@@ -1449,6 +1449,7 @@ function startTrimHold(dir) {
     if (dir === 'L' || dir === 'R') {
       bankTarget = Math.max(-60, Math.min(60, bankTarget + (dir === 'R' ? 1 : -1)));
       disengageNavAp();
+      rollApOn = false;
     } else {
       const d = dir === 'F' ? 1 : -1;
       applyDelta('spd', d);
@@ -1576,6 +1577,7 @@ function updateNavBtn() {
 
 // ── NAV Autopilot ──
 let navApOn = false;
+let rollApOn = true;   // false when manual bank trim overrides roll axis
 const navAp = { xtkI: 0, xtkPrev: 0, dtk0: null };
 
 function toggleNavAp() {
@@ -1585,6 +1587,7 @@ function toggleNavAp() {
     if (!fmsOk && !vorOk) return;
     if (!S.running) return;
     navApOn = true;
+    rollApOn = true;
     navAp.xtkI = 0; navAp.xtkPrev = 0; navAp.dtk0 = null;
   } else {
     navApOn = false;
@@ -1811,7 +1814,7 @@ function drawFMA(x, y, w) {
   //   Left   (collective): ALT or CRHT (or dim ALT when both holds are off)
   //   Middle (yaw/roll)  : HDG (default) or NAV/VOR/LOC when navAp engaged, GS when GSPD
   //   Right  (pitch)     : IAS — or GS when GSPD engaged
-  let left, leftOn, mid = navApOn ? midLabel : 'HDG', midOn = true, right, rightOn;
+  let left, leftOn, mid = navApOn ? midLabel : 'HDG', midOn = rollApOn, right, rightOn;
 
   if (gspdOn) {
     // GSPD engaged: both yaw/roll (mid) and pitch (right) are driven by
@@ -3191,6 +3194,7 @@ function stopGPS() {
   // Reset to simulation defaults
   S.spd = 80; S.hdg = 360; S.alt = 500;
   S.pit = pitchFromSpd(80); S.bnk = 0; bankTarget = 0;
+  rollApOn = true;
   S.running = false;
   updateFlyBtns();
 }
@@ -3751,6 +3755,7 @@ function applyDelta(field, d){
       S.hdg = normA(S.hdg + d);
       bankTarget = d > 0 ? 22 : -22;
       disengageNavAp();
+      rollApOn = true;
       break;
     case 'crs':
       if (navSrc === 'VOR' || navSrc === 'LOC') {
