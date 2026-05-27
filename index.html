@@ -2734,23 +2734,7 @@ function drawHsiHoverPage(x, y, w, h, cx, cy, rFull) {
   }
   ctx.restore(); // end clip
 
-  // Scale indicator (upper-right inside compass)
-  {
-    const scl_ft = Math.round(SCL_KT * 101);
-    const siX = r * 0.44, siY = -r * 0.70;
-    const bw = Math.max(42, r * 0.54), bh = 24;
-    ctx.fillStyle = 'rgba(0,0,0,0.78)';
-    ctx.fillRect(siX, siY - bh/2, bw, bh);
-    ctx.strokeStyle = '#555'; ctx.lineWidth = 1;
-    ctx.strokeRect(siX, siY - bh/2, bw, bh);
-    const sFs = Math.max(8, r * 0.095);
-    ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#00ff88';
-    ctx.font = `bold ${sFs}px Helvetica Neue, Arial, sans-serif`;
-    ctx.fillText(`${SCL_KT}KT`, siX + 4, siY - sFs * 0.38);
-    ctx.fillStyle = '#aaa';
-    ctx.fillText(`${scl_ft}FT`, siX + 4, siY + sFs * 0.55);
-  }
+
 
   ctx.restore(); // end translate(cx, cy)
 
