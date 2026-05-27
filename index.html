@@ -311,8 +311,9 @@ html, body {
 }
 .vfr-scale-km  { border-color: #fff;    background: #fff; }
 .vfr-scale-nm  { border-color: #00cfff; background: #00cfff; }
-/* Push Leaflet bottom-left controls above the sim bar */
-#map-wrap .leaflet-bottom.leaflet-left { margin-bottom: 40px; }
+/* Push Leaflet bottom controls above the sim bar */
+#map-wrap .leaflet-bottom.leaflet-left  { margin-bottom: 40px; }
+#map-wrap .leaflet-bottom.leaflet-right { margin-bottom: 40px; }
 /* ── Map top button bar ── */
 #map-top-bar {
   position: absolute; top: 8px; left: 8px; right: 8px; z-index: 1000;
@@ -2800,7 +2801,8 @@ function drawHSISidePanel(x, y, w, h, opt) {
 const osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:18});
 const satLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {maxZoom:19});
 let currentLayer = 'osm';
-const leafMap = L.map('map',{center:[37.46,126.44],zoom:8,zoomControl:true,attributionControl:false});
+const leafMap = L.map('map',{center:[37.46,126.44],zoom:8,zoomControl:false,attributionControl:false});
+L.control.zoom({position:'bottomright'}).addTo(leafMap);
 osmLayer.addTo(leafMap);
 
 // Custom dual-unit scale bar (km + NM)
