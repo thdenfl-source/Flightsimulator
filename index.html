@@ -2649,7 +2649,7 @@ function drawHsiHoverPage(x, y, w, h, cx, cy, rFull) {
   for (let a = 0; a < 360; a += 5) {
     const rad = a * D2R, is30 = a % 30 === 0, is10 = a % 10 === 0;
     const rOut = r * 0.97;
-    const rIn  = r * (is30 ? 0.77 : is10 ? 0.86 : 0.92);
+    const rIn  = r * (is30 ? 0.87 : is10 ? 0.915 : 0.955);
     ctx.strokeStyle = is30 ? '#ddd' : is10 ? '#888' : '#555';
     ctx.lineWidth   = is30 ? 2 : is10 ? 1.5 : 0.8;
     ctx.beginPath();
@@ -2723,21 +2723,14 @@ function drawHsiHoverPage(x, y, w, h, cx, cy, rFull) {
     const pxPerFt = r / 50;
     const mX =  bodyLat * pxPerFt;
     const mY = -bodyFwd * pxPerFt;
-    const matched = gspdOn && gspdRefLat !== null && gspdRefFwd !== null &&
-                    Math.abs(gspdActLat - gspdRefLat) < 1 &&
-                    Math.abs(gspdActFwd - gspdRefFwd) < 1;
-    const mr = Math.max(7, r * 0.095);
-    if (matched) {
-      ctx.fillStyle = 'rgba(0,200,80,0.22)';
-      ctx.strokeStyle = '#00cc44'; ctx.lineWidth = 2.5;
-      ctx.beginPath(); ctx.arc(mX, mY, mr, 0, Math.PI*2);
-      ctx.fill(); ctx.stroke();
-    } else {
-      ctx.strokeStyle = '#cc44ff'; ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.arc(mX, mY, mr, 0, Math.PI*2); ctx.stroke();
-      const sq = mr * 1.5;
-      ctx.strokeRect(mX - sq, mY - sq, sq * 2, sq * 2);
-    }
+    const sqSize = Math.max(10, r * 0.16);
+    ctx.fillStyle   = 'rgba(255,204,0,0.2)';
+    ctx.strokeStyle = '#ffcc00';
+    ctx.lineWidth   = 1.5;
+    ctx.beginPath();
+    ctx.rect(mX - sqSize/2, mY - sqSize/2, sqSize, sqSize);
+    ctx.fill();
+    ctx.stroke();
   }
   ctx.restore(); // end clip
 
