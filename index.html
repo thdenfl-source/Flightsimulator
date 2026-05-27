@@ -12,6 +12,8 @@
 <title>VFR Flight Sim</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet-velocity@2.1.0/dist/leaflet-velocity.min.css"/>
+<script src="https://cdn.jsdelivr.net/npm/leaflet-velocity@2.1.0/dist/leaflet-velocity.min.js"></script>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
 html, body {
@@ -357,6 +359,10 @@ html, body {
 #rain-btn.rain-active {
   background: rgba(0,10,40,0.92); border-color: #4488ff; color: #88bbff;
   box-shadow: 0 0 8px rgba(68,136,255,0.4);
+}
+#wind-btn.wind-active {
+  background: rgba(0,30,20,0.92); border-color: #44cc88; color: #88ffcc;
+  box-shadow: 0 0 8px rgba(68,204,136,0.4);
 }
 #map-sim-bar {
   position: absolute; bottom: 0; left: 0; right: 0; z-index: 1000;
@@ -1005,6 +1011,7 @@ html, body {
         <button id="pp-btn" onclick="ppAddWaypoint()">PP</button>
         <button id="as-ctr" onclick="toggleAS('CTR')">CTR</button>
         <button id="rain-btn" onclick="toggleRain()">RAIN</button>
+        <button id="wind-btn" onclick="toggleWind()">WIND</button>
       </div>
       <div id="gps-status"></div>
       <div id="map-sim-bar">
@@ -3004,6 +3011,107 @@ async function toggleRain() {
   } catch (e) {
     btn.textContent = 'RAIN';
     alert('강수 레이더 로드 실패. 네트워크를 확인하세요.');
+  }
+}
+
+let windLayer = null;
+let windActive = false;
+
+async function loadWindLayer() {
+  const bounds = leafMap.getBounds();
+  const latMin = bounds.getSouth(), latMax = bounds.getNorth();
+  const lonMin = bounds.getWest(), lonMax = bounds.getEast();
+  const gridN = 8;
+  const latStep = (latMax - latMin) / (gridN - 1);
+  const lonStep = (lonMax - lonMin) / (gridN - 1);
+
+  const lats = [], lons = [];
+  for (let i = 0; i < gridN; i++) {
+    lats.push(+(latMin + i * latStep).toFixed(4));
+    lons.push(+(lonMin + i * lonStep).toFixed(4));
+  }
+
+  const latParam = lats.join(',');
+  const lonParam = lons.join(',');
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${latParam}&longitude=${lonParam}&current=wind_speed_10m,wind_direction_10m&wind_speed_unit=ms&timeformat=unixtime`;
+
+  const res = await fetch(url);
+  const data = await res.json();
+  const entries = Array.isArray(data) ? data : [data];
+
+  const uData = [], vData = [];
+  for (let j = 0; j < gridN; j++) {
+    const row = entries[j] || entries[0];
+    const spd = row.current.wind_speed_10m;
+    const dir = row.current.wind_direction_10m * Math.PI / 180;
+    const u = -spd * Math.sin(dir);
+    const v = -spd * Math.cos(dir);
+    for (let i = 0; i < gridN; i++) {
+      uData.push(u);
+      vData.push(v);
+    }
+  }
+
+  const velocityData = [
+    {
+      header: {
+        parameterCategory: 2, parameterNumber: 2,
+        lo1: lonMin, lo2: lonMax, la1: latMax, la2: latMin,
+        dx: (lonMax - lonMin) / (gridN - 1), dy: (latMax - latMin) / (gridN - 1),
+        nx: gridN, ny: gridN
+      },
+      data: uData
+    },
+    {
+      header: {
+        parameterCategory: 2, parameterNumber: 3,
+        lo1: lonMin, lo2: lonMax, la1: latMax, la2: latMin,
+        dx: (lonMax - lonMin) / (gridN - 1), dy: (latMax - latMin) / (gridN - 1),
+        nx: gridN, ny: gridN
+      },
+      data: vData
+    }
+  ];
+
+  return L.velocityLayer({
+    data: velocityData,
+    maxVelocity: 20,
+    velocityScale: 0.008,
+    particleAge: 64,
+    lineWidth: 1.5,
+    particleMultiplier: 0.003,
+    colorScale: ['#ffffcc','#a1dab4','#41b6c4','#2c7fb8','#253494'],
+    displayValues: true,
+    displayOptions: {
+      velocityType: 'Wind',
+      position: 'bottomleft',
+      emptyString: '바람 데이터 없음',
+      angleConvention: 'bearingCCW',
+      speedUnit: 'm/s'
+    }
+  });
+}
+
+async function toggleWind() {
+  const btn = document.getElementById('wind-btn');
+  if (windActive) {
+    if (windLayer) { leafMap.removeLayer(windLayer); windLayer = null; }
+    windActive = false;
+    btn.classList.remove('wind-active');
+    btn.textContent = 'WIND';
+    return;
+  }
+  btn.textContent = '…';
+  try {
+    windLayer = await loadWindLayer();
+    windLayer.addTo(leafMap);
+    windActive = true;
+    btn.classList.add('wind-active');
+    btn.textContent = 'WIND';
+  } catch (e) {
+    console.error('Wind layer error:', e);
+    btn.textContent = 'WIND';
+    alert('바람 데이터 로드 실패. 네트워크를 확인하세요.');
   }
 }
 
