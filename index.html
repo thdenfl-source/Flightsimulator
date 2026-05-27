@@ -354,6 +354,10 @@ html, body {
   background: rgba(40,20,60,0.92); border-color: #aa66ff; color: #cc99ff;
   box-shadow: 0 0 8px rgba(170,102,255,0.4);
 }
+#rain-btn.rain-active {
+  background: rgba(0,10,40,0.92); border-color: #4488ff; color: #88bbff;
+  box-shadow: 0 0 8px rgba(68,136,255,0.4);
+}
 #map-sim-bar {
   position: absolute; bottom: 0; left: 0; right: 0; z-index: 1000;
   display: flex; gap: 4px; padding: 5px 8px;
@@ -1000,6 +1004,7 @@ html, body {
         <button id="wx-btn" onclick="toggleWxPanel()">WX</button>
         <button id="pp-btn" onclick="ppAddWaypoint()">PP</button>
         <button id="as-ctr" onclick="toggleAS('CTR')">CTR</button>
+        <button id="rain-btn" onclick="toggleRain()">RAIN</button>
       </div>
       <div id="gps-status"></div>
       <div id="map-sim-bar">
@@ -2963,6 +2968,42 @@ function toggleLayer() {
     currentLayer = 'osm';
     btn.textContent = 'SAT';
     btn.classList.remove('sat');
+  }
+}
+
+// ── RainViewer precipitation overlay ──
+let rainLayer = null;
+let rainActive = false;
+
+async function toggleRain() {
+  const btn = document.getElementById('rain-btn');
+  if (rainActive) {
+    if (rainLayer) { leafMap.removeLayer(rainLayer); rainLayer = null; }
+    rainActive = false;
+    btn.classList.remove('rain-active');
+    btn.textContent = 'RAIN';
+    return;
+  }
+  btn.textContent = '…';
+  try {
+    const res  = await fetch('https://api.rainviewer.com/public/weather-maps.json');
+    const data = await res.json();
+    const frames = data.radar.past;
+    if (!frames || !frames.length) throw new Error('no frames');
+    const latest = frames[frames.length - 1];
+    const tileUrl = `${data.host}${latest.path}/256/{z}/{x}/{y}/2/1_1.png`;
+    rainLayer = L.tileLayer(tileUrl, {
+      opacity: 0.6,
+      attribution: 'RainViewer',
+      zIndex: 500
+    });
+    rainLayer.addTo(leafMap);
+    rainActive = true;
+    btn.classList.add('rain-active');
+    btn.textContent = 'RAIN';
+  } catch (e) {
+    btn.textContent = 'RAIN';
+    alert('강수 레이더 로드 실패. 네트워크를 확인하세요.');
   }
 }
 
