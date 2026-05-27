@@ -2424,7 +2424,7 @@ function drawHSI(x, y, w, h) {
   ctx.rotate(-S.hdg * D2R);
   for (let a=0;a<360;a+=5) {
     const rad=a*D2R, is30=a%30===0, is10=a%10===0;
-    const rOut=r*0.97, rIn=r*(is30?0.73:is10?0.82:0.91);
+    const rOut=r*0.97, rIn=r*(is30?0.87:is10?0.915:0.955);
     ctx.strokeStyle=is30?'#bbb':is10?'#777':'#3a3a3a';
     ctx.lineWidth=is30?2:is10?1.5:0.8;
     ctx.beginPath();
@@ -2435,7 +2435,7 @@ function drawHSI(x, y, w, h) {
   const ROSE={0:'N',30:'3',60:'6',90:'E',120:'12',150:'15',180:'S',210:'21',240:'24',270:'W',300:'30',330:'33'};
   const fs=Math.max(9,r*0.115);
   for (const [ang,label] of Object.entries(ROSE)) {
-    const a=Number(ang), rad=a*D2R, lr=r*0.60;
+    const a=Number(ang), rad=a*D2R, lr=r*0.82;
     ctx.save();
     ctx.translate(Math.sin(rad)*lr,-Math.cos(rad)*lr);
     ctx.rotate(rad);
@@ -2662,7 +2662,7 @@ function drawHsiHoverPage(x, y, w, h, cx, cy, rFull) {
                   '180':'S','210':'21','240':'24','270':'W','300':'30','330':'33'};
   const rosFs = Math.max(9, r * 0.115);
   for (const [ang, lbl] of Object.entries(ROSE_H)) {
-    const a = Number(ang), rad = a * D2R, lr = r * 0.63;
+    const a = Number(ang), rad = a * D2R, lr = r * 0.82;
     ctx.save();
     ctx.translate(Math.sin(rad)*lr, -Math.cos(rad)*lr);
     ctx.rotate(rad);
