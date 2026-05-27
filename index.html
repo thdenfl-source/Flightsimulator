@@ -1961,7 +1961,7 @@ function drawAI(x, y, w, h) {
   ctx.fillStyle = sg;
   ctx.fillRect(-w*2,-h*2,w*4,h*2+skyY);
   const gg = ctx.createLinearGradient(0,skyY,0,skyY+h);
-  gg.addColorStop(0,'#3d2208'); gg.addColorStop(1,'#3d2208');
+  gg.addColorStop(0,'#a05014'); gg.addColorStop(1,'#a05014');
   ctx.fillStyle = gg;
   ctx.fillRect(-w*2,skyY,w*4,h*2);
   ctx.strokeStyle='#fff'; ctx.lineWidth=2;
@@ -2291,7 +2291,7 @@ function drawVSI(x, y, w, h) {
 // ────────────────────────────────────────
 function drawHSI(x, y, w, h) {
   ctx.save();  // outer save — ensure lineWidth/strokeStyle don't bleed into drawPFD
-  ctx.fillStyle='#3d2208';
+  ctx.fillStyle='#a05014';
   ctx.fillRect(x,y,w,h);
 
   const cx   = x + w / 2;
@@ -2417,7 +2417,7 @@ function drawHSI(x, y, w, h) {
   ctx.beginPath(); ctx.arc(0,0,r+3,0,Math.PI*2);
   ctx.strokeStyle='#1a0e04'; ctx.lineWidth=3; ctx.stroke();
   ctx.beginPath(); ctx.arc(0,0,r,0,Math.PI*2);
-  ctx.fillStyle='#3d2208'; ctx.fill();
+  ctx.fillStyle='#a05014'; ctx.fill();
 
   // rotating rose
   ctx.save();
@@ -2635,7 +2635,7 @@ function drawHsiHoverPage(x, y, w, h, cx, cy, rFull) {
 
   // Dark-brown inner fill (Garmin style)
   ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI*2);
-  ctx.fillStyle = '#3d2208'; ctx.fill();
+  ctx.fillStyle = '#a05014'; ctx.fill();
 
   // Outer bezel
   ctx.beginPath(); ctx.arc(0, 0, r + 3, 0, Math.PI*2);
