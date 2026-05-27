@@ -2048,15 +2048,6 @@ function drawAI(x, y, w, h) {
   ctx.beginPath(); ctx.arc(0,0,3,0,Math.PI*2); ctx.fillStyle='#fff'; ctx.fill();
   ctx.restore();
 
-  ctx.save(); ctx.translate(cx, aiY + aiH * 0.87);
-  ctx.rotate(-S.bnk*D2R);
-  ctx.strokeStyle='#666'; ctx.lineWidth=1;
-  const ss=22;
-  ctx.strokeRect(-ss,-5,ss*2,10);
-  const bx=Math.max(-ss+6,Math.min(ss-6,-Math.sin(S.bnk*D2R)*ss*0.6));
-  ctx.beginPath(); ctx.arc(bx,0,5,0,Math.PI*2);
-  ctx.fillStyle='#000'; ctx.fill(); ctx.strokeStyle='#ccc'; ctx.stroke();
-  ctx.restore();
 
   // ── Flight Path Vector (FPV) ──
   {
