@@ -1823,7 +1823,7 @@ function drawFMA(x, y, w) {
   };
 
   ctx.save();
-  ctx.font = `bold ${Math.max(8, Math.min(11, w * 0.030))}px 'Courier New', monospace`;
+  ctx.font = `bold ${Math.max(8, Math.min(11, w * 0.030))}px 'Helvetica Neue', 'Arial', sans-serif`;
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
 
   for (let i = 0; i < 3; i++) {
@@ -1871,7 +1871,7 @@ function drawCrhtDisplay(x, y, w, h) {
     ctx.beginPath(); ctx.moveTo(x + 7, ty); ctx.lineTo(x + (maj ? 16 : 10), ty); ctx.stroke();
     if (maj) {
       ctx.fillStyle  = tickColor;
-      ctx.font       = `${Math.max(8, w * 0.14)}px Courier New`;
+      ctx.font       = `${Math.max(8, w * 0.14)}px Helvetica Neue, Arial, sans-serif`;
       ctx.textAlign  = 'left';
       ctx.fillText(a, x + 18, ty + 4);
     }
@@ -1896,7 +1896,7 @@ function drawCrhtDisplay(x, y, w, h) {
   ctx.lineWidth   = on ? 1.5 : 1;
   ctx.strokeRect(x, cy - bh / 2, w, bh);
   ctx.fillStyle   = on ? '#44ff88' : '#555';
-  ctx.font        = `bold ${Math.max(10, w * 0.16)}px Courier New`;
+  ctx.font        = `bold ${Math.max(10, w * 0.16)}px Helvetica Neue, Arial, sans-serif`;
   ctx.textAlign   = 'center';
   ctx.fillText(Math.round(S.alt), x + w / 2, cy + 5);
 
@@ -1908,11 +1908,11 @@ function drawCrhtDisplay(x, y, w, h) {
   ctx.strokeRect(x + 1, y + 1, w - 2, HEAD_H - 2);
 
   // Line 1: "CRHT" label + selCrht setting value
-  ctx.font      = `bold ${Math.max(9, w * 0.14)}px Courier New`;
+  ctx.font      = `bold ${Math.max(9, w * 0.14)}px Helvetica Neue, Arial, sans-serif`;
   ctx.textAlign = 'left';
   ctx.fillStyle = on ? '#44ff88' : '#555';
   ctx.fillText('CRHT', x + 4, y + 11);
-  ctx.font      = `bold ${Math.max(10, w * 0.16)}px Courier New`;
+  ctx.font      = `bold ${Math.max(10, w * 0.16)}px Helvetica Neue, Arial, sans-serif`;
   ctx.textAlign = 'right';
   ctx.fillStyle = on ? '#fff' : '#666';
   ctx.fillText(selCrht, x + w - 4, y + 11);
@@ -1923,7 +1923,7 @@ function drawCrhtDisplay(x, y, w, h) {
     const d = selCrht - S.alt;
     vsStr = Math.abs(d) < 1 ? '0' : (d > 0 ? '+' : '−') + '500';
   }
-  ctx.font      = `${Math.max(8, w * 0.13)}px Courier New`;
+  ctx.font      = `${Math.max(8, w * 0.13)}px Helvetica Neue, Arial, sans-serif`;
   ctx.textAlign = 'left';
   ctx.fillStyle = on ? '#ffaa44' : '#444';
   ctx.fillText('VS', x + 4, y + 22);
@@ -1957,17 +1957,17 @@ function drawAI(x, y, w, h) {
   ctx.rotate(-S.bnk * D2R);
   const skyY = S.pit * ppd;
   const sg = ctx.createLinearGradient(0,-h,0,0);
-  sg.addColorStop(0,'#0e3670'); sg.addColorStop(1,'#1a56a0');
+  sg.addColorStop(0,'#1e5f9e'); sg.addColorStop(1,'#4a90c8');
   ctx.fillStyle = sg;
   ctx.fillRect(-w*2,-h*2,w*4,h*2+skyY);
   const gg = ctx.createLinearGradient(0,skyY,0,skyY+h);
-  gg.addColorStop(0,'#5c2c06'); gg.addColorStop(1,'#281003');
+  gg.addColorStop(0,'#8b5a2b'); gg.addColorStop(1,'#5a3818');
   ctx.fillStyle = gg;
   ctx.fillRect(-w*2,skyY,w*4,h*2);
   ctx.strokeStyle='#fff'; ctx.lineWidth=2;
   ctx.beginPath(); ctx.moveTo(-w*2,skyY); ctx.lineTo(w*2,skyY); ctx.stroke();
 
-  ctx.font=`${Math.max(8,w*0.022)}px Courier New`;
+  ctx.font=`${Math.max(8,w*0.022)}px Helvetica Neue, Arial, sans-serif`;
   ctx.textAlign='center'; ctx.fillStyle='#fff';
   // 2.5° minor ticks (drawn first, thinner)
   for (let p=-25;p<=25;p+=2.5) {
@@ -2103,19 +2103,19 @@ function drawSpeedTape(x, y, w, h) {
     if(ty<y||ty>y+h) continue;
     const maj=s%10===0, m5=s%5===0;
     if(!maj&&!m5) continue;
-    ctx.strokeStyle=maj?'#aaa':'#444'; ctx.lineWidth=maj?1.5:0.8;
+    ctx.strokeStyle=maj?'#fff':'#555'; ctx.lineWidth=maj?1.5:0.8;
     ctx.beginPath(); ctx.moveTo(x+w-6,ty); ctx.lineTo(x+w-(maj?15:10),ty); ctx.stroke();
     if(maj){
-      ctx.fillStyle='#aaa'; ctx.font=`${Math.max(9,w*0.17)}px Courier New`;
+      ctx.fillStyle='#fff'; ctx.font=`${Math.max(9,w*0.17)}px Helvetica Neue, Arial, sans-serif`;
       ctx.textAlign='right'; ctx.fillText(s,x+w-17,ty+4);
     }
   }
   const bh=22;
   ctx.fillStyle='#000'; ctx.fillRect(x,cy-bh/2,w,bh);
   ctx.strokeStyle='#fff'; ctx.lineWidth=1.5; ctx.strokeRect(x,cy-bh/2,w,bh);
-  ctx.fillStyle='#fff'; ctx.font=`bold ${Math.max(13,w*0.2)}px Courier New`;
+  ctx.fillStyle='#fff'; ctx.font=`bold ${Math.max(13,w*0.2)}px Helvetica Neue, Arial, sans-serif`;
   ctx.textAlign='center'; ctx.fillText(Math.round(S.spd),x+w/2,cy+6);
-  ctx.fillStyle='#555'; ctx.font='8px Courier New';
+  ctx.fillStyle='#aaa'; ctx.font='bold 8px Helvetica Neue, Arial, sans-serif';
   ctx.fillText('KT',x+w/2,y+11);
   // Speed trend vector (magenta, 6-second extrapolation)
   if (Math.abs(spdTrend) > 0.5) {
@@ -2155,10 +2155,10 @@ function drawAltTape(x, y, w, h) {
     const ty = cy - (a - S.alt) * pp100 / 100;
     if (ty < tapeY || ty > tapeY + tapeH) continue;
     const maj = a % 500 === 0;
-    ctx.strokeStyle = maj ? '#aaa' : '#444'; ctx.lineWidth = maj ? 1.5 : 0.8;
+    ctx.strokeStyle = maj ? '#fff' : '#555'; ctx.lineWidth = maj ? 1.5 : 0.8;
     ctx.beginPath(); ctx.moveTo(x + 7, ty); ctx.lineTo(x + (maj ? 16 : 10), ty); ctx.stroke();
     if (maj) {
-      ctx.fillStyle = '#aaa'; ctx.font = `${Math.max(9, w * 0.16)}px Courier New`;
+      ctx.fillStyle = '#fff'; ctx.font = `${Math.max(9, w * 0.16)}px Helvetica Neue, Arial, sans-serif`;
       ctx.textAlign = 'left'; ctx.fillText(a, x + 18, ty + 4);
     }
   }
@@ -2180,7 +2180,7 @@ function drawAltTape(x, y, w, h) {
   const bh = 22;
   ctx.fillStyle = '#000'; ctx.fillRect(x, cy - bh/2, w, bh);
   ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.strokeRect(x, cy - bh/2, w, bh);
-  ctx.fillStyle = '#fff'; ctx.font = `bold ${Math.max(12, w * 0.17)}px Courier New`;
+  ctx.fillStyle = '#fff'; ctx.font = `bold ${Math.max(12, w * 0.17)}px Helvetica Neue, Arial, sans-serif`;
   ctx.textAlign = 'center'; ctx.fillText(Math.round(S.alt), x + w/2, cy + 5);
 
   // ── ALT setting + change-rate box (top header) ──
@@ -2193,11 +2193,11 @@ function drawAltTape(x, y, w, h) {
   ctx.strokeRect(x + 1, y + 1, w - 2, HEAD_H - 2);
 
   // Line 1: "ALT" label + selAlt value
-  ctx.font      = `bold ${Math.max(9, w * 0.14)}px Courier New`;
+  ctx.font      = `bold ${Math.max(9, w * 0.14)}px Helvetica Neue, Arial, sans-serif`;
   ctx.textAlign = 'left';
   ctx.fillStyle = on ? '#00cfff' : '#666';
   ctx.fillText('ALT', x + 4, y + 11);
-  ctx.font      = `bold ${Math.max(10, w * 0.16)}px Courier New`;
+  ctx.font      = `bold ${Math.max(10, w * 0.16)}px Helvetica Neue, Arial, sans-serif`;
   ctx.textAlign = 'right';
   ctx.fillStyle = on ? '#fff' : '#777';
   ctx.fillText(selAlt, x + w - 4, y + 11);
@@ -2213,7 +2213,7 @@ function drawAltTape(x, y, w, h) {
   } else {
     vsStr = String(Math.abs(selVS));
   }
-  ctx.font      = `${Math.max(8, w * 0.13)}px Courier New`;
+  ctx.font      = `${Math.max(8, w * 0.13)}px Helvetica Neue, Arial, sans-serif`;
   ctx.textAlign = 'left';
   ctx.fillStyle = on ? '#ffaa44' : '#665533';
   ctx.fillText('VS', x + 4, y + 22);
@@ -2257,7 +2257,7 @@ function drawVSI(x, y, w, h) {
     const tw=maj?w*0.55:w*0.32;
     ctx.beginPath(); ctx.moveTo(x,ty); ctx.lineTo(x+tw,ty); ctx.stroke();
     if(maj){
-      ctx.fillStyle='#777'; ctx.font=`${Math.max(7,w*0.17)}px Courier New`;
+      ctx.fillStyle='#ccc'; ctx.font=`${Math.max(7,w*0.17)}px Helvetica Neue, Arial, sans-serif`;
       ctx.textAlign='left'; ctx.fillText(Math.abs(v/1000),x+tw+1,ty+3);
     }
   }
@@ -2277,11 +2277,11 @@ function drawVSI(x, y, w, h) {
   const bh=18;
   ctx.fillStyle='#000'; ctx.fillRect(x,y+h-bh,w,bh);
   ctx.strokeStyle='#333'; ctx.lineWidth=1; ctx.strokeRect(x,y+h-bh,w,bh);
-  ctx.fillStyle=pc; ctx.font=`bold ${Math.max(9,w*0.2)}px Courier New`;
+  ctx.fillStyle=pc; ctx.font=`bold ${Math.max(9,w*0.2)}px Helvetica Neue, Arial, sans-serif`;
   ctx.textAlign='center'; ctx.fillText(Math.round(vs),x+w/2,y+h-4);
 
   // label at top
-  ctx.fillStyle='#555'; ctx.font='7px Courier New';
+  ctx.fillStyle='#aaa'; ctx.font='bold 7px Helvetica Neue, Arial, sans-serif';
   ctx.fillText('FPM',x+w/2,y+9);
   ctx.restore();
 }
@@ -2352,7 +2352,7 @@ function drawHSI(x, y, w, h) {
     const wdY = y + h * 0.10;
     const fs  = Math.max(9, r * 0.105);
     ctx.save();
-    ctx.font = `bold ${fs}px Courier New`;
+    ctx.font = `bold ${fs}px Helvetica Neue, Arial, sans-serif`;
     ctx.fillStyle = '#ffffff';
     ctx.textAlign = 'center';
     ctx.fillText(`${wdirFmt}°/${wspdFmt}kt`, wdX, wdY + fs * 1.1);
@@ -2395,17 +2395,17 @@ function drawHSI(x, y, w, h) {
     ctx.save();
     ctx.textAlign = 'center';
     // GS
-    ctx.font = `${lblFs}px Courier New`;
+    ctx.font = `${lblFs}px Helvetica Neue, Arial, sans-serif`;
     ctx.fillStyle = '#888';
     ctx.fillText('GS', colX, gsY);
-    ctx.font = `bold ${valFs}px Courier New`;
+    ctx.font = `bold ${valFs}px Helvetica Neue, Arial, sans-serif`;
     ctx.fillStyle = '#00cc44';
     ctx.fillText(`${Math.round(gs)}kt`, colX, gsY + valFs);
     // TAS
-    ctx.font = `${lblFs}px Courier New`;
+    ctx.font = `${lblFs}px Helvetica Neue, Arial, sans-serif`;
     ctx.fillStyle = '#888';
     ctx.fillText('TAS', colX, tasY);
-    ctx.font = `bold ${valFs}px Courier New`;
+    ctx.font = `bold ${valFs}px Helvetica Neue, Arial, sans-serif`;
     ctx.fillStyle = '#88ccff';
     ctx.fillText(`${Math.round(tas)}kt`, colX, tasY + valFs);
     ctx.restore();
@@ -2440,7 +2440,7 @@ function drawHSI(x, y, w, h) {
     ctx.translate(Math.sin(rad)*lr,-Math.cos(rad)*lr);
     ctx.rotate(rad);
     ctx.fillStyle=a===0?'#ff5555':'#ddd';
-    ctx.font=`bold ${fs}px Courier New`;
+    ctx.font=`bold ${fs}px Helvetica Neue, Arial, sans-serif`;
     ctx.textAlign='center'; ctx.textBaseline='middle';
     ctx.fillText(label,0,0);
     ctx.restore();
@@ -2534,7 +2534,7 @@ function drawHSI(x, y, w, h) {
     const diff = normA(brgRef - dispCrs);
     const toFlag = diff < 90 || diff > 270;
     ctx.fillStyle = CG;
-    ctx.font = `bold ${Math.max(8, r*0.095)}px Courier New`;
+    ctx.font = `bold ${Math.max(8, r*0.095)}px Helvetica Neue, Arial, sans-serif`;
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText(toFlag ? 'TO' : 'FROM', 0, toFlag ? -r*0.34 : r*0.34);
     ctx.textBaseline = 'alphabetic';
@@ -2598,21 +2598,27 @@ function drawHSI(x, y, w, h) {
 
   ctx.restore(); // end translate cx,cy
 
-  // ── HDG / CRS readout boxes (나란히) ──
-  const bw=60, bh=20, gap=4;
+  // ── HDG / CRS readout boxes (Garmin 스타일: 시안 라벨 + 흰 숫자) ──
+  const bw=64, bh=20, gap=4;
   const hdgX = cx - bw - gap/2;
   const crsX = cx + gap/2;
   ctx.lineWidth=1;
   // HDG box
   ctx.fillStyle='#000'; ctx.strokeStyle='#555';
   ctx.fillRect(hdgX,y+2,bw,bh); ctx.strokeRect(hdgX,y+2,bw,bh);
-  ctx.fillStyle='#fff'; ctx.font='bold 13px Courier New'; ctx.textAlign='center';
-  ctx.fillText(fmtA(S.hdg)+'°', hdgX+bw/2, y+16);
+  ctx.textAlign='left';
+  ctx.fillStyle='#00cfff'; ctx.font='bold 11px Helvetica Neue, Arial, sans-serif';
+  ctx.fillText('HDG', hdgX+4, y+16);
+  ctx.fillStyle='#fff'; ctx.font='bold 13px Helvetica Neue, Arial, sans-serif'; ctx.textAlign='right';
+  ctx.fillText(fmtA(S.hdg)+'°', hdgX+bw-4, y+16);
   // CRS box
   ctx.fillStyle='#000'; ctx.strokeStyle='#555';
   ctx.fillRect(crsX,y+2,bw,bh); ctx.strokeRect(crsX,y+2,bw,bh);
-  ctx.fillStyle='#ccc'; ctx.font='bold 13px Courier New'; ctx.textAlign='center';
-  ctx.fillText('CRS '+fmtA(activeCrs()), crsX+bw/2, y+16);
+  ctx.textAlign='left';
+  ctx.fillStyle='#00cfff'; ctx.font='bold 11px Helvetica Neue, Arial, sans-serif';
+  ctx.fillText('CRS', crsX+4, y+16);
+  ctx.fillStyle='#fff'; ctx.font='bold 13px Helvetica Neue, Arial, sans-serif'; ctx.textAlign='right';
+  ctx.fillText(fmtA(activeCrs())+'°', crsX+bw-4, y+16);
   ctx.restore();  // outer restore — matches save at function entry
 }
 
@@ -2710,16 +2716,16 @@ function drawHsiHoverPage(x, y, w, h, cx, cy, rFull) {
   // ── Bottom-left: actual GPS speeds ──
   const actLatTxt = `${Math.round(gspdActLat)}`;
   const actFwdTxt = `${Math.round(gspdActFwd)}`;
-  ctx.font = `${lblFs}px Courier New`;
+  ctx.font = `${lblFs}px Helvetica Neue, Arial, sans-serif`;
   ctx.fillStyle = '#888';
   ctx.fillText('LAT', leftCx, baseY);
-  ctx.font = `bold ${valFs}px Courier New`;
+  ctx.font = `bold ${valFs}px Helvetica Neue, Arial, sans-serif`;
   ctx.fillStyle = '#00ff88';
   ctx.fillText(actLatTxt, leftCx, baseY + valFs);
-  ctx.font = `${lblFs}px Courier New`;
+  ctx.font = `${lblFs}px Helvetica Neue, Arial, sans-serif`;
   ctx.fillStyle = '#888';
   ctx.fillText('FWD', leftCx, baseY + valFs + rowGap + lblFs);
-  ctx.font = `bold ${valFs}px Courier New`;
+  ctx.font = `bold ${valFs}px Helvetica Neue, Arial, sans-serif`;
   ctx.fillStyle = '#00ff88';
   ctx.fillText(actFwdTxt, leftCx, baseY + valFs + rowGap + lblFs + valFs);
 
@@ -2727,16 +2733,16 @@ function drawHsiHoverPage(x, y, w, h, cx, cy, rFull) {
   const refLatTxt = gspdRefLat === null ? '--' : `${Math.round(gspdRefLat)}`;
   const refFwdTxt = gspdRefFwd === null ? '--' : `${Math.round(gspdRefFwd)}`;
   const refColor  = gspdOn ? '#ff66ff' : '#cc44cc';
-  ctx.font = `${lblFs}px Courier New`;
+  ctx.font = `${lblFs}px Helvetica Neue, Arial, sans-serif`;
   ctx.fillStyle = '#888';
   ctx.fillText('REF LAT', rightCx, baseY);
-  ctx.font = `bold ${valFs}px Courier New`;
+  ctx.font = `bold ${valFs}px Helvetica Neue, Arial, sans-serif`;
   ctx.fillStyle = refColor;
   ctx.fillText(refLatTxt, rightCx, baseY + valFs);
-  ctx.font = `${lblFs}px Courier New`;
+  ctx.font = `${lblFs}px Helvetica Neue, Arial, sans-serif`;
   ctx.fillStyle = '#888';
   ctx.fillText('REF FWD', rightCx, baseY + valFs + rowGap + lblFs);
-  ctx.font = `bold ${valFs}px Courier New`;
+  ctx.font = `bold ${valFs}px Helvetica Neue, Arial, sans-serif`;
   ctx.fillStyle = refColor;
   ctx.fillText(refFwdTxt, rightCx, baseY + valFs + rowGap + lblFs + valFs);
 
@@ -2747,7 +2753,7 @@ function drawHsiHoverPage(x, y, w, h, cx, cy, rFull) {
   const hdgX = cx - bw/2;
   ctx.fillStyle = '#000'; ctx.strokeStyle = '#555'; ctx.lineWidth = 1;
   ctx.fillRect(hdgX, y + 2, bw, bh); ctx.strokeRect(hdgX, y + 2, bw, bh);
-  ctx.fillStyle = '#fff'; ctx.font = 'bold 13px Courier New'; ctx.textAlign = 'center';
+  ctx.fillStyle = '#fff'; ctx.font = 'bold 13px Helvetica Neue, Arial, sans-serif'; ctx.textAlign = 'center';
   ctx.fillText(fmtA(S.hdg) + '°', hdgX + bw/2, y + 16);
 }
 
@@ -2760,7 +2766,7 @@ function drawHSISidePanel(x, y, w, h, opt) {
   const startY = y + h * 0.26;
 
   ctx.save();
-  ctx.font = `bold ${Math.max(9, lineH * 0.75)}px Courier New`;
+  ctx.font = `bold ${Math.max(9, lineH * 0.75)}px Helvetica Neue, Arial, sans-serif`;
   ctx.textAlign = ta;
 
   // source label + needle symbol
@@ -2768,27 +2774,27 @@ function drawHSISidePanel(x, y, w, h, opt) {
 
   ctx.fillStyle = opt.color;
   ctx.fillText(opt.label, cx, startY);
-  ctx.font = `${Math.max(8, lineH * 0.6)}px Courier New`;
+  ctx.font = `${Math.max(8, lineH * 0.6)}px Helvetica Neue, Arial, sans-serif`;
   ctx.fillStyle = '#555';
   ctx.fillText(opt.sublbl, cx, startY + lineH * 0.85);
 
   // needle mini symbol
   ctx.fillStyle = opt.color;
-  ctx.font = `${Math.max(11, lineH)}px Courier New`;
+  ctx.font = `${Math.max(11, lineH)}px Helvetica Neue, Arial, sans-serif`;
   ctx.fillText(needleSym, cx, startY + lineH * 2.0);
 
   // ident
-  ctx.font = `bold ${Math.max(9, lineH * 0.72)}px Courier New`;
+  ctx.font = `bold ${Math.max(9, lineH * 0.72)}px Helvetica Neue, Arial, sans-serif`;
   ctx.fillStyle = '#fff';
   ctx.fillText(opt.ident, cx, startY + lineH * 3.1);
 
   // bearing
-  ctx.font = `bold ${Math.max(11, lineH * 0.88)}px Courier New`;
+  ctx.font = `bold ${Math.max(11, lineH * 0.88)}px Helvetica Neue, Arial, sans-serif`;
   ctx.fillStyle = opt.color;
   ctx.fillText(opt.brg, cx, startY + lineH * 4.2);
 
   // distance
-  ctx.font = `${Math.max(9, lineH * 0.72)}px Courier New`;
+  ctx.font = `${Math.max(9, lineH * 0.72)}px Helvetica Neue, Arial, sans-serif`;
   ctx.fillStyle = '#cccc66';
   ctx.fillText(opt.dist, cx, startY + lineH * 5.2);
 
