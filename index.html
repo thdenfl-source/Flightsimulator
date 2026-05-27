@@ -2622,139 +2622,203 @@ function drawHSI(x, y, w, h) {
   ctx.restore();  // outer restore — matches save at function entry
 }
 
-// ── Hover Page HSI: compact circle + GPS speed readouts ──
+// ── Hover Page HSI: Garmin-style compass rose + GPS speed readouts ──
 function drawHsiHoverPage(x, y, w, h, cx, cy, rFull) {
-  const r = rFull * 0.7;
+  const STRIP_H = Math.max(46, h * 0.30);
+  const compH   = h - STRIP_H;
+  const compCy  = y + compH * 0.52;
+  const r       = Math.min(w * 0.44, compH * 0.47);
 
-  // Outer ring
+  // ── Compass rose ──
   ctx.save();
-  ctx.translate(cx, cy);
-  ctx.beginPath(); ctx.arc(0, 0, r + 3, 0, Math.PI*2);
-  ctx.strokeStyle = '#2a2a2a'; ctx.lineWidth = 3; ctx.stroke();
+  ctx.translate(cx, compCy);
+
+  // Dark-brown inner fill (Garmin style)
   ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI*2);
-  ctx.fillStyle = '#0f0f0f'; ctx.fill();
-  ctx.strokeStyle = '#555'; ctx.lineWidth = 1.5; ctx.stroke();
+  ctx.fillStyle = '#3a2510'; ctx.fill();
+
+  // Outer bezel
+  ctx.beginPath(); ctx.arc(0, 0, r + 3, 0, Math.PI*2);
+  ctx.strokeStyle = '#111'; ctx.lineWidth = 5; ctx.stroke();
+  ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI*2);
+  ctx.strokeStyle = '#999'; ctx.lineWidth = 1.5; ctx.stroke();
+
+  // ── Rotating rose (heading-up) ──
+  ctx.save();
+  ctx.rotate(-S.hdg * D2R);
+  for (let a = 0; a < 360; a += 5) {
+    const rad = a * D2R, is30 = a % 30 === 0, is10 = a % 10 === 0;
+    const rOut = r * 0.97;
+    const rIn  = r * (is30 ? 0.77 : is10 ? 0.86 : 0.92);
+    ctx.strokeStyle = is30 ? '#ddd' : is10 ? '#888' : '#555';
+    ctx.lineWidth   = is30 ? 2 : is10 ? 1.5 : 0.8;
+    ctx.beginPath();
+    ctx.moveTo(Math.sin(rad)*rOut, -Math.cos(rad)*rOut);
+    ctx.lineTo(Math.sin(rad)*rIn,  -Math.cos(rad)*rIn);
+    ctx.stroke();
+  }
+  // Garmin-style compass labels
+  const ROSE_H = {'0':'N','30':'3','60':'6','90':'E','120':'12','150':'15',
+                  '180':'S','210':'21','240':'24','270':'W','300':'30','330':'33'};
+  const rosFs = Math.max(9, r * 0.115);
+  for (const [ang, lbl] of Object.entries(ROSE_H)) {
+    const a = Number(ang), rad = a * D2R, lr = r * 0.63;
+    ctx.save();
+    ctx.translate(Math.sin(rad)*lr, -Math.cos(rad)*lr);
+    ctx.rotate(rad);
+    ctx.fillStyle = a === 0 ? '#ff5555' : '#ddd';
+    ctx.font = `bold ${rosFs}px Helvetica Neue, Arial, sans-serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(lbl, 0, 0);
+    ctx.restore();
+  }
+  ctx.restore(); // end rose rotation
+
+  // Fixed heading index (top triangle)
+  ctx.fillStyle = '#fff';
+  ctx.beginPath();
+  ctx.moveTo(0, -r + 1); ctx.lineTo(-6, -r + 13); ctx.lineTo(6, -r + 13);
+  ctx.closePath(); ctx.fill();
+
   // Center crosshair
-  const ch = r * 0.85;
-  ctx.strokeStyle = '#ddd'; ctx.lineWidth = 1.2;
+  const ch = r * 0.11;
+  ctx.strokeStyle = '#ccc'; ctx.lineWidth = 1.5;
   ctx.beginPath();
   ctx.moveTo(-ch, 0); ctx.lineTo(ch, 0);
   ctx.moveTo(0, -ch); ctx.lineTo(0, ch);
   ctx.stroke();
-  // Center dot
-  ctx.beginPath(); ctx.arc(0, 0, 3, 0, Math.PI*2);
-  ctx.fillStyle = '#fff'; ctx.fill();
-  ctx.restore();
 
-  // ── Speed vector + hover-position marker (clipped to circle) ──
-  // Hover page covers ±50 ft (body frame). Scale: 1 ft ≡ 1 kt → 50 kt = full radius.
+  // ── Speed vector + position marker (clipped) ──
   ctx.save();
-  ctx.translate(cx, cy);
-  ctx.beginPath();
-  ctx.arc(0, 0, r, 0, Math.PI*2);
-  ctx.clip();
+  ctx.beginPath(); ctx.arc(0, 0, r * 0.94, 0, Math.PI*2); ctx.clip();
 
-  const pxPerFt = r / 50;
+  const SCL_KT = 10;            // full radius = 10 kt
+  const pxPerKt = r / SCL_KT;
+  const vx = gspdActLat * pxPerKt;
+  const vy = -gspdActFwd * pxPerKt;
 
-  // GPS speed vector — solid green, length proportional to body-frame speed
-  const vx = gspdActLat * pxPerFt;
-  const vy = -gspdActFwd * pxPerFt;
-  if (Math.hypot(vx, vy) > 0.5) {
-    ctx.strokeStyle = '#00ff88';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(0, 0); ctx.lineTo(vx, vy);
-    ctx.stroke();
-    // Arrowhead
-    const a = Math.atan2(vy, vx);
-    const ah = 7;
+  if (Math.hypot(vx, vy) > 1) {
+    ctx.strokeStyle = '#00ff88'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(vx, vy); ctx.stroke();
+    const ang = Math.atan2(vy, vx), ah = 8;
     ctx.beginPath();
     ctx.moveTo(vx, vy);
-    ctx.lineTo(vx - ah * Math.cos(a - Math.PI/7), vy - ah * Math.sin(a - Math.PI/7));
+    ctx.lineTo(vx - ah*Math.cos(ang - Math.PI/7), vy - ah*Math.sin(ang - Math.PI/7));
     ctx.moveTo(vx, vy);
-    ctx.lineTo(vx - ah * Math.cos(a + Math.PI/7), vy - ah * Math.sin(a + Math.PI/7));
+    ctx.lineTo(vx - ah*Math.cos(ang + Math.PI/7), vy - ah*Math.sin(ang + Math.PI/7));
     ctx.stroke();
   }
 
-  // Hover-position marker — yellow square at captured world point, drawn in body frame
+  // Hover-position marker in body frame
   if (hoverPosOn && hoverPosLat !== null) {
     const M_PER_DEG = 111320, FT_PER_M = 3.28084;
     const dLatDeg = hoverPosLat - S.lat;
     const dLonDeg = hoverPosLon - S.lon;
     const relN_ft = dLatDeg * M_PER_DEG * FT_PER_M;
     const relE_ft = dLonDeg * M_PER_DEG * Math.cos(S.lat * D2R) * FT_PER_M;
-    // World N/E → body (forward, right)
     const chH = Math.cos(S.hdg * D2R), shH = Math.sin(S.hdg * D2R);
     const bodyFwd =  relN_ft * chH + relE_ft * shH;
     const bodyLat = -relN_ft * shH + relE_ft * chH;
-    const sqX =  bodyLat * pxPerFt;
-    const sqY = -bodyFwd * pxPerFt;
-    const sqSize = Math.max(10, r * 0.16);
-    ctx.fillStyle   = 'rgba(255,204,0,0.2)';
-    ctx.strokeStyle = '#ffcc00';
-    ctx.lineWidth   = 1.5;
-    ctx.beginPath();
-    ctx.rect(sqX - sqSize/2, sqY - sqSize/2, sqSize, sqSize);
-    ctx.fill();
-    ctx.stroke();
+    // ft → kt equivalent for same px scale (1 kt ≈ 101 ft/min; use direct ft/px)
+    const pxPerFt = r / 50;
+    const mX =  bodyLat * pxPerFt;
+    const mY = -bodyFwd * pxPerFt;
+    const matched = gspdOn && gspdRefLat !== null && gspdRefFwd !== null &&
+                    Math.abs(gspdActLat - gspdRefLat) < 1 &&
+                    Math.abs(gspdActFwd - gspdRefFwd) < 1;
+    const mr = Math.max(7, r * 0.095);
+    if (matched) {
+      ctx.fillStyle = 'rgba(0,200,80,0.22)';
+      ctx.strokeStyle = '#00cc44'; ctx.lineWidth = 2.5;
+      ctx.beginPath(); ctx.arc(mX, mY, mr, 0, Math.PI*2);
+      ctx.fill(); ctx.stroke();
+    } else {
+      ctx.strokeStyle = '#cc44ff'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(mX, mY, mr, 0, Math.PI*2); ctx.stroke();
+      const sq = mr * 1.5;
+      ctx.strokeRect(mX - sq, mY - sq, sq * 2, sq * 2);
+    }
+  }
+  ctx.restore(); // end clip
+
+  // Scale indicator (upper-right inside compass)
+  {
+    const scl_ft = Math.round(SCL_KT * 101);
+    const siX = r * 0.44, siY = -r * 0.70;
+    const bw = Math.max(42, r * 0.54), bh = 24;
+    ctx.fillStyle = 'rgba(0,0,0,0.78)';
+    ctx.fillRect(siX, siY - bh/2, bw, bh);
+    ctx.strokeStyle = '#555'; ctx.lineWidth = 1;
+    ctx.strokeRect(siX, siY - bh/2, bw, bh);
+    const sFs = Math.max(8, r * 0.095);
+    ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#00ff88';
+    ctx.font = `bold ${sFs}px Helvetica Neue, Arial, sans-serif`;
+    ctx.fillText(`${SCL_KT}KT`, siX + 4, siY - sFs * 0.38);
+    ctx.fillStyle = '#aaa';
+    ctx.fillText(`${scl_ft}FT`, siX + 4, siY + sFs * 0.55);
   }
 
-  ctx.restore();
+  ctx.restore(); // end translate(cx, compCy)
 
-  // Readouts placed in the side areas (beside the now-compact circle).
-  // Use the lower vertical band so they read as "left-bottom" / "right-bottom".
-  const valFs  = Math.max(14, h * 0.08);
-  const lblFs  = Math.max(8,  h * 0.045);
-  const rowGap = Math.max(4,  h * 0.025);
-  const baseY  = y + h * 0.50;   // start in lower-half band beside circle
-  const leftCx  = (x + (cx - r)) / 2;          // mid of left side area
-  const rightCx = (cx + r + (x + w)) / 2;      // mid of right side area
+  // ── Bottom readout strip ──
+  const stripY = y + compH;
+  ctx.fillStyle = '#080808';
+  ctx.fillRect(x, stripY, w, STRIP_H);
+  ctx.strokeStyle = '#2a2a2a'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(x, stripY); ctx.lineTo(x + w, stripY); ctx.stroke();
+  // Center divider
+  ctx.beginPath(); ctx.moveTo(cx, stripY + 6); ctx.lineTo(cx, stripY + STRIP_H - 6); ctx.stroke();
+
+  const valFs = Math.max(11, STRIP_H * 0.27);
+  const lblFs = Math.max(8,  STRIP_H * 0.19);
+  const row1Y = stripY + STRIP_H * 0.37;
+  const row2Y = stripY + STRIP_H * 0.77;
+  const lPad  = x + w * 0.03;
+  const rPad  = cx + w * 0.03;
+  const refColor = gspdOn ? '#cc44ff' : '#aa33cc';
+
+  const latDir = gspdActLat >= 0 ? '→' : '←';
+  const fwdDir = gspdActFwd >= 0 ? '↑' : '↓';
+  const rLatDir = (gspdRefLat || 0) >= 0 ? '→' : '←';
+  const rFwdDir = (gspdRefFwd || 0) >= 0 ? '↑' : '↓';
+  const refLatTxt = gspdRefLat === null ? '--' : `${Math.round(Math.abs(gspdRefLat))}KT`;
+  const refFwdTxt = gspdRefFwd === null ? '--' : `${Math.round(Math.abs(gspdRefFwd))}KT`;
 
   ctx.save();
-  ctx.textAlign = 'center';
+  ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
 
-  // ── Bottom-left: actual GPS speeds ──
-  const actLatTxt = `${Math.round(gspdActLat)}`;
-  const actFwdTxt = `${Math.round(gspdActFwd)}`;
-  ctx.font = `${lblFs}px Helvetica Neue, Arial, sans-serif`;
-  ctx.fillStyle = '#888';
-  ctx.fillText('LAT', leftCx, baseY);
+  // Left: actual GS (lateral row)
+  ctx.fillStyle = '#aaa'; ctx.font = `bold ${lblFs}px Helvetica Neue, Arial, sans-serif`;
+  ctx.fillText('GS', lPad, row1Y);
+  ctx.fillStyle = '#00ff88'; ctx.font = `${lblFs}px Helvetica Neue, Arial, sans-serif`;
+  ctx.fillText(latDir, lPad + lblFs * 1.5, row1Y);
   ctx.font = `bold ${valFs}px Helvetica Neue, Arial, sans-serif`;
-  ctx.fillStyle = '#00ff88';
-  ctx.fillText(actLatTxt, leftCx, baseY + valFs);
-  ctx.font = `${lblFs}px Helvetica Neue, Arial, sans-serif`;
-  ctx.fillStyle = '#888';
-  ctx.fillText('FWD', leftCx, baseY + valFs + rowGap + lblFs);
-  ctx.font = `bold ${valFs}px Helvetica Neue, Arial, sans-serif`;
-  ctx.fillStyle = '#00ff88';
-  ctx.fillText(actFwdTxt, leftCx, baseY + valFs + rowGap + lblFs + valFs);
+  ctx.fillText(`${Math.round(Math.abs(gspdActLat))}KT`, lPad + lblFs * 2.4, row1Y);
 
-  // ── Bottom-right: reference speeds (magenta when null/before GSPD) ──
-  const refLatTxt = gspdRefLat === null ? '--' : `${Math.round(gspdRefLat)}`;
-  const refFwdTxt = gspdRefFwd === null ? '--' : `${Math.round(gspdRefFwd)}`;
-  const refColor  = gspdOn ? '#ff66ff' : '#cc44cc';
-  ctx.font = `${lblFs}px Helvetica Neue, Arial, sans-serif`;
-  ctx.fillStyle = '#888';
-  ctx.fillText('REF LAT', rightCx, baseY);
+  // Left: actual GS (forward row)
+  ctx.fillStyle = '#00ff88'; ctx.font = `${lblFs}px Helvetica Neue, Arial, sans-serif`;
+  ctx.fillText(fwdDir, lPad + lblFs * 1.5, row2Y);
   ctx.font = `bold ${valFs}px Helvetica Neue, Arial, sans-serif`;
-  ctx.fillStyle = refColor;
-  ctx.fillText(refLatTxt, rightCx, baseY + valFs);
-  ctx.font = `${lblFs}px Helvetica Neue, Arial, sans-serif`;
-  ctx.fillStyle = '#888';
-  ctx.fillText('REF FWD', rightCx, baseY + valFs + rowGap + lblFs);
+  ctx.fillText(`${Math.round(Math.abs(gspdActFwd))}KT`, lPad + lblFs * 2.4, row2Y);
+
+  // Right: reference GS (lateral row)
+  ctx.fillStyle = '#aaa'; ctx.font = `bold ${lblFs}px Helvetica Neue, Arial, sans-serif`;
+  ctx.fillText('GS', rPad, row1Y);
+  ctx.fillStyle = refColor; ctx.font = `${lblFs}px Helvetica Neue, Arial, sans-serif`;
+  ctx.fillText(rLatDir, rPad + lblFs * 1.5, row1Y);
   ctx.font = `bold ${valFs}px Helvetica Neue, Arial, sans-serif`;
-  ctx.fillStyle = refColor;
-  ctx.fillText(refFwdTxt, rightCx, baseY + valFs + rowGap + lblFs + valFs);
+  ctx.fillText(refLatTxt, rPad + lblFs * 2.4, row1Y);
+
+  // Right: reference GS (forward row)
+  ctx.fillStyle = '#aaa'; ctx.font = `bold ${lblFs}px Helvetica Neue, Arial, sans-serif`;
+  ctx.fillText('REF', rPad, row2Y);
+  ctx.fillStyle = refColor; ctx.font = `${lblFs}px Helvetica Neue, Arial, sans-serif`;
+  ctx.fillText(rFwdDir, rPad + lblFs * 1.9, row2Y);
+  ctx.font = `bold ${valFs}px Helvetica Neue, Arial, sans-serif`;
+  ctx.fillText(refFwdTxt, rPad + lblFs * 2.8, row2Y);
 
   ctx.restore();
-
-  // HDG box at top center (preserve heading reference)
-  const bw = 60, bh = 20;
-  const hdgX = cx - bw/2;
-  ctx.fillStyle = '#000'; ctx.strokeStyle = '#555'; ctx.lineWidth = 1;
-  ctx.fillRect(hdgX, y + 2, bw, bh); ctx.strokeRect(hdgX, y + 2, bw, bh);
-  ctx.fillStyle = '#fff'; ctx.font = 'bold 13px Helvetica Neue, Arial, sans-serif'; ctx.textAlign = 'center';
-  ctx.fillText(fmtA(S.hdg) + '°', hdgX + bw/2, y + 16);
 }
 
 // ── HSI Side Panel helper ──
