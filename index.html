@@ -2493,7 +2493,7 @@ function drawHSI(x, y, w, h) {
     // sin() 공식 사용 → devDeg=0° (코스) & devDeg=180° (역코스) 모두 CDI=0
     cdbWp = { lat: navLat, lon: navLon };
     const brgFromNav = bearing(navLat, navLon, S.lat, S.lon);
-    const devDeg     = normAS(brgFromNav - vorObsCrs);
+    const devDeg     = normAS(brgFromNav - normA(vorObsCrs + 180));
     const fullScale  = navSrc === 'VOR' ? 15 : 2.5;
     cdiOff = Math.max(-1, Math.min(1,
       -Math.sin(devDeg * D2R) / Math.sin(fullScale * D2R))) * 2 * dotGap;
@@ -3826,7 +3826,7 @@ function simStep(ts){
           if (navLat === null) { disengageNavAp(); }
           else {
             dtk = vorObsCrs;
-            xtk = Math.sin(normAS(bearing(navLat, navLon, S.lat, S.lon) - vorObsCrs) * D2R) * S.dtw;
+            xtk = Math.sin(normAS(bearing(navLat, navLon, S.lat, S.lon) - normA(vorObsCrs + 180)) * D2R) * S.dtw;
           }
         }
         if (navApOn && dtk !== undefined) {
