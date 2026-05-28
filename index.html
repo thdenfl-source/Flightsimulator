@@ -2447,7 +2447,7 @@ function drawHSI(x, y, w, h) {
   } else if ((navSrc === 'VOR' || navSrc === 'LOC') && navLat !== null) {
     cdbWp = { lat: navLat, lon: navLon };
     const brgFromNav = bearing(navLat, navLon, S.lat, S.lon);
-    const devDeg     = normAS(brgFromNav - vorObsCrs);
+    const devDeg     = normAS(brgFromNav - normA(vorObsCrs + 180));
     const fullScale  = navSrc === 'VOR' ? 15 : 2.5;
     cdiOff = Math.max(-1, Math.min(1,
       Math.sin(devDeg * D2R) / Math.sin(fullScale * D2R))) * 2 * dotGap;
