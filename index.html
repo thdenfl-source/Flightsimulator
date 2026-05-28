@@ -6038,7 +6038,8 @@ if ('serviceWorker' in navigator) {
             } else {
                 let clickAction = btn.id === 'sys' ? `onclick="switchMode('AUDIO'); switchAudioTab('COM');"` :
                                   btn.id === 'perf' ? `onclick="switchMode('PERF')"` :
-                                  btn.id === 'fpl' ? `onclick="setPage(1)"` :
+                                  btn.id === 'fpl'  ? `onclick="setPage(1)"` :
+                                  btn.id === 'proc' ? `onclick="setPage(1); fpGo('IFR');"` :
                                   btn.id === 'util' ? `onclick="switchMode('UTIL')"` : '';
                 gridHtml += `
                     <div class="home-icon-wrapper" ${clickAction}>
