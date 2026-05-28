@@ -2496,19 +2496,16 @@ function drawHSI(x, y, w, h) {
       xtk = crossTrack(S.wps[S.fwp].lat, S.wps[S.fwp].lon,
                        cdbWp.lat, cdbWp.lon, S.lat, S.lon);
     } else {
-      // Direct-to: perpendicular offset from the course line through awp.
-      // TO/FROM independent (+ = right of course).
-      xtk = distance(cdbWp.lat, cdbWp.lon, S.lat, S.lon) *
-            Math.sin(normAS(bearing(cdbWp.lat, cdbWp.lon, S.lat, S.lon) - S.crs) * D2R);
+      // Direct-to: crossTrack on line bwdPt→awp (TO/FROM independent)
+      const bwdPt = destPoint(cdbWp.lat, cdbWp.lon, normA(S.crs + 180), 100);
+      xtk = crossTrack(bwdPt[0], bwdPt[1], cdbWp.lat, cdbWp.lon, S.lat, S.lon);
     }
     cdiOff = Math.max(-1, Math.min(1, -xtk / rnp)) * 2 * dotGap;
     cdbActive = true;
   } else if ((navSrc === 'VOR' || navSrc === 'LOC') && navLat !== null) {
-    // HSI VOR/LOC: deviation from vorObsCrs (independent of FMS S.crs).
-    // sin() form → 0 when on course; sign = side of course regardless of TO/FROM.
     cdbWp = { lat: navLat, lon: navLon };
     const brgFromNav = bearing(navLat, navLon, S.lat, S.lon);
-    const devDeg     = normAS(brgFromNav - vorObsCrs);
+    const devDeg     = normAS(brgFromNav - normA(vorObsCrs + 180));
     const fullScale  = navSrc === 'VOR' ? 15 : 2.5;
     cdiOff = Math.max(-1, Math.min(1,
       -Math.sin(devDeg * D2R) / Math.sin(fullScale * D2R))) * 2 * dotGap;
@@ -3992,69 +3989,74 @@ function simStep(ts){
       if(S.awp>=0&&S.dtw<0.25&&S.awp+1<S.wps.length&&!obsOn){selectWP(S.awp+1);}
 
       // ── NAV Autopilot ──
-      // Three behaviours only:
-      //  (1) VOR / LOC / FMS-OBS : 30° intercept onto the fixed CRS line, then
-      //      track it indefinitely (continues even past the station / fix).
-      //  (2) FMS non-OBS         : track the leg / direct-to course; once the
-      //      final fix is passed, hold the heading current at that moment.
-      //  (3) CDB shows the side of course independent of TO/FROM (see drawHSI).
+      // (1) VOR / LOC / FMS-OBS : intercept (≤30°) then track CRS line indefinitely.
+      // (2) FMS non-OBS          : track leg/direct-to; hold HDG at final-fix passage.
+      // XTK is always crossTrack() on a two-point line so sign is TO/FROM independent.
       if (navApOn) {
-        let crs, refLat, refLon, holdHdg = null;
+        // xtkP1/P2 define the course line direction (p1→p2 = crs direction).
+        let crs, xtkP1lat, xtkP1lon, xtkP2lat, xtkP2lon, holdHdg = null;
         if (navSrc === 'FMS') {
           if (S.awp < 0 || S.awp >= S.wps.length) { disengageNavAp(); }
           else {
             const wp = S.wps[S.awp];
             if (obsOn) {
-              // (1) FMS OBS — track the selected course through the active fix
-              crs = S.crs; refLat = wp.lat; refLon = wp.lon;
+              // (1) FMS OBS
+              crs = S.crs;
+              const bwd = destPoint(wp.lat, wp.lon, normA(crs + 180), 100);
+              xtkP1lat = bwd[0]; xtkP1lon = bwd[1];
+              xtkP2lat = wp.lat; xtkP2lon = wp.lon;
             } else {
               // (2) FMS leg / direct-to
               let dtk;
               if (S.fwp >= 0 && S.fwp < S.wps.length) {
                 dtk = bearing(S.wps[S.fwp].lat, S.wps[S.fwp].lon, wp.lat, wp.lon);
+                xtkP1lat = S.wps[S.fwp].lat; xtkP1lon = S.wps[S.fwp].lon;
+                xtkP2lat = wp.lat;            xtkP2lon = wp.lon;
               } else {
                 if (navAp.dtk0 === null) navAp.dtk0 = bearing(S.lat, S.lon, wp.lat, wp.lon);
                 dtk = navAp.dtk0;
+                const bwd = destPoint(wp.lat, wp.lon, normA(dtk + 180), 100);
+                xtkP1lat = bwd[0]; xtkP1lon = bwd[1];
+                xtkP2lat = wp.lat; xtkP2lon = wp.lon;
               }
-              S.crs = dtk;
-              // Passed the fix when it is now behind us along the course, and it
-              // is the final fix (intermediate fixes auto-sequence beforehand).
-              const passed  = Math.cos(normAS(bearing(S.lat, S.lon, wp.lat, wp.lon) - dtk) * D2R) < 0;
-              const lastWp  = S.awp + 1 >= S.wps.length;
+              S.crs = dtk; crs = dtk;
+              const passed = Math.cos(normAS(bearing(S.lat, S.lon, wp.lat, wp.lon) - dtk) * D2R) < 0;
+              const lastWp = S.awp + 1 >= S.wps.length;
               if (navAp.hdgHold === null && passed && lastWp) navAp.hdgHold = S.hdg;
               if (navAp.hdgHold !== null) holdHdg = navAp.hdgHold;
-              else { crs = dtk; refLat = wp.lat; refLon = wp.lon; }
             }
           }
         } else {
-          // (1) VOR / LOC — track the selected course through the station
+          // (1) VOR / LOC
           if (navLat === null) { disengageNavAp(); }
-          else { crs = vorObsCrs; refLat = navLat; refLon = navLon; }
+          else {
+            crs = vorObsCrs;
+            const bwd = destPoint(navLat, navLon, normA(vorObsCrs + 180), 100);
+            xtkP1lat = bwd[0]; xtkP1lon = bwd[1];
+            xtkP2lat = navLat; xtkP2lon = navLon;
+          }
         }
 
-        if (navApOn && (holdHdg !== null || crs !== undefined) && !acDragging) {
-          updateNavBtn(); // refresh armed/active colour each cycle
+        if (navApOn && !acDragging) {
+          updateNavBtn();
           let desiredHdg;
           if (holdHdg !== null) {
-            // (2) heading hold past the final fix
             desiredHdg = holdHdg;
-          } else {
-            // (1) 30° intercept, then track the CRS line.
-            // XTK = perpendicular distance from the course line (+ = right of course)
-            const xtk = distance(refLat, refLon, S.lat, S.lon) *
-                        Math.sin(normAS(bearing(refLat, refLon, S.lat, S.lon) - crs) * D2R);
-            // Intercept angle: proportional, capped at ±30°, turning toward course.
+          } else if (crs !== undefined) {
+            // crossTrack on the two-point line: sign correct for any TO/FROM position
+            const xtk = crossTrack(xtkP1lat, xtkP1lon, xtkP2lat, xtkP2lon, S.lat, S.lon);
             const intercept = Math.max(-30, Math.min(30, -xtk * 12));
-            // Wind-correction feed-forward (exact sim wind is known).
             const wEff = effectiveWindSpd();
             const crossComp = wEff * Math.sin(normAS(normA(windDir + 180) - crs) * D2R);
             const wca = Math.asin(Math.max(-1, Math.min(1, crossComp / Math.max(1, S.spd)))) / D2R;
             desiredHdg = normA(crs - wca + intercept);
           }
-          const hdgErr   = normAS(desiredHdg - S.hdg);
-          const turnRate = Math.tanh(hdgErr * 0.08) * 3;   // max ±3°/s
-          S.hdg = normA(S.hdg + turnRate * dt);
-          bankTarget = (turnRate / 3) * 25;
+          if (desiredHdg !== undefined) {
+            const hdgErr   = normAS(desiredHdg - S.hdg);
+            const turnRate = Math.tanh(hdgErr * 0.08) * 3;
+            S.hdg = normA(S.hdg + turnRate * dt);
+            bankTarget = (turnRate / 3) * 25;
+          }
         }
       }
       // Update speed trend (6s extrapolation, smoothed)
