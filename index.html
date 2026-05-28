@@ -4001,21 +4001,22 @@ function simStep(ts){
             const wp = S.wps[S.awp];
             if (!obsOn) {
               if (S.fwp >= 0 && S.fwp < S.wps.length) {
-                // Leg: fixed bearing fwp→awp
+                // Leg fwp→awp: match CDI crossTrack formula exactly
                 dtk = bearing(S.wps[S.fwp].lat, S.wps[S.fwp].lon, wp.lat, wp.lon);
+                xtk = crossTrack(S.wps[S.fwp].lat, S.wps[S.fwp].lon, wp.lat, wp.lon, S.lat, S.lon);
               } else {
-                // Direct-to: fix DTK at engagement time so XTK is always
-                // measured from the SAME course line (not re-aimed each frame,
-                // which would keep XTK = 0 and disable any lateral correction).
+                // Direct-to: fix DTK at engagement time; match CDI direct-to formula
                 if (navAp.dtk0 === null) navAp.dtk0 = bearing(S.lat, S.lon, wp.lat, wp.lon);
                 dtk = navAp.dtk0;
+                xtk = -Math.sin(normAS(bearing(S.lat, S.lon, wp.lat, wp.lon) - dtk) * D2R) * S.dtw;
               }
               S.crs = dtk;
             } else {
-              dtk = S.crs; // OBS: use manually selected course
+              // OBS: match CDI OBS formula
+              dtk = S.crs;
+              const bwdPt = destPoint(wp.lat, wp.lon, normA(S.crs + 180), 100);
+              xtk = crossTrack(bwdPt[0], bwdPt[1], wp.lat, wp.lon, S.lat, S.lon);
             }
-            // VOR-style XTK — same formula as VOR/LOC path below
-            xtk = Math.sin(normAS(bearing(wp.lat, wp.lon, S.lat, S.lon) - dtk) * D2R) * S.dtw;
           }
         } else {
           // VOR/LOC
