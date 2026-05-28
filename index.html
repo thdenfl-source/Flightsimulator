@@ -371,6 +371,10 @@ html, body {
   background: rgba(0,30,20,0.92); border-color: #44cc88; color: #88ffcc;
   box-shadow: 0 0 8px rgba(68,204,136,0.4);
 }
+#enr-btn.enr-active {
+  background: rgba(30,10,0,0.92); border-color: #ffaa44; color: #ffcc88;
+  box-shadow: 0 0 8px rgba(255,170,68,0.4);
+}
 #map-sim-bar {
   position: absolute; bottom: 0; left: 0; right: 0; z-index: 1000;
   display: flex; gap: 4px; padding: 5px 8px;
@@ -1020,6 +1024,7 @@ html, body {
         <button id="as-ctr" onclick="toggleAS('CTR')">CTR</button>
         <button id="rain-btn" onclick="toggleRain()">RAIN</button>
         <button id="wind-btn" onclick="toggleWind()">WIND</button>
+        <button id="enr-btn" onclick="toggleEnrChart()">ENR</button>
       </div>
       <div id="gps-status"></div>
       <div id="map-sim-bar">
@@ -2981,6 +2986,41 @@ function toggleLayer() {
 }
 
 // ── RainViewer precipitation overlay ──
+// ── Enroute Chart Overlay ──
+const ENR_URL    = 'https://raw.githubusercontent.com/thdenfl-source/Flightsimulator/main/ENR%206.1.pdf.png';
+const ENR_BOUNDS = [[29.0, 123.0], [38.5, 132.5]];
+let enrLayer  = null;
+let enrActive = false;
+
+function toggleEnrChart() {
+  const btn = document.getElementById('enr-btn');
+  if (enrActive) {
+    if (enrLayer) { leafMap.removeLayer(enrLayer); enrLayer = null; }
+    enrActive = false;
+    btn.classList.remove('enr-active');
+    btn.textContent = 'ENR';
+    return;
+  }
+  btn.textContent = '…';
+  enrLayer = L.imageOverlay(ENR_URL, ENR_BOUNDS, {
+    opacity: 0.65,
+    interactive: false,
+    zIndex: 450
+  });
+  enrLayer.addTo(leafMap);
+  enrLayer.on('load', () => {
+    enrActive = true;
+    btn.classList.add('enr-active');
+    btn.textContent = 'ENR';
+  });
+  enrLayer.on('error', () => {
+    leafMap.removeLayer(enrLayer);
+    enrLayer = null;
+    btn.textContent = 'ENR';
+    alert('Enroute 차트 로드 실패. 잠시 후 다시 시도하세요.');
+  });
+}
+
 let rainLayer = null;
 let rainActive = false;
 
