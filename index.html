@@ -262,24 +262,6 @@ html, body {
 .hover-pos-btn:active { background: #2a2a1a; }
 .hover-pos-btn.active { border-color: #ffcc00; color: #ffcc00; box-shadow: 0 0 6px rgba(255,204,0,0.45); }
 
-/* ── NAV Autopilot button ── */
-.nav-ap-group { display: flex; flex-direction: column; align-items: center; gap: 2px; }
-.nav-ap-btn {
-  background: #111; border: 1px solid #333; color: #555;
-  font-size: 11px; font-weight: bold; padding: 5px 10px;
-  border-radius: 3px; cursor: pointer; touch-action: manipulation;
-  font-family: 'Helvetica Neue', Arial, sans-serif;
-  letter-spacing: 1px; transition: background 0.15s, border-color 0.15s, color 0.15s;
-}
-.nav-ap-btn:active { background: #1a2a1a; }
-.nav-ap-btn.on {
-  background: #0a2a0a; border-color: #00cc44; color: #00ff88;
-  box-shadow: 0 0 6px rgba(0,200,80,0.5);
-}
-.nav-ap-btn.armed {
-  background: #1a0e00; border-color: #ff8800; color: #ff8800;
-  box-shadow: 0 0 6px rgba(255,136,0,0.4);
-}
 /* ── OBS button ── */
 .obs-btn {
   background: #111; border: 1px solid #333; color: #555;
@@ -915,11 +897,10 @@ html, body {
 
         <div class="ctrl-div"></div>
 
-        <div class="nav-ap-group">
+        <div class="obs-group">
           <div class="ctrl-lbl">AP</div>
           <div style="display:flex;gap:4px;align-items:center;">
             <button class="obs-btn" id="obs-btn" onclick="toggleObs()">OBS</button>
-            <button class="nav-ap-btn" id="nav-ap-btn" onclick="toggleNavAp()">NAV</button>
           </div>
         </div>
 
@@ -1457,7 +1438,6 @@ function startTrimHold(dir) {
     _trimNonGspdDir = dir;
     if (dir === 'L' || dir === 'R') {
       bankTarget = Math.max(-60, Math.min(60, bankTarget + (dir === 'R' ? 1 : -1)));
-      disengageNavAp();
       rollApOn = false;
     } else {
       const d = dir === 'F' ? 1 : -1;
@@ -1576,42 +1556,7 @@ function navInterceptOk() {
   return Math.abs(xtk) <= rnp;
 }
 
-function updateNavBtn() {
-  const btn = document.getElementById('nav-ap-btn');
-  btn.classList.remove('on', 'armed');
-  if (navApOn) {
-    btn.classList.add(navInterceptOk() ? 'on' : 'armed');
-  }
-}
-
-// ── NAV Autopilot ──
-let navApOn = false;
 let rollApOn = true;   // false when manual bank trim overrides roll axis
-const navAp = { dtk0: null, hdgHold: null };
-
-function toggleNavAp() {
-  if (!navApOn) {
-    const fmsOk = navSrc === 'FMS' && S.awp >= 0 && S.awp < S.wps.length;
-    const vorOk = (navSrc === 'VOR' || navSrc === 'LOC') && navLat !== null;
-    if (!fmsOk && !vorOk) return;
-    if (!S.running) return;
-    navApOn = true;
-    rollApOn = true;
-    navAp.dtk0 = null; navAp.hdgHold = null;
-  } else {
-    navApOn = false;
-    bankTarget = 0;
-  }
-  updateNavBtn();
-}
-
-function disengageNavAp() {
-  if (!navApOn) return;
-  navApOn = false;
-  navAp.dtk0 = null; navAp.hdgHold = null;
-  bankTarget = 0;
-  updateNavBtn();
-}
 
 // NAV source state
 let navSrc  = 'FMS';   // 'FMS' | 'VOR' | 'LOC'
@@ -1666,7 +1611,6 @@ function setNavSrc(src) {
   }
   // Reset NAV AP PID integrator on source change to prevent heading bias from
   // accumulated cross-track error on the previous source bleeding into the new course.
-  if (navApOn) { navAp.dtk0 = null; navAp.hdgHold = null; }
   updateCrsButtons(); // VOR/LOC ↔ FMS 전환 시 버튼 상태 갱신
   updateNav();
 }
@@ -1816,14 +1760,12 @@ function drawFMA(x, y, w) {
   const MARGIN = FMA_MARGIN, GAP = FMA_GAP, BOX_H = FMA_BOX_H;
   const cellW  = Math.floor((w - MARGIN * 2 - GAP * 2) / 3);
   const Y0     = y + MARGIN;
-  const midLabel = navSrc === 'FMS' ? 'NAV' : navSrc;
-
   // Determine active mode per axis.  Default ALT | HDG | IAS — each axis
   // gets its own distinct label, never duplicating ALT on two axes.
   //   Left   (collective): ALT or CRHT (or dim ALT when both holds are off)
-  //   Middle (yaw/roll)  : HDG (default) or NAV/VOR/LOC when navAp engaged, GS when GSPD
+  //   Middle (yaw/roll)  : HDG or GS when GSPD
   //   Right  (pitch)     : IAS — or GS when GSPD engaged
-  let left, leftOn, mid = navApOn ? midLabel : 'HDG', midOn = rollApOn, right, rightOn;
+  let left, leftOn, mid = 'HDG', midOn = rollApOn, right, rightOn;
 
   if (gspdOn) {
     // GSPD engaged: both yaw/roll (mid) and pitch (right) are driven by
@@ -2505,10 +2447,10 @@ function drawHSI(x, y, w, h) {
   } else if ((navSrc === 'VOR' || navSrc === 'LOC') && navLat !== null) {
     cdbWp = { lat: navLat, lon: navLon };
     const brgFromNav = bearing(navLat, navLon, S.lat, S.lon);
-    const devDeg     = normAS(brgFromNav - normA(vorObsCrs + 180));
+    const devDeg     = normAS(brgFromNav - vorObsCrs);
     const fullScale  = navSrc === 'VOR' ? 15 : 2.5;
     cdiOff = Math.max(-1, Math.min(1,
-      -Math.sin(devDeg * D2R) / Math.sin(fullScale * D2R))) * 2 * dotGap;
+      Math.sin(devDeg * D2R) / Math.sin(fullScale * D2R))) * 2 * dotGap;
     cdbActive = true;
   }
   const CG = '#ffffff';
@@ -3728,7 +3670,6 @@ function removeWP(i){
 function selectWP(i){
   S.fwp=S.awp;S.awp=i;
   if (!obsOn) S.crs=bearing(S.lat,S.lon,S.wps[i].lat,S.wps[i].lon);
-  navAp.dtk0 = null; navAp.hdgHold = null;   // new leg → re-arm tracking
   updateWpMarkers();fpRender();updateNav();
 }
 function setBrg2(i){
@@ -3738,7 +3679,6 @@ function setBrg2(i){
 function clearFP(){
   S.wps=[];S.awp=-1;S.fwp=-1;S.brg2wp=-1;
   fpMode='LIST';
-  disengageNavAp();
   updateWpMarkers();fpRender();updateNav();
 }
 
@@ -3754,7 +3694,6 @@ function applyDelta(field, d){
     case 'hdg':
       S.hdg = normA(S.hdg + d);
       bankTarget = d > 0 ? 22 : -22;
-      disengageNavAp();
       rollApOn = true;
       break;
     case 'crs':
@@ -3959,8 +3898,7 @@ function simStep(ts){
         }
 
         // Coordinated turn: bank angle drives heading change (g·tan(bank)/V).
-        // Skipped when GSPD controls ground velocity, or when nav AP is active.
-        if (Math.abs(S.bnk) > 0.5 && !gspdOn && !gspdCoasting && !navApOn) {
+        if (Math.abs(S.bnk) > 0.5 && !gspdOn && !gspdCoasting) {
           const V_ms = Math.max(10, S.spd) * 0.5144;
           const turnRate = 9.81 * Math.tan(S.bnk * D2R) / V_ms / D2R;  // °/s
           S.hdg = normA(S.hdg + turnRate * dt);
@@ -3988,77 +3926,6 @@ function simStep(ts){
       updateAcOnMap();updateNav();
       if(S.awp>=0&&S.dtw<0.25&&S.awp+1<S.wps.length&&!obsOn){selectWP(S.awp+1);}
 
-      // ── NAV Autopilot ──
-      // (1) VOR / LOC / FMS-OBS : intercept (≤30°) then track CRS line indefinitely.
-      // (2) FMS non-OBS          : track leg/direct-to; hold HDG at final-fix passage.
-      // XTK is always crossTrack() on a two-point line so sign is TO/FROM independent.
-      if (navApOn) {
-        // xtkP1/P2 define the course line direction (p1→p2 = crs direction).
-        let crs, xtkP1lat, xtkP1lon, xtkP2lat, xtkP2lon, holdHdg = null;
-        if (navSrc === 'FMS') {
-          if (S.awp < 0 || S.awp >= S.wps.length) { disengageNavAp(); }
-          else {
-            const wp = S.wps[S.awp];
-            if (obsOn) {
-              // (1) FMS OBS
-              crs = S.crs;
-              const bwd = destPoint(wp.lat, wp.lon, normA(crs + 180), 100);
-              xtkP1lat = bwd[0]; xtkP1lon = bwd[1];
-              xtkP2lat = wp.lat; xtkP2lon = wp.lon;
-            } else {
-              // (2) FMS leg / direct-to
-              let dtk;
-              if (S.fwp >= 0 && S.fwp < S.wps.length) {
-                dtk = bearing(S.wps[S.fwp].lat, S.wps[S.fwp].lon, wp.lat, wp.lon);
-                xtkP1lat = S.wps[S.fwp].lat; xtkP1lon = S.wps[S.fwp].lon;
-                xtkP2lat = wp.lat;            xtkP2lon = wp.lon;
-              } else {
-                if (navAp.dtk0 === null) navAp.dtk0 = bearing(S.lat, S.lon, wp.lat, wp.lon);
-                dtk = navAp.dtk0;
-                const bwd = destPoint(wp.lat, wp.lon, normA(dtk + 180), 100);
-                xtkP1lat = bwd[0]; xtkP1lon = bwd[1];
-                xtkP2lat = wp.lat; xtkP2lon = wp.lon;
-              }
-              S.crs = dtk; crs = dtk;
-              const passed = Math.cos(normAS(bearing(S.lat, S.lon, wp.lat, wp.lon) - dtk) * D2R) < 0;
-              const lastWp = S.awp + 1 >= S.wps.length;
-              if (navAp.hdgHold === null && passed && lastWp) navAp.hdgHold = S.hdg;
-              if (navAp.hdgHold !== null) holdHdg = navAp.hdgHold;
-            }
-          }
-        } else {
-          // (1) VOR / LOC
-          if (navLat === null) { disengageNavAp(); }
-          else {
-            crs = vorObsCrs;
-            const bwd = destPoint(navLat, navLon, normA(vorObsCrs + 180), 100);
-            xtkP1lat = bwd[0]; xtkP1lon = bwd[1];
-            xtkP2lat = navLat; xtkP2lon = navLon;
-          }
-        }
-
-        if (navApOn && !acDragging) {
-          updateNavBtn();
-          let desiredHdg;
-          if (holdHdg !== null) {
-            desiredHdg = holdHdg;
-          } else if (crs !== undefined) {
-            // crossTrack on the two-point line: sign correct for any TO/FROM position
-            const xtk = crossTrack(xtkP1lat, xtkP1lon, xtkP2lat, xtkP2lon, S.lat, S.lon);
-            const intercept = Math.max(-30, Math.min(30, -xtk * 12));
-            const wEff = effectiveWindSpd();
-            const crossComp = wEff * Math.sin(normAS(normA(windDir + 180) - crs) * D2R);
-            const wca = Math.asin(Math.max(-1, Math.min(1, crossComp / Math.max(1, S.spd)))) / D2R;
-            desiredHdg = normA(crs - wca + intercept);
-          }
-          if (desiredHdg !== undefined) {
-            const hdgErr   = normAS(desiredHdg - S.hdg);
-            const turnRate = Math.tanh(hdgErr * 0.08) * 3;
-            S.hdg = normA(S.hdg + turnRate * dt);
-            bankTarget = (turnRate / 3) * 25;
-          }
-        }
-      }
       // Update speed trend (6s extrapolation, smoothed)
       {
         const acc = (S.spd - _spdPrev) / dt;
