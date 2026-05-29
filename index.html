@@ -4188,7 +4188,7 @@ function resetSim(){
 }
 
 function simStep(ts){
-  if(S.running && !gpsMode && S.lastT!==null){
+  if(S.running && !gpsMode && !_fdrPlaying && S.lastT!==null){
     const dt=(ts-S.lastT)/1000;
     if(dt>0&&dt<0.5){
       // smooth bank toward target
@@ -7284,14 +7284,16 @@ switchMode('HOME');
 // ═══════════════════════════════════════════════════════════════
 //  FDR (GPX REPLAY)
 // ═══════════════════════════════════════════════════════════════
-let _fdrTrack    = [];       // [{lat,lon,altM,speedKt,timeMs}]
-let _fdrIdx      = 0;        // current playback index
-let _fdrTimer    = null;     // setInterval handle
-let _fdrSpeed    = 1;        // playback speed multiplier
-let _fdrPlaying  = false;
-let _fdrLayer2d  = null;     // Leaflet polyline
-let _fdrMarker2d = null;     // Leaflet marker for current position
-let _fdrLayer3d  = null;     // maplibre source id flag
+let _fdrTrack      = [];     // [{lat,lon,altM,speedKt,timeMs}]
+let _fdrIdx        = 0;      // current playback index
+let _fdrSpeed      = 1;      // playback speed multiplier
+let _fdrPlaying    = false;
+let _fdrRafId      = null;   // requestAnimationFrame handle
+let _fdrWallStart  = 0;      // wall-clock ms when play/resume began
+let _fdrTrackStart = 0;      // track timeMs at start of current play segment
+let _fdrLayer2d    = null;   // Leaflet polyline
+let _fdrMarker2d   = null;   // Leaflet marker for current position
+let _fdrLayer3d    = null;   // maplibre source id flag
 
 function toggleFdrPanel() {
   const panel = document.getElementById('fdr-panel');
@@ -7415,8 +7417,9 @@ function _fdrRenderFrame(idx) {
   S.spd = Math.round(p.speedKt);
   S.hdg = hdg;
 
-  // Update map aircraft marker + follow
+  // Update map aircraft marker + follow (triggers _applyFollow for 3D follow mode)
   updateAcOnMap();
+  drawPFD();
 
   // Update timeline slider
   document.getElementById('fdr-slider').value = _fdrIdx;
@@ -7433,26 +7436,45 @@ function _fmtTime(sec) {
            : `${m}:${String(s).padStart(2,'0')}`;
 }
 
-function _fdrTick() {
-  if (_fdrIdx >= _fdrTrack.length - 1) { fdrPause(); return; }
-  _fdrRenderFrame(_fdrIdx + 1);
+// rAF-based playback loop: advances to the track point whose timeMs matches
+// current elapsed wall-clock time × speed multiplier.
+function _fdrRafLoop(wallNow) {
+  if (!_fdrPlaying) return;
+
+  const trackNow = _fdrTrackStart + (wallNow - _fdrWallStart) * _fdrSpeed;
+  const last     = _fdrTrack[_fdrTrack.length - 1];
+
+  if (trackNow >= last.timeMs) {
+    _fdrRenderFrame(_fdrTrack.length - 1);
+    fdrPause();
+    return;
+  }
+
+  // Binary search for the correct index
+  let lo = _fdrIdx, hi = _fdrTrack.length - 1;
+  while (lo < hi - 1) {
+    const mid = (lo + hi) >> 1;
+    if (_fdrTrack[mid].timeMs <= trackNow) lo = mid; else hi = mid;
+  }
+  if (lo !== _fdrIdx) _fdrRenderFrame(lo);
+
+  _fdrRafId = requestAnimationFrame(_fdrRafLoop);
 }
 
 function fdrPlay() {
   if (!_fdrTrack.length) return;
   if (_fdrIdx >= _fdrTrack.length - 1) _fdrIdx = 0;
-  _fdrPlaying = true;
+  _fdrPlaying    = true;
+  _fdrWallStart  = performance.now();
+  _fdrTrackStart = _fdrTrack[_fdrIdx].timeMs;
   document.getElementById('fdr-play-btn').classList.add('active');
-  // Interval: average ms between points / speed multiplier
-  const avgMs = (_fdrTrack[_fdrTrack.length-1].timeMs - _fdrTrack[0].timeMs) / (_fdrTrack.length - 1);
-  const interval = Math.max(100, avgMs / _fdrSpeed);
-  if (_fdrTimer) clearInterval(_fdrTimer);
-  _fdrTimer = setInterval(_fdrTick, interval);
+  if (_fdrRafId) cancelAnimationFrame(_fdrRafId);
+  _fdrRafId = requestAnimationFrame(_fdrRafLoop);
 }
 
 function fdrPause() {
   _fdrPlaying = false;
-  if (_fdrTimer) { clearInterval(_fdrTimer); _fdrTimer = null; }
+  if (_fdrRafId) { cancelAnimationFrame(_fdrRafId); _fdrRafId = null; }
   document.getElementById('fdr-play-btn').classList.remove('active');
 }
 
@@ -7463,20 +7485,25 @@ function fdrStop() {
 }
 
 function fdrSeek(val) {
+  const idx = parseInt(val);
   const wasPlaying = _fdrPlaying;
-  if (wasPlaying) fdrPause();
-  _fdrRenderFrame(parseInt(val));
+  if (wasPlaying) {
+    // cancel current loop, move index, restart from new position
+    _fdrPlaying = false;
+    if (_fdrRafId) { cancelAnimationFrame(_fdrRafId); _fdrRafId = null; }
+  }
+  _fdrRenderFrame(idx);
   if (wasPlaying) fdrPlay();
 }
 
 function fdrSetSpeed(val) {
+  const wasPlaying = _fdrPlaying;
+  if (wasPlaying) fdrPause();
   _fdrSpeed = parseFloat(val);
-  if (_fdrPlaying) { fdrPause(); fdrPlay(); }
+  if (wasPlaying) fdrPlay();
 }
 
-function _fdrUpdateUi() {
-  // called after track load — nothing extra needed
-}
+function _fdrUpdateUi() {}
 </script>
 </body>
 </html>
