@@ -294,6 +294,17 @@ html, body {
 #layer-btn-3d { background: rgba(0,10,30,0.82); border: 1px solid #333; color: #aaa; }
 #layer-btn-3d.active { background: rgba(0,30,80,0.92); border-color: #4488ff; color: #88ccff; box-shadow: 0 0 8px rgba(68,136,255,0.4); }
 #follow-btn.active { background: rgba(60,30,0,0.92); border-color: #ffaa00; color: #ffcc44; box-shadow: 0 0 8px rgba(255,170,0,0.4); }
+#tilt-ctrl {
+  position: absolute; bottom: 10px; right: 46px; z-index: 900;
+  display: none; flex-direction: column; gap: 2px;
+}
+#tilt-ctrl.active { display: flex; }
+#tilt-ctrl button {
+  width: 34px; height: 34px; background: rgba(0,10,30,0.82);
+  border: 1px solid #555; border-radius: 4px; color: #ccc;
+  font-size: 18px; line-height: 1; cursor: pointer;
+}
+#tilt-ctrl button:hover { background: rgba(0,30,80,0.92); color: #fff; }
 /* Dual-unit map scale bar (km + NM) */
 .vfr-scale {
   background: rgba(0,0,0,0.65);
@@ -1005,7 +1016,12 @@ html, body {
     <!-- Page 1: Map -->
     <div id="map-wrap" class="page-content">
       <div id="map"></div>
-      <div id="map3d"></div>
+      <div id="map3d">
+        <div id="tilt-ctrl">
+          <button onclick="tiltAdj(-5)" title="Tilt up">▲</button>
+          <button onclick="tiltAdj(5)"  title="Tilt down">▼</button>
+        </div>
+      </div>
       <div id="map-top-bar">
         <button id="orient-btn" onclick="toggleMapOrient()">N↑</button>
         <button id="follow-btn" onclick="toggleFollow()">1인칭</button>
@@ -2975,6 +2991,18 @@ function toggleLayer() {
 let _ml3d = null;          // Maplibre GL map instance (lazy init)
 let _ml3dMarker = null;    // aircraft marker on 3D map
 let _view3dOn = false;
+let _ml3dPitch = 70;       // current 3D map pitch (adjustable via tilt buttons)
+
+function tiltAdj(delta) {
+  _ml3dPitch = Math.max(0, Math.min(85, _ml3dPitch + delta));
+  if (_ml3d && _ml3d.loaded()) {
+    if (followMode) {
+      _applyFollow(); // let follow recalculate with new pitch
+    } else {
+      _ml3d.easeTo({ pitch: _ml3dPitch, duration: 200 });
+    }
+  }
+}
 
 function toggle3dMap() {
   const btn = document.getElementById('layer-btn-3d');
@@ -2991,9 +3019,11 @@ function toggle3dMap() {
   _view3dOn = !_view3dOn;
   btn.classList.toggle('active', _view3dOn);
 
+  const tiltCtrl = document.getElementById('tilt-ctrl');
   if (_view3dOn) {
     div3d.classList.add('active');
     wrap.classList.add('map3d-on');
+    if (tiltCtrl) tiltCtrl.classList.add('active');
     _init3dMap();
     // Container just became visible — force a resize once layout settles
     requestAnimationFrame(() => {
@@ -3002,6 +3032,7 @@ function toggle3dMap() {
   } else {
     div3d.classList.remove('active');
     wrap.classList.remove('map3d-on');
+    if (tiltCtrl) tiltCtrl.classList.remove('active');
     // Returning to 2D — Leaflet needs to recompute its size; apply follow immediately
     setTimeout(() => {
       try { leafMap.invalidateSize(); } catch (e) {}
@@ -3551,7 +3582,7 @@ function _applyFollow() {
       center:  [S.lon, S.lat],
       bearing: S.hdg,          // map north rotates so aircraft heading points up
       zoom,
-      pitch:   70,
+      pitch:   _ml3dPitch,
       padding: { top: padTop, bottom: 0, left: 0, right: 0 }
     });
   } else {
