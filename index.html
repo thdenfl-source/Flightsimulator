@@ -1018,23 +1018,7 @@ html, body {
           <button onclick="closeWxPanel()" style="position:absolute;top:50%;right:8px;transform:translateY(-50%);background:none;border:none;color:#666;font-size:14px;line-height:1;cursor:pointer;padding:0;">✕</button>
         </div>
         <div id="wx-panel-body">
-          <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:3px;">
-            <button class="wx-ap-btn" onclick="setWxIcao('RKSI',this)">RKSI<br><span style="color:#ffcc00;font-weight:normal;">인천</span></button>
-            <button class="wx-ap-btn" onclick="setWxIcao('RKSS',this)">RKSS<br><span style="color:#ffcc00;font-weight:normal;">김포</span></button>
-            <button class="wx-ap-btn" onclick="setWxIcao('RKPC',this)">RKPC<br><span style="color:#ffcc00;font-weight:normal;">제주</span></button>
-            <button class="wx-ap-btn" onclick="setWxIcao('RKPK',this)">RKPK<br><span style="color:#ffcc00;font-weight:normal;">김해</span></button>
-            <button class="wx-ap-btn" onclick="setWxIcao('RKJB',this)">RKJB<br><span style="color:#ffcc00;font-weight:normal;">무안</span></button>
-            <button class="wx-ap-btn" onclick="setWxIcao('RKTU',this)">RKTU<br><span style="color:#ffcc00;font-weight:normal;">청주</span></button>
-            <button class="wx-ap-btn" onclick="setWxIcao('RKNY',this)">RKNY<br><span style="color:#ffcc00;font-weight:normal;">양양</span></button>
-            <button class="wx-ap-btn" onclick="setWxIcao('RKJJ',this)">RKJJ<br><span style="color:#ffcc00;font-weight:normal;">광주</span></button>
-            <button class="wx-ap-btn" onclick="setWxIcao('RKTN',this)">RKTN<br><span style="color:#ffcc00;font-weight:normal;">대구</span></button>
-            <button class="wx-ap-btn" onclick="setWxIcao('RKNN',this)">RKNN<br><span style="color:#ffcc00;font-weight:normal;">강릉</span></button>
-            <button class="wx-ap-btn" onclick="setWxIcao('RKPU',this)">RKPU<br><span style="color:#ffcc00;font-weight:normal;">울산</span></button>
-            <button class="wx-ap-btn" onclick="setWxIcao('RKTH',this)">RKTH<br><span style="color:#ffcc00;font-weight:normal;">포항</span></button>
-            <button class="wx-ap-btn" onclick="setWxIcao('RKJY',this)">RKJY<br><span style="color:#ffcc00;font-weight:normal;">여수</span></button>
-            <button class="wx-ap-btn" onclick="setWxIcao('RKPS',this)">RKPS<br><span style="color:#ffcc00;font-weight:normal;">사천</span></button>
-            <button class="wx-ap-btn" onclick="setWxIcao('RKJK',this)">RKJK<br><span style="color:#ffcc00;font-weight:normal;">군산</span></button>
-          </div>
+          <div id="wx-ap-grid" style="display:grid;grid-template-columns:repeat(5,1fr);gap:3px;"></div>
           <div id="wx-fetch-row">
             <input id="wx-icao" type="text" maxlength="4" placeholder="ICAO" autocomplete="off" autocorrect="off" spellcheck="false">
             <button class="wx-fetch-btn" onclick="fetchWx('METAR')">METAR</button>
@@ -4834,15 +4818,39 @@ const IFR_DB = {
   },
 };
 
-// ── Airport positions (always-visible markers) ──────────────────────────────
-const APT_LATLNG = {
-  'RKSI': [37.4690, 126.4510],
-  'RKSS': [37.5583, 126.7942],
-  'RKPK': [35.1795, 128.9380],
-  'RKPC': [33.5113, 126.4930],
-  'RKNY': [38.0614, 128.6692],
-  'RKJK': [35.9038, 126.6158],
-};
+// ── Korean airports providing METAR/TAF (single source of truth) ─────────────
+// Used for: always-visible map weather icons, background METAR refresh, and the
+// WX panel quick-select buttons. Covers civil airports plus military/joint-use
+// air bases (Osan, Gunsan, Seoul, Suwon, Pyeongtaek, Yecheon, Wonju) which
+// report METAR/TAF to aviationweather.gov / NOAA.
+const WX_AIRPORTS = [
+  { icao:'RKSI', name:'인천', lat:37.4690, lon:126.4510 },
+  { icao:'RKSS', name:'김포', lat:37.5583, lon:126.7942 },
+  { icao:'RKPC', name:'제주', lat:33.5113, lon:126.4930 },
+  { icao:'RKPK', name:'김해', lat:35.1795, lon:128.9380 },
+  { icao:'RKTN', name:'대구', lat:35.8939, lon:128.6586 },
+  { icao:'RKTU', name:'청주', lat:36.7166, lon:127.4990 },
+  { icao:'RKJB', name:'무안', lat:34.9914, lon:126.3829 },
+  { icao:'RKJJ', name:'광주', lat:35.1233, lon:126.8088 },
+  { icao:'RKJK', name:'군산', lat:35.9038, lon:126.6158 },
+  { icao:'RKJY', name:'여수', lat:34.8423, lon:127.6170 },
+  { icao:'RKPU', name:'울산', lat:35.5934, lon:129.3520 },
+  { icao:'RKPS', name:'사천', lat:35.0886, lon:128.0703 },
+  { icao:'RKTH', name:'포항', lat:35.9878, lon:129.4201 },
+  { icao:'RKNN', name:'강릉', lat:37.7537, lon:128.9437 },
+  { icao:'RKNY', name:'양양', lat:38.0613, lon:128.6693 },
+  { icao:'RKSO', name:'오산', lat:37.0911, lon:127.0297 },
+  { icao:'RKSG', name:'평택', lat:36.9622, lon:127.0327 },
+  { icao:'RKSM', name:'서울', lat:37.4447, lon:127.1127 },
+  { icao:'RKSW', name:'수원', lat:37.2394, lon:127.0070 },
+  { icao:'RKTY', name:'예천', lat:36.6304, lon:128.3497 },
+  { icao:'RKNW', name:'원주', lat:37.4378, lon:127.9603 },
+];
+
+// Airport positions (always-visible markers) — derived from WX_AIRPORTS
+const APT_LATLNG = Object.fromEntries(WX_AIRPORTS.map(a => [a.icao, [a.lat, a.lon]]));
+// ICAO → Korean name lookup (for marker labels & WX panel buttons)
+const APT_NAME = Object.fromEntries(WX_AIRPORTS.map(a => [a.icao, a.name]));
 
 let _aptWxCtl = null;
 
@@ -4895,7 +4903,7 @@ async function showAptWx(icao, name, latlng) {
 
 function initAirportLayer() {
   Object.entries(APT_LATLNG).forEach(([icao, latlng]) => {
-    const name = IFR_DB[icao]?.name || '';
+    const name = APT_NAME[icao] || IFR_DB[icao]?.name || '';
     const icon = L.divIcon({
       html: `<div style="text-align:center;cursor:pointer;">
         <div style="width:14px;height:14px;background:#ffcc00;border:2px solid #000;margin:0 auto;transform:rotate(45deg);box-shadow:0 0 5px rgba(255,204,0,0.7);"></div>
@@ -4909,6 +4917,18 @@ function initAirportLayer() {
   });
 }
 initAirportLayer();
+
+// Populate WX panel quick-select buttons from the same WX_AIRPORTS source,
+// keeping the map weather icons and the WX panel list in sync.
+function initWxButtons() {
+  const grid = document.getElementById('wx-ap-grid');
+  if (!grid) return;
+  grid.innerHTML = WX_AIRPORTS.map(a =>
+    `<button class="wx-ap-btn" onclick="setWxIcao('${a.icao}',this)">${a.icao}<br>` +
+    `<span style="color:#ffcc00;font-weight:normal;">${a.name}</span></button>`
+  ).join('');
+}
+initWxButtons();
 
 // ══════════════════════════════════════════════════════
 // IFR PLAN CONTROLS
