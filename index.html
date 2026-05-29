@@ -295,7 +295,7 @@ html, body {
 #layer-btn-3d.active { background: rgba(0,30,80,0.92); border-color: #4488ff; color: #88ccff; box-shadow: 0 0 8px rgba(68,136,255,0.4); }
 #follow-btn.active { background: rgba(60,30,0,0.92); border-color: #ffaa00; color: #ffcc44; box-shadow: 0 0 8px rgba(255,170,0,0.4); }
 #tilt-ctrl {
-  position: absolute; bottom: 44px; right: 46px; z-index: 900;
+  position: absolute; bottom: 54px; right: 46px; z-index: 900;
   display: none; flex-direction: column; gap: 0;
 }
 #tilt-ctrl.active { display: flex; }
@@ -3578,17 +3578,18 @@ function _applyFollow() {
     // lower, closer first-person view → +1 zoom vs. full altitude.
     // At ~500 ft (helicopter cruise) → zoom ~14.  At ~10 000 ft → zoom ~10.
     const zoom = Math.max(4, Math.min(16, 16 - Math.log2(Math.max(100, S.alt) / 100)));
-    // Offset the focal point downward via top padding so the aircraft sits at
-    // ~1/4 from the bottom. For fraction f from top: top = (2f-1)*H.
+    // Shift the focal point DOWN by 25% of screen height so the aircraft
+    // appears at 1/4 from the bottom without distorting the sky rendering.
+    // maplibre offset [x, y]: positive y = focal point moves down = aircraft moves down.
     const H = _ml3d.getContainer().clientHeight || 0;
-    const f = 1 - FOLLOW_FWD_FRAC; // 0.75 from top
-    const padTop = Math.max(0, (2 * f - 1) * H);
+    const offsetY = H * FOLLOW_FWD_FRAC; // e.g. 0.25 * height
     _ml3d.jumpTo({
       center:  [S.lon, S.lat],
-      bearing: S.hdg,          // map north rotates so aircraft heading points up
+      bearing: S.hdg,
       zoom,
       pitch:   _ml3dPitch,
-      padding: { top: padTop, bottom: 0, left: 0, right: 0 }
+      offset:  [0, offsetY],
+      padding: { top: 0, bottom: 0, left: 0, right: 0 }
     });
   } else {
     // ── 2D follow ──
