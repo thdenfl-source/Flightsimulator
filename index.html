@@ -901,6 +901,7 @@ html, body {
           <div class="ctrl-lbl">AP</div>
           <div style="display:flex;gap:4px;align-items:center;">
             <button class="obs-btn" id="obs-btn" onclick="toggleObs()">OBS</button>
+            <button class="obs-btn" id="nav-ap-btn" onclick="toggleNavAp()">NAV</button>
           </div>
         </div>
 
@@ -1485,6 +1486,9 @@ function toggleHoverPosition() {
 let obsOn = false;
 let vorObsCrs = 360; // VOR/LOC 전용 OBS 코스 — S.crs(FMS) 와 완전 분리
 
+// ── NAV AP (Course Tracking Autopilot) ──
+let navApOn = false;
+
 // ── Wind ──
 let windDir = 270; // direction FROM which wind blows (0-359°)
 let windSpd = 0;   // knots
@@ -1536,6 +1540,45 @@ function toggleObs() {
   obsOn = !obsOn;
   document.getElementById('obs-btn').classList.toggle('on', obsOn);
   updateCrsButtons();
+}
+
+function toggleNavAp() {
+  navApOn = !navApOn;
+  document.getElementById('nav-ap-btn').classList.toggle('on', navApOn);
+  if (!navApOn) bankTarget = 0;
+}
+
+// Compute fly-by anticipation distance (NM) for a turn from current course to nextCrs
+function flyByAnticipationDist(nextCrs) {
+  const turnAngle = Math.abs(normAS(nextCrs - activeCrs()));
+  if (turnAngle < 5) return 0.15;
+  const V_ms = Math.max(20, S.spd) * 0.5144;
+  const turnRadius = V_ms * V_ms / (9.81 * Math.tan(25 * D2R)) / 1852; // NM
+  return Math.max(0.15, turnRadius * Math.tan(turnAngle / 2 * D2R));
+}
+
+// Compute NAV AP bank target for course tracking.
+// Returns the desired bankTarget value.
+function navApBankTarget() {
+  const crs = activeCrs();
+
+  // Compute XTK (NM, positive = right of course)
+  let xtk = 0;
+  if (navSrc === 'FMS') {
+    xtk = S.xtk; // already computed by updateNav()
+  } else if (navLat !== null) {
+    // VOR/LOC: compute lateral deviation as signed XTK
+    const brgFromNav = bearing(navLat, navLon, S.lat, S.lon);
+    const devDeg = normAS(brgFromNav - normA(crs + 180));
+    xtk = Math.sin(devDeg * D2R) * S.dtw;
+  }
+
+  // Intercept angle: max ±45° proportional to XTK
+  // Gain: 15°/NM gives 45° at 3 NM deviation; tighter near course
+  const interceptAngle = Math.max(-45, Math.min(45, xtk * 15));
+  const desiredHdg = normA(crs - interceptAngle);
+  const hdgErr = normAS(desiredHdg - S.hdg);
+  return Math.max(-25, Math.min(25, hdgErr * 2));
 }
 
 // Returns true if the aircraft is laterally within ±RNP of the selected
@@ -1765,7 +1808,7 @@ function drawFMA(x, y, w) {
   //   Left   (collective): ALT or CRHT (or dim ALT when both holds are off)
   //   Middle (yaw/roll)  : HDG or GS when GSPD
   //   Right  (pitch)     : IAS — or GS when GSPD engaged
-  let left, leftOn, mid = 'HDG', midOn = rollApOn, right, rightOn;
+  let left, leftOn, mid = navApOn ? 'NAV' : 'HDG', midOn = rollApOn || navApOn, right, rightOn;
 
   if (gspdOn) {
     // GSPD engaged: both yaw/roll (mid) and pitch (right) are driven by
@@ -3924,7 +3967,38 @@ function simStep(ts){
         }
       }
       updateAcOnMap();updateNav();
-      if(S.awp>=0&&S.dtw<0.25&&S.awp+1<S.wps.length&&!obsOn){selectWP(S.awp+1);}
+
+      // FMS waypoint sequencing (fly-by when NAV AP active)
+      if (S.awp >= 0 && !obsOn) {
+        if (navApOn && navSrc === 'FMS' && S.awp + 1 < S.wps.length) {
+          // Fly-by: anticipate turn toward next leg before reaching WP
+          const nextLegCrs = bearing(S.wps[S.awp].lat, S.wps[S.awp].lon,
+                                     S.wps[S.awp + 1].lat, S.wps[S.awp + 1].lon);
+          const anticipateDist = flyByAnticipationDist(nextLegCrs);
+          if (S.dtw < anticipateDist) { selectWP(S.awp + 1); }
+        } else if (S.dtw < 0.25) {
+          if (S.awp + 1 < S.wps.length) {
+            selectWP(S.awp + 1);
+          } else if (navApOn && navSrc === 'FMS' && !obsOn) {
+            // Last WP passed in NAV AP mode — revert to HDG hold
+            navApOn = false;
+            document.getElementById('nav-ap-btn').classList.remove('on');
+            bankTarget = 0;
+          }
+        }
+      }
+
+      // NAV AP: drive bankTarget for course tracking
+      if (navApOn) {
+        if (navSrc === 'FMS' && !obsOn && S.awp < 0) {
+          // No active WP — disengage NAV AP
+          navApOn = false;
+          document.getElementById('nav-ap-btn').classList.remove('on');
+          bankTarget = 0;
+        } else {
+          bankTarget = navApBankTarget();
+        }
+      }
 
       // Update speed trend (6s extrapolation, smoothed)
       {
