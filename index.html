@@ -333,6 +333,63 @@ html, body {
 /* Push Leaflet bottom controls above the sim bar */
 #map-wrap .leaflet-bottom.leaflet-left  { margin-bottom: 40px; }
 #map-wrap .leaflet-bottom.leaflet-right { margin-bottom: 40px; }
+/* FDR upload button — above Leaflet zoom control (bottom-right) */
+#fdr-btn-wrap {
+  position: absolute; bottom: 120px; right: 10px; z-index: 1000;
+}
+#fdr-btn {
+  display: block; width: 36px;
+  background: rgba(20,20,20,0.88); border: 1px solid #444; border-radius: 4px;
+  color: #ccc; font-size: 10px; font-weight: bold; font-family: 'Helvetica Neue', Arial, sans-serif;
+  padding: 6px 2px; text-align: center; cursor: pointer;
+  transition: background 0.2s, border-color 0.2s, color 0.2s;
+}
+#fdr-btn:hover    { background: rgba(0,30,60,0.92); border-color: #4488ff; color: #88ccff; }
+#fdr-btn.active   { background: rgba(0,30,80,0.92); border-color: #4488ff; color: #88ccff;
+                    box-shadow: 0 0 8px rgba(68,136,255,0.4); }
+/* FDR panel */
+#fdr-panel {
+  display: none; position: absolute; bottom: 165px; right: 10px; z-index: 1100;
+  width: 220px; background: rgba(8,12,20,0.96); border: 1px solid #2a4a7a;
+  border-radius: 6px; padding: 8px; color: #ccc;
+  font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 11px;
+}
+#fdr-panel.open { display: block; }
+#fdr-panel-title {
+  color: #7ab8f5; font-size: 10px; font-weight: bold; letter-spacing: 1px;
+  border-bottom: 1px solid #1a3050; padding-bottom: 5px; margin-bottom: 7px;
+  display: flex; justify-content: space-between; align-items: center;
+}
+#fdr-file-row { display: flex; gap: 4px; margin-bottom: 6px; }
+#fdr-file-row label {
+  flex: 1; background: rgba(0,20,50,0.9); border: 1px solid #2a4a7a;
+  border-radius: 4px; padding: 5px 6px; cursor: pointer; text-align: center;
+  color: #88ccff; font-size: 10px;
+}
+#fdr-file-row label:hover { border-color: #4488ff; }
+#fdr-status {
+  font-size: 10px; color: #aaa; min-height: 14px; margin-bottom: 5px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+#fdr-track-info {
+  font-size: 10px; color: #7ab8f5; margin-bottom: 6px; display: none;
+}
+#fdr-controls { display: none; gap: 4px; }
+#fdr-controls button {
+  flex: 1; background: rgba(0,20,50,0.9); border: 1px solid #2a4a7a;
+  border-radius: 4px; padding: 4px 2px; color: #88ccff;
+  font-size: 11px; cursor: pointer;
+}
+#fdr-controls button:hover  { border-color: #4488ff; }
+#fdr-controls button.active { background: rgba(0,40,100,0.9); border-color: #4488ff; }
+#fdr-speed { display: none; align-items: center; gap: 4px; margin-top: 5px; font-size: 10px; }
+#fdr-speed label { color: #aaa; }
+#fdr-speed select {
+  background: rgba(0,20,50,0.9); border: 1px solid #2a4a7a;
+  border-radius: 3px; color: #88ccff; font-size: 10px; padding: 2px;
+}
+#fdr-timeline { display: none; margin-top: 5px; }
+#fdr-timeline input[type=range] { width: 100%; accent-color: #4488ff; }
 /* ── Map top button bar ── */
 #map-top-bar {
   position: absolute; top: 8px; left: 8px; right: 8px; z-index: 1000;
@@ -1040,6 +1097,41 @@ html, body {
         <button id="rain-btn" onclick="toggleRain()">RAIN</button>
         <button id="wind-btn" onclick="toggleWind()">WIND</button>
       </div>
+      <!-- FDR upload button + panel (above Leaflet zoom) -->
+      <div id="fdr-btn-wrap">
+        <button id="fdr-btn" onclick="toggleFdrPanel()">FDR</button>
+      </div>
+      <div id="fdr-panel">
+        <div id="fdr-panel-title">
+          <span>⏺ FDR REPLAY</span>
+          <span onclick="toggleFdrPanel()" style="cursor:pointer;color:#555;font-size:13px;">✕</span>
+        </div>
+        <div id="fdr-file-row">
+          <label for="fdr-file-input">📂 GPX 파일 열기</label>
+          <input id="fdr-file-input" type="file" accept=".gpx" style="display:none" onchange="loadFdrFile(this)">
+        </div>
+        <div id="fdr-status">파일을 선택하세요</div>
+        <div id="fdr-track-info"></div>
+        <div id="fdr-controls" style="display:none;gap:4px;display:none;">
+          <button id="fdr-play-btn"  onclick="fdrPlay()">▶</button>
+          <button id="fdr-pause-btn" onclick="fdrPause()">⏸</button>
+          <button id="fdr-stop-btn"  onclick="fdrStop()">⏹</button>
+        </div>
+        <div id="fdr-speed" style="display:none;">
+          <label>배속</label>
+          <select id="fdr-speed-sel" onchange="fdrSetSpeed(this.value)">
+            <option value="1">1×</option>
+            <option value="2">2×</option>
+            <option value="4">4×</option>
+            <option value="8">8×</option>
+          </select>
+        </div>
+        <div id="fdr-timeline" style="display:none;">
+          <input type="range" id="fdr-slider" min="0" value="0" oninput="fdrSeek(this.value)">
+          <div id="fdr-time-label" style="text-align:right;color:#888;font-size:9px;margin-top:2px;"></div>
+        </div>
+      </div>
+
       <div id="gps-status"></div>
       <div id="map-sim-bar">
         <button class="sim-btn" id="map-fly-btn" onclick="toggleSim()">▶ FLY</button>
@@ -7188,6 +7280,203 @@ if ('serviceWorker' in navigator) {
 
 
 switchMode('HOME');
+
+// ═══════════════════════════════════════════════════════════════
+//  FDR (GPX REPLAY)
+// ═══════════════════════════════════════════════════════════════
+let _fdrTrack    = [];       // [{lat,lon,altM,speedKt,timeMs}]
+let _fdrIdx      = 0;        // current playback index
+let _fdrTimer    = null;     // setInterval handle
+let _fdrSpeed    = 1;        // playback speed multiplier
+let _fdrPlaying  = false;
+let _fdrLayer2d  = null;     // Leaflet polyline
+let _fdrMarker2d = null;     // Leaflet marker for current position
+let _fdrLayer3d  = null;     // maplibre source id flag
+
+function toggleFdrPanel() {
+  const panel = document.getElementById('fdr-panel');
+  const btn   = document.getElementById('fdr-btn');
+  const open  = panel.classList.toggle('open');
+  btn.classList.toggle('active', open);
+}
+
+function loadFdrFile(input) {
+  const file = input.files[0];
+  if (!file) return;
+  document.getElementById('fdr-status').textContent = '파싱 중…';
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      _fdrTrack = _parseFdrGpx(e.target.result);
+      if (_fdrTrack.length < 2) {
+        document.getElementById('fdr-status').textContent = '트랙 포인트 없음';
+        return;
+      }
+      _fdrIdx = 0;
+      _fdrShowTrackOnMap();
+      _fdrUpdateUi();
+      document.getElementById('fdr-status').textContent = `✔ ${file.name}`;
+      const info = document.getElementById('fdr-track-info');
+      const totalSec = (_fdrTrack[_fdrTrack.length-1].timeMs - _fdrTrack[0].timeMs) / 1000;
+      const hh = Math.floor(totalSec/3600), mm = Math.floor((totalSec%3600)/60), ss = Math.floor(totalSec%60);
+      info.textContent = `${_fdrTrack.length}pt · ${hh?hh+'h ':''}${mm}m ${ss}s`;
+      info.style.display = 'block';
+      // show controls
+      document.getElementById('fdr-controls').style.display = 'flex';
+      document.getElementById('fdr-speed').style.display    = 'flex';
+      document.getElementById('fdr-timeline').style.display = 'block';
+      const slider = document.getElementById('fdr-slider');
+      slider.max   = _fdrTrack.length - 1;
+      slider.value = 0;
+      _fdrRenderFrame(0);
+    } catch(err) {
+      document.getElementById('fdr-status').textContent = '파싱 오류: ' + err.message;
+    }
+  };
+  reader.readAsText(file);
+  input.value = '';
+}
+
+function _parseFdrGpx(xmlStr) {
+  const doc   = new DOMParser().parseFromString(xmlStr, 'application/xml');
+  const pts   = Array.from(doc.querySelectorAll('trkpt'));
+  if (!pts.length) throw new Error('trkpt 없음');
+  const track = [];
+  let prevLat = null, prevLon = null, prevTimeMs = null;
+  for (const pt of pts) {
+    const lat    = parseFloat(pt.getAttribute('lat'));
+    const lon    = parseFloat(pt.getAttribute('lon'));
+    const eleEl  = pt.querySelector('ele');
+    const timeEl = pt.querySelector('time');
+    const altM   = eleEl  ? parseFloat(eleEl.textContent)  : 0;
+    const timeMs = timeEl ? new Date(timeEl.textContent).getTime() : (track.length * 1000);
+    // Speed: distance from previous point / time delta
+    let speedKt = 0;
+    if (prevLat !== null) {
+      const distNM  = distance(prevLat, prevLon, lat, lon);
+      const dtH     = (timeMs - prevTimeMs) / 3600000;
+      speedKt = dtH > 0 ? distNM / dtH : 0;
+    }
+    track.push({ lat, lon, altM, speedKt, timeMs });
+    prevLat = lat; prevLon = lon; prevTimeMs = timeMs;
+  }
+  // Smooth speed with simple 3-point average
+  for (let i = 1; i < track.length - 1; i++) {
+    track[i].speedKt = (track[i-1].speedKt + track[i].speedKt + track[i+1].speedKt) / 3;
+  }
+  return track;
+}
+
+function _fdrShowTrackOnMap() {
+  // 2D Leaflet track
+  if (_fdrLayer2d) { leafMap.removeLayer(_fdrLayer2d); _fdrLayer2d = null; }
+  if (_fdrMarker2d){ leafMap.removeLayer(_fdrMarker2d); _fdrMarker2d = null; }
+  const latlngs = _fdrTrack.map(p => [p.lat, p.lon]);
+  _fdrLayer2d = L.polyline(latlngs, { color: '#ff6600', weight: 2, opacity: 0.8 }).addTo(leafMap);
+  _fdrMarker2d = L.circleMarker([_fdrTrack[0].lat, _fdrTrack[0].lon],
+    { radius: 6, color: '#ff6600', fillColor: '#ff9900', fillOpacity: 1, weight: 2 }).addTo(leafMap);
+  leafMap.fitBounds(_fdrLayer2d.getBounds(), { padding: [20, 20] });
+
+  // 3D maplibre track
+  if (_ml3d && _ml3d.loaded()) {
+    if (_fdrLayer3d) {
+      try { _ml3d.removeLayer('fdr-track'); _ml3d.removeSource('fdr-track'); } catch(e) {}
+    }
+    _ml3d.addSource('fdr-track', {
+      type: 'geojson',
+      data: { type: 'Feature', geometry: { type: 'LineString',
+        coordinates: _fdrTrack.map(p => [p.lon, p.lat]) } }
+    });
+    _ml3d.addLayer({ id: 'fdr-track', type: 'line', source: 'fdr-track',
+      paint: { 'line-color': '#ff6600', 'line-width': 2, 'line-opacity': 0.8 } });
+    _fdrLayer3d = true;
+  }
+}
+
+function _fdrRenderFrame(idx) {
+  _fdrIdx = Math.max(0, Math.min(_fdrTrack.length - 1, idx));
+  const p = _fdrTrack[_fdrIdx];
+
+  // Update position marker on 2D map
+  if (_fdrMarker2d) _fdrMarker2d.setLatLng([p.lat, p.lon]);
+
+  // Calculate heading from next point (or previous if at end)
+  let hdg = 0;
+  if (_fdrIdx < _fdrTrack.length - 1) {
+    hdg = bearing(p.lat, p.lon, _fdrTrack[_fdrIdx+1].lat, _fdrTrack[_fdrIdx+1].lon);
+  } else if (_fdrIdx > 0) {
+    hdg = bearing(_fdrTrack[_fdrIdx-1].lat, _fdrTrack[_fdrIdx-1].lon, p.lat, p.lon);
+  }
+
+  // Inject into sim state (replay mode — overrides physics)
+  S.lat = p.lat;
+  S.lon = p.lon;
+  S.alt = p.altM * 3.28084;   // metres → feet
+  S.spd = Math.round(p.speedKt);
+  S.hdg = hdg;
+
+  // Update map aircraft marker + follow
+  updateAcOnMap();
+
+  // Update timeline slider
+  document.getElementById('fdr-slider').value = _fdrIdx;
+  // Time label
+  const elapsed = (_fdrTrack[_fdrIdx].timeMs - _fdrTrack[0].timeMs) / 1000;
+  const total   = (_fdrTrack[_fdrTrack.length-1].timeMs - _fdrTrack[0].timeMs) / 1000;
+  document.getElementById('fdr-time-label').textContent =
+    _fmtTime(elapsed) + ' / ' + _fmtTime(total);
+}
+
+function _fmtTime(sec) {
+  const h = Math.floor(sec/3600), m = Math.floor((sec%3600)/60), s = Math.floor(sec%60);
+  return h ? `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`
+           : `${m}:${String(s).padStart(2,'0')}`;
+}
+
+function _fdrTick() {
+  if (_fdrIdx >= _fdrTrack.length - 1) { fdrPause(); return; }
+  _fdrRenderFrame(_fdrIdx + 1);
+}
+
+function fdrPlay() {
+  if (!_fdrTrack.length) return;
+  if (_fdrIdx >= _fdrTrack.length - 1) _fdrIdx = 0;
+  _fdrPlaying = true;
+  document.getElementById('fdr-play-btn').classList.add('active');
+  // Interval: average ms between points / speed multiplier
+  const avgMs = (_fdrTrack[_fdrTrack.length-1].timeMs - _fdrTrack[0].timeMs) / (_fdrTrack.length - 1);
+  const interval = Math.max(100, avgMs / _fdrSpeed);
+  if (_fdrTimer) clearInterval(_fdrTimer);
+  _fdrTimer = setInterval(_fdrTick, interval);
+}
+
+function fdrPause() {
+  _fdrPlaying = false;
+  if (_fdrTimer) { clearInterval(_fdrTimer); _fdrTimer = null; }
+  document.getElementById('fdr-play-btn').classList.remove('active');
+}
+
+function fdrStop() {
+  fdrPause();
+  _fdrIdx = 0;
+  if (_fdrTrack.length) _fdrRenderFrame(0);
+}
+
+function fdrSeek(val) {
+  const wasPlaying = _fdrPlaying;
+  if (wasPlaying) fdrPause();
+  _fdrRenderFrame(parseInt(val));
+  if (wasPlaying) fdrPlay();
+}
+
+function fdrSetSpeed(val) {
+  _fdrSpeed = parseFloat(val);
+  if (_fdrPlaying) { fdrPause(); fdrPlay(); }
+}
+
+function _fdrUpdateUi() {
+  // called after track load — nothing extra needed
+}
 </script>
 </body>
 </html>
