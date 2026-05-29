@@ -33,11 +33,34 @@ html, body {
   display: grid;
   overflow: hidden;
 }
+/* Divider / resizer between the two panels */
+#panel-divider {
+  background: #1a1a1a;
+  z-index: 2000;
+  position: relative;
+  flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  cursor: col-resize;
+  touch-action: none;
+  user-select: none;
+}
+#panel-divider::after {
+  content: ''; display: block;
+  background: #444; border-radius: 2px;
+}
 @media (orientation: landscape) {
-  #app { grid-template-columns: 55% 45%; grid-template-rows: 1fr; }
+  #app { display: flex; flex-direction: row; }
+  #left-panel  { flex: 0 0 55%; min-width: 100px; overflow: hidden; }
+  #right-panel { flex: 1 1 0; min-width: 80px; overflow: hidden; }
+  #panel-divider { width: 6px; height: 100%; cursor: col-resize; }
+  #panel-divider::after { width: 2px; height: 40px; }
 }
 @media (orientation: portrait) {
-  #app { grid-template-columns: 1fr; grid-template-rows: 55% 45%; }
+  #app { display: flex; flex-direction: column; }
+  #left-panel  { flex: 0 0 55%; min-height: 100px; overflow: hidden; }
+  #right-panel { flex: 1 1 0; min-height: 80px; overflow: hidden; }
+  #panel-divider { height: 6px; width: 100%; cursor: row-resize; }
+  #panel-divider::after { height: 2px; width: 40px; }
 }
 #left-panel {
   display: flex;
@@ -59,10 +82,6 @@ html, body {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  border-left: 2px solid #1a1a1a;
-}
-@media (orientation: portrait) {
-  #right-panel { border-left: none; border-top: 2px solid #1a1a1a; }
 }
 #page-tabs {
   display: flex;
@@ -1067,6 +1086,9 @@ html, body {
   </div><!-- end #left-panel -->
 
   <!-- ── RIGHT PANEL (3 pages) ── -->
+  <div id="panel-divider" ontouchstart="dividerDragStart(event)" onmousedown="dividerDragStart(event)">
+  </div>
+
   <div id="right-panel">
 
     <div id="page-tabs">
@@ -7282,6 +7304,60 @@ if ('serviceWorker' in navigator) {
 switchMode('HOME');
 
 // ═══════════════════════════════════════════════════════════════
+//  PANEL DIVIDER DRAG (resizable left/right or top/bottom split)
+// ═══════════════════════════════════════════════════════════════
+(function() {
+  const app  = document.getElementById('app');
+  const left = document.getElementById('left-panel');
+  const div  = document.getElementById('panel-divider');
+  let dragging = false, startPos = 0, startSize = 0;
+
+  function isLandscape() { return window.innerWidth >= window.innerHeight; }
+
+  function onStart(e) {
+    e.preventDefault();
+    dragging  = true;
+    startPos  = isLandscape()
+      ? (e.touches ? e.touches[0].clientX : e.clientX)
+      : (e.touches ? e.touches[0].clientY : e.clientY);
+    startSize = isLandscape() ? left.offsetWidth : left.offsetHeight;
+    document.addEventListener('mousemove', onMove, { passive: false });
+    document.addEventListener('mouseup',   onEnd);
+    document.addEventListener('touchmove', onMove, { passive: false });
+    document.addEventListener('touchend',  onEnd);
+  }
+
+  function onMove(e) {
+    if (!dragging) return;
+    e.preventDefault();
+    const pos   = isLandscape()
+      ? (e.touches ? e.touches[0].clientX : e.clientX)
+      : (e.touches ? e.touches[0].clientY : e.clientY);
+    const delta = pos - startPos;
+    const total = isLandscape() ? app.offsetWidth : app.offsetHeight;
+    const divSz = isLandscape() ? div.offsetWidth : div.offsetHeight;
+    const newSz = Math.max(100, Math.min(total - divSz - 80, startSize + delta));
+    const pct   = (newSz / total * 100).toFixed(2) + '%';
+    left.style.flex = `0 0 ${pct}`;
+    // Notify PFD canvas + maps to resize
+    try { drawPFD(); } catch(e) {}
+    try { leafMap.invalidateSize(); } catch(e) {}
+    if (_ml3d) try { _ml3d.resize(); } catch(e) {}
+  }
+
+  function onEnd() {
+    dragging = false;
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseup',   onEnd);
+    document.removeEventListener('touchmove', onMove);
+    document.removeEventListener('touchend',  onEnd);
+  }
+
+  div.addEventListener('mousedown',  onStart, { passive: false });
+  div.addEventListener('touchstart', onStart, { passive: false });
+})();
+
+// ═══════════════════════════════════════════════════════════════
 //  FDR (GPX REPLAY)
 // ═══════════════════════════════════════════════════════════════
 let _fdrTrack      = [];     // [{lat,lon,altM,speedKt,timeMs}]
@@ -7456,7 +7532,12 @@ function _fdrRafLoop(wallNow) {
     const mid = (lo + hi) >> 1;
     if (_fdrTrack[mid].timeMs <= trackNow) lo = mid; else hi = mid;
   }
-  if (lo !== _fdrIdx) _fdrRenderFrame(lo);
+  if (lo !== _fdrIdx) {
+    _fdrRenderFrame(lo);
+  } else {
+    // Index unchanged but 3D camera (follow/track-up) must update every frame
+    if (_view3dOn && _ml3d && _ml3d.loaded() && followMode) _applyFollow();
+  }
 
   _fdrRafId = requestAnimationFrame(_fdrRafLoop);
 }
