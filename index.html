@@ -14,6 +14,8 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet-velocity@2.1.0/dist/leaflet-velocity.min.css"/>
 <script src="https://cdn.jsdelivr.net/npm/leaflet-velocity@2.1.0/dist/leaflet-velocity.min.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.css"/>
+<script src="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
 html, body {
@@ -282,6 +284,13 @@ html, body {
   flex: 1;
 }
 #map { width: 100%; height: 100%; transform-origin: center center; }
+#map3d {
+  position: absolute; inset: 0;
+  display: none; z-index: 5;
+}
+#map3d.active { display: block; }
+#layer-btn-3d { background: rgba(0,10,30,0.82); border: 1px solid #333; color: #aaa; }
+#layer-btn-3d.active { background: rgba(0,30,80,0.92); border-color: #4488ff; color: #88ccff; box-shadow: 0 0 8px rgba(68,136,255,0.4); }
 /* Dual-unit map scale bar (km + NM) */
 .vfr-scale {
   background: rgba(0,0,0,0.65);
@@ -993,9 +1002,11 @@ html, body {
     <!-- Page 1: Map -->
     <div id="map-wrap" class="page-content">
       <div id="map"></div>
+      <div id="map3d"></div>
       <div id="map-top-bar">
         <button id="orient-btn" onclick="toggleMapOrient()">N↑</button>
         <button id="layer-btn" class="sat" onclick="toggleLayer()">MAP</button>
+        <button id="layer-btn-3d" onclick="toggle3dMap()">3D</button>
         <button id="gps-btn" onclick="toggleGPS()">GPS</button>
         <button id="ifr-btn" onclick="toggleIfrChart()">IFR</button>
         <button id="wx-btn" onclick="toggleWxPanel()">WX</button>
@@ -2954,6 +2965,111 @@ function toggleLayer() {
 // ── RainViewer precipitation overlay ──
 
 
+// ══════════════════════════════════════════════════════
+// 3D TERRAIN MAP  (Maplibre GL JS)
+// ══════════════════════════════════════════════════════
+let _ml3d = null;          // Maplibre GL map instance (lazy init)
+let _ml3dMarker = null;    // aircraft marker on 3D map
+let _view3dOn = false;
+
+function toggle3dMap() {
+  _view3dOn = !_view3dOn;
+  const btn = document.getElementById('layer-btn-3d');
+  const div3d = document.getElementById('map3d');
+  btn.classList.toggle('active', _view3dOn);
+
+  if (_view3dOn) {
+    div3d.classList.add('active');
+    _init3dMap();
+  } else {
+    div3d.classList.remove('active');
+  }
+}
+
+function _init3dMap() {
+  if (_ml3d) {
+    // Already initialised — just jump to current aircraft position
+    _ml3d.resize();
+    _update3dMarker();
+    return;
+  }
+
+  _ml3d = new maplibregl.Map({
+    container: 'map3d',
+    style: {
+      version: 8,
+      glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
+      sources: {
+        satellite: {
+          type: 'raster',
+          tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'],
+          tileSize: 256,
+          attribution: 'Tiles © Esri'
+        },
+        terrain: {
+          type: 'raster-dem',
+          encoding: 'terrarium',
+          tiles: ['https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'],
+          minzoom: 0, maxzoom: 15,
+          tileSize: 256,
+          attribution: 'Terrain © Mapzen/AWS'
+        }
+      },
+      layers: [
+        { id: 'satellite', type: 'raster', source: 'satellite' }
+      ],
+      sky: {
+        'sky-color': '#1a2a4a',
+        'sky-horizon-blend': 0.5,
+        'horizon-color': '#6699bb',
+        'horizon-fog-blend': 0.3,
+        'fog-color': '#aabbcc',
+        'fog-ground-blend': 0.9
+      }
+    },
+    center: [S.lon, S.lat],
+    zoom: 11,
+    pitch: 55,
+    bearing: 0,
+    maxPitch: 85
+  });
+
+  _ml3d.on('load', () => {
+    _ml3d.setTerrain({ source: 'terrain', exaggeration: 1.5 });
+    _ml3d.setSky({
+      'sky-color': '#1a2a4a',
+      'sky-horizon-blend': 0.5,
+      'horizon-color': '#6699bb',
+      'horizon-fog-blend': 0.3,
+      'fog-color': '#aabbcc',
+      'fog-ground-blend': 0.9
+    });
+    // Aircraft marker
+    const el = document.createElement('div');
+    el.style.cssText = 'width:18px;height:18px;cursor:default;';
+    el.innerHTML = `<svg viewBox="0 0 24 24" width="18" height="18" xmlns="http://www.w3.org/2000/svg">
+      <polygon points="12,2 15,18 12,15 9,18" fill="#00ff88" stroke="#000" stroke-width="1"/>
+    </svg>`;
+    _ml3dMarker = new maplibregl.Marker({ element: el, rotationAlignment: 'map', pitchAlignment: 'viewport' })
+      .setLngLat([S.lon, S.lat])
+      .addTo(_ml3d);
+    _update3dMarker();
+  });
+
+  _ml3d.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'top-right');
+  _ml3d.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-left');
+}
+
+function _update3dMarker() {
+  if (!_ml3d || !_view3dOn) return;
+  if (_ml3dMarker) {
+    _ml3dMarker.setLngLat([S.lon, S.lat]);
+    // Rotate SVG icon to match heading
+    const el = _ml3dMarker.getElement();
+    if (el) el.style.transform = `rotate(${S.hdg}deg)`;
+  }
+}
+
 let rainLayer = null;
 let rainActive = false;
 
@@ -3377,6 +3493,7 @@ function updateAcOnMap(){
     acMarker.setIcon(makeAircraftIcon(S.hdg));
     _bindAcPointerDown(); // re-bind after setIcon creates a new DOM element
   }
+  _update3dMarker();
   if (mapHdgUp) {
     // scale(1.42 ≈ √2): rotated rectangle always covers map-wrap corners
     document.getElementById('map').style.transform = `rotate(${-S.hdg}deg) scale(1.42)`;
