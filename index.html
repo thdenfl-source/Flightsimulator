@@ -3572,29 +3572,25 @@ function _applyFollow() {
   if (!followMode) return;
 
   if (_view3dOn && _ml3d && _ml3d.loaded()) {
-    // ── 3D follow (chase camera at aircraft altitude) ──
-    // The eye is placed BEHIND the aircraft at the aircraft's true altitude,
-    // looking forward along the heading. Camera height tracks S.alt every
-    // frame, so changing ALT or CRHT moves the viewpoint accordingly.
-    const FT2M = 0.3048, M2NM = 1 / 1852;
-    const camAltM = Math.max(30, S.alt * FT2M);     // eye height = aircraft altitude
-    const pitch   = _ml3dPitch;                       // 0 = top-down, ~70 = near horizon
-    const fov     = (_ml3d.transform && _ml3d.transform.fov) || 36.87; // vertical FOV (deg)
-    // Center ray hits the ground at this horizontal distance ahead of the eye.
-    const DcM     = camAltM * Math.tan(pitch * D2R);
-    // Place the aircraft 1/4 from the bottom: it should sit below screen-center
-    // by half of the lower half → angular offset of fov/4 below the center ray.
-    const thetaC  = 90 - pitch;                        // center ray below horizontal
-    const thetaA  = Math.min(89, thetaC + fov / 4);    // aircraft ray below horizontal
-    const backM   = camAltM / Math.tan(thetaA * D2R);  // eye sits this far behind aircraft
-
-    const [clat, clon] = destPoint(S.lat, S.lon, S.hdg + 180, backM * M2NM); // eye ground pos
-    const [tlat, tlon] = destPoint(clat, clon, S.hdg, DcM * M2NM);           // look-at target
-
-    const fc = _ml3d.getFreeCameraOptions();
-    fc.position = maplibregl.MercatorCoordinate.fromLngLat([clon, clat], camAltM);
-    fc.lookAtPoint([tlon, tlat]);
-    _ml3d.setFreeCameraOptions(fc);
+    // ── 3D follow ──
+    // Altitude-based zoom: camera feels proportional to S.alt each frame.
+    // S.alt is in feet; 500 ft → zoom≈14, 10000 ft → zoom≈10.
+    const altFt = Math.max(100, S.alt);
+    const zoom  = Math.max(4, Math.min(16, 16 - Math.log2(altFt / 100)));
+    // Aircraft should sit at 1/4 from the bottom (75% from top).
+    // easeTo (duration:0) honours the offset param unlike jumpTo.
+    // offset [x,y]: positive y shifts the focal point DOWN → aircraft moves DOWN.
+    const H      = _ml3d.getContainer().clientHeight || 600;
+    const offsetY = H * FOLLOW_FWD_FRAC; // 0.25 * H → aircraft at 75% from top
+    _ml3d.easeTo({
+      center:   [S.lon, S.lat],
+      bearing:  S.hdg,
+      zoom,
+      pitch:    _ml3dPitch,
+      offset:   [0, offsetY],
+      duration: 0,
+      easing:   t => t
+    });
   } else {
     // ── 2D follow ──
     // Shift the map centre forward (along heading when HDG-UP, else north) so
