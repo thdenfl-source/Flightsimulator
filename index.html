@@ -3522,8 +3522,14 @@ function toggleFollow() {
   } else {
     // Re-enable Leaflet dragging unless HDG-UP also needs it disabled
     if (!mapHdgUp) leafMap.dragging.enable();
+    // Clear any 3D camera padding so manual exploration recentres normally
+    if (_ml3d) { try { _ml3d.setPadding({ top: 0, bottom: 0, left: 0, right: 0 }); } catch (e) {} }
   }
 }
+
+// In 1인칭, place the aircraft a quarter of the way up from the bottom of the
+// screen (vertical position ≈ 0.75 H from top) so the forward view is larger.
+const FOLLOW_FWD_FRAC = 0.25; // fraction of screen height the aircraft sits above the bottom
 
 // Called every frame from updateAcOnMap() to keep the view locked to the aircraft.
 function _applyFollow() {
@@ -3536,16 +3542,30 @@ function _applyFollow() {
     // lower, closer first-person view → +1 zoom vs. full altitude.
     // At ~500 ft (helicopter cruise) → zoom ~14.  At ~10 000 ft → zoom ~10.
     const zoom = Math.max(4, Math.min(16, 16 - Math.log2(Math.max(100, S.alt) / 100)));
+    // Offset the focal point downward via top padding so the aircraft sits at
+    // ~1/4 from the bottom. For fraction f from top: top = (2f-1)*H.
+    const H = _ml3d.getContainer().clientHeight || 0;
+    const f = 1 - FOLLOW_FWD_FRAC; // 0.75 from top
+    const padTop = Math.max(0, (2 * f - 1) * H);
     _ml3d.jumpTo({
       center:  [S.lon, S.lat],
       bearing: S.hdg,          // map north rotates so aircraft heading points up
       zoom,
-      pitch:   70
+      pitch:   70,
+      padding: { top: padTop, bottom: 0, left: 0, right: 0 }
     });
   } else {
     // ── 2D follow ──
-    // Keep map centred on aircraft; zoom unchanged.
-    leafMap.setView([S.lat, S.lon], leafMap.getZoom(), { animate: false });
+    // Shift the map centre forward (along heading when HDG-UP, else north) so
+    // the aircraft appears ~1/4 up from the bottom, showing more ahead.
+    const z = leafMap.getZoom();
+    const acP = leafMap.project([S.lat, S.lon], z);
+    const ang = (mapHdgUp ? S.hdg : 0) * D2R;
+    // HDG-UP applies a CSS scale(1.42); divide the pixel offset by it so the
+    // aircraft lands at the intended on-screen position after scaling.
+    const k = leafMap.getSize().y * FOLLOW_FWD_FRAC / (mapHdgUp ? 1.42 : 1);
+    const cP = L.point(acP.x + Math.sin(ang) * k, acP.y - Math.cos(ang) * k);
+    leafMap.setView(leafMap.unproject(cP, z), z, { animate: false });
     // HDG-UP CSS rotation (rotate(-hdg)) is re-applied by updateAcOnMap below,
     // so the map already shows the aircraft heading at the top.
   }
