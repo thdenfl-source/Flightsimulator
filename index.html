@@ -286,9 +286,11 @@ html, body {
 #map { width: 100%; height: 100%; transform-origin: center center; }
 #map3d {
   position: absolute; inset: 0;
-  display: none; z-index: 5;
+  display: none; z-index: 800;   /* above Leaflet panes (~700), below top bars (1000) */
 }
 #map3d.active { display: block; }
+/* When 3D is on, hide the 2D Leaflet map so its panes never paint through */
+#map-wrap.map3d-on #map { visibility: hidden; }
 #layer-btn-3d { background: rgba(0,10,30,0.82); border: 1px solid #333; color: #aaa; }
 #layer-btn-3d.active { background: rgba(0,30,80,0.92); border-color: #4488ff; color: #88ccff; box-shadow: 0 0 8px rgba(68,136,255,0.4); }
 /* Dual-unit map scale bar (km + NM) */
@@ -2973,16 +2975,31 @@ let _ml3dMarker = null;    // aircraft marker on 3D map
 let _view3dOn = false;
 
 function toggle3dMap() {
-  _view3dOn = !_view3dOn;
   const btn = document.getElementById('layer-btn-3d');
   const div3d = document.getElementById('map3d');
+  const wrap = document.getElementById('map-wrap');
+
+  // Library must be loaded
+  if (typeof maplibregl === 'undefined') {
+    if (btn) { btn.textContent = '3D ✕'; setTimeout(() => btn.textContent = '3D', 1500); }
+    console.error('[3D] maplibre-gl failed to load');
+    return;
+  }
+
+  _view3dOn = !_view3dOn;
   btn.classList.toggle('active', _view3dOn);
 
   if (_view3dOn) {
     div3d.classList.add('active');
+    wrap.classList.add('map3d-on');
     _init3dMap();
+    // Container just became visible — force a resize once layout settles
+    requestAnimationFrame(() => { if (_ml3d) _ml3d.resize(); });
   } else {
     div3d.classList.remove('active');
+    wrap.classList.remove('map3d-on');
+    // Returning to 2D — Leaflet needs to recompute its size
+    setTimeout(() => { try { leafMap.invalidateSize(); } catch (e) {} }, 50);
   }
 }
 
@@ -2990,70 +3007,82 @@ function _init3dMap() {
   if (_ml3d) {
     // Already initialised — just jump to current aircraft position
     _ml3d.resize();
+    _ml3d.jumpTo({ center: [S.lon, S.lat] });
     _update3dMarker();
     return;
   }
 
-  _ml3d = new maplibregl.Map({
-    container: 'map3d',
-    style: {
-      version: 8,
-      glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
-      sources: {
-        satellite: {
-          type: 'raster',
-          tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'],
-          tileSize: 256,
-          attribution: 'Tiles © Esri'
+  const SKY = {
+    'sky-color': '#1a2a4a',
+    'sky-horizon-blend': 0.5,
+    'horizon-color': '#6699bb',
+    'horizon-fog-blend': 0.3,
+    'fog-color': '#aabbcc',
+    'fog-ground-blend': 0.9
+  };
+
+  try {
+    _ml3d = new maplibregl.Map({
+      container: 'map3d',
+      style: {
+        version: 8,
+        sources: {
+          satellite: {
+            type: 'raster',
+            tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'],
+            tileSize: 256,
+            maxzoom: 19,
+            attribution: 'Tiles © Esri'
+          },
+          terrain: {
+            type: 'raster-dem',
+            encoding: 'terrarium',
+            tiles: ['https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'],
+            minzoom: 0, maxzoom: 15,
+            tileSize: 256,
+            attribution: 'Terrain © Tilezen/AWS'
+          }
         },
-        terrain: {
-          type: 'raster-dem',
-          encoding: 'terrarium',
-          tiles: ['https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'],
-          minzoom: 0, maxzoom: 15,
-          tileSize: 256,
-          attribution: 'Terrain © Mapzen/AWS'
-        }
+        layers: [
+          { id: 'satellite', type: 'raster', source: 'satellite' }
+        ]
       },
-      layers: [
-        { id: 'satellite', type: 'raster', source: 'satellite' }
-      ],
-      sky: {
-        'sky-color': '#1a2a4a',
-        'sky-horizon-blend': 0.5,
-        'horizon-color': '#6699bb',
-        'horizon-fog-blend': 0.3,
-        'fog-color': '#aabbcc',
-        'fog-ground-blend': 0.9
-      }
-    },
-    center: [S.lon, S.lat],
-    zoom: 11,
-    pitch: 55,
-    bearing: 0,
-    maxPitch: 85
-  });
+      center: [S.lon, S.lat],
+      zoom: 11,
+      pitch: 55,
+      bearing: 0,
+      maxPitch: 85,
+      attributionControl: false
+    });
+  } catch (e) {
+    console.error('[3D] map init failed:', e);
+    return;
+  }
+
+  _ml3d.on('error', (e) => console.warn('[3D] map error:', e && e.error ? e.error.message : e));
 
   _ml3d.on('load', () => {
-    _ml3d.setTerrain({ source: 'terrain', exaggeration: 1.5 });
-    _ml3d.setSky({
-      'sky-color': '#1a2a4a',
-      'sky-horizon-blend': 0.5,
-      'horizon-color': '#6699bb',
-      'horizon-fog-blend': 0.3,
-      'fog-color': '#aabbcc',
-      'fog-ground-blend': 0.9
-    });
-    // Aircraft marker
+    // Terrain is best-effort — a DEM failure must not blank the satellite view
+    try { _ml3d.setTerrain({ source: 'terrain', exaggeration: 1.5 }); }
+    catch (e) { console.warn('[3D] terrain unavailable:', e); }
+    try { _ml3d.setSky(SKY); } catch (e) { /* sky optional */ }
+
+    // Aircraft marker. Maplibre controls the OUTER element's transform for
+    // positioning, so heading rotation is applied to an INNER wrapper instead.
     const el = document.createElement('div');
-    el.style.cssText = 'width:18px;height:18px;cursor:default;';
-    el.innerHTML = `<svg viewBox="0 0 24 24" width="18" height="18" xmlns="http://www.w3.org/2000/svg">
+    el.style.cssText = 'width:18px;height:18px;';
+    const inner = document.createElement('div');
+    inner.className = 'ac3d-inner';
+    inner.style.cssText = 'width:18px;height:18px;transition:transform 0.1s linear;';
+    inner.innerHTML = `<svg viewBox="0 0 24 24" width="18" height="18" xmlns="http://www.w3.org/2000/svg">
       <polygon points="12,2 15,18 12,15 9,18" fill="#00ff88" stroke="#000" stroke-width="1"/>
     </svg>`;
-    _ml3dMarker = new maplibregl.Marker({ element: el, rotationAlignment: 'map', pitchAlignment: 'viewport' })
+    el.appendChild(inner);
+    _ml3dMarker = new maplibregl.Marker({ element: el, pitchAlignment: 'viewport', rotationAlignment: 'viewport' })
       .setLngLat([S.lon, S.lat])
       .addTo(_ml3d);
     _update3dMarker();
+    _ml3d.resize();
   });
 
   _ml3d.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'top-right');
@@ -3061,13 +3090,11 @@ function _init3dMap() {
 }
 
 function _update3dMarker() {
-  if (!_ml3d || !_view3dOn) return;
-  if (_ml3dMarker) {
-    _ml3dMarker.setLngLat([S.lon, S.lat]);
-    // Rotate SVG icon to match heading
-    const el = _ml3dMarker.getElement();
-    if (el) el.style.transform = `rotate(${S.hdg}deg)`;
-  }
+  if (!_ml3d || !_view3dOn || !_ml3dMarker) return;
+  _ml3dMarker.setLngLat([S.lon, S.lat]);
+  // Rotate the inner wrapper (outer element's transform is owned by maplibre)
+  const inner = _ml3dMarker.getElement().querySelector('.ac3d-inner');
+  if (inner) inner.style.transform = `rotate(${S.hdg}deg)`;
 }
 
 let rainLayer = null;

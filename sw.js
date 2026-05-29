@@ -1,6 +1,6 @@
 // VFR Flight Sim — Service Worker
 // 버전을 올리면 캐시가 갱신됩니다
-const CACHE = 'vfr-flight-v56';
+const CACHE = 'vfr-flight-v57';
 const CORE  = [
   './index.html',
   './manifest.json',
@@ -54,11 +54,30 @@ self.addEventListener('fetch', e => {
     return;
   }
 
-  // Leaflet JS/CSS CDN: 캐시 우선
-  if (url.includes('unpkg.com')) {
+  // 3D 지형(DEM) 타일: 캐시 우선 (CORS 응답만 캐시)
+  if (url.includes('elevation-tiles-prod')) {
+    e.respondWith(
+      caches.open('vfr-dem-tiles').then(c =>
+        c.match(e.request).then(cached => {
+          const fresh = fetch(e.request).then(res => {
+            if (res && res.ok) c.put(e.request, res.clone());
+            return res;
+          });
+          return cached || fresh;
+        })
+      )
+    );
+    return;
+  }
+
+  // Leaflet / Maplibre JS·CSS CDN: 캐시 우선 (정상 응답만 캐시)
+  if (url.includes('unpkg.com') || url.includes('cdn.jsdelivr.net')) {
     e.respondWith(
       caches.open(CACHE).then(c =>
-        c.match(e.request).then(cached => cached || fetch(e.request).then(res => { c.put(e.request, res.clone()); return res; }))
+        c.match(e.request).then(cached => cached || fetch(e.request).then(res => {
+          if (res && res.ok) c.put(e.request, res.clone());
+          return res;
+        }))
       )
     );
     return;
