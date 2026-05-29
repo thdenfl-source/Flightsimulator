@@ -293,6 +293,7 @@ html, body {
 #map-wrap.map3d-on #map { visibility: hidden; }
 #layer-btn-3d { background: rgba(0,10,30,0.82); border: 1px solid #333; color: #aaa; }
 #layer-btn-3d.active { background: rgba(0,30,80,0.92); border-color: #4488ff; color: #88ccff; box-shadow: 0 0 8px rgba(68,136,255,0.4); }
+#follow-btn.active { background: rgba(60,30,0,0.92); border-color: #ffaa00; color: #ffcc44; box-shadow: 0 0 8px rgba(255,170,0,0.4); }
 /* Dual-unit map scale bar (km + NM) */
 .vfr-scale {
   background: rgba(0,0,0,0.65);
@@ -1007,6 +1008,7 @@ html, body {
       <div id="map3d"></div>
       <div id="map-top-bar">
         <button id="orient-btn" onclick="toggleMapOrient()">N↑</button>
+        <button id="follow-btn" onclick="toggleFollow()">1인칭</button>
         <button id="layer-btn" class="sat" onclick="toggleLayer()">MAP</button>
         <button id="layer-btn-3d" onclick="toggle3dMap()">3D</button>
         <button id="gps-btn" onclick="toggleGPS()">GPS</button>
@@ -2994,12 +2996,17 @@ function toggle3dMap() {
     wrap.classList.add('map3d-on');
     _init3dMap();
     // Container just became visible — force a resize once layout settles
-    requestAnimationFrame(() => { if (_ml3d) _ml3d.resize(); });
+    requestAnimationFrame(() => {
+      if (_ml3d) { _ml3d.resize(); _applyFollow(); }
+    });
   } else {
     div3d.classList.remove('active');
     wrap.classList.remove('map3d-on');
-    // Returning to 2D — Leaflet needs to recompute its size
-    setTimeout(() => { try { leafMap.invalidateSize(); } catch (e) {} }, 50);
+    // Returning to 2D — Leaflet needs to recompute its size; apply follow immediately
+    setTimeout(() => {
+      try { leafMap.invalidateSize(); } catch (e) {}
+      _applyFollow();
+    }, 50);
   }
 }
 
@@ -3498,6 +3505,51 @@ function updateCrsLine() {
 
 function updateTrail(){ trailLine.setLatLngs(S.trail.map(t=>[t[0],t[1]])); }
 function updateShipTrail(){ shipTrailLine.setLatLngs(shipTrail.map(t=>[t[0],t[1]])); }
+// ── 1인칭 Follow Mode ────────────────────────────────────────────────────
+// When active: 2D map centres on aircraft every frame;
+//              3D map additionally tracks heading and scales zoom with altitude.
+// Dragging is disabled while following (like HDG-UP) to avoid fighting snaps.
+let followMode = false;
+
+function toggleFollow() {
+  followMode = !followMode;
+  const btn = document.getElementById('follow-btn');
+  btn.classList.toggle('active', followMode);
+  if (followMode) {
+    // Disable Leaflet dragging while following
+    leafMap.dragging.disable();
+    _applyFollow();
+  } else {
+    // Re-enable Leaflet dragging unless HDG-UP also needs it disabled
+    if (!mapHdgUp) leafMap.dragging.enable();
+  }
+}
+
+// Called every frame from updateAcOnMap() to keep the view locked to the aircraft.
+function _applyFollow() {
+  if (!followMode) return;
+
+  if (_view3dOn && _ml3d && _ml3d.loaded()) {
+    // ── 3D follow ──
+    // Zoom scales with altitude so the camera height feels proportional.
+    // At ~500 ft (helicopter cruise) → zoom ~13 (city detail).
+    // At ~10 000 ft → zoom ~9.  At ~30 000 ft → zoom ~7.
+    const zoom = Math.max(4, Math.min(15, 15 - Math.log2(Math.max(100, S.alt) / 100)));
+    _ml3d.jumpTo({
+      center:  [S.lon, S.lat],
+      bearing: S.hdg,          // map north rotates so aircraft heading points up
+      zoom,
+      pitch:   55
+    });
+  } else {
+    // ── 2D follow ──
+    // Keep map centred on aircraft; zoom unchanged.
+    leafMap.setView([S.lat, S.lon], leafMap.getZoom(), { animate: false });
+    // HDG-UP CSS rotation (rotate(-hdg)) is re-applied by updateAcOnMap below,
+    // so the map already shows the aircraft heading at the top.
+  }
+}
+
 let mapHdgUp = false;
 function toggleMapOrient() {
   mapHdgUp = !mapHdgUp;
@@ -3510,7 +3562,8 @@ function toggleMapOrient() {
     document.getElementById('map').style.transform = '';
     const ctrl = document.querySelector('.leaflet-control-container');
     if (ctrl) ctrl.style.transform = '';
-    leafMap.dragging.enable();
+    // Only re-enable dragging if follow mode is also off
+    if (!followMode) leafMap.dragging.enable();
   }
   updateAcOnMap();
 }
@@ -3521,6 +3574,7 @@ function updateAcOnMap(){
     _bindAcPointerDown(); // re-bind after setIcon creates a new DOM element
   }
   _update3dMarker();
+  _applyFollow();    // 1인칭: centre map / 3D view on aircraft every frame
   if (mapHdgUp) {
     // scale(1.42 ≈ √2): rotated rectangle always covers map-wrap corners
     document.getElementById('map').style.transform = `rotate(${-S.hdg}deg) scale(1.42)`;
