@@ -3092,7 +3092,7 @@ function _init3dMap() {
     _ml3d.resize();
   });
 
-  _ml3d.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'top-right');
+  _ml3d.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'bottom-right');
   _ml3d.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-left');
 }
 
@@ -3540,7 +3540,7 @@ function _applyFollow() {
       center:  [S.lon, S.lat],
       bearing: S.hdg,          // map north rotates so aircraft heading points up
       zoom,
-      pitch:   30
+      pitch:   80
     });
   } else {
     // ── 2D follow ──
