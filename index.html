@@ -995,7 +995,7 @@ html, body {
       <div id="map"></div>
       <div id="map-top-bar">
         <button id="orient-btn" onclick="toggleMapOrient()">N↑</button>
-        <button id="layer-btn" onclick="toggleLayer()">SAT</button>
+        <button id="layer-btn" class="sat" onclick="toggleLayer()">MAP</button>
         <button id="gps-btn" onclick="toggleGPS()">GPS</button>
         <button id="ifr-btn" onclick="toggleIfrChart()">IFR</button>
         <button id="wx-btn" onclick="toggleWxPanel()">WX</button>
@@ -1186,7 +1186,7 @@ const AIRPORTS = [
 // STATE
 // ══════════════════════════════════════════════════════
 const S = {
-  lat: 37.4602, lon: 126.4407,
+  lat: 35.9038, lon: 126.6159,
   hdg: 360,
   spd: 80,    // knots  (AFCS default 80 kt)
   alt: 500,   // feet   (AFCS default 500 ft)
@@ -2842,10 +2842,10 @@ function drawHSISidePanel(x, y, w, h, opt) {
 // ══════════════════════════════════════════════════════
 const osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:18});
 const satLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {maxZoom:19});
-let currentLayer = 'osm';
-const leafMap = L.map('map',{center:[37.46,126.44],zoom:8,zoomControl:false,attributionControl:false});
+let currentLayer = 'sat';
+const leafMap = L.map('map',{center:[35.9038,126.6159],zoom:12,zoomControl:false,attributionControl:false});
 L.control.zoom({position:'bottomright'}).addTo(leafMap);
-osmLayer.addTo(leafMap);
+satLayer.addTo(leafMap);
 
 // Custom dual-unit scale bar (km + NM)
 L.Control.DualScale = L.Control.extend({
