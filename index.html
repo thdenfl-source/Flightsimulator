@@ -7385,7 +7385,7 @@ function loadFdrFile(input) {
   const reader = new FileReader();
   reader.onload = e => {
     try {
-      _fdrTrack = _parseFdrGpx(e.target.result);
+      _fdrTrack = _fdrInterpolate(_parseFdrGpx(e.target.result), 500);
       if (_fdrTrack.length < 2) {
         document.getElementById('fdr-status').textContent = '트랙 포인트 없음';
         return;
@@ -7443,6 +7443,35 @@ function _parseFdrGpx(xmlStr) {
     track[i].speedKt = (track[i-1].speedKt + track[i].speedKt + track[i+1].speedKt) / 3;
   }
   return track;
+}
+
+// Linear interpolation between raw GPX points at stepMs intervals (default 500ms).
+// Lat/lon use great-circle interpolation via destPoint; alt/speed are lerped linearly.
+function _fdrInterpolate(raw, stepMs) {
+  if (raw.length < 2) return raw;
+  const out = [];
+  for (let i = 0; i < raw.length - 1; i++) {
+    const a  = raw[i], b = raw[i + 1];
+    const dt = b.timeMs - a.timeMs;
+    if (dt <= 0) { out.push(a); continue; }
+    // heading from a → b (used for all sub-points in this segment)
+    const segHdg = bearing(a.lat, a.lon, b.lat, b.lon);
+    const distNM = distance(a.lat, a.lon, b.lat, b.lon);
+    const steps  = Math.max(1, Math.round(dt / stepMs));
+    for (let s = 0; s < steps; s++) {
+      const t   = s / steps;            // 0 … <1
+      const p   = destPoint(a.lat, a.lon, segHdg, distNM * t);
+      out.push({
+        lat:     p[0],
+        lon:     p[1],
+        altM:    a.altM    + (b.altM    - a.altM)    * t,
+        speedKt: a.speedKt + (b.speedKt - a.speedKt) * t,
+        timeMs:  a.timeMs  + dt * t,
+      });
+    }
+  }
+  out.push(raw[raw.length - 1]); // always include the last original point
+  return out;
 }
 
 function _fdrShowTrackOnMap() {
