@@ -3238,7 +3238,18 @@ function _init3dMap() {
     _ml3dMarker = new maplibregl.Marker({ element: el, pitchAlignment: 'viewport', rotationAlignment: 'viewport' })
       .setLngLat([S.lon, S.lat])
       .addTo(_ml3d);
+    // Aircraft trail source + layer
+    _ml3d.addSource('ac-trail', {
+      type: 'geojson',
+      data: { type: 'Feature', geometry: { type: 'LineString', coordinates: [] } }
+    });
+    _ml3d.addLayer({
+      id: 'ac-trail', type: 'line', source: 'ac-trail',
+      paint: { 'line-color': '#00ff88', 'line-width': 2, 'line-opacity': 0.7 }
+    });
+
     _update3dMarker();
+    _update3dTrail();
     _ml3d.resize();
   });
 
@@ -3653,7 +3664,18 @@ function updateCrsLine() {
   }
 }
 
-function updateTrail(){ trailLine.setLatLngs(S.trail.map(t=>[t[0],t[1]])); }
+function updateTrail(){
+  trailLine.setLatLngs(S.trail.map(t=>[t[0],t[1]]));
+  _update3dTrail();
+}
+
+function _update3dTrail() {
+  if (!_ml3d || !_ml3d.loaded() || !_ml3d.getSource('ac-trail')) return;
+  _ml3d.getSource('ac-trail').setData({
+    type: 'Feature',
+    geometry: { type: 'LineString', coordinates: S.trail.map(t => [t[1], t[0]]) }
+  });
+}
 function updateShipTrail(){ shipTrailLine.setLatLngs(shipTrail.map(t=>[t[0],t[1]])); }
 // ── 1인칭 Follow Mode ────────────────────────────────────────────────────
 // When active: 2D map centres on aircraft every frame;
@@ -4205,7 +4227,7 @@ function toggleSim(){
 function resetSim(){
   S.running=false;
   updateFlyBtns();
-  S.trail=[];trailLine.setLatLngs([]);S.lastT=null;
+  S.trail=[];trailLine.setLatLngs([]);_update3dTrail();S.lastT=null;
   updateAcOnMap();
 }
 
@@ -7524,6 +7546,7 @@ function _fdrRenderFrame(idx) {
 
   // Update map aircraft marker + follow (triggers _applyFollow for 3D follow mode)
   updateAcOnMap();
+  _update3dTrail();
   drawPFD();
 
   // Update timeline slider
