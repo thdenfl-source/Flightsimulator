@@ -7385,7 +7385,7 @@ function loadFdrFile(input) {
   const reader = new FileReader();
   reader.onload = e => {
     try {
-      _fdrTrack = _fdrInterpolate(_parseFdrGpx(e.target.result), 500);
+      _fdrTrack = _fdrInterpolate(_parseFdrGpx(e.target.result), 50);
       if (_fdrTrack.length < 2) {
         document.getElementById('fdr-status').textContent = '트랙 포인트 없음';
         return;
