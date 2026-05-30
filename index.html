@@ -3238,15 +3238,20 @@ function _init3dMap() {
     _ml3dMarker = new maplibregl.Marker({ element: el, pitchAlignment: 'viewport', rotationAlignment: 'viewport' })
       .setLngLat([S.lon, S.lat])
       .addTo(_ml3d);
-    // Aircraft trail source + layer
+    // Aircraft trail — draped on terrain surface (no z, terrain-following)
     _ml3d.addSource('ac-trail', {
       type: 'geojson',
       data: { type: 'Feature', geometry: { type: 'LineString', coordinates: [] } }
     });
     _ml3d.addLayer({
       id: 'ac-trail', type: 'line', source: 'ac-trail',
-      paint: { 'line-color': '#00ff88', 'line-width': 2, 'line-opacity': 0.7 }
-    });
+      layout: { 'line-cap': 'round', 'line-join': 'round' },
+      paint: {
+        'line-color': '#00ff88',
+        'line-width': 2.5,
+        'line-opacity': 0.85
+      }
+    }, _firstSymbolLayerId());
 
     _update3dMarker();
     _update3dTrail();
@@ -3669,8 +3674,19 @@ function updateTrail(){
   _update3dTrail();
 }
 
+// Returns the id of the first symbol layer (labels etc.) in the current style,
+// so we can insert the trail layer just below it — rendered ON terrain tiles.
+function _firstSymbolLayerId() {
+  if (!_ml3d) return undefined;
+  const layers = _ml3d.getStyle().layers;
+  for (const l of layers) { if (l.type === 'symbol') return l.id; }
+  return undefined; // insert at top if no symbols
+}
+
 function _update3dTrail() {
   if (!_ml3d || !_ml3d.loaded() || !_ml3d.getSource('ac-trail')) return;
+  // Coordinates are [lon, lat] with NO altitude so maplibre drapes the
+  // line flat on the terrain surface — matching the 2D Leaflet appearance.
   _ml3d.getSource('ac-trail').setData({
     type: 'Feature',
     geometry: { type: 'LineString', coordinates: S.trail.map(t => [t[1], t[0]]) }
@@ -7544,6 +7560,13 @@ function _fdrRenderFrame(idx) {
   S.spd = Math.round(p.speedKt);
   S.hdg = hdg;
 
+  // Accumulate trail so 2D/3D trail lines update during FDR replay
+  const last = S.trail[S.trail.length - 1];
+  if (!last || distance(last[0], last[1], S.lat, S.lon) > 0.001) {
+    S.trail.push([S.lat, S.lon]);
+    if (S.trail.length > 3000) S.trail.shift();
+  }
+
   // Update map aircraft marker + follow (triggers _applyFollow for 3D follow mode)
   updateAcOnMap();
   _update3dTrail();
@@ -7614,6 +7637,7 @@ function fdrPause() {
 function fdrStop() {
   fdrPause();
   _fdrIdx = 0;
+  S.trail = []; updateTrail();   // clear trail when rewinding to start
   if (_fdrTrack.length) _fdrRenderFrame(0);
 }
 
