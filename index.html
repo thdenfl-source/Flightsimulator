@@ -7399,7 +7399,8 @@ switchMode('HOME');
 // ═══════════════════════════════════════════════════════════════
 //  FDR (GPX REPLAY)
 // ═══════════════════════════════════════════════════════════════
-let _fdrTrack      = [];     // [{lat,lon,altM,speedKt,timeMs}]
+let _fdrTrack      = [];     // interpolated track for playback
+let _fdrRawTrack   = [];     // original GPX points — used for route preview line only
 let _fdrIdx        = 0;      // current playback index
 let _fdrSpeed      = 1;      // playback speed multiplier
 let _fdrPlaying    = false;
@@ -7424,7 +7425,8 @@ function loadFdrFile(input) {
   const reader = new FileReader();
   reader.onload = e => {
     try {
-      _fdrTrack = _fdrInterpolate(_parseFdrGpx(e.target.result), 50);
+      _fdrRawTrack = _parseFdrGpx(e.target.result);
+      _fdrTrack    = _fdrInterpolate(_fdrRawTrack, 50);
       if (_fdrTrack.length < 2) {
         document.getElementById('fdr-status').textContent = '트랙 포인트 없음';
         return;
@@ -7518,12 +7520,11 @@ function _fdrShowTrackOnMap() {
   if (_fdrLayer2d)  { leafMap.removeLayer(_fdrLayer2d);  _fdrLayer2d  = null; }
   if (_fdrMarker2d) { leafMap.removeLayer(_fdrMarker2d); _fdrMarker2d = null; }
 
-  // Use the raw (non-interpolated) original GPX points for the overview line
-  // so it exactly matches the logged route.
-  const latlngs = _fdrTrack.map(p => [p.lat, p.lon]);
-  _fdrLayer2d  = L.polyline(latlngs, { color: '#ff8800', weight: 2.5, opacity: 0.9,
-                                        dashArray: null }).addTo(leafMap);
-  _fdrMarker2d = L.circleMarker([_fdrTrack[0].lat, _fdrTrack[0].lon],
+  // Use original (non-interpolated) GPX points for the route preview line
+  const src = _fdrRawTrack.length ? _fdrRawTrack : _fdrTrack;
+  const latlngs = src.map(p => [p.lat, p.lon]);
+  _fdrLayer2d  = L.polyline(latlngs, { color: '#ff8800', weight: 2.5, opacity: 0.9 }).addTo(leafMap);
+  _fdrMarker2d = L.circleMarker([src[0].lat, src[0].lon],
     { radius: 7, color: '#ff8800', fillColor: '#ffaa00', fillOpacity: 1, weight: 2 }).addTo(leafMap);
   leafMap.fitBounds(_fdrLayer2d.getBounds(), { padding: [20, 20] });
 
@@ -7545,8 +7546,9 @@ function _fdrDraw3dTrackRoute() {
     try { _ml3d.removeSource('fdr-track'); } catch(e) {}
     _fdrLayer3d = false;
   }
-  if (!_fdrTrack.length) return;
-  const coords = _fdrTrack.map(p => [p.lon, p.lat]);
+  const src = _fdrRawTrack.length ? _fdrRawTrack : _fdrTrack;
+  if (!src.length) return;
+  const coords = src.map(p => [p.lon, p.lat]);
   _ml3d.addSource('fdr-track', {
     type: 'geojson',
     data: { type: 'Feature', geometry: { type: 'LineString', coordinates: coords } }
