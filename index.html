@@ -3027,24 +3027,33 @@ const AS_COLOR = {
   CTR: { stroke:'#4499ff', fill:'#4499ff', fillOp:0.08, btnColor:'#88ccff', btnBorder:'#4499ff', glow:'rgba(68,153,255,0.35)' },
 };
 
+// CTR zones: base list covers all AIRPORTS plus military/additional fields.
+// Radius 9260m = 5NM; RKSI uses 10NM given its large TMA.
 const AIRSPACE = {
   CTR: [
-    { id:'RKSS', name:'김포',  lat:37.5581, lon:126.7911, r:9260,  floor:'SFC', ceil:'1500ft' },
-    { id:'RKSI', name:'인천',  lat:37.4603, lon:126.4400, r:18520, floor:'SFC', ceil:'2500ft' },
-    { id:'RKPK', name:'김해',  lat:35.1786, lon:128.9389, r:9260,  floor:'SFC', ceil:'1500ft' },
-    { id:'RKPC', name:'제주',  lat:33.5108, lon:126.4947, r:9260,  floor:'SFC', ceil:'3000ft' },
-    { id:'RKTN', name:'대구',  lat:35.8939, lon:128.6586, r:9260,  floor:'SFC', ceil:'1500ft' },
-    { id:'RKTU', name:'청주',  lat:36.7186, lon:127.4989, r:9260,  floor:'SFC', ceil:'1500ft' },
-    { id:'RKJJ', name:'광주',  lat:35.1231, lon:126.8092, r:9260,  floor:'SFC', ceil:'1500ft' },
-    { id:'RKSG', name:'성남',  lat:37.4444, lon:127.1139, r:9260,  floor:'SFC', ceil:'1500ft' },
-    { id:'RKSU', name:'수원',  lat:37.2397, lon:127.0067, r:9260,  floor:'SFC', ceil:'1500ft' },
-    { id:'RKSO', name:'오산',  lat:37.0911, lon:127.0300, r:9260,  floor:'SFC', ceil:'1500ft' },
-    { id:'RKJK', name:'군산',  lat:35.9039, lon:126.6158, r:9260,  floor:'SFC', ceil:'1500ft' },
-    { id:'RKTP', name:'포항',  lat:35.9881, lon:129.4200, r:9260,  floor:'SFC', ceil:'1500ft' },
-    { id:'RKPU', name:'원주',  lat:37.4389, lon:127.9600, r:9260,  floor:'SFC', ceil:'1500ft' },
-    { id:'RKTY', name:'예천',  lat:36.6319, lon:128.3519, r:9260,  floor:'SFC', ceil:'1500ft' },
-    { id:'RKPS', name:'사천',  lat:35.0894, lon:128.0683, r:9260,  floor:'SFC', ceil:'1500ft' },
-    { id:'RKNY', name:'양양',  lat:38.0611, lon:128.6689, r:9260,  floor:'SFC', ceil:'2500ft' },
+    // ── Civilian / joint-use airports (mirror AIRPORTS list) ──
+    { id:'RKSI', name:'인천',    lat:37.4603, lon:126.4400, r:18520, floor:'SFC', ceil:'2500ft' },
+    { id:'RKSS', name:'김포',    lat:37.5581, lon:126.7911, r:9260,  floor:'SFC', ceil:'1500ft' },
+    { id:'RKPK', name:'김해',    lat:35.1786, lon:128.9389, r:9260,  floor:'SFC', ceil:'1500ft' },
+    { id:'RKPC', name:'제주',    lat:33.5108, lon:126.4947, r:9260,  floor:'SFC', ceil:'3000ft' },
+    { id:'RKTU', name:'청주',    lat:36.7186, lon:127.4989, r:9260,  floor:'SFC', ceil:'1500ft' },
+    { id:'RKJJ', name:'광주',    lat:35.1231, lon:126.8092, r:9260,  floor:'SFC', ceil:'1500ft' },
+    { id:'RKJK', name:'군산',    lat:35.9039, lon:126.6158, r:9260,  floor:'SFC', ceil:'1500ft' },
+    { id:'RKJY', name:'여수',    lat:34.8423, lon:127.6170, r:9260,  floor:'SFC', ceil:'1500ft' },
+    { id:'RKJB', name:'무안',    lat:34.9914, lon:126.3829, r:9260,  floor:'SFC', ceil:'1500ft' },
+    { id:'RKTL', name:'사천',    lat:35.0886, lon:128.0703, r:9260,  floor:'SFC', ceil:'1500ft' },
+    { id:'RKTH', name:'포항경주', lat:35.9878, lon:129.4201, r:9260,  floor:'SFC', ceil:'1500ft' },
+    { id:'RKDU', name:'울산',    lat:35.5934, lon:129.3520, r:9260,  floor:'SFC', ceil:'1500ft' },
+    { id:'RKNN', name:'강릉',    lat:37.7537, lon:128.9437, r:9260,  floor:'SFC', ceil:'1500ft' },
+    { id:'RKNY', name:'양양',    lat:38.0611, lon:128.6689, r:9260,  floor:'SFC', ceil:'2500ft' },
+    { id:'RKNS', name:'속초',    lat:38.1427, lon:128.5986, r:9260,  floor:'SFC', ceil:'1500ft' },
+    // ── Military / additional ──
+    { id:'RKTN', name:'대구',    lat:35.8939, lon:128.6586, r:9260,  floor:'SFC', ceil:'1500ft' },
+    { id:'RKSG', name:'성남',    lat:37.4444, lon:127.1139, r:9260,  floor:'SFC', ceil:'1500ft' },
+    { id:'RKSU', name:'수원',    lat:37.2397, lon:127.0067, r:9260,  floor:'SFC', ceil:'1500ft' },
+    { id:'RKSO', name:'오산',    lat:37.0911, lon:127.0300, r:9260,  floor:'SFC', ceil:'1500ft' },
+    { id:'RKPU', name:'원주',    lat:37.4389, lon:127.9600, r:9260,  floor:'SFC', ceil:'1500ft' },
+    { id:'RKTY', name:'예천',    lat:36.6319, lon:128.3519, r:9260,  floor:'SFC', ceil:'1500ft' },
   ],
 };
 
