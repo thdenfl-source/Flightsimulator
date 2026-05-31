@@ -5276,7 +5276,6 @@ async function showAptWx(icao, name, latlng) {
   if (_aptWxCtl) _aptWxCtl.abort();
   _aptWxCtl = new AbortController();
   const ctl = _aptWxCtl;
-  const timer = setTimeout(() => ctl.abort(), 5000);
 
   const div = document.createElement('div');
   div.style.cssText = 'background:#0a1a0a;padding:10px;font-family:"Courier New",monospace;';
@@ -5285,32 +5284,24 @@ async function showAptWx(icao, name, latlng) {
   const popup = L.popup({ maxWidth: 340, className: 'apt-wx-popup', closeButton: true, autoClose: false })
     .setLatLng(latlng).setContent(div).openOn(leafMap);
 
-  const awBase   = 'https://aviationweather.gov/api/data/';
-  const noaaBase = 'https://tgftp.weather.gov/data/';
-  const noaaTds  = path => _wxGet(`${noaaBase}${path}`, ctl).then(t => {
-    const lines = t.split('\n').map(l => l.trim()).filter(Boolean);
-    return lines.length > 1 ? lines.slice(1).join(' ') : lines[0] || '';
-  });
+  const AMO_LINK = `<div style="margin-top:4px;font-size:12px;"><a href="https://global.amo.go.kr/observation/metar.do" target="_blank" style="color:#66aaff;">AMO METAR 조회</a></div>`;
 
   try {
     let raw = '';
     try {
-      raw = await raceValid(
-        [
-          _wxGet(`${awBase}metar?ids=${encodeURIComponent(icao)}&format=raw&hours=3`, ctl),
-          noaaTds(`observations/metar/stations/${icao}.TXT`),
-          _ivaoMetar(icao, ctl),
-          _vatsimMetar(icao, ctl),
-          _metarTafScrape(icao, ctl),
-        ],
-        v => typeof v === 'string' && v.length >= 8
-      );
+      const sig = ctl.signal;
+      const url = `https://aviationweather.gov/api/data/metar?ids=${encodeURIComponent(icao)}&format=raw&hours=3`;
+      const res = await Promise.race([
+        fetch(url, { signal: sig }).then(r => r.ok ? r.text() : Promise.reject()),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 3000)),
+      ]);
+      raw = res.trim();
     } catch { raw = ''; }
     if (ctl.signal.aborted) return;
-    if (raw.length >= 8) {
+    if (raw.length >= 8 && raw.toUpperCase().includes(icao)) {
       renderWxMetar(raw, div, icao);
     } else {
-      div.innerHTML = `<div style="color:#00ff88;font-size:15px;font-weight:bold;">${icao} — ${name}</div><div style="color:#ff8800;font-size:13px;margin-top:4px;">METAR 없음 (5초 내 응답 없음)</div><div style="margin-top:4px;font-size:12px;"><a href="https://global.amo.go.kr/observation/metar.do" target="_blank" style="color:#66aaff;">AMO METAR 조회</a></div>`;
+      div.innerHTML = `<div style="color:#00ff88;font-size:15px;font-weight:bold;">${icao} — ${name}</div><div style="color:#ff8800;font-size:13px;margin-top:4px;">METAR 없음</div>${AMO_LINK}`;
     }
     popup.update();
   } catch (e) {
@@ -5816,127 +5807,7 @@ function _wxTime(t) {
 // (allorigins /get) lets us verify upstream HTTP status to filter HTML errors.
 
 const _wxCache = new Map(); // url → {data, ts}
-const WX_CACHE_TTL = 10 * 60 * 1000; // 10분 (background refresh 주기와 동일)
-
-// ── Additional free METAR sources (no auth required) ──
-// IVAO: returns raw METAR text directly
-// VATSIM: returns raw METAR text directly
-function _ivaoMetar(icao, ctl) {
-  return _wxGet(`https://metar.ivao.aero/${icao}`, ctl);
-}
-function _vatsimMetar(icao, ctl) {
-  return _wxGet(`https://metar.vatsim.net/metar.php?id=${icao}`, ctl);
-}
-
-// metar-taf.com scraper — last-resort source for ROK military fields that
-// don't publish METAR through aviationweather.gov / IVAO / VATSIM.
-// Fetches the HTML page via CORS proxies and extracts the raw METAR string.
-async function _metarTafScrape(icao, ctl) {
-  const sig = ctl.signal;
-  const target = `https://metar-taf.com/metar/${icao}`;
-  const proxies = [
-    'https://api.allorigins.win/raw?url=' + encodeURIComponent(target),
-    'https://api.codetabs.com/v1/proxy?quest=' + encodeURIComponent(target),
-    'https://corsproxy.io/?' + encodeURIComponent(target),
-  ];
-  const re = new RegExp(icao + '\\s+\\d{6}Z\\b[^<\\n]*', 'i');
-  // 병렬로 모든 프록시 시도 — 첫 번째 유효 결과 반환
-  const tryProxy = async (px) => {
-    const r = await fetch(px, { signal: sig });
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    const html = await r.text();
-    const m = html.match(re);
-    if (!m) throw new Error('no match');
-    const txt = m[0].replace(/&[a-z]+;/gi, ' ').replace(/\s+/g, ' ').trim();
-    if (txt.length < 8) throw new Error('too short');
-    return txt;
-  };
-  return Promise.any(proxies.map(px => tryProxy(px)));
-}
-
-// Background METAR refresh — 공항별 순차 조회, 서버 부하 최소화
-async function _bgRefreshMetar() {
-  const awBase = 'https://aviationweather.gov/api/data/';
-  for (const icao of Object.keys(APT_LATLNG)) {
-    const ctl = new AbortController();
-    const t = setTimeout(() => ctl.abort(), 5000);
-    try {
-      await raceValid(
-        [
-          _wxGet(`${awBase}metar?ids=${encodeURIComponent(icao)}&format=raw&hours=3`, ctl),
-          _ivaoMetar(icao, ctl),
-          _vatsimMetar(icao, ctl),
-        ],
-        v => typeof v === 'string' && v.length >= 8
-      );
-    } catch { /* 개별 실패는 무시 */ } finally { clearTimeout(t); }
-    await new Promise(r => setTimeout(r, 800)); // 공항 간 0.8초 간격
-  }
-}
-// 첫 조회 후 10분마다 자동 갱신
-setTimeout(() => { _bgRefreshMetar(); setInterval(_bgRefreshMetar, 10 * 60 * 1000); }, 3000);
-
-// Resolves with first promise that passes guard; rejects when all fail or timeout
-const raceValid = (promises, guard, timeoutMs = 5000) => {
-  const race = new Promise((resolve, reject) => {
-    let pending = promises.length, lastErr = null;
-    if (!pending) return reject(new Error('no sources'));
-    promises.forEach(p => p
-      .then(v => { if (guard(v)) resolve(v); else if (--pending === 0) reject(lastErr || new Error('no valid data')); })
-      .catch(e => { lastErr = e; if (--pending === 0) reject(e); })
-    );
-  });
-  const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), timeoutMs));
-  return Promise.race([race, timeout]);
-};
-
-async function _wxGet(url, ctl) {
-  // Cache hit?
-  const c = _wxCache.get(url);
-  if (c && Date.now() - c.ts < WX_CACHE_TTL) return c.data;
-
-  const sig = ctl.signal;
-
-  // Plain proxy fetch — throws on HTTP error or HTML body
-  const raw = async (fetchUrl, init = {}) => {
-    const r = await fetch(fetchUrl, { signal: sig, ...init });
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    const body = (await r.text()).trim();
-    if (body.startsWith('<')) throw new Error('html');
-    return body;
-  };
-
-  // allorigins JSON wrapper — exposes upstream HTTP status code,
-  // distinguishes "API returned HTML" from "proxy returned HTML error"
-  const allOriginsJson = async () => {
-    const r = await fetch('https://api.allorigins.win/get?url=' + encodeURIComponent(url), { signal: sig });
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    const j = await r.json();
-    const code = j?.status?.http_code ?? 0;
-    if (code && (code < 200 || code >= 300)) throw new Error(`HTTP ${code}`);
-    const body = (j.contents || '').trim();
-    if (body.startsWith('<')) throw new Error('html');
-    return body;
-  };
-
-  // Fire ALL transports simultaneously — first valid wins (hard 4s timeout)
-  const _hardTimeout = new Promise((_, reject) => setTimeout(() => reject(new Error('wx-hard-timeout')), 4000));
-  const data = await Promise.race([
-    Promise.any([
-      raw(url, { mode: 'cors' }),
-      allOriginsJson(),
-      raw('https://api.allorigins.win/raw?url=' + encodeURIComponent(url)),
-      raw('https://corsproxy.io/?' + encodeURIComponent(url)),
-      raw('https://api.codetabs.com/v1/proxy?quest=' + encodeURIComponent(url)),
-      raw('https://thingproxy.freeboard.io/fetch/' + url),
-    ]),
-    _hardTimeout,
-  ]);
-
-  // Cache non-empty responses
-  if (data) _wxCache.set(url, { data, ts: Date.now() });
-  return data;
-}
+const WX_CACHE_TTL = 10 * 60 * 1000;
 
 async function fetchWx(type) {
   const icao = (document.getElementById('wx-icao').value || '').trim().toUpperCase();
@@ -5948,69 +5819,49 @@ async function fetchWx(type) {
   }
   const resultEl = document.getElementById('wx-result');
   resultEl.style.display = 'block';
-  resultEl.innerHTML = `<span style="color:#446644;">🔄 ${icao} ${type} 조회 중… (최대 5초)</span>`;
+  resultEl.innerHTML = `<span style="color:#446644;">🔄 ${icao} ${type} 조회 중…</span>`;
 
   const ctl = new AbortController();
-  const timer = setTimeout(() => ctl.abort(), 5000);
-
+  const AMO_LINK = `<a href="https://global.amo.go.kr/observation/metar.do" target="_blank" style="color:#66aaff;">AMO METAR 조회</a>`;
+  const awBase = 'https://aviationweather.gov/api/data/';
 
   try {
-    const awBase  = 'https://aviationweather.gov/api/data/';
-    const noaaBase = 'https://tgftp.weather.gov/data/';
-
-    // NOAA TDS helper: strips the leading timestamp line
-    const noaaTds = (path) => _wxGet(`${noaaBase}${path}`, ctl).then(t => {
-      const lines = t.split('\n').map(l => l.trim()).filter(Boolean);
-      return lines.length > 1 ? lines.slice(1).join(' ') : lines[0] || '';
-    });
-
     if (type === 'METAR') {
-      // First valid response wins — no waiting for the slow one
       let raw = '';
       try {
-        raw = await raceValid(
-          [
-            _wxGet(`${awBase}metar?ids=${encodeURIComponent(icao)}&format=raw&hours=3`, ctl),
-            noaaTds(`observations/metar/stations/${icao}.TXT`),
-            _ivaoMetar(icao, ctl),
-            _vatsimMetar(icao, ctl),
-            _metarTafScrape(icao, ctl),
-          ],
-          v => typeof v === 'string' && v.length >= 8 && v.toUpperCase().includes(icao)
-        );
+        const url = `${awBase}metar?ids=${encodeURIComponent(icao)}&format=raw&hours=3`;
+        const res = await Promise.race([
+          fetch(url, { signal: ctl.signal }).then(r => r.ok ? r.text() : Promise.reject()),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 3000)),
+        ]);
+        raw = res.trim();
       } catch { raw = ''; }
 
-      if (raw.length < 8) {
-        resultEl.innerHTML = `<span style="color:#ff8800;">${icao}: METAR 없음 (5초 내 응답 없음)</span> — <a href="https://global.amo.go.kr/observation/metar.do" target="_blank" style="color:#66aaff;">AMO METAR 조회</a>`;
+      if (raw.length < 8 || !raw.toUpperCase().includes(icao)) {
+        resultEl.innerHTML = `<span style="color:#ff8800;">${icao}: METAR 없음</span> — ${AMO_LINK}`;
         return;
       }
       renderWxMetar(raw, resultEl, icao);
 
     } else {
-      const fromAw = _wxGet(`${awBase}taf?ids=${encodeURIComponent(icao)}&format=json`, ctl).then(t => {
-        if (!t) return '';
-        let data; try { data = JSON.parse(t); } catch { data = null; }
-        return (data?.[0]?.rawTAF || data?.[0]?.rawTaf || data?.[0]?.taf || '').trim();
-      });
-
       let rawTaf = '';
       try {
-        rawTaf = await raceValid(
-          [fromAw, noaaTds(`forecasts/taf/stations/${icao}.TXT`)],
-          v => typeof v === 'string' && v.length >= 10
-        );
+        const url = `${awBase}taf?ids=${encodeURIComponent(icao)}&format=json`;
+        const res = await Promise.race([
+          fetch(url, { signal: ctl.signal }).then(r => r.ok ? r.text() : Promise.reject()),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 3000)),
+        ]);
+        let data; try { data = JSON.parse(res); } catch { data = null; }
+        rawTaf = (data?.[0]?.rawTAF || data?.[0]?.rawTaf || data?.[0]?.taf || '').trim();
       } catch { rawTaf = ''; }
 
       if (!rawTaf) { resultEl.innerHTML = `<span style="color:#ff8800;">${icao}: TAF 없음</span>`; return; }
       renderWxTaf(rawTaf, resultEl, icao);
     }
   } catch (e) {
-    const msg = e.name === 'AbortError'
-      ? '요청 시간 초과 — 잠시 후 다시 시도해주세요'
-      : '서버 접속 불가 — 잠시 후 다시 시도해주세요';
-    resultEl.innerHTML = `<div style="color:#ff5544;font-size:18px;line-height:1.6;">⚠ ${msg}</div>`;
+    resultEl.innerHTML = `<span style="color:#ff8800;">${icao}: 조회 실패</span> — ${AMO_LINK}`;
   } finally {
-    clearTimeout(timer);
+    ctl.abort();
   }
 }
 
