@@ -5862,7 +5862,7 @@ async function _bgRefreshMetar() {
   const awBase = 'https://aviationweather.gov/api/data/';
   for (const icao of Object.keys(APT_LATLNG)) {
     const ctl = new AbortController();
-    const t = setTimeout(() => ctl.abort(), 12000);
+    const t = setTimeout(() => ctl.abort(), 5000);
     try {
       await raceValid(
         [
@@ -5879,15 +5879,19 @@ async function _bgRefreshMetar() {
 // 첫 조회 후 10분마다 자동 갱신
 setTimeout(() => { _bgRefreshMetar(); setInterval(_bgRefreshMetar, 10 * 60 * 1000); }, 3000);
 
-// Resolves with first promise that passes guard; rejects when all fail
-const raceValid = (promises, guard) => new Promise((resolve, reject) => {
-  let pending = promises.length, lastErr = null;
-  if (!pending) return reject(new Error('no sources'));
-  promises.forEach(p => p
-    .then(v => { if (guard(v)) resolve(v); else if (--pending === 0) reject(lastErr || new Error('no valid data')); })
-    .catch(e => { lastErr = e; if (--pending === 0) reject(e); })
-  );
-});
+// Resolves with first promise that passes guard; rejects when all fail or timeout
+const raceValid = (promises, guard, timeoutMs = 5000) => {
+  const race = new Promise((resolve, reject) => {
+    let pending = promises.length, lastErr = null;
+    if (!pending) return reject(new Error('no sources'));
+    promises.forEach(p => p
+      .then(v => { if (guard(v)) resolve(v); else if (--pending === 0) reject(lastErr || new Error('no valid data')); })
+      .catch(e => { lastErr = e; if (--pending === 0) reject(e); })
+    );
+  });
+  const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), timeoutMs));
+  return Promise.race([race, timeout]);
+};
 
 async function _wxGet(url, ctl) {
   // Cache hit?
@@ -5943,7 +5947,7 @@ async function fetchWx(type) {
   }
   const resultEl = document.getElementById('wx-result');
   resultEl.style.display = 'block';
-  resultEl.innerHTML = `<span style="color:#446644;">🔄 ${icao} ${type} 조회 중… (다중 서버 동시 요청)</span>`;
+  resultEl.innerHTML = `<span style="color:#446644;">🔄 ${icao} ${type} 조회 중… (최대 5초)</span>`;
 
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), 5000);
