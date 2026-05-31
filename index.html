@@ -7444,7 +7444,6 @@ function loadFdrFile(input) {
       }
       _fdrIdx = 0;
       _fdrShowTrackOnMap();
-      _fdrUpdateUi();
       document.getElementById('fdr-status').textContent = `✔ ${file.name}`;
       const info = document.getElementById('fdr-track-info');
       const totalSec = (_fdrTrack[_fdrTrack.length-1].timeMs - _fdrTrack[0].timeMs) / 1000;
@@ -7694,7 +7693,6 @@ function fdrSetSpeed(val) {
   if (wasPlaying) fdrPlay();
 }
 
-function _fdrUpdateUi() {}
 </script>
 </body>
 </html>
