@@ -5894,13 +5894,35 @@ async function fetchWx(type) {
     } else {
       let rawTaf = '';
       try {
-        const url = `https://aviationweather.gov/api/data/taf?ids=${encodeURIComponent(icao)}&format=json`;
-        const res = await Promise.race([
-          fetch(url, { signal: sig }).then(r => r.ok ? r.text() : Promise.reject()),
+        const awUrl = `https://aviationweather.gov/api/data/taf?ids=${encodeURIComponent(icao)}&format=json`;
+        const noaaUrl = `https://tgftp.weather.gov/data/forecasts/taf/stations/${icao}.TXT`;
+        const proxies = [
+          'https://api.allorigins.win/raw?url=' + encodeURIComponent(awUrl),
+          'https://corsproxy.io/?' + encodeURIComponent(awUrl),
+          'https://api.allorigins.win/raw?url=' + encodeURIComponent(noaaUrl),
+          'https://corsproxy.io/?' + encodeURIComponent(noaaUrl),
+        ];
+        const fetchTaf = async (url) => {
+          const r = await fetch(url, { signal: sig });
+          if (!r.ok) throw new Error(`HTTP ${r.status}`);
+          const body = (await r.text()).trim();
+          // JSON 응답 (aviationweather)
+          if (body.startsWith('[') || body.startsWith('{')) {
+            let data; try { data = JSON.parse(body); } catch { throw new Error('parse'); }
+            const t = (data?.[0]?.rawTAF || data?.[0]?.rawTaf || data?.[0]?.taf || '').trim();
+            if (t.length >= 10) return t;
+            throw new Error('empty');
+          }
+          // 평문 TAF (NOAA tgftp) — 첫 줄 타임스탬프 제거
+          const lines = body.split('\n').map(l => l.trim()).filter(Boolean);
+          const t = (lines.length > 1 ? lines.slice(1).join(' ') : lines[0] || '').trim();
+          if (t.length >= 10) return t;
+          throw new Error('empty');
+        };
+        rawTaf = await Promise.race([
+          Promise.any(proxies.map(u => fetchTaf(u))),
           new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 3000)),
         ]);
-        let data; try { data = JSON.parse(res); } catch { data = null; }
-        rawTaf = (data?.[0]?.rawTAF || data?.[0]?.rawTaf || data?.[0]?.taf || '').trim();
       } catch { rawTaf = ''; }
 
       if (!rawTaf) { resultEl.innerHTML = `<span style="color:#ff8800;">${icao}: TAF 없음</span>`; return; }
