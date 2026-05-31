@@ -5824,10 +5824,28 @@ const raceValid = (promises, guard) => {
 async function _wxGet(url, sig) {
   const c = _wxCache.get(url);
   if (c && Date.now() - c.ts < WX_CACHE_TTL) return c.data;
-  const r = await fetch(url, { signal: sig });
-  if (!r.ok) throw new Error(`HTTP ${r.status}`);
-  const body = (await r.text()).trim();
-  if (body.startsWith('<')) throw new Error('html');
+
+  const proxies = [
+    url, // 직접 시도 (모바일 등 CORS 허용 환경)
+    'https://api.allorigins.win/raw?url=' + encodeURIComponent(url),
+    'https://corsproxy.io/?' + encodeURIComponent(url),
+    'https://api.codetabs.com/v1/proxy?quest=' + encodeURIComponent(url),
+  ];
+
+  const tryFetch = async (u) => {
+    const r = await fetch(u, { signal: sig });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const body = (await r.text()).trim();
+    if (body.startsWith('<')) throw new Error('html');
+    if (!body) throw new Error('empty');
+    return body;
+  };
+
+  const body = await Promise.race([
+    Promise.any(proxies.map(u => tryFetch(u))),
+    new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 3000)),
+  ]);
+
   if (body) _wxCache.set(url, { data: body, ts: Date.now() });
   return body;
 }
