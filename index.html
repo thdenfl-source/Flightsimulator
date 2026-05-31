@@ -5839,22 +5839,19 @@ async function _metarTafScrape(icao, ctl) {
     'https://api.codetabs.com/v1/proxy?quest=' + encodeURIComponent(target),
     'https://corsproxy.io/?' + encodeURIComponent(target),
   ];
-  // METAR pattern: "RKTY 121200Z 12010KT ... " up to RMK or end of line
   const re = new RegExp(icao + '\\s+\\d{6}Z\\b[^<\\n]*', 'i');
-  for (const px of proxies) {
-    try {
-      const r = await fetch(px, { signal: sig });
-      if (!r.ok) continue;
-      const html = await r.text();
-      const m = html.match(re);
-      if (m) {
-        // Decode HTML entities and collapse whitespace
-        const txt = m[0].replace(/&[a-z]+;/gi, ' ').replace(/\s+/g, ' ').trim();
-        if (txt.length >= 8) return txt;
-      }
-    } catch { /* try next proxy */ }
-  }
-  throw new Error('metar-taf scrape failed');
+  // 병렬로 모든 프록시 시도 — 첫 번째 유효 결과 반환
+  const tryProxy = async (px) => {
+    const r = await fetch(px, { signal: sig });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const html = await r.text();
+    const m = html.match(re);
+    if (!m) throw new Error('no match');
+    const txt = m[0].replace(/&[a-z]+;/gi, ' ').replace(/\s+/g, ' ').trim();
+    if (txt.length < 8) throw new Error('too short');
+    return txt;
+  };
+  return Promise.any(proxies.map(px => tryProxy(px)));
 }
 
 // Background METAR refresh — 공항별 순차 조회, 서버 부하 최소화
@@ -5922,14 +5919,18 @@ async function _wxGet(url, ctl) {
     return body;
   };
 
-  // Fire ALL transports simultaneously — first valid wins
-  const data = await Promise.any([
-    raw(url, { mode: 'cors' }),
-    allOriginsJson(),
-    raw('https://api.allorigins.win/raw?url=' + encodeURIComponent(url)),
-    raw('https://corsproxy.io/?' + encodeURIComponent(url)),
-    raw('https://api.codetabs.com/v1/proxy?quest=' + encodeURIComponent(url)),
-    raw('https://thingproxy.freeboard.io/fetch/' + url),
+  // Fire ALL transports simultaneously — first valid wins (hard 4s timeout)
+  const _hardTimeout = new Promise((_, reject) => setTimeout(() => reject(new Error('wx-hard-timeout')), 4000));
+  const data = await Promise.race([
+    Promise.any([
+      raw(url, { mode: 'cors' }),
+      allOriginsJson(),
+      raw('https://api.allorigins.win/raw?url=' + encodeURIComponent(url)),
+      raw('https://corsproxy.io/?' + encodeURIComponent(url)),
+      raw('https://api.codetabs.com/v1/proxy?quest=' + encodeURIComponent(url)),
+      raw('https://thingproxy.freeboard.io/fetch/' + url),
+    ]),
+    _hardTimeout,
   ]);
 
   // Cache non-empty responses
