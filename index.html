@@ -5285,20 +5285,18 @@ async function showAptWx(icao, name, latlng) {
     .setLatLng(latlng).setContent(div).openOn(leafMap);
 
   const AMO_LINK = `<div style="margin-top:4px;font-size:12px;"><a href="https://global.amo.go.kr/observation/metar.do" target="_blank" style="color:#66aaff;">AMO METAR 조회</a></div>`;
+  const sig = ctl.signal;
 
   try {
     let raw = '';
     try {
-      const sig = ctl.signal;
-      const url = `https://aviationweather.gov/api/data/metar?ids=${encodeURIComponent(icao)}&format=raw&hours=3`;
-      const res = await Promise.race([
-        fetch(url, { signal: sig }).then(r => r.ok ? r.text() : Promise.reject()),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 3000)),
-      ]);
-      raw = res.trim();
+      raw = await raceValid(
+        [_ivaoMetar(icao, sig), _vatsimMetar(icao, sig), _metarTafScrape(icao, sig)],
+        v => typeof v === 'string' && v.length >= 8 && v.toUpperCase().includes(icao)
+      );
     } catch { raw = ''; }
     if (ctl.signal.aborted) return;
-    if (raw.length >= 8 && raw.toUpperCase().includes(icao)) {
+    if (raw.length >= 8) {
       renderWxMetar(raw, div, icao);
     } else {
       div.innerHTML = `<div style="color:#00ff88;font-size:15px;font-weight:bold;">${icao} — ${name}</div><div style="color:#ff8800;font-size:13px;margin-top:4px;">METAR 없음</div>${AMO_LINK}`;
@@ -5806,8 +5804,60 @@ function _wxTime(t) {
 // aviationweather.gov blocks some proxies → wider net + JSON wrapper
 // (allorigins /get) lets us verify upstream HTTP status to filter HTML errors.
 
-const _wxCache = new Map(); // url → {data, ts}
+const _wxCache = new Map();
 const WX_CACHE_TTL = 10 * 60 * 1000;
+
+// 첫 번째 유효 결과 반환, 3초 초과 시 timeout으로 reject
+const raceValid = (promises, guard) => {
+  const race = new Promise((resolve, reject) => {
+    let pending = promises.length, lastErr = null;
+    if (!pending) return reject(new Error('no sources'));
+    promises.forEach(p => p
+      .then(v => { if (guard(v)) resolve(v); else if (--pending === 0) reject(lastErr || new Error('no valid data')); })
+      .catch(e => { lastErr = e; if (--pending === 0) reject(e); })
+    );
+  });
+  const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 3000));
+  return Promise.race([race, timeout]);
+};
+
+async function _wxGet(url, sig) {
+  const c = _wxCache.get(url);
+  if (c && Date.now() - c.ts < WX_CACHE_TTL) return c.data;
+  const r = await fetch(url, { signal: sig });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  const body = (await r.text()).trim();
+  if (body.startsWith('<')) throw new Error('html');
+  if (body) _wxCache.set(url, { data: body, ts: Date.now() });
+  return body;
+}
+
+function _ivaoMetar(icao, sig) {
+  return _wxGet(`https://metar.ivao.aero/${icao}`, sig);
+}
+function _vatsimMetar(icao, sig) {
+  return _wxGet(`https://metar.vatsim.net/metar.php?id=${icao}`, sig);
+}
+
+async function _metarTafScrape(icao, sig) {
+  const target = `https://metar-taf.com/metar/${icao}`;
+  const proxies = [
+    'https://api.allorigins.win/raw?url=' + encodeURIComponent(target),
+    'https://api.codetabs.com/v1/proxy?quest=' + encodeURIComponent(target),
+    'https://corsproxy.io/?' + encodeURIComponent(target),
+  ];
+  const re = new RegExp(icao + '\\s+\\d{6}Z\\b[^<\\n]*', 'i');
+  return Promise.any(proxies.map(async px => {
+    const r = await fetch(px, { signal: sig });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const html = await r.text();
+    const m = html.match(re);
+    if (!m) throw new Error('no match');
+    const txt = m[0].replace(/&[a-z]+;/gi, ' ').replace(/\s+/g, ' ').trim();
+    if (txt.length < 8) throw new Error('too short');
+    return txt;
+  }));
+}
 
 async function fetchWx(type) {
   const icao = (document.getElementById('wx-icao').value || '').trim().toUpperCase();
@@ -5822,41 +5872,27 @@ async function fetchWx(type) {
   resultEl.innerHTML = `<span style="color:#446644;">🔄 ${icao} ${type} 조회 중…</span>`;
 
   const ctl = new AbortController();
+  const sig = ctl.signal;
   const AMO_LINK = `<a href="https://global.amo.go.kr/observation/metar.do" target="_blank" style="color:#66aaff;">AMO METAR 조회</a>`;
-  const awBase = 'https://aviationweather.gov/api/data/';
 
   try {
     if (type === 'METAR') {
       let raw = '';
       try {
-        const url = `${awBase}metar?ids=${encodeURIComponent(icao)}&format=raw&hours=3`;
-        const res = await Promise.race([
-          fetch(url, { signal: ctl.signal }).then(r => r.ok ? r.text() : Promise.reject()),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 3000)),
-        ]);
-        raw = res.trim();
+        raw = await raceValid(
+          [_ivaoMetar(icao, sig), _vatsimMetar(icao, sig), _metarTafScrape(icao, sig)],
+          v => typeof v === 'string' && v.length >= 8 && v.toUpperCase().includes(icao)
+        );
       } catch { raw = ''; }
 
-      if (raw.length < 8 || !raw.toUpperCase().includes(icao)) {
+      if (raw.length < 8) {
         resultEl.innerHTML = `<span style="color:#ff8800;">${icao}: METAR 없음</span> — ${AMO_LINK}`;
         return;
       }
       renderWxMetar(raw, resultEl, icao);
 
     } else {
-      let rawTaf = '';
-      try {
-        const url = `${awBase}taf?ids=${encodeURIComponent(icao)}&format=json`;
-        const res = await Promise.race([
-          fetch(url, { signal: ctl.signal }).then(r => r.ok ? r.text() : Promise.reject()),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 3000)),
-        ]);
-        let data; try { data = JSON.parse(res); } catch { data = null; }
-        rawTaf = (data?.[0]?.rawTAF || data?.[0]?.rawTaf || data?.[0]?.taf || '').trim();
-      } catch { rawTaf = ''; }
-
-      if (!rawTaf) { resultEl.innerHTML = `<span style="color:#ff8800;">${icao}: TAF 없음</span>`; return; }
-      renderWxTaf(rawTaf, resultEl, icao);
+      resultEl.innerHTML = `<span style="color:#ff8800;">${icao}: TAF 없음</span>`;
     }
   } catch (e) {
     resultEl.innerHTML = `<span style="color:#ff8800;">${icao}: 조회 실패</span> — ${AMO_LINK}`;
