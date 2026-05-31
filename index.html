@@ -5299,6 +5299,8 @@ async function showAptWx(icao, name, latlng) {
         [
           _wxGet(`${awBase}metar?ids=${encodeURIComponent(icao)}&format=raw&hours=3`, ctl),
           noaaTds(`observations/metar/stations/${icao}.TXT`),
+          _ivaoMetar(icao, ctl),
+          _vatsimMetar(icao, ctl),
         ],
         v => typeof v === 'string' && v.length >= 8
       );
@@ -5815,6 +5817,16 @@ function _wxTime(t) {
 const _wxCache = new Map(); // url → {data, ts}
 const WX_CACHE_TTL = 10 * 60 * 1000; // 10분 (background refresh 주기와 동일)
 
+// ── Additional free METAR sources (no auth required) ──
+// IVAO: returns raw METAR text directly
+// VATSIM: returns raw METAR text directly
+function _ivaoMetar(icao, ctl) {
+  return _wxGet(`https://metar.ivao.aero/${icao}`, ctl);
+}
+function _vatsimMetar(icao, ctl) {
+  return _wxGet(`https://metar.vatsim.net/metar.php?id=${icao}`, ctl);
+}
+
 // Background METAR refresh — 공항별 순차 조회, 서버 부하 최소화
 async function _bgRefreshMetar() {
   const awBase = 'https://aviationweather.gov/api/data/';
@@ -5822,7 +5834,14 @@ async function _bgRefreshMetar() {
     const ctl = new AbortController();
     const t = setTimeout(() => ctl.abort(), 12000);
     try {
-      await _wxGet(`${awBase}metar?ids=${encodeURIComponent(icao)}&format=raw&hours=3`, ctl);
+      await raceValid(
+        [
+          _wxGet(`${awBase}metar?ids=${encodeURIComponent(icao)}&format=raw&hours=3`, ctl),
+          _ivaoMetar(icao, ctl),
+          _vatsimMetar(icao, ctl),
+        ],
+        v => typeof v === 'string' && v.length >= 8
+      );
     } catch { /* 개별 실패는 무시 */ } finally { clearTimeout(t); }
     await new Promise(r => setTimeout(r, 800)); // 공항 간 0.8초 간격
   }
@@ -5918,8 +5937,10 @@ async function fetchWx(type) {
           [
             _wxGet(`${awBase}metar?ids=${encodeURIComponent(icao)}&format=raw&hours=3`, ctl),
             noaaTds(`observations/metar/stations/${icao}.TXT`),
+            _ivaoMetar(icao, ctl),
+            _vatsimMetar(icao, ctl),
           ],
-          v => typeof v === 'string' && v.length >= 8
+          v => typeof v === 'string' && v.length >= 8 && v.toUpperCase().includes(icao)
         );
       } catch { raw = ''; }
 
