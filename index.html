@@ -5310,7 +5310,9 @@ async function showAptWx(icao, name, latlng) {
     if (raw.length >= 8) {
       renderWxMetar(raw, div, icao);
     } else {
-      div.innerHTML = `<div style="color:#00ff88;font-size:15px;font-weight:bold;">${icao} — ${name}</div><div style="color:#ff8800;font-size:13px;margin-top:4px;">METAR 없음</div>`;
+      const AMO_AIRPORTS = ['RKJJ','RKSW','RKDU','RKTH','RKNN','RKTY','RKNW'];
+      const amoLink = AMO_AIRPORTS.includes(icao) ? `<div style="margin-top:4px;font-size:12px;"><a href="https://global.amo.go.kr/observation/metar.do" target="_blank" style="color:#66aaff;">AMO METAR 조회</a></div>` : '';
+      div.innerHTML = `<div style="color:#00ff88;font-size:15px;font-weight:bold;">${icao} — ${name}</div><div style="color:#ff8800;font-size:13px;margin-top:4px;">METAR 없음</div>${amoLink}`;
     }
     popup.update();
   } catch (e) {
@@ -5975,7 +5977,12 @@ async function fetchWx(type) {
         );
       } catch { raw = ''; }
 
-      if (raw.length < 8) { resultEl.innerHTML = `<span style="color:#ff8800;">${icao}: METAR 없음</span>`; return; }
+      if (raw.length < 8) {
+        const AMO_AIRPORTS = ['RKJJ','RKSW','RKDU','RKTH','RKNN','RKTY','RKNW'];
+        const amoLink = AMO_AIRPORTS.includes(icao) ? ` — <a href="https://global.amo.go.kr/observation/metar.do" target="_blank" style="color:#66aaff;">AMO METAR 조회</a>` : '';
+        resultEl.innerHTML = `<span style="color:#ff8800;">${icao}: METAR 없음</span>${amoLink}`;
+        return;
+      }
       renderWxMetar(raw, resultEl, icao);
 
     } else {
