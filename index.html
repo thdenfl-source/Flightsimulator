@@ -5276,7 +5276,7 @@ async function showAptWx(icao, name, latlng) {
   if (_aptWxCtl) _aptWxCtl.abort();
   _aptWxCtl = new AbortController();
   const ctl = _aptWxCtl;
-  const timer = setTimeout(() => ctl.abort(), 15000);
+  const timer = setTimeout(() => ctl.abort(), 5000);
 
   const div = document.createElement('div');
   div.style.cssText = 'background:#0a1a0a;padding:10px;font-family:"Courier New",monospace;';
@@ -5310,9 +5310,7 @@ async function showAptWx(icao, name, latlng) {
     if (raw.length >= 8) {
       renderWxMetar(raw, div, icao);
     } else {
-      const AMO_AIRPORTS = ['RKJJ','RKSW','RKDU','RKTH','RKNN','RKTY','RKNW'];
-      const amoLink = AMO_AIRPORTS.includes(icao) ? `<div style="margin-top:4px;font-size:12px;"><a href="https://global.amo.go.kr/observation/metar.do" target="_blank" style="color:#66aaff;">AMO METAR 조회</a></div>` : '';
-      div.innerHTML = `<div style="color:#00ff88;font-size:15px;font-weight:bold;">${icao} — ${name}</div><div style="color:#ff8800;font-size:13px;margin-top:4px;">METAR 없음</div>${amoLink}`;
+      div.innerHTML = `<div style="color:#00ff88;font-size:15px;font-weight:bold;">${icao} — ${name}</div><div style="color:#ff8800;font-size:13px;margin-top:4px;">METAR 없음 (5초 내 응답 없음)</div><div style="margin-top:4px;font-size:12px;"><a href="https://global.amo.go.kr/observation/metar.do" target="_blank" style="color:#66aaff;">AMO METAR 조회</a></div>`;
     }
     popup.update();
   } catch (e) {
@@ -5948,7 +5946,7 @@ async function fetchWx(type) {
   resultEl.innerHTML = `<span style="color:#446644;">🔄 ${icao} ${type} 조회 중… (다중 서버 동시 요청)</span>`;
 
   const ctl = new AbortController();
-  const timer = setTimeout(() => ctl.abort(), 15000);
+  const timer = setTimeout(() => ctl.abort(), 5000);
 
 
   try {
@@ -5978,9 +5976,7 @@ async function fetchWx(type) {
       } catch { raw = ''; }
 
       if (raw.length < 8) {
-        const AMO_AIRPORTS = ['RKJJ','RKSW','RKDU','RKTH','RKNN','RKTY','RKNW'];
-        const amoLink = AMO_AIRPORTS.includes(icao) ? ` — <a href="https://global.amo.go.kr/observation/metar.do" target="_blank" style="color:#66aaff;">AMO METAR 조회</a>` : '';
-        resultEl.innerHTML = `<span style="color:#ff8800;">${icao}: METAR 없음</span>${amoLink}`;
+        resultEl.innerHTML = `<span style="color:#ff8800;">${icao}: METAR 없음 (5초 내 응답 없음)</span> — <a href="https://global.amo.go.kr/observation/metar.do" target="_blank" style="color:#66aaff;">AMO METAR 조회</a>`;
         return;
       }
       renderWxMetar(raw, resultEl, icao);
