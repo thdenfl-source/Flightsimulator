@@ -1320,7 +1320,7 @@ const AIRPORTS = [
 // STATE
 // ══════════════════════════════════════════════════════
 const S = {
-  lat: 35.9038, lon: 126.6159,
+  lat: 37.3895, lon: 126.6550,
   hdg: 360,
   spd: 80,    // knots  (AFCS default 80 kt)
   alt: 500,   // feet   (AFCS default 500 ft)
@@ -2977,7 +2977,7 @@ function drawHSISidePanel(x, y, w, h, opt) {
 const osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:18});
 const satLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {maxZoom:19});
 let currentLayer = 'sat';
-const leafMap = L.map('map',{center:[35.9038,126.6159],zoom:12,zoomControl:false,attributionControl:false});
+const leafMap = L.map('map',{center:[37.3895,126.6550],zoom:12,zoomControl:false,attributionControl:false});
 L.control.zoom({position:'bottomright'}).addTo(leafMap);
 satLayer.addTo(leafMap);
 
@@ -7341,6 +7341,27 @@ if ('serviceWorker' in navigator) {
 
 
 switchMode('HOME');
+
+// ── Startup: place aircraft at current GPS position, fallback to Songdo ──
+(function _initStartPos() {
+  const SONGDO = { lat: 37.3895, lon: 126.6550 };
+
+  function _applyStartPos(lat, lon) {
+    S.lat = lat; S.lon = lon;
+    leafMap.setView([lat, lon], 12, { animate: false });
+    updateAcOnMap();
+  }
+
+  if ('geolocation' in navigator) {
+    navigator.geolocation.getCurrentPosition(
+      pos => _applyStartPos(pos.coords.latitude, pos.coords.longitude),
+      ()  => _applyStartPos(SONGDO.lat, SONGDO.lon),
+      { timeout: 5000, maximumAge: 30000 }
+    );
+  } else {
+    _applyStartPos(SONGDO.lat, SONGDO.lon);
+  }
+})();
 
 // ═══════════════════════════════════════════════════════════════
 //  PANEL DIVIDER DRAG (resizable left/right or top/bottom split)
