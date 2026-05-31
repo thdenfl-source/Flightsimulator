@@ -5892,7 +5892,19 @@ async function fetchWx(type) {
       renderWxMetar(raw, resultEl, icao);
 
     } else {
-      resultEl.innerHTML = `<span style="color:#ff8800;">${icao}: TAF 없음</span>`;
+      let rawTaf = '';
+      try {
+        const url = `https://aviationweather.gov/api/data/taf?ids=${encodeURIComponent(icao)}&format=json`;
+        const res = await Promise.race([
+          fetch(url, { signal: sig }).then(r => r.ok ? r.text() : Promise.reject()),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 3000)),
+        ]);
+        let data; try { data = JSON.parse(res); } catch { data = null; }
+        rawTaf = (data?.[0]?.rawTAF || data?.[0]?.rawTaf || data?.[0]?.taf || '').trim();
+      } catch { rawTaf = ''; }
+
+      if (!rawTaf) { resultEl.innerHTML = `<span style="color:#ff8800;">${icao}: TAF 없음</span>`; return; }
+      renderWxTaf(rawTaf, resultEl, icao);
     }
   } catch (e) {
     resultEl.innerHTML = `<span style="color:#ff8800;">${icao}: 조회 실패</span> — ${AMO_LINK}`;
