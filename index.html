@@ -5301,6 +5301,7 @@ async function showAptWx(icao, name, latlng) {
           noaaTds(`observations/metar/stations/${icao}.TXT`),
           _ivaoMetar(icao, ctl),
           _vatsimMetar(icao, ctl),
+          _metarTafScrape(icao, ctl),
         ],
         v => typeof v === 'string' && v.length >= 8
       );
@@ -5827,6 +5828,35 @@ function _vatsimMetar(icao, ctl) {
   return _wxGet(`https://metar.vatsim.net/metar.php?id=${icao}`, ctl);
 }
 
+// metar-taf.com scraper — last-resort source for ROK military fields that
+// don't publish METAR through aviationweather.gov / IVAO / VATSIM.
+// Fetches the HTML page via CORS proxies and extracts the raw METAR string.
+async function _metarTafScrape(icao, ctl) {
+  const sig = ctl.signal;
+  const target = `https://metar-taf.com/metar/${icao}`;
+  const proxies = [
+    'https://api.allorigins.win/raw?url=' + encodeURIComponent(target),
+    'https://api.codetabs.com/v1/proxy?quest=' + encodeURIComponent(target),
+    'https://corsproxy.io/?' + encodeURIComponent(target),
+  ];
+  // METAR pattern: "RKTY 121200Z 12010KT ... " up to RMK or end of line
+  const re = new RegExp(icao + '\\s+\\d{6}Z\\b[^<\\n]*', 'i');
+  for (const px of proxies) {
+    try {
+      const r = await fetch(px, { signal: sig });
+      if (!r.ok) continue;
+      const html = await r.text();
+      const m = html.match(re);
+      if (m) {
+        // Decode HTML entities and collapse whitespace
+        const txt = m[0].replace(/&[a-z]+;/gi, ' ').replace(/\s+/g, ' ').trim();
+        if (txt.length >= 8) return txt;
+      }
+    } catch { /* try next proxy */ }
+  }
+  throw new Error('metar-taf scrape failed');
+}
+
 // Background METAR refresh — 공항별 순차 조회, 서버 부하 최소화
 async function _bgRefreshMetar() {
   const awBase = 'https://aviationweather.gov/api/data/';
@@ -5939,6 +5969,7 @@ async function fetchWx(type) {
             noaaTds(`observations/metar/stations/${icao}.TXT`),
             _ivaoMetar(icao, ctl),
             _vatsimMetar(icao, ctl),
+            _metarTafScrape(icao, ctl),
           ],
           v => typeof v === 'string' && v.length >= 8 && v.toUpperCase().includes(icao)
         );
