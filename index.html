@@ -457,6 +457,14 @@ html, body {
   background: rgba(0,30,20,0.92); border-color: #44cc88; color: #88ffcc;
   box-shadow: 0 0 8px rgba(68,204,136,0.4);
 }
+#notam-btn.notam-active {
+  background: rgba(40,20,0,0.92); border-color: #ffaa22; color: #ffdd88;
+  box-shadow: 0 0 8px rgba(255,170,34,0.4);
+}
+#night-btn.night-active {
+  background: rgba(5,5,30,0.92); border-color: #6655cc; color: #bbaaff;
+  box-shadow: 0 0 8px rgba(102,85,204,0.4);
+}
 
 #map-sim-bar {
   position: absolute; bottom: 0; left: 0; right: 0; z-index: 1000;
@@ -1118,6 +1126,8 @@ html, body {
         <button id="as-ctr" onclick="toggleAS('CTR')">CTR</button>
         <button id="rain-btn" onclick="toggleRain()">RAIN</button>
         <button id="wind-btn" onclick="toggleWind()">WIND</button>
+        <button id="notam-btn" onclick="toggleNotam()">NOTAM</button>
+        <button id="night-btn" onclick="toggleNight()">NIGHT</button>
       </div>
       <!-- FDR upload button + panel (above Leaflet zoom) -->
       <div id="fdr-btn-wrap">
@@ -3522,6 +3532,165 @@ async function toggleWind() {
     btn.textContent = 'WIND';
     alert('바람 데이터 로드 실패. 네트워크를 확인하세요.');
   }
+}
+
+// ══════════════════════════════════════════════════════
+// NOTAM OVERLAY
+// ══════════════════════════════════════════════════════
+let _notamLayer = null;
+let _notamActive = false;
+
+async function toggleNotam() {
+  const btn = document.getElementById('notam-btn');
+  if (_notamActive) {
+    if (_notamLayer) { leafMap.removeLayer(_notamLayer); _notamLayer = null; }
+    _notamActive = false;
+    btn.classList.remove('notam-active');
+    btn.textContent = 'NOTAM';
+    return;
+  }
+  btn.textContent = '…';
+  try {
+    const icaos = AIRPORTS_KR.map(a => a.icao).join(',');
+    const url = `https://aviationweather.gov/api/data/notam?location=${icaos}&format=json`;
+    const proxies = [
+      'https://api.allorigins.win/raw?url=' + encodeURIComponent(url),
+      'https://corsproxy.io/?' + encodeURIComponent(url),
+    ];
+    let notams = [];
+    for (const px of proxies) {
+      try {
+        const r = await fetch(px);
+        if (!r.ok) continue;
+        const txt = await r.text();
+        let data; try { data = JSON.parse(txt); } catch { continue; }
+        if (Array.isArray(data) && data.length) { notams = data; break; }
+      } catch {}
+    }
+    if (!notams.length) throw new Error('no notams');
+
+    const markers = [];
+    // 공항별로 NOTAM 집계
+    const byApt = {};
+    for (const n of notams) {
+      const loc = n.location || n.icaoLocation || n.facilityDesignator || '';
+      if (!byApt[loc]) byApt[loc] = [];
+      byApt[loc].push(n);
+    }
+    for (const [icao, list] of Object.entries(byApt)) {
+      const apt = AIRPORTS_KR.find(a => a.icao === icao);
+      if (!apt) continue;
+      const icon = L.divIcon({
+        className: '',
+        iconSize: [28, 28],
+        iconAnchor: [14, 14],
+        html: `<div style="background:rgba(255,140,0,0.85);border:1.5px solid #ffaa22;border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:bold;color:#000;cursor:pointer;">N${list.length > 9 ? '9+' : list.length}</div>`,
+      });
+      const popupHtml = `<div style="max-height:220px;overflow-y:auto;font-family:monospace;font-size:11px;background:#111;padding:6px;border-radius:4px;max-width:300px;">
+        <div style="color:#ffaa22;font-weight:bold;margin-bottom:4px;">${icao} NOTAM (${list.length}건)</div>
+        ${list.slice(0, 10).map(n => {
+          const txt = n.traditionalMessage || n.icaoMessage || n.text || JSON.stringify(n);
+          return `<div style="color:#ddd;border-bottom:1px solid #333;padding:3px 0;">${txt.slice(0,120)}${txt.length > 120 ? '…' : ''}</div>`;
+        }).join('')}
+      </div>`;
+      markers.push(L.marker([apt.lat, apt.lon], { icon, zIndexOffset: 700 }).bindPopup(popupHtml, { maxWidth: 320 }));
+    }
+    if (!markers.length) throw new Error('no matching airports');
+    _notamLayer = L.layerGroup(markers).addTo(leafMap);
+    _notamActive = true;
+    btn.classList.add('notam-active');
+    btn.textContent = `NOTAM(${notams.length})`;
+  } catch (e) {
+    btn.textContent = 'NOTAM';
+    console.warn('NOTAM load failed:', e);
+    alert('NOTAM 데이터 로드 실패. 잠시 후 다시 시도해주세요.');
+  }
+}
+
+// ══════════════════════════════════════════════════════
+// NIGHT / DAY-NIGHT TERMINATOR OVERLAY
+// ══════════════════════════════════════════════════════
+let _nightLayer = null;
+let _nightActive = false;
+let _nightTimer = null;
+
+function _solarDeclination(date) {
+  const doy = Math.floor((date - new Date(date.getFullYear(), 0, 0)) / 86400000);
+  return 23.45 * Math.sin((360 / 365) * (doy - 81) * Math.PI / 180);
+}
+
+function _equationOfTime(date) {
+  const doy = Math.floor((date - new Date(date.getFullYear(), 0, 0)) / 86400000);
+  const B = (360 / 365) * (doy - 81) * Math.PI / 180;
+  return 9.87 * Math.sin(2 * B) - 7.53 * Math.cos(B) - 1.5 * Math.sin(B);
+}
+
+function _buildNightPolygon(date) {
+  const decl = _solarDeclination(date) * Math.PI / 180;
+  const eot = _equationOfTime(date);
+  // Solar noon UTC offset in minutes
+  const utcH = date.getUTCHours() + date.getUTCMinutes() / 60 + date.getUTCSeconds() / 3600;
+
+  // Terminator: for each longitude, compute the latitude where sun is on horizon
+  const pts = [];
+  for (let lon = -180; lon <= 180; lon += 2) {
+    const lonRad = lon * Math.PI / 180;
+    const solarNoonOffset = (lon / 15) - eot / 60; // hours
+    const hourAngle = (utcH - 12 - solarNoonOffset) * 15 * Math.PI / 180;
+    // cos(zenith)=0 at terminator → sin(lat)*sin(decl)+cos(lat)*cos(decl)*cos(H)=0
+    const lat = Math.atan(-Math.cos(hourAngle) / Math.tan(decl)) * 180 / Math.PI;
+    pts.push([lat, lon]);
+  }
+
+  // Night polygon: wrap around the night side
+  const sunLon = -(utcH - 12) * 15;
+  const nightTop = decl > 0 ? -90 : 90; // pole in darkness
+
+  const polygon = [
+    ...pts,
+    [nightTop, 180],
+    [nightTop, -180],
+    [pts[0][0], -180],
+  ];
+  return polygon;
+}
+
+function _updateNightLayer() {
+  if (!_nightActive) return;
+  if (_nightLayer) { leafMap.removeLayer(_nightLayer); _nightLayer = null; }
+  const now = new Date();
+  const poly = _buildNightPolygon(now);
+  _nightLayer = L.polygon(poly, {
+    color: 'transparent',
+    fillColor: '#000033',
+    fillOpacity: 0.38,
+    interactive: false,
+    zIndex: 200,
+  }).addTo(leafMap);
+}
+
+async function toggleNight() {
+  const btn = document.getElementById('night-btn');
+  if (_nightActive) {
+    if (_nightTimer) { clearInterval(_nightTimer); _nightTimer = null; }
+    if (_nightLayer) { leafMap.removeLayer(_nightLayer); _nightLayer = null; }
+    _nightActive = false;
+    btn.classList.remove('night-active');
+    btn.textContent = 'NIGHT';
+    return;
+  }
+  _nightActive = true;
+  _updateNightLayer();
+  _nightTimer = setInterval(_updateNightLayer, 60 * 1000); // 1분마다 갱신
+  btn.classList.add('night-active');
+  // 현재 UTC 시각 표시
+  const utc = new Date();
+  btn.textContent = `NIGHT ${utc.getUTCHours().toString().padStart(2,'0')}:${utc.getUTCMinutes().toString().padStart(2,'0')}Z`;
+  setInterval(() => {
+    if (!_nightActive) return;
+    const t = new Date();
+    btn.textContent = `NIGHT ${t.getUTCHours().toString().padStart(2,'0')}:${t.getUTCMinutes().toString().padStart(2,'0')}Z`;
+  }, 60000);
 }
 
 function makeAircraftIcon(hdg) {
