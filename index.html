@@ -3266,7 +3266,16 @@ function _init3dMap() {
 
     _update3dMarker();
     _update3dTrail();
-    if (_fdrTrack.length) _fdrDraw3dTrackRoute();  // restore route preview if GPX already loaded
+    if (_fdrTrack.length) _fdrDraw3dTrackRoute();
+    // 레이더가 이미 켜져 있으면 3D에도 적용
+    if (rainActive && _rainFrames.length) {
+      const f = _rainFrames[_rainFrameIdx];
+      const tileUrl = `${f._host}${f.path}/256/{z}/{x}/{y}/2/1_1.png`;
+      try {
+        _ml3d.addSource('rain-src', { type:'raster', tiles:[tileUrl], tileSize:256, attribution:'RainViewer' });
+        _ml3d.addLayer({ id:'rain-layer', type:'raster', source:'rain-src', paint:{'raster-opacity':0.55} }, _firstSymbolLayerId());
+      } catch {}
+    }
     _ml3d.resize();
   });
 
@@ -3284,11 +3293,69 @@ function _update3dMarker() {
 
 let rainLayer = null;
 let rainActive = false;
+let _rainFrames = [];
+let _rainFrameIdx = 0;
+let _rainAnimTimer = null;
+let _rainRefreshTimer = null;
+let _rain3dLayerId = null;
+
+async function _loadRainFrames() {
+  const res = await fetch('https://api.rainviewer.com/public/weather-maps.json');
+  const data = await res.json();
+  return { host: data.host, frames: data.radar.past.slice(-6) }; // 최근 6프레임
+}
+
+function _setRainFrame(host, frame) {
+  if (rainLayer) { leafMap.removeLayer(rainLayer); rainLayer = null; }
+  const tileUrl = `${host}${frame.path}/256/{z}/{x}/{y}/2/1_1.png`;
+  rainLayer = L.tileLayer(tileUrl, { opacity: 0.6, attribution: 'RainViewer', zIndex: 500 });
+  rainLayer.addTo(leafMap);
+
+  // 3D 맵에도 적용
+  if (_ml3d && _ml3d.loaded()) {
+    const src = _ml3d.getSource ? _ml3d.getSource('rain-src') : null;
+    if (src) {
+      src.tiles = [tileUrl];
+      src.setTiles([tileUrl]);
+    } else {
+      try {
+        if (_ml3d.getSource('rain-src')) _ml3d.removeLayer('rain-layer'), _ml3d.removeSource('rain-src');
+      } catch {}
+      _ml3d.addSource('rain-src', { type:'raster', tiles:[tileUrl], tileSize:256, attribution:'RainViewer' });
+      _ml3d.addLayer({ id:'rain-layer', type:'raster', source:'rain-src', paint:{'raster-opacity':0.55} }, _firstSymbolLayerId());
+      _rain3dLayerId = 'rain-layer';
+    }
+  }
+
+  // 타임스탬프 표시
+  const ts = new Date(frame.time * 1000);
+  const label = `${ts.getUTCHours().toString().padStart(2,'0')}:${ts.getUTCMinutes().toString().padStart(2,'0')}Z`;
+  const btn = document.getElementById('rain-btn');
+  if (btn) btn.textContent = `RAIN ${label}`;
+}
+
+function _startRainAnim() {
+  if (_rainAnimTimer) clearInterval(_rainAnimTimer);
+  _rainAnimTimer = setInterval(() => {
+    if (!_rainFrames.length) return;
+    _rainFrameIdx = (_rainFrameIdx + 1) % _rainFrames.length;
+    _setRainFrame(_rainFrames[0]._host, _rainFrames[_rainFrameIdx]);
+  }, 800);
+}
+
+function _stopRainAnim() {
+  if (_rainAnimTimer) { clearInterval(_rainAnimTimer); _rainAnimTimer = null; }
+}
 
 async function toggleRain() {
   const btn = document.getElementById('rain-btn');
   if (rainActive) {
+    _stopRainAnim();
+    if (_rainRefreshTimer) { clearInterval(_rainRefreshTimer); _rainRefreshTimer = null; }
     if (rainLayer) { leafMap.removeLayer(rainLayer); rainLayer = null; }
+    if (_ml3d && _ml3d.loaded()) {
+      try { _ml3d.removeLayer('rain-layer'); _ml3d.removeSource('rain-src'); } catch {}
+    }
     rainActive = false;
     btn.classList.remove('rain-active');
     btn.textContent = 'RAIN';
@@ -3296,21 +3363,21 @@ async function toggleRain() {
   }
   btn.textContent = '…';
   try {
-    const res  = await fetch('https://api.rainviewer.com/public/weather-maps.json');
-    const data = await res.json();
-    const frames = data.radar.past;
-    if (!frames || !frames.length) throw new Error('no frames');
-    const latest = frames[frames.length - 1];
-    const tileUrl = `${data.host}${latest.path}/256/{z}/{x}/{y}/2/1_1.png`;
-    rainLayer = L.tileLayer(tileUrl, {
-      opacity: 0.6,
-      attribution: 'RainViewer',
-      zIndex: 500
-    });
-    rainLayer.addTo(leafMap);
+    const { host, frames } = await _loadRainFrames();
+    _rainFrames = frames.map(f => ({ ...f, _host: host }));
+    _rainFrameIdx = _rainFrames.length - 1;
+    _setRainFrame(host, _rainFrames[_rainFrameIdx]);
     rainActive = true;
     btn.classList.add('rain-active');
-    btn.textContent = 'RAIN';
+    _startRainAnim();
+    // 5분마다 자동 갱신
+    _rainRefreshTimer = setInterval(async () => {
+      try {
+        const { host: h2, frames: f2 } = await _loadRainFrames();
+        _rainFrames = f2.map(f => ({ ...f, _host: h2 }));
+        _rainFrameIdx = _rainFrames.length - 1;
+      } catch {}
+    }, 5 * 60 * 1000);
   } catch (e) {
     btn.textContent = 'RAIN';
     alert('강수 레이더 로드 실패. 네트워크를 확인하세요.');
@@ -3395,10 +3462,41 @@ async function loadWindLayer() {
   });
 }
 
+let _windAptLayer = null;
+
+async function _loadAirportWinds() {
+  // Open-Meteo에서 모든 공항 풍향/풍속 병렬 요청
+  const base = 'https://api.open-meteo.com/v1/forecast?current=wind_speed_10m,wind_direction_10m&wind_speed_unit=kn&timeformat=unixtime';
+  const results = await Promise.allSettled(
+    AIRPORTS_KR.map(a =>
+      fetch(`${base}&latitude=${a.lat}&longitude=${a.lon}`)
+        .then(r => r.json())
+        .then(d => ({ icao: a.icao, name: a.name, lat: a.lat, lon: a.lon,
+          spd: Math.round(d.current.wind_speed_10m),
+          dir: Math.round(d.current.wind_direction_10m) }))
+    )
+  );
+  return results.filter(r => r.status === 'fulfilled').map(r => r.value);
+}
+
+function _makeWindIcon(dir, spd) {
+  const color = spd < 10 ? '#88ffcc' : spd < 20 ? '#ffdd44' : '#ff6644';
+  return L.divIcon({
+    className: '',
+    iconSize: [48, 48],
+    iconAnchor: [24, 24],
+    html: `<div style="width:48px;height:48px;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none;">
+      <div style="font-size:18px;transform:rotate(${dir}deg);line-height:1;color:${color};">↑</div>
+      <div style="font-size:9px;color:${color};font-weight:bold;font-family:monospace;line-height:1.2;">${spd}kt</div>
+    </div>`,
+  });
+}
+
 async function toggleWind() {
   const btn = document.getElementById('wind-btn');
   if (windActive) {
     if (windLayer) { leafMap.removeLayer(windLayer); windLayer = null; }
+    if (_windAptLayer) { leafMap.removeLayer(_windAptLayer); _windAptLayer = null; }
     windActive = false;
     btn.classList.remove('wind-active');
     btn.textContent = 'WIND';
@@ -3406,8 +3504,16 @@ async function toggleWind() {
   }
   btn.textContent = '…';
   try {
-    windLayer = await loadWindLayer();
+    // 속도장 레이어 + 공항 풍향 화살표 동시 로드
+    const [wl, aptWinds] = await Promise.all([loadWindLayer(), _loadAirportWinds()]);
+    windLayer = wl;
     windLayer.addTo(leafMap);
+
+    _windAptLayer = L.layerGroup(
+      aptWinds.map(w => L.marker([w.lat, w.lon], { icon: _makeWindIcon(w.dir, w.spd), zIndexOffset: 600 })
+        .bindTooltip(`${w.icao} ${w.name}<br>${w.dir.toString().padStart(3,'0')}° / ${w.spd}kt`, { direction:'top', offset:[0,-24] }))
+    ).addTo(leafMap);
+
     windActive = true;
     btn.classList.add('wind-active');
     btn.textContent = 'WIND';
