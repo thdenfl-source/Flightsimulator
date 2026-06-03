@@ -445,10 +445,6 @@ html, body {
   background: rgba(0,20,40,0.92); border-color: #00aaff; color: #66ccff;
   box-shadow: 0 0 8px rgba(0,170,255,0.4);
 }
-#ifr-btn.ifr-active {
-  background: rgba(40,20,60,0.92); border-color: #aa66ff; color: #cc99ff;
-  box-shadow: 0 0 8px rgba(170,102,255,0.4);
-}
 #rain-btn.rain-active {
   background: rgba(0,10,40,0.92); border-color: #4488ff; color: #88bbff;
   box-shadow: 0 0 8px rgba(68,136,255,0.4);
@@ -1112,10 +1108,8 @@ html, body {
         <button id="layer-btn" class="sat" onclick="toggleLayer()">MAP</button>
         <button id="layer-btn-3d" onclick="toggle3dMap()">3D</button>
         <button id="gps-btn" onclick="toggleGPS()">GPS</button>
-        <button id="ifr-btn" onclick="toggleIfrChart()">IFR</button>
         <button id="wx-btn" onclick="toggleWxPanel()">WX</button>
         <button id="pp-btn" onclick="ppAddWaypoint()">PP</button>
-        <button id="as-ctr" onclick="toggleAS('CTR')">CTR</button>
         <button id="rain-btn" onclick="toggleRain()">RAIN</button>
         <button id="wind-btn" onclick="toggleWind()">WIND</button>
       </div>
@@ -3020,80 +3014,32 @@ L.Control.DualScale = L.Control.extend({
 });
 new L.Control.DualScale().addTo(leafMap);
 
-// ══════════════════════════════════════════════════════
-// AIRSPACE OVERLAYS  (CTR / P / R / D / MOA)
-// ══════════════════════════════════════════════════════
-const AS_COLOR = {
-  CTR: { stroke:'#4499ff', fill:'#4499ff', fillOp:0.08, btnColor:'#88ccff', btnBorder:'#4499ff', glow:'rgba(68,153,255,0.35)' },
-};
-
 // ── 단일 공항 마스터 데이터 ──
-// WX_AIRPORTS, APT_LATLNG, APT_NAME, AIRSPACE.CTR 모두 여기서 파생
+// WX_AIRPORTS, APT_LATLNG, APT_NAME 모두 여기서 파생
 const AIRPORTS_KR = [
-  { icao:'RKSI', name:'인천',  lat:37.4603, lon:126.4400, ctr:{r:18520, floor:'SFC', ceil:'2500ft'} },
-  { icao:'RKSS', name:'김포',  lat:37.5581, lon:126.7911, ctr:{r:9260,  floor:'SFC', ceil:'1500ft'} },
-  { icao:'RKPK', name:'김해',  lat:35.1786, lon:128.9389, ctr:{r:9260,  floor:'SFC', ceil:'1500ft'} },
-  { icao:'RKPC', name:'제주',  lat:33.5108, lon:126.4947, ctr:{r:9260,  floor:'SFC', ceil:'3000ft'} },
-  { icao:'RKTU', name:'청주',  lat:36.7186, lon:127.4989, ctr:{r:9260,  floor:'SFC', ceil:'1500ft'} },
-  { icao:'RKJJ', name:'광주',  lat:35.1231, lon:126.8092, ctr:{r:9260,  floor:'SFC', ceil:'1500ft'} },
-  { icao:'RKJK', name:'군산',  lat:35.9039, lon:126.6158, ctr:{r:9260,  floor:'SFC', ceil:'1500ft'} },
-  { icao:'RKJY', name:'여수',  lat:34.8423, lon:127.6170, ctr:{r:9260,  floor:'SFC', ceil:'1500ft'} },
-  { icao:'RKJB', name:'무안',  lat:34.9914, lon:126.3829, ctr:{r:9260,  floor:'SFC', ceil:'1500ft'} },
-  { icao:'RKTL', name:'사천',  lat:35.0886, lon:128.0703, ctr:{r:9260,  floor:'SFC', ceil:'1500ft'} },
-  { icao:'RKTH', name:'포항',  lat:35.9878, lon:129.4201, ctr:{r:9260,  floor:'SFC', ceil:'1500ft'} },
-  { icao:'RKDU', name:'울산',  lat:35.5934, lon:129.3520, ctr:{r:9260,  floor:'SFC', ceil:'1500ft'} },
-  { icao:'RKTN', name:'대구',  lat:35.8939, lon:128.6586, ctr:{r:9260,  floor:'SFC', ceil:'1500ft'} },
-  { icao:'RKNN', name:'강릉',  lat:37.7537, lon:128.9437, ctr:{r:9260,  floor:'SFC', ceil:'1500ft'} },
-  { icao:'RKNY', name:'양양',  lat:38.0611, lon:128.6689, ctr:{r:9260,  floor:'SFC', ceil:'2500ft'} },
-  { icao:'RKNS', name:'속초',  lat:38.1427, lon:128.5986, ctr:{r:9260,  floor:'SFC', ceil:'1500ft'} },
-  { icao:'RKSG', name:'성남',  lat:37.4444, lon:127.1139, ctr:{r:9260,  floor:'SFC', ceil:'1500ft'} },
-  { icao:'RKSW', name:'수원',  lat:37.2394, lon:127.0070, ctr:{r:9260,  floor:'SFC', ceil:'1500ft'} },
-  { icao:'RKSO', name:'오산',  lat:37.0911, lon:127.0300, ctr:{r:9260,  floor:'SFC', ceil:'1500ft'} },
-  { icao:'RKPU', name:'원주',  lat:37.4389, lon:127.9600, ctr:{r:9260,  floor:'SFC', ceil:'1500ft'} },
-  { icao:'RKTY', name:'예천',  lat:36.6319, lon:128.3519, ctr:{r:9260,  floor:'SFC', ceil:'1500ft'} },
+  { icao:'RKSI', name:'인천',  lat:37.4603, lon:126.4400 },
+  { icao:'RKSS', name:'김포',  lat:37.5581, lon:126.7911 },
+  { icao:'RKPK', name:'김해',  lat:35.1786, lon:128.9389 },
+  { icao:'RKPC', name:'제주',  lat:33.5108, lon:126.4947 },
+  { icao:'RKTU', name:'청주',  lat:36.7186, lon:127.4989 },
+  { icao:'RKJJ', name:'광주',  lat:35.1231, lon:126.8092 },
+  { icao:'RKJK', name:'군산',  lat:35.9039, lon:126.6158 },
+  { icao:'RKJY', name:'여수',  lat:34.8423, lon:127.6170 },
+  { icao:'RKJB', name:'무안',  lat:34.9914, lon:126.3829 },
+  { icao:'RKTL', name:'사천',  lat:35.0886, lon:128.0703 },
+  { icao:'RKTH', name:'포항',  lat:35.9878, lon:129.4201 },
+  { icao:'RKDU', name:'울산',  lat:35.5934, lon:129.3520 },
+  { icao:'RKTN', name:'대구',  lat:35.8939, lon:128.6586 },
+  { icao:'RKNN', name:'강릉',  lat:37.7537, lon:128.9437 },
+  { icao:'RKNY', name:'양양',  lat:38.0611, lon:128.6689 },
+  { icao:'RKNS', name:'속초',  lat:38.1427, lon:128.5986 },
+  { icao:'RKSG', name:'성남',  lat:37.4444, lon:127.1139 },
+  { icao:'RKSW', name:'수원',  lat:37.2394, lon:127.0070 },
+  { icao:'RKSO', name:'오산',  lat:37.0911, lon:127.0300 },
+  { icao:'RKPU', name:'원주',  lat:37.4389, lon:127.9600 },
+  { icao:'RKTY', name:'예천',  lat:36.6319, lon:128.3519 },
 ];
 
-const AIRSPACE = {
-  CTR: AIRPORTS_KR.filter(a => a.ctr).map(a => ({
-    id: a.icao, name: a.name, lat: a.lat, lon: a.lon, ...a.ctr,
-  })),
-};
-
-const asLayerGroups = { CTR:[] };
-const asOn = { CTR:false };
-
-function _makeAsLayer(cat, a) {
-  const c = AS_COLOR[cat];
-  const opts = { color:c.stroke, weight:1.5, fillColor:c.fill, fillOpacity:c.fillOp, interactive:true };
-  const tip = `<b>${a.id}</b> ${a.name}<br><span style="color:#aaa;font-size:10px">${a.floor} – ${a.ceil}</span>`;
-  const layer = a.latlngs
-    ? L.polygon(a.latlngs, opts)
-    : L.circle([a.lat, a.lon], { ...opts, radius:a.r });
-  layer.bindTooltip(tip, { sticky:true, opacity:0.95, className:'as-tip' });
-  return layer;
-}
-
-function toggleAS(cat) {
-  const btn = document.getElementById('as-' + cat.toLowerCase());
-  const c = AS_COLOR[cat];
-  if (asOn[cat]) {
-    asLayerGroups[cat].forEach(l => leafMap.removeLayer(l));
-    asLayerGroups[cat] = [];
-    asOn[cat] = false;
-    btn.style.cssText = '';
-  } else {
-    AIRSPACE[cat].forEach(a => {
-      const l = _makeAsLayer(cat, a);
-      l.addTo(leafMap);
-      asLayerGroups[cat].push(l);
-    });
-    asOn[cat] = true;
-    btn.style.borderColor = c.btnBorder;
-    btn.style.color = c.btnColor;
-    btn.style.boxShadow = `0 0 8px ${c.glow}`;
-    btn.style.background = 'rgba(20,20,20,0.95)';
-  }
-}
 
 function toggleLayer() {
   const btn = document.getElementById('layer-btn');
@@ -5828,45 +5774,6 @@ function ppAddWaypoint() {
   }, 700);
 }
 
-// ── IFR Enroute overlay (Korean fixes only) ──
-let ifrLayer = null;
-function toggleIfrChart() {
-  const btn = document.getElementById('ifr-btn');
-  if (ifrLayer) {
-    leafMap.removeLayer(ifrLayer);
-    ifrLayer = null;
-    btn.classList.remove('ifr-active');
-    return;
-  }
-  ifrLayer = L.layerGroup();
-
-  // Build procedure fix set (SID/STAR/approach waypoints — shown in yellow)
-  const procedureFixSet = new Set();
-  Object.values(IFR_DB).forEach(apt => {
-    ['sids','stars','approaches'].forEach(type => {
-      (apt[type] || []).forEach(proc => (proc.wps || []).forEach(wp => procedureFixSet.add(wp.ident)));
-    });
-  });
-
-  // All fixes: procedure → yellow, others → cyan-white
-  Object.keys(IFR_FIXES).forEach(id => {
-    const f = IFR_FIXES[id];
-    const fixColor = procedureFixSet.has(id) ? '#ffcc00' : '#ccffee';
-    L.marker([f.lat, f.lon], {
-      interactive: false,
-      icon: L.divIcon({
-        html: `<div style="position:relative;">
-          <div style="width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-bottom:8px solid ${fixColor};filter:drop-shadow(0 0 2px rgba(0,0,0,0.9));"></div>
-          <div style="position:absolute;left:9px;top:-2px;color:${fixColor};font:bold 9px monospace;white-space:nowrap;text-shadow:1px 1px 2px #000, -1px -1px 2px #000;">${id}</div>
-        </div>`,
-        iconSize: [10, 8], iconAnchor: [5, 4], className: ''
-      })
-    }).addTo(ifrLayer);
-  });
-
-  ifrLayer.addTo(leafMap);
-  btn.classList.add('ifr-active');
-}
 
 function setWxIcao(icao, btn) {
   document.getElementById('wx-icao').value = icao;
