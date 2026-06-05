@@ -377,35 +377,12 @@ html, body {
 }
 #counter-value {
   font-family: 'Courier New', monospace;
-  font-size: 28px;
+  font-size: 26px;
   font-weight: bold;
   color: #00e5ff;
   min-width: 60px;
   text-align: center;
   line-height: 1;
-}
-#counter-btns {
-  display: flex;
-  gap: 4px;
-  margin-top: 2px;
-}
-#counter-btns button {
-  width: 28px; height: 24px;
-  font-size: 16px; font-weight: bold;
-  background: rgba(255,255,255,0.08);
-  border: 1px solid #555;
-  border-radius: 4px;
-  color: #fff;
-  cursor: pointer;
-  line-height: 1;
-  padding: 0;
-}
-#counter-btns button:active { background: rgba(0,229,255,0.25); }
-#counter-reset {
-  font-size: 10px !important;
-  width: auto !important;
-  padding: 0 6px !important;
-  color: #aaa !important;
 }
 /* FDR upload button — above Leaflet zoom control (bottom-right) */
 #fdr-btn-wrap {
@@ -1168,15 +1145,10 @@ html, body {
         <button id="rain-btn" onclick="toggleRain()">RAIN</button>
         <button id="wind-btn" onclick="toggleWind()">WIND</button>
       </div>
-      <!-- Counter widget (above scale bar, bottom-left) -->
+      <!-- Visitor counter widget (above scale bar, bottom-left) -->
       <div id="counter-wrap">
-        <div id="counter-label">COUNTER</div>
-        <div id="counter-value">0</div>
-        <div id="counter-btns">
-          <button onclick="cntAdj(-1)" title="감소">−</button>
-          <button onclick="cntAdj(1)"  title="증가">+</button>
-          <button id="counter-reset" onclick="cntReset()" title="초기화">RST</button>
-        </div>
+        <div id="counter-label">방문자 수</div>
+        <div id="counter-value">…</div>
       </div>
       <!-- FDR upload button + panel (above Leaflet zoom) -->
       <div id="fdr-btn-wrap">
@@ -3581,16 +3553,34 @@ document.addEventListener('touchend', () => { acDragging = false; });
 // ══════════════════════════════════════════════════════
 let gpsMode = false;
 let gpsWatchId = null;
-// ── Counter widget ──
-let _cntVal = 0;
-function cntAdj(d) {
-  _cntVal = Math.max(0, _cntVal + d);
-  document.getElementById('counter-value').textContent = _cntVal;
+// ── Visitor counter widget ──
+// 페이지가 로드될 때마다 방문 횟수를 1 증가시키고 누적 총방문수를 표시한다.
+// 원격 카운터(counterapi.dev)를 우선 사용하고, 실패 시 localStorage로 폴백한다.
+async function initVisitorCounter() {
+  const el = document.getElementById('counter-value');
+  if (!el) return;
+  const NS = 'thdenfl-flightsim', KEY = 'visits';
+  try {
+    const res = await Promise.race([
+      fetch(`https://api.counterapi.dev/v1/${NS}/${KEY}/up`),
+      new Promise((_, r) => setTimeout(() => r(new Error('timeout')), 4000)),
+    ]);
+    const data = await res.json();
+    const count = data.count ?? data.value;
+    if (typeof count === 'number') {
+      el.textContent = count.toLocaleString();
+      localStorage.setItem('visitCount', count);
+      return;
+    }
+    throw new Error('bad response');
+  } catch (e) {
+    // 폴백: 로컬 누적 방문수
+    let n = parseInt(localStorage.getItem('visitCount') || '0', 10) + 1;
+    localStorage.setItem('visitCount', n);
+    el.textContent = n.toLocaleString();
+  }
 }
-function cntReset() {
-  _cntVal = 0;
-  document.getElementById('counter-value').textContent = 0;
-}
+window.addEventListener('load', initVisitorCounter);
 
 let lastGpsMs = 0;
 
