@@ -352,6 +352,61 @@ html, body {
 /* Push Leaflet bottom controls above the sim bar */
 #map-wrap .leaflet-bottom.leaflet-left  { margin-bottom: 40px; }
 #map-wrap .leaflet-bottom.leaflet-right { margin-bottom: 40px; }
+/* Counter widget */
+#counter-wrap {
+  position: absolute;
+  bottom: 110px;   /* above the scale bar (~70px) + some gap */
+  left: 10px;
+  z-index: 1100;
+  background: rgba(0,0,0,0.78);
+  border: 1px solid #444;
+  border-radius: 6px;
+  padding: 6px 10px 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: 110px;
+  user-select: none;
+}
+#counter-label {
+  font-size: 10px;
+  color: #aaa;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+#counter-value {
+  font-family: 'Courier New', monospace;
+  font-size: 28px;
+  font-weight: bold;
+  color: #00e5ff;
+  min-width: 60px;
+  text-align: center;
+  line-height: 1;
+}
+#counter-btns {
+  display: flex;
+  gap: 4px;
+  margin-top: 2px;
+}
+#counter-btns button {
+  width: 28px; height: 24px;
+  font-size: 16px; font-weight: bold;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid #555;
+  border-radius: 4px;
+  color: #fff;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0;
+}
+#counter-btns button:active { background: rgba(0,229,255,0.25); }
+#counter-reset {
+  font-size: 10px !important;
+  width: auto !important;
+  padding: 0 6px !important;
+  color: #aaa !important;
+}
 /* FDR upload button — above Leaflet zoom control (bottom-right) */
 #fdr-btn-wrap {
   position: absolute; bottom: 120px; right: 10px; z-index: 1000;
@@ -1112,6 +1167,16 @@ html, body {
         <button id="pp-btn" onclick="ppAddWaypoint()">PP</button>
         <button id="rain-btn" onclick="toggleRain()">RAIN</button>
         <button id="wind-btn" onclick="toggleWind()">WIND</button>
+      </div>
+      <!-- Counter widget (above scale bar, bottom-left) -->
+      <div id="counter-wrap">
+        <div id="counter-label">COUNTER</div>
+        <div id="counter-value">0</div>
+        <div id="counter-btns">
+          <button onclick="cntAdj(-1)" title="감소">−</button>
+          <button onclick="cntAdj(1)"  title="증가">+</button>
+          <button id="counter-reset" onclick="cntReset()" title="초기화">RST</button>
+        </div>
       </div>
       <!-- FDR upload button + panel (above Leaflet zoom) -->
       <div id="fdr-btn-wrap">
@@ -3516,6 +3581,17 @@ document.addEventListener('touchend', () => { acDragging = false; });
 // ══════════════════════════════════════════════════════
 let gpsMode = false;
 let gpsWatchId = null;
+// ── Counter widget ──
+let _cntVal = 0;
+function cntAdj(d) {
+  _cntVal = Math.max(0, _cntVal + d);
+  document.getElementById('counter-value').textContent = _cntVal;
+}
+function cntReset() {
+  _cntVal = 0;
+  document.getElementById('counter-value').textContent = 0;
+}
+
 let lastGpsMs = 0;
 
 function toggleGPS() {
