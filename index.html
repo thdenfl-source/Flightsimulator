@@ -355,33 +355,29 @@ html, body {
 /* Counter widget */
 #counter-wrap {
   position: absolute;
-  bottom: 110px;   /* above the scale bar (~70px) + some gap */
+  bottom: 110px;
   left: 10px;
   z-index: 1100;
-  background: rgba(0,0,0,0.78);
+  background: rgba(0,0,0,0.72);
   border: 1px solid #444;
-  border-radius: 6px;
-  padding: 6px 10px 8px;
+  border-radius: 4px;
+  padding: 2px 8px;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
-  gap: 4px;
-  min-width: 110px;
+  gap: 5px;
   user-select: none;
 }
 #counter-label {
   font-size: 10px;
   color: #aaa;
-  letter-spacing: 1px;
-  text-transform: uppercase;
+  font-family: 'Courier New', monospace;
 }
 #counter-value {
   font-family: 'Courier New', monospace;
-  font-size: 26px;
+  font-size: 11px;
   font-weight: bold;
   color: #00e5ff;
-  min-width: 60px;
-  text-align: center;
   line-height: 1;
 }
 /* FDR upload button — above Leaflet zoom control (bottom-right) */
@@ -1147,7 +1143,7 @@ html, body {
       </div>
       <!-- Visitor counter widget (above scale bar, bottom-left) -->
       <div id="counter-wrap">
-        <div id="counter-label">방문자 수</div>
+        <div id="counter-label">Visit</div>
         <div id="counter-value">…</div>
       </div>
       <!-- FDR upload button + panel (above Leaflet zoom) -->
