@@ -8225,14 +8225,7 @@ async function handleZipFile(file) {
             return;
         }
 
-        // 스마트폰 보호: 처리 개수 상한
-        const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
-        const MAX_ENTRIES = isMobile ? 80 : 500;
-        const MAX_PDF_MB  = isMobile ? 8  : 30;
-        const limited = entries.length > MAX_ENTRIES;
-        const processEntries = limited ? entries.slice(0, MAX_ENTRIES) : entries;
-
-        importProgress = { phase: 'saving', done: 0, total: processEntries.length, found: 0, skipped: 0, limited, error: null };
+        importProgress = { phase: 'saving', done: 0, total: entries.length, found: 0, skipped: 0, error: null };
         renderCduContent();
 
         const safeAirac = getSafeAiracInfo();
@@ -8240,19 +8233,9 @@ async function handleZipFile(file) {
         let saved = loadSavedCharts();
         let idbFailed = false;
 
-        for (let i = 0; i < processEntries.length; i++) {
-            const { entry, icao, num, chartName } = processEntries[i];
+        for (let i = 0; i < entries.length; i++) {
+            const { entry, icao, num, chartName } = entries[i];
             try {
-                // 크기 체크 (uncompressedSize 사용 — blob 미생성)
-                const uncompSz = entry._data?.uncompressedSize ?? entry.uncompressedSize ?? 0;
-                if (uncompSz > MAX_PDF_MB * 1024 * 1024) {
-                    importProgress.skipped++;
-                    importProgress.done = i + 1;
-                    if (i % 3 === 0) renderCduContent();
-                    await new Promise(r => setTimeout(r, 0));
-                    continue;
-                }
-
                 // PDF를 ArrayBuffer로 추출 → IDB 저장 → 즉시 해제
                 let buf = await entry.async('arraybuffer');
                 const blob = new Blob([buf], { type: 'application/pdf' });
@@ -8268,8 +8251,6 @@ async function handleZipFile(file) {
                     }
                 }
 
-                // blob 참조 해제
-                // (메타데이터는 IDB 실패 여부와 관계없이 저장)
                 const alreadyIn = saved.find(s => s.icao === icao && s.chartNum === num);
                 if (!alreadyIn) {
                     const airport = chartAirportList.find(a => a.icao === icao);
@@ -8288,10 +8269,8 @@ async function handleZipFile(file) {
             }
 
             importProgress.done = i + 1;
-
-            // 매 항목마다 UI 갱신 + GC 유도를 위한 딜레이 (모바일은 더 긴 딜레이)
-            if (i % (isMobile ? 1 : 3) === 0) renderCduContent();
-            await new Promise(r => setTimeout(r, isMobile ? 30 : 0));
+            if (i % 3 === 0) renderCduContent();
+            await new Promise(r => setTimeout(r, 30));
         }
 
         // localStorage 저장 (용량 초과 시 오래된 것부터 제거)
