@@ -8037,19 +8037,15 @@ const chartAirportList = [
     { icao: 'RKTU', name: '청주국제', nameEn: 'Cheongju Intl', cat: 'INT' },
     { icao: 'RKJB', name: '무안국제', nameEn: 'Muan Intl', cat: 'INT' },
     { icao: 'RKNY', name: '양양국제', nameEn: 'Yangyang Intl', cat: 'INT' },
-    { icao: 'RKTF', name: '사천', nameEn: 'Sacheon', cat: 'DOM' },
     { icao: 'RKJJ', name: '광주', nameEn: 'Gwangju', cat: 'DOM' },
     { icao: 'RKTH', name: '포항경주', nameEn: 'Pohang', cat: 'DOM' },
     { icao: 'RKJY', name: '여수', nameEn: 'Yeosu', cat: 'DOM' },
     { icao: 'RKPU', name: '울산', nameEn: 'Ulsan', cat: 'DOM' },
     { icao: 'RKTL', name: '울진', nameEn: 'Uljin', cat: 'DOM' },
     { icao: 'RKPD', name: '정석(제주)', nameEn: 'Jeongseok', cat: 'DOM' },
-    { icao: 'RKNN', name: '강릉', nameEn: 'Gangneung', cat: 'MIL' },
     { icao: 'RKJK', name: '군산', nameEn: 'Gunsan', cat: 'MIL' },
     { icao: 'RKNW', name: '원주', nameEn: 'Wonju', cat: 'MIL' },
-    { icao: 'RKSO', name: '오산', nameEn: 'Osan AB', cat: 'MIL' },
     { icao: 'RKSM', name: '서울', nameEn: 'Seoul AB', cat: 'MIL' },
-    { icao: 'RKSG', name: '평택', nameEn: 'Pyeongtaek', cat: 'MIL' },
     { icao: 'RKPS', name: '진해', nameEn: 'Jinhae', cat: 'MIL' },
 ];
 
@@ -8505,19 +8501,30 @@ async function fetchAirportChartList(icao) {
     const safeAirac = getSafeAiracInfo();
     const htmlUrl = `https://aim.koca.go.kr/eaipPub/Package/${safeAirac.startUrl}-AIRAC/html/AD/AD2${icao}.html`;
 
+    // allorigins JSON, allorigins raw, corsproxy 순으로 시도
     const proxies = [
-        'https://api.allorigins.win/raw?url=' + encodeURIComponent(htmlUrl),
-        'https://corsproxy.io/?' + encodeURIComponent(htmlUrl),
+        { url: 'https://api.allorigins.win/get?url=' + encodeURIComponent(htmlUrl), json: true },
+        { url: 'https://api.allorigins.win/raw?url=' + encodeURIComponent(htmlUrl), json: false },
+        { url: 'https://corsproxy.io/?' + encodeURIComponent(htmlUrl), json: false },
     ];
 
     let text = null;
-    for (const src of proxies) {
+    for (const { url, json } of proxies) {
         try {
             const res = await Promise.race([
-                fetch(src),
+                fetch(url),
                 new Promise((_, r) => setTimeout(() => r(new Error('timeout')), 20000)),
             ]);
-            if (res.ok) { text = await res.text(); break; }
+            if (res.ok) {
+                if (json) {
+                    const data = await res.json();
+                    text = data.contents || null;
+                } else {
+                    text = await res.text();
+                }
+                if (text && text.length > 200) break;
+                text = null;
+            }
         } catch(e) {}
     }
 
@@ -8529,19 +8536,28 @@ async function fetchAirportChartList(icao) {
 
     const charts = [];
     const seen = new Set();
-    // PDF 링크에서 (번호) 이름.pdf 패턴 추출
-    const re = /\((\d+-\d+[A-Z0-9]*)\)\s+([^<"'\r\n]+?)\.pdf/gi;
-    let m;
-    while ((m = re.exec(text)) !== null) {
-        const num = m[1].trim();
-        const name = m[2].trim().replace(/\s+/g, ' ');
-        if (!seen.has(num) && name.length > 0 && name.length < 80) {
-            seen.add(num);
-            charts.push({ num, name, cat: catFromChartName(name) });
+
+    // 패턴 1: (2-1) NAME.pdf  — 일반 텍스트
+    // 패턴 2: (2-1)%20NAME.pdf — href에서 일부 인코딩
+    // 패턴 3: %282-1%29%20NAME.pdf — 완전 URL 인코딩
+    const patterns = [
+        /\((\d+-\d+[A-Z0-9]*)\)\s+([^<"'\r\n]+?)\.pdf/gi,
+        /\((\d+-\d+[A-Z0-9]*)\)%20([^<"'\r\n?#&]+?)\.pdf/gi,
+        /%28(\d+-\d+[A-Z0-9]*)%29%20([^<"'\r\n?#&]+?)\.pdf/gi,
+    ];
+
+    for (const re of patterns) {
+        let m;
+        while ((m = re.exec(text)) !== null) {
+            const num = m[1].trim();
+            const name = decodeURIComponent(m[2].trim().replace(/\+/g, ' ')).replace(/\s+/g, ' ');
+            if (!seen.has(num) && name.length > 0 && name.length < 80) {
+                seen.add(num);
+                charts.push({ num, name, cat: catFromChartName(name) });
+            }
         }
     }
 
-    // 정렬: 번호 순
     charts.sort((a, b) => {
         const [am, an] = a.num.split('-').map(Number);
         const [bm, bn] = b.num.split('-').map(Number);
