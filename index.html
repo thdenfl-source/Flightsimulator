@@ -8178,12 +8178,6 @@ async function handleZipFile(file) {
         return;
     }
 
-    // 스마트폰 메모리 한계: 파일 크기 경고 (50MB 초과)
-    const MAX_ZIP_MB = 150;
-    if (file.size > MAX_ZIP_MB * 1024 * 1024) {
-        if (!confirm(`ZIP 파일이 ${(file.size/1024/1024).toFixed(0)}MB입니다.\n스마트폰에서는 메모리 부족으로 실패할 수 있습니다.\n계속하시겠습니까?`)) return;
-    }
-
     importProgress = { phase: 'reading', done: 0, total: 0, found: 0, skipped: 0, error: null };
     renderCduContent();
 
