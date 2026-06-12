@@ -8178,7 +8178,13 @@ async function handleZipFile(file) {
         return;
     }
 
-    importProgress = { phase: 'reading', done: 0, total: 0, found: 0, error: null };
+    // 스마트폰 메모리 한계: 파일 크기 경고 (50MB 초과)
+    const MAX_ZIP_MB = 150;
+    if (file.size > MAX_ZIP_MB * 1024 * 1024) {
+        if (!confirm(`ZIP 파일이 ${(file.size/1024/1024).toFixed(0)}MB입니다.\n스마트폰에서는 메모리 부족으로 실패할 수 있습니다.\n계속하시겠습니까?`)) return;
+    }
+
+    importProgress = { phase: 'reading', done: 0, total: 0, found: 0, skipped: 0, error: null };
     renderCduContent();
 
     try {
@@ -8192,6 +8198,7 @@ async function handleZipFile(file) {
             return;
         }
 
+        // 항목 목록만 먼저 수집 (blob 추출 X — 메모리 절약)
         const entries = [];
         zip.forEach((path, entry) => {
             if (entry.dir || !/\.pdf$/i.test(path)) return;
@@ -8200,15 +8207,15 @@ async function handleZipFile(file) {
             const icao = icaoM[1].toUpperCase();
             const filename = path.split(/[\/\\]/).pop().replace(/\.pdf$/i, '').trim();
             const pm = filename.match(/^\(([^)]+)\)\s*(.*)/);
-            if (pm && pm[2]) {
-                entries.push({ entry, icao, num: pm[1].trim(), chartName: pm[2].trim() });
-            } else if (pm) {
-                entries.push({ entry, icao, num: pm[1].trim(), chartName: filename });
-            } else {
+            let num, chartName;
+            if (pm && pm[2]) { num = pm[1].trim(); chartName = pm[2].trim(); }
+            else if (pm)     { num = pm[1].trim(); chartName = filename; }
+            else {
                 const anyNum = filename.match(/^(\d[\d\-A-Z.]*)\s+(.*)/i);
-                if (anyNum) { entries.push({ entry, icao, num: anyNum[1].trim(), chartName: anyNum[2].trim() }); }
-                else { entries.push({ entry, icao, num: filename.slice(0, 10), chartName: filename }); }
+                if (anyNum) { num = anyNum[1].trim(); chartName = anyNum[2].trim(); }
+                else        { num = filename.slice(0, 10); chartName = filename; }
             }
+            entries.push({ entry, icao, num, chartName });
         });
 
         if (entries.length === 0) {
@@ -8218,7 +8225,14 @@ async function handleZipFile(file) {
             return;
         }
 
-        importProgress = { phase: 'saving', done: 0, total: entries.length, found: 0, error: null };
+        // 스마트폰 보호: 처리 개수 상한
+        const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
+        const MAX_ENTRIES = isMobile ? 80 : 500;
+        const MAX_PDF_MB  = isMobile ? 8  : 30;
+        const limited = entries.length > MAX_ENTRIES;
+        const processEntries = limited ? entries.slice(0, MAX_ENTRIES) : entries;
+
+        importProgress = { phase: 'saving', done: 0, total: processEntries.length, found: 0, skipped: 0, limited, error: null };
         renderCduContent();
 
         const safeAirac = getSafeAiracInfo();
@@ -8226,20 +8240,36 @@ async function handleZipFile(file) {
         let saved = loadSavedCharts();
         let idbFailed = false;
 
-        for (let i = 0; i < entries.length; i++) {
-            const { entry, icao, num, chartName } = entries[i];
+        for (let i = 0; i < processEntries.length; i++) {
+            const { entry, icao, num, chartName } = processEntries[i];
             try {
-                const blob = await entry.async('blob');
-                try {
-                    await idbPut(`${icao}|${num}`, blob);
-                    importProgress.found++;
-                } catch(idbErr) {
-                    // IndexedDB 실패 시 메타데이터만 저장 (iOS 사파리 용량 제한 등)
-                    if (!idbFailed) {
+                // 크기 체크 (uncompressedSize 사용 — blob 미생성)
+                const uncompSz = entry._data?.uncompressedSize ?? entry.uncompressedSize ?? 0;
+                if (uncompSz > MAX_PDF_MB * 1024 * 1024) {
+                    importProgress.skipped++;
+                    importProgress.done = i + 1;
+                    if (i % 3 === 0) renderCduContent();
+                    await new Promise(r => setTimeout(r, 0));
+                    continue;
+                }
+
+                // PDF를 ArrayBuffer로 추출 → IDB 저장 → 즉시 해제
+                let buf = await entry.async('arraybuffer');
+                const blob = new Blob([buf], { type: 'application/pdf' });
+                buf = null; // ArrayBuffer 즉시 해제 → GC 유도
+
+                if (!idbFailed) {
+                    try {
+                        await idbPut(`${icao}|${num}`, blob);
+                        importProgress.found++;
+                    } catch(idbErr) {
                         idbFailed = true;
-                        console.warn('IndexedDB 저장 실패 (용량 초과일 수 있음):', idbErr);
+                        console.warn('IndexedDB 저장 실패:', idbErr.message);
                     }
                 }
+
+                // blob 참조 해제
+                // (메타데이터는 IDB 실패 여부와 관계없이 저장)
                 const alreadyIn = saved.find(s => s.icao === icao && s.chartNum === num);
                 if (!alreadyIn) {
                     const airport = chartAirportList.find(a => a.icao === icao);
@@ -8254,24 +8284,31 @@ async function handleZipFile(file) {
                 }
             } catch(e) {
                 console.warn('항목 처리 실패:', icao, num, e.message);
+                importProgress.skipped++;
             }
+
             importProgress.done = i + 1;
-            if (i % 3 === 0) renderCduContent();
-            await new Promise(r => setTimeout(r, 0));
+
+            // 매 항목마다 UI 갱신 + GC 유도를 위한 딜레이 (모바일은 더 긴 딜레이)
+            if (i % (isMobile ? 1 : 3) === 0) renderCduContent();
+            await new Promise(r => setTimeout(r, isMobile ? 30 : 0));
         }
 
+        // localStorage 저장 (용량 초과 시 오래된 것부터 제거)
         try {
             localStorage.setItem('savedCharts', JSON.stringify(saved));
         } catch(storageErr) {
-            console.warn('localStorage 저장 실패 (용량 초과):', storageErr);
-            // 최근 50개만 보존
-            const trimmed = saved.slice(-50);
-            try { localStorage.setItem('savedCharts', JSON.stringify(trimmed)); } catch(e2) {}
+            console.warn('localStorage 용량 초과, 최근 50개만 보존');
+            try { localStorage.setItem('savedCharts', JSON.stringify(saved.slice(-50))); } catch(e2) {}
         }
 
-        if (idbFailed) {
-            alert(`차트 메타데이터는 저장되었으나 일부 PDF를 기기에 저장하지 못했습니다.\n저장 공간이 부족하거나 브라우저 제한일 수 있습니다.\n차트 탭에서 링크(↗)로 외부 열기가 가능합니다.`);
-        }
+        // 완료 알림
+        const msgs = [];
+        if (importProgress.found > 0) msgs.push(`✅ PDF 저장: ${importProgress.found}개`);
+        if (idbFailed) msgs.push('⚠️ 일부 PDF는 저장 공간 부족으로 메타데이터만 저장됨\n(차트 목록에서 ↗ 외부 열기 가능)');
+        if (importProgress.skipped > 0) msgs.push(`⏭ 크기 초과 또는 오류로 건너뜀: ${importProgress.skipped}개`);
+        if (limited) msgs.push(`📱 스마트폰 메모리 보호: 최대 ${MAX_ENTRIES}개만 처리됨\n(전체 ${entries.length}개)`);
+        if (msgs.length) alert(msgs.join('\n'));
 
     } catch(e) {
         console.error('ZIP import error:', e);
