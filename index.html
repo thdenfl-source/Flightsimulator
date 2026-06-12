@@ -8171,10 +8171,27 @@ function getSafeAiracInfo() {
 
 async function handleZipFile(file) {
     if (!file) return;
-    importProgress = { phase: 'reading', done: 0, total: 0, found: 0 };
+
+    // JSZip 로드 확인
+    if (typeof JSZip === 'undefined') {
+        alert('JSZip 라이브러리가 로드되지 않았습니다. 네트워크 연결 후 페이지를 새로고침 해주세요.');
+        return;
+    }
+
+    importProgress = { phase: 'reading', done: 0, total: 0, found: 0, error: null };
     renderCduContent();
+
     try {
-        const zip = await JSZip.loadAsync(file);
+        let zip;
+        try {
+            zip = await JSZip.loadAsync(file);
+        } catch(e) {
+            importProgress = null;
+            renderCduContent();
+            alert('ZIP 파일을 읽을 수 없습니다.\n파일이 손상되었거나 올바른 ZIP 형식이 아닙니다.\n(' + e.message + ')');
+            return;
+        }
+
         const entries = [];
         zip.forEach((path, entry) => {
             if (entry.dir || !/\.pdf$/i.test(path)) return;
@@ -8193,19 +8210,36 @@ async function handleZipFile(file) {
                 else { entries.push({ entry, icao, num: filename.slice(0, 10), chartName: filename }); }
             }
         });
-        importProgress = { phase: 'saving', done: 0, total: entries.length, found: 0 };
+
+        if (entries.length === 0) {
+            importProgress = null;
+            renderCduContent();
+            alert('ZIP 파일 안에서 차트 PDF를 찾지 못했습니다.\nAIM Korea에서 받은 AIRAC ZIP 파일인지 확인해 주세요.\n(경로: .../AD/ICAO4/(번호) 차트명.pdf)');
+            return;
+        }
+
+        importProgress = { phase: 'saving', done: 0, total: entries.length, found: 0, error: null };
         renderCduContent();
 
         const safeAirac = getSafeAiracInfo();
         const today = new Date().toISOString().slice(0, 10);
         let saved = loadSavedCharts();
+        let idbFailed = false;
 
         for (let i = 0; i < entries.length; i++) {
             const { entry, icao, num, chartName } = entries[i];
             try {
                 const blob = await entry.async('blob');
-                await idbPut(`${icao}|${num}`, blob);
-                importProgress.found++;
+                try {
+                    await idbPut(`${icao}|${num}`, blob);
+                    importProgress.found++;
+                } catch(idbErr) {
+                    // IndexedDB 실패 시 메타데이터만 저장 (iOS 사파리 용량 제한 등)
+                    if (!idbFailed) {
+                        idbFailed = true;
+                        console.warn('IndexedDB 저장 실패 (용량 초과일 수 있음):', idbErr);
+                    }
+                }
                 const alreadyIn = saved.find(s => s.icao === icao && s.chartNum === num);
                 if (!alreadyIn) {
                     const airport = chartAirportList.find(a => a.icao === icao);
@@ -8218,13 +8252,31 @@ async function handleZipFile(file) {
                         airac: safeAirac.id, savedAt: today, status: 'unverified'
                     });
                 }
-            } catch(e) {}
+            } catch(e) {
+                console.warn('항목 처리 실패:', icao, num, e.message);
+            }
             importProgress.done = i + 1;
-            if (i % 5 === 0) renderCduContent();
+            if (i % 3 === 0) renderCduContent();
             await new Promise(r => setTimeout(r, 0));
         }
-        localStorage.setItem('savedCharts', JSON.stringify(saved));
-    } catch(e) { console.error('ZIP import error:', e); }
+
+        try {
+            localStorage.setItem('savedCharts', JSON.stringify(saved));
+        } catch(storageErr) {
+            console.warn('localStorage 저장 실패 (용량 초과):', storageErr);
+            // 최근 50개만 보존
+            const trimmed = saved.slice(-50);
+            try { localStorage.setItem('savedCharts', JSON.stringify(trimmed)); } catch(e2) {}
+        }
+
+        if (idbFailed) {
+            alert(`차트 메타데이터는 저장되었으나 일부 PDF를 기기에 저장하지 못했습니다.\n저장 공간이 부족하거나 브라우저 제한일 수 있습니다.\n차트 탭에서 링크(↗)로 외부 열기가 가능합니다.`);
+        }
+
+    } catch(e) {
+        console.error('ZIP import error:', e);
+        alert('ZIP 가져오기 중 오류가 발생했습니다:\n' + e.message);
+    }
     importProgress = null;
     await refreshLocalPdfKeys();
 }
@@ -8532,10 +8584,12 @@ function renderChartsScreen(container, footer, title, centerLabel) {
 
 // renderCduContent는 CDU 내부의 renderContent를 가리킴
 function renderCduContent() {
-    if (window._cduRenderContent) window._cduRenderContent();
+    try {
+        if (window._cduRenderContent) window._cduRenderContent();
+    } catch(e) { console.warn('renderCduContent error:', e); }
 }
 
 </script>
-<input type="file" id="zipFileInput" accept=".zip" style="display:none" onchange="handleZipFile(this.files[0]); this.value='';">
+<input type="file" id="zipFileInput" accept=".zip,application/zip,application/x-zip-compressed,application/octet-stream" style="display:none" onchange="handleZipFile(this.files[0]); this.value='';">
 </body>
 </html>
