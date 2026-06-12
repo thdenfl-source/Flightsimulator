@@ -8280,7 +8280,6 @@ async function handleZipFile(file) {
         if (importProgress.found > 0) msgs.push(`✅ PDF 저장: ${importProgress.found}개`);
         if (idbFailed) msgs.push('⚠️ 일부 PDF는 저장 공간 부족으로 메타데이터만 저장됨\n(차트 목록에서 ↗ 외부 열기 가능)');
         if (importProgress.skipped > 0) msgs.push(`⏭ 크기 초과 또는 오류로 건너뜀: ${importProgress.skipped}개`);
-        if (limited) msgs.push(`📱 스마트폰 메모리 보호: 최대 ${MAX_ENTRIES}개만 처리됨\n(전체 ${entries.length}개)`);
         if (msgs.length) alert(msgs.join('\n'));
 
     } catch(e) {
