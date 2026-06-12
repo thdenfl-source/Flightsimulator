@@ -8473,9 +8473,85 @@ async function verifyOneChart(icao, chartNum) {
 }
 
 let expandedAirport = null;
+let chartsTab = 'my';          // 'my' | 'download'
+let dlExpandedAirport = null;  // 개별 다운로드 탭 펼친 공항
+let dlProgress = {};           // { 'ICAO|num': 'idle'|'loading'|'ok'|'fail' }
+
 function toggleExpand(icao) {
     expandedAirport = expandedAirport === icao ? null : icao;
     renderCduContent();
+}
+function toggleDlExpand(icao) {
+    dlExpandedAirport = dlExpandedAirport === icao ? null : icao;
+    renderCduContent();
+}
+function setChartsTab(t) {
+    chartsTab = t;
+    renderCduContent();
+}
+
+// 개별 PDF 다운로드: 직접 fetch → IDB 저장
+// CORS 차단 시 CORS 프록시 경유
+async function downloadOneChart(icao, num, url, name) {
+    const key = `${icao}|${num}`;
+    dlProgress[key] = 'loading';
+    renderCduContent();
+
+    const proxies = [
+        url,
+        'https://api.allorigins.win/raw?url=' + encodeURIComponent(url),
+        'https://corsproxy.io/?' + encodeURIComponent(url),
+    ];
+
+    let blob = null;
+    for (const src of proxies) {
+        try {
+            const res = await Promise.race([
+                fetch(src, { mode: 'cors' }),
+                new Promise((_, r) => setTimeout(() => r(new Error('timeout')), 15000)),
+            ]);
+            if (res.ok) {
+                const buf = await res.arrayBuffer();
+                blob = new Blob([buf], { type: 'application/pdf' });
+                break;
+            }
+        } catch(e) { /* 다음 프록시 시도 */ }
+    }
+
+    if (!blob) {
+        // 모든 경로 실패 → 외부 브라우저로 열기
+        dlProgress[key] = 'fail';
+        renderCduContent();
+        if (confirm(`직접 다운로드에 실패했습니다.\n외부 브라우저에서 열겠습니까?\n(브라우저에서 "다운로드" 또는 저장 가능)`)) {
+            window.open(url, '_blank');
+        }
+        return;
+    }
+
+    try {
+        await idbPut(key, blob);
+        // savedCharts 메타데이터 추가
+        let saved = loadSavedCharts();
+        if (!saved.find(s => s.icao === icao && s.chartNum === num)) {
+            const airport = chartAirportList.find(a => a.icao === icao);
+            const known = (airportSpecificCharts[icao] || []).find(c => c.num === num);
+            const safeAirac = getSafeAiracInfo();
+            saved.push({
+                icao, name: airport?.nameEn || icao,
+                chartNum: num, chartName: known?.name || name,
+                cat: known?.cat || catFromChartName(name),
+                url, airac: safeAirac.id,
+                savedAt: new Date().toISOString().slice(0, 10),
+                status: 'unverified'
+            });
+            try { localStorage.setItem('savedCharts', JSON.stringify(saved)); } catch(e) {}
+        }
+        dlProgress[key] = 'ok';
+        await refreshLocalPdfKeys();
+    } catch(e) {
+        dlProgress[key] = 'fail';
+        renderCduContent();
+    }
 }
 
 function getAiracInfo_charts() {
@@ -8500,120 +8576,176 @@ function renderChartsScreen(container, footer, title, centerLabel) {
     centerLabel.innerText = "CHARTS";
 
     const airac = getAiracInfo_charts();
-    const saved = loadSavedCharts();
-    const savedByIcao = {};
-    saved.forEach(c => {
-        if (!savedByIcao[c.icao]) savedByIcao[c.icao] = { name: c.name, charts: [] };
-        savedByIcao[c.icao].charts.push(c);
-    });
     const daysColor = airac.daysLeft <= 7 ? '#f44336' : airac.daysLeft <= 14 ? '#ff9800' : '#4caf50';
-    const statusIcon = (s) => {
-        if (s === 'verified') return '<span style="color:#4caf50;font-weight:bold;">✓</span>';
-        if (s === 'failed') return '<span style="color:#f44336;font-weight:bold;">✗</span>';
-        if (s === 'checking') return '<span style="color:#ffeb3b;">⌛</span>';
-        return '<span style="color:#666;">?</span>';
-    };
 
-    let html = `<div style="padding:0 2px; height:100%; display:flex; flex-direction:column; overflow:hidden;">`;
+    // ── AIRAC 헤더 ──
+    let html = `<div style="padding:0 2px;height:100%;display:flex;flex-direction:column;overflow:hidden;">`;
     html += `
-    <div style="display:flex;align-items:center;gap:6px;background:#1a2a1a;border:1px solid #4caf50;border-radius:5px;padding:6px 8px;margin-bottom:5px;">
+    <div style="display:flex;align-items:center;gap:5px;background:#1a2a1a;border:1px solid #4caf50;border-radius:5px;padding:5px 7px;margin-bottom:4px;flex-shrink:0;">
         <div style="flex:1;min-width:0;">
             <div style="color:#4caf50;font-size:7px;font-weight:bold;letter-spacing:1px;">AIRAC ${airac.id}</div>
             <div style="color:#aaa;font-size:8px;">${airac.start} ~ ${airac.end}</div>
-            <a href="https://aim.koca.go.kr/eaipPub/Package/history-en-GB.html?language=ko_KR" target="_blank" style="color:#4caf50;font-size:7px;text-decoration:none;">패키지 목록 ↗</a>
         </div>
-        <div style="text-align:center;">
-            <div style="color:${daysColor};font-size:18px;font-weight:bold;line-height:1;">${airac.daysLeft}</div>
-            <div style="color:#666;font-size:7px;">days left</div>
-        </div>
-        <div onclick="openAimPackage()" style="background:#0a2a0a;color:#4caf50;border:1px solid #4caf50;border-radius:5px;padding:8px 10px;font-size:10px;font-weight:bold;cursor:pointer;white-space:nowrap;text-align:center;min-width:52px;">
-            🌐<br><span style="font-size:8px;">AIM eAIP</span>
-        </div>
-        <div onclick="${importProgress ? '' : 'triggerZipImport()'}" style="background:${importProgress ? '#1a1a1a' : '#0a1a2a'};color:${importProgress ? '#444' : '#29b6f6'};border:1px solid ${importProgress ? '#333' : '#29b6f6'};border-radius:5px;padding:8px 10px;font-size:10px;font-weight:bold;cursor:${importProgress ? 'default' : 'pointer'};white-space:nowrap;text-align:center;min-width:52px;">
-            ${importProgress ? '⏳' : '📂'}<br><span style="font-size:8px;">ZIP 가져오기</span>
+        <div style="color:${daysColor};font-size:16px;font-weight:bold;line-height:1;text-align:center;">
+            ${airac.daysLeft}<div style="color:#666;font-size:7px;font-weight:normal;">days</div>
         </div>
     </div>`;
 
+    // ── 탭 전환 ──
+    html += `
+    <div style="display:flex;gap:3px;margin-bottom:4px;flex-shrink:0;">
+        <div onclick="setChartsTab('my')" style="flex:1;padding:6px 0;text-align:center;font-size:9px;font-weight:bold;border-radius:4px;cursor:pointer;
+            background:${chartsTab==='my'?'#1a3a1a':'#111'};color:${chartsTab==='my'?'#4caf50':'#555'};border:1px solid ${chartsTab==='my'?'#4caf50':'#333'};">
+            📂 내 차트
+        </div>
+        <div onclick="setChartsTab('download')" style="flex:1;padding:6px 0;text-align:center;font-size:9px;font-weight:bold;border-radius:4px;cursor:pointer;
+            background:${chartsTab==='download'?'#0a1a2a':'#111'};color:${chartsTab==='download'?'#29b6f6':'#555'};border:1px solid ${chartsTab==='download'?'#29b6f6':'#333'};">
+            ⬇ 개별 다운로드
+        </div>
+        <div onclick="${importProgress?'':' triggerZipImport()'}" style="flex:0 0 auto;padding:6px 8px;text-align:center;font-size:9px;font-weight:bold;border-radius:4px;cursor:pointer;
+            background:${importProgress?'#111':'#0a1020'};color:${importProgress?'#444':'#29b6f6'};border:1px solid ${importProgress?'#333':'#29b6f6'};">
+            ${importProgress?'⏳':'📦'} ZIP
+        </div>
+    </div>`;
+
+    // ZIP 진행 바
     if (importProgress) {
         const pct = importProgress.total > 0 ? (importProgress.done / importProgress.total * 100).toFixed(0) : 0;
-        const label = importProgress.phase === 'reading' ? 'ZIP 읽는 중...' : `저장 중 ${importProgress.done}/${importProgress.total} (PDF ${importProgress.found}개 발견)`;
-        html += `
-        <div style="background:#0a1020;border:1px solid #29b6f6;border-radius:4px;padding:5px 8px;margin-bottom:5px;">
-            <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;">
-                <div style="color:#29b6f6;font-size:9px;font-weight:bold;">📂 ZIP 가져오기</div>
-                <div style="color:#29b6f6;font-size:8px;">${label}</div>
-            </div>
-            <div style="background:#000;border-radius:3px;height:6px;overflow:hidden;">
+        const label = importProgress.phase === 'reading' ? 'ZIP 읽는 중...' : `저장 ${importProgress.done}/${importProgress.total} (PDF ${importProgress.found}개)`;
+        html += `<div style="background:#0a1020;border:1px solid #29b6f6;border-radius:4px;padding:4px 7px;margin-bottom:4px;flex-shrink:0;">
+            <div style="color:#29b6f6;font-size:8px;margin-bottom:2px;">${label}</div>
+            <div style="background:#000;border-radius:3px;height:5px;overflow:hidden;">
                 <div style="background:#29b6f6;height:100%;width:${pct}%;transition:width 0.1s;"></div>
-            </div>
-        </div>`;
+            </div></div>`;
     }
 
     html += `<div style="flex:1;overflow-y:auto;">`;
-    if (saved.length === 0) {
-        html += `<div style="text-align:center;color:#444;font-size:10px;margin-top:30px;line-height:2.2;">차트 없음<br><span style="font-size:8px;color:#4caf50;">🌐 AIM eAIP — AIM Korea 사이트에서 AIRAC ZIP 다운</span><br><span style="font-size:8px;color:#29b6f6;">📂 ZIP 가져오기 — 받은 ZIP 파일 선택 후 자동 분류</span></div>`;
-    } else {
-        Object.keys(savedByIcao).forEach(icao => {
-            const grp = savedByIcao[icao];
-            const isOpen = expandedAirport === icao;
-            const counts = { local: 0, verified: 0, failed: 0, checking: 0, unverified: 0, link: 0 };
-            grp.charts.forEach(c => {
-                if (isSectionLink(c)) { counts.link++; return; }
-                if (localPdfKeys.has(`${c.icao}|${c.chartNum}`)) { counts.local++; return; }
-                const s = c.status || 'unverified';
-                counts[s] = (counts[s] || 0) + 1;
-            });
-            const summary = `<span style="color:#29b6f6;">📂${counts.local}</span> <span style="color:#4caf50;">✓${counts.verified}</span> <span style="color:#f44336;">✗${counts.failed}</span> <span style="color:#888;">?${counts.unverified + counts.checking}</span> <span style="color:#7e57c2;">🔗${counts.link}</span>`;
-            html += `
-            <div style="margin-bottom:4px;border:1px solid #333;border-radius:4px;overflow:hidden;">
-                <div onclick="toggleExpand('${icao}')" style="display:flex;align-items:center;padding:6px 6px;background:#151515;cursor:pointer;gap:4px;">
-                    <div style="color:#0ff;font-size:11px;font-weight:bold;">${isOpen ? '▼' : '▶'}</div>
-                    <div style="flex:1;min-width:0;">
-                        <div style="color:#fff;font-size:11px;font-weight:bold;">${icao} <span style="color:#aaa;font-size:9px;font-weight:normal;">${grp.name}</span></div>
-                        <div style="color:#666;font-size:8px;">${grp.charts.length}개 · ${summary}</div>
-                    </div>
-                    <div onclick="event.stopPropagation(); deleteAirportCharts('${icao}')" style="color:#f44336;font-size:9px;cursor:pointer;padding:2px 5px;border:1px solid #f44336;border-radius:3px;white-space:nowrap;">삭제</div>
-                </div>`;
-            if (isOpen) {
-                grp.charts.forEach(c => {
-                    const status = c.status || 'unverified';
-                    const cat = inferChartCat(c);
-                    const catColor = chartCatColors[cat] || '#888';
-                    const safeUrl = (c.url || '').replace(/'/g, '%27');
-                    const link = isSectionLink(c);
-                    const isLocal = !link && localPdfKeys.has(`${c.icao}|${c.chartNum}`);
-                    const leftIcon = link
-                        ? `<div style="font-size:12px;padding:0 4px;line-height:1;width:16px;text-align:center;flex-shrink:0;">🔗</div>`
-                        : isLocal
-                            ? `<div style="font-size:12px;padding:0 4px;line-height:1;width:16px;text-align:center;flex-shrink:0;color:#29b6f6;">📂</div>`
-                            : `<div onclick="event.stopPropagation(); verifyOneChart('${c.icao}','${c.chartNum}')" style="font-size:12px;cursor:pointer;padding:0 4px;line-height:1;width:16px;text-align:center;flex-shrink:0;">${statusIcon(status)}</div>`;
-                    const titleLine = link ? `${c.chartName}` : `(${c.chartNum}) ${c.chartName}`;
-                    const subLine = link
-                        ? `eAIP 공식 페이지 · 모든 ${cat} 차트 포함`
-                        : isLocal
-                            ? `로컬 저장됨 · AIRAC ${c.airac || '-'}`
-                            : `AIRAC ${c.airac || '-'} · ${c.savedAt || ''}${c.verifiedAt ? ` · 검증 ${c.verifiedAt}` : ''}`;
-                    const bgColor = isLocal ? '#040d12' : link ? '#0d1418' : '#0a0a0a';
-                    const arrowColor = isLocal ? '#29b6f6' : '#4caf50';
-                    const onclickAction = link
-                        ? `window.open('${safeUrl}','_blank')`
-                        : `openChart('${c.icao}','${c.chartNum}','${safeUrl}')`;
-                    html += `
-                    <div onclick="${onclickAction}" style="display:flex;align-items:center;padding:7px 8px;border-top:1px solid #222;gap:5px;background:${bgColor};cursor:pointer;">
-                        ${leftIcon}
-                        <span style="background:${catColor}22;color:${catColor};border:1px solid ${catColor}55;border-radius:3px;font-size:7px;padding:1px 4px;min-width:30px;text-align:center;font-weight:bold;flex-shrink:0;">${cat}</span>
+
+    // ════════════════════════════════
+    // 탭 A: 내 차트
+    // ════════════════════════════════
+    if (chartsTab === 'my') {
+        const saved = loadSavedCharts();
+        const savedByIcao = {};
+        saved.forEach(c => {
+            if (!savedByIcao[c.icao]) savedByIcao[c.icao] = { name: c.name, charts: [] };
+            savedByIcao[c.icao].charts.push(c);
+        });
+        const statusIcon = s => s==='verified'?'<span style="color:#4caf50;">✓</span>':s==='failed'?'<span style="color:#f44336;">✗</span>':s==='checking'?'<span style="color:#ffeb3b;">⌛</span>':'<span style="color:#666;">?</span>';
+
+        if (saved.length === 0) {
+            html += `<div style="text-align:center;color:#444;font-size:10px;margin-top:30px;line-height:2.2;">
+                저장된 차트 없음<br>
+                <span style="font-size:8px;color:#29b6f6;">⬇ 개별 다운로드 탭에서 원하는 차트를 선택하세요</span>
+            </div>`;
+        } else {
+            Object.keys(savedByIcao).forEach(icao => {
+                const grp = savedByIcao[icao];
+                const isOpen = expandedAirport === icao;
+                const local = grp.charts.filter(c => localPdfKeys.has(`${c.icao}|${c.chartNum}`)).length;
+                html += `<div style="margin-bottom:4px;border:1px solid #333;border-radius:4px;overflow:hidden;">
+                    <div onclick="toggleExpand('${icao}')" style="display:flex;align-items:center;padding:6px;background:#151515;cursor:pointer;gap:4px;">
+                        <div style="color:#0ff;font-size:11px;font-weight:bold;">${isOpen?'▼':'▶'}</div>
                         <div style="flex:1;min-width:0;">
-                            <div style="color:#fff;font-size:9px;font-weight:bold;">${titleLine}</div>
-                            <div style="color:${isLocal ? '#1e6a8a' : '#555'};font-size:7px;">${subLine}</div>
+                            <div style="color:#fff;font-size:11px;font-weight:bold;">${icao} <span style="color:#aaa;font-size:9px;">${grp.name}</span></div>
+                            <div style="color:#666;font-size:8px;">${grp.charts.length}개 · <span style="color:#29b6f6;">📂${local}</span></div>
                         </div>
-                        <span style="color:${arrowColor};font-size:9px;flex-shrink:0;">${isLocal ? '▶' : '↗'}</span>
-                        <div onclick="event.stopPropagation(); deleteSavedChart('${c.icao}','${c.chartNum}')" style="color:#f44336;font-size:14px;cursor:pointer;padding:0 4px;line-height:1;flex-shrink:0;">✕</div>
+                        <div onclick="event.stopPropagation();deleteAirportCharts('${icao}')" style="color:#f44336;font-size:9px;cursor:pointer;padding:2px 5px;border:1px solid #f44336;border-radius:3px;">삭제</div>
                     </div>`;
-                });
-            }
-            html += `</div>`;
+                if (isOpen) {
+                    grp.charts.forEach(c => {
+                        const cat = inferChartCat(c);
+                        const catColor = chartCatColors[cat]||'#888';
+                        const safeUrl = (c.url||'').replace(/'/g,'%27');
+                        const isLocal = localPdfKeys.has(`${c.icao}|${c.chartNum}`);
+                        const link = isSectionLink(c);
+                        const onclick = link ? `window.open('${safeUrl}','_blank')` : `openChart('${c.icao}','${c.chartNum}','${safeUrl}')`;
+                        html += `<div onclick="${onclick}" style="display:flex;align-items:center;padding:6px 8px;border-top:1px solid #1a1a1a;gap:5px;background:${isLocal?'#040d12':'#0a0a0a'};cursor:pointer;">
+                            <span style="font-size:11px;">${link?'🔗':isLocal?'📂':'☁️'}</span>
+                            <span style="background:${catColor}22;color:${catColor};border:1px solid ${catColor}55;border-radius:3px;font-size:7px;padding:1px 3px;flex-shrink:0;">${cat}</span>
+                            <div style="flex:1;min-width:0;color:#fff;font-size:9px;">${link?c.chartName:`(${c.chartNum}) ${c.chartName}`}</div>
+                            <span style="color:${isLocal?'#29b6f6':'#4caf50'};font-size:9px;">${isLocal?'▶':'↗'}</span>
+                            <div onclick="event.stopPropagation();deleteSavedChart('${c.icao}','${c.chartNum}')" style="color:#f44336;font-size:13px;cursor:pointer;padding:0 3px;">✕</div>
+                        </div>`;
+                    });
+                }
+                html += `</div>`;
+            });
+        }
+
+    // ════════════════════════════════
+    // 탭 B: 개별 다운로드
+    // ════════════════════════════════
+    } else {
+        const safeAirac = getSafeAiracInfo();
+        html += `<div style="color:#555;font-size:8px;padding:3px 2px 5px;flex-shrink:0;">AIRAC ${safeAirac.id} 기준 · 공항 선택 후 차트별 ⬇ 탭</div>`;
+
+        // 카테고리별 공항 그룹
+        const cats = [
+            { key:'INT', label:'국제공항', color:'#29b6f6' },
+            { key:'DOM', label:'국내공항', color:'#4caf50' },
+            { key:'MIL', label:'군 공항',  color:'#ff9800' },
+        ];
+
+        cats.forEach(({ key, label, color }) => {
+            const airports = chartAirportList.filter(a => a.cat === key);
+            html += `<div style="color:${color};font-size:8px;font-weight:bold;padding:4px 2px 2px;border-bottom:1px solid ${color}33;margin-bottom:3px;">${label}</div>`;
+            airports.forEach(apt => {
+                const charts = airportSpecificCharts[apt.icao] || [];
+                const isOpen = dlExpandedAirport === apt.icao;
+                const savedCount = charts.filter(c => localPdfKeys.has(`${apt.icao}|${c.num}`)).length;
+                html += `<div style="margin-bottom:3px;border:1px solid #2a2a2a;border-radius:4px;overflow:hidden;">
+                    <div onclick="toggleDlExpand('${apt.icao}')" style="display:flex;align-items:center;padding:6px 7px;background:#111;cursor:pointer;gap:5px;">
+                        <span style="color:${color};font-size:10px;font-weight:bold;">${isOpen?'▼':'▶'}</span>
+                        <div style="flex:1;">
+                            <span style="color:#fff;font-size:10px;font-weight:bold;">${apt.icao}</span>
+                            <span style="color:#888;font-size:9px;"> ${apt.name}</span>
+                        </div>
+                        <span style="color:#666;font-size:8px;">${charts.length}개${savedCount>0?` · <span style="color:#29b6f6;">📂${savedCount}</span>`:''}  </span>
+                    </div>`;
+                if (isOpen) {
+                    if (charts.length === 0) {
+                        html += `<div style="padding:6px 10px;color:#444;font-size:9px;">개별 PDF 목록 없음 —
+                            <a href="https://aim.koca.go.kr/eaipPub/Package/history-en-GB.html?language=ko_KR" target="_blank" style="color:#4caf50;">AIM eAIP ↗</a>에서 확인
+                        </div>`;
+                    } else {
+                        charts.forEach(c => {
+                            const key = `${apt.icao}|${c.num}`;
+                            const isLocal = localPdfKeys.has(key);
+                            const prog = dlProgress[key] || 'idle';
+                            const catColor = chartCatColors[c.cat]||'#888';
+                            const pdfUrl = buildChartPdfUrl(safeAirac.startUrl, apt.icao, c.num, c.name);
+                            const safeUrl = pdfUrl.replace(/'/g,'%27');
+                            const safeName = c.name.replace(/'/g,"\\'");
+
+                            let btnHtml;
+                            if (isLocal) {
+                                btnHtml = `<div onclick="event.stopPropagation();openChart('${apt.icao}','${c.num}','${safeUrl}')" style="color:#29b6f6;font-size:11px;cursor:pointer;padding:3px 6px;border:1px solid #29b6f6;border-radius:3px;">▶</div>`;
+                            } else if (prog === 'loading') {
+                                btnHtml = `<div style="color:#ffeb3b;font-size:9px;padding:3px 6px;">⏳</div>`;
+                            } else if (prog === 'ok') {
+                                btnHtml = `<div style="color:#4caf50;font-size:11px;padding:3px 6px;">✓</div>`;
+                            } else if (prog === 'fail') {
+                                btnHtml = `<div onclick="event.stopPropagation();downloadOneChart('${apt.icao}','${c.num}','${safeUrl}','${safeName}')" style="color:#f44336;font-size:9px;cursor:pointer;padding:3px 6px;border:1px solid #f44336;border-radius:3px;">재시도</div>`;
+                            } else {
+                                btnHtml = `<div onclick="event.stopPropagation();downloadOneChart('${apt.icao}','${c.num}','${safeUrl}','${safeName}')" style="color:#29b6f6;font-size:11px;cursor:pointer;padding:3px 7px;border:1px solid #29b6f6;border-radius:3px;">⬇</div>`;
+                            }
+
+                            html += `<div style="display:flex;align-items:center;padding:6px 8px;border-top:1px solid #1a1a1a;gap:5px;background:${isLocal?'#040d12':'#0c0c0c'};">
+                                <span style="background:${catColor}22;color:${catColor};border:1px solid ${catColor}44;border-radius:3px;font-size:7px;padding:1px 3px;flex-shrink:0;">${c.cat}</span>
+                                <div style="flex:1;min-width:0;">
+                                    <div style="color:${isLocal?'#29b6f6':'#ccc'};font-size:9px;">(${c.num}) ${c.name}</div>
+                                </div>
+                                ${btnHtml}
+                            </div>`;
+                        });
+                    }
+                }
+                html += `</div>`;
+            });
         });
     }
+
     html += `</div></div>`;
     container.innerHTML = html;
     footer.innerHTML = `<div class="nav-btn" onclick="switchMode('HOME')"><span>↩</span>Back</div><div class="nav-btn" onclick="switchMode('HOME')"><span>🏠</span>Home</div><div class="nav-btn"><span>✉</span>Msg</div><div class="nav-btn"><span>✥</span>Full</div>`;
