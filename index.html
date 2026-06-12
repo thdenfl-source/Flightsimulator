@@ -16,6 +16,8 @@
 <script src="https://cdn.jsdelivr.net/npm/leaflet-velocity@2.1.0/dist/leaflet-velocity.min.js"></script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.css"/>
 <script src="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" crossorigin="anonymous"></script>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
 html, body {
@@ -6441,8 +6443,10 @@ if ('serviceWorker' in navigator) {
         } else if (mode === 'SELCAL_INPUT') {
             selcalInput = selcalCode;
             hasStartedTyping = false;
+        } else if (mode === 'CHARTS') {
+            expandedAirport = null;
         }
-        
+
         renderContent();
     }
 
@@ -6471,7 +6475,6 @@ if ('serviceWorker' in navigator) {
         homeButtons.forEach(btn => {
             const links = {
                 'weather': "https://customwidgethosting.web.app/embed.html?ffCompiledSrc=https%3A%2F%2Fstorage.googleapis.com%2Fflutterflow-io-6f20.appspot.com%2Fbuild_outputs%2Fintegrated-flight-preparation-assistant-mlvjyo%2Fweb%2FQMZqWepPgY9jqDmcO2Uu%2Fmain.dart.js",
-                'charts': "https://aim.koca.go.kr/eaipPub/Package/history-en-GB.html?language=ko_KR",
                 'notam': "https://aim.koca.go.kr/xNotam/index.do?type=search2&language=ko_KR",
                 'serv': "https://thdenfl.tistory.com",
                 'as565': "https://thdenfl-source.github.io/AS565/",
@@ -6494,7 +6497,8 @@ if ('serviceWorker' in navigator) {
                                   btn.id === 'perf' ? `onclick="switchMode('PERF')"` :
                                   btn.id === 'fpl'  ? `onclick="setPage(1)"` :
                                   btn.id === 'proc' ? `onclick="setPage(1); fpGo('IFR');"` :
-                                  btn.id === 'util' ? `onclick="switchMode('UTIL')"` : '';
+                                  btn.id === 'util' ? `onclick="switchMode('UTIL')"` :
+                                  btn.id === 'charts' ? `onclick="switchMode('CHARTS')"` : '';
                 gridHtml += `
                     <div class="home-icon-wrapper" ${clickAction}>
                         <div class="${boxClass}">${btn.icon}</div>
@@ -7129,6 +7133,7 @@ if ('serviceWorker' in navigator) {
 
     // --- Main Content Renderer Route ---
     function renderContent() {
+        window._cduRenderContent = renderContent; // 전역 노출 (Charts 기능에서 참조)
         const container = document.getElementById('mainContentArea');
         const footer = document.getElementById('footerNav');
         const title = document.getElementById('modeTitle');
@@ -7148,6 +7153,7 @@ if ('serviceWorker' in navigator) {
             case 'XPDR_MODE': renderXpdrModeScreen(container, footer, title, centerLabel); break;
             case 'XPDR_CODE': renderXpdrCodeScreen(container, footer, title, centerLabel); break;
             case 'UTIL': renderUtilScreen(container, footer, title, centerLabel); break;
+            case 'CHARTS': renderChartsScreen(container, footer, title, centerLabel); break;
         }
 
         updateHeaderUI();
@@ -7784,6 +7790,604 @@ function fdrSetSpeed(val) {
   if (wasPlaying) fdrPlay();
 }
 
+// ══════════════════════════════════════════════════════
+// CHARTS — AIRAC 차트 관리 기능
+// ══════════════════════════════════════════════════════
+let localPdfKeys = new Set();
+let importProgress = null;
+
+const chartCatColors = {
+    AD: '#29b6f6', SID: '#4caf50', STAR: '#ff9800', IAP: '#e91e63', TEXT: '#9c27b0'
+};
+
+const sectionTypes = [
+    { cat: 'SID',  num: 'SID',  name: 'SID (표준 출발 절차)' },
+    { cat: 'STAR', num: 'STAR', name: 'STAR (표준 도착 절차)' },
+    { cat: 'IAP',  num: 'IAP',  name: 'IAP (계기 접근 절차)' },
+    { cat: 'TEXT', num: 'HTML', name: 'AERODROME INFO (eAIP)' },
+];
+
+function isSectionLink(c) {
+    return sectionTypes.some(st => st.num === c.chartNum);
+}
+
+const airportSpecificCharts = {
+    RKSI: [
+        { cat: 'AD',  num: '2-1',  name: 'AD CHART' },
+        { cat: 'AD',  num: '2-18', name: 'AD OBSTACLE CHART TYPE B' },
+        { cat: 'SID', num: '2-27', name: 'AREA CHART_DEP' },
+        { cat: 'IAP', num: '2-51', name: 'INSTR APCH CHART' },
+        { cat: 'IAP', num: '2-71', name: 'VISUAL APCH CHART' },
+    ],
+    RKSS: [
+        { cat: 'AD',  num: '2-3',  name: 'AIRCRAFT PARKING DOCKING CHART' },
+        { cat: 'AD',  num: '2-5',  name: 'AD GROUND MOVEMENT CHART' },
+        { cat: 'AD',  num: '2-7',  name: 'AD OBSTACLE CHART TYPE A' },
+        { cat: 'IAP', num: '2-29', name: 'INSTR APCH CHART' },
+    ],
+    RKPC: [
+        { cat: 'AD',  num: '2-3',  name: 'AIRCRAFT PARKING DOCKING CHART' },
+        { cat: 'IAP', num: '2-22', name: 'INSTR APCH CHART' },
+    ],
+    RKPK: [
+        { cat: 'SID', num: '2-13', name: 'SID' },
+        { cat: 'IAP', num: '2-25', name: 'INSTR APCH CHART' },
+    ],
+    RKTN: [
+        { cat: 'AD',  num: '2-5',  name: 'AD OBSTACLE CHART TYPE A' },
+    ],
+    RKTU: [
+        { cat: 'AD',  num: '2-9',  name: 'AD OBSTACLE CHART TYPE B' },
+        { cat: 'IAP', num: '2-17', name: 'INSTR APCH CHART' },
+    ],
+    RKJB: [
+        { cat: 'AD',  num: '2-5',  name: 'AD OBSTACLE CHART TYPE A' },
+        { cat: 'AD',  num: '2-6',  name: 'AD OBSTACLE CHART TYPE B' },
+        { cat: 'IAP', num: '2-13', name: 'INSTR APCH CHART' },
+    ],
+    RKJJ: [
+        { cat: 'AD',  num: '2-10', name: 'AREA CHART' },
+        { cat: 'SID', num: '2-11', name: 'SID' },
+        { cat: 'IAP', num: '2-15', name: 'INSTR APCH CHART' },
+    ],
+    RKNY: [
+        { cat: 'AD',  num: '2-2',  name: 'AIRCRAFT PARKING DOCKING CHART' },
+        { cat: 'AD',  num: '2-6',  name: 'AD OBSTACLE CHART TYPE B' },
+    ],
+    RKTL: [
+        { cat: 'AD',  num: '2-3',  name: 'AIRCRAFT PARKING DOCKING CHART' },
+        { cat: 'IAP', num: '2-18', name: 'INSTR APCH CHART' },
+    ],
+    RKPD: [
+        { cat: 'IAP', num: '2-13', name: 'INSTR APCH CHART' },
+    ],
+    RKSM: [
+        { cat: 'IAP', num: '2-11', name: 'INSTR APCH CHART' },
+    ],
+};
+
+function getAirportChartTypes(icao) {
+    return airportSpecificCharts[icao] || [];
+}
+
+function inferChartCat(c) {
+    if (c.cat) return c.cat;
+    const name = (c.chartName || '').toUpperCase();
+    if (c.chartNum === 'HTML' || c.chartNum === 'TEXT') return 'TEXT';
+    if (name.includes('VISUAL') || name.includes('APCH') || name.includes('ILS') || name.includes('VOR')) return 'IAP';
+    if (name.includes('STAR') || name.includes('ARR')) return 'STAR';
+    if (name.includes('SID') || name.includes('DEP')) return 'SID';
+    return 'AD';
+}
+
+const chartAirportList = [
+    { icao: 'RKSI', name: '인천국제', nameEn: 'Incheon Intl', cat: 'INT' },
+    { icao: 'RKSS', name: '김포국제', nameEn: 'Gimpo Intl', cat: 'INT' },
+    { icao: 'RKPC', name: '제주국제', nameEn: 'Jeju Intl', cat: 'INT' },
+    { icao: 'RKPK', name: '김해국제', nameEn: 'Gimhae Intl', cat: 'INT' },
+    { icao: 'RKTN', name: '대구국제', nameEn: 'Daegu Intl', cat: 'INT' },
+    { icao: 'RKTU', name: '청주국제', nameEn: 'Cheongju Intl', cat: 'INT' },
+    { icao: 'RKJB', name: '무안국제', nameEn: 'Muan Intl', cat: 'INT' },
+    { icao: 'RKNY', name: '양양국제', nameEn: 'Yangyang Intl', cat: 'INT' },
+    { icao: 'RKTF', name: '사천', nameEn: 'Sacheon', cat: 'DOM' },
+    { icao: 'RKJJ', name: '광주', nameEn: 'Gwangju', cat: 'DOM' },
+    { icao: 'RKTH', name: '포항경주', nameEn: 'Pohang', cat: 'DOM' },
+    { icao: 'RKJY', name: '여수', nameEn: 'Yeosu', cat: 'DOM' },
+    { icao: 'RKPU', name: '울산', nameEn: 'Ulsan', cat: 'DOM' },
+    { icao: 'RKTL', name: '울진', nameEn: 'Uljin', cat: 'DOM' },
+    { icao: 'RKPD', name: '정석(제주)', nameEn: 'Jeongseok', cat: 'DOM' },
+    { icao: 'RKNN', name: '강릉', nameEn: 'Gangneung', cat: 'MIL' },
+    { icao: 'RKJK', name: '군산', nameEn: 'Gunsan', cat: 'MIL' },
+    { icao: 'RKNW', name: '원주', nameEn: 'Wonju', cat: 'MIL' },
+    { icao: 'RKSO', name: '오산', nameEn: 'Osan AB', cat: 'MIL' },
+    { icao: 'RKSM', name: '서울', nameEn: 'Seoul AB', cat: 'MIL' },
+    { icao: 'RKSG', name: '평택', nameEn: 'Pyeongtaek', cat: 'MIL' },
+    { icao: 'RKPS', name: '진해', nameEn: 'Jinhae', cat: 'MIL' },
+];
+
+// --- Charts Functions ---
+function loadSavedCharts() {
+    try {
+        const raw = JSON.parse(localStorage.getItem('savedCharts') || '[]');
+        let dirty = false;
+        raw.forEach(c => {
+            if (c.url && c.url.startsWith('http://')) { c.url = c.url.replace('http://', 'https://'); dirty = true; }
+        });
+        if (!localStorage.getItem('verifyFix_v1')) {
+            raw.forEach(c => {
+                if (c.status === 'verified' && !isSectionLink(c)) { c.status = 'unverified'; delete c.verifiedAt; dirty = true; }
+            });
+            localStorage.setItem('verifyFix_v1', '1');
+        }
+        const seen = new Set();
+        const deduped = [];
+        raw.forEach(c => {
+            const key = `${c.icao}|${c.chartNum}|${c.airac}`;
+            if (!seen.has(key)) { seen.add(key); deduped.push(c); } else { dirty = true; }
+        });
+        if (dirty) localStorage.setItem('savedCharts', JSON.stringify(deduped));
+        return deduped;
+    } catch(e) { return []; }
+}
+
+function openAimPackage() {
+    window.open('https://aim.koca.go.kr/eaipPub/Package/history-en-GB.html?language=ko_KR', '_blank');
+}
+
+function buildChartPdfUrl(airacStart, icao, num, name) {
+    return `https://aim.koca.go.kr/eaipPub/Package/${airacStart}-AIRAC/pdf/AD/${icao}/(${num})%20${name.replace(/ /g, '%20')}.pdf`;
+}
+
+// --- IndexedDB PDF Storage ---
+let _idb = null;
+function openIDB() {
+    if (_idb) return Promise.resolve(_idb);
+    return new Promise((res, rej) => {
+        const req = indexedDB.open('CduCharts', 1);
+        req.onupgradeneeded = e => e.target.result.createObjectStore('pdfs');
+        req.onsuccess = e => { _idb = e.target.result; res(_idb); };
+        req.onerror = e => rej(e.target.error);
+    });
+}
+async function idbPut(key, blob) {
+    const db = await openIDB();
+    return new Promise((res, rej) => {
+        const tx = db.transaction('pdfs', 'readwrite');
+        tx.objectStore('pdfs').put(blob, key);
+        tx.oncomplete = res; tx.onerror = e => rej(e.target.error);
+    });
+}
+async function idbGet(key) {
+    const db = await openIDB();
+    return new Promise((res, rej) => {
+        const tx = db.transaction('pdfs', 'readonly');
+        const req = tx.objectStore('pdfs').get(key);
+        req.onsuccess = e => res(e.target.result || null);
+        req.onerror = e => rej(e.target.error);
+    });
+}
+async function idbDeleteByPrefix(prefix) {
+    const db = await openIDB();
+    return new Promise((res, rej) => {
+        const tx = db.transaction('pdfs', 'readwrite');
+        const store = tx.objectStore('pdfs');
+        store.getAllKeys().onsuccess = e => {
+            e.target.result.filter(k => k.startsWith(prefix)).forEach(k => store.delete(k));
+        };
+        tx.oncomplete = res; tx.onerror = e => rej(e.target.error);
+    });
+}
+async function idbGetAllKeys() {
+    const db = await openIDB();
+    return new Promise((res, rej) => {
+        const tx = db.transaction('pdfs', 'readonly');
+        const req = tx.objectStore('pdfs').getAllKeys();
+        req.onsuccess = e => res(e.target.result);
+        req.onerror = e => rej(e.target.error);
+    });
+}
+async function refreshLocalPdfKeys() {
+    try { const keys = await idbGetAllKeys(); localPdfKeys = new Set(keys); } catch(e) { localPdfKeys = new Set(); }
+    renderCduContent();
+}
+
+// --- ZIP Import ---
+function triggerZipImport() {
+    document.getElementById('zipFileInput').click();
+}
+
+function catFromChartName(name) {
+    const n = name.toUpperCase();
+    if (n.includes('INSTR APCH') || n.includes('VISUAL APCH') || n.includes('ILS') || n.includes('VOR') || n.includes('NDB')) return 'IAP';
+    if (n.includes('STAR') || n.includes('ARR')) return 'STAR';
+    if (n.includes('SID') || n.includes('AREA CHART_DEP') || n.includes('DEP')) return 'SID';
+    return 'AD';
+}
+
+function getSafeAiracInfo() {
+    const airac = getAiracInfo_charts();
+    if (airac.daysLeft >= 26) {
+        const ref = new Date(2024, 0, 25);
+        const dayMs = 86400000;
+        const offset = Math.floor((new Date() - ref) / (28 * dayMs)) - 1;
+        const n1 = offset + 1;
+        const yr = 2024 + Math.floor((n1 - 1) / 13);
+        const cn = ((n1 - 1) % 13) + 1;
+        const id = yr.toString().slice(2) + cn.toString().padStart(2, '0');
+        const startDate = new Date(ref.getTime() + offset * 28 * dayMs);
+        const startUrl = startDate.toISOString().slice(0, 10);
+        return { ...airac, id, startUrl };
+    }
+    return airac;
+}
+
+async function handleZipFile(file) {
+    if (!file) return;
+    importProgress = { phase: 'reading', done: 0, total: 0, found: 0 };
+    renderCduContent();
+    try {
+        const zip = await JSZip.loadAsync(file);
+        const entries = [];
+        zip.forEach((path, entry) => {
+            if (entry.dir || !/\.pdf$/i.test(path)) return;
+            const icaoM = path.match(/AD[\/\\]([A-Z]{4})[\/\\]/i);
+            if (!icaoM) return;
+            const icao = icaoM[1].toUpperCase();
+            const filename = path.split(/[\/\\]/).pop().replace(/\.pdf$/i, '').trim();
+            const pm = filename.match(/^\(([^)]+)\)\s*(.*)/);
+            if (pm && pm[2]) {
+                entries.push({ entry, icao, num: pm[1].trim(), chartName: pm[2].trim() });
+            } else if (pm) {
+                entries.push({ entry, icao, num: pm[1].trim(), chartName: filename });
+            } else {
+                const anyNum = filename.match(/^(\d[\d\-A-Z.]*)\s+(.*)/i);
+                if (anyNum) { entries.push({ entry, icao, num: anyNum[1].trim(), chartName: anyNum[2].trim() }); }
+                else { entries.push({ entry, icao, num: filename.slice(0, 10), chartName: filename }); }
+            }
+        });
+        importProgress = { phase: 'saving', done: 0, total: entries.length, found: 0 };
+        renderCduContent();
+
+        const safeAirac = getSafeAiracInfo();
+        const today = new Date().toISOString().slice(0, 10);
+        let saved = loadSavedCharts();
+
+        for (let i = 0; i < entries.length; i++) {
+            const { entry, icao, num, chartName } = entries[i];
+            try {
+                const blob = await entry.async('blob');
+                await idbPut(`${icao}|${num}`, blob);
+                importProgress.found++;
+                const alreadyIn = saved.find(s => s.icao === icao && s.chartNum === num);
+                if (!alreadyIn) {
+                    const airport = chartAirportList.find(a => a.icao === icao);
+                    const known = (airportSpecificCharts[icao] || []).find(c => c.num === num);
+                    saved.push({
+                        icao, name: airport?.nameEn || icao,
+                        chartNum: num, chartName: known?.name || chartName,
+                        cat: known?.cat || catFromChartName(chartName),
+                        url: buildChartPdfUrl(safeAirac.startUrl, icao, num, known?.name || chartName),
+                        airac: safeAirac.id, savedAt: today, status: 'unverified'
+                    });
+                }
+            } catch(e) {}
+            importProgress.done = i + 1;
+            if (i % 5 === 0) renderCduContent();
+            await new Promise(r => setTimeout(r, 0));
+        }
+        localStorage.setItem('savedCharts', JSON.stringify(saved));
+    } catch(e) { console.error('ZIP import error:', e); }
+    importProgress = null;
+    await refreshLocalPdfKeys();
+}
+
+// --- PDF Viewer ---
+let _pdfDoc = null, _pdfCurPage = 1;
+let _pdfTx = 0, _pdfTy = 0, _pdfScale = 1;
+let _pdfOx = 0, _pdfOy = 0;
+
+async function openChart(icao, chartNum, url) {
+    const key = `${icao}|${chartNum}`;
+    if (!localPdfKeys.has(key)) { window.open(url, '_blank'); return; }
+    const ex = document.getElementById('pdfViewerOverlay');
+    if (ex) ex.remove();
+    const ov = document.createElement('div');
+    ov.id = 'pdfViewerOverlay';
+    ov.style.cssText = 'position:fixed;inset:0;background:#1a1a1a;z-index:9999;display:flex;flex-direction:column;font-family:monospace;';
+    ov.innerHTML = `
+        <div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:#000;border-bottom:1px solid #333;flex-shrink:0;">
+            <div onclick="closePdfViewer()" style="color:#0ff;font-size:11px;font-weight:bold;cursor:pointer;padding:4px 12px;border:1px solid #0ff;border-radius:4px;white-space:nowrap;">← 목록</div>
+            <span style="color:#aaa;font-size:9px;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${icao} · (${chartNum})</span>
+            <span id="pdfPageNum" style="color:#888;font-size:9px;white-space:nowrap;"></span>
+        </div>
+        <div id="pdfViewArea" style="flex:1;overflow:hidden;position:relative;background:#555;touch-action:none;">
+            <div style="color:#ccc;padding:50px;text-align:center;font-size:13px;">PDF 로딩 중...</div>
+        </div>
+        <div style="display:flex;border-top:1px solid #333;flex-shrink:0;">
+            <div onclick="_pdfPrev()" style="flex:1;padding:11px 0;text-align:center;background:#0a0a0a;color:#0ff;font-size:16px;cursor:pointer;border-right:1px solid #222;">◀</div>
+            <div id="pdfPageLabel" style="flex:2;padding:11px 0;text-align:center;background:#0a0a0a;color:#555;font-size:10px;"></div>
+            <div onclick="_pdfNext()" style="flex:1;padding:11px 0;text-align:center;background:#0a0a0a;color:#0ff;font-size:16px;cursor:pointer;border-left:1px solid #222;">▶</div>
+        </div>`;
+    document.body.appendChild(ov);
+    try {
+        const blob = await idbGet(key);
+        if (!blob) throw new Error('IndexedDB에서 PDF를 찾을 수 없습니다');
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        _pdfDoc = await pdfjsLib.getDocument({ data: await blob.arrayBuffer() }).promise;
+        _pdfCurPage = 1;
+        await _pdfRender();
+    } catch(e) {
+        const area = document.getElementById('pdfViewArea');
+        if (area) area.innerHTML = `<div style="color:#f44336;padding:30px;font-size:12px;">오류: ${e.message}</div>`;
+    }
+}
+
+async function _pdfRender() {
+    if (!_pdfDoc) return;
+    const area = document.getElementById('pdfViewArea');
+    if (!area) return;
+    area.innerHTML = '<div style="color:#ccc;padding:50px;text-align:center;font-size:12px;">렌더링 중...</div>';
+    _pdfTx = 0; _pdfTy = 0; _pdfScale = 1;
+    const page = await _pdfDoc.getPage(_pdfCurPage);
+    const dpr = window.devicePixelRatio || 1;
+    const vp0 = page.getViewport({ scale: 1 });
+    const aW = area.clientWidth, aH = area.clientHeight;
+    const fitScale = Math.min(aW / vp0.width, aH / vp0.height);
+    const viewport = page.getViewport({ scale: fitScale * dpr });
+    const cssW = viewport.width / dpr, cssH = viewport.height / dpr;
+    _pdfOx = (aW - cssW) / 2;
+    _pdfOy = (aH - cssH) / 2;
+    area.innerHTML = '';
+    const canvas = document.createElement('canvas');
+    canvas.id = 'pdfCanvas';
+    canvas.width = viewport.width; canvas.height = viewport.height;
+    canvas.style.cssText = `position:absolute;left:${_pdfOx}px;top:${_pdfOy}px;width:${cssW}px;height:${cssH}px;transform-origin:0 0;`;
+    area.appendChild(canvas);
+    await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+    const lbl = document.getElementById('pdfPageLabel');
+    if (lbl) lbl.textContent = `${_pdfCurPage} / ${_pdfDoc.numPages}`;
+    const num = document.getElementById('pdfPageNum');
+    if (num) num.textContent = `${_pdfCurPage}/${_pdfDoc.numPages}`;
+    _pdfAttachTouch(area);
+}
+
+function _pdfApplyTransform() {
+    const c = document.getElementById('pdfCanvas');
+    if (c) c.style.transform = `translate(${_pdfTx}px,${_pdfTy}px) scale(${_pdfScale})`;
+}
+
+function _pdfAttachTouch(area) {
+    let t = null;
+    const dist = (a, b) => Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+    area.addEventListener('touchstart', e => {
+        e.preventDefault();
+        const rc = area.getBoundingClientRect();
+        if (e.touches.length === 1) {
+            t = { mode: 'pan', x0: e.touches[0].clientX, y0: e.touches[0].clientY, tx0: _pdfTx, ty0: _pdfTy };
+        } else if (e.touches.length >= 2) {
+            const cx = (e.touches[0].clientX + e.touches[1].clientX) / 2 - rc.left;
+            const cy = (e.touches[0].clientY + e.touches[1].clientY) / 2 - rc.top;
+            t = { mode: 'pinch', d0: dist(e.touches[0], e.touches[1]), s0: _pdfScale, cx, cy, tx0: _pdfTx, ty0: _pdfTy };
+        }
+    }, { passive: false });
+    area.addEventListener('touchmove', e => {
+        e.preventDefault();
+        if (!t) return;
+        if (t.mode === 'pan' && e.touches.length === 1) {
+            _pdfTx = t.tx0 + e.touches[0].clientX - t.x0;
+            _pdfTy = t.ty0 + e.touches[0].clientY - t.y0;
+            _pdfApplyTransform();
+        } else if (t.mode === 'pinch' && e.touches.length >= 2) {
+            const newScale = Math.min(Math.max(t.s0 * dist(e.touches[0], e.touches[1]) / t.d0, 0.5), 8);
+            const r = newScale / t.s0;
+            _pdfScale = newScale;
+            _pdfTx = (t.cx - _pdfOx) * (1 - r) + t.tx0 * r;
+            _pdfTy = (t.cy - _pdfOy) * (1 - r) + t.ty0 * r;
+            _pdfApplyTransform();
+        }
+    }, { passive: false });
+    area.addEventListener('touchend', e => {
+        if (e.touches.length === 1 && t?.mode === 'pinch') {
+            t = { mode: 'pan', x0: e.touches[0].clientX, y0: e.touches[0].clientY, tx0: _pdfTx, ty0: _pdfTy };
+        } else if (e.touches.length === 0) { t = null; }
+    }, { passive: false });
+}
+
+async function _pdfPrev() { if (_pdfDoc && _pdfCurPage > 1) { _pdfCurPage--; await _pdfRender(); } }
+async function _pdfNext() { if (_pdfDoc && _pdfCurPage < _pdfDoc.numPages) { _pdfCurPage++; await _pdfRender(); } }
+function closePdfViewer() { _pdfDoc = null; const ov = document.getElementById('pdfViewerOverlay'); if (ov) ov.remove(); }
+
+function deleteSavedChart(icao, chartNum) {
+    let saved = loadSavedCharts().filter(c => !(c.icao === icao && c.chartNum === chartNum));
+    localStorage.setItem('savedCharts', JSON.stringify(saved));
+    idbDeleteByPrefix(`${icao}|${chartNum}`).then(() => refreshLocalPdfKeys());
+}
+
+async function deleteAirportCharts(icao) {
+    let saved = loadSavedCharts().filter(c => c.icao !== icao);
+    localStorage.setItem('savedCharts', JSON.stringify(saved));
+    await idbDeleteByPrefix(`${icao}|`);
+    await refreshLocalPdfKeys();
+}
+
+function updateChartStatus(icao, chartNum, status) {
+    let saved = loadSavedCharts();
+    const entry = saved.find(s => s.icao === icao && s.chartNum === chartNum);
+    if (entry) {
+        entry.status = status;
+        entry.verifiedAt = new Date().toISOString().slice(0, 16).replace('T', ' ');
+        localStorage.setItem('savedCharts', JSON.stringify(saved));
+    }
+}
+
+async function verifyOneChart(icao, chartNum) {
+    const saved = loadSavedCharts();
+    const c = saved.find(s => s.icao === icao && s.chartNum === chartNum);
+    if (!c || isSectionLink(c)) return;
+    updateChartStatus(icao, chartNum, 'checking');
+    renderCduContent();
+    try {
+        const resp = await fetch(c.url, { mode: 'cors' });
+        updateChartStatus(icao, chartNum, resp.ok ? 'verified' : 'failed');
+    } catch (e) {
+        updateChartStatus(icao, chartNum, 'unverified');
+    }
+    renderCduContent();
+}
+
+let expandedAirport = null;
+function toggleExpand(icao) {
+    expandedAirport = expandedAirport === icao ? null : icao;
+    renderCduContent();
+}
+
+function getAiracInfo_charts() {
+    const now = new Date();
+    const ref = new Date(2024, 0, 25);
+    const dayMs = 86400000;
+    const offset = Math.floor((now - ref) / (28 * dayMs));
+    const n1 = offset + 1;
+    const yr = 2024 + Math.floor((n1 - 1) / 13);
+    const cn = ((n1 - 1) % 13) + 1;
+    const id = yr.toString().slice(2) + cn.toString().padStart(2, '0');
+    const startDate = new Date(ref.getTime() + offset * 28 * dayMs);
+    const endDate = new Date(startDate.getTime() + 27 * dayMs);
+    const daysLeft = Math.ceil((endDate - now) / dayMs) + 1;
+    const fmt = d => d.toISOString().slice(0, 10).replace(/-/g, '/');
+    const startUrl = startDate.toISOString().slice(0, 10);
+    return { id, start: fmt(startDate), end: fmt(endDate), daysLeft: Math.max(1, daysLeft), startUrl };
+}
+
+function renderChartsScreen(container, footer, title, centerLabel) {
+    title.innerText = "Charts";
+    centerLabel.innerText = "CHARTS";
+
+    const airac = getAiracInfo_charts();
+    const saved = loadSavedCharts();
+    const savedByIcao = {};
+    saved.forEach(c => {
+        if (!savedByIcao[c.icao]) savedByIcao[c.icao] = { name: c.name, charts: [] };
+        savedByIcao[c.icao].charts.push(c);
+    });
+    const daysColor = airac.daysLeft <= 7 ? '#f44336' : airac.daysLeft <= 14 ? '#ff9800' : '#4caf50';
+    const statusIcon = (s) => {
+        if (s === 'verified') return '<span style="color:#4caf50;font-weight:bold;">✓</span>';
+        if (s === 'failed') return '<span style="color:#f44336;font-weight:bold;">✗</span>';
+        if (s === 'checking') return '<span style="color:#ffeb3b;">⌛</span>';
+        return '<span style="color:#666;">?</span>';
+    };
+
+    let html = `<div style="padding:0 2px; height:100%; display:flex; flex-direction:column; overflow:hidden;">`;
+    html += `
+    <div style="display:flex;align-items:center;gap:6px;background:#1a2a1a;border:1px solid #4caf50;border-radius:5px;padding:6px 8px;margin-bottom:5px;">
+        <div style="flex:1;min-width:0;">
+            <div style="color:#4caf50;font-size:7px;font-weight:bold;letter-spacing:1px;">AIRAC ${airac.id}</div>
+            <div style="color:#aaa;font-size:8px;">${airac.start} ~ ${airac.end}</div>
+            <a href="https://aim.koca.go.kr/eaipPub/Package/history-en-GB.html?language=ko_KR" target="_blank" style="color:#4caf50;font-size:7px;text-decoration:none;">패키지 목록 ↗</a>
+        </div>
+        <div style="text-align:center;">
+            <div style="color:${daysColor};font-size:18px;font-weight:bold;line-height:1;">${airac.daysLeft}</div>
+            <div style="color:#666;font-size:7px;">days left</div>
+        </div>
+        <div onclick="openAimPackage()" style="background:#0a2a0a;color:#4caf50;border:1px solid #4caf50;border-radius:5px;padding:8px 10px;font-size:10px;font-weight:bold;cursor:pointer;white-space:nowrap;text-align:center;min-width:52px;">
+            🌐<br><span style="font-size:8px;">AIM eAIP</span>
+        </div>
+        <div onclick="${importProgress ? '' : 'triggerZipImport()'}" style="background:${importProgress ? '#1a1a1a' : '#0a1a2a'};color:${importProgress ? '#444' : '#29b6f6'};border:1px solid ${importProgress ? '#333' : '#29b6f6'};border-radius:5px;padding:8px 10px;font-size:10px;font-weight:bold;cursor:${importProgress ? 'default' : 'pointer'};white-space:nowrap;text-align:center;min-width:52px;">
+            ${importProgress ? '⏳' : '📂'}<br><span style="font-size:8px;">ZIP 가져오기</span>
+        </div>
+    </div>`;
+
+    if (importProgress) {
+        const pct = importProgress.total > 0 ? (importProgress.done / importProgress.total * 100).toFixed(0) : 0;
+        const label = importProgress.phase === 'reading' ? 'ZIP 읽는 중...' : `저장 중 ${importProgress.done}/${importProgress.total} (PDF ${importProgress.found}개 발견)`;
+        html += `
+        <div style="background:#0a1020;border:1px solid #29b6f6;border-radius:4px;padding:5px 8px;margin-bottom:5px;">
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;">
+                <div style="color:#29b6f6;font-size:9px;font-weight:bold;">📂 ZIP 가져오기</div>
+                <div style="color:#29b6f6;font-size:8px;">${label}</div>
+            </div>
+            <div style="background:#000;border-radius:3px;height:6px;overflow:hidden;">
+                <div style="background:#29b6f6;height:100%;width:${pct}%;transition:width 0.1s;"></div>
+            </div>
+        </div>`;
+    }
+
+    html += `<div style="flex:1;overflow-y:auto;">`;
+    if (saved.length === 0) {
+        html += `<div style="text-align:center;color:#444;font-size:10px;margin-top:30px;line-height:2.2;">차트 없음<br><span style="font-size:8px;color:#4caf50;">🌐 AIM eAIP — AIM Korea 사이트에서 AIRAC ZIP 다운</span><br><span style="font-size:8px;color:#29b6f6;">📂 ZIP 가져오기 — 받은 ZIP 파일 선택 후 자동 분류</span></div>`;
+    } else {
+        Object.keys(savedByIcao).forEach(icao => {
+            const grp = savedByIcao[icao];
+            const isOpen = expandedAirport === icao;
+            const counts = { local: 0, verified: 0, failed: 0, checking: 0, unverified: 0, link: 0 };
+            grp.charts.forEach(c => {
+                if (isSectionLink(c)) { counts.link++; return; }
+                if (localPdfKeys.has(`${c.icao}|${c.chartNum}`)) { counts.local++; return; }
+                const s = c.status || 'unverified';
+                counts[s] = (counts[s] || 0) + 1;
+            });
+            const summary = `<span style="color:#29b6f6;">📂${counts.local}</span> <span style="color:#4caf50;">✓${counts.verified}</span> <span style="color:#f44336;">✗${counts.failed}</span> <span style="color:#888;">?${counts.unverified + counts.checking}</span> <span style="color:#7e57c2;">🔗${counts.link}</span>`;
+            html += `
+            <div style="margin-bottom:4px;border:1px solid #333;border-radius:4px;overflow:hidden;">
+                <div onclick="toggleExpand('${icao}')" style="display:flex;align-items:center;padding:6px 6px;background:#151515;cursor:pointer;gap:4px;">
+                    <div style="color:#0ff;font-size:11px;font-weight:bold;">${isOpen ? '▼' : '▶'}</div>
+                    <div style="flex:1;min-width:0;">
+                        <div style="color:#fff;font-size:11px;font-weight:bold;">${icao} <span style="color:#aaa;font-size:9px;font-weight:normal;">${grp.name}</span></div>
+                        <div style="color:#666;font-size:8px;">${grp.charts.length}개 · ${summary}</div>
+                    </div>
+                    <div onclick="event.stopPropagation(); deleteAirportCharts('${icao}')" style="color:#f44336;font-size:9px;cursor:pointer;padding:2px 5px;border:1px solid #f44336;border-radius:3px;white-space:nowrap;">삭제</div>
+                </div>`;
+            if (isOpen) {
+                grp.charts.forEach(c => {
+                    const status = c.status || 'unverified';
+                    const cat = inferChartCat(c);
+                    const catColor = chartCatColors[cat] || '#888';
+                    const safeUrl = (c.url || '').replace(/'/g, '%27');
+                    const link = isSectionLink(c);
+                    const isLocal = !link && localPdfKeys.has(`${c.icao}|${c.chartNum}`);
+                    const leftIcon = link
+                        ? `<div style="font-size:12px;padding:0 4px;line-height:1;width:16px;text-align:center;flex-shrink:0;">🔗</div>`
+                        : isLocal
+                            ? `<div style="font-size:12px;padding:0 4px;line-height:1;width:16px;text-align:center;flex-shrink:0;color:#29b6f6;">📂</div>`
+                            : `<div onclick="event.stopPropagation(); verifyOneChart('${c.icao}','${c.chartNum}')" style="font-size:12px;cursor:pointer;padding:0 4px;line-height:1;width:16px;text-align:center;flex-shrink:0;">${statusIcon(status)}</div>`;
+                    const titleLine = link ? `${c.chartName}` : `(${c.chartNum}) ${c.chartName}`;
+                    const subLine = link
+                        ? `eAIP 공식 페이지 · 모든 ${cat} 차트 포함`
+                        : isLocal
+                            ? `로컬 저장됨 · AIRAC ${c.airac || '-'}`
+                            : `AIRAC ${c.airac || '-'} · ${c.savedAt || ''}${c.verifiedAt ? ` · 검증 ${c.verifiedAt}` : ''}`;
+                    const bgColor = isLocal ? '#040d12' : link ? '#0d1418' : '#0a0a0a';
+                    const arrowColor = isLocal ? '#29b6f6' : '#4caf50';
+                    const onclickAction = link
+                        ? `window.open('${safeUrl}','_blank')`
+                        : `openChart('${c.icao}','${c.chartNum}','${safeUrl}')`;
+                    html += `
+                    <div onclick="${onclickAction}" style="display:flex;align-items:center;padding:7px 8px;border-top:1px solid #222;gap:5px;background:${bgColor};cursor:pointer;">
+                        ${leftIcon}
+                        <span style="background:${catColor}22;color:${catColor};border:1px solid ${catColor}55;border-radius:3px;font-size:7px;padding:1px 4px;min-width:30px;text-align:center;font-weight:bold;flex-shrink:0;">${cat}</span>
+                        <div style="flex:1;min-width:0;">
+                            <div style="color:#fff;font-size:9px;font-weight:bold;">${titleLine}</div>
+                            <div style="color:${isLocal ? '#1e6a8a' : '#555'};font-size:7px;">${subLine}</div>
+                        </div>
+                        <span style="color:${arrowColor};font-size:9px;flex-shrink:0;">${isLocal ? '▶' : '↗'}</span>
+                        <div onclick="event.stopPropagation(); deleteSavedChart('${c.icao}','${c.chartNum}')" style="color:#f44336;font-size:14px;cursor:pointer;padding:0 4px;line-height:1;flex-shrink:0;">✕</div>
+                    </div>`;
+                });
+            }
+            html += `</div>`;
+        });
+    }
+    html += `</div></div>`;
+    container.innerHTML = html;
+    footer.innerHTML = `<div class="nav-btn" onclick="switchMode('HOME')"><span>↩</span>Back</div><div class="nav-btn" onclick="switchMode('HOME')"><span>🏠</span>Home</div><div class="nav-btn"><span>✉</span>Msg</div><div class="nav-btn"><span>✥</span>Full</div>`;
+}
+
+// renderCduContent는 CDU 내부의 renderContent를 가리킴
+function renderCduContent() {
+    if (window._cduRenderContent) window._cduRenderContent();
+}
+
 </script>
+<input type="file" id="zipFileInput" accept=".zip" style="display:none" onchange="handleZipFile(this.files[0]); this.value='';">
 </body>
 </html>
