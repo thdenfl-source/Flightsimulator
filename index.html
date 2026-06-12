@@ -8469,10 +8469,11 @@ async function verifyOneChart(icao, chartNum) {
 }
 
 let expandedAirport = null;
-let chartsTab = 'my';          // 'my' | 'download'
-let dlExpandedAirport = null;  // 개별 다운로드 탭 펼친 공항
-let dlProgress = {};           // { 'ICAO|num': 'idle'|'loading'|'ok'|'fail' }
-let chartListCache = {};       // { icao: { status: 'loading'|'ok'|'fail'|'empty', charts: [{num,name,cat}] } }
+let chartsTab = 'my';
+let dlExpandedAirport = null;
+let dlProgress = {};
+let chartListCache = {};
+let updateProgress = null; // { total, done, fail }
 
 function toggleExpand(icao) {
     expandedAirport = expandedAirport === icao ? null : icao;
@@ -8492,6 +8493,86 @@ function toggleDlExpand(icao) {
 function setChartsTab(t) {
     chartsTab = t;
     renderCduContent();
+}
+
+// 현재 AIRAC과 다른 주기로 저장된 차트 수 반환
+function countOutdatedCharts() {
+    const current = getSafeAiracInfo().id;
+    return loadSavedCharts().filter(c => !isSectionLink(c) && c.airac && c.airac !== current).length;
+}
+
+// 저장된 차트 메타데이터의 URL + airac을 현재 주기로 갱신
+function rebuildChartUrl(c) {
+    const safeAirac = getSafeAiracInfo();
+    return buildChartPdfUrl(safeAirac.startUrl, c.icao, c.chartNum, c.chartName);
+}
+
+// 단일 차트 AIRAC 업데이트 (기존 PDF 교체)
+async function updateOneChart(icao, chartNum) {
+    const saved = loadSavedCharts();
+    const c = saved.find(s => s.icao === icao && s.chartNum === chartNum);
+    if (!c || isSectionLink(c)) return;
+
+    const key = `${icao}|${chartNum}`;
+    dlProgress[key] = 'loading';
+    renderCduContent();
+
+    const newUrl = rebuildChartUrl(c);
+    const proxies = [
+        newUrl,
+        'https://api.allorigins.win/raw?url=' + encodeURIComponent(newUrl),
+        'https://corsproxy.io/?' + encodeURIComponent(newUrl),
+    ];
+    let blob = null;
+    for (const src of proxies) {
+        try {
+            const res = await Promise.race([
+                fetch(src, { mode: 'cors' }),
+                new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 15000)),
+            ]);
+            if (res.ok) { blob = new Blob([await res.arrayBuffer()], { type: 'application/pdf' }); break; }
+        } catch(e) {}
+    }
+
+    if (!blob) {
+        dlProgress[key] = 'fail';
+        renderCduContent();
+        return;
+    }
+
+    const safeAirac = getSafeAiracInfo();
+    await idbPut(key, blob);
+    const idx = saved.findIndex(s => s.icao === icao && s.chartNum === chartNum);
+    if (idx >= 0) {
+        saved[idx].url = newUrl;
+        saved[idx].airac = safeAirac.id;
+        saved[idx].savedAt = new Date().toISOString().slice(0, 10);
+        saved[idx].status = 'unverified';
+        try { localStorage.setItem('savedCharts', JSON.stringify(saved)); } catch(e) {}
+    }
+    dlProgress[key] = 'ok';
+    await refreshLocalPdfKeys();
+}
+
+// 오래된 차트 전체 업데이트
+async function updateAllCharts() {
+    const current = getSafeAiracInfo().id;
+    const outdated = loadSavedCharts().filter(c => !isSectionLink(c) && c.airac !== current);
+    if (outdated.length === 0) return;
+
+    updateProgress = { total: outdated.length, done: 0, fail: 0 };
+    renderCduContent();
+
+    for (const c of outdated) {
+        await updateOneChart(c.icao, c.chartNum);
+        const key = `${c.icao}|${c.chartNum}`;
+        if (dlProgress[key] === 'ok') updateProgress.done++;
+        else updateProgress.fail++;
+        renderCduContent();
+    }
+
+    // 완료 후 progress 초기화
+    setTimeout(() => { updateProgress = null; renderCduContent(); }, 3000);
 }
 
 async function fetchAirportChartList(icao) {
@@ -8704,12 +8785,33 @@ function renderChartsScreen(container, footer, title, centerLabel) {
     // ════════════════════════════════
     if (chartsTab === 'my') {
         const saved = loadSavedCharts();
+        const currentAirac = getSafeAiracInfo().id;
+        const outdatedCount = saved.filter(c => !isSectionLink(c) && c.airac && c.airac !== currentAirac).length;
+
+        // ── AIRAC 업데이트 배너 ──
+        if (updateProgress) {
+            const pct = updateProgress.total > 0 ? ((updateProgress.done + updateProgress.fail) / updateProgress.total * 100).toFixed(0) : 0;
+            html += `<div style="background:#0a1a0a;border:1px solid #4caf50;border-radius:4px;padding:5px 8px;margin-bottom:4px;flex-shrink:0;">
+                <div style="color:#4caf50;font-size:8px;margin-bottom:2px;">업데이트 중… ${updateProgress.done+updateProgress.fail}/${updateProgress.total} (실패 ${updateProgress.fail})</div>
+                <div style="background:#000;border-radius:3px;height:5px;overflow:hidden;">
+                    <div style="background:#4caf50;height:100%;width:${pct}%;transition:width 0.2s;"></div>
+                </div>
+            </div>`;
+        } else if (outdatedCount > 0) {
+            html += `<div style="background:#1a1a0a;border:1px solid #ff9800;border-radius:4px;padding:5px 8px;margin-bottom:4px;display:flex;align-items:center;gap:6px;flex-shrink:0;">
+                <div style="flex:1;min-width:0;">
+                    <div style="color:#ff9800;font-size:8px;font-weight:bold;">🔄 AIRAC ${currentAirac} 새 주기 발행</div>
+                    <div style="color:#888;font-size:7px;margin-top:1px;">차트 ${outdatedCount}개 업데이트 가능 (이전 주기 PDF)</div>
+                </div>
+                <div onclick="updateAllCharts()" style="color:#ff9800;font-size:8px;font-weight:bold;cursor:pointer;padding:4px 8px;border:1px solid #ff9800;border-radius:3px;white-space:nowrap;">전체 업데이트</div>
+            </div>`;
+        }
+
         const savedByIcao = {};
         saved.forEach(c => {
             if (!savedByIcao[c.icao]) savedByIcao[c.icao] = { name: c.name, charts: [] };
             savedByIcao[c.icao].charts.push(c);
         });
-        const statusIcon = s => s==='verified'?'<span style="color:#4caf50;">✓</span>':s==='failed'?'<span style="color:#f44336;">✗</span>':s==='checking'?'<span style="color:#ffeb3b;">⌛</span>':'<span style="color:#666;">?</span>';
 
         if (saved.length === 0) {
             html += `<div style="text-align:center;color:#444;font-size:10px;margin-top:30px;line-height:2.2;">
@@ -8721,12 +8823,13 @@ function renderChartsScreen(container, footer, title, centerLabel) {
                 const grp = savedByIcao[icao];
                 const isOpen = expandedAirport === icao;
                 const local = grp.charts.filter(c => localPdfKeys.has(`${c.icao}|${c.chartNum}`)).length;
-                html += `<div style="margin-bottom:4px;border:1px solid #333;border-radius:4px;overflow:hidden;">
+                const airportOutdated = grp.charts.filter(c => !isSectionLink(c) && c.airac && c.airac !== currentAirac).length;
+                html += `<div style="margin-bottom:4px;border:1px solid ${airportOutdated>0?'#ff980066':'#333'};border-radius:4px;overflow:hidden;">
                     <div onclick="toggleExpand('${icao}')" style="display:flex;align-items:center;padding:6px;background:#151515;cursor:pointer;gap:4px;">
                         <div style="color:#0ff;font-size:11px;font-weight:bold;">${isOpen?'▼':'▶'}</div>
                         <div style="flex:1;min-width:0;">
                             <div style="color:#fff;font-size:11px;font-weight:bold;">${icao} <span style="color:#aaa;font-size:9px;">${grp.name}</span></div>
-                            <div style="color:#666;font-size:8px;">${grp.charts.length}개 · <span style="color:#29b6f6;">📂${local}</span></div>
+                            <div style="color:#666;font-size:8px;">${grp.charts.length}개 · <span style="color:#29b6f6;">📂${local}</span>${airportOutdated>0?` · <span style="color:#ff9800;">🔄${airportOutdated}</span>`:''}</div>
                         </div>
                         <div onclick="event.stopPropagation();deleteAirportCharts('${icao}')" style="color:#f44336;font-size:9px;cursor:pointer;padding:2px 5px;border:1px solid #f44336;border-radius:3px;">삭제</div>
                     </div>`;
@@ -8737,12 +8840,33 @@ function renderChartsScreen(container, footer, title, centerLabel) {
                         const safeUrl = (c.url||'').replace(/'/g,'%27');
                         const isLocal = localPdfKeys.has(`${c.icao}|${c.chartNum}`);
                         const link = isSectionLink(c);
+                        const isOutdated = !link && c.airac && c.airac !== currentAirac;
+                        const key = `${c.icao}|${c.chartNum}`;
+                        const prog = dlProgress[key] || 'idle';
                         const onclick = link ? `window.open('${safeUrl}','_blank')` : `openChart('${c.icao}','${c.chartNum}','${safeUrl}')`;
-                        html += `<div onclick="${onclick}" style="display:flex;align-items:center;padding:6px 8px;border-top:1px solid #1a1a1a;gap:5px;background:${isLocal?'#040d12':'#0a0a0a'};cursor:pointer;">
-                            <span style="font-size:11px;">${link?'🔗':isLocal?'📂':'☁️'}</span>
-                            <span style="background:${catColor}22;color:${catColor};border:1px solid ${catColor}55;border-radius:3px;font-size:7px;padding:1px 3px;flex-shrink:0;">${cat}</span>
-                            <div style="flex:1;min-width:0;color:#fff;font-size:9px;">${link?c.chartName:`(${c.chartNum}) ${c.chartName}`}</div>
-                            <span style="color:${isLocal?'#29b6f6':'#4caf50'};font-size:9px;">${isLocal?'▶':'↗'}</span>
+
+                        let updateBtn = '';
+                        if (!link) {
+                            if (isOutdated && prog === 'loading') {
+                                updateBtn = `<span style="color:#ffeb3b;font-size:9px;padding:2px 4px;">⏳</span>`;
+                            } else if (isOutdated) {
+                                updateBtn = `<div onclick="event.stopPropagation();updateOneChart('${c.icao}','${c.chartNum}')" style="color:#ff9800;font-size:8px;cursor:pointer;padding:2px 5px;border:1px solid #ff9800;border-radius:3px;white-space:nowrap;">🔄</div>`;
+                            } else if (prog === 'ok') {
+                                updateBtn = `<span style="color:#4caf50;font-size:9px;padding:2px 4px;">✓</span>`;
+                            }
+                        }
+
+                        html += `<div style="display:flex;align-items:center;padding:6px 8px;border-top:1px solid #1a1a1a;gap:5px;background:${isLocal?'#040d12':'#0a0a0a'};">
+                            <div onclick="${onclick}" style="flex:1;display:flex;align-items:center;gap:5px;cursor:pointer;min-width:0;">
+                                <span style="font-size:11px;">${link?'🔗':isLocal?'📂':'☁️'}</span>
+                                <span style="background:${catColor}22;color:${catColor};border:1px solid ${catColor}55;border-radius:3px;font-size:7px;padding:1px 3px;flex-shrink:0;">${cat}</span>
+                                <div style="flex:1;min-width:0;">
+                                    <div style="color:${isOutdated?'#ff9800':isLocal?'#fff':'#aaa'};font-size:9px;">${link?c.chartName:`(${c.chartNum}) ${c.chartName}`}</div>
+                                    ${isOutdated?`<div style="color:#555;font-size:7px;">${c.airac} → ${currentAirac}</div>`:''}
+                                </div>
+                            </div>
+                            ${updateBtn}
+                            <span onclick="event.stopPropagation();openChart('${c.icao}','${c.chartNum}','${safeUrl}')" style="color:${isLocal?'#29b6f6':'#4caf50'};font-size:9px;cursor:pointer;">${isLocal?'▶':'↗'}</span>
                             <div onclick="event.stopPropagation();deleteSavedChart('${c.icao}','${c.chartNum}')" style="color:#f44336;font-size:13px;cursor:pointer;padding:0 3px;">✕</div>
                         </div>`;
                     });
