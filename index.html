@@ -7702,7 +7702,14 @@ function loadNotamFile(input) {
         }
       });
       if (_notamLayers.length === 0) {
-        alert('표시할 지형지물이 없습니다.');
+        const hasPm = isKml ? _xmlAll(new DOMParser().parseFromString(text, 'application/xml'), 'Placemark').length : 0;
+        const hasWpt = !isKml ? _xmlAll(new DOMParser().parseFromString(text, 'application/xml'), 'wpt').length + _xmlAll(new DOMParser().parseFromString(text, 'application/xml'), 'trkpt').length : 0;
+        if (isKml && hasPm === 0)
+          alert('표시할 지형지물이 없습니다.\n\n이 KML 파일에 Placemark(위치/도형) 데이터가 없습니다.\nNOTAM 좌표 정보가 포함된 KML 파일을 사용해 주세요.');
+        else if (!isKml && hasWpt === 0)
+          alert('표시할 지형지물이 없습니다.\n\n이 GPX 파일에 wpt/trkpt 데이터가 없습니다.');
+        else
+          alert('표시할 지형지물이 없습니다.\n(좌표가 누락되었거나 지원하지 않는 형식입니다)');
         return;
       }
       _notamActive = true;
