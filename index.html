@@ -7709,19 +7709,37 @@ function loadNotamFile(input) {
       _notamLayers.forEach(l => { try { leafMap.removeLayer(l); } catch(e){} });
       _notamLayers = [];
       features.forEach(f => {
+        const popup = _notamPopupHtml(f.name, f.desc);
+        const popupOpts = { maxWidth: 320 };
         let layer;
         if (f.type === 'point') {
           layer = L.circleMarker([f.lat, f.lon], {
             radius: 6, color: '#ff9800', fillColor: '#ff9800', fillOpacity: 0.8, weight: 2
-          }).bindPopup(`<b>${f.name || ''}</b>${f.desc ? '<br>' + f.desc : ''}`);
+          }).bindPopup(popup, popupOpts);
+          layer.addTo(leafMap);
+          _notamLayers.push(layer);
+          // 반경 원 추가
+          const radiusM = _extractNotamRadius(f.name + '\n' + (f.desc || ''));
+          if (radiusM) {
+            const circle = L.circle([f.lat, f.lon], {
+              radius: radiusM,
+              color: '#ff0000', weight: 0.1, opacity: 1,
+              fillColor: '#ff0000', fillOpacity: 0.04
+            }).bindPopup(popup, popupOpts);
+            circle.addTo(leafMap);
+            _notamLayers.push(circle);
+          }
         } else if (f.type === 'line') {
-          layer = L.polyline(f.coords, { color: '#ff9800', weight: 2.5, opacity: 0.9 })
-            .bindPopup(f.name || '');
+          layer = L.polyline(f.coords, { color: '#ff0000', weight: 0.1, opacity: 1 })
+            .bindPopup(popup, popupOpts);
+          layer.addTo(leafMap);
+          _notamLayers.push(layer);
         } else if (f.type === 'polygon') {
-          layer = L.polygon(f.coords, { color: '#ff9800', weight: 2, fillOpacity: 0.15 })
-            .bindPopup(f.name || '');
+          layer = L.polygon(f.coords, { color: '#ff0000', weight: 0.1, fillOpacity: 0.04, fillColor: '#ff0000' })
+            .bindPopup(popup, popupOpts);
+          layer.addTo(leafMap);
+          _notamLayers.push(layer);
         }
-        if (layer) { layer.addTo(leafMap); _notamLayers.push(layer); }
       });
       if (_notamLayers.length === 0) {
         alert('표시할 지형지물이 없습니다.');
@@ -7738,28 +7756,126 @@ function loadNotamFile(input) {
   reader.readAsText(file);
 }
 
+// NOTAM 텍스트에서 반경(미터) 추출
+function _extractNotamRadius(text) {
+  if (!text) return null;
+  const t = text.toUpperCase();
+  // 패턴: RADIUS X NM / X NM RADIUS / WITHIN X NM / X NM OF / 반경 X NM
+  const pats = [
+    /RADIUS[:\s]+(\d+(?:\.\d+)?)\s*NM/,
+    /(\d+(?:\.\d+)?)\s*NM\s+RADIUS/,
+    /WITHIN\s+(\d+(?:\.\d+)?)\s*NM/,
+    /(\d+(?:\.\d+)?)\s*NM\s+(?:OF|FROM)\b/,
+    /반경\s*(\d+(?:\.\d+)?)\s*(?:NM|해리)/,
+    /CIRCLE[^,\n]*?(\d+(?:\.\d+)?)\s*NM/,
+  ];
+  for (const p of pats) {
+    const m = t.match(p);
+    if (m) return parseFloat(m[1]) * 1852;
+  }
+  // NOTAM Q라인: Q)FIR/CODE/IVHK/BO/AE/LLL/UUU/DDMMNDDDMMENNN
+  const qm = t.match(/Q\)[^\n]*\/(\d{4}[NS]\d{5}[EW])(\d{3})/);
+  if (qm) {
+    const r = parseInt(qm[2]);
+    if (r > 0 && r < 500) return r * 1852;
+  }
+  return null;
+}
+
+// NOTAM 팝업 HTML 생성
+function _notamPopupHtml(name, desc) {
+  const raw = (desc || '').trim();
+  const interp = _interpretNotam(raw || name || '');
+  let html = '<div style="max-height:220px;overflow-y:auto;font-size:11px;line-height:1.5">';
+  if (name) html += `<div style="font-weight:bold;color:#ffcc00;margin-bottom:4px">${_escHtml(name)}</div>`;
+  if (interp) {
+    html += `<div style="background:rgba(0,60,120,0.7);border-radius:4px;padding:4px 6px;color:#a8d8ff;margin-bottom:5px">${interp.replace(/\n/g,'<br>')}</div>`;
+  }
+  if (raw) {
+    html += `<div style="color:#ccc;white-space:pre-wrap;font-size:10px">${_escHtml(raw)}</div>`;
+  }
+  html += '</div>';
+  return html;
+}
+
+function _escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// NOTAM 텍스트 자동 해석
+function _interpretNotam(text) {
+  if (!text) return '';
+  const lines = [];
+  // Q라인 파싱
+  const qm = text.match(/Q\)\s*([^\n\r]+)/);
+  if (qm) {
+    const parts = qm[1].split('/');
+    if (parts.length >= 2) {
+      const subj = _notamSubject(parts[1] || '');
+      if (subj) lines.push('종류: ' + subj);
+    }
+    if (parts.length >= 3) {
+      const tr = { 'IV':'IFR+VFR', 'I':'IFR만', 'V':'VFR만', 'K':'체크리스트' };
+      const tv = tr[(parts[2]||'').trim()];
+      if (tv) lines.push('해당: ' + tv);
+    }
+  }
+  // 시작/종료
+  const bm = text.match(/B\)\s*(\d{10})/);
+  const cm = text.match(/C\)\s*(\d{10}|PERM)/i);
+  if (bm) lines.push('시작: ' + _fmtNotamDt(bm[1]));
+  if (cm) lines.push('종료: ' + (cm[1].toUpperCase()==='PERM'?'영구':_fmtNotamDt(cm[1])));
+  // E라인 (본문)
+  const em = text.match(/E\)\s*([\s\S]+?)(?=\r?\n[A-Z]\)|$)/);
+  if (em) {
+    const body = em[1].trim();
+    if (body) lines.push('내용: ' + body.substring(0, 300) + (body.length > 300 ? '…' : ''));
+  }
+  // 반경 정보 표시
+  const rm = _extractNotamRadius(text);
+  if (rm) lines.push(`반경: ${(rm/1852).toFixed(1)} NM (${Math.round(rm)} m)`);
+  return lines.join('\n');
+}
+
+function _notamSubject(code) {
+  const c = code.toUpperCase();
+  const map = [
+    ['QRTCA','임시비행제한구역(TFR)'], ['QRDCA','위험구역(D)'], ['QRPCA','금지구역(P)'],
+    ['QRACA','제한구역(R)'], ['QWWXX','경고'], ['QLCAS','착륙구역 폐쇄'],
+    ['QFAXX','공항 운영정보'], ['QNVAS','항법장비 운용 중단'],
+    ['QOBCE','장애물 신설'], ['QOBCL','조명 장애물'],
+    ['QPICH','PIC 주의'], ['QSPAH','공역 변경'],
+  ];
+  for (const [k, v] of map) if (c.includes(k)) return v;
+  return code;
+}
+
+function _fmtNotamDt(s) {
+  if (!s || s.length < 10) return s;
+  return `20${s.slice(0,2)}-${s.slice(2,4)}-${s.slice(4,6)} ${s.slice(6,8)}:${s.slice(8,10)}Z`;
+}
+
 function _parseGpx2(text) {
   const doc = new DOMParser().parseFromString(text, 'application/xml');
   const features = [];
-  // waypoints
   doc.querySelectorAll('wpt').forEach(w => {
     features.push({ type: 'point', lat: +w.getAttribute('lat'), lon: +w.getAttribute('lon'),
       name: w.querySelector('name')?.textContent || '',
       desc: w.querySelector('desc')?.textContent || '' });
   });
-  // tracks
   doc.querySelectorAll('trk').forEach(trk => {
     const name = trk.querySelector('name')?.textContent || '';
+    const desc = trk.querySelector('desc')?.textContent || '';
     trk.querySelectorAll('trkseg').forEach(seg => {
       const coords = [...seg.querySelectorAll('trkpt')].map(p => [+p.getAttribute('lat'), +p.getAttribute('lon')]);
-      if (coords.length > 1) features.push({ type: 'line', coords, name });
+      if (coords.length > 1) features.push({ type: 'line', coords, name, desc });
     });
   });
-  // routes
   doc.querySelectorAll('rte').forEach(rte => {
     const name = rte.querySelector('name')?.textContent || '';
+    const desc = rte.querySelector('desc')?.textContent || '';
     const coords = [...rte.querySelectorAll('rtept')].map(p => [+p.getAttribute('lat'), +p.getAttribute('lon')]);
-    if (coords.length > 1) features.push({ type: 'line', coords, name });
+    if (coords.length > 1) features.push({ type: 'line', coords, name, desc });
   });
   return features;
 }
@@ -7774,24 +7890,31 @@ function _parseKml(text) {
 
   doc.querySelectorAll('Placemark').forEach(pm => {
     const name = pm.querySelector('name')?.textContent || '';
-    const desc = pm.querySelector('description')?.textContent || '';
+    // description에서 CDATA 포함 텍스트 추출
+    const descEl = pm.querySelector('description');
+    const desc = descEl ? (descEl.textContent || descEl.innerHTML || '') : '';
+    // ExtendedData 추가 텍스트
+    const extPairs = [...(pm.querySelectorAll('ExtendedData Data') || [])].map(d =>
+      `${d.getAttribute('name')}: ${d.querySelector('value')?.textContent||''}`).join('\n');
+    const fullDesc = [desc, extPairs].filter(Boolean).join('\n');
+
     const pt = pm.querySelector('Point coordinates');
     if (pt) {
       const [lon, lat] = pt.textContent.trim().split(',').map(Number);
-      if (!isNaN(lat)) features.push({ type: 'point', lat, lon, name, desc });
+      if (!isNaN(lat)) features.push({ type: 'point', lat, lon, name, desc: fullDesc });
       return;
     }
     const ls = pm.querySelector('LineString coordinates');
     if (ls) {
       const coords = parseCoordStr(ls.textContent);
-      if (coords.length > 1) features.push({ type: 'line', coords, name });
+      if (coords.length > 1) features.push({ type: 'line', coords, name, desc: fullDesc });
       return;
     }
     const pg = pm.querySelector('Polygon outerBoundaryIs LinearRing coordinates') ||
                pm.querySelector('Polygon coordinates');
     if (pg) {
       const coords = parseCoordStr(pg.textContent);
-      if (coords.length > 2) features.push({ type: 'polygon', coords, name });
+      if (coords.length > 2) features.push({ type: 'polygon', coords, name, desc: fullDesc });
     }
   });
   return features;
