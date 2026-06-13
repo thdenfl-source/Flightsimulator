@@ -7717,28 +7717,41 @@ function loadNotamFile(input) {
 }
 
 // NOTAM 텍스트에서 반경(미터) 추출
+// 우선순위: ① Q라인 좌표+반경 필드(가장 권위 있음) → ② 본문 자유 텍스트 패턴
 function _extractNotamRadius(text) {
   if (!text) return null;
   const t = text.toUpperCase();
-  // 패턴: RADIUS X NM / X NM RADIUS / WITHIN X NM / X NM OF / 반경 X NM
-  const pats = [
-    /RADIUS[:\s]+(\d+(?:\.\d+)?)\s*NM/,
-    /(\d+(?:\.\d+)?)\s*NM\s+RADIUS/,
-    /WITHIN\s+(\d+(?:\.\d+)?)\s*NM/,
-    /(\d+(?:\.\d+)?)\s*NM\s+(?:OF|FROM)\b/,
-    /반경\s*(\d+(?:\.\d+)?)\s*(?:NM|해리)/,
-    /CIRCLE[^,\n]*?(\d+(?:\.\d+)?)\s*NM/,
+
+  // ① Q라인 마지막 필드: <lat><lon><radius>
+  //    좌표 = DDMM[N/S]DDDMM[E/W] (초 단위 없음), 반경 = 3자리 NM
+  const qm = t.match(/Q\)[^\n]*?(\d{4}[NS]\d{5}[EW])(\d{3})\b/);
+  if (qm) {
+    const r = parseInt(qm[2], 10);
+    if (r > 0 && r < 1000) return r * 1852;   // 999NM 미만이면 유효
+  }
+
+  // ② 본문 자유 텍스트 — NM 단위
+  const num = '(\\d+(?:\\.\\d+)?)';
+  const nmPats = [
+    new RegExp(`RADIUS\\s+OF\\s+${num}\\s*NM`),
+    new RegExp(`RADIUS[:\\s]+${num}\\s*NM`),
+    new RegExp(`${num}\\s*NM\\s+RADIUS`),
+    new RegExp(`WITHIN\\s+(?:A\\s+)?${num}\\s*NM`),
+    new RegExp(`${num}\\s*NM\\s+(?:OF|FROM)\\b`),
+    new RegExp(`CIRCLE[^,\\n]*?${num}\\s*NM`),
+    new RegExp(`반경\\s*${num}\\s*(?:NM|해리)`),
   ];
-  for (const p of pats) {
+  for (const p of nmPats) {
     const m = t.match(p);
     if (m) return parseFloat(m[1]) * 1852;
   }
-  // NOTAM Q라인: Q)FIR/CODE/IVHK/BO/AE/LLL/UUU/DDMMNDDDMMENNN
-  const qm = t.match(/Q\)[^\n]*\/(\d{4}[NS]\d{5}[EW])(\d{3})/);
-  if (qm) {
-    const r = parseInt(qm[2]);
-    if (r > 0 && r < 500) return r * 1852;
-  }
+
+  // ③ 미터/킬로미터 단위 (드물지만 일부 NOTAM 사용)
+  let m = t.match(new RegExp(`RADIUS[:\\s]+${num}\\s*KM`)) || t.match(new RegExp(`${num}\\s*KM\\s+RADIUS`));
+  if (m) return parseFloat(m[1]) * 1000;
+  m = t.match(new RegExp(`RADIUS[:\\s]+${num}\\s*M\\b`)) || t.match(new RegExp(`반경\\s*${num}\\s*(?:M|미터)\\b`));
+  if (m) return parseFloat(m[1]);
+
   return null;
 }
 
@@ -7779,6 +7792,14 @@ function _interpretNotam(text) {
       const tv = tr[(parts[2]||'').trim()];
       if (tv) lines.push('해당: ' + tv);
     }
+    // 고도 범위 (하한/상한 FL — Q라인 6·7번째 필드)
+    if (parts.length >= 7) {
+      const lo = (parts[5]||'').trim(), hi = (parts[6]||'').trim();
+      if (/^\d{3}$/.test(lo) && /^\d{3}$/.test(hi)) {
+        const fl = v => v === '000' ? 'GND/SFC' : 'FL' + v;
+        lines.push(`고도: ${fl(lo)} – ${hi==='999'?'무제한':fl(hi)}`);
+      }
+    }
   }
   // 시작/종료
   const bm = text.match(/B\)\s*(\d{10})/);
@@ -7815,11 +7836,18 @@ function _fmtNotamDt(s) {
   return `20${s.slice(0,2)}-${s.slice(2,4)}-${s.slice(4,6)} ${s.slice(6,8)}:${s.slice(8,10)}Z`;
 }
 
+// ── 공통 GPX 헬퍼 ──────────────────────────────────────
+// <wpt>/<trkpt>/<rtept> 엘리먼트에서 [lat, lon] 추출 (NOTAM·FDR 공용)
+function _gpxLatLon(el) {
+  return [parseFloat(el.getAttribute('lat')), parseFloat(el.getAttribute('lon'))];
+}
+
 function _parseGpx2(text) {
   const doc = new DOMParser().parseFromString(text, 'application/xml');
   const features = [];
   doc.querySelectorAll('wpt').forEach(w => {
-    features.push({ type: 'point', lat: +w.getAttribute('lat'), lon: +w.getAttribute('lon'),
+    const [lat, lon] = _gpxLatLon(w);
+    features.push({ type: 'point', lat, lon,
       name: w.querySelector('name')?.textContent || '',
       desc: w.querySelector('desc')?.textContent || '' });
   });
@@ -7827,14 +7855,14 @@ function _parseGpx2(text) {
     const name = trk.querySelector('name')?.textContent || '';
     const desc = trk.querySelector('desc')?.textContent || '';
     trk.querySelectorAll('trkseg').forEach(seg => {
-      const coords = [...seg.querySelectorAll('trkpt')].map(p => [+p.getAttribute('lat'), +p.getAttribute('lon')]);
+      const coords = [...seg.querySelectorAll('trkpt')].map(_gpxLatLon);
       if (coords.length > 1) features.push({ type: 'line', coords, name, desc });
     });
   });
   doc.querySelectorAll('rte').forEach(rte => {
     const name = rte.querySelector('name')?.textContent || '';
     const desc = rte.querySelector('desc')?.textContent || '';
-    const coords = [...rte.querySelectorAll('rtept')].map(p => [+p.getAttribute('lat'), +p.getAttribute('lon')]);
+    const coords = [...rte.querySelectorAll('rtept')].map(_gpxLatLon);
     if (coords.length > 1) features.push({ type: 'line', coords, name, desc });
   });
   return features;
@@ -7924,8 +7952,7 @@ function _parseFdrGpx(xmlStr) {
   const track = [];
   let prevLat = null, prevLon = null, prevTimeMs = null;
   for (const pt of pts) {
-    const lat    = parseFloat(pt.getAttribute('lat'));
-    const lon    = parseFloat(pt.getAttribute('lon'));
+    const [lat, lon] = _gpxLatLon(pt);
     const eleEl  = pt.querySelector('ele');
     const timeEl = pt.querySelector('time');
     const altM   = eleEl  ? parseFloat(eleEl.textContent)  : 0;
