@@ -7837,32 +7837,34 @@ function _fmtNotamDt(s) {
 }
 
 // ── 공통 GPX 헬퍼 ──────────────────────────────────────
-// <wpt>/<trkpt>/<rtept> 엘리먼트에서 [lat, lon] 추출 (NOTAM·FDR 공용)
+// getElementsByTagName은 네임스페이스를 무시 → xmlns 선언된 KML/GPX에서도 동작
 function _gpxLatLon(el) {
   return [parseFloat(el.getAttribute('lat')), parseFloat(el.getAttribute('lon'))];
 }
+function _xmlAll(parent, tag) { return Array.from(parent.getElementsByTagName(tag)); }
+function _xml1(parent, tag)   { return parent.getElementsByTagName(tag)[0] ?? null; }
 
 function _parseGpx2(text) {
   const doc = new DOMParser().parseFromString(text, 'application/xml');
   const features = [];
-  doc.querySelectorAll('wpt').forEach(w => {
+  _xmlAll(doc, 'wpt').forEach(w => {
     const [lat, lon] = _gpxLatLon(w);
     features.push({ type: 'point', lat, lon,
-      name: w.querySelector('name')?.textContent || '',
-      desc: w.querySelector('desc')?.textContent || '' });
+      name: _xml1(w, 'name')?.textContent || '',
+      desc: _xml1(w, 'desc')?.textContent || '' });
   });
-  doc.querySelectorAll('trk').forEach(trk => {
-    const name = trk.querySelector('name')?.textContent || '';
-    const desc = trk.querySelector('desc')?.textContent || '';
-    trk.querySelectorAll('trkseg').forEach(seg => {
-      const coords = [...seg.querySelectorAll('trkpt')].map(_gpxLatLon);
+  _xmlAll(doc, 'trk').forEach(trk => {
+    const name = _xml1(trk, 'name')?.textContent || '';
+    const desc = _xml1(trk, 'desc')?.textContent  || '';
+    _xmlAll(trk, 'trkseg').forEach(seg => {
+      const coords = _xmlAll(seg, 'trkpt').map(_gpxLatLon);
       if (coords.length > 1) features.push({ type: 'line', coords, name, desc });
     });
   });
-  doc.querySelectorAll('rte').forEach(rte => {
-    const name = rte.querySelector('name')?.textContent || '';
-    const desc = rte.querySelector('desc')?.textContent || '';
-    const coords = [...rte.querySelectorAll('rtept')].map(_gpxLatLon);
+  _xmlAll(doc, 'rte').forEach(rte => {
+    const name = _xml1(rte, 'name')?.textContent || '';
+    const desc = _xml1(rte, 'desc')?.textContent  || '';
+    const coords = _xmlAll(rte, 'rtept').map(_gpxLatLon);
     if (coords.length > 1) features.push({ type: 'line', coords, name, desc });
   });
   return features;
@@ -7876,33 +7878,46 @@ function _parseKml(text) {
     return [lat, lon];
   }).filter(([lat, lon]) => !isNaN(lat) && !isNaN(lon));
 
-  doc.querySelectorAll('Placemark').forEach(pm => {
-    const name = pm.querySelector('name')?.textContent || '';
-    // description에서 CDATA 포함 텍스트 추출
-    const descEl = pm.querySelector('description');
-    const desc = descEl ? (descEl.textContent || descEl.innerHTML || '') : '';
-    // ExtendedData 추가 텍스트
-    const extPairs = [...(pm.querySelectorAll('ExtendedData Data') || [])].map(d =>
-      `${d.getAttribute('name')}: ${d.querySelector('value')?.textContent||''}`).join('\n');
+  _xmlAll(doc, 'Placemark').forEach(pm => {
+    const name = _xml1(pm, 'name')?.textContent || '';
+    // description CDATA 포함 텍스트 추출
+    const descEl = _xml1(pm, 'description');
+    const desc   = descEl ? (descEl.textContent || '') : '';
+    // ExtendedData
+    const extPairs = _xmlAll(pm, 'Data').map(d =>
+      `${d.getAttribute('name')}: ${_xml1(d, 'value')?.textContent || ''}`).join('\n');
     const fullDesc = [desc, extPairs].filter(Boolean).join('\n');
 
-    const pt = pm.querySelector('Point coordinates');
-    if (pt) {
-      const [lon, lat] = pt.textContent.trim().split(',').map(Number);
-      if (!isNaN(lat)) features.push({ type: 'point', lat, lon, name, desc: fullDesc });
+    // Point
+    const ptEl = _xml1(pm, 'Point');
+    if (ptEl) {
+      const coordsEl = _xml1(ptEl, 'coordinates');
+      if (coordsEl) {
+        const [lon, lat] = coordsEl.textContent.trim().split(',').map(Number);
+        if (!isNaN(lat) && !isNaN(lon)) features.push({ type: 'point', lat, lon, name, desc: fullDesc });
+      }
       return;
     }
-    const ls = pm.querySelector('LineString coordinates');
-    if (ls) {
-      const coords = parseCoordStr(ls.textContent);
-      if (coords.length > 1) features.push({ type: 'line', coords, name, desc: fullDesc });
+    // LineString
+    const lsEl = _xml1(pm, 'LineString');
+    if (lsEl) {
+      const coordsEl = _xml1(lsEl, 'coordinates');
+      if (coordsEl) {
+        const coords = parseCoordStr(coordsEl.textContent);
+        if (coords.length > 1) features.push({ type: 'line', coords, name, desc: fullDesc });
+      }
       return;
     }
-    const pg = pm.querySelector('Polygon outerBoundaryIs LinearRing coordinates') ||
-               pm.querySelector('Polygon coordinates');
-    if (pg) {
-      const coords = parseCoordStr(pg.textContent);
-      if (coords.length > 2) features.push({ type: 'polygon', coords, name, desc: fullDesc });
+    // Polygon
+    const pgEl = _xml1(pm, 'Polygon');
+    if (pgEl) {
+      const obEl  = _xml1(pgEl, 'outerBoundaryIs') || pgEl;
+      const lrEl  = _xml1(obEl, 'LinearRing') || obEl;
+      const cEl   = _xml1(lrEl, 'coordinates');
+      if (cEl) {
+        const coords = parseCoordStr(cEl.textContent);
+        if (coords.length > 2) features.push({ type: 'polygon', coords, name, desc: fullDesc });
+      }
     }
   });
   return features;
@@ -7947,14 +7962,14 @@ function loadFdrFile(input) {
 
 function _parseFdrGpx(xmlStr) {
   const doc   = new DOMParser().parseFromString(xmlStr, 'application/xml');
-  const pts   = Array.from(doc.querySelectorAll('trkpt'));
+  const pts   = _xmlAll(doc, 'trkpt');
   if (!pts.length) throw new Error('trkpt 없음');
   const track = [];
   let prevLat = null, prevLon = null, prevTimeMs = null;
   for (const pt of pts) {
     const [lat, lon] = _gpxLatLon(pt);
-    const eleEl  = pt.querySelector('ele');
-    const timeEl = pt.querySelector('time');
+    const eleEl  = _xml1(pt, 'ele');
+    const timeEl = _xml1(pt, 'time');
     const altM   = eleEl  ? parseFloat(eleEl.textContent)  : 0;
     const timeMs = timeEl ? new Date(timeEl.textContent).getTime() : (track.length * 1000);
     // Speed: distance from previous point / time delta
