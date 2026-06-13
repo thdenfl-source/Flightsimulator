@@ -519,6 +519,10 @@ body.solo-mode .solo-panel-visible {
   background: rgba(0,40,0,0.92); border-color: #00dd44; color: #00ff88;
   box-shadow: 0 0 8px rgba(0,220,80,0.4);
 }
+#notam-btn.active {
+  background: rgba(40,25,0,0.92); border-color: #ff9800; color: #ffb74d;
+  box-shadow: 0 0 8px rgba(255,152,0,0.4);
+}
 #gps-status {
   position: absolute; top: 44px; right: 8px; z-index: 1000;
   background: rgba(0,20,0,0.80); border: 1px solid #226622; color: #00cc66;
@@ -1206,7 +1210,9 @@ body.solo-mode .solo-panel-visible {
         <button id="pp-btn" onclick="ppAddWaypoint()">PP</button>
         <button id="rain-btn" onclick="toggleRain()">RAIN</button>
         <button id="wind-btn" onclick="toggleWind()">WIND</button>
+        <button id="notam-btn" onclick="toggleNotamLayer()">NOTAM</button>
       </div>
+      <input type="file" id="notamFileInput" accept=".kml,.gpx" style="display:none" onchange="loadNotamFile(this)">
       <!-- Visitor counter widget (above scale bar, bottom-left) -->
       <div id="counter-wrap">
         <div id="counter-label">Visit</div>
@@ -4667,9 +4673,10 @@ function setLeftPage(n) {
     if (currentPage === 0) setPage(1); // MAP 탭이 숨겨지므로 PLAN으로 전환
   }
   if (n === 0) {
-    // offsetHeight 읽기로 강제 리플로우 → 이후 clientWidth/Height가 정확함
-    void pfdWrap.offsetHeight;
-    resizePFD();
+    requestAnimationFrame(() => {
+      resizePFD();
+      drawPFD();
+    });
   }
   setTimeout(() => leafMap.invalidateSize(), 50);
 }
@@ -7672,6 +7679,122 @@ function toggleFdrPanel() {
   const btn   = document.getElementById('fdr-btn');
   const open  = panel.classList.toggle('open');
   btn.classList.toggle('active', open);
+}
+
+// ── NOTAM / KML / GPX overlay ──────────────────────────
+let _notamLayers = [];
+let _notamActive = false;
+
+function toggleNotamLayer() {
+  if (_notamActive) {
+    _notamLayers.forEach(l => { try { leafMap.removeLayer(l); } catch(e){} });
+    _notamLayers = [];
+    _notamActive = false;
+    document.getElementById('notam-btn').classList.remove('active');
+  } else {
+    document.getElementById('notamFileInput').click();
+  }
+}
+
+function loadNotamFile(input) {
+  const file = input.files[0];
+  input.value = '';
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const text = e.target.result;
+    const isKml = file.name.toLowerCase().endsWith('.kml');
+    try {
+      const features = isKml ? _parseKml(text) : _parseGpx2(text);
+      _notamLayers.forEach(l => { try { leafMap.removeLayer(l); } catch(e){} });
+      _notamLayers = [];
+      features.forEach(f => {
+        let layer;
+        if (f.type === 'point') {
+          layer = L.circleMarker([f.lat, f.lon], {
+            radius: 6, color: '#ff9800', fillColor: '#ff9800', fillOpacity: 0.8, weight: 2
+          }).bindPopup(`<b>${f.name || ''}</b>${f.desc ? '<br>' + f.desc : ''}`);
+        } else if (f.type === 'line') {
+          layer = L.polyline(f.coords, { color: '#ff9800', weight: 2.5, opacity: 0.9 })
+            .bindPopup(f.name || '');
+        } else if (f.type === 'polygon') {
+          layer = L.polygon(f.coords, { color: '#ff9800', weight: 2, fillOpacity: 0.15 })
+            .bindPopup(f.name || '');
+        }
+        if (layer) { layer.addTo(leafMap); _notamLayers.push(layer); }
+      });
+      if (_notamLayers.length === 0) {
+        alert('표시할 지형지물이 없습니다.');
+        return;
+      }
+      _notamActive = true;
+      document.getElementById('notam-btn').classList.add('active');
+      const group = L.featureGroup(_notamLayers);
+      leafMap.fitBounds(group.getBounds().pad(0.1));
+    } catch(err) {
+      alert('파일 파싱 오류: ' + err.message);
+    }
+  };
+  reader.readAsText(file);
+}
+
+function _parseGpx2(text) {
+  const doc = new DOMParser().parseFromString(text, 'application/xml');
+  const features = [];
+  // waypoints
+  doc.querySelectorAll('wpt').forEach(w => {
+    features.push({ type: 'point', lat: +w.getAttribute('lat'), lon: +w.getAttribute('lon'),
+      name: w.querySelector('name')?.textContent || '',
+      desc: w.querySelector('desc')?.textContent || '' });
+  });
+  // tracks
+  doc.querySelectorAll('trk').forEach(trk => {
+    const name = trk.querySelector('name')?.textContent || '';
+    trk.querySelectorAll('trkseg').forEach(seg => {
+      const coords = [...seg.querySelectorAll('trkpt')].map(p => [+p.getAttribute('lat'), +p.getAttribute('lon')]);
+      if (coords.length > 1) features.push({ type: 'line', coords, name });
+    });
+  });
+  // routes
+  doc.querySelectorAll('rte').forEach(rte => {
+    const name = rte.querySelector('name')?.textContent || '';
+    const coords = [...rte.querySelectorAll('rtept')].map(p => [+p.getAttribute('lat'), +p.getAttribute('lon')]);
+    if (coords.length > 1) features.push({ type: 'line', coords, name });
+  });
+  return features;
+}
+
+function _parseKml(text) {
+  const doc = new DOMParser().parseFromString(text, 'application/xml');
+  const features = [];
+  const parseCoordStr = s => s.trim().split(/\s+/).map(c => {
+    const [lon, lat] = c.split(',').map(Number);
+    return [lat, lon];
+  }).filter(([lat, lon]) => !isNaN(lat) && !isNaN(lon));
+
+  doc.querySelectorAll('Placemark').forEach(pm => {
+    const name = pm.querySelector('name')?.textContent || '';
+    const desc = pm.querySelector('description')?.textContent || '';
+    const pt = pm.querySelector('Point coordinates');
+    if (pt) {
+      const [lon, lat] = pt.textContent.trim().split(',').map(Number);
+      if (!isNaN(lat)) features.push({ type: 'point', lat, lon, name, desc });
+      return;
+    }
+    const ls = pm.querySelector('LineString coordinates');
+    if (ls) {
+      const coords = parseCoordStr(ls.textContent);
+      if (coords.length > 1) features.push({ type: 'line', coords, name });
+      return;
+    }
+    const pg = pm.querySelector('Polygon outerBoundaryIs LinearRing coordinates') ||
+               pm.querySelector('Polygon coordinates');
+    if (pg) {
+      const coords = parseCoordStr(pg.textContent);
+      if (coords.length > 2) features.push({ type: 'polygon', coords, name });
+    }
+  });
+  return features;
 }
 
 function loadFdrFile(input) {
