@@ -8527,6 +8527,11 @@ async function handleZipFile(file) {
 let _pdfDoc = null, _pdfCurPage = 1;
 let _pdfTx = 0, _pdfTy = 0, _pdfScale = 1;
 let _pdfOx = 0, _pdfOy = 0;
+let _pdfFitScale = 1, _pdfBaseW = 0, _pdfBaseH = 0;   // fit(=1배) 레이아웃
+let _pdfRenderQ = 1;          // 현재 비트맵 품질 배율(선명도)
+let _pdfRenderToken = 0;      // 렌더 경쟁 방지 토큰
+let _pdfReqTimer = null;      // 품질 재렌더 디바운스
+const _PDF_MAXQ = 3;          // 비트맵 최대 품질 배율(메모리 보호)
 
 async function openChart(icao, chartNum, url) {
     const key = `${icao}|${chartNum}`;
@@ -8562,6 +8567,11 @@ async function openChart(icao, chartNum, url) {
             <div onclick="_pdfNext()" style="flex:1;padding:11px 0;text-align:center;background:#0a0a0a;color:#0ff;font-size:16px;cursor:pointer;border-left:1px solid #222;">▶</div>
         </div>`;
     document.body.appendChild(ov);
+    // 제스처 핸들러는 오버레이당 1회 등록(영역은 재렌더돼도 동일 element 유지)
+    const viewArea = document.getElementById('pdfViewArea');
+    _pdfAttachTouch(viewArea);
+    _pdfAttachWheel(viewArea);
+    _pdfAttachMouse(viewArea);
     try {
         pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
         _pdfDoc = await pdfjsLib.getDocument({ data: await blob.arrayBuffer() }).promise;
@@ -8573,28 +8583,11 @@ async function openChart(icao, chartNum, url) {
     }
 }
 
+// 페이지 전환/최초 표시: 뷰(이동·배율·품질)를 초기화하고 그린다
 async function _pdfRender() {
-    if (!_pdfDoc) return;
-    const area = document.getElementById('pdfViewArea');
-    if (!area) return;
-    area.innerHTML = '<div style="color:#ccc;padding:50px;text-align:center;font-size:12px;">렌더링 중...</div>';
-    _pdfTx = 0; _pdfTy = 0; _pdfScale = 1;
-    const page = await _pdfDoc.getPage(_pdfCurPage);
-    const dpr = window.devicePixelRatio || 1;
-    const vp0 = page.getViewport({ scale: 1 });
-    const aW = area.clientWidth, aH = area.clientHeight;
-    const fitScale = Math.min(aW / vp0.width, aH / vp0.height);
-    const viewport = page.getViewport({ scale: fitScale * dpr });
-    const cssW = viewport.width / dpr, cssH = viewport.height / dpr;
-    _pdfOx = (aW - cssW) / 2;
-    _pdfOy = (aH - cssH) / 2;
-    area.innerHTML = '';
-    const canvas = document.createElement('canvas');
-    canvas.id = 'pdfCanvas';
-    canvas.width = viewport.width; canvas.height = viewport.height;
-    canvas.style.cssText = `position:absolute;left:${_pdfOx}px;top:${_pdfOy}px;width:${cssW}px;height:${cssH}px;transform-origin:0 0;`;
-    area.appendChild(canvas);
-    await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+    if (_pdfReqTimer) { clearTimeout(_pdfReqTimer); _pdfReqTimer = null; }
+    _pdfTx = 0; _pdfTy = 0; _pdfScale = 1; _pdfRenderQ = 1;
+    await _pdfDrawPage(true);
     const lbl = document.getElementById('pdfPageLabel');
     if (lbl) lbl.textContent = `${_pdfCurPage} / ${_pdfDoc.numPages}`;
     const num = document.getElementById('pdfPageNum');
@@ -8602,9 +8595,55 @@ async function _pdfRender() {
     // 페이지가 1장뿐이면 ◀/▶ 네비게이션 바 숨김
     const nav = document.getElementById('pdfNavBar');
     if (nav) nav.style.display = _pdfDoc.numPages > 1 ? 'flex' : 'none';
-    _pdfApplyTransform(); // 배율 레이블 초기화
-    _pdfAttachTouch(area);
-    _pdfAttachWheel(area);
+}
+
+// 현재 페이지를 _pdfRenderQ 품질(비트맵 해상도)로 그린다.
+// resetLayout=true: fit 기준 CSS 박스·중앙정렬 재계산 / false: 현재 뷰 유지(품질만 교체)
+async function _pdfDrawPage(resetLayout) {
+    if (!_pdfDoc) return;
+    const area = document.getElementById('pdfViewArea');
+    if (!area) return;
+    const token = ++_pdfRenderToken;
+    if (resetLayout) area.innerHTML = '<div style="color:#ccc;padding:50px;text-align:center;font-size:12px;">렌더링 중...</div>';
+
+    const page = await _pdfDoc.getPage(_pdfCurPage);
+    if (token !== _pdfRenderToken) return;
+    const dpr = window.devicePixelRatio || 1;
+    const vp0 = page.getViewport({ scale: 1 });
+
+    if (resetLayout) {
+        const aW = area.clientWidth, aH = area.clientHeight;
+        _pdfFitScale = Math.min(aW / vp0.width, aH / vp0.height);
+        _pdfBaseW = vp0.width  * _pdfFitScale;   // 1배(fit)일 때 CSS 크기
+        _pdfBaseH = vp0.height * _pdfFitScale;
+        _pdfOx = (aW - _pdfBaseW) / 2;
+        _pdfOy = (aH - _pdfBaseH) / 2;
+    }
+
+    // 비트맵은 fit × dpr × 품질배율 해상도로 렌더 → 확대해도 선명
+    const viewport = page.getViewport({ scale: _pdfFitScale * dpr * _pdfRenderQ });
+    const canvas = document.createElement('canvas');
+    canvas.id = 'pdfCanvas';
+    canvas.width  = Math.round(viewport.width);
+    canvas.height = Math.round(viewport.height);
+    // CSS 박스는 항상 fit 크기로 고정 → 이동·배율 transform 수식이 품질과 무관하게 동일
+    canvas.style.cssText = `position:absolute;left:${_pdfOx}px;top:${_pdfOy}px;width:${_pdfBaseW}px;height:${_pdfBaseH}px;transform-origin:0 0;`;
+    await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+    if (token !== _pdfRenderToken) return;   // 더 최신 렌더가 시작됐으면 폐기
+
+    area.innerHTML = '';
+    area.appendChild(canvas);
+    _pdfApplyTransform();
+}
+
+// 확대 정도에 맞춰 비트맵 품질을 올려 재렌더(디바운스). 이동/배율은 유지.
+function _pdfScheduleQuality() {
+    if (_pdfReqTimer) clearTimeout(_pdfReqTimer);
+    _pdfReqTimer = setTimeout(() => {
+        _pdfReqTimer = null;
+        const want = Math.min(Math.max(Math.ceil(_pdfScale), 1), _PDF_MAXQ);
+        if (want !== _pdfRenderQ) { _pdfRenderQ = want; _pdfDrawPage(false); }
+    }, 160);
 }
 
 function _pdfApplyTransform() {
@@ -8633,6 +8672,7 @@ function _pdfZoomOut() {
 function _pdfZoomReset() {
     _pdfTx = 0; _pdfTy = 0; _pdfScale = 1;
     _pdfApplyTransform();
+    _pdfScheduleQuality();   // 품질 1배로 복귀(메모리 회수)
 }
 function _pdfZoomAt(newScale, cx, cy) {
     const r = newScale / _pdfScale;
@@ -8640,6 +8680,7 @@ function _pdfZoomAt(newScale, cx, cy) {
     _pdfTy = (cy - _pdfOy) * (1 - r) + _pdfTy * r;
     _pdfScale = newScale;
     _pdfApplyTransform();
+    _pdfScheduleQuality();
 }
 
 // 마우스 휠 줌 (PC)
@@ -8653,6 +8694,30 @@ function _pdfAttachWheel(area) {
         const ns   = Math.min(Math.max(_pdfScale + step, _PDF_ZOOM_MIN), _PDF_ZOOM_MAX);
         _pdfZoomAt(ns, cx, cy);
     }, { passive: false });
+}
+
+// 마우스 드래그 패닝 (PC) — 확대 후 클릭해서 화면 이동
+let _pdfMD = null;               // 드래그 상태(전역)
+let _pdfMouseDocInit = false;    // document 리스너 1회 등록 가드
+function _pdfAttachMouse(area) {
+    area.style.cursor = 'grab';
+    area.addEventListener('mousedown', e => {
+        e.preventDefault();
+        _pdfMD = { x0: e.clientX, y0: e.clientY, tx0: _pdfTx, ty0: _pdfTy };
+        area.style.cursor = 'grabbing';
+    });
+    if (_pdfMouseDocInit) return;
+    _pdfMouseDocInit = true;
+    // move/up은 document에 1회만 등록(영역 밖으로 나가도 드래그 유지)
+    document.addEventListener('mousemove', e => {
+        if (!_pdfMD || !document.getElementById('pdfViewerOverlay')) return;
+        _pdfTx = _pdfMD.tx0 + e.clientX - _pdfMD.x0;
+        _pdfTy = _pdfMD.ty0 + e.clientY - _pdfMD.y0;
+        _pdfApplyTransform();
+    });
+    document.addEventListener('mouseup', () => {
+        if (_pdfMD) { _pdfMD = null; const a = document.getElementById('pdfViewArea'); if (a) a.style.cursor = 'grab'; }
+    });
 }
 
 function _pdfAttachTouch(area) {
@@ -8688,13 +8753,21 @@ function _pdfAttachTouch(area) {
     area.addEventListener('touchend', e => {
         if (e.touches.length === 1 && t?.mode === 'pinch') {
             t = { mode: 'pan', x0: e.touches[0].clientX, y0: e.touches[0].clientY, tx0: _pdfTx, ty0: _pdfTy };
-        } else if (e.touches.length === 0) { t = null; }
+        } else if (e.touches.length === 0) {
+            if (t?.mode === 'pinch') _pdfScheduleQuality();   // 핀치 줌 후 선명도 보정
+            t = null;
+        }
     }, { passive: false });
 }
 
 async function _pdfPrev() { if (_pdfDoc && _pdfCurPage > 1) { _pdfCurPage--; await _pdfRender(); } }
 async function _pdfNext() { if (_pdfDoc && _pdfCurPage < _pdfDoc.numPages) { _pdfCurPage++; await _pdfRender(); } }
-function closePdfViewer() { _pdfDoc = null; const ov = document.getElementById('pdfViewerOverlay'); if (ov) ov.remove(); }
+function closePdfViewer() {
+    _pdfDoc = null; _pdfMD = null;
+    if (_pdfReqTimer) { clearTimeout(_pdfReqTimer); _pdfReqTimer = null; }
+    _pdfRenderToken++;   // 진행 중 렌더 무효화
+    const ov = document.getElementById('pdfViewerOverlay'); if (ov) ov.remove();
+}
 
 function deleteSavedChart(icao, chartNum) {
     let saved = loadSavedCharts().filter(c => !(c.icao === icao && c.chartNum === chartNum));
