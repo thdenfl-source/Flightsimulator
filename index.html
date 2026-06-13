@@ -8542,9 +8542,15 @@ async function openChart(icao, chartNum, url) {
     ov.id = 'pdfViewerOverlay';
     ov.style.cssText = 'position:fixed;inset:0;background:#1a1a1a;z-index:9999;display:flex;flex-direction:column;font-family:monospace;';
     ov.innerHTML = `
-        <div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:#000;border-bottom:1px solid #333;flex-shrink:0;">
-            <div onclick="closePdfViewer()" style="color:#0ff;font-size:11px;font-weight:bold;cursor:pointer;padding:4px 12px;border:1px solid #0ff;border-radius:4px;white-space:nowrap;">← 목록</div>
+        <div style="display:flex;align-items:center;gap:6px;padding:6px 10px;background:#000;border-bottom:1px solid #333;flex-shrink:0;">
+            <div onclick="closePdfViewer()" style="color:#0ff;font-size:11px;font-weight:bold;cursor:pointer;padding:4px 10px;border:1px solid #0ff;border-radius:4px;white-space:nowrap;">← 목록</div>
             <span style="color:#aaa;font-size:9px;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${icao} · (${chartNum})</span>
+            <div style="display:flex;align-items:center;gap:2px;flex-shrink:0;">
+                <div onclick="_pdfZoomOut()" title="축소" style="color:#fff;font-size:16px;font-weight:bold;cursor:pointer;padding:2px 9px;background:#1a1a1a;border:1px solid #444;border-radius:3px;line-height:1;user-select:none;">−</div>
+                <div id="pdfZoomLabel" style="color:#aaa;font-size:9px;min-width:36px;text-align:center;padding:3px 2px;"></div>
+                <div onclick="_pdfZoomIn()"  title="확대" style="color:#fff;font-size:16px;font-weight:bold;cursor:pointer;padding:2px 9px;background:#1a1a1a;border:1px solid #444;border-radius:3px;line-height:1;user-select:none;">+</div>
+                <div onclick="_pdfZoomReset()" title="배율 초기화" style="color:#888;font-size:9px;cursor:pointer;padding:3px 6px;background:#111;border:1px solid #333;border-radius:3px;margin-left:2px;white-space:nowrap;">1:1</div>
+            </div>
             <span id="pdfPageNum" style="color:#888;font-size:9px;white-space:nowrap;"></span>
         </div>
         <div id="pdfViewArea" style="flex:1;overflow:hidden;position:relative;background:#555;touch-action:none;">
@@ -8596,12 +8602,57 @@ async function _pdfRender() {
     // 페이지가 1장뿐이면 ◀/▶ 네비게이션 바 숨김
     const nav = document.getElementById('pdfNavBar');
     if (nav) nav.style.display = _pdfDoc.numPages > 1 ? 'flex' : 'none';
+    _pdfApplyTransform(); // 배율 레이블 초기화
     _pdfAttachTouch(area);
+    _pdfAttachWheel(area);
 }
 
 function _pdfApplyTransform() {
     const c = document.getElementById('pdfCanvas');
     if (c) c.style.transform = `translate(${_pdfTx}px,${_pdfTy}px) scale(${_pdfScale})`;
+    const lz = document.getElementById('pdfZoomLabel');
+    if (lz) lz.textContent = Math.round(_pdfScale * 100) + '%';
+}
+
+const _PDF_ZOOM_STEP = 0.25;
+const _PDF_ZOOM_MIN  = 0.25;
+const _PDF_ZOOM_MAX  = 8;
+
+function _pdfZoomIn() {
+    const area = document.getElementById('pdfViewArea');
+    if (!area) return;
+    const cx = area.clientWidth / 2, cy = area.clientHeight / 2;
+    _pdfZoomAt(Math.min(_pdfScale + _PDF_ZOOM_STEP, _PDF_ZOOM_MAX), cx, cy);
+}
+function _pdfZoomOut() {
+    const area = document.getElementById('pdfViewArea');
+    if (!area) return;
+    const cx = area.clientWidth / 2, cy = area.clientHeight / 2;
+    _pdfZoomAt(Math.max(_pdfScale - _PDF_ZOOM_STEP, _PDF_ZOOM_MIN), cx, cy);
+}
+function _pdfZoomReset() {
+    _pdfTx = 0; _pdfTy = 0; _pdfScale = 1;
+    _pdfApplyTransform();
+}
+function _pdfZoomAt(newScale, cx, cy) {
+    const r = newScale / _pdfScale;
+    _pdfTx = (cx - _pdfOx) * (1 - r) + _pdfTx * r;
+    _pdfTy = (cy - _pdfOy) * (1 - r) + _pdfTy * r;
+    _pdfScale = newScale;
+    _pdfApplyTransform();
+}
+
+// 마우스 휠 줌 (PC)
+function _pdfAttachWheel(area) {
+    area.addEventListener('wheel', e => {
+        e.preventDefault();
+        const rc   = area.getBoundingClientRect();
+        const cx   = e.clientX - rc.left;
+        const cy   = e.clientY - rc.top;
+        const step = e.deltaY < 0 ? _PDF_ZOOM_STEP : -_PDF_ZOOM_STEP;
+        const ns   = Math.min(Math.max(_pdfScale + step, _PDF_ZOOM_MIN), _PDF_ZOOM_MAX);
+        _pdfZoomAt(ns, cx, cy);
+    }, { passive: false });
 }
 
 function _pdfAttachTouch(area) {
