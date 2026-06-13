@@ -8714,12 +8714,7 @@ function renderChartsScreen(container, footer, title, centerLabel) {
         savedByIcao[c.icao].charts.push(c);
     });
     const daysColor = airac.daysLeft <= 7 ? '#f44336' : airac.daysLeft <= 14 ? '#ff9800' : '#4caf50';
-    const statusIcon = (s) => {
-        if (s === 'verified') return '<span style="color:#4caf50;font-weight:bold;">✓</span>';
-        if (s === 'failed')   return '<span style="color:#f44336;font-weight:bold;">✗</span>';
-        if (s === 'checking') return '<span style="color:#ffeb3b;">⌛</span>';
-        return '<span style="color:#666;">?</span>';
-    };
+
 
     let html = `<div style="padding:0 2px;height:100%;display:flex;flex-direction:column;overflow:hidden;">`;
 
@@ -8767,14 +8762,12 @@ function renderChartsScreen(container, footer, title, centerLabel) {
         Object.keys(savedByIcao).forEach(icao => {
             const grp = savedByIcao[icao];
             const isOpen = expandedAirport === icao;
-            const counts = { local: 0, verified: 0, failed: 0, checking: 0, unverified: 0, link: 0 };
+    const counts = { local: 0, link: 0 };
             grp.charts.forEach(c => {
                 if (isSectionLink(c)) { counts.link++; return; }
-                if (localPdfKeys.has(`${c.icao}|${c.chartNum}`)) { counts.local++; return; }
-                const s = c.status || 'unverified';
-                counts[s] = (counts[s] || 0) + 1;
+                if (localPdfKeys.has(`${c.icao}|${c.chartNum}`)) { counts.local++; }
             });
-            const summary = `<span style="color:#29b6f6;">📂${counts.local}</span> <span style="color:#4caf50;">✓${counts.verified}</span> <span style="color:#f44336;">✗${counts.failed}</span> <span style="color:#888;">?${counts.unverified + counts.checking}</span> <span style="color:#7e57c2;">🔗${counts.link}</span>`;
+            const summary = `<span style="color:#29b6f6;">📂 ${counts.local}개</span> <span style="color:#7e57c2;">🔗 ${counts.link}개</span>`;
             html += `
             <div style="margin-bottom:4px;border:1px solid #333;border-radius:4px;overflow:hidden;">
                 <div onclick="toggleExpand('${icao}')" style="display:flex;align-items:center;padding:6px 6px;background:#151515;cursor:pointer;gap:4px;">
@@ -8797,13 +8790,11 @@ function renderChartsScreen(container, footer, title, centerLabel) {
                         ? `<div style="font-size:12px;padding:0 4px;line-height:1;width:16px;text-align:center;flex-shrink:0;">🔗</div>`
                         : isLocal
                             ? `<div style="font-size:12px;padding:0 4px;line-height:1;width:16px;text-align:center;flex-shrink:0;color:#29b6f6;">📂</div>`
-                            : `<div onclick="event.stopPropagation(); verifyOneChart('${c.icao}','${c.chartNum}')" style="font-size:12px;cursor:pointer;padding:0 4px;line-height:1;width:16px;text-align:center;flex-shrink:0;">${statusIcon(status)}</div>`;
+                            : `<div style="width:16px;flex-shrink:0;"></div>`;
                     const titleLine = link ? `${c.chartName}` : `(${c.chartNum}) ${c.chartName}`;
                     const subLine = link
                         ? `eAIP 공식 페이지 · 모든 ${cat} 차트 포함`
-                        : isLocal
-                            ? `로컬 저장됨 · AIRAC ${c.airac || '-'}`
-                            : `AIRAC ${c.airac || '-'} · ${c.savedAt || ''}${c.verifiedAt ? ` · 검증 ${c.verifiedAt}` : ''}`;
+                        : `AIRAC ${c.airac || '-'}${isLocal ? ' · 로컬 저장됨' : ''}`;
                     const bgColor = isLocal ? '#040d12' : link ? '#0d1418' : '#0a0a0a';
                     const arrowColor = isLocal ? '#29b6f6' : '#4caf50';
                     const onclickAction = link
