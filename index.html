@@ -8530,7 +8530,12 @@ let _pdfOx = 0, _pdfOy = 0;
 
 async function openChart(icao, chartNum, url) {
     const key = `${icao}|${chartNum}`;
-    if (!localPdfKeys.has(key)) { window.open(url, '_blank'); return; }
+    // 로컬 저장된 PDF가 있으면 항상 앱 내장 '한 페이지' 뷰어로 연다.
+    // (localPdfKeys 캐시가 갱신 안 됐을 수 있으므로 IndexedDB를 직접 확인)
+    let blob = null;
+    try { blob = await idbGet(key); } catch(e) {}
+    if (!blob) { if (url) window.open(url, '_blank'); return; }
+
     const ex = document.getElementById('pdfViewerOverlay');
     if (ex) ex.remove();
     const ov = document.createElement('div');
@@ -8545,15 +8550,13 @@ async function openChart(icao, chartNum, url) {
         <div id="pdfViewArea" style="flex:1;overflow:hidden;position:relative;background:#555;touch-action:none;">
             <div style="color:#ccc;padding:50px;text-align:center;font-size:13px;">PDF 로딩 중...</div>
         </div>
-        <div style="display:flex;border-top:1px solid #333;flex-shrink:0;">
+        <div id="pdfNavBar" style="display:flex;border-top:1px solid #333;flex-shrink:0;">
             <div onclick="_pdfPrev()" style="flex:1;padding:11px 0;text-align:center;background:#0a0a0a;color:#0ff;font-size:16px;cursor:pointer;border-right:1px solid #222;">◀</div>
             <div id="pdfPageLabel" style="flex:2;padding:11px 0;text-align:center;background:#0a0a0a;color:#555;font-size:10px;"></div>
             <div onclick="_pdfNext()" style="flex:1;padding:11px 0;text-align:center;background:#0a0a0a;color:#0ff;font-size:16px;cursor:pointer;border-left:1px solid #222;">▶</div>
         </div>`;
     document.body.appendChild(ov);
     try {
-        const blob = await idbGet(key);
-        if (!blob) throw new Error('IndexedDB에서 PDF를 찾을 수 없습니다');
         pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
         _pdfDoc = await pdfjsLib.getDocument({ data: await blob.arrayBuffer() }).promise;
         _pdfCurPage = 1;
@@ -8590,6 +8593,9 @@ async function _pdfRender() {
     if (lbl) lbl.textContent = `${_pdfCurPage} / ${_pdfDoc.numPages}`;
     const num = document.getElementById('pdfPageNum');
     if (num) num.textContent = `${_pdfCurPage}/${_pdfDoc.numPages}`;
+    // 페이지가 1장뿐이면 ◀/▶ 네비게이션 바 숨김
+    const nav = document.getElementById('pdfNavBar');
+    if (nav) nav.style.display = _pdfDoc.numPages > 1 ? 'flex' : 'none';
     _pdfAttachTouch(area);
 }
 
