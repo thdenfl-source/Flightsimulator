@@ -8506,7 +8506,31 @@ function triggerZipImport() {
 
 // 압축 해제된 폴더 가져오기 (메모리 절약 — JSZip 미사용)
 function triggerFolderImport() {
-    document.getElementById('folderInput').click();
+    // 매번 새 input을 생성해 webkitdirectory를 프로퍼티로 설정
+    // (정적 HTML 속성은 일부 브라우저에서 폴더 선택이 열리지 않는 문제가 있음)
+    const inp = document.createElement('input');
+    inp.type = 'file';
+    inp.style.display = 'none';
+    let folderSupported = false;
+    try {
+        inp.webkitdirectory = true;
+        inp.directory = true;
+        folderSupported = ('webkitdirectory' in inp);
+    } catch(e) {}
+
+    if (!folderSupported) {
+        // 폴더 선택 미지원(주로 모바일) → 여러 PDF 파일 선택으로 대체
+        inp.multiple = true;
+        inp.accept = 'application/pdf,.pdf';
+        alert('이 브라우저는 폴더 선택을 지원하지 않습니다.\n압축을 푼 폴더 안의 PDF 파일들을 직접 여러 개 선택해 주세요.');
+    }
+
+    inp.addEventListener('change', () => {
+        handleFolderImport(inp);
+        if (inp.parentNode) inp.parentNode.removeChild(inp);
+    });
+    document.body.appendChild(inp);
+    inp.click();
 }
 
 // 파일 경로/이름에서 ICAO·차트번호·차트명 추출 (ZIP/폴더 공용)
@@ -9145,7 +9169,5 @@ function renderCduContent() {
 }
 
 </script>
-<input type="file" id="zipFileInput" accept=".zip,application/zip,application/x-zip-compressed,application/octet-stream" style="display:none" onchange="handleZipFile(this.files[0]); this.value='';">
-<input type="file" id="folderInput" webkitdirectory directory multiple style="display:none" onchange="handleFolderImport(this);">
-</body>
+<input type="file" id="zipFileInput" accept=".zip,application/zip,application/x-zip-compressed,application/octet-stream" style="display:none" onchange="handleZipFile(this.files[0]); this.value='';"></body>
 </html>
