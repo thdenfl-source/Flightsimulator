@@ -8305,11 +8305,17 @@ let localPdfKeys = new Set();
 let importProgress = null;
 
 const chartCatColors = {
-    AD: '#29b6f6', SID: '#4caf50', STAR: '#ff9800', IAP: '#e91e63', TEXT: '#9c27b0', ENR: '#26c6da'
+    AD: '#29b6f6', SID: '#4caf50', STAR: '#ff9800', IAP: '#e91e63', TEXT: '#9c27b0', ENR: '#26c6da', GEN: '#ab47bc'
 };
 
-// Enroute(항로) 차트 묶음을 위한 가상 그룹 코드
+// 특정 공항에 속하지 않는 섹션(항로/일반)용 가상 그룹 코드
 const ENROUTE_GROUP = 'ENRT';
+const GENERAL_GROUP = 'GENL';
+// 가상 그룹 표시 정보 (목록 상단에 별도 표시)
+const SECTION_GROUPS = {
+    [ENROUTE_GROUP]: { label: '🗺 ENROUTE', sub: '항로 차트', color: '#26c6da', name: 'ENROUTE (항로)', order: 0 },
+    [GENERAL_GROUP]: { label: '📖 GENERAL', sub: '일반(GEN)',  color: '#ab47bc', name: 'GENERAL (일반)', order: 1 },
+};
 
 const sectionTypes = [
     { cat: 'SID',  num: 'SID',  name: 'SID (표준 출발 절차)' },
@@ -8553,13 +8559,16 @@ function triggerFolderImport() {
 function _parseChartPath(path, hintIcao) {
     if (!/\.pdf$/i.test(path)) return null;
     const fnUpper = path.split(/[\/\\]/).pop().toUpperCase();
-    let icao = null, isEnr = false;
+    let icao = null, cat;
     const icaoM = path.match(/AD[\/\\]([A-Z]{4})[\/\\]/i);
     if (icaoM) {
         icao = icaoM[1].toUpperCase();
     } else if (/(^|[\/\\])ENR([\/\\]|[\s._-])/i.test(path) || /^\(?\s*ENR\b/.test(fnUpper)) {
         // Enroute(항로) 차트 — 특정 공항에 속하지 않음
-        icao = ENROUTE_GROUP; isEnr = true;
+        icao = ENROUTE_GROUP; cat = 'ENR';
+    } else if (/(^|[\/\\])GEN([\/\\]|[\s._-])/i.test(path) || /^\(?\s*GEN\b/.test(fnUpper)) {
+        // General(일반) 섹션 — 특정 공항에 속하지 않음
+        icao = GENERAL_GROUP; cat = 'GEN';
     } else {
         // 경로에 폴더 구조가 없으면(iOS 등) 파일명에서 ICAO 토큰 탐색
         const tok = fnUpper.match(/\b([RZ][A-Z]{3})\b/); // 한국/동아시아 ICAO (RK**, ZK**)
@@ -8576,13 +8585,13 @@ function _parseChartPath(path, hintIcao) {
         const anyNum = filename.match(/^(\d[\d\-A-Z.]*)\s+(.*)/i);
         if (anyNum)  { num = anyNum[1].trim(); chartName = anyNum[2].trim(); }
         else {
-            // ENR 6-1 형태 등: 앞쪽 식별자 토큰을 번호로
-            const enrNum = filename.match(/^(ENR[\s\d.\-]*)\s*(.*)/i);
-            if (enrNum && enrNum[2]) { num = enrNum[1].trim(); chartName = enrNum[2].trim(); }
+            // ENR 6-1 / GEN 3.2 형태 등: 앞쪽 식별자 토큰을 번호로
+            const secNum = filename.match(/^((?:ENR|GEN)[\s\d.\-]*)\s*(.*)/i);
+            if (secNum && secNum[2]) { num = secNum[1].trim(); chartName = secNum[2].trim(); }
             else { num = filename.slice(0, 12); chartName = filename; }
         }
     }
-    return { icao, num, chartName, cat: isEnr ? 'ENR' : undefined };
+    return { icao, num, chartName, cat };
 }
 
 function catFromChartName(name) {
@@ -8772,14 +8781,14 @@ async function _saveChartEntries(entries) {
 
             const alreadyIn = saved.find(s => s.icao === icao && s.chartNum === num);
             if (!alreadyIn) {
-                const isEnr = icao === ENROUTE_GROUP;
+                const section = SECTION_GROUPS[icao];
                 const airport = chartAirportList.find(a => a.icao === icao);
                 const known = (airportSpecificCharts[icao] || []).find(c => c.num === num);
                 saved.push({
-                    icao, name: isEnr ? 'ENROUTE (항로)' : (airport?.nameEn || icao),
+                    icao, name: section ? section.name : (airport?.nameEn || icao),
                     chartNum: num, chartName: known?.name || chartName,
                     cat: cat || known?.cat || catFromChartName(chartName),
-                    url: isEnr ? '' : buildChartPdfUrl(safeAirac.startUrl, icao, num, known?.name || chartName),
+                    url: section ? '' : buildChartPdfUrl(safeAirac.startUrl, icao, num, known?.name || chartName),
                     airac: safeAirac.id, savedAt: today, status: 'unverified'
                 });
             }
@@ -8890,6 +8899,7 @@ async function _pdfRender() {
     if (_pdfReqTimer) { clearTimeout(_pdfReqTimer); _pdfReqTimer = null; }
     _pdfTx = 0; _pdfTy = 0; _pdfScale = 1; _pdfRenderQ = 1;
     await _pdfDrawPage(true);
+    _pdfScheduleQuality();   // fit 상태에서도 보이는 영역 선명 렌더
     const lbl = document.getElementById('pdfPageLabel');
     if (lbl) lbl.textContent = `${_pdfCurPage} / ${_pdfDoc.numPages}`;
     const num = document.getElementById('pdfPageNum');
@@ -8938,21 +8948,78 @@ async function _pdfDrawPage(resetLayout) {
     _pdfApplyTransform();
 }
 
-// 확대 정도에 맞춰 비트맵 품질을 올려 재렌더(디바운스). 이동/배율은 유지.
+// 확대/이동이 멈추면, '보이는 영역만' PDF 원본 해상도로 재렌더(디바운스).
+// 화면에 보이는 부분만 그리므로 캔버스 크기가 화면 크기로 한정 →
+// iOS 캔버스 면적 한도를 넘지 않으면서 어떤 배율에서도 선명하게 보인다.
 function _pdfScheduleQuality() {
     if (_pdfReqTimer) clearTimeout(_pdfReqTimer);
     _pdfReqTimer = setTimeout(() => {
         _pdfReqTimer = null;
-        // 줌 배율만큼 비트맵 해상도를 올린다(확대해도 PDF 원본 해상도 유지).
-        // 단, 캔버스 픽셀 예산 안에서만(iOS 한도 초과 시 빈 화면 방지).
-        const want = Math.min(Math.max(Math.ceil(_pdfScale), 1), _pdfMaxQ());
-        if (Math.abs(want - _pdfRenderQ) > 0.01) { _pdfRenderQ = want; _pdfDrawPage(false); }
+        _pdfRenderHi();
     }, 160);
+}
+
+let _pdfHiToken = 0;
+// 현재 보이는 영역을 줌 배율 그대로의 해상도로 렌더해 선명한 오버레이로 표시
+async function _pdfRenderHi() {
+    if (!_pdfDoc) return;
+    const area = document.getElementById('pdfViewArea');
+    if (!area) return;
+    const token = ++_pdfHiToken;
+
+    const AW = area.clientWidth, AH = area.clientHeight;
+    const S = _pdfScale;
+    const left = _pdfOx + _pdfTx, top = _pdfOy + _pdfTy;   // 화면상 페이지 좌상단
+    const pageW = _pdfBaseW * S, pageH = _pdfBaseH * S;     // 화면상 페이지 크기
+
+    // 페이지와 뷰영역의 교집합(=실제로 보이는 부분, CSS px)
+    const visL = Math.max(0, left), visT = Math.max(0, top);
+    const visR = Math.min(AW, left + pageW), visB = Math.min(AH, top + pageH);
+    const cssW = visR - visL, cssH = visB - visT;
+    if (cssW <= 1 || cssH <= 1) return;
+
+    // 디바이스 픽셀 배율 q (예산 안에서 최대 선명도)
+    const dpr = window.devicePixelRatio || 1;
+    let q = dpr;
+    if (cssW * q * cssH * q > _PDF_PX_BUDGET) {
+        q = Math.sqrt(_PDF_PX_BUDGET / (cssW * cssH));
+    }
+    const cw = Math.max(1, Math.round(cssW * q));
+    const ch = Math.max(1, Math.round(cssH * q));
+
+    // 전체 페이지를 (fit×S×q) 배율로 렌더하되, 보이는 sub-rect만 캔버스에 담는다.
+    const page = await _pdfDoc.getPage(_pdfCurPage);
+    if (token !== _pdfHiToken) return;
+    const renderScale = _pdfFitScale * S * q;
+    const viewport = page.getViewport({ scale: renderScale });
+    const offX = (visL - left) * q;   // 보이는 영역의 페이지 내 디바이스 오프셋
+    const offY = (visT - top) * q;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = cw; canvas.height = ch;
+    try {
+        await page.render({
+            canvasContext: canvas.getContext('2d'),
+            viewport,
+            transform: [1, 0, 0, 1, -offX, -offY]   // 보이는 영역이 캔버스 원점에 오도록 이동
+        }).promise;
+    } catch(e) { return; }
+    if (token !== _pdfHiToken) return;   // 더 최신 요청이 있으면 폐기
+
+    // 이동/줌 중 새로 들어온 제스처로 위치가 바뀌었으면 무효
+    const ex = document.getElementById('pdfHiCanvas');
+    if (ex) ex.remove();
+    canvas.id = 'pdfHiCanvas';
+    canvas.style.cssText = `position:absolute;left:${visL}px;top:${visT}px;width:${cssW}px;height:${cssH}px;pointer-events:none;`;
+    area.appendChild(canvas);
 }
 
 function _pdfApplyTransform() {
     const c = document.getElementById('pdfCanvas');
     if (c) c.style.transform = `translate(${_pdfTx}px,${_pdfTy}px) scale(${_pdfScale})`;
+    // 이동/줌이 시작되면 선명 오버레이는 위치가 어긋나므로 제거(미리보기만 표시)
+    const hi = document.getElementById('pdfHiCanvas');
+    if (hi) hi.remove();
     const lz = document.getElementById('pdfZoomLabel');
     if (lz) lz.textContent = Math.round(_pdfScale * 100) + '%';
 }
@@ -9020,7 +9087,7 @@ function _pdfAttachMouse(area) {
         _pdfApplyTransform();
     });
     document.addEventListener('mouseup', () => {
-        if (_pdfMD) { _pdfMD = null; const a = document.getElementById('pdfViewArea'); if (a) a.style.cursor = 'grab'; }
+        if (_pdfMD) { _pdfMD = null; const a = document.getElementById('pdfViewArea'); if (a) a.style.cursor = 'grab'; _pdfScheduleQuality(); }
     });
 }
 
@@ -9058,7 +9125,8 @@ function _pdfAttachTouch(area) {
         if (e.touches.length === 1 && t?.mode === 'pinch') {
             t = { mode: 'pan', x0: e.touches[0].clientX, y0: e.touches[0].clientY, tx0: _pdfTx, ty0: _pdfTy };
         } else if (e.touches.length === 0) {
-            if (t?.mode === 'pinch') _pdfScheduleQuality();   // 핀치 줌 후 선명도 보정
+            // 핀치 줌·패닝 끝 → 보이는 영역 선명도 보정
+            if (t) _pdfScheduleQuality();
             t = null;
         }
     }, { passive: false });
@@ -9196,27 +9264,32 @@ function renderChartsScreen(container, footer, title, centerLabel) {
     if (saved.length === 0) {
         html += `<div style="text-align:center;color:#444;font-size:10px;margin-top:30px;line-height:2.2;">차트 없음<br><span style="font-size:8px;color:#4caf50;">🌐 AIM eAIP — AIM Korea 사이트에서 AIRAC ZIP 다운</span><br><span style="font-size:8px;color:#29b6f6;">📂 ZIP 가져오기 — 받은 ZIP 파일 선택 후 자동 분류</span></div>`;
     } else {
-        // ENROUTE(항로) 그룹을 맨 위로 정렬
+        // 특수 섹션(ENROUTE/GENERAL)을 맨 위로, 그 외 공항은 ICAO 이름순 정렬
         const icaoKeys = Object.keys(savedByIcao).sort((a, b) => {
-            if (a === ENROUTE_GROUP) return -1;
-            if (b === ENROUTE_GROUP) return 1;
+            const sa = SECTION_GROUPS[a], sb = SECTION_GROUPS[b];
+            if (sa && sb) return sa.order - sb.order;
+            if (sa) return -1;
+            if (sb) return 1;
             return a.localeCompare(b);
         });
         icaoKeys.forEach(icao => {
             const grp = savedByIcao[icao];
-            const isEnrGrp = icao === ENROUTE_GROUP;
+            const section = SECTION_GROUPS[icao];
             const isOpen = expandedAirport === icao;
+            // 각 그룹 내 차트를 이름순으로 정렬
+            grp.charts.sort((c1, c2) =>
+                (c1.chartName || '').localeCompare((c2.chartName || ''), undefined, { numeric: true, sensitivity: 'base' }));
     const counts = { local: 0, link: 0 };
             grp.charts.forEach(c => {
                 if (isSectionLink(c)) { counts.link++; return; }
                 if (localPdfKeys.has(`${c.icao}|${c.chartNum}`)) { counts.local++; }
             });
             const summary = `<span style="color:#29b6f6;">📂 ${counts.local}개</span> <span style="color:#7e57c2;">🔗 ${counts.link}개</span>`;
-            const headTitle = isEnrGrp
-                ? `<span style="color:#26c6da;">🗺 ENROUTE</span> <span style="color:#aaa;font-size:9px;font-weight:normal;">항로 차트</span>`
+            const headTitle = section
+                ? `<span style="color:${section.color};">${section.label}</span> <span style="color:#aaa;font-size:9px;font-weight:normal;">${section.sub}</span>`
                 : `${icao} <span style="color:#aaa;font-size:9px;font-weight:normal;">${grp.name}</span>`;
             html += `
-            <div style="margin-bottom:4px;border:1px solid ${isEnrGrp ? '#26c6da' : '#333'};border-radius:4px;overflow:hidden;">
+            <div style="margin-bottom:4px;border:1px solid ${section ? section.color : '#333'};border-radius:4px;overflow:hidden;">
                 <div onclick="toggleExpand('${icao}')" style="display:flex;align-items:center;padding:6px 6px;background:#151515;cursor:pointer;gap:4px;">
                     <div style="color:#0ff;font-size:11px;font-weight:bold;">${isOpen ? '▼' : '▶'}</div>
                     <div style="flex:1;min-width:0;">
