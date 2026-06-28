@@ -8648,6 +8648,33 @@ async function handleZipFile(file) {
     await refreshLocalPdfKeys();
 }
 
+// 선택한 파일들에서 그룹 공항코드(ICAO) 탐색
+// 우선순위: ① 폴더 경로(AD/ICAO/), ② 모든 파일명의 ICAO 토큰, ③ txt 파일 내용
+async function _detectGroupIcao(files) {
+    // ① 폴더 경로에서
+    for (const f of files) {
+        const m = (f.webkitRelativePath || '').match(/AD[\/\\]([A-Z]{4})[\/\\]/i);
+        if (m) return m[1].toUpperCase();
+    }
+    // ② 파일명(확장자 무관)에서 한국/동아시아 ICAO 토큰
+    for (const f of files) {
+        const name = (f.webkitRelativePath || f.name || '').toUpperCase();
+        const m = name.match(/\b([RZ][A-Z]{3})\b/);
+        if (m) return m[1];
+    }
+    // ③ txt 등 텍스트 보조 파일 내용에서 ICAO 탐색 (앞부분만 읽음)
+    for (const f of files) {
+        if (!/\.(txt|csv|json|xml|cfg|ini)$/i.test(f.name)) continue;
+        try {
+            const slice = f.slice ? f.slice(0, 65536) : f;
+            const txt = (await slice.text()).toUpperCase();
+            const m = txt.match(/\b([RZ][A-Z]{3})\b/);
+            if (m) return m[1];
+        } catch(e) {}
+    }
+    return null;
+}
+
 // 압축 해제된 폴더에서 차트 가져오기 (JSZip 미사용 — 저메모리 기기용)
 async function handleFolderImport(input) {
     const files = Array.from(input.files || []);
@@ -8658,21 +8685,25 @@ async function handleFolderImport(input) {
     renderCduContent();
 
     try {
-        // 1차 파싱 (경로/파일명에서 ICAO 추출 시도)
+        // 선택한 파일들 중 공항코드 단서 탐색 (txt 등 보조 파일 포함)
+        // 1) PDF 외 파일명에서 ICAO 토큰, 2) txt 파일 내용에서 ICAO
+        let groupIcao = await _detectGroupIcao(files);
+
+        // 1차 파싱 (경로/파일명에서 ICAO 추출, 없으면 그룹 ICAO 사용)
         const pdfFiles = files.filter(f => /\.pdf$/i.test(f.webkitRelativePath || f.name));
         let entries = [];
         for (const file of pdfFiles) {
             const path = file.webkitRelativePath || file.name;
-            const meta = _parseChartPath(path);
+            const meta = _parseChartPath(path, groupIcao);
             if (meta) entries.push({ getBuffer: () => file.arrayBuffer(), ...meta });
         }
 
-        // PDF는 있는데 ICAO를 못 찾았으면(iOS 다중 파일 선택 등) 공항코드 입력 요청
+        // 그래도 ICAO를 못 찾았으면 공항코드 입력 요청
         if (entries.length === 0 && pdfFiles.length > 0) {
             const hint = (prompt(
-                'PDF 파일의 공항(ICAO 4코드)을 파일명에서 찾지 못했습니다.\n' +
+                'PDF 파일의 공항(ICAO 4코드)을 자동으로 찾지 못했습니다.\n' +
                 '선택한 PDF들이 속한 공항코드를 입력해 주세요. (예: RKSI)\n' +
-                '※ 한 번에 한 공항 폴더의 PDF만 선택해 주세요.', ''
+                '※ 한 번에 한 공항 폴더의 파일만 선택해 주세요.', ''
             ) || '').trim().toUpperCase();
             if (/^[A-Z]{4}$/.test(hint)) {
                 for (const file of pdfFiles) {
