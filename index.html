@@ -8504,6 +8504,30 @@ function triggerZipImport() {
     document.getElementById('zipFileInput').click();
 }
 
+// 압축 해제된 폴더 가져오기 (메모리 절약 — JSZip 미사용)
+function triggerFolderImport() {
+    document.getElementById('folderInput').click();
+}
+
+// 파일 경로/이름에서 ICAO·차트번호·차트명 추출 (ZIP/폴더 공용)
+function _parseChartPath(path) {
+    if (!/\.pdf$/i.test(path)) return null;
+    const icaoM = path.match(/AD[\/\\]([A-Z]{4})[\/\\]/i);
+    if (!icaoM) return null;
+    const icao = icaoM[1].toUpperCase();
+    const filename = path.split(/[\/\\]/).pop().replace(/\.pdf$/i, '').trim();
+    const pm = filename.match(/^\(([^)]+)\)\s*(.*)/);
+    let num, chartName;
+    if (pm && pm[2]) { num = pm[1].trim(); chartName = pm[2].trim(); }
+    else if (pm)     { num = pm[1].trim(); chartName = filename; }
+    else {
+        const anyNum = filename.match(/^(\d[\d\-A-Z.]*)\s+(.*)/i);
+        if (anyNum) { num = anyNum[1].trim(); chartName = anyNum[2].trim(); }
+        else        { num = filename.slice(0, 10); chartName = filename; }
+    }
+    return { icao, num, chartName };
+}
+
 function catFromChartName(name) {
     const n = name.toUpperCase();
     if (n.includes('INSTR APCH') || n.includes('VISUAL APCH') || n.includes('ILS') || n.includes('VOR') || n.includes('NDB')) return 'IAP';
@@ -8555,21 +8579,10 @@ async function handleZipFile(file) {
         // 항목 목록만 먼저 수집 (blob 추출 X — 메모리 절약)
         const entries = [];
         zip.forEach((path, entry) => {
-            if (entry.dir || !/\.pdf$/i.test(path)) return;
-            const icaoM = path.match(/AD[\/\\]([A-Z]{4})[\/\\]/i);
-            if (!icaoM) return;
-            const icao = icaoM[1].toUpperCase();
-            const filename = path.split(/[\/\\]/).pop().replace(/\.pdf$/i, '').trim();
-            const pm = filename.match(/^\(([^)]+)\)\s*(.*)/);
-            let num, chartName;
-            if (pm && pm[2]) { num = pm[1].trim(); chartName = pm[2].trim(); }
-            else if (pm)     { num = pm[1].trim(); chartName = filename; }
-            else {
-                const anyNum = filename.match(/^(\d[\d\-A-Z.]*)\s+(.*)/i);
-                if (anyNum) { num = anyNum[1].trim(); chartName = anyNum[2].trim(); }
-                else        { num = filename.slice(0, 10); chartName = filename; }
-            }
-            entries.push({ entry, icao, num, chartName });
+            if (entry.dir) return;
+            const meta = _parseChartPath(path);
+            if (!meta) return;
+            entries.push({ getBuffer: () => entry.async('arraybuffer'), ...meta });
         });
 
         if (entries.length === 0) {
@@ -8579,75 +8592,117 @@ async function handleZipFile(file) {
             return;
         }
 
-        importProgress = { phase: 'saving', done: 0, total: entries.length, found: 0, skipped: 0, error: null };
-        renderCduContent();
-
-        const safeAirac = getSafeAiracInfo();
-        const today = new Date().toISOString().slice(0, 10);
-        let saved = loadSavedCharts();
-        let idbFailed = false;
-
-        for (let i = 0; i < entries.length; i++) {
-            const { entry, icao, num, chartName } = entries[i];
-            try {
-                // PDF를 ArrayBuffer로 추출 → IDB 저장 → 즉시 해제
-                let buf = await entry.async('arraybuffer');
-                const blob = new Blob([buf], { type: 'application/pdf' });
-                buf = null; // ArrayBuffer 즉시 해제 → GC 유도
-
-                if (!idbFailed) {
-                    try {
-                        await idbPut(`${icao}|${num}`, blob);
-                        importProgress.found++;
-                    } catch(idbErr) {
-                        idbFailed = true;
-                        console.warn('IndexedDB 저장 실패:', idbErr.message);
-                    }
-                }
-
-                const alreadyIn = saved.find(s => s.icao === icao && s.chartNum === num);
-                if (!alreadyIn) {
-                    const airport = chartAirportList.find(a => a.icao === icao);
-                    const known = (airportSpecificCharts[icao] || []).find(c => c.num === num);
-                    saved.push({
-                        icao, name: airport?.nameEn || icao,
-                        chartNum: num, chartName: known?.name || chartName,
-                        cat: known?.cat || catFromChartName(chartName),
-                        url: buildChartPdfUrl(safeAirac.startUrl, icao, num, known?.name || chartName),
-                        airac: safeAirac.id, savedAt: today, status: 'unverified'
-                    });
-                }
-            } catch(e) {
-                console.warn('항목 처리 실패:', icao, num, e.message);
-                importProgress.skipped++;
-            }
-
-            importProgress.done = i + 1;
-            if (i % 3 === 0) renderCduContent();
-            await new Promise(r => setTimeout(r, 30));
-        }
-
-        // localStorage 저장 (용량 초과 시 오래된 것부터 제거)
-        try {
-            localStorage.setItem('savedCharts', JSON.stringify(saved));
-        } catch(storageErr) {
-            console.warn('localStorage 용량 초과, 최근 50개만 보존');
-            try { localStorage.setItem('savedCharts', JSON.stringify(saved.slice(-50))); } catch(e2) {}
-        }
-
-        // 완료 알림
-        const msgs = [];
-        if (importProgress.found > 0) msgs.push(`✅ PDF 저장: ${importProgress.found}개`);
-        if (idbFailed) msgs.push('⚠️ 일부 PDF는 저장 공간 부족으로 메타데이터만 저장됨\n(차트 목록에서 ↗ 외부 열기 가능)');
-        if (importProgress.skipped > 0) msgs.push(`⏭ 크기 초과 또는 오류로 건너뜀: ${importProgress.skipped}개`);
-        if (msgs.length) alert(msgs.join('\n'));
+        await _saveChartEntries(entries);
 
     } catch(e) {
         console.error('ZIP import error:', e);
         alert('ZIP 가져오기 중 오류가 발생했습니다:\n' + e.message);
+        importProgress = null;
     }
-    importProgress = null;
     await refreshLocalPdfKeys();
+}
+
+// 압축 해제된 폴더에서 차트 가져오기 (JSZip 미사용 — 저메모리 기기용)
+async function handleFolderImport(input) {
+    const files = Array.from(input.files || []);
+    input.value = '';
+    if (!files.length) return;
+
+    importProgress = { phase: 'reading', done: 0, total: 0, found: 0, skipped: 0, error: null };
+    renderCduContent();
+
+    try {
+        const entries = [];
+        for (const file of files) {
+            const path = file.webkitRelativePath || file.name;
+            const meta = _parseChartPath(path);
+            if (!meta) continue;
+            entries.push({ getBuffer: () => file.arrayBuffer(), ...meta });
+        }
+
+        if (entries.length === 0) {
+            importProgress = null;
+            renderCduContent();
+            alert('선택한 폴더 안에서 차트 PDF를 찾지 못했습니다.\nZIP을 푼 폴더(상위 폴더)를 선택했는지 확인해 주세요.\n(경로: .../AD/ICAO4/(번호) 차트명.pdf)');
+            return;
+        }
+
+        await _saveChartEntries(entries);
+
+    } catch(e) {
+        console.error('Folder import error:', e);
+        alert('폴더 가져오기 중 오류가 발생했습니다:\n' + e.message);
+        importProgress = null;
+    }
+    await refreshLocalPdfKeys();
+}
+
+// ZIP/폴더 공용 저장 루프 — entries: [{ getBuffer:async()=>ArrayBuffer, icao, num, chartName }]
+async function _saveChartEntries(entries) {
+    importProgress = { phase: 'saving', done: 0, total: entries.length, found: 0, skipped: 0, error: null };
+    renderCduContent();
+
+    const safeAirac = getSafeAiracInfo();
+    const today = new Date().toISOString().slice(0, 10);
+    let saved = loadSavedCharts();
+    let idbFailed = false;
+
+    for (let i = 0; i < entries.length; i++) {
+        const { getBuffer, icao, num, chartName } = entries[i];
+        try {
+            // PDF를 ArrayBuffer로 추출 → IDB 저장 → 즉시 해제
+            let buf = await getBuffer();
+            const blob = new Blob([buf], { type: 'application/pdf' });
+            buf = null; // ArrayBuffer 즉시 해제 → GC 유도
+
+            if (!idbFailed) {
+                try {
+                    await idbPut(`${icao}|${num}`, blob);
+                    importProgress.found++;
+                } catch(idbErr) {
+                    idbFailed = true;
+                    console.warn('IndexedDB 저장 실패:', idbErr.message);
+                }
+            }
+
+            const alreadyIn = saved.find(s => s.icao === icao && s.chartNum === num);
+            if (!alreadyIn) {
+                const airport = chartAirportList.find(a => a.icao === icao);
+                const known = (airportSpecificCharts[icao] || []).find(c => c.num === num);
+                saved.push({
+                    icao, name: airport?.nameEn || icao,
+                    chartNum: num, chartName: known?.name || chartName,
+                    cat: known?.cat || catFromChartName(chartName),
+                    url: buildChartPdfUrl(safeAirac.startUrl, icao, num, known?.name || chartName),
+                    airac: safeAirac.id, savedAt: today, status: 'unverified'
+                });
+            }
+        } catch(e) {
+            console.warn('항목 처리 실패:', icao, num, e.message);
+            importProgress.skipped++;
+        }
+
+        importProgress.done = i + 1;
+        if (i % 3 === 0) renderCduContent();
+        await new Promise(r => setTimeout(r, 30));
+    }
+
+    // localStorage 저장 (용량 초과 시 오래된 것부터 제거)
+    try {
+        localStorage.setItem('savedCharts', JSON.stringify(saved));
+    } catch(storageErr) {
+        console.warn('localStorage 용량 초과, 최근 50개만 보존');
+        try { localStorage.setItem('savedCharts', JSON.stringify(saved.slice(-50))); } catch(e2) {}
+    }
+
+    // 완료 알림
+    const msgs = [];
+    if (importProgress.found > 0) msgs.push(`✅ PDF 저장: ${importProgress.found}개`);
+    if (idbFailed) msgs.push('⚠️ 일부 PDF는 저장 공간 부족으로 메타데이터만 저장됨\n(차트 목록에서 ↗ 외부 열기 가능)');
+    if (importProgress.skipped > 0) msgs.push(`⏭ 크기 초과 또는 오류로 건너뜀: ${importProgress.skipped}개`);
+    if (msgs.length) alert(msgs.join('\n'));
+
+    importProgress = null;
 }
 
 // --- PDF Viewer ---
@@ -8993,6 +9048,9 @@ function renderChartsScreen(container, footer, title, centerLabel) {
         <div onclick="${importProgress ? '' : 'triggerZipImport()'}" style="background:${importProgress ? '#1a1a1a' : '#0a1a2a'};color:${importProgress ? '#444' : '#29b6f6'};border:1px solid ${importProgress ? '#333' : '#29b6f6'};border-radius:5px;padding:8px 10px;font-size:10px;font-weight:bold;cursor:${importProgress ? 'default' : 'pointer'};white-space:nowrap;text-align:center;min-width:52px;">
             ${importProgress ? '⏳' : '📂'}<br><span style="font-size:8px;">ZIP 가져오기</span>
         </div>
+        <div onclick="${importProgress ? '' : 'triggerFolderImport()'}" style="background:${importProgress ? '#1a1a1a' : '#1a140a'};color:${importProgress ? '#444' : '#ffb74d'};border:1px solid ${importProgress ? '#333' : '#ffb74d'};border-radius:5px;padding:8px 10px;font-size:10px;font-weight:bold;cursor:${importProgress ? 'default' : 'pointer'};white-space:nowrap;text-align:center;min-width:52px;">
+            ${importProgress ? '⏳' : '📁'}<br><span style="font-size:8px;">폴더 가져오기</span>
+        </div>
     </div>`;
 
     // ZIP 가져오기 진행 바
@@ -9088,5 +9146,6 @@ function renderCduContent() {
 
 </script>
 <input type="file" id="zipFileInput" accept=".zip,application/zip,application/x-zip-compressed,application/octet-stream" style="display:none" onchange="handleZipFile(this.files[0]); this.value='';">
+<input type="file" id="folderInput" webkitdirectory directory multiple style="display:none" onchange="handleFolderImport(this);">
 </body>
 </html>
