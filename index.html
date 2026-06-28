@@ -8819,7 +8819,21 @@ let _pdfFitScale = 1, _pdfBaseW = 0, _pdfBaseH = 0;   // fit(=1배) 레이아웃
 let _pdfRenderQ = 1;          // 현재 비트맵 품질 배율(선명도)
 let _pdfRenderToken = 0;      // 렌더 경쟁 방지 토큰
 let _pdfReqTimer = null;      // 품질 재렌더 디바운스
-const _PDF_MAXQ = 3;          // 비트맵 최대 품질 배율(메모리 보호)
+
+// 캔버스 픽셀 예산 — 이 한도 안에서 가능한 한 높은 해상도로 렌더한다.
+// iOS Safari는 캔버스 최대 면적이 약 16.7M px라 이를 넘기면 빈 화면이 된다.
+const _PDF_IS_IOS = /iP(ad|hone|od)/.test(navigator.userAgent || '') ||
+                    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const _PDF_PX_BUDGET = _PDF_IS_IOS ? 16000000 : 60000000;
+
+// 현재 페이지 fit 크기 기준, 픽셀 예산을 넘지 않는 최대 품질 배율 계산
+function _pdfMaxQ() {
+    const dpr = window.devicePixelRatio || 1;
+    const baseArea = (_pdfBaseW || 1) * (_pdfBaseH || 1) * dpr * dpr;
+    if (baseArea <= 0) return 1;
+    const q = Math.sqrt(_PDF_PX_BUDGET / baseArea);
+    return Math.max(1, Math.min(12, Math.floor(q * 100) / 100));
+}
 
 async function openChart(icao, chartNum, url) {
     const key = `${icao}|${chartNum}`;
@@ -8929,8 +8943,10 @@ function _pdfScheduleQuality() {
     if (_pdfReqTimer) clearTimeout(_pdfReqTimer);
     _pdfReqTimer = setTimeout(() => {
         _pdfReqTimer = null;
-        const want = Math.min(Math.max(Math.ceil(_pdfScale), 1), _PDF_MAXQ);
-        if (want !== _pdfRenderQ) { _pdfRenderQ = want; _pdfDrawPage(false); }
+        // 줌 배율만큼 비트맵 해상도를 올린다(확대해도 PDF 원본 해상도 유지).
+        // 단, 캔버스 픽셀 예산 안에서만(iOS 한도 초과 시 빈 화면 방지).
+        const want = Math.min(Math.max(Math.ceil(_pdfScale), 1), _pdfMaxQ());
+        if (Math.abs(want - _pdfRenderQ) > 0.01) { _pdfRenderQ = want; _pdfDrawPage(false); }
     }, 160);
 }
 
