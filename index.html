@@ -8554,11 +8554,23 @@ function triggerFolderImport() {
     inp.click();
 }
 
+// 이미 저장된 항목이 macOS AppleDouble(._) 등 오류 메타데이터인지 판별
+function _isJunkChart(c) {
+    const num = (c.chartNum || '').trim();
+    const name = (c.chartName || '').trim();
+    return /^\._/.test(num) || /^\._/.test(name) ||
+           /^\(\._/.test(num) || /^\(\._/.test(name) ||
+           /\._[A-Z0-9-]*-?TEXT/i.test(name);
+}
+
 // 파일 경로/이름에서 ICAO·차트번호·차트명 추출 (ZIP/폴더 공용)
 // hintIcao: 경로에서 ICAO를 못 찾을 때(iOS 다중 파일 선택 등) 사용할 후보
 function _parseChartPath(path, hintIcao) {
     if (!/\.pdf$/i.test(path)) return null;
-    const fnUpper = path.split(/[\/\\]/).pop().toUpperCase();
+    const baseName = path.split(/[\/\\]/).pop();
+    // macOS 압축 해제 시 생기는 AppleDouble 메타데이터(._파일명, __MACOSX) 제외
+    if (/^\._/.test(baseName) || /(^|[\/\\])__MACOSX([\/\\]|$)/.test(path)) return null;
+    const fnUpper = baseName.toUpperCase();
     let icao = null, cat;
     const icaoM = path.match(/AD[\/\\]([A-Z]{4})[\/\\]/i);
     if (icaoM) {
@@ -9212,6 +9224,7 @@ function renderChartsScreen(container, footer, title, centerLabel) {
     const saved = loadSavedCharts();
     const savedByIcao = {};
     saved.forEach(c => {
+        if (_isJunkChart(c)) return;   // macOS ._ 메타데이터 등 오류 항목 숨김
         if (!savedByIcao[c.icao]) savedByIcao[c.icao] = { name: c.name, charts: [] };
         savedByIcao[c.icao].charts.push(c);
     });
