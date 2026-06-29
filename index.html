@@ -9306,9 +9306,12 @@ function renderChartsScreen(container, footer, title, centerLabel) {
             const grp = savedByIcao[icao];
             const section = SECTION_GROUPS[icao];
             const isOpen = expandedAirport === icao;
-            // 각 그룹 내 차트를 이름순 내림차순으로 정렬
-            grp.charts.sort((c1, c2) =>
-                (c2.chartName || '').localeCompare((c1.chartName || ''), undefined, { numeric: true, sensitivity: 'base' }));
+            // 각 그룹 내 차트를 차트번호 기준 내림차순으로 정렬(번호 없으면 이름)
+            grp.charts.sort((c1, c2) => {
+                const k1 = (c1.chartNum || c1.chartName || '');
+                const k2 = (c2.chartNum || c2.chartName || '');
+                return k2.localeCompare(k1, undefined, { numeric: true, sensitivity: 'base' });
+            });
     const counts = { local: 0, link: 0 };
             grp.charts.forEach(c => {
                 if (isSectionLink(c)) { counts.link++; return; }
