@@ -8322,7 +8322,7 @@ let localPdfKeys = new Set();
 let importProgress = null;
 
 const chartCatColors = {
-    AD: '#29b6f6', SID: '#4caf50', STAR: '#ff9800', IAP: '#e91e63', TEXT: '#9c27b0', ENR: '#26c6da', GEN: '#ab47bc'
+    AD: '#29b6f6', SID: '#4caf50', STAR: '#ff9800', IAP: '#e91e63', TEXT: '#9c27b0', ENR: '#26c6da', GEN: '#ffa726'
 };
 
 // 특정 공항에 속하지 않는 섹션(항로/일반)용 가상 그룹 코드
@@ -8331,7 +8331,7 @@ const GENERAL_GROUP = 'GENL';
 // 가상 그룹 표시 정보 (목록 상단에 별도 표시)
 const SECTION_GROUPS = {
     [ENROUTE_GROUP]: { label: '🗺 ENROUTE', sub: '항로 차트', color: '#26c6da', name: 'ENROUTE (항로)', order: 0 },
-    [GENERAL_GROUP]: { label: '📖 GENERAL', sub: '일반(GEN)',  color: '#ab47bc', name: 'GENERAL (일반)', order: 1 },
+    [GENERAL_GROUP]: { label: '📖 GENERAL', sub: '일반(GEN)',  color: '#ffa726', name: 'GENERAL (일반)', order: 1 },
 };
 
 const sectionTypes = [
@@ -9306,9 +9306,9 @@ function renderChartsScreen(container, footer, title, centerLabel) {
             const grp = savedByIcao[icao];
             const section = SECTION_GROUPS[icao];
             const isOpen = expandedAirport === icao;
-            // 각 그룹 내 차트를 이름순으로 정렬
+            // 각 그룹 내 차트를 이름순 내림차순으로 정렬
             grp.charts.sort((c1, c2) =>
-                (c1.chartName || '').localeCompare((c2.chartName || ''), undefined, { numeric: true, sensitivity: 'base' }));
+                (c2.chartName || '').localeCompare((c1.chartName || ''), undefined, { numeric: true, sensitivity: 'base' }));
     const counts = { local: 0, link: 0 };
             grp.charts.forEach(c => {
                 if (isSectionLink(c)) { counts.link++; return; }
