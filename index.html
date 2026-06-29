@@ -96,6 +96,22 @@ html, body {
   transition: color 0.15s, background 0.15s;
 }
 .page-tab:last-child { border-right: none; }
+#reload-btn {
+  flex: 0 0 auto;
+  background: transparent;
+  border: none;
+  border-left: 1px solid #1e1e1e;
+  color: #5aaefd;
+  font-size: 16px;
+  font-weight: bold;
+  line-height: 1;
+  padding: 6px 12px;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: color 0.15s, background 0.15s;
+}
+#reload-btn:hover { color: #fff; background: #06141f; }
+#reload-btn:active { transform: rotate(180deg); }
 .page-tab.active {
   color: #00ff88;
   background: #081808;
@@ -1202,6 +1218,7 @@ body.solo-mode .solo-panel-visible {
       <button class="page-tab" onclick="setPage(1)">PLAN</button>
       <button class="page-tab" onclick="setPage(2)">CDU</button>
       <button class="page-tab" onclick="enterSolo()" title="단일화면 모드">One View</button>
+      <button id="reload-btn" onclick="location.reload()" title="새로고침">⟳</button>
     </div>
 
     <!-- Page 1: Map -->
