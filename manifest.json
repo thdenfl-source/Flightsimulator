@@ -1,7 +1,7 @@
 {
-  "name": "VFR Flight Sim",
-  "short_name": "VFR Flight",
-  "description": "iPad VFR Flight Simulator with PFD, HSI, Map and GPS",
+  "name": "Flight Simulator",
+  "short_name": "Flight Simulator",
+  "description": "iPad Flight Simulator with PFD, HSI, Map and GPS",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
