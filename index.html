@@ -8863,6 +8863,156 @@ let _pdfRenderQ = 1;          // 현재 비트맵 품질 배율(선명도)
 let _pdfRenderToken = 0;      // 렌더 경쟁 방지 토큰
 let _pdfReqTimer = null;      // 품질 재렌더 디바운스
 
+// ── 차트 위치 보정(2점 캘리브레이션) + 항공기 위치 오버레이 ──
+let _pdfChartKey = null;      // 현재 차트 키 (icao|chartNum)
+let _pdfCalibration = null;   // { p1:{fx,fy,lat,lon}, p2:{...} } — fx/fy는 페이지 비율(0~1)
+let _pdfCalStep = 0;          // 0=없음, 1·2=보정점 수집 중
+let _pdfCalTmp = null;        // 첫 보정점 임시 저장
+let _pdfAcTimer = null;       // 항공기 위치 갱신 타이머
+
+function _loadChartCalib(key) {
+    try { return (JSON.parse(localStorage.getItem('chartCalib') || '{}'))[key] || null; }
+    catch(e) { return null; }
+}
+function _saveChartCalib(key, cal) {
+    try {
+        const m = JSON.parse(localStorage.getItem('chartCalib') || '{}');
+        m[key] = cal; localStorage.setItem('chartCalib', JSON.stringify(m));
+    } catch(e) {}
+}
+function _pdfClearCalib() {
+    try {
+        const m = JSON.parse(localStorage.getItem('chartCalib') || '{}');
+        delete m[_pdfChartKey]; localStorage.setItem('chartCalib', JSON.stringify(m));
+    } catch(e) {}
+    _pdfCalibration = null; _pdfUpdateAcMarker();
+}
+
+// 위/경도 입력 파서 — 십진수(37.46) 또는 DMS(37 27 47 N / N37°27′) 허용
+function _parseLatLonInput(s) {
+    if (s == null) return null;
+    s = ('' + s).trim(); if (!s) return null;
+    if (/^[+-]?\d+(\.\d+)?$/.test(s)) return parseFloat(s);
+    const m = s.toUpperCase().match(/([NSEW])?\s*(\d+(?:\.\d+)?)[°\s]*(?:(\d+(?:\.\d+)?)['′\s]*)?(?:(\d+(?:\.\d+)?)["″\s]*)?([NSEW])?/);
+    if (!m) return null;
+    const hemi = m[1] || m[5];
+    let v = parseFloat(m[2]) + (m[3] ? parseFloat(m[3]) / 60 : 0) + (m[4] ? parseFloat(m[4]) / 3600 : 0);
+    if (isNaN(v)) return null;
+    if (hemi === 'S' || hemi === 'W') v = -v;
+    return v;
+}
+
+// 위경도 → 페이지 비율 좌표 (2점 닮음변환: 회전·축척·평행이동)
+function _pdfGeoXY(lat, lon, lat0) {
+    return { x: lon * Math.cos(lat0 * Math.PI / 180), y: lat };
+}
+function _pdfLatLonToFrac(lat, lon) {
+    const cal = _pdfCalibration; if (!cal) return null;
+    const lat0 = (cal.p1.lat + cal.p2.lat) / 2;
+    const P1 = _pdfGeoXY(cal.p1.lat, cal.p1.lon, lat0);
+    const P2 = _pdfGeoXY(cal.p2.lat, cal.p2.lon, lat0);
+    const P  = _pdfGeoXY(lat, lon, lat0);
+    const ppx = P2.x - P1.x, ppy = P2.y - P1.y;
+    const qx = cal.p2.fx - cal.p1.fx, qy = cal.p2.fy - cal.p1.fy;
+    const denom = ppx * ppx + ppy * ppy; if (!denom) return null;
+    const ra = (qx * ppx + qy * ppy) / denom;
+    const rb = (qy * ppx - qx * ppy) / denom;
+    const dx = P.x - P1.x, dy = P.y - P1.y;
+    return { fx: cal.p1.fx + ra * dx - rb * dy, fy: cal.p1.fy + rb * dx + ra * dy };
+}
+
+// 차트 위 항공기 심볼 갱신 (현재 위치 S.lat/lon, 방향 S.hdg)
+function _pdfUpdateAcMarker() {
+    const area = document.getElementById('pdfViewArea'); if (!area) return;
+    let m = document.getElementById('pdfAcMarker');
+    if (!_pdfCalibration || typeof S === 'undefined' || S.lat == null) { if (m) m.style.display = 'none'; return; }
+    const f = _pdfLatLonToFrac(S.lat, S.lon); if (!f) { if (m) m.style.display = 'none'; return; }
+    const fitX = f.fx * _pdfBaseW, fitY = f.fy * _pdfBaseH;
+    const sx = _pdfOx + _pdfTx + fitX * _pdfScale;
+    const sy = _pdfOy + _pdfTy + fitY * _pdfScale;
+    if (!m) {
+        m = document.createElement('div');
+        m.id = 'pdfAcMarker';
+        m.style.cssText = 'position:absolute;pointer-events:none;z-index:6;width:0;height:0;';
+        m.innerHTML = '<svg width="36" height="36" viewBox="0 0 36 36" style="position:absolute;left:-18px;top:-18px;transform-origin:18px 18px;"><polygon points="18,3 28,31 18,24 8,31" fill="#ff1744" stroke="#fff" stroke-width="1.6"/></svg>';
+        area.appendChild(m);
+    }
+    m.style.display = 'block';
+    m.style.left = sx + 'px';
+    m.style.top  = sy + 'px';
+    const svg = m.firstChild;
+    if (svg) svg.style.transform = `rotate(${S.hdg || 0}deg)`;
+}
+
+// 보정 시작/재보정/삭제 토글
+function _pdfToggleCalibration() {
+    if (_pdfCalStep) { _pdfCancelCalibration(); return; }
+    if (_pdfCalibration) {
+        if (confirm('이 차트는 이미 위치 보정되어 있습니다.\n\n확인 = 다시 보정\n취소 = 보정 삭제')) _pdfStartCalibration();
+        else _pdfClearCalib();
+    } else {
+        _pdfStartCalibration();
+    }
+}
+function _pdfStartCalibration() {
+    if (!_pdfChartKey) return;
+    _pdfCalStep = 1; _pdfCalTmp = null;
+    _pdfShowCalOverlay('① 보정점 1/2\n좌표를 아는 지점을 탭하세요\n(활주로 끝·VOR·좌표 눈금 교차점 등)');
+}
+function _pdfCancelCalibration() {
+    _pdfCalStep = 0; _pdfCalTmp = null;
+    const o = document.getElementById('pdfCalOverlay'); if (o) o.remove();
+}
+function _pdfShowCalOverlay(msg) {
+    const area = document.getElementById('pdfViewArea'); if (!area) return;
+    let o = document.getElementById('pdfCalOverlay'); if (o) o.remove();
+    o = document.createElement('div');
+    o.id = 'pdfCalOverlay';
+    o.style.cssText = 'position:absolute;inset:0;z-index:8;cursor:crosshair;touch-action:none;';
+    o.innerHTML = `<div style="position:absolute;top:8px;left:8px;right:8px;background:rgba(0,0,0,0.85);color:#0ff;font-size:11px;padding:8px 10px;border:1px solid #0ff;border-radius:6px;white-space:pre-line;text-align:center;line-height:1.5;">${msg}<div style="margin-top:6px;"><span onclick="_pdfCancelCalibration()" style="display:inline-block;color:#ff5252;border:1px solid #ff5252;border-radius:4px;padding:3px 14px;cursor:pointer;">취소</span></div></div>`;
+    area.appendChild(o);
+    let st = null, moved = false;
+    o.addEventListener('pointerdown', e => { st = { x: e.clientX, y: e.clientY, tx: _pdfTx, ty: _pdfTy }; moved = false; try { o.setPointerCapture(e.pointerId); } catch(_){} });
+    o.addEventListener('pointermove', e => {
+        if (!st) return;
+        const dx = e.clientX - st.x, dy = e.clientY - st.y;
+        if (Math.abs(dx) > 6 || Math.abs(dy) > 6) moved = true;
+        if (moved) { _pdfTx = st.tx + dx; _pdfTy = st.ty + dy; _pdfApplyTransform(); }
+    });
+    o.addEventListener('pointerup', e => { const wasTap = st && !moved; const wasMove = moved; st = null; if (wasTap) _pdfCalCapture(e); else if (wasMove) _pdfScheduleQuality(); });
+}
+function _pdfCalCapture(e) {
+    const area = document.getElementById('pdfViewArea'); if (!area) return;
+    const rc = area.getBoundingClientRect();
+    const sx = e.clientX - rc.left, sy = e.clientY - rc.top;
+    const fx = ((sx - _pdfOx - _pdfTx) / _pdfScale) / _pdfBaseW;
+    const fy = ((sy - _pdfOy - _pdfTy) / _pdfScale) / _pdfBaseH;
+
+    const latS = prompt('이 지점의 위도(Latitude)\n십진수(예: 37.4631) 또는 DMS(예: 37 27 47 N)');
+    if (latS === null) return;
+    const lat = _parseLatLonInput(latS);
+    if (lat === null || lat < -90 || lat > 90) { alert('위도 형식이 올바르지 않습니다. 다시 탭해 주세요.'); return; }
+    const lonS = prompt('이 지점의 경도(Longitude)\n십진수(예: 126.4407) 또는 DMS(예: 126 26 27 E)');
+    if (lonS === null) return;
+    const lon = _parseLatLonInput(lonS);
+    if (lon === null || lon < -180 || lon > 180) { alert('경도 형식이 올바르지 않습니다. 다시 탭해 주세요.'); return; }
+
+    const pt = { fx, fy, lat, lon };
+    if (_pdfCalStep === 1) {
+        _pdfCalTmp = pt; _pdfCalStep = 2;
+        _pdfShowCalOverlay('② 보정점 2/2\n다른 지점을 탭하세요\n(첫 점과 멀리 떨어질수록 정확)');
+    } else {
+        if (Math.hypot(pt.fx - _pdfCalTmp.fx, pt.fy - _pdfCalTmp.fy) < 0.02) {
+            alert('두 점이 너무 가깝습니다. 더 멀리 떨어진 지점을 선택하세요.'); return;
+        }
+        _pdfCalibration = { p1: _pdfCalTmp, p2: pt };
+        _saveChartCalib(_pdfChartKey, _pdfCalibration);
+        _pdfCancelCalibration();
+        _pdfUpdateAcMarker();
+        alert('위치 보정 완료! 현재 위치(▲)가 차트에 표시됩니다.\n\n⚠ 참고용입니다. 실제 항법에 사용하지 마세요.');
+    }
+}
+
 // 캔버스 픽셀 예산 — 이 한도 안에서 가능한 한 높은 해상도로 렌더한다.
 // iOS Safari는 캔버스 최대 면적이 약 16.7M px라 이를 넘기면 빈 화면이 된다.
 const _PDF_IS_IOS = /iP(ad|hone|od)/.test(navigator.userAgent || '') ||
@@ -8886,6 +9036,10 @@ async function openChart(icao, chartNum, url) {
     try { blob = await idbGet(key); } catch(e) {}
     if (!blob) { if (url) window.open(url, '_blank'); return; }
 
+    _pdfChartKey = key;
+    _pdfCalibration = _loadChartCalib(key);
+    _pdfCalStep = 0; _pdfCalTmp = null;
+
     const ex = document.getElementById('pdfViewerOverlay');
     if (ex) ex.remove();
     const ov = document.createElement('div');
@@ -8900,6 +9054,7 @@ async function openChart(icao, chartNum, url) {
                 <div id="pdfZoomLabel" style="color:#aaa;font-size:9px;min-width:36px;text-align:center;padding:3px 2px;"></div>
                 <div onclick="_pdfZoomIn()"  title="확대" style="color:#fff;font-size:16px;font-weight:bold;cursor:pointer;padding:2px 9px;background:#1a1a1a;border:1px solid #444;border-radius:3px;line-height:1;user-select:none;">+</div>
                 <div onclick="_pdfZoomReset()" title="배율 초기화" style="color:#888;font-size:9px;cursor:pointer;padding:3px 6px;background:#111;border:1px solid #333;border-radius:3px;margin-left:2px;white-space:nowrap;">1:1</div>
+                <div onclick="_pdfToggleCalibration()" id="pdfCalBtn" title="현재 위치 보정/표시" style="color:#ff5252;font-size:13px;cursor:pointer;padding:2px 8px;background:#1a1010;border:1px solid #ff5252;border-radius:3px;margin-left:2px;line-height:1;user-select:none;">📍</div>
             </div>
             <span id="pdfPageNum" style="color:#888;font-size:9px;white-space:nowrap;"></span>
         </div>
@@ -8922,6 +9077,9 @@ async function openChart(icao, chartNum, url) {
         _pdfDoc = await pdfjsLib.getDocument({ data: await blob.arrayBuffer() }).promise;
         _pdfCurPage = 1;
         await _pdfRender();
+        _pdfUpdateAcMarker();
+        if (_pdfAcTimer) clearInterval(_pdfAcTimer);
+        _pdfAcTimer = setInterval(_pdfUpdateAcMarker, 1000);   // GPS 위치 실시간 반영
     } catch(e) {
         const area = document.getElementById('pdfViewArea');
         if (area) area.innerHTML = `<div style="color:#f44336;padding:30px;font-size:12px;">오류: ${e.message}</div>`;
@@ -9056,6 +9214,7 @@ function _pdfApplyTransform() {
     if (hi) hi.remove();
     const lz = document.getElementById('pdfZoomLabel');
     if (lz) lz.textContent = Math.round(_pdfScale * 100) + '%';
+    _pdfUpdateAcMarker();   // 항공기 심볼도 이동/줌에 맞춰 갱신
 }
 
 const _PDF_ZOOM_STEP = 0.25;
@@ -9171,6 +9330,8 @@ async function _pdfNext() { if (_pdfDoc && _pdfCurPage < _pdfDoc.numPages) { _pd
 function closePdfViewer() {
     _pdfDoc = null; _pdfMD = null;
     if (_pdfReqTimer) { clearTimeout(_pdfReqTimer); _pdfReqTimer = null; }
+    if (_pdfAcTimer) { clearInterval(_pdfAcTimer); _pdfAcTimer = null; }
+    _pdfCalStep = 0; _pdfCalTmp = null;
     _pdfRenderToken++;   // 진행 중 렌더 무효화
     const ov = document.getElementById('pdfViewerOverlay'); if (ov) ov.remove();
 }
