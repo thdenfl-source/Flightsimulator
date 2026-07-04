@@ -9002,6 +9002,25 @@ function _pdfCalibRmsMeters(pts, rmsFrac) {
     return mpp ? rmsFrac * mpp : null;
 }
 
+// 이름 오인식을 막기 위한 불용어(약어/단위/제목 등)
+const _PDF_FIX_STOP = new Set([
+    'STATION','CHART','APPROACH','INSTRUMENT','APPROACHES','ELEV','ELEVATION','ALT','ALTITUDE',
+    'VAR','BRG','DIST','HOLDING','EMERG','EMERGENCY','MAX','MIN','MNM','RVR','VIS','CAT','APCH',
+    'MSA','IAF','FAF','MAPT','RWY','RUNWAY','AIP','KOREA','REPUBLIC','TRANS','LEVEL','FEET',
+    'INBD','OUTBD','TRACK','COURSE','RADIAL','ARC','THR','THRESHOLD','MISSED','CLIMB','TURN',
+    'NORTH','SOUTH','EAST','WEST','AND','THE','FOR','WITH','FROM','NOTE','WARNING','CAUTION'
+]);
+
+// 좌표 매치 위치 직전에서 워드-바운더리로 3~5자 식별자(픽스 이름) 탐색
+function _pdfNameBefore(T, idx) {
+    const pre = T.slice(Math.max(0, idx - 16), idx);
+    const m = pre.match(/(?:^|[^A-Z])([A-Z]{3,5})[^A-Z0-9]{0,4}$/);  // 좌우 경계 확인
+    if (!m) return '';
+    const nm = m[1];
+    if (_PDF_FIX_STOP.has(nm)) return '';
+    return nm;
+}
+
 // PDF 전체 페이지 텍스트에서 픽스(이름+좌표) 자동 추출
 async function _pdfExtractFixes() {
     _pdfFixList = [];
@@ -9015,29 +9034,39 @@ async function _pdfExtractFixes() {
             text = tc.items.map(it => it.str).join(' ');
         } catch(e) { continue; }
         const T = text.toUpperCase();
-        // ① 접미형 컴팩트: (이름) DDMMSS(.s)N DDDMMSS(.s)E
-        const re1 = /([A-Z]{3,5})?[\s:]*(\d{6}(?:\.\d+)?)\s*([NS])\s*(\d{7}(?:\.\d+)?)\s*([EW])/g;
+        // ① 접미형 컴팩트: DDMMSS(.s)N DDDMMSS(.s)E
+        const re1 = /(\d{6}(?:\.\d+)?)\s*([NS])\s*(\d{7}(?:\.\d+)?)\s*([EW])/g;
         let m;
         while ((m = re1.exec(T)) !== null) {
-            const lat = _parseDms(m[2] + m[3]), lon = _parseDms(m[4] + m[5]);
+            const lat = _parseDms(m[1] + m[2]), lon = _parseDms(m[3] + m[4]);
             if (lat == null || lon == null) continue;
-            _pdfAddFix(m[1], lat, lon, seen);
+            _pdfAddFix(_pdfNameBefore(T, m.index), lat, lon, seen);
         }
         // ② 구분자형: DD MM SS.s N  DDD MM SS.s E
-        const re2 = /([A-Z]{3,5})?[\s:]*(\d{2,3})[°\s]+(\d{2})['′\s]+(\d{2}(?:\.\d+)?)["″\s]*([NS])[\s,]+(\d{2,3})[°\s]+(\d{2})['′\s]+(\d{2}(?:\.\d+)?)["″\s]*([EW])/g;
+        const re2 = /(\d{2,3})[°\s]+(\d{2})['′\s]+(\d{2}(?:\.\d+)?)["″\s]*([NS])[\s,]+(\d{2,3})[°\s]+(\d{2})['′\s]+(\d{2}(?:\.\d+)?)["″\s]*([EW])/g;
         while ((m = re2.exec(T)) !== null) {
-            let lat = (+m[2]) + (+m[3]) / 60 + (+m[4]) / 3600; if (m[5] === 'S') lat = -lat;
-            let lon = (+m[6]) + (+m[7]) / 60 + (+m[8]) / 3600; if (m[9] === 'W') lon = -lon;
-            _pdfAddFix(m[1], lat, lon, seen);
+            let lat = (+m[1]) + (+m[2]) / 60 + (+m[3]) / 3600; if (m[4] === 'S') lat = -lat;
+            let lon = (+m[5]) + (+m[6]) / 60 + (+m[7]) / 3600; if (m[8] === 'W') lon = -lon;
+            _pdfAddFix(_pdfNameBefore(T, m.index), lat, lon, seen);
         }
     }
+    // 이름 있는 픽스를 목록 위쪽으로 정렬(작업 편의)
+    _pdfFixList.sort((a, b) => (a.named === b.named) ? 0 : (a.named ? -1 : 1));
 }
 function _pdfAddFix(name, lat, lon, seen) {
     if (lat < -90 || lat > 90 || lon < -180 || lon > 180) return;
     const nm = (name && /^[A-Z]{3,5}$/.test(name)) ? name : '';
-    const k = (nm || '') + lat.toFixed(4) + lon.toFixed(4);
-    if (seen.has(k)) return; seen.add(k);
-    _pdfFixList.push({ name: nm || `점${_pdfFixList.length + 1}`, lat, lon });
+    // 같은 좌표가 이름 없이 먼저 등록됐다면, 이름이 생기면 갱신
+    const ck = lat.toFixed(4) + ',' + lon.toFixed(4);
+    if (seen.has(ck)) {
+        if (nm) {
+            const ex = _pdfFixList.find(f => !f.named && (f.lat.toFixed(4) + ',' + f.lon.toFixed(4)) === ck);
+            if (ex) { ex.name = nm; ex.named = true; }
+        }
+        return;
+    }
+    seen.add(ck);
+    _pdfFixList.push({ name: nm || `좌표${_pdfFixList.length + 1}`, lat, lon, named: !!nm });
 }
 
 // 차트 위 항공기 심볼 갱신 (현재 위치 S.lat/lon, 방향 S.hdg)
@@ -9187,8 +9216,10 @@ function _pdfPickCoord(cb) {
     box.style.cssText = 'position:absolute;inset:0;z-index:10;background:rgba(0,0,0,0.75);display:flex;align-items:center;justify-content:center;';
     let listHtml = '';
     _pdfFixList.forEach((f, i) => {
+        const nameCol = f.named ? '#00e5ff' : '#888';
+        const nameTxt = f.named ? f.name : `· ${f.name}`;
         listHtml += `<div data-i="${i}" class="pdfFixRow" style="padding:9px 12px;border-bottom:1px solid #222;cursor:pointer;color:#eee;font-size:12px;display:flex;justify-content:space-between;gap:10px;">
-            <span style="color:#00e5ff;font-weight:bold;">${f.name}</span>
+            <span style="color:${nameCol};font-weight:bold;">${nameTxt}</span>
             <span style="color:#aaa;font-size:10px;">${f.lat.toFixed(4)}, ${f.lon.toFixed(4)}</span></div>`;
     });
     box.innerHTML = `
