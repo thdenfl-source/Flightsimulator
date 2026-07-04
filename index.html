@@ -9360,9 +9360,10 @@ function _pdfPickCoord(cb) {
         const tagCol  = isProc ? '#00e676' : '#ffca28';
         const tag = f.type ? ` <span style="color:${tagCol};font-size:9px;font-weight:bold;">${f.type}</span>` : '';
         const nameTxt = f.named ? f.name : `· ${f.name}`;
+        const dms = `${decToDMS(f.lat, true)} ${decToDMS(f.lon, false)}`;
         listHtml += `<div data-i="${i}" class="pdfFixRow" style="padding:11px 12px;border-bottom:1px solid #222;cursor:pointer;color:#eee;font-size:12px;display:flex;justify-content:space-between;gap:10px;align-items:center;">
             <span style="color:${nameCol};font-weight:bold;">${nameTxt}${tag}</span>
-            <span style="color:#aaa;font-size:10px;">${f.lat.toFixed(4)}, ${f.lon.toFixed(4)}</span></div>`;
+            <span style="color:#aaa;font-size:9px;white-space:nowrap;">${dms}</span></div>`;
     });
     box.innerHTML = `
         <div style="width:86%;max-width:340px;max-height:80%;background:#0c0c0c;border:1px solid #00e5ff;border-radius:8px;display:flex;flex-direction:column;overflow:hidden;">
