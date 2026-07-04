@@ -3700,6 +3700,7 @@ function startGPS() {
   // 즉시 GPS 모드로 전환(시뮬레이션 물리와 충돌 방지) + '위치 확인 중' 표시
   gpsMode = true;
   lastGpsMs = 0;
+  _gpsPrev = null;
   updateGpsBtn();
   const status = document.getElementById('gps-status');
   if (status) { status.style.display = 'block'; status.innerHTML = '📡 위치 확인 중…'; }
@@ -3729,6 +3730,7 @@ function startGPS() {
 function stopGPS() {
   if (gpsWatchId !== null) { navigator.geolocation.clearWatch(gpsWatchId); gpsWatchId = null; }
   gpsMode = false;
+  _gpsPrev = null;
   updateGpsBtn();
   // Reset to simulation defaults
   S.spd = 80; S.hdg = 360; S.alt = 500;
@@ -3738,21 +3740,47 @@ function stopGPS() {
   updateFlyBtns();
 }
 
+let _gpsPrev = null;   // 직전 GPS 위치(속도·방위각 산출용)
+
 function applyGPS(pos) {
   const c = pos.coords;
-  S.lat = c.latitude;
-  S.lon = c.longitude;
-  if (c.speed !== null && c.speed >= 0) {
-    S.spd = Math.max(0, Math.round(c.speed * 1.94384));
+  const nowMs = pos.timestamp || Date.now();
+  const lat = c.latitude, lon = c.longitude;
+
+  // ── 속도 ── 기기 제공값 우선, 없으면 이전 위치로부터 계산
+  let spdKt = null;
+  if (c.speed !== null && !isNaN(c.speed) && c.speed >= 0) {
+    spdKt = c.speed * 1.94384;                       // m/s → kt
+  } else if (_gpsPrev) {
+    const dtH = (nowMs - _gpsPrev.ms) / 3600000;
+    if (dtH > 0) spdKt = distance(_gpsPrev.lat, _gpsPrev.lon, lat, lon) / dtH;
+  }
+  if (spdKt !== null) {
+    S.spd = Math.max(0, Math.round(spdKt));
     S.pit = pitchFromSpd(S.spd);
   }
-  if (c.heading !== null && !isNaN(c.heading) && c.speed > 0.5) {
-    S.hdg = c.heading;
+
+  // ── 방위각 ── 기기 제공값 우선, 없으면 이전 위치로부터 계산(충분히 이동했을 때만)
+  let hdg = null;
+  if (c.heading !== null && !isNaN(c.heading) && (c.speed == null || c.speed > 0.5)) {
+    hdg = c.heading;
+  } else if (_gpsPrev) {
+    const dNM = distance(_gpsPrev.lat, _gpsPrev.lon, lat, lon);
+    if (dNM > 0.0027) hdg = bearing(_gpsPrev.lat, _gpsPrev.lon, lat, lon);  // ~5m 이상 이동
+  }
+  if (hdg !== null) {
+    S.hdg = normA(hdg);
     bankTarget = 0; S.bnk = 0;
   }
-  if (c.altitude !== null) {
+
+  // ── 고도 ── GPS 고도(m) → ft
+  if (c.altitude !== null && !isNaN(c.altitude)) {
     S.alt = Math.max(0, Math.round(c.altitude * 3.28084));
   }
+
+  S.lat = lat; S.lon = lon;
+  _gpsPrev = { lat, lon, ms: nowMs };
+
   // Trail
   const last = S.trail[S.trail.length - 1];
   if (!last || distance(last[0], last[1], S.lat, S.lon) > 0.01) {
@@ -3763,10 +3791,11 @@ function applyGPS(pos) {
   leafMap.setView([S.lat, S.lon]);
   updateAcOnMap();
   updateNav();
-  // Status overlay
+  // Status overlay (좌표 + 속도/고도/방위 요약)
   const acc = c.accuracy ? c.accuracy.toFixed(0) + 'm' : '--';
   document.getElementById('gps-status').innerHTML =
-    `${decToDMS(S.lat, true)}<br>${decToDMS(S.lon, false)}<br>±${acc}`;
+    `${decToDMS(S.lat, true)}<br>${decToDMS(S.lon, false)}<br>` +
+    `${S.spd}kt · ${S.alt}ft · ${String(Math.round(S.hdg)).padStart(3,'0')}° · ±${acc}`;
 }
 
 function decToDMS(deg, isLat) {
