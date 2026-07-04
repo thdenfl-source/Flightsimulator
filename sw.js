@@ -1,6 +1,6 @@
 // VFR Flight Sim — Service Worker
 // 버전을 올리면 캐시가 갱신됩니다
-const CACHE = 'vfr-flight-v57';
+const CACHE = 'vfr-flight-v58';
 const CORE  = [
   './index.html',
   './manifest.json',
@@ -8,10 +8,16 @@ const CORE  = [
   './icon-512.png',
 ];
 
-// 설치 시 핵심 파일 캐시
+// 설치 시 핵심 파일 캐시 (HTTP 캐시 우회로 항상 최신본 저장)
 self.addEventListener('install', e => {
   e.waitUntil(
-    caches.open(CACHE).then(c => c.addAll(CORE)).then(() => self.skipWaiting())
+    caches.open(CACHE)
+      .then(c => Promise.all(CORE.map(u =>
+        fetch(new Request(u, { cache: 'reload' }))
+          .then(res => res && res.ok ? c.put(u, res) : null)
+          .catch(() => null)
+      )))
+      .then(() => self.skipWaiting())
   );
 });
 
