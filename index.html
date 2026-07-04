@@ -6725,7 +6725,7 @@ if ('serviceWorker' in navigator) {
                 'parkcctv': "https://m.knps.or.kr/main/menuctrl.do?menuNo=10"
             };
 
-            let isActiveBtn = ['weather', 'charts', 'notam', 'metar', 'directTo', 'fpl', 'serv', 'sys', 'perf', 'as565', 'util', 'proc', 'badacctv', 'parkcctv'].includes(btn.id);
+            let isActiveBtn = ['weather', 'charts', 'notam', 'metar', 'directTo', 'map', 'fpl', 'serv', 'sys', 'perf', 'as565', 'util', 'proc', 'badacctv', 'parkcctv'].includes(btn.id);
             let boxClass = isActiveBtn ? 'icon-box func-active' : 'icon-box';
 
             if (links[btn.id]) {
@@ -6740,6 +6740,7 @@ if ('serviceWorker' in navigator) {
                                   btn.id === 'fpl'  ? `onclick="setPage(1)"` :
                                   btn.id === 'proc' ? `onclick="setPage(1); fpGo('IFR');"` :
                                   btn.id === 'util' ? `onclick="switchMode('UTIL')"` :
+                                  btn.id === 'map'  ? `onclick="switchMode('MAP')"` :
                                   btn.id === 'charts' ? `onclick="switchMode('CHARTS')"` : '';
                 gridHtml += `
                     <div class="home-icon-wrapper" ${clickAction}>
@@ -7396,6 +7397,7 @@ if ('serviceWorker' in navigator) {
             case 'XPDR_CODE': renderXpdrCodeScreen(container, footer, title, centerLabel); break;
             case 'UTIL': renderUtilScreen(container, footer, title, centerLabel); break;
             case 'CHARTS': renderChartsScreen(container, footer, title, centerLabel); break;
+            case 'MAP': renderMapSettingsScreen(container, footer, title, centerLabel); break;
         }
 
         updateHeaderUI();
@@ -7716,6 +7718,77 @@ function toggleFdrPanel() {
 }
 
 // ── NOTAM / KML / GPX overlay ──────────────────────────
+// ══════════════════════════════════════════════════════
+//  MAP SETTINGS — 공역/비행장 오버레이
+// ══════════════════════════════════════════════════════
+// 카테고리 정의 (색상·라벨). 데이터는 airspaceData에 채워 넣는다(차차 확장).
+const airspaceCategories = [
+  { key: 'airfield',   label: '비행장',        color: '#00e5ff', fill: 0.06 },
+  { key: 'airspace',   label: '공역',          color: '#4caf50', fill: 0.05 },
+  { key: 'restricted', label: '제한공역 (R)',  color: '#ff9800', fill: 0.10 },
+  { key: 'moa',        label: 'MOA',           color: '#ba68c8', fill: 0.10 },
+  { key: 'prohibited', label: '금지공역 (P)',  color: '#f44336', fill: 0.12 },
+  { key: 'ufa',        label: 'UFA 공역',      color: '#ffee58', fill: 0.10 },
+];
+
+// 각 항목: { name, coords:[[lat,lon],...] }  (닫힌 폴리곤)
+const airspaceData = {
+  airfield: [
+    { name: '인천국제 (RKSI)', coords: [[37.545170,126.441260],[37.534020,126.493580],[37.503460,126.531900],[37.461700,126.545890],[37.419990,126.531860],[37.389480,126.493580],[37.378320,126.441260],[37.389480,126.388950],[37.419990,126.350630],[37.461700,126.336550],[37.503460,126.350500],[37.534020,126.388830]] },
+    { name: '김해 (RKPK)', coords: [[35.261480,128.942670],[35.250320,128.993530],[35.219720,129.030770],[35.177960,129.044340],[35.136250,129.030680],[35.105740,128.993430],[35.094530,128.942670],[35.105740,128.891860],[35.136250,128.854690],[35.177960,128.841000],[35.219720,128.854560],[35.250320,128.891760]] },
+    { name: 'K-04 사천 (RKPS)', coords: [[35.171700,128.070670],[35.160500,128.121560],[35.129900,128.158730],[35.088140,128.172250],[35.046430,128.158640],[35.015910,128.121440],[35.004760,128.070670],[35.015910,128.019980],[35.046430,127.982830],[35.088140,127.969180],[35.129900,127.982740],[35.160500,128.019890]] },
+    { name: 'K-60 성무 (RKTE)', coords: [[36.651160,127.500540],[36.639960,127.552350],[36.609450,127.590280],[36.567690,127.603980],[36.525980,127.590110],[36.495420,127.552260],[36.484310,127.500540],[36.495420,127.448920],[36.525980,127.411030],[36.567690,127.397120],[36.609450,127.410900],[36.639960,127.448790]] },
+    { name: 'K-75 중원 (RKTI)', coords: [[37.112970,127.886190],[37.101770,127.938280],[37.071220,127.976390],[37.029460,127.990340],[36.987790,127.976260],[36.957280,127.938240],[36.946070,127.886190],[36.957280,127.834220],[36.987790,127.796110],[37.029460,127.782150],[37.071220,127.796060],[37.101770,127.834120]] },
+  ],
+  airspace: [],
+  restricted: [],
+  moa: [],
+  prohibited: [],
+  ufa: [],
+};
+
+const airspaceOn = {};        // { key: bool }
+const airspaceLayers = {};    // { key: [L.polygon,...] }
+airspaceCategories.forEach(c => { airspaceOn[c.key] = false; airspaceLayers[c.key] = []; });
+
+// 저장된 표시 상태 복원
+try {
+  const saved = JSON.parse(localStorage.getItem('airspaceOn') || '{}');
+  Object.keys(saved).forEach(k => { if (k in airspaceOn) airspaceOn[k] = !!saved[k]; });
+} catch(e) {}
+
+function _airspaceCatMeta(key) { return airspaceCategories.find(c => c.key === key); }
+
+function _drawAirspaceCat(key) {
+  _clearAirspaceCat(key);
+  const meta = _airspaceCatMeta(key);
+  (airspaceData[key] || []).forEach(item => {
+    if (!item.coords || item.coords.length < 3) return;
+    const poly = L.polygon(item.coords, {
+      color: meta.color, weight: 1.5, opacity: 0.9,
+      fillColor: meta.color, fillOpacity: meta.fill
+    });
+    if (item.name) poly.bindTooltip(item.name, { sticky: true });
+    poly.addTo(leafMap);
+    airspaceLayers[key].push(poly);
+  });
+}
+function _clearAirspaceCat(key) {
+  (airspaceLayers[key] || []).forEach(l => { try { leafMap.removeLayer(l); } catch(e){} });
+  airspaceLayers[key] = [];
+}
+function toggleAirspaceCat(key) {
+  airspaceOn[key] = !airspaceOn[key];
+  if (airspaceOn[key]) _drawAirspaceCat(key); else _clearAirspaceCat(key);
+  try { localStorage.setItem('airspaceOn', JSON.stringify(airspaceOn)); } catch(e) {}
+  if (window._cduRenderContent) window._cduRenderContent();
+}
+// 페이지 로드 시 저장된 ON 카테고리 그리기 (지도 준비 후)
+function _initAirspaceLayers() {
+  airspaceCategories.forEach(c => { if (airspaceOn[c.key]) _drawAirspaceCat(c.key); });
+}
+if (typeof leafMap !== 'undefined') { try { _initAirspaceLayers(); } catch(e) {} }
+
 let _notamLayers = [];
 let _notamActive = false;
 
@@ -9810,6 +9883,35 @@ function getAiracInfo_charts() {
     const fmt = d => d.toISOString().slice(0, 10).replace(/-/g, '/');
     const startUrl = startDate.toISOString().slice(0, 10);
     return { id, start: fmt(startDate), end: fmt(endDate), daysLeft: Math.max(1, daysLeft), startUrl };
+}
+
+function renderMapSettingsScreen(container, footer, title, centerLabel) {
+    title.innerText = "Map Settings";
+    centerLabel.innerText = "MAP SETTINGS";
+
+    let html = `<div style="padding:6px 4px;height:100%;display:flex;flex-direction:column;overflow:hidden;">`;
+    html += `<div style="color:#8fbcd4;font-size:9px;line-height:1.5;margin-bottom:8px;padding:6px 8px;background:#0a1520;border:1px solid #1e3a4a;border-radius:5px;">
+        지도(MAP)에 표시할 항목을 켜고 끄세요. 항목은 차차 추가됩니다.</div>`;
+    html += `<div style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:6px;">`;
+
+    airspaceCategories.forEach(c => {
+        const on = airspaceOn[c.key];
+        const cnt = (airspaceData[c.key] || []).length;
+        const empty = cnt === 0;
+        html += `
+        <div onclick="${empty ? '' : `toggleAirspaceCat('${c.key}')`}" style="display:flex;align-items:center;gap:10px;padding:11px 12px;border:1px solid ${on ? c.color : '#2a2a2a'};border-radius:6px;background:${on ? c.color + '18' : '#111'};cursor:${empty ? 'default' : 'pointer'};opacity:${empty ? 0.45 : 1};">
+            <div style="width:14px;height:14px;border-radius:3px;background:${c.color};flex-shrink:0;box-shadow:0 0 4px ${c.color}66;"></div>
+            <div style="flex:1;min-width:0;">
+                <div style="color:#fff;font-size:13px;font-weight:bold;">${c.label}</div>
+                <div style="color:#777;font-size:9px;">${empty ? '데이터 없음 (예정)' : cnt + '개 영역'}</div>
+            </div>
+            <div style="flex-shrink:0;font-size:11px;font-weight:bold;color:${on ? c.color : '#555'};border:1px solid ${on ? c.color : '#444'};border-radius:12px;padding:3px 12px;">${on ? 'ON' : 'OFF'}</div>
+        </div>`;
+    });
+
+    html += `</div></div>`;
+    container.innerHTML = html;
+    if (footer) footer.style.display = '';
 }
 
 function renderChartsScreen(container, footer, title, centerLabel) {
