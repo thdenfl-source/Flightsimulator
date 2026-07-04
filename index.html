@@ -6725,7 +6725,7 @@ if ('serviceWorker' in navigator) {
                 'parkcctv': "https://m.knps.or.kr/main/menuctrl.do?menuNo=10"
             };
 
-            let isActiveBtn = ['weather', 'charts', 'notam', 'metar', 'directTo', 'map', 'fpl', 'serv', 'sys', 'perf', 'as565', 'util', 'proc', 'badacctv', 'parkcctv'].includes(btn.id);
+            let isActiveBtn = ['weather', 'charts', 'notam', 'metar', 'directTo', 'fpl', 'serv', 'sys', 'perf', 'as565', 'util', 'proc', 'badacctv', 'parkcctv'].includes(btn.id);
             let boxClass = isActiveBtn ? 'icon-box func-active' : 'icon-box';
 
             if (links[btn.id]) {
@@ -6740,7 +6740,6 @@ if ('serviceWorker' in navigator) {
                                   btn.id === 'fpl'  ? `onclick="setPage(1)"` :
                                   btn.id === 'proc' ? `onclick="setPage(1); fpGo('IFR');"` :
                                   btn.id === 'util' ? `onclick="switchMode('UTIL')"` :
-                                  btn.id === 'map'  ? `onclick="switchMode('MAP')"` :
                                   btn.id === 'charts' ? `onclick="switchMode('CHARTS')"` : '';
                 gridHtml += `
                     <div class="home-icon-wrapper" ${clickAction}>
@@ -7397,7 +7396,6 @@ if ('serviceWorker' in navigator) {
             case 'XPDR_CODE': renderXpdrCodeScreen(container, footer, title, centerLabel); break;
             case 'UTIL': renderUtilScreen(container, footer, title, centerLabel); break;
             case 'CHARTS': renderChartsScreen(container, footer, title, centerLabel); break;
-            case 'MAP': renderMapSettingsScreen(container, footer, title, centerLabel); break;
         }
 
         updateHeaderUI();
@@ -7718,190 +7716,6 @@ function toggleFdrPanel() {
 }
 
 // ── NOTAM / KML / GPX overlay ──────────────────────────
-// ══════════════════════════════════════════════════════
-//  MAP SETTINGS — 공역/비행장 오버레이
-// ══════════════════════════════════════════════════════
-// 카테고리 정의 (색상·라벨). 데이터는 airspaceData에 채워 넣는다(차차 확장).
-const airspaceCategories = [
-  { key: 'airfield',   label: '비행장',        color: '#00e5ff', fill: 0.06 },
-  { key: 'airspace',   label: '공역',          color: '#4caf50', fill: 0.05 },
-  { key: 'restricted', label: '제한공역 (R)',  color: '#ff9800', fill: 0.10 },
-  { key: 'moa',        label: 'MOA',           color: '#ba68c8', fill: 0.10 },
-  { key: 'prohibited', label: '금지공역 (P)',  color: '#f44336', fill: 0.12 },
-  { key: 'ufa',        label: 'UFA 공역',      color: '#ffee58', fill: 0.10 },
-  { key: 'tourist',    label: '관광비행로',     color: '#26c6da', fill: 0.08 },
-  { key: 'holding',    label: '공로 대기지점',   color: '#ff7043', fill: 0.06 },
-];
-
-// 대기 패턴(레이스트랙 근사 타원) — 픽스·진입방향·회전방향으로 생성
-function _holdPattern(F, ib, turn) {
-  const a = 4.0, b = 1.5;                       // 반장축·반단축(NM)
-  const side = turn === 'R' ? ib + 90 : ib - 90;
-  const back = ib + 180;
-  let c = destPoint(F[0], F[1], back, a);       // 축 방향으로 뒤로
-  c = destPoint(c[0], c[1], side, b);           // 회전 방향으로 오프셋(픽스가 앞 가장자리)
-  const pts = [];
-  for (let i = 0; i <= 36; i++) {
-    const th = i * 10 * Math.PI / 180;
-    const x = a * Math.cos(th), y = b * Math.sin(th);
-    let p = destPoint(c[0], c[1], x >= 0 ? back : back + 180, Math.abs(x));
-    p = destPoint(p[0], p[1], y >= 0 ? side : side + 180, Math.abs(y));
-    pts.push(p);
-  }
-  return pts;
-}
-
-// 항목 형식:
-//  원(관제권):   { name, center:[lat,lon], radiiNM:[...] }
-//  다각형(공역): { name, coords:[[lat,lon],...], alt }
-// 김포 기점 50NM 호(Arc) 생성 (T07/T15 남단)
-const _GIMPO = [37.55694, 126.79750];
-function _tmaArc(p3, p5) { return arcPoints(p3[0], p3[1], p5[0], p5[1], _GIMPO[0], _GIMPO[1], 'R', 24); }
-// 제주 ARP 기준 호(Arc) 생성 (dir 'R'=시계방향, 'L'=반시계방향)
-const _JEJU = [33.51222, 126.49278];
-function _jjArc(from, to, dir) { return arcPoints(from[0], from[1], to[0], to[1], _JEJU[0], _JEJU[1], dir, 20); }
-
-const airspaceData = {
-  // ── 관제권 반경 (AIP ENR 2.1) — 원형 레이어 ──
-  airfield: [
-    { name: '인천국제 (RKSI)',     center: [37.4625, 126.43917],  radiiNM: [5, 10, 20] },
-    { name: '김포국제 (RKSS)',     center: [37.55694, 126.7975],  radiiNM: [5, 10, 20] },
-    { name: '서울 (성남/RKSM)',    center: [37.44556, 127.11306], radiiNM: [5] },
-    { name: '오산 (RKSO)',         center: [37.09056, 127.02972], radiiNM: [5] },
-    { name: '수원 (RKSW)',         center: [37.23944, 127.00694], radiiNM: [5] },
-    { name: '이천비행장',           center: [37.20111, 127.47194], radiiNM: [5] },
-    { name: '평택 (Humphreys)',    center: [36.96, 127.03333],    radiiNM: [5] },
-    // 비행장교통구역(ATZ, Class D) — SFC~1,000ft
-    { name: '태안 ATZ (Class D)',  center: [36.64472, 126.29722], radiiNM: [3] },
-    { name: '포승 ATZ (Class D)',  center: [36.99139, 126.8075],  radiiNM: [3] },
-  ],
-  // ── 접근통제구역(TMA) — 다각형 레이어 ──
-  airspace: [
-    { name: 'Seoul TMA T01', alt: '1,000ft AGL ~ FL185',
-      coords: [[37.35278,125.54806],[37.65278,126.16472],[37.71944,126.68111],[37.63611,126.88111],[37.96944,127.66444],[37.27194,127.66444],[37.25278,127.39778],[37.30278,127.31444],[37.30278,127.14778],[37.35278,126.96444],[37.34028,126.80611],[37.14861,126.61028],[37.14194,126.52861],[37.09389,126.36611],[37.08806,125.8025],[37.26944,125.79806]] },
-    { name: 'Seoul TMA T02', alt: 'FL175 ~ FL185',
-      coords: [[37.96944,127.66444],[38.00278,127.91444],[37.16944,127.91444],[37.16944,127.76444],[37.11111,127.66444]] },
-    { name: 'Seoul TMA T03', alt: '4,500ft AMSL ~ FL185',
-      coords: [[37.34028,126.80611],[37.35278,126.96444],[37.30278,127.14778],[37.30278,127.31444],[37.25278,127.39778],[37.25278,127.11444],[37.16083,126.72611],[37.14861,126.61028]] },
-    { name: 'Seoul TMA T06', alt: '9,500ft AMSL ~ FL185',
-      coords: [[36.96944,126.48111],[37.09194,127.02972],[37.1775,127.66444],[37.04167,127.66444],[36.87944,126.58444]] },
-    { name: 'Seoul TMA T07', alt: '11,500ft AMSL ~ FL185',
-      coords: [[36.87944,126.58444],[37.04167,127.66444]].concat(_tmaArc([37.03611,127.66444],[36.72083,126.77028])) },
-    { name: 'Osan TMA T11', alt: '1,000ft AGL ~ 6,500ft AMSL',
-      coords: [[37.08806,125.8025],[37.09389,126.36611],[37.14194,126.52861],[37.16083,126.72611],[37.22583,126.99361],[37.09194,127.02972],[36.99528,126.595],[37.04306,126.55694],[37.01389,126.28111],[36.94778,125.80639]] },
-    { name: 'Osan TMA T12', alt: '4,500ft ~ 6,500ft AMSL',
-      coords: [[37.01389,126.28111],[37.04306,126.55694],[36.99528,126.595],[36.96944,126.48111]] },
-    { name: 'Osan TMA T15', alt: '1,000ft AGL ~ 11,500ft AMSL',
-      coords: [[36.89361,126.67556],[37.04167,127.66444]].concat(_tmaArc([37.03611,127.66444],[36.72083,126.77028])).concat([[36.74083,126.74306]]) },
-    // ── 제주 Class B (ENR 2.2) — ARP 33°30'44"N 126°29'34"E ──
-    { name: 'Jeju Class B 1구역', alt: 'SFC ~ 10,000ft AMSL',
-      center: _JEJU, radiiNM: [5] },
-    { name: 'Jeju Class B 2구역', alt: '1,000ft ~ 10,000ft AMSL',
-      coords: _jjArc([33.44306,126.43722],[33.51333,126.59222],'R').concat(_jjArc([33.51417,126.69194],[33.37361,126.38194],'L')) },
-    { name: 'Jeju Class B 3구역', alt: '2,000ft ~ 10,000ft AMSL',
-      coords: _jjArc([33.37361,126.38194],[33.51417,126.69194],'R').concat(_jjArc([33.51583,126.89111],[33.23472,126.27167],'L')) },
-  ],
-  restricted: [],
-  moa: [],
-  prohibited: [],
-  ufa: [],
-  // ── 관광비행로 (ENR 3.5) — 선형 ──
-  tourist: [
-    { name: '단양 관광비행로', line: [[36.95694,128.33278],[36.93972,128.30333],[36.97972,128.34333],[36.97944,128.37194],[37.005,128.34583],[37.00028,128.38667],[37.03,128.38389],[37.04361,128.4125],[37.06028,128.41556]] },
-    { name: '구미 관광비행로(기준점)', point: [36.10333,128.35139] },
-  ],
-  // ── 공로 대기지점 (ENR 3.6) — 마커 + 대기패턴 ──
-  holding: [
-    { name: 'SAKTI',    fix: [36.85,127.76667],    inbound: 318, turn: 'L', alt: 'FL180~FL200' },
-    { name: 'BIGOB',    fix: [36.72361,128.16444], inbound: 313, turn: 'R', alt: 'FL210~FL360' },
-    { name: 'ATASO',    fix: [35.89556,126.94917], inbound: 13,  turn: 'R', alt: 'FL230~FL260' },
-    { name: 'NONOS',    fix: [36.67944,124.41472], inbound: 8,   turn: 'R', alt: 'FL200~FL310' },
-    { name: 'CJU HOLD', fix: [33.65278,126.92056], inbound: 236, turn: 'L', alt: 'FL180~FL260' },
-  ],
-};
-
-const airspaceOn = {};        // { key: bool }
-const airspaceLayers = {};    // { key: [L.polygon,...] }
-airspaceCategories.forEach(c => { airspaceOn[c.key] = false; airspaceLayers[c.key] = []; });
-
-// 저장된 표시 상태 복원
-try {
-  const saved = JSON.parse(localStorage.getItem('airspaceOn') || '{}');
-  Object.keys(saved).forEach(k => { if (k in airspaceOn) airspaceOn[k] = !!saved[k]; });
-} catch(e) {}
-
-function _airspaceCatMeta(key) { return airspaceCategories.find(c => c.key === key); }
-
-function _drawAirspaceCat(key) {
-  _clearAirspaceCat(key);
-  const meta = _airspaceCatMeta(key);
-  (airspaceData[key] || []).forEach(item => {
-    if (item.center && item.radiiNM) {
-      // 원형(관제권): 반경별 링 + 중심점
-      item.radiiNM.forEach(r => {
-        const c = L.circle(item.center, {
-          radius: r * 1852, color: meta.color, weight: 1.3, opacity: 0.9,
-          fillColor: meta.color, fillOpacity: r <= 5 ? meta.fill : 0.015
-        });
-        c.bindTooltip(`${item.name} · ${r}NM`, { sticky: true });
-        c.addTo(leafMap); airspaceLayers[key].push(c);
-      });
-      const dot = L.circleMarker(item.center, {
-        radius: 3, color: meta.color, fillColor: meta.color, fillOpacity: 1, weight: 1
-      });
-      dot.bindTooltip(item.name, { sticky: true });
-      dot.addTo(leafMap); airspaceLayers[key].push(dot);
-    } else if (item.fix && item.inbound != null) {
-      // 대기지점(홀딩): 픽스 마커 + 대기 패턴(레이스트랙)
-      const pat = L.polygon(_holdPattern(item.fix, item.inbound, item.turn), {
-        color: meta.color, weight: 1.3, opacity: 0.85, dashArray: '4,3',
-        fillColor: meta.color, fillOpacity: meta.fill
-      });
-      pat.addTo(leafMap); airspaceLayers[key].push(pat);
-      const mk = L.circleMarker(item.fix, {
-        radius: 4, color: '#fff', weight: 1.5, fillColor: meta.color, fillOpacity: 1
-      });
-      mk.bindTooltip(`${item.name} · ${item.turn === 'R' ? '우선회' : '좌선회'}` + (item.alt ? ` · ${item.alt}` : ''), { sticky: true });
-      mk.addTo(leafMap); airspaceLayers[key].push(mk);
-    } else if (item.line && item.line.length >= 2) {
-      // 선형(관광비행로)
-      const pl = L.polyline(item.line, { color: meta.color, weight: 2.5, opacity: 0.9 });
-      pl.bindTooltip(item.name, { sticky: true });
-      pl.addTo(leafMap); airspaceLayers[key].push(pl);
-    } else if (item.point) {
-      // 단일 포인트
-      const mk = L.circleMarker(item.point, {
-        radius: 4, color: meta.color, weight: 1.5, fillColor: meta.color, fillOpacity: 0.9
-      });
-      mk.bindTooltip(item.name, { sticky: true });
-      mk.addTo(leafMap); airspaceLayers[key].push(mk);
-    } else if (item.coords && item.coords.length >= 3) {
-      // 다각형(공역)
-      const poly = L.polygon(item.coords, {
-        color: meta.color, weight: 1.5, opacity: 0.9,
-        fillColor: meta.color, fillOpacity: meta.fill
-      });
-      poly.bindTooltip(item.name + (item.alt ? ` (${item.alt})` : ''), { sticky: true });
-      poly.addTo(leafMap); airspaceLayers[key].push(poly);
-    }
-  });
-}
-function _clearAirspaceCat(key) {
-  (airspaceLayers[key] || []).forEach(l => { try { leafMap.removeLayer(l); } catch(e){} });
-  airspaceLayers[key] = [];
-}
-function toggleAirspaceCat(key) {
-  airspaceOn[key] = !airspaceOn[key];
-  if (airspaceOn[key]) _drawAirspaceCat(key); else _clearAirspaceCat(key);
-  try { localStorage.setItem('airspaceOn', JSON.stringify(airspaceOn)); } catch(e) {}
-  if (window._cduRenderContent) window._cduRenderContent();
-}
-// 페이지 로드 시 저장된 ON 카테고리 그리기 (지도 준비 후)
-function _initAirspaceLayers() {
-  airspaceCategories.forEach(c => { if (airspaceOn[c.key]) _drawAirspaceCat(c.key); });
-}
-if (typeof leafMap !== 'undefined') { try { _initAirspaceLayers(); } catch(e) {} }
-
 let _notamLayers = [];
 let _notamActive = false;
 
@@ -9996,35 +9810,6 @@ function getAiracInfo_charts() {
     const fmt = d => d.toISOString().slice(0, 10).replace(/-/g, '/');
     const startUrl = startDate.toISOString().slice(0, 10);
     return { id, start: fmt(startDate), end: fmt(endDate), daysLeft: Math.max(1, daysLeft), startUrl };
-}
-
-function renderMapSettingsScreen(container, footer, title, centerLabel) {
-    title.innerText = "Map Settings";
-    centerLabel.innerText = "MAP SETTINGS";
-
-    let html = `<div style="padding:6px 4px;height:100%;display:flex;flex-direction:column;overflow:hidden;">`;
-    html += `<div style="color:#8fbcd4;font-size:9px;line-height:1.5;margin-bottom:8px;padding:6px 8px;background:#0a1520;border:1px solid #1e3a4a;border-radius:5px;">
-        지도(MAP)에 표시할 항목을 켜고 끄세요. 항목은 차차 추가됩니다.</div>`;
-    html += `<div style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:6px;">`;
-
-    airspaceCategories.forEach(c => {
-        const on = airspaceOn[c.key];
-        const cnt = (airspaceData[c.key] || []).length;
-        const empty = cnt === 0;
-        html += `
-        <div onclick="${empty ? '' : `toggleAirspaceCat('${c.key}')`}" style="display:flex;align-items:center;gap:10px;padding:11px 12px;border:1px solid ${on ? c.color : '#2a2a2a'};border-radius:6px;background:${on ? c.color + '18' : '#111'};cursor:${empty ? 'default' : 'pointer'};opacity:${empty ? 0.45 : 1};">
-            <div style="width:14px;height:14px;border-radius:3px;background:${c.color};flex-shrink:0;box-shadow:0 0 4px ${c.color}66;"></div>
-            <div style="flex:1;min-width:0;">
-                <div style="color:#fff;font-size:13px;font-weight:bold;">${c.label}</div>
-                <div style="color:#777;font-size:9px;">${empty ? '데이터 없음 (예정)' : cnt + '개 영역'}</div>
-            </div>
-            <div style="flex-shrink:0;font-size:11px;font-weight:bold;color:${on ? c.color : '#555'};border:1px solid ${on ? c.color : '#444'};border-radius:12px;padding:3px 12px;">${on ? 'ON' : 'OFF'}</div>
-        </div>`;
-    });
-
-    html += `</div></div>`;
-    container.innerHTML = html;
-    if (footer) footer.style.display = '';
 }
 
 function renderChartsScreen(container, footer, title, centerLabel) {
