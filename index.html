@@ -3694,10 +3694,30 @@ function startGPS() {
     showGpsError('이 기기에서 GPS를 사용할 수 없습니다');
     return;
   }
-  const opts = { enableHighAccuracy: true, maximumAge: 2000, timeout: 15000 };
+  // 이전 watch가 남아있으면 정리(중복 방지)
+  if (gpsWatchId !== null) { try { navigator.geolocation.clearWatch(gpsWatchId); } catch(e){} gpsWatchId = null; }
+
+  // 즉시 GPS 모드로 전환(시뮬레이션 물리와 충돌 방지) + '위치 확인 중' 표시
+  gpsMode = true;
+  lastGpsMs = 0;
+  updateGpsBtn();
+  const status = document.getElementById('gps-status');
+  if (status) { status.style.display = 'block'; status.innerHTML = '📡 위치 확인 중…'; }
+
+  const opts = { enableHighAccuracy: true, maximumAge: 1000, timeout: 20000 };
+  const onPos = pos => {
+    if (!gpsMode) return;          // 그 사이 GPS를 껐다면 무시
+    lastGpsMs = Date.now();
+    applyGPS(pos);
+  };
+
+  // ① 첫 위치는 one-shot으로 빠르게 획득(watch가 늦게 뜨는 문제 완화)
+  navigator.geolocation.getCurrentPosition(onPos, () => {}, opts);
+
+  // ② 이후 연속 갱신은 watch로(3초 스로틀)
   gpsWatchId = navigator.geolocation.watchPosition(
     pos => {
-      if (!gpsMode) { gpsMode = true; updateGpsBtn(); }
+      if (!gpsMode) return;
       const now = Date.now();
       if (now - lastGpsMs >= 3000) { lastGpsMs = now; applyGPS(pos); }
     },
