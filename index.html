@@ -8866,21 +8866,30 @@ let _pdfRenderQ = 1;          // 현재 비트맵 품질 배율(선명도)
 let _pdfRenderToken = 0;      // 렌더 경쟁 방지 토큰
 let _pdfReqTimer = null;      // 품질 재렌더 디바운스
 
-// ── 차트 위치 보정(2점 캘리브레이션) + 항공기 위치 오버레이 ──
+// ── 차트 위치 보정(다점 최소자승 아핀) + 항공기 위치 오버레이 ──
 let _pdfChartKey = null;      // 현재 차트 키 (icao|chartNum)
-let _pdfCalibration = null;   // { p1:{fx,fy,lat,lon}, p2:{...} } — fx/fy는 페이지 비율(0~1)
-let _pdfCalStep = 0;          // 0=없음, 1·2=보정점 수집 중
-let _pdfCalTmp = null;        // 첫 보정점 임시 저장
+let _pdfCalibration = null;   // { pts:[{fx,fy,lat,lon,name}], fit:{...} } — fx/fy는 페이지 비율(0~1)
+let _pdfCalActive = false;    // 보정 수집 중 여부
+let _pdfCalPts = [];          // 보정 수집 중 임시 점 목록
 let _pdfAcTimer = null;       // 항공기 위치 갱신 타이머
+let _pdfFixList = [];         // 현재 PDF에서 추출한 픽스 목록 [{name,lat,lon}]
 
 function _loadChartCalib(key) {
-    try { return (JSON.parse(localStorage.getItem('chartCalib') || '{}'))[key] || null; }
-    catch(e) { return null; }
+    try {
+        const cal = (JSON.parse(localStorage.getItem('chartCalib') || '{}'))[key] || null;
+        if (!cal) return null;
+        // 구버전({p1,p2}) 호환 → pts 배열로 변환
+        if (!cal.pts && cal.p1 && cal.p2) cal.pts = [cal.p1, cal.p2];
+        if (!cal.pts || cal.pts.length < 2) return null;
+        cal.fit = _pdfFit(cal.pts);
+        return cal;
+    } catch(e) { return null; }
 }
 function _saveChartCalib(key, cal) {
     try {
         const m = JSON.parse(localStorage.getItem('chartCalib') || '{}');
-        m[key] = cal; localStorage.setItem('chartCalib', JSON.stringify(m));
+        m[key] = { pts: cal.pts };   // 원자료(점들)만 저장 — fit은 로드 시 재계산
+        localStorage.setItem('chartCalib', JSON.stringify(m));
     } catch(e) {}
 }
 function _pdfClearCalib() {
@@ -8905,23 +8914,130 @@ function _parseLatLonInput(s) {
     return v;
 }
 
-// 위경도 → 페이지 비율 좌표 (2점 닮음변환: 회전·축척·평행이동)
+// 3×3 선형계 풀이(가우스 소거)
+function _solve3(M, b) {
+    const a = [[M[0][0], M[0][1], M[0][2], b[0]],
+               [M[1][0], M[1][1], M[1][2], b[1]],
+               [M[2][0], M[2][1], M[2][2], b[2]]];
+    for (let i = 0; i < 3; i++) {
+        let p = i;
+        for (let r = i + 1; r < 3; r++) if (Math.abs(a[r][i]) > Math.abs(a[p][i])) p = r;
+        if (Math.abs(a[p][i]) < 1e-12) return null;
+        [a[i], a[p]] = [a[p], a[i]];
+        for (let r = 0; r < 3; r++) {
+            if (r === i) continue;
+            const f = a[r][i] / a[i][i];
+            for (let c = i; c < 4; c++) a[r][c] -= f * a[i][c];
+        }
+    }
+    return [a[0][3] / a[0][0], a[1][3] / a[1][1], a[2][3] / a[2][2]];
+}
+
 function _pdfGeoXY(lat, lon, lat0) {
     return { x: lon * Math.cos(lat0 * Math.PI / 180), y: lat };
 }
+
+// 보정점들로부터 좌표→페이지비율 변환식 계산
+//  점 3개 이상: 최소자승 아핀(회전·축척·비대칭·평행이동)
+//  점 2개:      닮음변환(회전·축척·평행이동)
+function _pdfFit(points) {
+    const lat0 = points.reduce((s, p) => s + p.lat, 0) / points.length;
+    const toXY = p => _pdfGeoXY(p.lat, p.lon, lat0);
+    if (points.length < 3) {
+        const P1 = toXY(points[0]), P2 = toXY(points[1]);
+        const ppx = P2.x - P1.x, ppy = P2.y - P1.y;
+        const qx = points[1].fx - points[0].fx, qy = points[1].fy - points[0].fy;
+        const denom = ppx * ppx + ppy * ppy || 1e-12;
+        const ra = (qx * ppx + qy * ppy) / denom;
+        const rb = (qy * ppx - qx * ppy) / denom;
+        return { lat0, kind: 'similarity', P1: { x: P1.x, y: P1.y, fx: points[0].fx, fy: points[0].fy }, ra, rb, rms: 0, n: 2 };
+    }
+    let Sxx = 0, Sxy = 0, Sx = 0, Syy = 0, Sy = 0, Sn = 0;
+    let bxFx = 0, byFx = 0, bnFx = 0, bxFy = 0, byFy = 0, bnFy = 0;
+    points.forEach(p => {
+        const { x, y } = toXY(p);
+        Sxx += x * x; Sxy += x * y; Sx += x; Syy += y * y; Sy += y; Sn += 1;
+        bxFx += x * p.fx; byFx += y * p.fx; bnFx += p.fx;
+        bxFy += x * p.fy; byFy += y * p.fy; bnFy += p.fy;
+    });
+    const M = [[Sxx, Sxy, Sx], [Sxy, Syy, Sy], [Sx, Sy, Sn]];
+    const abc = _solve3(M, [bxFx, byFx, bnFx]);
+    const def = _solve3(M, [bxFy, byFy, bnFy]);
+    if (!abc || !def) {   // 특이(모든 점 일직선 등) → 닮음변환으로 대체
+        return _pdfFit(points.slice(0, 2));
+    }
+    let se = 0;
+    points.forEach(p => {
+        const { x, y } = toXY(p);
+        const efx = abc[0] * x + abc[1] * y + abc[2];
+        const efy = def[0] * x + def[1] * y + def[2];
+        se += (efx - p.fx) ** 2 + (efy - p.fy) ** 2;
+    });
+    return { lat0, kind: 'affine', abc, def, rms: Math.sqrt(se / points.length), n: points.length };
+}
+
 function _pdfLatLonToFrac(lat, lon) {
-    const cal = _pdfCalibration; if (!cal) return null;
-    const lat0 = (cal.p1.lat + cal.p2.lat) / 2;
-    const P1 = _pdfGeoXY(cal.p1.lat, cal.p1.lon, lat0);
-    const P2 = _pdfGeoXY(cal.p2.lat, cal.p2.lon, lat0);
-    const P  = _pdfGeoXY(lat, lon, lat0);
-    const ppx = P2.x - P1.x, ppy = P2.y - P1.y;
-    const qx = cal.p2.fx - cal.p1.fx, qy = cal.p2.fy - cal.p1.fy;
-    const denom = ppx * ppx + ppy * ppy; if (!denom) return null;
-    const ra = (qx * ppx + qy * ppy) / denom;
-    const rb = (qy * ppx - qx * ppy) / denom;
-    const dx = P.x - P1.x, dy = P.y - P1.y;
-    return { fx: cal.p1.fx + ra * dx - rb * dy, fy: cal.p1.fy + rb * dx + ra * dy };
+    const cal = _pdfCalibration; if (!cal || !cal.fit) return null;
+    const f = cal.fit;
+    const x = lon * Math.cos(f.lat0 * Math.PI / 180), y = lat;
+    if (f.kind === 'affine') {
+        return { fx: f.abc[0] * x + f.abc[1] * y + f.abc[2], fy: f.def[0] * x + f.def[1] * y + f.def[2] };
+    }
+    const dx = x - f.P1.x, dy = y - f.P1.y;
+    return { fx: f.P1.fx + f.ra * dx - f.rb * dy, fy: f.P1.fy + f.rb * dx + f.ra * dy };
+}
+
+// 보정 RMS 잔차를 미터로 근사 (가장 멀리 떨어진 두 점의 지리거리/비율거리 사용)
+function _pdfCalibRmsMeters(pts, rmsFrac) {
+    if (!pts || pts.length < 2 || !rmsFrac) return null;
+    let best = 0, mpp = null;
+    for (let i = 0; i < pts.length; i++) for (let j = i + 1; j < pts.length; j++) {
+        const fd = Math.hypot(pts[i].fx - pts[j].fx, pts[i].fy - pts[j].fy);
+        if (fd > best) {
+            best = fd;
+            const gd = distance(pts[i].lat, pts[i].lon, pts[j].lat, pts[j].lon) * 1852; // NM→m
+            mpp = fd > 0 ? gd / fd : null;
+        }
+    }
+    return mpp ? rmsFrac * mpp : null;
+}
+
+// PDF 전체 페이지 텍스트에서 픽스(이름+좌표) 자동 추출
+async function _pdfExtractFixes() {
+    _pdfFixList = [];
+    if (!_pdfDoc) return;
+    const seen = new Set();
+    for (let pg = 1; pg <= _pdfDoc.numPages; pg++) {
+        let text;
+        try {
+            const p = await _pdfDoc.getPage(pg);
+            const tc = await p.getTextContent();
+            text = tc.items.map(it => it.str).join(' ');
+        } catch(e) { continue; }
+        const T = text.toUpperCase();
+        // ① 접미형 컴팩트: (이름) DDMMSS(.s)N DDDMMSS(.s)E
+        const re1 = /([A-Z]{3,5})?[\s:]*(\d{6}(?:\.\d+)?)\s*([NS])\s*(\d{7}(?:\.\d+)?)\s*([EW])/g;
+        let m;
+        while ((m = re1.exec(T)) !== null) {
+            const lat = _parseDms(m[2] + m[3]), lon = _parseDms(m[4] + m[5]);
+            if (lat == null || lon == null) continue;
+            _pdfAddFix(m[1], lat, lon, seen);
+        }
+        // ② 구분자형: DD MM SS.s N  DDD MM SS.s E
+        const re2 = /([A-Z]{3,5})?[\s:]*(\d{2,3})[°\s]+(\d{2})['′\s]+(\d{2}(?:\.\d+)?)["″\s]*([NS])[\s,]+(\d{2,3})[°\s]+(\d{2})['′\s]+(\d{2}(?:\.\d+)?)["″\s]*([EW])/g;
+        while ((m = re2.exec(T)) !== null) {
+            let lat = (+m[2]) + (+m[3]) / 60 + (+m[4]) / 3600; if (m[5] === 'S') lat = -lat;
+            let lon = (+m[6]) + (+m[7]) / 60 + (+m[8]) / 3600; if (m[9] === 'W') lon = -lon;
+            _pdfAddFix(m[1], lat, lon, seen);
+        }
+    }
+}
+function _pdfAddFix(name, lat, lon, seen) {
+    if (lat < -90 || lat > 90 || lon < -180 || lon > 180) return;
+    const nm = (name && /^[A-Z]{3,5}$/.test(name)) ? name : '';
+    const k = (nm || '') + lat.toFixed(4) + lon.toFixed(4);
+    if (seen.has(k)) return; seen.add(k);
+    _pdfFixList.push({ name: nm || `점${_pdfFixList.length + 1}`, lat, lon });
 }
 
 // 차트 위 항공기 심볼 갱신 (현재 위치 S.lat/lon, 방향 S.hdg)
@@ -8949,7 +9065,7 @@ function _pdfUpdateAcMarker() {
 
 // 보정 시작/재보정/삭제 토글
 function _pdfToggleCalibration() {
-    if (_pdfCalStep) { _pdfCancelCalibration(); return; }
+    if (_pdfCalActive) { _pdfCancelCalibration(); return; }
     if (_pdfCalibration) {
         if (confirm('이 차트는 이미 위치 보정되어 있습니다.\n\n확인 = 다시 보정\n취소 = 보정 삭제')) _pdfStartCalibration();
         else _pdfClearCalib();
@@ -8959,61 +9075,172 @@ function _pdfToggleCalibration() {
 }
 function _pdfStartCalibration() {
     if (!_pdfChartKey) return;
-    _pdfCalStep = 1; _pdfCalTmp = null;
-    _pdfShowCalOverlay('① 보정점 1/2\n좌표를 아는 지점을 탭하세요\n(활주로 끝·VOR·좌표 눈금 교차점 등)');
+    _pdfCalActive = true;
+    _pdfCalPts = [];
+    _pdfShowCalOverlay();
+    const hint = _pdfFixList.length
+        ? `픽스 좌표 ${_pdfFixList.length}개 자동 인식됨.\n차트에서 픽스를 탭한 뒤 이름을 고르세요.`
+        : `좌표를 아는 지점을 탭한 뒤 좌표를 입력하세요.\n(다음 페이지에서 픽스 좌표를 못 찾았습니다)`;
+    _pdfCalBanner(`위치 보정 · 3점 이상 권장\n${hint}`);
 }
 function _pdfCancelCalibration() {
-    _pdfCalStep = 0; _pdfCalTmp = null;
+    _pdfCalActive = false; _pdfCalPts = [];
     const o = document.getElementById('pdfCalOverlay'); if (o) o.remove();
+    const pk = document.getElementById('pdfFixPicker'); if (pk) pk.remove();
 }
-function _pdfShowCalOverlay(msg) {
+function _pdfCalBanner(msg) {
+    const b = document.getElementById('pdfCalBannerTxt');
+    if (b) b.innerHTML = msg.replace(/\n/g, '<br>');
+}
+function _pdfShowCalOverlay() {
     const area = document.getElementById('pdfViewArea'); if (!area) return;
     let o = document.getElementById('pdfCalOverlay'); if (o) o.remove();
     o = document.createElement('div');
     o.id = 'pdfCalOverlay';
     o.style.cssText = 'position:absolute;inset:0;z-index:8;cursor:crosshair;touch-action:none;';
-    o.innerHTML = `<div style="position:absolute;top:8px;left:8px;right:8px;background:rgba(0,0,0,0.85);color:#0ff;font-size:11px;padding:8px 10px;border:1px solid #0ff;border-radius:6px;white-space:pre-line;text-align:center;line-height:1.5;">${msg}<div style="margin-top:6px;"><span onclick="_pdfCancelCalibration()" style="display:inline-block;color:#ff5252;border:1px solid #ff5252;border-radius:4px;padding:3px 14px;cursor:pointer;">취소</span></div></div>`;
+    o.innerHTML = `
+        <div style="position:absolute;top:8px;left:8px;right:8px;background:rgba(0,0,0,0.85);color:#0ff;font-size:11px;padding:8px 10px;border:1px solid #0ff;border-radius:6px;text-align:center;line-height:1.5;">
+            <div id="pdfCalBannerTxt"></div>
+            <div style="margin-top:7px;display:flex;gap:8px;justify-content:center;">
+                <span onclick="_pdfCalUndo()" style="color:#ffca28;border:1px solid #ffca28;border-radius:4px;padding:3px 12px;cursor:pointer;">↶ 취소(점)</span>
+                <span onclick="_pdfCalFinish()" style="color:#00e676;border:1px solid #00e676;border-radius:4px;padding:3px 14px;cursor:pointer;">✔ 완료</span>
+                <span onclick="_pdfCancelCalibration()" style="color:#ff5252;border:1px solid #ff5252;border-radius:4px;padding:3px 12px;cursor:pointer;">✕ 종료</span>
+            </div>
+        </div>`;
     area.appendChild(o);
     let st = null, moved = false;
-    o.addEventListener('pointerdown', e => { st = { x: e.clientX, y: e.clientY, tx: _pdfTx, ty: _pdfTy }; moved = false; try { o.setPointerCapture(e.pointerId); } catch(_){} });
+    o.addEventListener('pointerdown', e => {
+        if (e.target.closest('span')) return;   // 버튼 탭은 무시
+        st = { x: e.clientX, y: e.clientY, tx: _pdfTx, ty: _pdfTy }; moved = false;
+        try { o.setPointerCapture(e.pointerId); } catch(_){}
+    });
     o.addEventListener('pointermove', e => {
         if (!st) return;
         const dx = e.clientX - st.x, dy = e.clientY - st.y;
         if (Math.abs(dx) > 6 || Math.abs(dy) > 6) moved = true;
         if (moved) { _pdfTx = st.tx + dx; _pdfTy = st.ty + dy; _pdfApplyTransform(); }
     });
-    o.addEventListener('pointerup', e => { const wasTap = st && !moved; const wasMove = moved; st = null; if (wasTap) _pdfCalCapture(e); else if (wasMove) _pdfScheduleQuality(); });
+    o.addEventListener('pointerup', e => {
+        const wasTap = st && !moved; const wasMove = moved; st = null;
+        if (wasTap && !e.target.closest('span')) _pdfCalCapture(e);
+        else if (wasMove) { _pdfScheduleQuality(); _pdfDrawCalDots(); }
+    });
 }
+
+// 보정 중 찍은 점들을 오버레이에 작은 원으로 표시
+function _pdfDrawCalDots() {
+    const o = document.getElementById('pdfCalOverlay'); if (!o) return;
+    o.querySelectorAll('.pdfCalDot').forEach(d => d.remove());
+    _pdfCalPts.forEach((p, i) => {
+        const sx = _pdfOx + _pdfTx + (p.fx * _pdfBaseW) * _pdfScale;
+        const sy = _pdfOy + _pdfTy + (p.fy * _pdfBaseH) * _pdfScale;
+        const d = document.createElement('div');
+        d.className = 'pdfCalDot';
+        d.style.cssText = `position:absolute;left:${sx}px;top:${sy}px;width:0;height:0;pointer-events:none;`;
+        d.innerHTML = `<div style="position:absolute;left:-6px;top:-6px;width:12px;height:12px;border-radius:50%;background:#00e676;border:2px solid #fff;box-shadow:0 0 3px #000;"></div><div style="position:absolute;left:9px;top:-8px;color:#00e676;font-size:10px;font-weight:bold;text-shadow:0 0 3px #000;">${i + 1}</div>`;
+        o.appendChild(d);
+    });
+}
+
+function _pdfCalUndo() {
+    if (!_pdfCalPts.length) return;
+    _pdfCalPts.pop();
+    _pdfDrawCalDots();
+    _pdfCalUpdateBanner();
+}
+function _pdfCalUpdateBanner() {
+    let msg = `위치 보정 · ${_pdfCalPts.length}점 등록`;
+    if (_pdfCalPts.length >= 2) {
+        const fit = _pdfFit(_pdfCalPts);
+        const rm = _pdfCalibRmsMeters(_pdfCalPts, fit.rms);
+        msg += fit.kind === 'affine'
+            ? ` · 아핀(오차 ≈ ${rm != null ? Math.round(rm) + 'm' : '--'})`
+            : ` · 2점(닮음)`;
+        msg += `\n점을 더 찍을수록 정확 · [✔ 완료]로 종료`;
+    } else {
+        msg += `\n픽스를 탭하고 이름을 선택하세요(3점 이상 권장)`;
+    }
+    _pdfCalBanner(msg);
+}
+
 function _pdfCalCapture(e) {
     const area = document.getElementById('pdfViewArea'); if (!area) return;
     const rc = area.getBoundingClientRect();
     const sx = e.clientX - rc.left, sy = e.clientY - rc.top;
     const fx = ((sx - _pdfOx - _pdfTx) / _pdfScale) / _pdfBaseW;
     const fy = ((sy - _pdfOy - _pdfTy) / _pdfScale) / _pdfBaseH;
+    // 좌표 선택(추출된 픽스 목록) → 없으면 수동 입력
+    _pdfPickCoord(coord => {
+        if (!coord) return;
+        _pdfCalPts.push({ fx, fy, lat: coord.lat, lon: coord.lon, name: coord.name || '' });
+        _pdfDrawCalDots();
+        _pdfCalUpdateBanner();
+    });
+}
 
-    const latS = prompt('이 지점의 위도(Latitude)\n십진수(예: 37.4631) 또는 DMS(예: 37 27 47 N)');
-    if (latS === null) return;
-    const lat = _parseLatLonInput(latS);
-    if (lat === null || lat < -90 || lat > 90) { alert('위도 형식이 올바르지 않습니다. 다시 탭해 주세요.'); return; }
-    const lonS = prompt('이 지점의 경도(Longitude)\n십진수(예: 126.4407) 또는 DMS(예: 126 26 27 E)');
-    if (lonS === null) return;
-    const lon = _parseLatLonInput(lonS);
-    if (lon === null || lon < -180 || lon > 180) { alert('경도 형식이 올바르지 않습니다. 다시 탭해 주세요.'); return; }
+// 좌표 선택 모달: 추출된 픽스 목록 + 수동 입력
+function _pdfPickCoord(cb) {
+    const area = document.getElementById('pdfViewArea'); if (!area) return;
+    const ex = document.getElementById('pdfFixPicker'); if (ex) ex.remove();
+    const box = document.createElement('div');
+    box.id = 'pdfFixPicker';
+    box.style.cssText = 'position:absolute;inset:0;z-index:10;background:rgba(0,0,0,0.75);display:flex;align-items:center;justify-content:center;';
+    let listHtml = '';
+    _pdfFixList.forEach((f, i) => {
+        listHtml += `<div data-i="${i}" class="pdfFixRow" style="padding:9px 12px;border-bottom:1px solid #222;cursor:pointer;color:#eee;font-size:12px;display:flex;justify-content:space-between;gap:10px;">
+            <span style="color:#00e5ff;font-weight:bold;">${f.name}</span>
+            <span style="color:#aaa;font-size:10px;">${f.lat.toFixed(4)}, ${f.lon.toFixed(4)}</span></div>`;
+    });
+    box.innerHTML = `
+        <div style="width:86%;max-width:340px;max-height:80%;background:#0c0c0c;border:1px solid #00e5ff;border-radius:8px;display:flex;flex-direction:column;overflow:hidden;">
+            <div style="padding:9px 12px;background:#001a20;color:#00e5ff;font-size:12px;font-weight:bold;flex-shrink:0;">이 지점의 좌표 선택</div>
+            <div style="flex:1;overflow-y:auto;">${listHtml || '<div style="padding:14px;color:#888;font-size:11px;text-align:center;">자동 인식된 픽스가 없습니다.<br>아래 [직접 입력]을 사용하세요.</div>'}</div>
+            <div style="display:flex;border-top:1px solid #222;flex-shrink:0;">
+                <div id="pdfFixManual" style="flex:1;padding:10px;text-align:center;color:#ffca28;font-size:12px;cursor:pointer;border-right:1px solid #222;">✎ 직접 입력</div>
+                <div id="pdfFixCancel" style="flex:1;padding:10px;text-align:center;color:#ff5252;font-size:12px;cursor:pointer;">취소</div>
+            </div>
+        </div>`;
+    area.appendChild(box);
+    box.querySelectorAll('.pdfFixRow').forEach(row => {
+        row.addEventListener('click', () => {
+            const f = _pdfFixList[+row.getAttribute('data-i')];
+            box.remove(); cb({ lat: f.lat, lon: f.lon, name: f.name });
+        });
+    });
+    box.querySelector('#pdfFixCancel').addEventListener('click', () => { box.remove(); cb(null); });
+    box.querySelector('#pdfFixManual').addEventListener('click', () => {
+        box.remove();
+        const latS = prompt('위도(Latitude)\n십진수(예: 37.4631) 또는 DMS(예: 37 27 47 N)');
+        if (latS === null) { cb(null); return; }
+        const lat = _parseLatLonInput(latS);
+        if (lat === null || lat < -90 || lat > 90) { alert('위도 형식 오류'); cb(null); return; }
+        const lonS = prompt('경도(Longitude)\n십진수(예: 126.4407) 또는 DMS(예: 126 26 27 E)');
+        if (lonS === null) { cb(null); return; }
+        const lon = _parseLatLonInput(lonS);
+        if (lon === null || lon < -180 || lon > 180) { alert('경도 형식 오류'); cb(null); return; }
+        cb({ lat, lon, name: '' });
+    });
+}
 
-    const pt = { fx, fy, lat, lon };
-    if (_pdfCalStep === 1) {
-        _pdfCalTmp = pt; _pdfCalStep = 2;
-        _pdfShowCalOverlay('② 보정점 2/2\n다른 지점을 탭하세요\n(첫 점과 멀리 떨어질수록 정확)');
-    } else {
-        if (Math.hypot(pt.fx - _pdfCalTmp.fx, pt.fy - _pdfCalTmp.fy) < 0.02) {
-            alert('두 점이 너무 가깝습니다. 더 멀리 떨어진 지점을 선택하세요.'); return;
-        }
-        _pdfCalibration = { p1: _pdfCalTmp, p2: pt };
-        _saveChartCalib(_pdfChartKey, _pdfCalibration);
-        _pdfCancelCalibration();
-        _pdfUpdateAcMarker();
-        alert('위치 보정 완료! 현재 위치(▲)가 차트에 표시됩니다.\n\n⚠ 참고용입니다. 실제 항법에 사용하지 마세요.');
-    }
+function _pdfCalFinish() {
+    if (_pdfCalPts.length < 2) { alert('점을 2개 이상 찍어야 합니다. (3개 이상 권장)'); return; }
+    // 점들이 모두 너무 가까우면 거부
+    let far = 0;
+    for (let i = 0; i < _pdfCalPts.length; i++) for (let j = i + 1; j < _pdfCalPts.length; j++)
+        far = Math.max(far, Math.hypot(_pdfCalPts[i].fx - _pdfCalPts[j].fx, _pdfCalPts[i].fy - _pdfCalPts[j].fy));
+    if (far < 0.02) { alert('점들이 너무 가깝습니다. 더 멀리 떨어진 지점을 포함하세요.'); return; }
+
+    const pts = _pdfCalPts.slice();
+    const fit = _pdfFit(pts);
+    _pdfCalibration = { pts, fit };
+    _saveChartCalib(_pdfChartKey, _pdfCalibration);
+    _pdfCancelCalibration();
+    _pdfUpdateAcMarker();
+    const rm = _pdfCalibRmsMeters(pts, fit.rms);
+    const kindTxt = fit.kind === 'affine' ? `아핀 변환(${fit.n}점)` : '닮음 변환(2점)';
+    alert(`위치 보정 완료!\n방식: ${kindTxt}` +
+          (rm != null ? `\n추정 오차(RMS): 약 ${Math.round(rm)}m` : '') +
+          `\n\n현재 위치(▲)가 차트에 표시됩니다.\n⚠ 참고용입니다. 실제 항법에 사용하지 마세요.`);
 }
 
 // 캔버스 픽셀 예산 — 이 한도 안에서 가능한 한 높은 해상도로 렌더한다.
@@ -9041,7 +9268,7 @@ async function openChart(icao, chartNum, url) {
 
     _pdfChartKey = key;
     _pdfCalibration = _loadChartCalib(key);
-    _pdfCalStep = 0; _pdfCalTmp = null;
+    _pdfCalActive = false; _pdfCalPts = []; _pdfFixList = [];
 
     const ex = document.getElementById('pdfViewerOverlay');
     if (ex) ex.remove();
@@ -9083,6 +9310,7 @@ async function openChart(icao, chartNum, url) {
         _pdfUpdateAcMarker();
         if (_pdfAcTimer) clearInterval(_pdfAcTimer);
         _pdfAcTimer = setInterval(_pdfUpdateAcMarker, 1000);   // GPS 위치 실시간 반영
+        _pdfExtractFixes();   // 텍스트 페이지에서 픽스 좌표 자동 추출(백그라운드)
     } catch(e) {
         const area = document.getElementById('pdfViewArea');
         if (area) area.innerHTML = `<div style="color:#f44336;padding:30px;font-size:12px;">오류: ${e.message}</div>`;
@@ -9218,6 +9446,7 @@ function _pdfApplyTransform() {
     const lz = document.getElementById('pdfZoomLabel');
     if (lz) lz.textContent = Math.round(_pdfScale * 100) + '%';
     _pdfUpdateAcMarker();   // 항공기 심볼도 이동/줌에 맞춰 갱신
+    if (_pdfCalActive) _pdfDrawCalDots();   // 보정 점들도 이동/줌에 맞춰 갱신
 }
 
 const _PDF_ZOOM_STEP = 0.25;
@@ -9334,7 +9563,7 @@ function closePdfViewer() {
     _pdfDoc = null; _pdfMD = null;
     if (_pdfReqTimer) { clearTimeout(_pdfReqTimer); _pdfReqTimer = null; }
     if (_pdfAcTimer) { clearInterval(_pdfAcTimer); _pdfAcTimer = null; }
-    _pdfCalStep = 0; _pdfCalTmp = null;
+    _pdfCalActive = false; _pdfCalPts = []; _pdfFixList = [];
     _pdfRenderToken++;   // 진행 중 렌더 무효화
     const ov = document.getElementById('pdfViewerOverlay'); if (ov) ov.remove();
 }
