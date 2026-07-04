@@ -7737,6 +7737,9 @@ const airspaceCategories = [
 // 김포 기점 50NM 호(Arc) 생성 (T07/T15 남단)
 const _GIMPO = [37.55694, 126.79750];
 function _tmaArc(p3, p5) { return arcPoints(p3[0], p3[1], p5[0], p5[1], _GIMPO[0], _GIMPO[1], 'R', 24); }
+// 제주 ARP 기준 호(Arc) 생성 (dir 'R'=시계방향, 'L'=반시계방향)
+const _JEJU = [33.51222, 126.49278];
+function _jjArc(from, to, dir) { return arcPoints(from[0], from[1], to[0], to[1], _JEJU[0], _JEJU[1], dir, 20); }
 
 const airspaceData = {
   // ── 관제권 반경 (AIP ENR 2.1) — 원형 레이어 ──
@@ -7748,6 +7751,9 @@ const airspaceData = {
     { name: '수원 (RKSW)',         center: [37.23944, 127.00694], radiiNM: [5] },
     { name: '이천비행장',           center: [37.20111, 127.47194], radiiNM: [5] },
     { name: '평택 (Humphreys)',    center: [36.96, 127.03333],    radiiNM: [5] },
+    // 비행장교통구역(ATZ, Class D) — SFC~1,000ft
+    { name: '태안 ATZ (Class D)',  center: [36.64472, 126.29722], radiiNM: [3] },
+    { name: '포승 ATZ (Class D)',  center: [36.99139, 126.8075],  radiiNM: [3] },
   ],
   // ── 접근통제구역(TMA) — 다각형 레이어 ──
   airspace: [
@@ -7767,6 +7773,13 @@ const airspaceData = {
       coords: [[37.01389,126.28111],[37.04306,126.55694],[36.99528,126.595],[36.96944,126.48111]] },
     { name: 'Osan TMA T15', alt: '1,000ft AGL ~ 11,500ft AMSL',
       coords: [[36.89361,126.67556],[37.04167,127.66444]].concat(_tmaArc([37.03611,127.66444],[36.72083,126.77028])).concat([[36.74083,126.74306]]) },
+    // ── 제주 Class B (ENR 2.2) — ARP 33°30'44"N 126°29'34"E ──
+    { name: 'Jeju Class B 1구역', alt: 'SFC ~ 10,000ft AMSL',
+      center: _JEJU, radiiNM: [5] },
+    { name: 'Jeju Class B 2구역', alt: '1,000ft ~ 10,000ft AMSL',
+      coords: _jjArc([33.44306,126.43722],[33.51333,126.59222],'R').concat(_jjArc([33.51417,126.69194],[33.37361,126.38194],'L')) },
+    { name: 'Jeju Class B 3구역', alt: '2,000ft ~ 10,000ft AMSL',
+      coords: _jjArc([33.37361,126.38194],[33.51417,126.69194],'R').concat(_jjArc([33.51583,126.89111],[33.23472,126.27167],'L')) },
   ],
   restricted: [],
   moa: [],
