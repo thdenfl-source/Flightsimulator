@@ -9118,28 +9118,35 @@ const _PDF_FIX_STOP = new Set([
     'NORTH','SOUTH','EAST','WEST','AND','THE','FOR','WITH','FROM','NOTE','WARNING','CAUTION'
 ]);
 
-// 좌표 매치 위치 주변(앞·뒤)에서 이름과 종류(IAF/VOR 등) 탐색
-//  반환: { name, type, priority }  priority 2=IAF/항법시설, 1=명명픽스, 0=무명
+// 좌표 매치 위치 주변(앞·뒤)에서 이름과 종류(IAF/FAF/VOR 등) 탐색
+//  반환: { name, type, priority }
+//  priority 3=IAF/FAF(최우선), 2=항법시설, 1=명명픽스, 0=무명
 function _pdfNameTypeAround(T, s, e) {
-    const pre  = T.slice(Math.max(0, s - 34), s);
-    const post = T.slice(e, Math.min(T.length, e + 20));
-    const near = T.slice(Math.max(0, s - 34), Math.min(T.length, e + 20));
-    // ① 항법시설: IDENT + (VORTAC/VOR/DME/TACAN/NDB) — 좌표 앞 또는 뒤
-    let m = pre.match(/\b([A-Z]{2,4})\s+(VORTAC|VOR\/DME|VOR|DME|TACAN|NDB)\b[^A-Z0-9]{0,14}$/);
-    if (m && !_PDF_FIX_STOP.has(m[1])) return { name: m[1], type: m[2].replace('/DME',''), priority: 2 };
-    m = post.match(/^[^A-Z0-9]{0,10}([A-Z]{2,4})\s+(VORTAC|VOR\/DME|VOR|DME|TACAN|NDB)\b/);
-    if (m && !_PDF_FIX_STOP.has(m[1])) return { name: m[1], type: m[2].replace('/DME',''), priority: 2 };
-    // ② IAF 라벨 근처 + 인접 식별자(앞 우선, 없으면 뒤)
-    const isIaf = /\bIAF\b/.test(near);
+    const pre  = T.slice(Math.max(0, s - 40), s);
+    const post = T.slice(e, Math.min(T.length, e + 24));
+    const near = T.slice(Math.max(0, s - 40), Math.min(T.length, e + 24));
+
+    // 인접 식별자(픽스 이름) — 앞 우선, 없으면 뒤 (라벨 약어는 제외)
     let nm = '';
-    m = pre.match(/(?:^|[^A-Z])([A-Z]{3,5})[^A-Z0-9]{0,6}$/);
+    let m = pre.match(/(?:^|[^A-Z])([A-Z]{3,5})[^A-Z0-9]{0,6}$/);
     if (m && !_PDF_FIX_STOP.has(m[1])) nm = m[1];
     if (!nm) {
         m = post.match(/^[^A-Z0-9]{0,6}([A-Z]{3,5})(?:[^A-Z]|$)/);
         if (m && !_PDF_FIX_STOP.has(m[1])) nm = m[1];
     }
-    if (isIaf) return { name: nm, type: 'IAF', priority: 2 };
-    if (nm)    return { name: nm, type: '', priority: 1 };
+
+    // ① IAF / FAF 라벨이 근처에 있으면 최우선(접근 절차의 핵심 픽스)
+    if (/\bFAF\b/.test(near)) return { name: nm, type: 'FAF', priority: 3 };
+    if (/\bIAF\b/.test(near)) return { name: nm, type: 'IAF', priority: 3 };
+
+    // ② 항법시설: IDENT + (VORTAC/VOR/DME/TACAN/NDB) — 좌표 앞 또는 뒤
+    m = pre.match(/\b([A-Z]{2,4})\s+(VORTAC|VOR\/DME|VOR|DME|TACAN|NDB)\b[^A-Z0-9]{0,14}$/);
+    if (m && !_PDF_FIX_STOP.has(m[1])) return { name: m[1], type: m[2].replace('/DME',''), priority: 2 };
+    m = post.match(/^[^A-Z0-9]{0,10}([A-Z]{2,4})\s+(VORTAC|VOR\/DME|VOR|DME|TACAN|NDB)\b/);
+    if (m && !_PDF_FIX_STOP.has(m[1])) return { name: m[1], type: m[2].replace('/DME',''), priority: 2 };
+
+    // ③ 그 외 명명 픽스 / 무명
+    if (nm) return { name: nm, type: '', priority: 1 };
     return { name: '', type: '', priority: 0 };
 }
 
@@ -9348,8 +9355,10 @@ function _pdfPickCoord(cb) {
     box.style.cssText = 'position:absolute;inset:0;z-index:10;background:rgba(0,0,0,0.75);display:flex;align-items:center;justify-content:center;';
     let listHtml = '';
     _pdfFixList.forEach((f, i) => {
-        const nameCol = f.priority >= 2 ? '#00e676' : (f.named ? '#00e5ff' : '#888');
-        const tag = f.type ? ` <span style="color:#ffca28;font-size:9px;">${f.type}</span>` : '';
+        const isProc = f.type === 'IAF' || f.type === 'FAF';
+        const nameCol = isProc ? '#00e676' : (f.priority >= 2 ? '#26c6da' : (f.named ? '#00e5ff' : '#888'));
+        const tagCol  = isProc ? '#00e676' : '#ffca28';
+        const tag = f.type ? ` <span style="color:${tagCol};font-size:9px;font-weight:bold;">${f.type}</span>` : '';
         const nameTxt = f.named ? f.name : `· ${f.name}`;
         listHtml += `<div data-i="${i}" class="pdfFixRow" style="padding:11px 12px;border-bottom:1px solid #222;cursor:pointer;color:#eee;font-size:12px;display:flex;justify-content:space-between;gap:10px;align-items:center;">
             <span style="color:${nameCol};font-weight:bold;">${nameTxt}${tag}</span>
@@ -9357,7 +9366,7 @@ function _pdfPickCoord(cb) {
     });
     box.innerHTML = `
         <div style="width:86%;max-width:340px;max-height:80%;background:#0c0c0c;border:1px solid #00e5ff;border-radius:8px;display:flex;flex-direction:column;overflow:hidden;">
-            <div style="padding:9px 12px;background:#001a20;color:#00e5ff;font-size:12px;font-weight:bold;flex-shrink:0;">이 지점의 좌표 선택 <span style="color:#00e676;font-size:9px;">■ IAF/VOR</span></div>
+            <div style="padding:9px 12px;background:#001a20;color:#00e5ff;font-size:12px;font-weight:bold;flex-shrink:0;">이 지점의 좌표 선택 <span style="color:#00e676;font-size:9px;">■ IAF/FAF 우선</span></div>
             <div style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;">${listHtml || '<div style="padding:14px;color:#888;font-size:11px;text-align:center;">자동 인식된 픽스가 없습니다.<br>아래 [직접 입력]을 사용하세요.</div>'}</div>
             <div style="display:flex;border-top:1px solid #222;flex-shrink:0;">
                 <div id="pdfFixManual" style="flex:1;padding:12px;text-align:center;color:#ffca28;font-size:12px;cursor:pointer;border-right:1px solid #222;">✎ 직접 입력</div>
