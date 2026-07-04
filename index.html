@@ -9011,18 +9011,26 @@ const _PDF_FIX_STOP = new Set([
     'NORTH','SOUTH','EAST','WEST','AND','THE','FOR','WITH','FROM','NOTE','WARNING','CAUTION'
 ]);
 
-// 좌표 매치 위치 주변에서 이름과 종류(IAF/VOR 등) 탐색
+// 좌표 매치 위치 주변(앞·뒤)에서 이름과 종류(IAF/VOR 등) 탐색
 //  반환: { name, type, priority }  priority 2=IAF/항법시설, 1=명명픽스, 0=무명
-function _pdfNameTypeBefore(T, idx) {
-    const pre  = T.slice(Math.max(0, idx - 34), idx);
-    const near = T.slice(Math.max(0, idx - 34), Math.min(T.length, idx + 12));
-    // ① 항법시설: IDENT + (VORTAC/VOR/DME/TACAN/NDB) — 좌표 앞에 위치
+function _pdfNameTypeAround(T, s, e) {
+    const pre  = T.slice(Math.max(0, s - 34), s);
+    const post = T.slice(e, Math.min(T.length, e + 20));
+    const near = T.slice(Math.max(0, s - 34), Math.min(T.length, e + 20));
+    // ① 항법시설: IDENT + (VORTAC/VOR/DME/TACAN/NDB) — 좌표 앞 또는 뒤
     let m = pre.match(/\b([A-Z]{2,4})\s+(VORTAC|VOR\/DME|VOR|DME|TACAN|NDB)\b[^A-Z0-9]{0,14}$/);
     if (m && !_PDF_FIX_STOP.has(m[1])) return { name: m[1], type: m[2].replace('/DME',''), priority: 2 };
-    // ② IAF 라벨 근처 + 바로 앞 식별자
+    m = post.match(/^[^A-Z0-9]{0,10}([A-Z]{2,4})\s+(VORTAC|VOR\/DME|VOR|DME|TACAN|NDB)\b/);
+    if (m && !_PDF_FIX_STOP.has(m[1])) return { name: m[1], type: m[2].replace('/DME',''), priority: 2 };
+    // ② IAF 라벨 근처 + 인접 식별자(앞 우선, 없으면 뒤)
     const isIaf = /\bIAF\b/.test(near);
+    let nm = '';
     m = pre.match(/(?:^|[^A-Z])([A-Z]{3,5})[^A-Z0-9]{0,6}$/);
-    const nm = (m && !_PDF_FIX_STOP.has(m[1])) ? m[1] : '';
+    if (m && !_PDF_FIX_STOP.has(m[1])) nm = m[1];
+    if (!nm) {
+        m = post.match(/^[^A-Z0-9]{0,6}([A-Z]{3,5})(?:[^A-Z]|$)/);
+        if (m && !_PDF_FIX_STOP.has(m[1])) nm = m[1];
+    }
     if (isIaf) return { name: nm, type: 'IAF', priority: 2 };
     if (nm)    return { name: nm, type: '', priority: 1 };
     return { name: '', type: '', priority: 0 };
@@ -9047,14 +9055,14 @@ async function _pdfExtractFixes() {
         while ((m = re1.exec(T)) !== null) {
             const lat = _parseDms(m[1] + m[2]), lon = _parseDms(m[3] + m[4]);
             if (lat == null || lon == null) continue;
-            _pdfAddFix(_pdfNameTypeBefore(T, m.index), lat, lon, seen);
+            _pdfAddFix(_pdfNameTypeAround(T, m.index, re1.lastIndex), lat, lon, seen);
         }
         // ② 구분자형: DD MM SS.s N  DDD MM SS.s E
         const re2 = /(\d{2,3})[°\s]+(\d{2})['′\s]+(\d{2}(?:\.\d+)?)["″\s]*([NS])[\s,]+(\d{2,3})[°\s]+(\d{2})['′\s]+(\d{2}(?:\.\d+)?)["″\s]*([EW])/g;
         while ((m = re2.exec(T)) !== null) {
             let lat = (+m[1]) + (+m[2]) / 60 + (+m[3]) / 3600; if (m[4] === 'S') lat = -lat;
             let lon = (+m[5]) + (+m[6]) / 60 + (+m[7]) / 3600; if (m[8] === 'W') lon = -lon;
-            _pdfAddFix(_pdfNameTypeBefore(T, m.index), lat, lon, seen);
+            _pdfAddFix(_pdfNameTypeAround(T, m.index, re2.lastIndex), lat, lon, seen);
         }
     }
     // IAF/VOR 등(priority 2) → 명명픽스 → 무명 순으로 정렬(매칭 편의)
@@ -9136,20 +9144,28 @@ function _pdfShowCalOverlay() {
     o.id = 'pdfCalOverlay';
     o.style.cssText = 'position:absolute;inset:0;z-index:8;cursor:crosshair;touch-action:none;';
     o.innerHTML = `
-        <div style="position:absolute;top:8px;left:8px;right:8px;background:rgba(0,0,0,0.85);color:#0ff;font-size:11px;padding:8px 10px;border:1px solid #0ff;border-radius:6px;text-align:center;line-height:1.5;">
+        <div id="pdfCalBar" style="position:absolute;top:8px;left:8px;right:8px;background:rgba(0,0,0,0.88);color:#0ff;font-size:11px;padding:8px 10px;border:1px solid #0ff;border-radius:6px;text-align:center;line-height:1.5;">
             <div id="pdfCalBannerTxt"></div>
             <div style="margin-top:7px;display:flex;gap:8px;justify-content:center;">
-                <span onclick="_pdfCalUndo()" style="color:#ffca28;border:1px solid #ffca28;border-radius:4px;padding:3px 12px;cursor:pointer;">↶ 취소(점)</span>
-                <span onclick="_pdfCalFinish()" style="color:#00e676;border:1px solid #00e676;border-radius:4px;padding:3px 14px;cursor:pointer;">✔ 완료</span>
-                <span onclick="_pdfCancelCalibration()" style="color:#ff5252;border:1px solid #ff5252;border-radius:4px;padding:3px 12px;cursor:pointer;">✕ 종료</span>
+                <span id="pdfCalUndoBtn" style="color:#ffca28;border:1px solid #ffca28;border-radius:4px;padding:5px 12px;cursor:pointer;">↶ 취소(점)</span>
+                <span id="pdfCalDoneBtn" style="color:#00e676;border:1px solid #00e676;border-radius:4px;padding:5px 16px;cursor:pointer;font-weight:bold;">✔ 완료</span>
+                <span id="pdfCalExitBtn" style="color:#ff5252;border:1px solid #ff5252;border-radius:4px;padding:5px 12px;cursor:pointer;">✕ 종료</span>
             </div>
         </div>`;
     area.appendChild(o);
+    // 버튼은 pointerup으로 직접 처리(유령 클릭·캡처 문제 회피)
+    const bind = (id, fn) => {
+        const el = o.querySelector('#' + id);
+        if (el) el.addEventListener('pointerup', e => { e.stopPropagation(); e.preventDefault(); fn(); });
+    };
+    bind('pdfCalUndoBtn', _pdfCalUndo);
+    bind('pdfCalDoneBtn', _pdfCalFinish);
+    bind('pdfCalExitBtn', _pdfCancelCalibration);
+
     let st = null, moved = false;
     o.addEventListener('pointerdown', e => {
-        if (e.target.closest('span')) return;   // 버튼 탭은 무시
+        if (e.target.closest('#pdfCalBar')) return;   // 상단 바(버튼) 탭은 무시
         st = { x: e.clientX, y: e.clientY, tx: _pdfTx, ty: _pdfTy }; moved = false;
-        try { o.setPointerCapture(e.pointerId); } catch(_){}
     });
     o.addEventListener('pointermove', e => {
         if (!st) return;
@@ -9158,8 +9174,9 @@ function _pdfShowCalOverlay() {
         if (moved) { _pdfTx = st.tx + dx; _pdfTy = st.ty + dy; _pdfApplyTransform(); }
     });
     o.addEventListener('pointerup', e => {
+        if (e.target.closest('#pdfCalBar')) { st = null; return; }
         const wasTap = st && !moved; const wasMove = moved; st = null;
-        if (wasTap && !e.target.closest('span')) _pdfCalCapture(e);
+        if (wasTap) _pdfCalCapture(e);
         else if (wasMove) { _pdfScheduleQuality(); _pdfDrawCalDots(); }
     });
 }
