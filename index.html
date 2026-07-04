@@ -7729,7 +7729,27 @@ const airspaceCategories = [
   { key: 'moa',        label: 'MOA',           color: '#ba68c8', fill: 0.10 },
   { key: 'prohibited', label: '금지공역 (P)',  color: '#f44336', fill: 0.12 },
   { key: 'ufa',        label: 'UFA 공역',      color: '#ffee58', fill: 0.10 },
+  { key: 'tourist',    label: '관광비행로',     color: '#26c6da', fill: 0.08 },
+  { key: 'holding',    label: '공로 대기지점',   color: '#ff7043', fill: 0.06 },
 ];
+
+// 대기 패턴(레이스트랙 근사 타원) — 픽스·진입방향·회전방향으로 생성
+function _holdPattern(F, ib, turn) {
+  const a = 4.0, b = 1.5;                       // 반장축·반단축(NM)
+  const side = turn === 'R' ? ib + 90 : ib - 90;
+  const back = ib + 180;
+  let c = destPoint(F[0], F[1], back, a);       // 축 방향으로 뒤로
+  c = destPoint(c[0], c[1], side, b);           // 회전 방향으로 오프셋(픽스가 앞 가장자리)
+  const pts = [];
+  for (let i = 0; i <= 36; i++) {
+    const th = i * 10 * Math.PI / 180;
+    const x = a * Math.cos(th), y = b * Math.sin(th);
+    let p = destPoint(c[0], c[1], x >= 0 ? back : back + 180, Math.abs(x));
+    p = destPoint(p[0], p[1], y >= 0 ? side : side + 180, Math.abs(y));
+    pts.push(p);
+  }
+  return pts;
+}
 
 // 항목 형식:
 //  원(관제권):   { name, center:[lat,lon], radiiNM:[...] }
@@ -7785,6 +7805,19 @@ const airspaceData = {
   moa: [],
   prohibited: [],
   ufa: [],
+  // ── 관광비행로 (ENR 3.5) — 선형 ──
+  tourist: [
+    { name: '단양 관광비행로', line: [[36.95694,128.33278],[36.93972,128.30333],[36.97972,128.34333],[36.97944,128.37194],[37.005,128.34583],[37.00028,128.38667],[37.03,128.38389],[37.04361,128.4125],[37.06028,128.41556]] },
+    { name: '구미 관광비행로(기준점)', point: [36.10333,128.35139] },
+  ],
+  // ── 공로 대기지점 (ENR 3.6) — 마커 + 대기패턴 ──
+  holding: [
+    { name: 'SAKTI',    fix: [36.85,127.76667],    inbound: 318, turn: 'L', alt: 'FL180~FL200' },
+    { name: 'BIGOB',    fix: [36.72361,128.16444], inbound: 313, turn: 'R', alt: 'FL210~FL360' },
+    { name: 'ATASO',    fix: [35.89556,126.94917], inbound: 13,  turn: 'R', alt: 'FL230~FL260' },
+    { name: 'NONOS',    fix: [36.67944,124.41472], inbound: 8,   turn: 'R', alt: 'FL200~FL310' },
+    { name: 'CJU HOLD', fix: [33.65278,126.92056], inbound: 236, turn: 'L', alt: 'FL180~FL260' },
+  ],
 };
 
 const airspaceOn = {};        // { key: bool }
@@ -7818,6 +7851,30 @@ function _drawAirspaceCat(key) {
       });
       dot.bindTooltip(item.name, { sticky: true });
       dot.addTo(leafMap); airspaceLayers[key].push(dot);
+    } else if (item.fix && item.inbound != null) {
+      // 대기지점(홀딩): 픽스 마커 + 대기 패턴(레이스트랙)
+      const pat = L.polygon(_holdPattern(item.fix, item.inbound, item.turn), {
+        color: meta.color, weight: 1.3, opacity: 0.85, dashArray: '4,3',
+        fillColor: meta.color, fillOpacity: meta.fill
+      });
+      pat.addTo(leafMap); airspaceLayers[key].push(pat);
+      const mk = L.circleMarker(item.fix, {
+        radius: 4, color: '#fff', weight: 1.5, fillColor: meta.color, fillOpacity: 1
+      });
+      mk.bindTooltip(`${item.name} · ${item.turn === 'R' ? '우선회' : '좌선회'}` + (item.alt ? ` · ${item.alt}` : ''), { sticky: true });
+      mk.addTo(leafMap); airspaceLayers[key].push(mk);
+    } else if (item.line && item.line.length >= 2) {
+      // 선형(관광비행로)
+      const pl = L.polyline(item.line, { color: meta.color, weight: 2.5, opacity: 0.9 });
+      pl.bindTooltip(item.name, { sticky: true });
+      pl.addTo(leafMap); airspaceLayers[key].push(pl);
+    } else if (item.point) {
+      // 단일 포인트
+      const mk = L.circleMarker(item.point, {
+        radius: 4, color: meta.color, weight: 1.5, fillColor: meta.color, fillOpacity: 0.9
+      });
+      mk.bindTooltip(item.name, { sticky: true });
+      mk.addTo(leafMap); airspaceLayers[key].push(mk);
     } else if (item.coords && item.coords.length >= 3) {
       // 다각형(공역)
       const poly = L.polygon(item.coords, {
