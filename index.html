@@ -1258,8 +1258,8 @@ body.solo-mode .solo-panel-visible {
           <span onclick="toggleFdrPanel()" style="cursor:pointer;color:#555;font-size:13px;">✕</span>
         </div>
         <div id="fdr-file-row">
-          <label for="fdr-file-input">📂 GPX 파일 열기</label>
-          <input id="fdr-file-input" type="file" accept=".gpx" style="display:none" onchange="loadFdrFile(this)">
+          <label for="fdr-file-input">📂 GPX / KML 파일 열기</label>
+          <input id="fdr-file-input" type="file" accept=".gpx,.kml" style="display:none" onchange="loadFdrFile(this)">
         </div>
         <div id="fdr-status">파일을 선택하세요</div>
         <div id="fdr-track-info"></div>
@@ -8065,9 +8065,10 @@ function loadFdrFile(input) {
   if (!file) return;
   document.getElementById('fdr-status').textContent = '파싱 중…';
   const reader = new FileReader();
+  const isKml = /\.kml$/i.test(file.name);
   reader.onload = e => {
     try {
-      _fdrRawTrack = _parseFdrGpx(e.target.result);
+      _fdrRawTrack = isKml ? _parseFdrKml(e.target.result) : _parseFdrGpx(e.target.result);
       _fdrTrack    = _fdrInterpolate(_fdrRawTrack, 50);
       if (_fdrTrack.length < 2) {
         document.getElementById('fdr-status').textContent = '트랙 포인트 없음';
@@ -8120,6 +8121,63 @@ function _parseFdrGpx(xmlStr) {
     prevLat = lat; prevLon = lon; prevTimeMs = timeMs;
   }
   // Smooth speed with simple 3-point average
+  for (let i = 1; i < track.length - 1; i++) {
+    track[i].speedKt = (track[i-1].speedKt + track[i].speedKt + track[i+1].speedKt) / 3;
+  }
+  return track;
+}
+
+// KML FDR 파서 — gx:Track(시간 포함) 우선, 없으면 LineString 좌표열 사용
+function _parseFdrKml(xmlStr) {
+  const doc = new DOMParser().parseFromString(xmlStr, 'application/xml');
+  // 네임스페이스(gx:) 무관하게 로컬명으로 조회
+  const byLocal = local => Array.from(doc.getElementsByTagNameNS('*', local));
+  const track = [];
+
+  // ① gx:Track: <when> … <gx:coord>lon lat alt</gx:coord> 쌍
+  const coords = byLocal('coord');
+  const whens  = byLocal('when');
+  if (coords.length) {
+    for (let i = 0; i < coords.length; i++) {
+      const p = coords[i].textContent.trim().split(/\s+/).map(Number); // lon lat alt
+      if (p.length < 2 || isNaN(p[0]) || isNaN(p[1])) continue;
+      const timeMs = whens[i] ? new Date(whens[i].textContent).getTime() : (track.length * 1000);
+      track.push({ lat: p[1], lon: p[0], altM: p[2] || 0, speedKt: 0, timeMs });
+    }
+  }
+
+  // ② LineString/coordinates 좌표열(시간 없음 → 1초 간격 부여)
+  if (track.length < 2) {
+    track.length = 0;
+    const csNodes = byLocal('coordinates');
+    for (const cs of csNodes) {
+      const tokens = cs.textContent.trim().split(/\s+/);
+      for (const tk of tokens) {
+        const p = tk.split(',').map(Number); // lon,lat,alt
+        if (p.length < 2 || isNaN(p[0]) || isNaN(p[1])) continue;
+        track.push({ lat: p[1], lon: p[0], altM: p[2] || 0, speedKt: 0, timeMs: track.length * 1000 });
+      }
+      if (track.length >= 2) break;   // 첫 유효 트랙만 사용
+    }
+  }
+
+  if (track.length < 2) throw new Error('KML 트랙 좌표 없음 (gx:Track 또는 LineString 필요)');
+
+  // 시간이 없는(모두 0) 경우 index 기반 시간 부여 보정
+  if (track[track.length - 1].timeMs <= track[0].timeMs) {
+    track.forEach((t, i) => { t.timeMs = i * 1000; });
+  }
+
+  // 속도 계산 + 3점 평활(_parseFdrGpx와 동일)
+  let prev = null;
+  for (const t of track) {
+    if (prev) {
+      const distNM = distance(prev.lat, prev.lon, t.lat, t.lon);
+      const dtH    = (t.timeMs - prev.timeMs) / 3600000;
+      t.speedKt = dtH > 0 ? distNM / dtH : 0;
+    }
+    prev = t;
+  }
   for (let i = 1; i < track.length - 1; i++) {
     track[i].speedKt = (track[i-1].speedKt + track[i].speedKt + track[i+1].speedKt) / 3;
   }
