@@ -9198,6 +9198,10 @@ function _pdfCalCapture(e) {
     const sx = e.clientX - rc.left, sy = e.clientY - rc.top;
     const fx = ((sx - _pdfOx - _pdfTx) / _pdfScale) / _pdfBaseW;
     const fy = ((sy - _pdfOy - _pdfTy) / _pdfScale) / _pdfBaseH;
+    // 배치 탭이 유발하는 '유령 클릭'이 방금 연 피커를 즉시 닫아버리는 것 방지
+    const swallow = ev => { ev.stopPropagation(); ev.preventDefault(); };
+    document.addEventListener('click', swallow, { capture: true, once: true });
+    setTimeout(() => { try { document.removeEventListener('click', swallow, true); } catch(_){} }, 450);
     // 좌표 선택(추출된 픽스 목록) → 없으면 수동 입력
     _pdfPickCoord(coord => {
         if (!coord) return;
