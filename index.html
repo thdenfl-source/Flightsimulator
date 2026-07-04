@@ -9011,14 +9011,21 @@ const _PDF_FIX_STOP = new Set([
     'NORTH','SOUTH','EAST','WEST','AND','THE','FOR','WITH','FROM','NOTE','WARNING','CAUTION'
 ]);
 
-// 좌표 매치 위치 직전에서 워드-바운더리로 3~5자 식별자(픽스 이름) 탐색
-function _pdfNameBefore(T, idx) {
-    const pre = T.slice(Math.max(0, idx - 16), idx);
-    const m = pre.match(/(?:^|[^A-Z])([A-Z]{3,5})[^A-Z0-9]{0,4}$/);  // 좌우 경계 확인
-    if (!m) return '';
-    const nm = m[1];
-    if (_PDF_FIX_STOP.has(nm)) return '';
-    return nm;
+// 좌표 매치 위치 주변에서 이름과 종류(IAF/VOR 등) 탐색
+//  반환: { name, type, priority }  priority 2=IAF/항법시설, 1=명명픽스, 0=무명
+function _pdfNameTypeBefore(T, idx) {
+    const pre  = T.slice(Math.max(0, idx - 34), idx);
+    const near = T.slice(Math.max(0, idx - 34), Math.min(T.length, idx + 12));
+    // ① 항법시설: IDENT + (VORTAC/VOR/DME/TACAN/NDB) — 좌표 앞에 위치
+    let m = pre.match(/\b([A-Z]{2,4})\s+(VORTAC|VOR\/DME|VOR|DME|TACAN|NDB)\b[^A-Z0-9]{0,14}$/);
+    if (m && !_PDF_FIX_STOP.has(m[1])) return { name: m[1], type: m[2].replace('/DME',''), priority: 2 };
+    // ② IAF 라벨 근처 + 바로 앞 식별자
+    const isIaf = /\bIAF\b/.test(near);
+    m = pre.match(/(?:^|[^A-Z])([A-Z]{3,5})[^A-Z0-9]{0,6}$/);
+    const nm = (m && !_PDF_FIX_STOP.has(m[1])) ? m[1] : '';
+    if (isIaf) return { name: nm, type: 'IAF', priority: 2 };
+    if (nm)    return { name: nm, type: '', priority: 1 };
+    return { name: '', type: '', priority: 0 };
 }
 
 // PDF 전체 페이지 텍스트에서 픽스(이름+좌표) 자동 추출
@@ -9040,33 +9047,34 @@ async function _pdfExtractFixes() {
         while ((m = re1.exec(T)) !== null) {
             const lat = _parseDms(m[1] + m[2]), lon = _parseDms(m[3] + m[4]);
             if (lat == null || lon == null) continue;
-            _pdfAddFix(_pdfNameBefore(T, m.index), lat, lon, seen);
+            _pdfAddFix(_pdfNameTypeBefore(T, m.index), lat, lon, seen);
         }
         // ② 구분자형: DD MM SS.s N  DDD MM SS.s E
         const re2 = /(\d{2,3})[°\s]+(\d{2})['′\s]+(\d{2}(?:\.\d+)?)["″\s]*([NS])[\s,]+(\d{2,3})[°\s]+(\d{2})['′\s]+(\d{2}(?:\.\d+)?)["″\s]*([EW])/g;
         while ((m = re2.exec(T)) !== null) {
             let lat = (+m[1]) + (+m[2]) / 60 + (+m[3]) / 3600; if (m[4] === 'S') lat = -lat;
             let lon = (+m[5]) + (+m[6]) / 60 + (+m[7]) / 3600; if (m[8] === 'W') lon = -lon;
-            _pdfAddFix(_pdfNameBefore(T, m.index), lat, lon, seen);
+            _pdfAddFix(_pdfNameTypeBefore(T, m.index), lat, lon, seen);
         }
     }
-    // 이름 있는 픽스를 목록 위쪽으로 정렬(작업 편의)
-    _pdfFixList.sort((a, b) => (a.named === b.named) ? 0 : (a.named ? -1 : 1));
+    // IAF/VOR 등(priority 2) → 명명픽스 → 무명 순으로 정렬(매칭 편의)
+    _pdfFixList.sort((a, b) => (b.priority - a.priority) || ((b.named ? 1 : 0) - (a.named ? 1 : 0)));
 }
-function _pdfAddFix(name, lat, lon, seen) {
+function _pdfAddFix(info, lat, lon, seen) {
     if (lat < -90 || lat > 90 || lon < -180 || lon > 180) return;
-    const nm = (name && /^[A-Z]{3,5}$/.test(name)) ? name : '';
-    // 같은 좌표가 이름 없이 먼저 등록됐다면, 이름이 생기면 갱신
+    const nm = (info.name && /^[A-Z]{2,5}$/.test(info.name)) ? info.name : '';
+    // 같은 좌표가 먼저 등록됐다면, 더 나은 정보(이름/우선순위)로 갱신
     const ck = lat.toFixed(4) + ',' + lon.toFixed(4);
     if (seen.has(ck)) {
-        if (nm) {
-            const ex = _pdfFixList.find(f => !f.named && (f.lat.toFixed(4) + ',' + f.lon.toFixed(4)) === ck);
-            if (ex) { ex.name = nm; ex.named = true; }
+        const ex = _pdfFixList.find(f => (f.lat.toFixed(4) + ',' + f.lon.toFixed(4)) === ck);
+        if (ex && info.priority > (ex.priority || 0)) {
+            if (nm) { ex.name = nm; ex.named = true; }
+            ex.type = info.type || ex.type; ex.priority = info.priority;
         }
         return;
     }
     seen.add(ck);
-    _pdfFixList.push({ name: nm || `좌표${_pdfFixList.length + 1}`, lat, lon, named: !!nm });
+    _pdfFixList.push({ name: nm || `좌표${_pdfFixList.length + 1}`, lat, lon, named: !!nm, type: info.type || '', priority: info.priority || 0 });
 }
 
 // 차트 위 항공기 심볼 갱신 (현재 위치 S.lat/lon, 방향 S.hdg)
@@ -9198,10 +9206,6 @@ function _pdfCalCapture(e) {
     const sx = e.clientX - rc.left, sy = e.clientY - rc.top;
     const fx = ((sx - _pdfOx - _pdfTx) / _pdfScale) / _pdfBaseW;
     const fy = ((sy - _pdfOy - _pdfTy) / _pdfScale) / _pdfBaseH;
-    // 배치 탭이 유발하는 '유령 클릭'이 방금 연 피커를 즉시 닫아버리는 것 방지
-    const swallow = ev => { ev.stopPropagation(); ev.preventDefault(); };
-    document.addEventListener('click', swallow, { capture: true, once: true });
-    setTimeout(() => { try { document.removeEventListener('click', swallow, true); } catch(_){} }, 450);
     // 좌표 선택(추출된 픽스 목록) → 없으면 수동 입력
     _pdfPickCoord(coord => {
         if (!coord) return;
@@ -9220,30 +9224,38 @@ function _pdfPickCoord(cb) {
     box.style.cssText = 'position:absolute;inset:0;z-index:10;background:rgba(0,0,0,0.75);display:flex;align-items:center;justify-content:center;';
     let listHtml = '';
     _pdfFixList.forEach((f, i) => {
-        const nameCol = f.named ? '#00e5ff' : '#888';
+        const nameCol = f.priority >= 2 ? '#00e676' : (f.named ? '#00e5ff' : '#888');
+        const tag = f.type ? ` <span style="color:#ffca28;font-size:9px;">${f.type}</span>` : '';
         const nameTxt = f.named ? f.name : `· ${f.name}`;
-        listHtml += `<div data-i="${i}" class="pdfFixRow" style="padding:9px 12px;border-bottom:1px solid #222;cursor:pointer;color:#eee;font-size:12px;display:flex;justify-content:space-between;gap:10px;">
-            <span style="color:${nameCol};font-weight:bold;">${nameTxt}</span>
+        listHtml += `<div data-i="${i}" class="pdfFixRow" style="padding:11px 12px;border-bottom:1px solid #222;cursor:pointer;color:#eee;font-size:12px;display:flex;justify-content:space-between;gap:10px;align-items:center;">
+            <span style="color:${nameCol};font-weight:bold;">${nameTxt}${tag}</span>
             <span style="color:#aaa;font-size:10px;">${f.lat.toFixed(4)}, ${f.lon.toFixed(4)}</span></div>`;
     });
     box.innerHTML = `
         <div style="width:86%;max-width:340px;max-height:80%;background:#0c0c0c;border:1px solid #00e5ff;border-radius:8px;display:flex;flex-direction:column;overflow:hidden;">
-            <div style="padding:9px 12px;background:#001a20;color:#00e5ff;font-size:12px;font-weight:bold;flex-shrink:0;">이 지점의 좌표 선택</div>
-            <div style="flex:1;overflow-y:auto;">${listHtml || '<div style="padding:14px;color:#888;font-size:11px;text-align:center;">자동 인식된 픽스가 없습니다.<br>아래 [직접 입력]을 사용하세요.</div>'}</div>
+            <div style="padding:9px 12px;background:#001a20;color:#00e5ff;font-size:12px;font-weight:bold;flex-shrink:0;">이 지점의 좌표 선택 <span style="color:#00e676;font-size:9px;">■ IAF/VOR</span></div>
+            <div style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;">${listHtml || '<div style="padding:14px;color:#888;font-size:11px;text-align:center;">자동 인식된 픽스가 없습니다.<br>아래 [직접 입력]을 사용하세요.</div>'}</div>
             <div style="display:flex;border-top:1px solid #222;flex-shrink:0;">
-                <div id="pdfFixManual" style="flex:1;padding:10px;text-align:center;color:#ffca28;font-size:12px;cursor:pointer;border-right:1px solid #222;">✎ 직접 입력</div>
-                <div id="pdfFixCancel" style="flex:1;padding:10px;text-align:center;color:#ff5252;font-size:12px;cursor:pointer;">취소</div>
+                <div id="pdfFixManual" style="flex:1;padding:12px;text-align:center;color:#ffca28;font-size:12px;cursor:pointer;border-right:1px solid #222;">✎ 직접 입력</div>
+                <div id="pdfFixCancel" style="flex:1;padding:12px;text-align:center;color:#ff5252;font-size:12px;cursor:pointer;">취소</div>
             </div>
         </div>`;
     area.appendChild(box);
+    // 유령 클릭 회피를 위해 click 대신 pointerup 사용 + 스크롤 드래그는 선택 제외
+    let downY = null, moved = false;
+    box.addEventListener('pointerdown', e => { downY = e.clientY; moved = false; });
+    box.addEventListener('pointermove', e => { if (downY != null && Math.abs(e.clientY - downY) > 10) moved = true; });
+    const pick = (row) => {
+        if (moved) return;
+        const f = _pdfFixList[+row.getAttribute('data-i')];
+        box.remove(); cb({ lat: f.lat, lon: f.lon, name: f.name });
+    };
     box.querySelectorAll('.pdfFixRow').forEach(row => {
-        row.addEventListener('click', () => {
-            const f = _pdfFixList[+row.getAttribute('data-i')];
-            box.remove(); cb({ lat: f.lat, lon: f.lon, name: f.name });
-        });
+        row.addEventListener('pointerup', e => { e.stopPropagation(); pick(row); });
     });
-    box.querySelector('#pdfFixCancel').addEventListener('click', () => { box.remove(); cb(null); });
-    box.querySelector('#pdfFixManual').addEventListener('click', () => {
+    box.querySelector('#pdfFixCancel').addEventListener('pointerup', e => { e.stopPropagation(); box.remove(); cb(null); });
+    box.querySelector('#pdfFixManual').addEventListener('pointerup', e => {
+        e.stopPropagation();
         box.remove();
         const latS = prompt('위도(Latitude)\n십진수(예: 37.4631) 또는 DMS(예: 37 27 47 N)');
         if (latS === null) { cb(null); return; }
