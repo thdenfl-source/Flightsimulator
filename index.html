@@ -9115,72 +9115,129 @@ const _PDF_FIX_STOP = new Set([
     'VAR','BRG','DIST','HOLDING','EMERG','EMERGENCY','MAX','MIN','MNM','RVR','VIS','CAT','APCH',
     'MSA','IAF','FAF','MAPT','RWY','RUNWAY','AIP','KOREA','REPUBLIC','TRANS','LEVEL','FEET',
     'INBD','OUTBD','TRACK','COURSE','RADIAL','ARC','THR','THRESHOLD','MISSED','CLIMB','TURN',
-    'NORTH','SOUTH','EAST','WEST','AND','THE','FOR','WITH','FROM','NOTE','WARNING','CAUTION'
+    'NORTH','SOUTH','EAST','WEST','AND','THE','FOR','WITH','FROM','NOTE','WARNING','CAUTION',
+    // 좌표표(WGS-84 테이블) 헤더/열 이름
+    'WPT','FIX','NAME','POINT','LAT','LATN','LONG','LON','WGS','IDENT','TYPE','REMARK','REMARKS',
+    'SEQ','GEO','COORD','COORDS','DEG','MIN','SEC','FT','NM','MSL','AMSL','AGL','MHZ','KHZ','CH','FREQ'
 ]);
 
-// 좌표 매치 위치 주변(앞·뒤)에서 이름과 종류(IAF/FAF/VOR 등) 탐색
-//  반환: { name, type, priority }
-//  priority 3=IAF/FAF(최우선), 2=항법시설, 1=명명픽스, 0=무명
-function _pdfNameTypeAround(T, s, e) {
-    const pre  = T.slice(Math.max(0, s - 40), s);
-    const post = T.slice(e, Math.min(T.length, e + 24));
-    const near = T.slice(Math.max(0, s - 40), Math.min(T.length, e + 24));
-
-    // 인접 식별자(픽스 이름) — 앞 우선, 없으면 뒤 (라벨 약어는 제외)
-    let nm = '';
-    let m = pre.match(/(?:^|[^A-Z])([A-Z]{3,5})[^A-Z0-9]{0,6}$/);
-    if (m && !_PDF_FIX_STOP.has(m[1])) nm = m[1];
-    if (!nm) {
-        m = post.match(/^[^A-Z0-9]{0,6}([A-Z]{3,5})(?:[^A-Z]|$)/);
-        if (m && !_PDF_FIX_STOP.has(m[1])) nm = m[1];
+// PDF 텍스트 조각들을 시각적 '행(row)'으로 재구성
+//  pdf.js 텍스트 아이템의 transform에서 x(=t[4]), y(=t[5])를 얻어
+//  같은 y(허용오차 내)끼리 묶고 x 순으로 정렬 → 표의 실제 행을 복원
+function _pdfPageRows(tc) {
+    const items = [];
+    for (const it of tc.items) {
+        const s = (it.str || '').trim();
+        if (!s) continue;
+        const t = it.transform || [1,0,0,1,0,0];
+        const h = Math.abs(t[3]) || Math.abs(t[0]) || 8;   // 글자 높이(행 병합 허용오차 기준)
+        items.push({ s: s.toUpperCase(), x: t[4], y: t[5], h });
     }
+    // y 내림차순(페이지 위→아래) 정렬 후 같은 행끼리 묶기
+    items.sort((a, b) => b.y - a.y || a.x - b.x);
+    const rows = [];
+    for (const it of items) {
+        const tol = Math.max(3, it.h * 0.6);
+        const row = rows.length ? rows[rows.length - 1] : null;
+        if (row && Math.abs(row.y - it.y) <= tol) {
+            row.items.push(it);
+            row.y = (row.y * (row.items.length - 1) + it.y) / row.items.length; // 평균 y 유지
+        } else {
+            rows.push({ y: it.y, items: [it] });
+        }
+    }
+    rows.forEach(r => {
+        r.items.sort((a, b) => a.x - b.x);
+        r.text = r.items.map(i => i.s).join(' ');
+    });
+    return rows;
+}
 
-    // ① IAF / FAF 라벨이 근처에 있으면 최우선(접근 절차의 핵심 픽스)
-    if (/\bFAF\b/.test(near)) return { name: nm, type: 'FAF', priority: 3 };
-    if (/\bIAF\b/.test(near)) return { name: nm, type: 'IAF', priority: 3 };
+// 한 행 텍스트에서 좌표(위도+경도) 검출 → [{lat,lon,start}] 반환
+function _pdfRowCoords(T) {
+    const out = [];
+    // ① 컴팩트형: DDMMSS(.s)N DDDMMSS(.s)E  (소수점 초, 셀 분리 공백 허용)
+    const cvt = (d, isLon) => {
+        const degLen = isLon ? 3 : 2;
+        const deg = +d.slice(0, degLen), mn = +d.slice(degLen, degLen + 2), sc = +d.slice(degLen + 2);
+        if (mn >= 60 || sc >= 60) return null;
+        return deg + mn / 60 + sc / 3600;
+    };
+    const re1 = /(\d{6}(?:\.\d+)?)\s*([NS])[\s,;/]*(\d{7}(?:\.\d+)?)\s*([EW])/g;
+    let m;
+    while ((m = re1.exec(T)) !== null) {
+        let lat = cvt(m[1], false), lon = cvt(m[3], true);
+        if (lat == null || lon == null) continue;
+        if (m[2] === 'S') lat = -lat;
+        if (m[4] === 'W') lon = -lon;
+        out.push({ lat, lon, start: m.index });
+    }
+    // ② 구분자형: DD°MM'SS.s"N DDD°MM'SS.s"E (공백/기호 구분)
+    const re2 = /(\d{2,3})[°\s]+(\d{2})['′\s]+(\d{2}(?:\.\d+)?)["″\s]*([NS])[\s,;/]+(\d{2,3})[°\s]+(\d{2})['′\s]+(\d{2}(?:\.\d+)?)["″\s]*([EW])/g;
+    while ((m = re2.exec(T)) !== null) {
+        let lat = (+m[1]) + (+m[2]) / 60 + (+m[3]) / 3600; if (m[4] === 'S') lat = -lat;
+        let lon = (+m[5]) + (+m[6]) / 60 + (+m[7]) / 3600; if (m[8] === 'W') lon = -lon;
+        out.push({ lat, lon, start: m.index });
+    }
+    // ③ 도분형(초 없음): DDMM.m N DDDMM.m E — WGS-84 표에서 간혹 사용
+    if (out.length === 0) {
+        const re3 = /(\d{4}\.\d+)\s*([NS])[\s,;/]*(\d{5}\.\d+)\s*([EW])/g;
+        while ((m = re3.exec(T)) !== null) {
+            let lat = Math.floor(+m[1] / 100) + (+m[1] % 100) / 60; if (m[2] === 'S') lat = -lat;
+            let lon = Math.floor(+m[3] / 100) + (+m[3] % 100) / 60; if (m[4] === 'W') lon = -lon;
+            out.push({ lat, lon, start: m.index });
+        }
+    }
+    return out;
+}
 
-    // ② 항법시설: IDENT + (VORTAC/VOR/DME/TACAN/NDB) — 좌표 앞 또는 뒤
-    m = pre.match(/\b([A-Z]{2,4})\s+(VORTAC|VOR\/DME|VOR|DME|TACAN|NDB)\b[^A-Z0-9]{0,14}$/);
-    if (m && !_PDF_FIX_STOP.has(m[1])) return { name: m[1], type: m[2].replace('/DME',''), priority: 2 };
-    m = post.match(/^[^A-Z0-9]{0,10}([A-Z]{2,4})\s+(VORTAC|VOR\/DME|VOR|DME|TACAN|NDB)\b/);
-    if (m && !_PDF_FIX_STOP.has(m[1])) return { name: m[1], type: m[2].replace('/DME',''), priority: 2 };
+// 한 행에서 포인트 이름·종류 추출 (좌표 앞부분 토큰 우선 = 표의 이름 열)
+function _pdfRowNameType(T, coordStart) {
+    const before = T.slice(0, coordStart);
+    // 이름 후보: 2~5자 대문자 토큰(불용어 제외). 표에서는 맨 왼쪽 열이 포인트명이므로
+    // '좌표 앞 구간에서 가장 마지막이 아니라 첫 번째' 유효 토큰을 우선한다.
+    const toks = before.match(/\b[A-Z]{2,5}\b/g) || [];
+    let nm = '';
+    for (const t of toks) { if (!_PDF_FIX_STOP.has(t) && t.length >= 3) { nm = t; break; } }
+    // 없으면 2자(항법시설 IDENT 등)도 허용
+    if (!nm) for (const t of toks) { if (!_PDF_FIX_STOP.has(t)) { nm = t; break; } }
 
-    // ③ 그 외 명명 픽스 / 무명
+    if (/\bFAF\b/.test(T)) return { name: nm, type: 'FAF', priority: 3 };
+    if (/\bIAF\b/.test(T)) return { name: nm, type: 'IAF', priority: 3 };
+    const nav = T.match(/\b([A-Z]{2,4})\s+(VORTAC|VOR\/DME|VOR|DME|TACAN|NDB)\b/);
+    if (nav && !_PDF_FIX_STOP.has(nav[1])) return { name: nav[1], type: nav[2].replace('/DME',''), priority: 2 };
+    if (/\b(WPT|WAYPOINT|FIX)\b/.test(T) && nm) return { name: nm, type: '', priority: 2 };
     if (nm) return { name: nm, type: '', priority: 1 };
     return { name: '', type: '', priority: 0 };
 }
 
-// PDF 전체 페이지 텍스트에서 픽스(이름+좌표) 자동 추출
+// PDF 전체 페이지에서 픽스(이름+좌표) 자동 추출 — 행(표) 기반
 async function _pdfExtractFixes() {
     _pdfFixList = [];
     if (!_pdfDoc) return;
     const seen = new Set();
     for (let pg = 1; pg <= _pdfDoc.numPages; pg++) {
-        let text;
+        let rows;
         try {
             const p = await _pdfDoc.getPage(pg);
-            const tc = await p.getTextContent();
-            text = tc.items.map(it => it.str).join(' ');
+            rows = _pdfPageRows(await p.getTextContent());
         } catch(e) { continue; }
-        const T = text.toUpperCase();
-        // ① 접미형 컴팩트: DDMMSS(.s)N DDDMMSS(.s)E
-        const re1 = /(\d{6}(?:\.\d+)?)\s*([NS])\s*(\d{7}(?:\.\d+)?)\s*([EW])/g;
-        let m;
-        while ((m = re1.exec(T)) !== null) {
-            const lat = _parseDms(m[1] + m[2]), lon = _parseDms(m[3] + m[4]);
-            if (lat == null || lon == null) continue;
-            _pdfAddFix(_pdfNameTypeAround(T, m.index, re1.lastIndex), lat, lon, seen);
-        }
-        // ② 구분자형: DD MM SS.s N  DDD MM SS.s E
-        const re2 = /(\d{2,3})[°\s]+(\d{2})['′\s]+(\d{2}(?:\.\d+)?)["″\s]*([NS])[\s,]+(\d{2,3})[°\s]+(\d{2})['′\s]+(\d{2}(?:\.\d+)?)["″\s]*([EW])/g;
-        while ((m = re2.exec(T)) !== null) {
-            let lat = (+m[1]) + (+m[2]) / 60 + (+m[3]) / 3600; if (m[4] === 'S') lat = -lat;
-            let lon = (+m[5]) + (+m[6]) / 60 + (+m[7]) / 3600; if (m[8] === 'W') lon = -lon;
-            _pdfAddFix(_pdfNameTypeAround(T, m.index, re2.lastIndex), lat, lon, seen);
+        for (let ri = 0; ri < rows.length; ri++) {
+            const T = rows[ri].text;
+            const coords = _pdfRowCoords(T);
+            for (const c of coords) {
+                let info = _pdfRowNameType(T, c.start);
+                // 셀 줄바꿈 등으로 이름이 윗행에 있는 경우: 윗행에서 이름만 보충
+                if (!info.name && ri > 0) {
+                    const up = _pdfRowNameType(rows[ri - 1].text, rows[ri - 1].text.length);
+                    if (up.name) info = { name: up.name, type: info.type || up.type, priority: Math.max(info.priority, up.priority, 1) };
+                }
+                _pdfAddFix(info, c.lat, c.lon, seen);
+            }
         }
     }
-    // IAF/VOR 등(priority 2) → 명명픽스 → 무명 순으로 정렬(매칭 편의)
-    _pdfFixList.sort((a, b) => (b.priority - a.priority) || ((b.named ? 1 : 0) - (a.named ? 1 : 0)));
+    // IAF/FAF → 항법시설/WPT표 → 명명픽스 → 무명 순 정렬(매칭 편의)
+    _pdfFixList.sort((a, b) => (b.priority - a.priority) || ((b.named ? 1 : 0) - (a.named ? 1 : 0)) || a.name.localeCompare(b.name));
 }
 function _pdfAddFix(info, lat, lon, seen) {
     if (lat < -90 || lat > 90 || lon < -180 || lon > 180) return;
