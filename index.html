@@ -9432,6 +9432,7 @@ function _pdfPickCoord(cb) {
             </div>
         </div>`;
     area.appendChild(box);
+    _pdfMD = null;   // 피커 열림 → 진행 중이던 차트 드래그 상태 해제
     // 유령 클릭 회피를 위해 click 대신 pointerup 사용 + 스크롤 드래그는 선택 제외
     let downY = null, moved = false;
     box.addEventListener('pointerdown', e => { downY = e.clientY; moved = false; });
@@ -9736,6 +9737,9 @@ let _pdfMouseDocInit = false;    // document 리스너 1회 등록 가드
 function _pdfAttachMouse(area) {
     area.style.cursor = 'grab';
     area.addEventListener('mousedown', e => {
+        // 좌표 피커·보정 상단바 위에서 시작된 클릭은 드래그로 취급하지 않음
+        // (피커가 선택 즉시 제거되면 mouseup이 유실되어 드래그 상태가 남는 문제 방지)
+        if (e.target.closest && e.target.closest('#pdfFixPicker, #pdfCalBar')) return;
         e.preventDefault();
         _pdfMD = { x0: e.clientX, y0: e.clientY, tx0: _pdfTx, ty0: _pdfTy };
         area.style.cursor = 'grabbing';
@@ -9745,6 +9749,10 @@ function _pdfAttachMouse(area) {
     // move/up은 document에 1회만 등록(영역 밖으로 나가도 드래그 유지)
     document.addEventListener('mousemove', e => {
         if (!_pdfMD || !document.getElementById('pdfViewerOverlay')) return;
+        // 피커가 열려 있는 동안은 차트 패닝 금지 + 잔여 드래그 상태 해제
+        if (document.getElementById('pdfFixPicker')) { _pdfMD = null; return; }
+        // 마우스 버튼이 이미 떼어졌는데 상태가 남아있으면 해제(mouseup 유실 대비)
+        if (e.buttons === 0) { _pdfMD = null; return; }
         _pdfTx = _pdfMD.tx0 + e.clientX - _pdfMD.x0;
         _pdfTy = _pdfMD.ty0 + e.clientY - _pdfMD.y0;
         _pdfApplyTransform();
