@@ -9153,40 +9153,73 @@ function _pdfPageRows(tc) {
     return rows;
 }
 
-// 한 행 텍스트에서 좌표(위도+경도) 검출 → [{lat,lon,start}] 반환
-function _pdfRowCoords(T) {
-    const out = [];
-    // ① 컴팩트형: DDMMSS(.s)N DDDMMSS(.s)E  (소수점 초, 셀 분리 공백 허용)
-    const cvt = (d, isLon) => {
-        const degLen = isLon ? 3 : 2;
-        const deg = +d.slice(0, degLen), mn = +d.slice(degLen, degLen + 2), sc = +d.slice(degLen + 2);
-        if (mn >= 60 || sc >= 60) return null;
-        return deg + mn / 60 + sc / 3600;
+// ── 위도/경도 토큰 스캐너 ──────────────────────────────
+// 지원 표기(접미형·접두형 모두):
+//   컴팩트: 355032.0N / N355032.0        구분자: 35°50'32.0"N / 35 50 32.0 N / 35-50-32.0N
+//   도분:   3550.53N                      접두 구분자: N35°50'32.0"
+function _pdfScanCoordTokens(T, isLon) {
+    const H = isLon ? '[EW]' : '[NS]';
+    const degLen = isLon ? 3 : 2;
+    const dmsLen = isLon ? 7 : 6;         // 컴팩트 DDDMMSS / DDMMSS
+    const dmLen  = isLon ? 5 : 4;         // 도분 DDDMM.m / DDMM.m
+    const found = [];
+    const push = (start, end, hemi, deg, mn, sc) => {
+        if (mn >= 60 || sc >= 60) return;
+        if (!isLon && deg > 90) return;
+        if (isLon && deg > 180) return;
+        let v = deg + mn / 60 + sc / 3600;
+        if (hemi === 'S' || hemi === 'W') v = -v;
+        found.push({ v, start, end });
     };
-    const re1 = /(\d{6}(?:\.\d+)?)\s*([NS])[\s,;/]*(\d{7}(?:\.\d+)?)\s*([EW])/g;
     let m;
-    while ((m = re1.exec(T)) !== null) {
-        let lat = cvt(m[1], false), lon = cvt(m[3], true);
-        if (lat == null || lon == null) continue;
-        if (m[2] === 'S') lat = -lat;
-        if (m[4] === 'W') lon = -lon;
-        out.push({ lat, lon, start: m.index });
+    // 접미형의 반구 문자는 뒤에 숫자가 바로 붙으면 안 됨
+    // (E127…의 E처럼 '다음 좌표의 접두문자'를 훔쳐가는 오매치 방지)
+    const HS = '(' + H + ')(?!\\d)';
+    // ① 컴팩트 접미형: DDMMSS(.s)H
+    let re = new RegExp('(\\d{' + dmsLen + '}(?:\\.\\d+)?)\\s*' + HS, 'g');
+    while ((m = re.exec(T)) !== null)
+        push(m.index, re.lastIndex, m[2], +m[1].slice(0, degLen), +m[1].slice(degLen, degLen + 2), +m[1].slice(degLen + 2));
+    // ② 컴팩트 접두형: HDDMMSS(.s)
+    re = new RegExp('(' + H + ')\\s*(\\d{' + dmsLen + '}(?:\\.\\d+)?)(?!\\d)', 'g');
+    while ((m = re.exec(T)) !== null)
+        push(m.index, re.lastIndex, m[1], +m[2].slice(0, degLen), +m[2].slice(degLen, degLen + 2), +m[2].slice(degLen + 2));
+    // ③ 구분자 접미형: DD°MM'SS(.s)"H  (구분자: °'" 공백 하이픈)
+    re = new RegExp('(\\d{1,' + degLen + '})[°\\s-]+(\\d{2})[\'′\\s-]+(\\d{2}(?:\\.\\d+)?)["″\\s]*' + HS, 'g');
+    while ((m = re.exec(T)) !== null)
+        push(m.index, re.lastIndex, m[4], +m[1], +m[2], +m[3]);
+    // ④ 구분자 접두형: H DD°MM'SS(.s)"
+    re = new RegExp('(' + H + ')\\s*(\\d{1,' + degLen + '})[°\\s-]+(\\d{2})[\'′\\s-]+(\\d{2}(?:\\.\\d+)?)["″]?', 'g');
+    while ((m = re.exec(T)) !== null)
+        push(m.index, re.lastIndex, m[1], +m[2], +m[3], +m[4]);
+    // ⑤ 도분형: DDMM.mH / HDDMM.m
+    re = new RegExp('(\\d{' + dmLen + '}\\.\\d+)\\s*' + HS, 'g');
+    while ((m = re.exec(T)) !== null)
+        push(m.index, re.lastIndex, m[2], Math.floor(+m[1] / 100), (+m[1]) % 100, 0);
+    re = new RegExp('(' + H + ')\\s*(\\d{' + dmLen + '}\\.\\d+)(?!\\d)', 'g');
+    while ((m = re.exec(T)) !== null)
+        push(m.index, re.lastIndex, m[1], Math.floor(+m[2] / 100), (+m[2]) % 100, 0);
+    // 위치순 정렬 + 겹치는 매치 제거(같은 숫자를 여러 패턴이 잡는 경우)
+    found.sort((a, b) => a.start - b.start);
+    const out = [];
+    for (const f of found) {
+        if (out.length && f.start < out[out.length - 1].end) continue;
+        out.push(f);
     }
-    // ② 구분자형: DD°MM'SS.s"N DDD°MM'SS.s"E (공백/기호 구분)
-    const re2 = /(\d{2,3})[°\s]+(\d{2})['′\s]+(\d{2}(?:\.\d+)?)["″\s]*([NS])[\s,;/]+(\d{2,3})[°\s]+(\d{2})['′\s]+(\d{2}(?:\.\d+)?)["″\s]*([EW])/g;
-    while ((m = re2.exec(T)) !== null) {
-        let lat = (+m[1]) + (+m[2]) / 60 + (+m[3]) / 3600; if (m[4] === 'S') lat = -lat;
-        let lon = (+m[5]) + (+m[6]) / 60 + (+m[7]) / 3600; if (m[8] === 'W') lon = -lon;
-        out.push({ lat, lon, start: m.index });
-    }
-    // ③ 도분형(초 없음): DDMM.m N DDDMM.m E — WGS-84 표에서 간혹 사용
-    if (out.length === 0) {
-        const re3 = /(\d{4}\.\d+)\s*([NS])[\s,;/]*(\d{5}\.\d+)\s*([EW])/g;
-        while ((m = re3.exec(T)) !== null) {
-            let lat = Math.floor(+m[1] / 100) + (+m[1] % 100) / 60; if (m[2] === 'S') lat = -lat;
-            let lon = Math.floor(+m[3] / 100) + (+m[3] % 100) / 60; if (m[4] === 'W') lon = -lon;
-            out.push({ lat, lon, start: m.index });
-        }
+    return out;
+}
+
+// 한 행 텍스트에서 좌표(위도+경도) 검출 → [{lat,lon,start}]
+// 위도·경도 토큰을 각각 찾아 순서대로 짝짓는다(표 셀 분리·형식 혼용 대응)
+function _pdfRowCoords(T) {
+    const lats = _pdfScanCoordTokens(T, false);
+    const lons = _pdfScanCoordTokens(T, true);
+    const out = [];
+    let li = 0;
+    for (const la of lats) {
+        while (li < lons.length && lons[li].end <= la.start) li++;   // 위도보다 앞의 경도는 건너뜀
+        if (li >= lons.length) break;
+        out.push({ lat: la.v, lon: lons[li].v, start: la.start });
+        li++;
     }
     return out;
 }
@@ -9212,19 +9245,32 @@ function _pdfRowNameType(T, coordStart) {
 }
 
 // PDF 전체 페이지에서 픽스(이름+좌표) 자동 추출 — 행(표) 기반
+let _pdfNoTextLayer = false;   // 스캔본(텍스트 레이어 없음) 감지 플래그
 async function _pdfExtractFixes() {
     _pdfFixList = [];
+    _pdfNoTextLayer = false;
     if (!_pdfDoc) return;
     const seen = new Set();
+    let totalChars = 0;
     for (let pg = 1; pg <= _pdfDoc.numPages; pg++) {
         let rows;
         try {
             const p = await _pdfDoc.getPage(pg);
             rows = _pdfPageRows(await p.getTextContent());
         } catch(e) { continue; }
+        rows.forEach(r => { totalChars += r.text.length; });
         for (let ri = 0; ri < rows.length; ri++) {
             const T = rows[ri].text;
-            const coords = _pdfRowCoords(T);
+            let coords = _pdfRowCoords(T);
+            // 위도만 있고 경도가 없는 행(셀 세로 배치): 다음 행에서 경도를 찾아 짝짓기
+            if (coords.length === 0 && ri + 1 < rows.length) {
+                const lats = _pdfScanCoordTokens(T, false);
+                if (lats.length && _pdfScanCoordTokens(T, true).length === 0) {
+                    const lonsNext = _pdfScanCoordTokens(rows[ri + 1].text, true);
+                    coords = lats.slice(0, lonsNext.length)
+                        .map((la, i) => ({ lat: la.v, lon: lonsNext[i].v, start: la.start }));
+                }
+            }
             for (const c of coords) {
                 let info = _pdfRowNameType(T, c.start);
                 // 셀 줄바꿈 등으로 이름이 윗행에 있는 경우: 윗행에서 이름만 보충
@@ -9236,6 +9282,8 @@ async function _pdfExtractFixes() {
             }
         }
     }
+    // 텍스트가 거의 없으면 스캔 이미지 PDF로 판단(자동 추출 불가 안내용)
+    if (totalChars < 40) _pdfNoTextLayer = true;
     // IAF/FAF → 항법시설/WPT표 → 명명픽스 → 무명 순 정렬(매칭 편의)
     _pdfFixList.sort((a, b) => (b.priority - a.priority) || ((b.named ? 1 : 0) - (a.named ? 1 : 0)) || a.name.localeCompare(b.name));
 }
@@ -9296,7 +9344,9 @@ function _pdfStartCalibration() {
     _pdfShowCalOverlay();
     const hint = _pdfFixList.length
         ? `픽스 좌표 ${_pdfFixList.length}개 자동 인식됨.\n차트에서 픽스를 탭한 뒤 이름을 고르세요.`
-        : `좌표를 아는 지점을 탭한 뒤 좌표를 입력하세요.\n(다음 페이지에서 픽스 좌표를 못 찾았습니다)`;
+        : (_pdfNoTextLayer
+            ? `이 PDF는 스캔 이미지라 텍스트가 없어\n좌표 자동 추출이 불가합니다. [직접 입력]을 사용하세요.`
+            : `좌표를 아는 지점을 탭한 뒤 좌표를 입력하세요.\n(이 차트에서 픽스 좌표를 못 찾았습니다)`);
     _pdfCalBanner(`위치 보정 · 3점 이상 권장\n${hint}`);
 }
 function _pdfCancelCalibration() {
