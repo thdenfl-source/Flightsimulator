@@ -479,6 +479,19 @@ body.solo-mode .solo-panel-visible {
   transition: background 0.2s, border-color 0.2s, color 0.2s;
 }
 #fdr-btn:hover    { background: rgba(0,30,60,0.92); border-color: #4488ff; color: #88ccff; }
+#rec-btn {
+  display: block; width: 36px; margin-bottom: 4px;
+  background: rgba(20,20,20,0.88); border: 1px solid #444; border-radius: 4px;
+  color: #ccc; font-size: 10px; font-weight: bold; font-family: 'Helvetica Neue', Arial, sans-serif;
+  padding: 6px 2px; text-align: center; cursor: pointer;
+  transition: background 0.2s, border-color 0.2s, color 0.2s;
+}
+#rec-btn:hover  { background: rgba(60,0,0,0.92); border-color: #ff4444; color: #ff8888; }
+#rec-btn.active {
+  background: rgba(90,0,0,0.92); border-color: #ff4444; color: #ff6666;
+  animation: recblink 1.2s infinite;
+}
+@keyframes recblink { 0%,100%{ box-shadow: 0 0 6px rgba(255,68,68,0.7);} 50%{ box-shadow: none;} }
 #fdr-btn.active   { background: rgba(0,30,80,0.92); border-color: #4488ff; color: #88ccff;
                     box-shadow: 0 0 8px rgba(68,136,255,0.4); }
 /* FDR panel */
@@ -1291,6 +1304,7 @@ body.solo-mode .solo-panel-visible {
       </div>
       <!-- FDR upload button + panel (above Leaflet zoom) -->
       <div id="fdr-btn-wrap">
+        <button id="rec-btn" onclick="toggleTrackRec()">REC</button>
         <button id="fdr-btn" onclick="toggleFdrPanel()">FDR</button>
       </div>
       <div id="fdr-panel">
@@ -3963,6 +3977,27 @@ let routeLine = L.polyline([],{color:'#4488ff',weight:2,dashArray:'6 5',opacity:
 let crsLine   = L.polyline([],{color:'#00cc44',weight:1.5,dashArray:'10 5',opacity:0.9}).addTo(leafMap);
 let vorCrsLine = L.polyline([],{color:'#44aaff',weight:1.5,dashArray:'10 5',opacity:0.9}).addTo(leafMap);
 
+// ── 속도 벡터 (헤딩 방향 붉은 화살표, 1분 예상위치 길이·최대 130kt) ──
+let spdVecLine = L.polyline([], {color:'#ff1744', weight:2.5, opacity:0.95}).addTo(leafMap);
+let spdVecHead = L.polyline([], {color:'#ff1744', weight:2.5, opacity:0.95}).addTo(leafMap);
+
+function updateSpeedVector() {
+  const spd = Math.min(Math.max(S.spd || 0, 0), 130);   // 130kt 상한
+  if (spd < 3) {   // 사실상 정지 → 숨김
+    spdVecLine.setLatLngs([]);
+    spdVecHead.setLatLngs([]);
+    return;
+  }
+  const lenNM = spd / 60;                                // 1분 진행 거리
+  const tip = destPoint(S.lat, S.lon, S.hdg, lenNM);
+  spdVecLine.setLatLngs([[S.lat, S.lon], tip]);
+  // 화살촉: 끝점에서 헤딩±150° 방향 짧은 바브 2개
+  const barb = Math.max(lenNM * 0.18, 0.06);
+  const b1 = destPoint(tip[0], tip[1], normA(S.hdg + 150), barb);
+  const b2 = destPoint(tip[0], tip[1], normA(S.hdg - 150), barb);
+  spdVecHead.setLatLngs([b1, tip, b2]);
+}
+
 // ── BRG1/BRG2 베어링 라인 (HSI 사이드패널과 동일 소스·색) ──
 //  BRG1(파랑): 항공기 → 선택 항법시설(VOR/ILS)
 //  BRG2(초록): 항공기 → FMS 활성 웨이포인트
@@ -4154,6 +4189,7 @@ function updateAcOnMap(){
     acMarker.setIcon(makeAircraftIcon(S.hdg));
     _bindAcPointerDown(); // re-bind after setIcon creates a new DOM element
   }
+  updateSpeedVector();   // 헤딩 방향 속도 벡터(1분 예상위치) 갱신
   _update3dMarker();
   _applyFollow();    // 1인칭: centre map / 3D view on aircraft every frame
   if (mapHdgUp) {
@@ -7784,6 +7820,64 @@ switchMode('HOME');
   }
 })();
 
+
+// ═══════════════════════════════════════════════════════════════
+//  TRACK RECORDER — 비행 항적 기록 → GPX/KML 저장
+// ═══════════════════════════════════════════════════════════════
+let _trkRec = false;
+let _trkPts = [];        // {lat, lon, altM, t(ms)}
+let _trkTimer = null;
+
+function toggleTrackRec() {
+  if (_trkRec) { _trkStop(); return; }
+  _trkRec = true;
+  _trkPts = [];
+  document.getElementById('rec-btn').classList.add('active');
+  document.getElementById('rec-btn').textContent = '● REC';
+  _trkCapture();
+  _trkTimer = setInterval(_trkCapture, 2000);   // 2초 간격 기록
+}
+function _trkCapture() {
+  if (typeof S === 'undefined' || S.lat == null) return;
+  const last = _trkPts[_trkPts.length - 1];
+  // 정지 상태 중복 기록 방지(약 5m 미만 이동 시 60초에 1점만)
+  if (last && distance(last.lat, last.lon, S.lat, S.lon) < 0.0027 && Date.now() - last.t < 60000) return;
+  _trkPts.push({ lat: S.lat, lon: S.lon, altM: (S.alt || 0) * 0.3048, t: Date.now() });
+}
+function _trkStop() {
+  _trkRec = false;
+  if (_trkTimer) { clearInterval(_trkTimer); _trkTimer = null; }
+  const btn = document.getElementById('rec-btn');
+  btn.classList.remove('active'); btn.textContent = 'REC';
+  if (_trkPts.length < 2) { alert('기록된 항적이 없습니다 (2점 미만).'); return; }
+  const asGpx = confirm(`항적 ${_trkPts.length}점 기록 완료.\n\n확인 = GPX로 저장\n취소 = KML로 저장`);
+  const d = new Date(_trkPts[0].t);
+  const p2 = n => String(n).padStart(2, '0');
+  const fname = `track_${d.getFullYear()}${p2(d.getMonth()+1)}${p2(d.getDate())}_${p2(d.getHours())}${p2(d.getMinutes())}`;
+  if (asGpx) _trkDownload(fname + '.gpx', _trkToGpx(), 'application/gpx+xml');
+  else       _trkDownload(fname + '.kml', _trkToKml(), 'application/vnd.google-earth.kml+xml');
+}
+function _trkToGpx() {
+  const pts = _trkPts.map(p =>
+    `<trkpt lat="${p.lat.toFixed(6)}" lon="${p.lon.toFixed(6)}"><ele>${p.altM.toFixed(1)}</ele><time>${new Date(p.t).toISOString()}</time></trkpt>`
+  ).join('\n');
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="FlightSimulator" xmlns="http://www.topografix.com/GPX/1/1">\n<trk><name>Flight Track</name><trkseg>\n${pts}\n</trkseg></trk>\n</gpx>`;
+}
+function _trkToKml() {
+  // gx:Track(시간 포함) — 앱 FDR로 그대로 리플레이 가능
+  const whens  = _trkPts.map(p => `<when>${new Date(p.t).toISOString()}</when>`).join('\n');
+  const coords = _trkPts.map(p => `<gx:coord>${p.lon.toFixed(6)} ${p.lat.toFixed(6)} ${p.altM.toFixed(1)}</gx:coord>`).join('\n');
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<kml xmlns="http://www.opengis.net/kml/2.2" xmlns:gx="http://www.google.com/kml/ext/2.2">\n<Document><Placemark><name>Flight Track</name>\n<gx:Track>\n${whens}\n${coords}\n</gx:Track>\n</Placemark></Document>\n</kml>`;
+}
+function _trkDownload(name, text, mime) {
+  const blob = new Blob([text], { type: mime });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 2000);
+}
 
 // ═══════════════════════════════════════════════════════════════
 //  FDR (GPX REPLAY)
