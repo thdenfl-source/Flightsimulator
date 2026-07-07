@@ -4011,7 +4011,9 @@ function updateSpeedVector() {
   // GPS/FDR 모드는 S.spd/S.hdg가 이미 지상속도·트랙이므로 그대로 사용
   let gs = S.spd || 0, trk = S.hdg || 0;
   const wEff = (typeof effectiveWindSpd === 'function') ? effectiveWindSpd() : 0;
-  if (!gpsMode && !_fdrPlaying && wEff > 0) {
+  // _fdrPlaying은 뒤쪽(FDR 섹션)에서 선언되므로 초기화 전 접근(TDZ) 안전 가드
+  let fdrOn = false; try { fdrOn = !!_fdrPlaying; } catch(e) {}
+  if (!gpsMode && !fdrOn && wEff > 0) {
     // 시뮬 이동 모델(computeTrack)과 동일한 바람 합성(속도 의존 효과 포함)
     const wt = normA(windDir + 180) * D2R;
     const vN = gs * Math.cos(trk * D2R) + wEff * Math.cos(wt);
