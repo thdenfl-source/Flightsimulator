@@ -440,6 +440,25 @@ body.solo-mode .solo-panel-visible {
   flex: 1 !important;
 }
 
+/* ── 지도 중앙 십자마크 ── */
+#map-crosshair {
+  position: absolute; left: 50%; top: 50%;
+  width: 0; height: 0; z-index: 900; pointer-events: none;
+}
+#map-crosshair .ch-h, #map-crosshair .ch-v {
+  position: absolute; background: #ff1744;
+  box-shadow: 0 0 2px rgba(0,0,0,0.8);
+}
+#map-crosshair .ch-h { left: -11px; top: -1px; width: 22px; height: 2px; }
+#map-crosshair .ch-v { left: -1px; top: -11px; width: 2px; height: 22px; }
+/* ── 중앙 좌표 표시 (Visit 카운터 아래, 축척 위) ── */
+#center-coord {
+  position: absolute; bottom: 76px; left: 10px; z-index: 1100;
+  background: rgba(0,0,0,0.72); border: 1px solid #444; border-radius: 4px;
+  padding: 3px 7px; font-family: 'Courier New', monospace;
+  font-size: 10px; line-height: 1.4; color: #ff6e6e; white-space: nowrap;
+  pointer-events: none;
+}
 #counter-wrap {
   position: absolute;
   bottom: 110px;
@@ -1302,6 +1321,9 @@ body.solo-mode .solo-panel-visible {
         <div id="counter-label">Visit</div>
         <div id="counter-value">…</div>
       </div>
+      <!-- 지도 중앙 십자마크 + 중앙(1인칭: 항공기) 좌표 표시 -->
+      <div id="map-crosshair"><div class="ch-h"></div><div class="ch-v"></div></div>
+      <div id="center-coord"></div>
       <!-- FDR upload button + panel (above Leaflet zoom) -->
       <div id="fdr-btn-wrap">
         <button id="rec-btn" onclick="toggleTrackRec()">REC</button>
@@ -4109,6 +4131,7 @@ function toggleFollow() {
   followMode = !followMode;
   const btn = document.getElementById('follow-btn');
   btn.classList.toggle('active', followMode);
+  try { updateCenterCoord(); } catch(e) {}   // 좌표 기준(중앙↔항공기) 즉시 전환
   if (followMode) {
     // Disable Leaflet dragging while following
     leafMap.dragging.disable();
@@ -4120,6 +4143,18 @@ function toggleFollow() {
     if (_ml3d) { try { _ml3d.setPadding({ top: 0, bottom: 0, left: 0, right: 0 }); } catch (e) {} }
   }
 }
+
+// ── 지도 중앙(1인칭: 항공기 위치) 좌표 표시 ──
+function updateCenterCoord() {
+  const el = document.getElementById('center-coord');
+  if (!el) return;
+  let lat, lon, tag;
+  if (followMode) { lat = S.lat; lon = S.lon; tag = '✈'; }   // 1인칭: 항공기 기준
+  else { const c = leafMap.getCenter(); lat = c.lat; lon = c.lng; tag = '＋'; }
+  el.innerHTML = `${tag} ${decToDMS(lat, true)}<br>&nbsp;&nbsp;&nbsp;${decToDMS(lon, false)}`;
+}
+leafMap.on('move', updateCenterCoord);
+try { updateCenterCoord(); } catch(e) {}
 
 // In 1인칭, place the aircraft a quarter of the way up from the bottom of the
 // screen (vertical position ≈ 0.75 H from top) so the forward view is larger.
@@ -4190,6 +4225,7 @@ function updateAcOnMap(){
     _bindAcPointerDown(); // re-bind after setIcon creates a new DOM element
   }
   updateSpeedVector();   // 헤딩 방향 속도 벡터(1분 예상위치) 갱신
+  if (followMode) updateCenterCoord();   // 1인칭: 항공기 기준 좌표 갱신
   _update3dMarker();
   _applyFollow();    // 1인칭: centre map / 3D view on aircraft every frame
   if (mapHdgUp) {
