@@ -1494,11 +1494,13 @@ function toggleBrg1() {
   brg1Visible = !brg1Visible;
   const btn = document.getElementById('brg1-tog');
   btn.classList.toggle('brg1-on', brg1Visible);
+  if (typeof updateBrgLines === 'function') updateBrgLines();   // 지도 BRG 라인 즉시 반영
 }
 function toggleBrg2() {
   brg2Visible = !brg2Visible;
   const btn = document.getElementById('brg2-tog');
   btn.classList.toggle('brg2-on', brg2Visible);
+  if (typeof updateBrgLines === 'function') updateBrgLines();
 }
 
 // ── Hover Page / GSPD mode ──
@@ -3914,6 +3916,48 @@ let routeLine = L.polyline([],{color:'#4488ff',weight:2,dashArray:'6 5',opacity:
 // CRS 라인 색은 HSI BRG 색 체계와 통일: FMS=BRG2 초록, VOR/LOC=BRG1 파랑
 let crsLine   = L.polyline([],{color:'#00cc44',weight:1.5,dashArray:'10 5',opacity:0.9}).addTo(leafMap);
 let vorCrsLine = L.polyline([],{color:'#44aaff',weight:1.5,dashArray:'10 5',opacity:0.9}).addTo(leafMap);
+
+// ── BRG1/BRG2 베어링 라인 (HSI 사이드패널과 동일 소스·색) ──
+//  BRG1(파랑): 항공기 → 선택 항법시설(VOR/ILS)
+//  BRG2(초록): 항공기 → FMS 활성 웨이포인트
+let brg1Line = L.polyline([],{color:'#44aaff',weight:2,opacity:0.85}).addTo(leafMap);
+let brg2Line = L.polyline([],{color:'#00cc44',weight:2,opacity:0.85}).addTo(leafMap);
+let _brg1LblMk = null, _brg2LblMk = null;
+
+function _brgLabelMarker(color) {
+  const icon = L.divIcon({
+    html: `<div style="color:${color};font-size:9px;font-family:monospace;font-weight:bold;white-space:nowrap;text-shadow:1px 1px 2px #000,-1px -1px 2px #000;transform:translate(6px,-6px);"></div>`,
+    iconSize: [0, 0], className: ''
+  });
+  return L.marker([0, 0], { icon, interactive: false }).addTo(leafMap);
+}
+function _setBrgLine(line, mkRef, show, tLat, tLon, tag, brg, dist, color) {
+  if (!show || tLat == null) {
+    line.setLatLngs([]);
+    if (mkRef.mk) { leafMap.removeLayer(mkRef.mk); mkRef.mk = null; }
+    return;
+  }
+  line.setLatLngs([[S.lat, S.lon], [tLat, tLon]]);
+  if (!mkRef.mk) mkRef.mk = _brgLabelMarker(color);
+  const midLat = (S.lat + tLat) / 2, midLon = (S.lon + tLon) / 2;
+  mkRef.mk.setLatLng([midLat, midLon]);
+  const el = mkRef.mk.getElement();
+  if (el && el.firstChild) el.firstChild.textContent = `${tag} ${fmtA(brg)}° ${dist.toFixed(1)}NM`;
+}
+const _brg1Ref = { mk: null }, _brg2Ref = { mk: null };
+function updateBrgLines() {
+  // BRG1: 항법시설(VOR/ILS) — HSI BRG1 패널과 동일
+  const b1on = brg1Visible && navLat !== null;
+  _setBrgLine(brg1Line, _brg1Ref, b1on, navLat, navLon, 'BRG1',
+    b1on ? bearing(S.lat, S.lon, navLat, navLon) : 0,
+    b1on ? distance(S.lat, S.lon, navLat, navLon) : 0, '#44aaff');
+  // BRG2: FMS 활성 웨이포인트 — HSI BRG2 패널과 동일
+  const wpOk = S.awp >= 0 && S.awp < S.wps.length;
+  const wp = wpOk ? S.wps[S.awp] : null;
+  _setBrgLine(brg2Line, _brg2Ref, brg2Visible && wpOk, wp?.lat, wp?.lon, 'BRG2',
+    wp ? bearing(S.lat, S.lon, wp.lat, wp.lon) : 0,
+    wp ? distance(S.lat, S.lon, wp.lat, wp.lon) : 0, '#00cc44');
+}
 let vorStationMarker = null;
 let wpMarkers = [];
 
@@ -4140,6 +4184,7 @@ function updateNav(){
   } else { S.brg2=0;S.dtw2=0; }
 
   updateCrsLine();
+  updateBrgLines();
   renderNavBox();
 }
 function renderNavBox(){
