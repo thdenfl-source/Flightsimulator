@@ -4007,37 +4007,56 @@ let spdVecLine = L.polyline([], {color:'#ff1744', weight:2.5, opacity:0.95}).add
 let spdVecHead = L.polygon([],  {color:'#ff1744', weight:1, fillColor:'#ff1744', fillOpacity:1, opacity:1}).addTo(leafMap);
 
 function updateSpeedVector() {
-  // 지상 벡터 계산: 시뮬 모드에서는 바람 벡터 합성(편류 반영),
-  // GPS/FDR 모드는 S.spd/S.hdg가 이미 지상속도·트랙이므로 그대로 사용
-  let gs = S.spd || 0, trk = S.hdg || 0;
-  const wEff = (typeof effectiveWindSpd === 'function') ? effectiveWindSpd() : 0;
-  // _fdrPlaying은 뒤쪽(FDR 섹션)에서 선언되므로 초기화 전 접근(TDZ) 안전 가드
+  // 1분 예상궤적: 선회 중(뱅크)에는 선회율+바람을 적분한 곡선,
+  // 직진 시에는 기존처럼 직선. GPS/FDR 모드는 지상속도·트랙 그대로 직선.
   let fdrOn = false; try { fdrOn = !!_fdrPlaying; } catch(e) {}
-  if (!gpsMode && !fdrOn && wEff > 0) {
-    // 시뮬 이동 모델(computeTrack)과 동일한 바람 합성(속도 의존 효과 포함)
-    const wt = normA(windDir + 180) * D2R;
-    const vN = gs * Math.cos(trk * D2R) + wEff * Math.cos(wt);
-    const vE = gs * Math.sin(trk * D2R) + wEff * Math.sin(wt);
-    gs  = Math.hypot(vN, vE);
-    trk = normA(Math.atan2(vE, vN) / D2R);
+  const simMode = !gpsMode && !fdrOn;
+  const airSpd = Math.min(Math.max(S.spd || 0, 0), 130);   // 130kt 상한
+  const wEff = (simMode && typeof effectiveWindSpd === 'function') ? effectiveWindSpd() : 0;
+  const wt = normA(windDir + 180) * D2R;
+  const wN = wEff * Math.cos(wt), wE = wEff * Math.sin(wt);
+
+  // 선회율(°/s): 시뮬 물리(협조선회)와 동일 — g·tan(bank)/V
+  let turnRate = 0;
+  if (simMode && Math.abs(S.bnk) > 2 && airSpd > 5) {
+    const V_ms = Math.max(10, airSpd) * 0.5144;
+    turnRate = 9.81 * Math.tan(S.bnk * D2R) / V_ms / D2R;
   }
-  const spd = Math.min(Math.max(gs, 0), 130);   // 130kt 상한
-  if (spd < 3) {   // 사실상 정지 → 숨김
+
+  // 60초 적분(2초 스텝) — 직진이면 1스텝 직선과 동일
+  const dt = 2, steps = 30;
+  const pts = [[S.lat, S.lon]];
+  let lat = S.lat, lon = S.lon, hdg = S.hdg || 0, lastTrk = S.hdg || 0;
+  for (let i = 0; i < steps; i++) {
+    const vN = airSpd * Math.cos(hdg * D2R) + wN;
+    const vE = airSpd * Math.sin(hdg * D2R) + wE;
+    const gsI = Math.hypot(vN, vE);
+    if (gsI > 0.5) {
+      lastTrk = normA(Math.atan2(vE, vN) / D2R);
+      const p = destPoint(lat, lon, lastTrk, gsI * dt / 3600);
+      lat = p[0]; lon = p[1];
+    }
+    pts.push([lat, lon]);
+    hdg = normA(hdg + turnRate * dt);
+  }
+
+  const totalNM = airSpd / 60;
+  if (totalNM * 60 < 3 && wEff < 3) {   // 사실상 정지 → 숨김
     spdVecLine.setLatLngs([]);
     spdVecHead.setLatLngs([]);
     return;
   }
-  const lenNM = spd / 60;                                // 1분 진행 거리
-  const tip  = destPoint(S.lat, S.lon, trk, lenNM);
-  // 화살촉(채워진 삼각형): 끝점 + 뒤쪽 ±25° 방향 두 밑변점 (HSI 니들 스타일)
-  const headLen = Math.max(lenNM * 0.022, 0.007);
-  const base = destPoint(tip[0], tip[1], normA(trk + 180), headLen);
+
+  // 화살촉(채워진 삼각형): 궤적 끝점, 마지막 진행방향 기준 (HSI 니들 스타일)
+  const tip = pts[pts.length - 1];
+  const headLen = Math.max(totalNM * 0.022, 0.007);
+  const base = destPoint(tip[0], tip[1], normA(lastTrk + 180), headLen);
   const halfW = headLen * 0.45;
-  const b1 = destPoint(base[0], base[1], normA(trk + 90), halfW);
-  const b2 = destPoint(base[0], base[1], normA(trk - 90), halfW);
-  spdVecHead.setLatLngs([tip, b1, b2]);
-  // 샤프트는 삼각형 밑변까지만 (겹침 방지)
-  spdVecLine.setLatLngs([[S.lat, S.lon], base]);
+  const hb1 = destPoint(base[0], base[1], normA(lastTrk + 90), halfW);
+  const hb2 = destPoint(base[0], base[1], normA(lastTrk - 90), halfW);
+  spdVecHead.setLatLngs([tip, hb1, hb2]);
+  pts[pts.length - 1] = base;   // 샤프트는 삼각형 밑변까지
+  spdVecLine.setLatLngs(pts);
 }
 
 // ── BRG1/BRG2 베어링 라인 (HSI 사이드패널과 동일 소스·색) ──
