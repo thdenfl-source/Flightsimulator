@@ -5859,8 +5859,8 @@ function _aptInfoHtml(info) {
   Object.keys(info.freqs).forEach(k => { if (!order.includes(k)) li.push(`${k} ${info.freqs[k].join(' ')}`); });
   if (!li.length) return '';
   return `<div style="border-top:1px solid #1e3a2a;margin-top:8px;padding-top:6px;">
-    <div style="color:#ffcc00;font-size:11px;font-weight:bold;margin-bottom:3px;">─ 공항 정보 (AIP) ─</div>` +
-    li.map(x => `<div style="color:#cfe8dc;font-size:11px;line-height:1.5;">${x}</div>`).join('') + '</div>';
+    <div style="color:#ffcc00;font-size:20px;font-weight:bold;margin-bottom:5px;letter-spacing:0.5px;">공항 정보 (AIP)</div>` +
+    li.map(x => `<div style="color:#cfe8dc;font-size:18px;line-height:1.6;margin-bottom:4px;">${x}</div>`).join('') + '</div>';
 }
 
 let _aptWxCtl = null;
