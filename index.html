@@ -4007,20 +4007,32 @@ let spdVecLine = L.polyline([], {color:'#ff1744', weight:2.5, opacity:0.95}).add
 let spdVecHead = L.polygon([],  {color:'#ff1744', weight:1, fillColor:'#ff1744', fillOpacity:1, opacity:1}).addTo(leafMap);
 
 function updateSpeedVector() {
-  const spd = Math.min(Math.max(S.spd || 0, 0), 130);   // 130kt 상한
+  // 지상 벡터 계산: 시뮬 모드에서는 바람 벡터 합성(편류 반영),
+  // GPS/FDR 모드는 S.spd/S.hdg가 이미 지상속도·트랙이므로 그대로 사용
+  let gs = S.spd || 0, trk = S.hdg || 0;
+  const wEff = (typeof effectiveWindSpd === 'function') ? effectiveWindSpd() : 0;
+  if (!gpsMode && !_fdrPlaying && wEff > 0) {
+    // 시뮬 이동 모델(computeTrack)과 동일한 바람 합성(속도 의존 효과 포함)
+    const wt = normA(windDir + 180) * D2R;
+    const vN = gs * Math.cos(trk * D2R) + wEff * Math.cos(wt);
+    const vE = gs * Math.sin(trk * D2R) + wEff * Math.sin(wt);
+    gs  = Math.hypot(vN, vE);
+    trk = normA(Math.atan2(vE, vN) / D2R);
+  }
+  const spd = Math.min(Math.max(gs, 0), 130);   // 130kt 상한
   if (spd < 3) {   // 사실상 정지 → 숨김
     spdVecLine.setLatLngs([]);
     spdVecHead.setLatLngs([]);
     return;
   }
   const lenNM = spd / 60;                                // 1분 진행 거리
-  const tip  = destPoint(S.lat, S.lon, S.hdg, lenNM);
+  const tip  = destPoint(S.lat, S.lon, trk, lenNM);
   // 화살촉(채워진 삼각형): 끝점 + 뒤쪽 ±25° 방향 두 밑변점 (HSI 니들 스타일)
   const headLen = Math.max(lenNM * 0.022, 0.007);
-  const base = destPoint(tip[0], tip[1], normA(S.hdg + 180), headLen);
+  const base = destPoint(tip[0], tip[1], normA(trk + 180), headLen);
   const halfW = headLen * 0.45;
-  const b1 = destPoint(base[0], base[1], normA(S.hdg + 90), halfW);
-  const b2 = destPoint(base[0], base[1], normA(S.hdg - 90), halfW);
+  const b1 = destPoint(base[0], base[1], normA(trk + 90), halfW);
+  const b2 = destPoint(base[0], base[1], normA(trk - 90), halfW);
   spdVecHead.setLatLngs([tip, b1, b2]);
   // 샤프트는 삼각형 밑변까지만 (겹침 방지)
   spdVecLine.setLatLngs([[S.lat, S.lon], base]);
