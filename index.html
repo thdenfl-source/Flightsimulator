@@ -8009,6 +8009,27 @@ if (awyLayerOn) {
   try { _drawAwyLayer(); document.getElementById('awy-btn').classList.add('active'); } catch(e) {}
 }
 
+// ── Flight Plan IFR DB를 AIP ENR 데이터로 동기화 (항로·픽스 단일 소스) ──
+(function syncIfrDbFromAip() {
+  try {
+    // ① 픽스: AIP 픽스 149개 + VOR id → IFR_FIXES 갱신/추가 (기존 오류 좌표 덮어씀)
+    _enrFixList().forEach(f => { IFR_FIXES[f.name] = { lat: +f.lat.toFixed(5), lon: +f.lon.toFixed(5) }; });
+    ENR_VORS.forEach(v => { IFR_FIXES[v.id] = { lat: v.lat, lon: v.lon }; });
+    // ② 항로: 임시 항로망 전면 교체 → AIP ENR 3.1/3.2의 53개 항로
+    Object.keys(IFR_AIRWAYS).forEach(k => delete IFR_AIRWAYS[k]);
+    ENR_ROUTES.forEach(r => { IFR_AIRWAYS[r.route] = r.wps.map(w => w.n); });
+    // ③ SID/STAR/APP 절차 경유점 좌표를 AIP 픽스와 동기화(이름 일치 시)
+    Object.values(IFR_DB).forEach(ap => {
+      ['sids', 'stars', 'approaches'].forEach(k => (ap[k] || []).forEach(proc => {
+        (proc.wps || []).forEach(wp => {
+          const f = IFR_FIXES[wp.ident];
+          if (f) { wp.lat = f.lat; wp.lon = f.lon; }
+        });
+      }));
+    });
+  } catch(e) { console.warn('IFR DB 동기화 실패:', e); }
+})();
+
 let _notamLayers = [];
 let _notamActive = false;
 
