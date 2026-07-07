@@ -553,6 +553,10 @@ body.solo-mode .solo-panel-visible {
   background: rgba(40,25,0,0.92); border-color: #ff9800; color: #ffb74d;
   box-shadow: 0 0 8px rgba(255,152,0,0.4);
 }
+#fix-btn.active {
+  background: rgba(0,35,40,0.92); border-color: #26c6da; color: #4dd0e1;
+  box-shadow: 0 0 8px rgba(38,198,218,0.4);
+}
 #gps-status {
   position: absolute; top: 44px; right: 8px; z-index: 1000;
   background: rgba(0,20,0,0.80); border: 1px solid #226622; color: #00cc66;
@@ -1241,6 +1245,7 @@ body.solo-mode .solo-panel-visible {
         <button id="rain-btn" onclick="toggleRain()">RAIN</button>
         <button id="wind-btn" onclick="toggleWind()">WIND</button>
         <button id="notam-btn" onclick="toggleNotamLayer()">NOTAM</button>
+        <button id="fix-btn" onclick="toggleFixLayer()">FIX</button>
       </div>
       <input type="file" id="notamFileInput" accept=".kml,.gpx" style="display:none" onchange="loadNotamFile(this)">
       <!-- Visitor counter widget (above scale bar, bottom-left) -->
@@ -7762,6 +7767,89 @@ function toggleFdrPanel() {
 }
 
 // ── NOTAM / KML / GPX overlay ──────────────────────────
+// ── ENR 항로 픽스 오버레이 (AIP ENR 픽스 좌표표에서 전사) ──
+// 형식: 이름 위도(DDMMSS) 경도(DDDMMSS). 교차검증: SAKTI/BIGOB/ATASO/NONOS = ENR 3.6과 일치
+const ENR_FIX_RAW =
+  'AGAVO 371000 1240000,AGSUS 364521 1304044,AKPON 334650 1271953,ANDOL 373958 1330000,' +
+  'ANKUS 350730 1284616,ANROD 343758 1282952,ANSIM 372323 1245009,ANUBA 350746 1273523,' +
+  'APARU 352442 1290932,APELA 344323 1291430,ATASO 355344 1265657,ATINA 334320 1270423,' +
+  'ATOTI 300013 1251154,BASEM 365037 1275710,BEDAR 315401 1262910,BEDES 360905 1264844,' +
+  'BEDOM 352513 1291754,BELTU 371218 1254759,BEPKO 353910 1265714,BESNA 343718 1290751,' +
+  'BIDRI 362007 1242453,BIGOB 364325 1280952,BIKSI 374032 1283504,BILUM 334613 1270439,' +
+  'BINIL 372349 1251359,BITUX 361645 1280148,BODOL 371122 1244954,BOGAN 371241 1262812,' +
+  'BONSO 302840 1250851,BOPTA 364406 1263658,BULGA 355609 1294924,BULTI 364322 1264930,' +
+  'BUSKO 374033 1301610,DABIK 361743 1301143,DALPO 365835 1242453,DALSU 350731 1264206,' +
+  'DANPA 353036 1242453,DANTI 371806 1243929,DOMKO 322848 1255859,DOTOL 341515 1263637,' +
+  'EGOBA 372915 1272204,ELAPI 362014 1285051,ELGEP 314653 1255617,ELPOS 355410 1264707,' +
+  'ENGOT 344834 1253948,ENSAL 365554 1274747,ENSUM 321302 1244635,ENTEL 362311 1265705,' +
+  'ESNEG 371014 1295051,GOGET 372442 1263036,GONAV 371048 1242453,GONAX 362311 1265016,' +
+  'GOSBO 341517 1274734,GUKDO 370111 1273823,GUKSU 335251 1263457,GUNKU 363414 1265949,' +
+  'IGDOK 353104 1274907,IGRAS 371846 1324417,IKEDO 314314 1253948,INVOK 344719 1291923,' +
+  'IPDAS 341515 1264301,KAKSO 370745 1272637,KALEK 351232 1295305,KALMA 371845 1270645,' +
+  'KALOD 353012 1284626,KAMIT 341514 1264618,KANKA 311515 1253504,KANSU 383800 1323830,' +
+  'KARBU 373159 1273952,KIDOS 335028 1263420,LAMEN 313636 1240000,LANAT 362224 1312542,' +
+  'LAPAL 355413 1271542,LESBU 374116 1294104,LIMDI 333313 1254953,LINTA 353116 1265119,' +
+  'LOSNI 333315 1264153,LOSTO 362016 1292548,MAKDU 362712 1274909,MAKET 335452 1271953,' +
+  'MAKSA 313155 1253504,MALSO 375440 1314904,MANGI 353011 1264618,MANOL 333629 1265514,' +
+  'MASTA 352847 1283340,MEKIL 363322 1264953,MONSI 371247 1265015,MUGUS 300006 1245712,' +
+  'NIRAT 320354 1260329,NISAV 341519 1275835,NOBUT 370715 1281957,NOGON 372250 1242505,' +
+  'NONOS 364046 1242453,NOPIK 372412 1253905,NULDI 342511 1261225,OLBIM 371411 1240751,' +
+  'OLMEN 364413 1265928,OLMUD 350225 1284916,OMKIM 331320 1264114,OMOTU 350033 1285022,' +
+  'ONATA 382832 1320602,ONIKU 321142 1265716,OPEDA 355149 1273652,OROGA 364456 1272718,' +
+  'OSPOT 365018 1272055,OSVOM 363844 1292331,PALDU 375813 1323625,PALSA 340131 1242453,' +
+  'PANSI 342051 1261225,PAPLU 333441 1270337,PEBRI 362311 1270013,PILIT 372631 1291731,' +
+  'POLEG 371249 1265935,PONIK 320021 1254659,POSAN 365615 1271316,POVEM 345523 1285416,' +
+  'POVOR 341520 1274400,REBIT 371203 1252913,REMOS 363605 1262329,RILRO 371033 1241442,' +
+  'RIMPO 350739 1273502,RINBO 355352 1253349,RUGMA 323012 1265725,RUNIT 350734 1282952,' +
+  'SABET 373829 1324019,SADLI 314948 1250000,SAKTI 365100 1274600,SAMDO 335036 1281857,' +
+  'SAMLO 332223 1261536,SAMUL 350736 1265154,SAPDI 350737 1282952,SAPRA 354926 1304325,' +
+  'SARAM 350736 1283147,SELPA 375515 1304911,SOSDO 330012 1262735,TAMNA 332815 1271953,' +
+  'TEBEX 363341 1275929,TEDAN 350744 1271852,TENAS 373820 1313427,TESIM 313526 1255128,' +
+  'TOLIS 335030 1242453,TOPAX 344655 1282952,TORUS 373625 1280807,TOSAN 330012 1264619,' +
+  'UGOVI 374105 1295051,UPGOS 335733 1271953,VASLI 364252 1273003';
+
+let _fixMarkers = [];
+let fixLayerOn = false;
+try { fixLayerOn = localStorage.getItem('fixLayerOn') === '1'; } catch(e) {}
+
+function _enrFixList() {
+  const dms = (d, degLen) => (+d.slice(0, degLen)) + (+d.slice(degLen, degLen + 2)) / 60 + (+d.slice(degLen + 2)) / 3600;
+  return ENR_FIX_RAW.split(',').map(s => {
+    const [name, la, lo] = s.trim().split(/\s+/);
+    return { name, lat: dms(la, 2), lon: dms(lo, 3) };
+  });
+}
+function _drawFixLayer() {
+  _clearFixLayer();
+  _enrFixList().forEach(f => {
+    const icon = L.divIcon({
+      html: `<div style="position:relative;">
+        <div style="width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-bottom:9px solid #26c6da;filter:drop-shadow(0 0 1.5px #000);"></div>
+        <div style="position:absolute;left:11px;top:-2px;color:#4dd0e1;font-size:8px;font-family:monospace;font-weight:bold;white-space:nowrap;text-shadow:1px 1px 2px #000;">${f.name}</div>
+      </div>`,
+      iconSize: [10, 9], iconAnchor: [5, 5], className: ''
+    });
+    const mk = L.marker([f.lat, f.lon], { icon, interactive: true });
+    mk.bindTooltip(`${f.name}<br>${decToDMS(f.lat, true)} ${decToDMS(f.lon, false)}`, { sticky: true });
+    mk.addTo(leafMap);
+    _fixMarkers.push(mk);
+  });
+}
+function _clearFixLayer() {
+  _fixMarkers.forEach(m => { try { leafMap.removeLayer(m); } catch(e){} });
+  _fixMarkers = [];
+}
+function toggleFixLayer() {
+  fixLayerOn = !fixLayerOn;
+  if (fixLayerOn) _drawFixLayer(); else _clearFixLayer();
+  document.getElementById('fix-btn').classList.toggle('active', fixLayerOn);
+  try { localStorage.setItem('fixLayerOn', fixLayerOn ? '1' : '0'); } catch(e) {}
+}
+// 저장된 상태 복원
+if (fixLayerOn) {
+  try { _drawFixLayer(); document.getElementById('fix-btn').classList.add('active'); } catch(e) {}
+}
+
 let _notamLayers = [];
 let _notamActive = false;
 
