@@ -3911,8 +3911,9 @@ let trailLine = L.polyline([],{color:'#00ff88',weight:1.5,opacity:0.65}).addTo(l
 let shipTrail = [];
 let shipTrailLine = L.polyline([],{color:'#ff3333',weight:1.5,opacity:0.65}).addTo(leafMap);
 let routeLine = L.polyline([],{color:'#4488ff',weight:2,dashArray:'6 5',opacity:0.8}).addTo(leafMap);
-let crsLine   = L.polyline([],{color:'#ff00ff',weight:1.5,dashArray:'10 5',opacity:0.9}).addTo(leafMap);
-let vorCrsLine = L.polyline([],{color:'#ffaa00',weight:1.5,dashArray:'10 5',opacity:0.9}).addTo(leafMap);
+// CRS 라인 색은 HSI BRG 색 체계와 통일: FMS=BRG2 초록, VOR/LOC=BRG1 파랑
+let crsLine   = L.polyline([],{color:'#00cc44',weight:1.5,dashArray:'10 5',opacity:0.9}).addTo(leafMap);
+let vorCrsLine = L.polyline([],{color:'#44aaff',weight:1.5,dashArray:'10 5',opacity:0.9}).addTo(leafMap);
 let vorStationMarker = null;
 let wpMarkers = [];
 
@@ -3930,8 +3931,8 @@ function updateCrsLine() {
       if (vorStationMarker) { leafMap.removeLayer(vorStationMarker); vorStationMarker = null; }
       const stIcon = L.divIcon({
         html: `<div style="position:relative;">
-          <div style="width:10px;height:10px;background:#ffaa00;border:2px solid #fff;box-shadow:0 0 4px rgba(0,0,0,0.7);transform:rotate(45deg);"></div>
-          <div style="position:absolute;left:13px;top:-3px;color:#ffaa00;font-size:9px;font-family:monospace;white-space:nowrap;text-shadow:1px 1px 2px #000;">${navSrc}${navIcao?':'+navIcao:''}</div>
+          <div style="width:10px;height:10px;background:#44aaff;border:2px solid #fff;box-shadow:0 0 4px rgba(0,0,0,0.7);transform:rotate(45deg);"></div>
+          <div style="position:absolute;left:13px;top:-3px;color:#44aaff;font-size:9px;font-family:monospace;white-space:nowrap;text-shadow:1px 1px 2px #000;">${navSrc}${navIcao?':'+navIcao:''}</div>
         </div>`,
         iconSize:[10,10], iconAnchor:[5,5], className:''
       });
