@@ -7863,36 +7863,45 @@ const ENR_VORS = [
   { id: 'TGU', name: 'DALSEONG VORTAC',  freq: '112.2', lat: 35.80972, lon: 128.59083 },  // 354835N 1283527E
   { id: 'KAE', name: 'GANGWON VORTAC',   freq: '115.6', lat: 37.70083, lon: 128.75389 },  // 374203N 1284514E
   { id: 'KUZ', name: 'GUNSAN VORTAC',    freq: '112.8', lat: 35.91028, lon: 126.61139 },  // 355437N 1263641E
+  { id: 'SML', name: 'SEOUL VORTAC',     freq: '',      lat: 37.5614,  lon: 126.7914  },
+  { id: 'PSN', name: 'BUSAN VORTAC',     freq: '',      lat: 35.2917,  lon: 129.1244  },
 ];
-// 항로: 경유점은 VOR id 또는 픽스 이름으로 참조(픽스 DB와 단일 소스 유지)
+// 항로(ATS Routes): VOR는 id 참조(vor:1), 그 외 경유점은 제공된 십진수 좌표 내장
 const ENR_ROUTES = [
-  { route: 'A582', type: 'CONV', pts: ['SEL', 'POLEG'] },
-  { route: 'G585', type: 'CONV', pts: ['SEL', 'KALMA', 'KAKSO', 'GUKDO', 'ENSAL', 'BASEM'] },
-  { route: 'W62',  type: 'CONV', pts: ['SOT', 'MONSI', 'GOGET'] },
-  { route: 'L512', type: 'RNAV', pts: ['TENAS', 'SABET', 'ANDOL'] },
-  { route: 'Y590', type: 'RNAV', pts: ['BEDAR', 'ELGEP', 'IKEDO'] },
+  { route: 'A582', type: 'CONV', wps: [{n:'SEL',vor:1},{n:'POLEG',lat:37.2136,lon:126.9931}] },
+  { route: 'G585', type: 'CONV', wps: [{n:'SEL',vor:1},{n:'KALMA',lat:37.3125,lon:127.1125},{n:'KAKSO',lat:37.1292,lon:127.4436},{n:'GUKDO',lat:37.0197,lon:127.6397},{n:'ENSAL',lat:36.9317,lon:127.7964},{n:'BASEM',lat:36.8436,lon:127.9528}] },
+  { route: 'W62',  type: 'CONV', wps: [{n:'SOT',vor:1},{n:'MONSI',lat:37.2131,lon:126.8375},{n:'GOGET',lat:37.4117,lon:126.5100}] },
+  { route: 'L512', type: 'RNAV', wps: [{n:'TENAS',lat:37.6389,lon:131.5742},{n:'SABET',lat:37.6414,lon:132.6719},{n:'ANDOL',lat:37.6661,lon:133.0000}] },
+  { route: 'Y590', type: 'RNAV', wps: [{n:'BEDAR',lat:31.9003,lon:126.4861},{n:'ELGEP',lat:31.7814,lon:125.9381},{n:'IKEDO',lat:31.7206,lon:125.6633}] },
+  { route: 'B467', type: 'CONV', wps: [{n:'KANSU',lat:38.0433,lon:128.6608},{n:'KAE',vor:1},{n:'SOTGO',lat:37.1331,lon:129.0700},{n:'KPO',vor:1}] },
+  { route: 'V11',  type: 'CONV', wps: [{n:'SEL',vor:1},{n:'SOTGO',lat:37.1331,lon:129.0700},{n:'OSVOT',lat:36.6389,lon:129.2131}] },
+  { route: 'Y644', type: 'RNAV', wps: [{n:'ALADI',lat:37.2414,lon:125.4319},{n:'SULMO',lat:36.7844,lon:125.8436},{n:'KUZ',vor:1},{n:'DOLOL',lat:34.8517,lon:127.3114}] },
+  { route: 'Y711', type: 'RNAV', wps: [{n:'IPDAS',lat:37.5217,lon:126.2114},{n:'TONAM',lat:36.9814,lon:126.4389},{n:'BUKDO',lat:36.1244,lon:126.7531}] },
+  { route: 'Y722', type: 'RNAV', wps: [{n:'SML',vor:1},{n:'MALMI',lat:36.9531,lon:127.3114},{n:'TGU',vor:1},{n:'PSN',vor:1}] },
 ];
 
 let _awyLayers = [];
 let awyLayerOn = false;
 try { awyLayerOn = localStorage.getItem('awyLayerOn') === '1'; } catch(e) {}
 
-// 경유점 이름 → 좌표 (VOR id 우선, 그다음 픽스 DB)
-function _awyResolve(name) {
-  const v = ENR_VORS.find(x => x.id === name);
-  if (v) return [v.lat, v.lon];
-  const f = _enrFixList().find(x => x.name === name);
-  return f ? [f.lat, f.lon] : null;
+// 경유점 → 좌표 (VOR는 id 참조, 그 외는 내장 좌표)
+function _awyWpCoord(w) {
+  if (w.vor) {
+    const v = ENR_VORS.find(x => x.id === w.n);
+    return v ? [v.lat, v.lon] : null;
+  }
+  return (w.lat != null && w.lon != null) ? [w.lat, w.lon] : null;
 }
 function _drawAwyLayer() {
   _clearAwyLayer();
   // 항로선 (CONV=녹색, RNAV=하늘색)
   ENR_ROUTES.forEach(r => {
-    const coords = r.pts.map(_awyResolve).filter(Boolean);
+    const coordsAll = r.wps.map(_awyWpCoord);   // 경유점 인덱스 보존(미해결=null)
+    const coords = coordsAll.filter(Boolean);
     if (coords.length < 2) return;
     const color = r.type === 'RNAV' ? '#4dd0e1' : '#8bc34a';
     const pl = L.polyline(coords, { color, weight: 2, opacity: 0.85 });
-    pl.bindTooltip(`${r.route} (${r.type}) · ${r.pts.join(' – ')}`, { sticky: true });
+    pl.bindTooltip(`${r.route} (${r.type}) · ${r.wps.map(w => w.n).join(' – ')}`, { sticky: true });
     pl.addTo(leafMap); _awyLayers.push(pl);
     // 항로명 라벨 — 모든 구간 중앙에 표시(어느 구간에서 봐도 항로명 확인 가능)
     for (let i = 0; i < coords.length - 1; i++) {
@@ -7907,17 +7916,16 @@ function _drawAwyLayer() {
       lbl.addTo(leafMap); _awyLayers.push(lbl);
     }
     // 경유 픽스 점 + 이름 (FIX 레이어를 켜지 않아도 항로 경유점 확인 가능)
-    r.pts.forEach((nm, i) => {
-      if (!coords[i]) return;
-      if (ENR_VORS.some(v => v.id === nm)) return;   // VOR은 별도 심볼로 표시됨
-      const mk = L.circleMarker(coords[i], {
+    r.wps.forEach((w, i) => {
+      if (!coordsAll[i] || w.vor) return;   // VOR은 별도 육각형 심볼로 표시됨
+      const mk = L.circleMarker(coordsAll[i], {
         radius: 3.5, color: '#fff', weight: 1, fillColor: color, fillOpacity: 1
       });
-      mk.bindTooltip(`${nm} (${r.route})`, { sticky: true });
+      mk.bindTooltip(`${w.n} (${r.route})`, { sticky: true });
       mk.addTo(leafMap); _awyLayers.push(mk);
-      const nmLbl = L.marker(coords[i], {
+      const nmLbl = L.marker(coordsAll[i], {
         icon: L.divIcon({
-          html: `<div style="color:#eee;font-size:8px;font-family:monospace;font-weight:bold;white-space:nowrap;text-shadow:1px 1px 2px #000;transform:translate(7px,-11px);">${nm}</div>`,
+          html: `<div style="color:#eee;font-size:8px;font-family:monospace;font-weight:bold;white-space:nowrap;text-shadow:1px 1px 2px #000;transform:translate(7px,-11px);">${w.n}</div>`,
           iconSize: [0, 0], className: ''
         }), interactive: false
       });
@@ -7930,12 +7938,12 @@ function _drawAwyLayer() {
       html: `<div style="position:relative;">
         <div style="width:13px;height:13px;background:#8bc34a;clip-path:polygon(25% 0,75% 0,100% 50%,75% 100%,25% 100%,0 50%);filter:drop-shadow(0 0 1.5px #000);"></div>
         <div style="position:absolute;left:50%;top:50%;width:4px;height:4px;margin:-2px 0 0 -2px;background:#0a0a0a;border-radius:50%;"></div>
-        <div style="position:absolute;left:16px;top:-1px;color:#aed581;font-size:8px;font-family:monospace;font-weight:bold;white-space:nowrap;text-shadow:1px 1px 2px #000;">${v.id} ${v.freq}</div>
+        <div style="position:absolute;left:16px;top:-1px;color:#aed581;font-size:8px;font-family:monospace;font-weight:bold;white-space:nowrap;text-shadow:1px 1px 2px #000;">${v.id}${v.freq ? ' ' + v.freq : ''}</div>
       </div>`,
       iconSize: [13, 13], iconAnchor: [6, 6], className: ''
     });
     const mk = L.marker([v.lat, v.lon], { icon });
-    mk.bindTooltip(`${v.name} (${v.id})<br>${v.freq} MHz<br>${decToDMS(v.lat, true)} ${decToDMS(v.lon, false)}`, { sticky: true });
+    mk.bindTooltip(`${v.name} (${v.id})${v.freq ? '<br>' + v.freq + ' MHz' : ''}<br>${decToDMS(v.lat, true)} ${decToDMS(v.lon, false)}`, { sticky: true });
     mk.addTo(leafMap); _awyLayers.push(mk);
   });
 }
