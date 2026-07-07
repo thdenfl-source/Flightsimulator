@@ -4000,8 +4000,9 @@ let crsLine   = L.polyline([],{color:'#00cc44',weight:1.5,dashArray:'10 5',opaci
 let vorCrsLine = L.polyline([],{color:'#44aaff',weight:1.5,dashArray:'10 5',opacity:0.9}).addTo(leafMap);
 
 // ── 속도 벡터 (헤딩 방향 붉은 화살표, 1분 예상위치 길이·최대 130kt) ──
+// 화살촉은 HSI 코스/BRG 니들과 같은 '채워진 삼각형' 스타일
 let spdVecLine = L.polyline([], {color:'#ff1744', weight:2.5, opacity:0.95}).addTo(leafMap);
-let spdVecHead = L.polyline([], {color:'#ff1744', weight:2.5, opacity:0.95}).addTo(leafMap);
+let spdVecHead = L.polygon([],  {color:'#ff1744', weight:1, fillColor:'#ff1744', fillOpacity:1, opacity:1}).addTo(leafMap);
 
 function updateSpeedVector() {
   const spd = Math.min(Math.max(S.spd || 0, 0), 130);   // 130kt 상한
@@ -4011,13 +4012,16 @@ function updateSpeedVector() {
     return;
   }
   const lenNM = spd / 60;                                // 1분 진행 거리
-  const tip = destPoint(S.lat, S.lon, S.hdg, lenNM);
-  spdVecLine.setLatLngs([[S.lat, S.lon], tip]);
-  // 화살촉: 끝점에서 헤딩±150° 방향 짧은 바브 2개
-  const barb = Math.max(lenNM * 0.18, 0.06);
-  const b1 = destPoint(tip[0], tip[1], normA(S.hdg + 150), barb);
-  const b2 = destPoint(tip[0], tip[1], normA(S.hdg - 150), barb);
-  spdVecHead.setLatLngs([b1, tip, b2]);
+  const tip  = destPoint(S.lat, S.lon, S.hdg, lenNM);
+  // 화살촉(채워진 삼각형): 끝점 + 뒤쪽 ±25° 방향 두 밑변점 (HSI 니들 스타일)
+  const headLen = Math.max(lenNM * 0.22, 0.07);
+  const base = destPoint(tip[0], tip[1], normA(S.hdg + 180), headLen);
+  const halfW = headLen * 0.45;
+  const b1 = destPoint(base[0], base[1], normA(S.hdg + 90), halfW);
+  const b2 = destPoint(base[0], base[1], normA(S.hdg - 90), halfW);
+  spdVecHead.setLatLngs([tip, b1, b2]);
+  // 샤프트는 삼각형 밑변까지만 (겹침 방지)
+  spdVecLine.setLatLngs([[S.lat, S.lon], base]);
 }
 
 // ── BRG1/BRG2 베어링 라인 (HSI 사이드패널과 동일 소스·색) ──
@@ -8419,10 +8423,16 @@ function _aspcGroupSet(grp,on){
     const cb=document.getElementById('aspc-cb-'+a.id); if(cb)cb.checked=on;
   });
   _aspcSave(); _aspcUpdateBtn();
+  _aspcRenderPanel();   // 헤더 ON 카운트 갱신
 }
 function _aspcUpdateBtn(){
   const any=AIRSPACE_DB.some(a=>aspcOn[a.id]);
   document.getElementById('aspc-btn').classList.toggle('active',any||document.getElementById('aspc-panel').classList.contains('open'));
+}
+const _aspcOpen = {};   // 그룹 펼침 상태 (기본: 모두 접힘)
+function _aspcToggleGrp(g){
+  _aspcOpen[g] = !_aspcOpen[g];
+  _aspcRenderPanel();
 }
 function _aspcRenderPanel(){
   const p=document.getElementById('aspc-panel');
@@ -8430,12 +8440,17 @@ function _aspcRenderPanel(){
   let html='';
   grps.forEach(g=>{
     const col=_aspcColors[g];
-    html+=`<div class="aspc-grp" style="color:${col};">${g}
-      <div style="flex-shrink:0;"><span onclick="_aspcGroupSet('${g}',true)">모두</span><span onclick="_aspcGroupSet('${g}',false)">해제</span></div></div>`;
-    AIRSPACE_DB.filter(a=>a.grp===g).forEach(a=>{
-      html+=`<label class="aspc-item"><input type="checkbox" id="aspc-cb-${a.id}" ${aspcOn[a.id]?'checked':''} onchange="toggleAspcItem('${a.id}')">
-        <span style="color:${col};">■</span> ${a.name}${a.alt?` <span style=\"color:#666;font-size:8px;\">${a.alt}</span>`:''}</label>`;
-    });
+    const open=!!_aspcOpen[g];
+    const onCnt=AIRSPACE_DB.filter(a=>a.grp===g&&aspcOn[a.id]).length;
+    html+=`<div class="aspc-grp" style="color:${col};cursor:pointer;" onclick="_aspcToggleGrp('${g}')">
+      <span style="border:none;background:none;padding:0;margin:0;color:${col};font-size:10px;">${open?'▼':'▶'} ${g}${onCnt?` <b style=\"color:#fff;\">(${onCnt})</b>`:''}</span>
+      <div style="flex-shrink:0;" onclick="event.stopPropagation()"><span onclick="_aspcGroupSet('${g}',true)">모두</span><span onclick="_aspcGroupSet('${g}',false)">해제</span></div></div>`;
+    if(open){
+      AIRSPACE_DB.filter(a=>a.grp===g).forEach(a=>{
+        html+=`<label class="aspc-item"><input type="checkbox" id="aspc-cb-${a.id}" ${aspcOn[a.id]?'checked':''} onchange="toggleAspcItem('${a.id}')">
+          <span style="color:${col};">■</span> ${a.name}${a.alt?` <span style=\"color:#666;font-size:8px;\">${a.alt}</span>`:''}</label>`;
+      });
+    }
   });
   p.innerHTML=html;
 }
