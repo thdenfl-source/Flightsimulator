@@ -4138,6 +4138,9 @@ function toggleFollow() {
   const btn = document.getElementById('follow-btn');
   btn.classList.toggle('active', followMode);
   try { updateCenterCoord(); } catch(e) {}   // 좌표 기준(중앙↔항공기) 즉시 전환
+  // 1인칭 모드에서는 중앙 십자마크 숨김(항공기 기준 좌표 표시 중)
+  const ch = document.getElementById('map-crosshair');
+  if (ch) ch.style.display = followMode ? 'none' : '';
   if (followMode) {
     // Disable Leaflet dragging while following
     leafMap.dragging.disable();
