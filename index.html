@@ -607,6 +607,14 @@ body.solo-mode .solo-panel-visible {
   padding: 8px; font-family: monospace; -webkit-overflow-scrolling: touch;
 }
 #aspc-panel.open { display: block; }
+#awy-panel {
+  display: none;
+  position: absolute; top: 44px; right: 8px; z-index: 1100;
+  width: 210px; background: rgba(8,14,8,0.94);
+  border: 1px solid #8bc34a; border-radius: 8px; padding: 8px;
+  font-family: monospace;
+}
+#awy-panel.open { display: block; }
 .aspc-grp {
   color: #ce93d8; font-size: 10px; font-weight: bold; letter-spacing: 1px;
   border-bottom: 1px solid #2a1a30; padding: 6px 2px 3px; margin-top: 2px;
@@ -1317,6 +1325,7 @@ body.solo-mode .solo-panel-visible {
         <button id="aspc-btn" onclick="toggleAspcPanel()">공역</button>
       </div>
       <div id="aspc-panel"></div>
+      <div id="awy-panel"></div>
       <input type="file" id="notamFileInput" accept=".kml,.gpx" style="display:none" onchange="loadNotamFile(this)">
       <!-- Visitor counter widget (above scale bar, bottom-left) -->
       <div id="counter-wrap">
@@ -8117,8 +8126,13 @@ const ENR_ROUTES = [
 ];
 
 let _awyLayers = [];
-let awyLayerOn = false;
-try { awyLayerOn = localStorage.getItem('awyLayerOn') === '1'; } catch(e) {}
+// 카테고리별 표시 상태: Conventional 항로 / RNAV 항로 / VOR 표지소
+let awyCat = { conv: false, rnav: false, vor: false };
+try {
+  const s = JSON.parse(localStorage.getItem('awyCat') || 'null');
+  if (s) awyCat = { conv: !!s.conv, rnav: !!s.rnav, vor: !!s.vor };
+  else if (localStorage.getItem('awyLayerOn') === '1') awyCat = { conv: true, rnav: true, vor: true };   // 구버전 마이그레이션
+} catch(e) {}
 
 // 경유점 → 좌표 (VOR는 id 참조, 그 외는 내장 좌표)
 function _awyWpCoord(w) {
@@ -8130,8 +8144,9 @@ function _awyWpCoord(w) {
 }
 function _drawAwyLayer() {
   _clearAwyLayer();
-  // 항로선 (CONV=녹색, RNAV=하늘색)
+  // 항로선 (CONV=녹색, RNAV=하늘색) — 카테고리별 표시
   ENR_ROUTES.forEach(r => {
+    if (r.type === 'RNAV' ? !awyCat.rnav : !awyCat.conv) return;
     const coordsAll = r.wps.map(_awyWpCoord);   // 경유점 인덱스 보존(미해결=null)
     const coords = coordsAll.filter(Boolean);
     if (coords.length < 2) return;
@@ -8170,7 +8185,7 @@ function _drawAwyLayer() {
     });
   });
   // VOR 표지소 (육각형 심볼 + ID·주파수 라벨)
-  ENR_VORS.forEach(v => {
+  if (awyCat.vor) ENR_VORS.forEach(v => {
     const icon = L.divIcon({
       html: `<div style="position:relative;">
         <div style="width:13px;height:13px;background:#8bc34a;clip-path:polygon(25% 0,75% 0,100% 50%,75% 100%,25% 100%,0 50%);filter:drop-shadow(0 0 1.5px #000);"></div>
@@ -8188,15 +8203,42 @@ function _clearAwyLayer() {
   _awyLayers.forEach(l => { try { leafMap.removeLayer(l); } catch(e){} });
   _awyLayers = [];
 }
-function toggleAwyLayer() {
-  awyLayerOn = !awyLayerOn;
-  if (awyLayerOn) _drawAwyLayer(); else _clearAwyLayer();
-  document.getElementById('awy-btn').classList.toggle('active', awyLayerOn);
-  try { localStorage.setItem('awyLayerOn', awyLayerOn ? '1' : '0'); } catch(e) {}
+function _awySave() { try { localStorage.setItem('awyCat', JSON.stringify(awyCat)); } catch(e) {} }
+function _awyUpdateBtn() {
+  const any = awyCat.conv || awyCat.rnav || awyCat.vor;
+  const p = document.getElementById('awy-panel');
+  document.getElementById('awy-btn').classList.toggle('active', any || (p && p.classList.contains('open')));
 }
-if (awyLayerOn) {
-  try { _drawAwyLayer(); document.getElementById('awy-btn').classList.add('active'); } catch(e) {}
+function toggleAwyCat(k) {
+  awyCat[k] = !awyCat[k];
+  _drawAwyLayer(); _awySave(); _awyUpdateBtn(); _awyRenderPanel();
 }
+function _awySetAll(on) {
+  awyCat = { conv: on, rnav: on, vor: on };
+  _drawAwyLayer(); _awySave(); _awyUpdateBtn(); _awyRenderPanel();
+}
+function _awyRenderPanel() {
+  const p = document.getElementById('awy-panel'); if (!p) return;
+  const rows = [
+    ['conv', 'Conventional 항로', '#8bc34a', ENR_ROUTES.filter(r=>r.type==='CONV').length + '개'],
+    ['rnav', 'RNAV(Area) 항로',   '#4dd0e1', ENR_ROUTES.filter(r=>r.type==='RNAV').length + '개'],
+    ['vor',  'VOR 표지소',        '#aed581', ENR_VORS.length + '개소'],
+  ];
+  p.innerHTML = `<div class="aspc-grp" style="color:#8bc34a;">항로(AWY) 표시
+      <div style="flex-shrink:0;"><span onclick="_awySetAll(true)">모두</span><span onclick="_awySetAll(false)">해제</span></div></div>` +
+    rows.map(([k, nm, col, cnt]) =>
+      `<label class="aspc-item"><input type="checkbox" ${awyCat[k] ? 'checked' : ''} onchange="toggleAwyCat('${k}')">
+        <span style="color:${col};">■</span> ${nm} <span style="color:#666;font-size:8px;">${cnt}</span></label>`).join('');
+}
+function toggleAwyLayer() {   // AWY 버튼 → 카테고리 패널 열기/닫기
+  const p = document.getElementById('awy-panel');
+  const open = !p.classList.contains('open');
+  p.classList.toggle('open', open);
+  if (open) _awyRenderPanel();
+  _awyUpdateBtn();
+}
+// 저장된 상태 복원
+try { _drawAwyLayer(); _awyUpdateBtn(); } catch(e) {}
 
 // AIP ENR 2.1/2.2에서 추출한 공역 데이터 (TMA/CTA/제주 Class B/ATZ/관제권/소음방지)
 const AIRSPACE_DB = [
