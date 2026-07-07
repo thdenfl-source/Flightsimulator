@@ -443,7 +443,7 @@ body.solo-mode .solo-panel-visible {
 /* ── 지도 중앙 십자마크 ── */
 #map-crosshair {
   position: absolute; left: 50%; top: 50%;
-  width: 0; height: 0; z-index: 900; pointer-events: none;
+  width: 0; height: 0; z-index: 500; pointer-events: none;   /* 마커 페인(600)보다 아래 → 헬기 아이콘이 위에 표시 */
 }
 #map-crosshair .ch-h, #map-crosshair .ch-v {
   position: absolute; background: #ff1744;
@@ -456,7 +456,7 @@ body.solo-mode .solo-panel-visible {
   position: absolute; bottom: 76px; left: 10px; z-index: 1100;
   background: rgba(0,0,0,0.72); border: 1px solid #444; border-radius: 4px;
   padding: 3px 7px; font-family: 'Courier New', monospace;
-  font-size: 10px; line-height: 1.4; color: #ff6e6e; white-space: nowrap;
+  font-size: 10px; line-height: 1.4; color: #ffd54f; white-space: nowrap;
   pointer-events: none;
 }
 #counter-wrap {
@@ -4155,7 +4155,7 @@ function updateCenterCoord() {
   let lat, lon, tag;
   if (followMode) { lat = S.lat; lon = S.lon; tag = '✈'; }   // 1인칭: 항공기 기준
   else { const c = leafMap.getCenter(); lat = c.lat; lon = c.lng; tag = '＋'; }
-  el.innerHTML = `${tag} ${decToDMS(lat, true)}<br>&nbsp;&nbsp;&nbsp;${decToDMS(lon, false)}`;
+  el.textContent = `${tag} ${decToDMS(lat, true)} ${decToDMS(lon, false)}`;   // 북위·동경 1줄 표시
 }
 leafMap.on('move', updateCenterCoord);
 try { updateCenterCoord(); } catch(e) {}
