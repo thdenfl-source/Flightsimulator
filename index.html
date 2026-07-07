@@ -5801,7 +5801,7 @@ const APT_NAME    = Object.fromEntries(AIRPORTS_KR.map(a => [a.icao, a.name]));
 //  ELEV / ARP / 활주로 / 주파수(TWR·GND·APP·ATIS 등) → METAR 팝업에 표시
 async function _getAptInfo(icao) {
   try {
-    const cache = JSON.parse(localStorage.getItem('aptInfoDB') || '{}');
+    const cache = JSON.parse(localStorage.getItem('aptInfoDB2') || '{}');
     if (cache[icao]) return cache[icao];
     // 차트 저장소에서 해당 공항 TEXT PDF 탐색
     const keys = await idbGetAllKeys();
@@ -5817,7 +5817,9 @@ async function _getAptInfo(icao) {
       const rows = _pdfPageRows(await doc.getPage(p).then(pg => pg.getTextContent()));
       for (const r of rows) {
         const T = r.text;
-        const sm = T.match(/AD 2\.(\d+)/); if (sm) sec = sm[1];
+        // 섹션 헤더만 인정: 'AD 2.n 제목' 형태 + 참조 문구(REFER/SEE 등) 제외 + 번호 역행 금지
+        const sm = T.match(/\bAD 2\.(\d+)\b\s+[A-Z]/);
+        if (sm && !/REFER|SEE |PARAGRAPH|ITEM/.test(T) && (+sm[1]) >= (+sec || 0)) sec = sm[1];
         if (sec === '2') {
           let m = T.match(/ARP COORDINATES[^0-9]*(\d{6})N\s*(\d{7})E/);
           if (m && !info.arp) info.arp = m[1] + 'N ' + m[2] + 'E';
@@ -5840,11 +5842,11 @@ async function _getAptInfo(icao) {
           }
         }
       }
-      if (sec && +sec > 18) break;   // 필요 섹션 지나면 중단
+      // (조기 종료 제거 — 참조 문구로 인한 섹션 오인 시 데이터 누락 방지)
     }
     if (info.elevM == null && !info.arp && !info.rwys.length && !Object.keys(info.freqs).length) return null;
     cache[icao] = info;
-    try { localStorage.setItem('aptInfoDB', JSON.stringify(cache)); } catch(e) {}
+    try { localStorage.setItem('aptInfoDB2', JSON.stringify(cache)); } catch(e) {}
     return info;
   } catch(e) { return null; }
 }
