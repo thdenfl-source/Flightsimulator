@@ -1402,7 +1402,7 @@ body.solo-mode .solo-panel-visible {
           <button id="ship-tab-spd" class="ship-tab ship-tab-active" onclick="shipSetMode('SPD')">SPD</button>
           <button id="ship-tab-crs" class="ship-tab" onclick="shipSetMode('CRS')">CRS</button>
         </div>
-        <div id="ship-display" style="background:#000;border:1.5px solid #333;border-radius:4px;color:#c8ff00;font-size:24px;text-align:right;padding:4px 10px;margin-bottom:3px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;min-height:36px;display:flex;align-items:center;justify-content:flex-end;letter-spacing:2px;">0</div>
+        <div id="ship-display" style="background:#000;border:1.5px solid #333;border-radius:4px;color:#c8ff00;font-size:24px;text-align:right;padding:4px 10px;margin-bottom:3px;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica Neue,Arial,sans-serif;min-height:36px;display:flex;align-items:center;justify-content:flex-end;letter-spacing:2px;">0</div>
         <div id="ship-unit" style="color:#555;font-size:7px;text-align:right;margin-bottom:8px;">kt · max 50</div>
         <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin-bottom:8px;">
           <button class="ship-num" onclick="shipKey('7')">7</button>
@@ -3666,7 +3666,7 @@ function _makeWindIcon(dir, spd) {
     iconAnchor: [24, 24],
     html: `<div style="width:48px;height:48px;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none;">
       <div style="font-size:18px;transform:rotate(${dir}deg);line-height:1;color:${color};">↑</div>
-      <div style="font-size:9px;color:${color};font-weight:bold;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;line-height:1.2;">${spd}kt</div>
+      <div style="font-size:9px;color:${color};font-weight:bold;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica Neue,Arial,sans-serif;line-height:1.2;">${spd}kt</div>
     </div>`,
   });
 }
@@ -3947,12 +3947,12 @@ leafMap.on('click', function(e) {
   const lonStr = (lon >= 0 ? lon.toFixed(4) + '° E' : (-lon).toFixed(4) + '° W');
 
   const box = document.createElement('div');
-  box.style.cssText = 'background:#0d1a0d;padding:12px 16px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;text-align:center;';
+  box.style.cssText = 'background:#0d1a0d;padding:12px 16px;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica Neue,Arial,sans-serif;text-align:center;';
   box.innerHTML =
     `<div style="color:#aaddaa;font-size:13px;line-height:1.7;margin-bottom:10px;">${latStr}<br>${lonStr}</div>` +
     `<div style="display:flex;gap:10px;justify-content:center;">` +
-    `<button id="_tapAdd" style="background:#1a4a1a;border:1px solid #00ff88;color:#00ff88;font:bold 13px -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;padding:7px 20px;border-radius:4px;cursor:pointer;touch-action:manipulation;">추가</button>` +
-    `<button id="_tapCnl" style="background:#2a1a1a;border:1px solid #664444;color:#cc8888;font:bold 13px -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;padding:7px 16px;border-radius:4px;cursor:pointer;touch-action:manipulation;">취소</button>` +
+    `<button id="_tapAdd" style="background:#1a4a1a;border:1px solid #00ff88;color:#00ff88;font:bold 13px -apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica Neue,Arial,sans-serif;padding:7px 20px;border-radius:4px;cursor:pointer;touch-action:manipulation;">추가</button>` +
+    `<button id="_tapCnl" style="background:#2a1a1a;border:1px solid #664444;color:#cc8888;font:bold 13px -apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica Neue,Arial,sans-serif;padding:7px 16px;border-radius:4px;cursor:pointer;touch-action:manipulation;">취소</button>` +
     `</div>`;
 
   const popup = L.popup({ closeButton: false, className: 'tap-confirm-popup', autoClose: false, closeOnClick: false })
@@ -4058,7 +4058,7 @@ let _brg1LblMk = null, _brg2LblMk = null;
 
 function _brgLabelMarker(color) {
   const icon = L.divIcon({
-    html: `<div style="color:${color};font-size:9px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;font-weight:bold;white-space:nowrap;text-shadow:1px 1px 2px #000,-1px -1px 2px #000;transform:translate(6px,-6px);"></div>`,
+    html: `<div style="color:${color};font-size:9px;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica Neue,Arial,sans-serif;font-weight:bold;white-space:nowrap;text-shadow:1px 1px 2px #000,-1px -1px 2px #000;transform:translate(6px,-6px);"></div>`,
     iconSize: [0, 0], className: ''
   });
   return L.marker([0, 0], { icon, interactive: false }).addTo(leafMap);
@@ -4108,7 +4108,7 @@ function updateCrsLine() {
       const stIcon = L.divIcon({
         html: `<div style="position:relative;">
           <div style="width:10px;height:10px;background:#44aaff;border:2px solid #fff;box-shadow:0 0 4px rgba(0,0,0,0.7);transform:rotate(45deg);"></div>
-          <div style="position:absolute;left:13px;top:-3px;color:#44aaff;font-size:9px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;white-space:nowrap;text-shadow:1px 1px 2px #000;">${navSrc}${navIcao?':'+navIcao:''}</div>
+          <div style="position:absolute;left:13px;top:-3px;color:#44aaff;font-size:9px;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica Neue,Arial,sans-serif;white-space:nowrap;text-shadow:1px 1px 2px #000;">${navSrc}${navIcao?':'+navIcao:''}</div>
         </div>`,
         iconSize:[10,10], iconAnchor:[5,5], className:''
       });
@@ -4277,7 +4277,7 @@ function updateWpMarkers(){
     const icon=L.divIcon({
       html:`<div style="position:relative;">
         <div style="width:10px;height:10px;border-radius:50%;background:${bg};border:2px solid #fff;box-shadow:0 0 4px rgba(0,0,0,0.6);"></div>
-        <div style="position:absolute;left:12px;top:-2px;color:#fff;font-size:8px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;white-space:nowrap;text-shadow:1px 1px 2px #000;">${wp.ident}</div>
+        <div style="position:absolute;left:12px;top:-2px;color:#fff;font-size:8px;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica Neue,Arial,sans-serif;white-space:nowrap;text-shadow:1px 1px 2px #000;">${wp.ident}</div>
       </div>`,
       iconSize:[10,10],iconAnchor:[5,5],className:'',
     });
@@ -5871,7 +5871,7 @@ async function showAptWx(icao, name, latlng) {
   const ctl = _aptWxCtl;
 
   const div = document.createElement('div');
-  div.style.cssText = 'background:#0a1a0a;padding:10px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;';
+  div.style.cssText = 'background:#0a1a0a;padding:10px;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica Neue,Arial,sans-serif;';
   div.innerHTML = `<div style="color:#00ff88;font-size:15px;font-weight:bold;margin-bottom:6px;">${icao} — ${name}</div><div style="color:#888;font-size:13px;">조회 중...</div>`;
 
   const popup = L.popup({ maxWidth: 340, className: 'apt-wx-popup', closeButton: true, autoClose: false })
@@ -5920,7 +5920,7 @@ function initAirportLayer() {
     const icon = L.divIcon({
       html: `<div style="text-align:center;cursor:pointer;">
         <div style="width:14px;height:14px;background:#ffcc00;border:2px solid #000;margin:0 auto;transform:rotate(45deg);box-shadow:0 0 5px rgba(255,204,0,0.7);"></div>
-        <div style="color:#ffcc00;font:bold 10px -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;white-space:nowrap;margin-top:3px;text-shadow:1px 1px 2px #000,-1px -1px 2px #000;">${icao}</div>
+        <div style="color:#ffcc00;font:bold 10px -apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica Neue,Arial,sans-serif;white-space:nowrap;margin-top:3px;text-shadow:1px 1px 2px #000,-1px -1px 2px #000;">${icao}</div>
       </div>`,
       iconSize: [52, 28], iconAnchor: [26, 8], className: ''
     });
@@ -7566,7 +7566,7 @@ if ('serviceWorker' in navigator) {
         const on = utilTab === t.id;
         return `<button onclick="utilSetTab('${t.id}')" style="` +
           `flex:1;padding:5px 1px;font-size:9px;font-weight:bold;cursor:pointer;border-radius:3px;` +
-          `font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;letter-spacing:0.3px;` +
+          `font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica Neue,Arial,sans-serif;letter-spacing:0.3px;` +
           `background:${on ? '#002a10' : '#111'};color:${on ? '#00ff88' : '#555'};` +
           `border:1px solid ${on ? '#00ff88' : '#2a2a2a'};">${t.label}</button>`;
       }).join('');
@@ -7581,8 +7581,8 @@ if ('serviceWorker' in navigator) {
           `background:${isAct ? '#001a0a' : 'transparent'};` +
           `border:1px solid ${isAct ? '#00ff88' : '#1a1a1a'};` +
           `">` +
-          `<span style="color:#666;font-size:9px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;letter-spacing:0.5px;">${c.label}</span>` +
-          `<span style="color:${isAct ? '#00ff88' : '#aaa'};font-size:14px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;font-weight:bold;letter-spacing:1px;">` +
+          `<span style="color:#666;font-size:9px;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica Neue,Arial,sans-serif;letter-spacing:0.5px;">${c.label}</span>` +
+          `<span style="color:${isAct ? '#00ff88' : '#aaa'};font-size:14px;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica Neue,Arial,sans-serif;font-weight:bold;letter-spacing:1px;">` +
             `${val}<span style="color:#446;font-size:10px;margin-left:3px;">${c.unit}</span>` +
           `</span>` +
           `</div>`;
@@ -7610,13 +7610,13 @@ if ('serviceWorker' in navigator) {
       const dispVal = utilInput || (cfg ? _UV[utilActive].toFixed(cfg.dec) : '0');
       const BN = `display:flex;align-items:center;justify-content:center;` +
         `background:#111;border:1px solid #333;border-radius:3px;cursor:pointer;` +
-        `font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;font-weight:bold;color:#00ff88;` +
+        `font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica Neue,Arial,sans-serif;font-weight:bold;color:#00ff88;` +
         `font-size:14px;padding:8px 0;user-select:none;`;
       const numpadHtml =
         `<div style="background:#050e05;border:1px solid #1a1a1a;border-radius:5px;padding:7px;margin-top:8px;">` +
           `<div id="unp-disp" style="background:#000;border:1.5px solid #333;border-radius:4px;` +
             `color:#c8ff00;font-size:20px;text-align:right;padding:4px 10px;margin-bottom:4px;` +
-            `font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;min-height:32px;display:flex;align-items:center;justify-content:flex-end;` +
+            `font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica Neue,Arial,sans-serif;min-height:32px;display:flex;align-items:center;justify-content:flex-end;` +
             `letter-spacing:1px;">${dispVal}</div>` +
           `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:4px;margin-bottom:4px;">` +
             ['7','8','9','4','5','6','1','2','3'].map(n =>
@@ -8105,7 +8105,7 @@ function _drawFixLayer() {
     const icon = L.divIcon({
       html: `<div style="position:relative;">
         <div style="width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-bottom:9px solid #26c6da;filter:drop-shadow(0 0 1.5px #000);"></div>
-        <div style="position:absolute;left:11px;top:-2px;color:#4dd0e1;font-size:8px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;font-weight:bold;white-space:nowrap;text-shadow:1px 1px 2px #000;">${f.name}</div>
+        <div style="position:absolute;left:11px;top:-2px;color:#4dd0e1;font-size:8px;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica Neue,Arial,sans-serif;font-weight:bold;white-space:nowrap;text-shadow:1px 1px 2px #000;">${f.name}</div>
       </div>`,
       iconSize: [10, 9], iconAnchor: [5, 5], className: ''
     });
@@ -8229,7 +8229,7 @@ function _drawAwyLayer() {
     const color = r.type === 'RNAV' ? '#4dd0e1' : '#8bc34a';
     const pl = L.polyline(coords, { color, weight: 2, opacity: 0.85 });
     pl.bindTooltip(`${r.route} (${r.type}) · ${r.wps.map(w => w.n).join(' – ')}`, { sticky: true });
-    pl.bindPopup(`<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;font-size:12px;"><b style="color:${r.type === 'RNAV' ? '#00838f' : '#558b2f'};">${r.route}</b> <span style="color:#888;font-size:10px;">(${r.type})</span><br>${r.wps.map(w => w.n).join(' → ')}</div>`, { maxWidth: 280 });
+    pl.bindPopup(`<div style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica Neue,Arial,sans-serif;font-size:12px;"><b style="color:${r.type === 'RNAV' ? '#00838f' : '#558b2f'};">${r.route}</b> <span style="color:#888;font-size:10px;">(${r.type})</span><br>${r.wps.map(w => w.n).join(' → ')}</div>`, { maxWidth: 280 });
     pl.addTo(leafMap); _awyLayers.push(pl);
     // 항로명 라벨 — 모든 구간 중앙에 표시(어느 구간에서 봐도 항로명 확인 가능)
     for (let i = 0; i < coords.length - 1; i++) {
@@ -8237,7 +8237,7 @@ function _drawAwyLayer() {
       const midLon = (coords[i][1] + coords[i + 1][1]) / 2;
       const lbl = L.marker([midLat, midLon], {
         icon: L.divIcon({
-          html: `<div style="color:${color};font-size:9px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;font-weight:bold;white-space:nowrap;text-shadow:1px 1px 2px #000;background:rgba(0,0,0,0.55);padding:0 3px;border-radius:3px;transform:translate(-50%,-50%);">${r.route}</div>`,
+          html: `<div style="color:${color};font-size:9px;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica Neue,Arial,sans-serif;font-weight:bold;white-space:nowrap;text-shadow:1px 1px 2px #000;background:rgba(0,0,0,0.55);padding:0 3px;border-radius:3px;transform:translate(-50%,-50%);">${r.route}</div>`,
           iconSize: [0, 0], className: ''
         }), interactive: false
       });
@@ -8253,7 +8253,7 @@ function _drawAwyLayer() {
       mk.addTo(leafMap); _awyLayers.push(mk);
       const nmLbl = L.marker(coordsAll[i], {
         icon: L.divIcon({
-          html: `<div style="color:#eee;font-size:8px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;font-weight:bold;white-space:nowrap;text-shadow:1px 1px 2px #000;transform:translate(7px,-11px);">${w.n}</div>`,
+          html: `<div style="color:#eee;font-size:8px;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica Neue,Arial,sans-serif;font-weight:bold;white-space:nowrap;text-shadow:1px 1px 2px #000;transform:translate(7px,-11px);">${w.n}</div>`,
           iconSize: [0, 0], className: ''
         }), interactive: false
       });
@@ -8266,7 +8266,7 @@ function _drawAwyLayer() {
       html: `<div style="position:relative;">
         <div style="width:13px;height:13px;background:#8bc34a;clip-path:polygon(25% 0,75% 0,100% 50%,75% 100%,25% 100%,0 50%);filter:drop-shadow(0 0 1.5px #000);"></div>
         <div style="position:absolute;left:50%;top:50%;width:4px;height:4px;margin:-2px 0 0 -2px;background:#0a0a0a;border-radius:50%;"></div>
-        <div style="position:absolute;left:16px;top:-1px;color:#aed581;font-size:8px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;font-weight:bold;white-space:nowrap;text-shadow:1px 1px 2px #000;">${v.id}${v.freq ? ' ' + v.freq : ''}</div>
+        <div style="position:absolute;left:16px;top:-1px;color:#aed581;font-size:8px;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica Neue,Arial,sans-serif;font-weight:bold;white-space:nowrap;text-shadow:1px 1px 2px #000;">${v.id}${v.freq ? ' ' + v.freq : ''}</div>
       </div>`,
       iconSize: [13, 13], iconAnchor: [6, 6], className: ''
     });
@@ -10495,7 +10495,7 @@ async function openChart(icao, chartNum, url) {
     ov.style.cssText = (host === document.body
         ? 'position:fixed;inset:0;z-index:9999;'
         : 'position:absolute;inset:0;z-index:60;')
-        + 'background:#1a1a1a;display:flex;flex-direction:column;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;';
+        + 'background:#1a1a1a;display:flex;flex-direction:column;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica Neue,Arial,sans-serif;';
     ov.innerHTML = `
         <div style="display:flex;align-items:center;gap:6px;padding:6px 10px;background:#000;border-bottom:1px solid #333;flex-shrink:0;">
             <div onclick="closePdfViewer()" style="color:#0ff;font-size:11px;font-weight:bold;cursor:pointer;padding:4px 10px;border:1px solid #0ff;border-radius:4px;white-space:nowrap;">← 목록</div>
