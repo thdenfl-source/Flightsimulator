@@ -7865,6 +7865,8 @@ const ENR_VORS = [
   { id: 'KUZ', name: 'GUNSAN VORTAC',    freq: '112.8', lat: 35.91028, lon: 126.61139 },  // 355437N 1263641E
   { id: 'SML', name: 'SEOUL VORTAC',     freq: '',      lat: 37.5614,  lon: 126.7914  },
   { id: 'PSN', name: 'BUSAN VORTAC',     freq: '',      lat: 35.2917,  lon: 129.1244  },
+  { id: 'CJU', name: 'JEJU VOR/DME',     freq: '',      lat: 33.5114,  lon: 126.4931  },
+  { id: 'OSN', name: 'OSAN VOR/DME',     freq: '',      lat: 37.0903,  lon: 127.0306  },
 ];
 // 항로(ATS Routes): VOR는 id 참조(vor:1), 그 외 경유점은 제공된 십진수 좌표 내장
 const ENR_ROUTES = [
@@ -7875,9 +7877,11 @@ const ENR_ROUTES = [
   { route: 'Y590', type: 'RNAV', wps: [{n:'BEDAR',lat:31.9003,lon:126.4861},{n:'ELGEP',lat:31.7814,lon:125.9381},{n:'IKEDO',lat:31.7206,lon:125.6633}] },
   { route: 'B467', type: 'CONV', wps: [{n:'KANSU',lat:38.63333,lon:132.475},{n:'KAE',vor:1},{n:'SOTGO',lat:37.1331,lon:129.0700},{n:'KPO',vor:1}] },   // KANSU 383800N 1322830E
   { route: 'V11',  type: 'CONV', wps: [{n:'SEL',vor:1},{n:'SOTGO',lat:37.1331,lon:129.0700},{n:'OSVOT',lat:36.6389,lon:129.2131}] },
-  { route: 'Y644', type: 'RNAV', wps: [{n:'ALADI',lat:37.2414,lon:125.4319},{n:'SULMO',lat:36.7844,lon:125.8436},{n:'KUZ',vor:1},{n:'DOLOL',lat:34.8517,lon:127.3114}] },
-  { route: 'Y711', type: 'RNAV', wps: [{n:'IPDAS',lat:34.25417,lon:126.71694},{n:'TONAM',lat:36.9814,lon:126.4389},{n:'BUKDO',lat:36.1244,lon:126.7531}] },   // IPDAS 341515N 1264301E
+  { route: 'Y644', type: 'RNAV', wps: [{n:'ALADI',lat:37.2414,lon:125.4319},{n:'SULMO',lat:36.7844,lon:125.8436},{n:'KUZ',vor:1},{n:'DOLOL',lat:34.8517,lon:127.3114},{n:'TAMNA',lat:33.47083,lon:127.33139}] },   // TAMNA는 픽스 DB(332815N 1271953E) 사용
+  { route: 'Y711', type: 'RNAV', wps: [{n:'IPDAS',lat:34.25417,lon:126.71694},{n:'TONAM',lat:36.9814,lon:126.4389},{n:'BUKDO',lat:36.1244,lon:126.7531},{n:'CJU',vor:1}] },   // IPDAS 341515N 1264301E
   { route: 'Y722', type: 'RNAV', wps: [{n:'SML',vor:1},{n:'MALMI',lat:36.9531,lon:127.3114},{n:'TGU',vor:1},{n:'PSN',vor:1}] },
+  { route: 'Y744', type: 'RNAV', wps: [{n:'SOT',vor:1},{n:'OSN',vor:1},{n:'DUBUK',lat:36.2144,lon:127.5517},{n:'TOPLA',lat:35.1542,lon:128.1139}] },
+  { route: 'Y781', type: 'RNAV', wps: [{n:'KAE',vor:1},{n:'PULUN',lat:36.5514,lon:129.1417},{n:'KPO',vor:1},{n:'SAPRA',lat:35.82389,lon:130.72361}] },   // SAPRA는 픽스 DB(354926N 1304325E) 사용
 ];
 
 let _awyLayers = [];
@@ -7902,6 +7906,7 @@ function _drawAwyLayer() {
     const color = r.type === 'RNAV' ? '#4dd0e1' : '#8bc34a';
     const pl = L.polyline(coords, { color, weight: 2, opacity: 0.85 });
     pl.bindTooltip(`${r.route} (${r.type}) · ${r.wps.map(w => w.n).join(' – ')}`, { sticky: true });
+    pl.bindPopup(`<div style="font-family:monospace;font-size:12px;"><b style="color:${r.type === 'RNAV' ? '#00838f' : '#558b2f'};">${r.route}</b> <span style="color:#888;font-size:10px;">(${r.type})</span><br>${r.wps.map(w => w.n).join(' → ')}</div>`, { maxWidth: 280 });
     pl.addTo(leafMap); _awyLayers.push(pl);
     // 항로명 라벨 — 모든 구간 중앙에 표시(어느 구간에서 봐도 항로명 확인 가능)
     for (let i = 0; i < coords.length - 1; i++) {
