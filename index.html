@@ -3957,32 +3957,6 @@ function updateGpsBtn() {
   }
 }
 
-// ── Map tap → confirm popup → add waypoint ──
-leafMap.on('click', function(e) {
-  const lat = e.latlng.lat, lon = e.latlng.lng;
-  const latStr = (lat >= 0 ? lat.toFixed(4) + '° N' : (-lat).toFixed(4) + '° S');
-  const lonStr = (lon >= 0 ? lon.toFixed(4) + '° E' : (-lon).toFixed(4) + '° W');
-
-  const box = document.createElement('div');
-  box.style.cssText = 'background:#0d1a0d;padding:12px 16px;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica Neue,Arial,sans-serif;text-align:center;';
-  box.innerHTML =
-    `<div style="color:#aaddaa;font-size:13px;line-height:1.7;margin-bottom:10px;">${latStr}<br>${lonStr}</div>` +
-    `<div style="display:flex;gap:10px;justify-content:center;">` +
-    `<button id="_tapAdd" style="background:#1a4a1a;border:1px solid #00ff88;color:#00ff88;font:bold 13px -apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica Neue,Arial,sans-serif;padding:7px 20px;border-radius:4px;cursor:pointer;touch-action:manipulation;">추가</button>` +
-    `<button id="_tapCnl" style="background:#2a1a1a;border:1px solid #664444;color:#cc8888;font:bold 13px -apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica Neue,Arial,sans-serif;padding:7px 16px;border-radius:4px;cursor:pointer;touch-action:manipulation;">취소</button>` +
-    `</div>`;
-
-  const popup = L.popup({ closeButton: false, className: 'tap-confirm-popup', autoClose: false, closeOnClick: false })
-    .setLatLng(e.latlng).setContent(box).openOn(leafMap);
-
-  box.querySelector('#_tapAdd').addEventListener('click', () => {
-    pushWP({ ident: 'WP' + (S.wps.length + 1), lat, lon });
-    setPage(1);
-    popup.close();
-  });
-  box.querySelector('#_tapCnl').addEventListener('click', () => popup.close());
-});
-
 // ── HDG-UP absolute-direction pan ──
 // When HDG-UP is active, Leaflet dragging is disabled (toggleMapOrient).
 // We handle panning manually: rotate the screen drag vector by the current heading
