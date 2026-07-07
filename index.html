@@ -4014,7 +4014,7 @@ function updateSpeedVector() {
   const lenNM = spd / 60;                                // 1분 진행 거리
   const tip  = destPoint(S.lat, S.lon, S.hdg, lenNM);
   // 화살촉(채워진 삼각형): 끝점 + 뒤쪽 ±25° 방향 두 밑변점 (HSI 니들 스타일)
-  const headLen = Math.max(lenNM * 0.22, 0.07);
+  const headLen = Math.max(lenNM * 0.022, 0.007);
   const base = destPoint(tip[0], tip[1], normA(S.hdg + 180), headLen);
   const halfW = headLen * 0.45;
   const b1 = destPoint(base[0], base[1], normA(S.hdg + 90), halfW);
