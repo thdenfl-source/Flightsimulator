@@ -578,7 +578,13 @@ body.solo-mode .solo-panel-visible {
   border-bottom: 1px solid #2a1a30; padding: 6px 2px 3px; margin-top: 2px;
   display: flex; justify-content: space-between; align-items: center;
 }
-.aspc-grp span { cursor: pointer; color: #888; font-size: 9px; }
+.aspc-grp span {
+  cursor: pointer; color: #aaa; font-size: 9px;
+  border: 1px solid #555; border-radius: 4px;
+  padding: 2px 8px; margin-left: 4px;
+  background: rgba(255,255,255,0.05);
+}
+.aspc-grp span:active { background: rgba(186,104,200,0.25); border-color: #ba68c8; color: #fff; }
 .aspc-item {
   display: flex; align-items: center; gap: 6px; padding: 4px 2px;
   color: #ccc; font-size: 10px; cursor: pointer; user-select: none;
@@ -8222,7 +8228,7 @@ function _aspcRenderPanel(){
   grps.forEach(g=>{
     const col=_aspcColors[g];
     html+=`<div class="aspc-grp" style="color:${col};">${g}
-      <span onclick="_aspcGroupSet('${g}',true)">모두</span><span onclick="_aspcGroupSet('${g}',false)">해제</span></div>`;
+      <div style="flex-shrink:0;"><span onclick="_aspcGroupSet('${g}',true)">모두</span><span onclick="_aspcGroupSet('${g}',false)">해제</span></div></div>`;
     AIRSPACE_DB.filter(a=>a.grp===g).forEach(a=>{
       html+=`<label class="aspc-item"><input type="checkbox" id="aspc-cb-${a.id}" ${aspcOn[a.id]?'checked':''} onchange="toggleAspcItem('${a.id}')">
         <span style="color:${col};">■</span> ${a.name}${a.alt?` <span style=\"color:#666;font-size:8px;\">${a.alt}</span>`:''}</label>`;
