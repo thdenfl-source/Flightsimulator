@@ -8972,6 +8972,8 @@ let _pdfFitScale = 1, _pdfBaseW = 0, _pdfBaseH = 0;   // fit(=1배) 레이아웃
 let _pdfRenderQ = 1;          // 현재 비트맵 품질 배율(선명도)
 let _pdfRenderToken = 0;      // 렌더 경쟁 방지 토큰
 let _pdfReqTimer = null;      // 품질 재렌더 디바운스
+let _pdfResizeObs = null;     // CDU 창 크기 변화 감시(Full Screen 전환 대응)
+let _pdfResizeT = null;       // 리사이즈 재렌더 디바운스
 
 // ── 차트 위치 보정(다점 최소자승 아핀) + 항공기 위치 오버레이 ──
 let _pdfChartKey = null;      // 현재 차트 키 (icao|chartNum)
@@ -9563,7 +9565,12 @@ async function openChart(icao, chartNum, url) {
     if (ex) ex.remove();
     const ov = document.createElement('div');
     ov.id = 'pdfViewerOverlay';
-    ov.style.cssText = 'position:fixed;inset:0;background:#1a1a1a;z-index:9999;display:flex;flex-direction:column;font-family:monospace;';
+    // CDU 창(#cdu-wrap) 내부에 표시 — 전체 화면이 필요하면 Full Screen 탭 사용
+    const host = document.getElementById('cdu-wrap') || document.body;
+    ov.style.cssText = (host === document.body
+        ? 'position:fixed;inset:0;z-index:9999;'
+        : 'position:absolute;inset:0;z-index:60;')
+        + 'background:#1a1a1a;display:flex;flex-direction:column;font-family:monospace;';
     ov.innerHTML = `
         <div style="display:flex;align-items:center;gap:6px;padding:6px 10px;background:#000;border-bottom:1px solid #333;flex-shrink:0;">
             <div onclick="closePdfViewer()" style="color:#0ff;font-size:11px;font-weight:bold;cursor:pointer;padding:4px 10px;border:1px solid #0ff;border-radius:4px;white-space:nowrap;">← 목록</div>
@@ -9585,12 +9592,24 @@ async function openChart(icao, chartNum, url) {
             <div id="pdfPageLabel" style="flex:2;padding:11px 0;text-align:center;background:#0a0a0a;color:#555;font-size:10px;"></div>
             <div onclick="_pdfNext()" style="flex:1;padding:11px 0;text-align:center;background:#0a0a0a;color:#0ff;font-size:16px;cursor:pointer;border-left:1px solid #222;">▶</div>
         </div>`;
-    document.body.appendChild(ov);
+    host.appendChild(ov);
     // 제스처 핸들러는 오버레이당 1회 등록(영역은 재렌더돼도 동일 element 유지)
     const viewArea = document.getElementById('pdfViewArea');
     _pdfAttachTouch(viewArea);
     _pdfAttachWheel(viewArea);
     _pdfAttachMouse(viewArea);
+    // CDU 창 크기 변화(Full Screen 전환 등) 시 페이지를 새 크기에 맞춰 재렌더
+    if (window.ResizeObserver) {
+        let w0 = viewArea.clientWidth, h0 = viewArea.clientHeight;
+        _pdfResizeObs = new ResizeObserver(() => {
+            const w = viewArea.clientWidth, h = viewArea.clientHeight;
+            if (!_pdfDoc || w === 0 || h === 0 || (w === w0 && h === h0)) return;
+            w0 = w; h0 = h;
+            clearTimeout(_pdfResizeT);
+            _pdfResizeT = setTimeout(() => { if (_pdfDoc) _pdfRender(); }, 200);
+        });
+        _pdfResizeObs.observe(viewArea);
+    }
     try {
         pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
         _pdfDoc = await pdfjsLib.getDocument({ data: await blob.arrayBuffer() }).promise;
@@ -9859,6 +9878,8 @@ function closePdfViewer() {
     _pdfDoc = null; _pdfMD = null;
     if (_pdfReqTimer) { clearTimeout(_pdfReqTimer); _pdfReqTimer = null; }
     if (_pdfAcTimer) { clearInterval(_pdfAcTimer); _pdfAcTimer = null; }
+    if (_pdfResizeObs) { try { _pdfResizeObs.disconnect(); } catch(e){} _pdfResizeObs = null; }
+    if (_pdfResizeT) { clearTimeout(_pdfResizeT); _pdfResizeT = null; }
     _pdfCalActive = false; _pdfCalPts = []; _pdfFixList = [];
     _pdfRenderToken++;   // 진행 중 렌더 무효화
     const ov = document.getElementById('pdfViewerOverlay'); if (ov) ov.remove();
