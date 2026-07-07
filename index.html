@@ -557,6 +557,10 @@ body.solo-mode .solo-panel-visible {
   background: rgba(0,35,40,0.92); border-color: #26c6da; color: #4dd0e1;
   box-shadow: 0 0 8px rgba(38,198,218,0.4);
 }
+#awy-btn.active {
+  background: rgba(20,35,0,0.92); border-color: #8bc34a; color: #aed581;
+  box-shadow: 0 0 8px rgba(139,195,74,0.4);
+}
 #gps-status {
   position: absolute; top: 44px; right: 8px; z-index: 1000;
   background: rgba(0,20,0,0.80); border: 1px solid #226622; color: #00cc66;
@@ -1246,6 +1250,7 @@ body.solo-mode .solo-panel-visible {
         <button id="wind-btn" onclick="toggleWind()">WIND</button>
         <button id="notam-btn" onclick="toggleNotamLayer()">NOTAM</button>
         <button id="fix-btn" onclick="toggleFixLayer()">FIX</button>
+        <button id="awy-btn" onclick="toggleAwyLayer()">AWY</button>
       </div>
       <input type="file" id="notamFileInput" accept=".kml,.gpx" style="display:none" onchange="loadNotamFile(this)">
       <!-- Visitor counter widget (above scale bar, bottom-left) -->
@@ -7848,6 +7853,85 @@ function toggleFixLayer() {
 // 저장된 상태 복원
 if (fixLayerOn) {
   try { _drawFixLayer(); document.getElementById('fix-btn').classList.add('active'); } catch(e) {}
+}
+
+// ── VOR 표지소 + 항로(AWY) 오버레이 (AIP ENR 4.1 / 3.x) ──
+const ENR_VORS = [
+  { id: 'SEL', name: 'ANYANG VORTAC',    freq: '115.5', lat: 37.41361, lon: 126.92833 },  // 372449N 1265542E
+  { id: 'KPO', name: 'POHANG VORTAC',    freq: '112.5', lat: 35.97722, lon: 129.47444 },  // 355838N 1292828E
+  { id: 'SOT', name: 'SONGTAN VORTAC',   freq: '116.9', lat: 37.09444, lon: 127.03167 },  // 370540N 1270154E
+  { id: 'TGU', name: 'DALSEONG VORTAC',  freq: '112.2', lat: 35.80972, lon: 128.59083 },  // 354835N 1283527E
+  { id: 'KAE', name: 'GANGWON VORTAC',   freq: '115.6', lat: 37.70083, lon: 128.75389 },  // 374203N 1284514E
+  { id: 'KUZ', name: 'GUNSAN VORTAC',    freq: '112.8', lat: 35.91028, lon: 126.61139 },  // 355437N 1263641E
+];
+// 항로: 경유점은 VOR id 또는 픽스 이름으로 참조(픽스 DB와 단일 소스 유지)
+const ENR_ROUTES = [
+  { route: 'A582', type: 'CONV', pts: ['SEL', 'POLEG'] },
+  { route: 'G585', type: 'CONV', pts: ['SEL', 'KALMA', 'KAKSO', 'GUKDO', 'ENSAL', 'BASEM'] },
+  { route: 'W62',  type: 'CONV', pts: ['SOT', 'MONSI', 'GOGET'] },
+  { route: 'L512', type: 'RNAV', pts: ['TENAS', 'SABET', 'ANDOL'] },
+  { route: 'Y590', type: 'RNAV', pts: ['BEDAR', 'ELGEP', 'IKEDO'] },
+];
+
+let _awyLayers = [];
+let awyLayerOn = false;
+try { awyLayerOn = localStorage.getItem('awyLayerOn') === '1'; } catch(e) {}
+
+// 경유점 이름 → 좌표 (VOR id 우선, 그다음 픽스 DB)
+function _awyResolve(name) {
+  const v = ENR_VORS.find(x => x.id === name);
+  if (v) return [v.lat, v.lon];
+  const f = _enrFixList().find(x => x.name === name);
+  return f ? [f.lat, f.lon] : null;
+}
+function _drawAwyLayer() {
+  _clearAwyLayer();
+  // 항로선 (CONV=녹색, RNAV=하늘색)
+  ENR_ROUTES.forEach(r => {
+    const coords = r.pts.map(_awyResolve).filter(Boolean);
+    if (coords.length < 2) return;
+    const color = r.type === 'RNAV' ? '#4dd0e1' : '#8bc34a';
+    const pl = L.polyline(coords, { color, weight: 2, opacity: 0.85 });
+    pl.bindTooltip(`${r.route} (${r.type}) · ${r.pts.join(' – ')}`, { sticky: true });
+    pl.addTo(leafMap); _awyLayers.push(pl);
+    // 항로명 라벨(중간 지점)
+    const mid = coords[Math.floor((coords.length - 1) / 2)];
+    const mid2 = coords[Math.min(coords.length - 1, Math.floor((coords.length - 1) / 2) + 1)];
+    const lbl = L.marker([(mid[0] + mid2[0]) / 2, (mid[1] + mid2[1]) / 2], {
+      icon: L.divIcon({
+        html: `<div style="color:${color};font-size:9px;font-family:monospace;font-weight:bold;white-space:nowrap;text-shadow:1px 1px 2px #000;background:rgba(0,0,0,0.55);padding:0 3px;border-radius:3px;transform:translate(-50%,-50%);">${r.route}</div>`,
+        iconSize: [0, 0], className: ''
+      }), interactive: false
+    });
+    lbl.addTo(leafMap); _awyLayers.push(lbl);
+  });
+  // VOR 표지소 (육각형 심볼 + ID·주파수 라벨)
+  ENR_VORS.forEach(v => {
+    const icon = L.divIcon({
+      html: `<div style="position:relative;">
+        <div style="width:13px;height:13px;background:#8bc34a;clip-path:polygon(25% 0,75% 0,100% 50%,75% 100%,25% 100%,0 50%);filter:drop-shadow(0 0 1.5px #000);"></div>
+        <div style="position:absolute;left:50%;top:50%;width:4px;height:4px;margin:-2px 0 0 -2px;background:#0a0a0a;border-radius:50%;"></div>
+        <div style="position:absolute;left:16px;top:-1px;color:#aed581;font-size:8px;font-family:monospace;font-weight:bold;white-space:nowrap;text-shadow:1px 1px 2px #000;">${v.id} ${v.freq}</div>
+      </div>`,
+      iconSize: [13, 13], iconAnchor: [6, 6], className: ''
+    });
+    const mk = L.marker([v.lat, v.lon], { icon });
+    mk.bindTooltip(`${v.name} (${v.id})<br>${v.freq} MHz<br>${decToDMS(v.lat, true)} ${decToDMS(v.lon, false)}`, { sticky: true });
+    mk.addTo(leafMap); _awyLayers.push(mk);
+  });
+}
+function _clearAwyLayer() {
+  _awyLayers.forEach(l => { try { leafMap.removeLayer(l); } catch(e){} });
+  _awyLayers = [];
+}
+function toggleAwyLayer() {
+  awyLayerOn = !awyLayerOn;
+  if (awyLayerOn) _drawAwyLayer(); else _clearAwyLayer();
+  document.getElementById('awy-btn').classList.toggle('active', awyLayerOn);
+  try { localStorage.setItem('awyLayerOn', awyLayerOn ? '1' : '0'); } catch(e) {}
+}
+if (awyLayerOn) {
+  try { _drawAwyLayer(); document.getElementById('awy-btn').classList.add('active'); } catch(e) {}
 }
 
 let _notamLayers = [];
