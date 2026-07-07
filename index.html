@@ -615,6 +615,19 @@ body.solo-mode .solo-panel-visible {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
 }
 #awy-panel.open { display: block; }
+#pp-menu {
+  display: none;
+  position: absolute; top: 44px; z-index: 1200;
+  background: rgba(8,8,14,0.95); border: 1px solid #00ff88; border-radius: 6px;
+  padding: 4px; flex-direction: column; gap: 4px;
+}
+#pp-menu.open { display: flex; }
+#pp-menu button {
+  background: rgba(20,20,20,0.9); border: 1px solid #444; border-radius: 4px;
+  color: #cfe; font-size: 11px; font-weight: bold; padding: 7px 12px;
+  cursor: pointer; white-space: nowrap; text-align: left;
+}
+#pp-menu button:active { border-color: #00ff88; color: #00ff88; }
 .aspc-grp {
   color: #ce93d8; font-size: 10px; font-weight: bold; letter-spacing: 1px;
   border-bottom: 1px solid #2a1a30; padding: 6px 2px 3px; margin-top: 2px;
@@ -1316,7 +1329,11 @@ body.solo-mode .solo-panel-visible {
         <button id="layer-btn-3d" onclick="toggle3dMap()">3D</button>
         <button id="gps-btn" onclick="toggleGPS()">GPS</button>
         <button id="wx-btn" onclick="toggleWxPanel()">WX</button>
-        <button id="pp-btn" onclick="ppAddWaypoint()">PP</button>
+        <button id="pp-btn" onclick="togglePpMenu()">＋</button>
+        <div id="pp-menu">
+          <button onclick="ppAddWaypoint();togglePpMenu(false)">PP 현재위치</button>
+          <button onclick="chAddWaypoint();togglePpMenu(false)">＋ 십자위치</button>
+        </div>
         <button id="rain-btn" onclick="toggleRain()">RAIN</button>
         <button id="wind-btn" onclick="toggleWind()">WIND</button>
         <button id="notam-btn" onclick="toggleNotamLayer()">NOTAM</button>
@@ -6334,6 +6351,26 @@ function toggleWxPanel() {
 }
 
 // PP: 현재 항공기 위치를 Flight Plan에 웨이포인트로 추가
+function togglePpMenu(force) {
+  const m = document.getElementById('pp-menu');
+  const open = (force !== undefined) ? force : !m.classList.contains('open');
+  m.classList.toggle('open', open);
+  if (open) {
+    // ＋ 버튼 바로 아래 위치 정렬
+    const btn = document.getElementById('pp-btn');
+    const bar = document.getElementById('map-top-bar');
+    m.style.left = Math.max(4, btn.offsetLeft + bar.offsetLeft - 6) + 'px';
+  }
+}
+// 십자(지도 중앙) 위치에 웨이포인트 추가
+function chAddWaypoint() {
+  const c = leafMap.getCenter();
+  const cnt = S.wps.filter(w => /^WP\d*$/.test(w.ident)).length;
+  pushWP({ ident: 'WP' + (cnt + 1), lat: c.lat, lon: c.lng });
+  const btn = document.getElementById('pp-btn');
+  btn.style.background = 'rgba(0,50,10,0.95)'; btn.style.borderColor = '#00ff88'; btn.style.color = '#00ff88';
+  setTimeout(() => { btn.style.background = ''; btn.style.borderColor = ''; btn.style.color = ''; }, 700);
+}
 function ppAddWaypoint() {
   const ppCount = S.wps.filter(w => /^PP\d*$/.test(w.ident)).length;
   const name = 'PP' + (ppCount + 1);
