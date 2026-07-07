@@ -9533,7 +9533,7 @@ function _pdfPickCoord(cb) {
     box.innerHTML = `
         <div style="width:86%;max-width:340px;max-height:80%;background:#0c0c0c;border:1px solid #00e5ff;border-radius:8px;display:flex;flex-direction:column;overflow:hidden;">
             <div style="padding:9px 12px;background:#001a20;color:#00e5ff;font-size:12px;font-weight:bold;flex-shrink:0;">이 지점의 좌표 선택 <span style="color:#00e676;font-size:9px;">■ IAF/FAF/IF</span> <span style="color:#26c6da;font-size:9px;">■ VOR/DME</span></div>
-            <div style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;">${listHtml || '<div style="padding:14px;color:#888;font-size:11px;text-align:center;">자동 인식된 픽스가 없습니다.<br>아래 [직접 입력]을 사용하세요.</div>'}</div>
+            <div style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;touch-action:pan-y;overscroll-behavior:contain;">${listHtml || '<div style="padding:14px;color:#888;font-size:11px;text-align:center;">자동 인식된 픽스가 없습니다.<br>아래 [직접 입력]을 사용하세요.</div>'}</div>
             <div style="display:flex;border-top:1px solid #222;flex-shrink:0;">
                 <div id="pdfFixManual" style="flex:1;padding:12px;text-align:center;color:#ffca28;font-size:12px;cursor:pointer;border-right:1px solid #222;">✎ 직접 입력</div>
                 <div id="pdfFixCancel" style="flex:1;padding:12px;text-align:center;color:#ff5252;font-size:12px;cursor:pointer;">취소</div>
@@ -9846,6 +9846,8 @@ function _pdfZoomAt(newScale, cx, cy) {
 // 마우스 휠 줌 (PC)
 function _pdfAttachWheel(area) {
     area.addEventListener('wheel', e => {
+        // 좌표 피커 위에서는 목록 스크롤이 되도록 줌을 막지 않음
+        if (e.target.closest && e.target.closest('#pdfFixPicker')) return;
         e.preventDefault();
         const rc   = area.getBoundingClientRect();
         const cx   = e.clientX - rc.left;
@@ -9890,7 +9892,10 @@ function _pdfAttachMouse(area) {
 function _pdfAttachTouch(area) {
     let t = null;
     const dist = (a, b) => Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+    // 좌표 피커·보정 상단바 위의 터치는 차트 제스처로 처리하지 않음(목록 스크롤 허용)
+    const skipUi = e => e.target.closest && e.target.closest('#pdfFixPicker, #pdfCalBar');
     area.addEventListener('touchstart', e => {
+        if (skipUi(e)) { t = null; return; }
         e.preventDefault();
         const rc = area.getBoundingClientRect();
         if (e.touches.length === 1) {
@@ -9902,6 +9907,7 @@ function _pdfAttachTouch(area) {
         }
     }, { passive: false });
     area.addEventListener('touchmove', e => {
+        if (skipUi(e)) return;
         e.preventDefault();
         if (!t) return;
         if (t.mode === 'pan' && e.touches.length === 1) {
