@@ -323,9 +323,10 @@ html, body {
   position: relative; overflow: hidden;
   flex: 1;
 }
-#map { width: 100%; height: 100%; transform-origin: center center; }
+/* 지도는 상단 80%, 하단 20%는 TERRAIN CUT 패널이 차지(겹침 없음) */
+#map { width: 100%; height: 80%; transform-origin: center center; }
 #map3d {
-  position: absolute; inset: 0;
+  position: absolute; top: 0; left: 0; right: 0; height: 80%;
   display: none; z-index: 800;   /* above Leaflet panes (~700), below top bars (1000) */
 }
 #map3d.active { display: block; }
@@ -4153,7 +4154,8 @@ function updateTerrainCut() {
   }
 }
 setInterval(() => { try { updateTerrainCut(); } catch(e) {} }, 1000);
-try { updateTerrainCut(); } catch(e) {}
+// 지도 영역이 80%로 바뀌었으므로 Leaflet 리사이즈 강제(초기 렌더 보정)
+setTimeout(() => { try { leafMap.invalidateSize(); } catch(e) {} try { updateTerrainCut(); } catch(e) {} }, 300);
 
 // ── BRG1/BRG2 베어링 라인 (HSI 사이드패널과 동일 소스·색) ──
 //  BRG1(파랑): 항공기 → 선택 항법시설(VOR/ILS)
