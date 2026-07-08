@@ -7059,7 +7059,7 @@ if ('serviceWorker' in navigator) {
         { id: 'serv', text: 'Services', icon: '<svg viewBox="0 0 100 100"><path d="M22 52 C22 28, 78 28, 78 52" fill="none" stroke="#00e5ff" stroke-width="6"/><rect x="14" y="50" width="14" height="24" rx="6" fill="#00e5ff"/><rect x="72" y="50" width="14" height="24" rx="6" fill="#00e5ff"/><path d="M78 68 C78 80, 62 85, 50 85" fill="none" stroke="#00e5ff" stroke-width="4"/></svg>' },
         /* Row 4 */
         /* Map Settings — green map + red pin */
-        { id: 'map', text: 'Map<br>Settings', icon: '<svg viewBox="0 0 100 100"><rect x="12" y="22" width="76" height="56" rx="4" fill="#2e7d32"/><path d="M12 42 L30 32 L55 48 L76 34 L88 42 L88 78 L12 78Z" fill="#388e3c"/><circle cx="30" cy="35" r="10" fill="#e53935"/><circle cx="30" cy="35" r="5" fill="#fff"/><line x1="30" y1="45" x2="30" y2="56" stroke="#e53935" stroke-width="3"/></svg>' },
+        { id: 'map', text: 'MAP', icon: '<svg viewBox="0 0 100 100"><rect x="12" y="22" width="76" height="56" rx="4" fill="#2e7d32"/><path d="M12 42 L30 32 L55 48 L76 34 L88 42 L88 78 L12 78Z" fill="#388e3c"/><circle cx="30" cy="35" r="10" fill="#e53935"/><circle cx="30" cy="35" r="5" fill="#fff"/><line x1="30" y1="45" x2="30" y2="56" stroke="#e53935" stroke-width="3"/></svg>' },
         /* Checklist — clipboard + checkmarks */
         { id: 'check', text: 'Checklist', icon: '<svg viewBox="0 0 100 100"><rect x="22" y="14" width="56" height="72" rx="4" fill="none" stroke="#fff" stroke-width="5"/><rect x="36" y="8" width="28" height="12" rx="4" fill="#555"/><polyline points="30,38 38,48 52,28" fill="none" stroke="#00e5ff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/><line x1="57" y1="38" x2="70" y2="38" stroke="#aaa" stroke-width="4" stroke-linecap="round"/><polyline points="30,58 38,68 52,48" fill="none" stroke="#00e5ff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/><line x1="57" y1="58" x2="70" y2="58" stroke="#aaa" stroke-width="4" stroke-linecap="round"/></svg>' },
         /* Utilities — wrench */
@@ -7125,7 +7125,7 @@ if ('serviceWorker' in navigator) {
                 'parkcctv': "https://m.knps.or.kr/main/menuctrl.do?menuNo=10"
             };
 
-            let isActiveBtn = ['weather', 'charts', 'notam', 'metar', 'directTo', 'fpl', 'serv', 'sys', 'perf', 'as565', 'util', 'proc', 'badacctv', 'parkcctv'].includes(btn.id);
+            let isActiveBtn = ['weather', 'charts', 'notam', 'metar', 'directTo', 'map', 'fpl', 'serv', 'sys', 'perf', 'as565', 'util', 'proc', 'badacctv', 'parkcctv'].includes(btn.id);
             let boxClass = isActiveBtn ? 'icon-box func-active' : 'icon-box';
 
             if (links[btn.id]) {
@@ -7140,6 +7140,7 @@ if ('serviceWorker' in navigator) {
                                   btn.id === 'fpl'  ? `onclick="setPage(1)"` :
                                   btn.id === 'proc' ? `onclick="setPage(1); fpGo('IFR');"` :
                                   btn.id === 'util' ? `onclick="switchMode('UTIL')"` :
+                                  btn.id === 'map'  ? `onclick="setPage(0)"` :
                                   btn.id === 'charts' ? `onclick="switchMode('CHARTS')"` : '';
                 gridHtml += `
                     <div class="home-icon-wrapper" ${clickAction}>
