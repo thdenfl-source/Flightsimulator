@@ -9800,36 +9800,94 @@ function getSafeAiracInfo() {
     return airac;
 }
 
+// ── 스트리밍 ZIP 리더 (저메모리) ─────────────────────────────
+// ZIP 전체를 메모리에 올리지 않고, 파일을 조각내(file.slice) 중앙
+// 디렉터리만 읽은 뒤 각 항목을 필요할 때 1개씩 슬라이스·해제(inflate)한다.
+// → 대용량 AIRAC ZIP도 8GB 이하 기기에서 중단 없이 처리.
+async function _zipReadSlice(file, start, len) {
+    return new Uint8Array(await file.slice(start, start + len).arrayBuffer());
+}
+async function _streamZipEntries(file) {
+    if (typeof DecompressionStream === 'undefined') throw new Error('DecompressionStream 미지원');
+    // ① EOCD(End of Central Directory) 탐색 — 파일 끝 최대 65557바이트
+    const tailLen = Math.min(65557, file.size);
+    const tail = await _zipReadSlice(file, file.size - tailLen, tailLen);
+    let eocd = -1;
+    for (let i = tail.length - 22; i >= 0; i--) {
+        if (tail[i] === 0x50 && tail[i+1] === 0x4b && tail[i+2] === 0x05 && tail[i+3] === 0x06) { eocd = i; break; }
+    }
+    if (eocd < 0) throw new Error('ZIP 중앙 디렉터리를 찾지 못함');
+    const tv = new DataView(tail.buffer, tail.byteOffset);
+    const cdSize = tv.getUint32(eocd + 12, true);
+    const cdOff  = tv.getUint32(eocd + 16, true);
+    if (cdOff === 0xFFFFFFFF || cdSize === 0xFFFFFFFF) throw new Error('ZIP64 미지원');   // 폴백 유도
+    // ② 중앙 디렉터리(작음) 읽어 항목 메타 파싱
+    const cd = await _zipReadSlice(file, cdOff, cdSize);
+    const cv = new DataView(cd.buffer, cd.byteOffset);
+    const dec = new TextDecoder('utf-8');
+    const out = [];
+    let p = 0;
+    while (p + 46 <= cd.length && cv.getUint32(p, true) === 0x02014b50) {
+        const method   = cv.getUint16(p + 10, true);
+        const compSize = cv.getUint32(p + 20, true);
+        const nameLen  = cv.getUint16(p + 28, true);
+        const extraLen = cv.getUint16(p + 30, true);
+        const cmtLen   = cv.getUint16(p + 32, true);
+        const lho      = cv.getUint32(p + 42, true);
+        const name     = dec.decode(cd.subarray(p + 46, p + 46 + nameLen));
+        if (lho !== 0xFFFFFFFF && compSize !== 0xFFFFFFFF && !name.endsWith('/')) {
+            out.push({ name, method, compSize, lho });
+        }
+        p += 46 + nameLen + extraLen + cmtLen;
+    }
+    return out.map(e => ({
+        path: e.name,
+        getBuffer: async () => {
+            const lh = await _zipReadSlice(file, e.lho, 30);
+            const lv = new DataView(lh.buffer, lh.byteOffset);
+            const dataStart = e.lho + 30 + lv.getUint16(26, true) + lv.getUint16(28, true);
+            const comp = await _zipReadSlice(file, dataStart, e.compSize);   // 이 항목만 메모리에
+            if (e.method === 0) return comp.buffer;   // stored(무압축)
+            const stream = new Blob([comp]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+            return await new Response(stream).arrayBuffer();
+        }
+    }));
+}
+
 async function handleZipFile(file) {
     if (!file) return;
-
-    // JSZip 로드 확인
-    if (typeof JSZip === 'undefined') {
-        alert('JSZip 라이브러리가 로드되지 않았습니다. 네트워크 연결 후 페이지를 새로고침 해주세요.');
-        return;
-    }
 
     importProgress = { phase: 'reading', done: 0, total: 0, found: 0, skipped: 0, error: null };
     renderCduContent();
 
     try {
-        let zip;
+        // ① 저메모리 스트리밍 리더 우선 → 실패 시 JSZip 폴백
+        let rawEntries = null;
         try {
-            zip = await JSZip.loadAsync(file);
-        } catch(e) {
-            importProgress = null;
-            renderCduContent();
-            alert('ZIP 파일을 읽을 수 없습니다.\n파일이 손상되었거나 올바른 ZIP 형식이 아닙니다.\n(' + e.message + ')');
-            return;
+            rawEntries = await _streamZipEntries(file);
+        } catch(streamErr) {
+            console.warn('스트리밍 ZIP 실패, JSZip 폴백:', streamErr.message);
+            if (typeof JSZip === 'undefined') {
+                importProgress = null; renderCduContent();
+                alert('ZIP 파일을 읽을 수 없습니다.\n(' + streamErr.message + ')\n네트워크 연결 후 새로고침하거나 폴더 가져오기를 사용해 주세요.');
+                return;
+            }
+            let zip;
+            try { zip = await JSZip.loadAsync(file); }
+            catch(e) {
+                importProgress = null; renderCduContent();
+                alert('ZIP 파일을 읽을 수 없습니다.\n파일이 손상되었거나 올바른 ZIP 형식이 아닙니다.\n(' + e.message + ')');
+                return;
+            }
+            rawEntries = [];
+            zip.forEach((path, entry) => { if (!entry.dir) rawEntries.push({ path, getBuffer: () => entry.async('arraybuffer') }); });
         }
 
-        // 항목 목록만 먼저 수집 (blob 추출 X — 메모리 절약)
+        // 차트 PDF만 필터링(메모리 절약 — blob 추출 X)
         const entries = [];
-        zip.forEach((path, entry) => {
-            if (entry.dir) return;
-            const meta = _parseChartPath(path);
-            if (!meta) return;
-            entries.push({ getBuffer: () => entry.async('arraybuffer'), ...meta });
+        rawEntries.forEach(e => {
+            const meta = _parseChartPath(e.path);
+            if (meta) entries.push({ getBuffer: e.getBuffer, ...meta });
         });
 
         if (entries.length === 0) {
