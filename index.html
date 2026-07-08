@@ -349,8 +349,9 @@ html, body {
 #tilt-ctrl button:last-child { border-radius: 0 0 4px 4px; border-bottom: 0; }
 #tilt-ctrl button:hover { background: #f0f0f0; }
 /* Lift the 3D zoom/tilt controls above the bottom SHIP/sim bar */
-#map3d .maplibregl-ctrl-bottom-right { bottom: calc(20% + 44px); }
-#map3d .maplibregl-ctrl-bottom-left { bottom: calc(20% + 44px); }
+/* #map3d 는 높이 80%라 하단 가장자리가 이미 terrain-cut 위에 있음 → px만 올림 */
+#map3d .maplibregl-ctrl-bottom-right { bottom: 44px; }
+#map3d .maplibregl-ctrl-bottom-left { bottom: 44px; }
 /* Dual-unit map scale bar (km + NM) */
 .vfr-scale {
   background: rgba(0,0,0,0.65);
@@ -372,9 +373,11 @@ html, body {
 }
 .vfr-scale-km  { border-color: #fff;    background: #fff; }
 .vfr-scale-nm  { border-color: #00cfff; background: #00cfff; }
-/* Push Leaflet bottom controls above the sim bar */
-#map-wrap .leaflet-bottom.leaflet-left  { margin-bottom: 40px; bottom: 20%; }
-#map-wrap .leaflet-bottom.leaflet-right { margin-bottom: 40px; bottom: 20%; }
+/* Push Leaflet bottom controls above the sim bar.
+   #map 높이가 80%라 하단 가장자리가 이미 terrain-cut(하단 20%) 위에 있으므로
+   bottom:0 기준 + margin 만 준다(20%를 또 더하면 축척이 좌표 위로 밀려 올라감). */
+#map-wrap .leaflet-bottom.leaflet-left  { margin-bottom: 44px; bottom: 0; }
+#map-wrap .leaflet-bottom.leaflet-right { margin-bottom: 44px; bottom: 0; }
 /* ── Solo (single-screen) mode ── */
 #solo-bar {
   position: fixed;
@@ -9643,6 +9646,11 @@ async function idbPut(key, blob) {
         tx.oncomplete = res; tx.onerror = e => rej(e.target.error);
     });
 }
+// 연결을 닫아 iOS WebKit이 버퍼링한 blob 쓰기를 디스크로 flush하고 메모리를
+// 회수하도록 유도한다(대량 저장 중 60% 부근 리셋 방지 핵심).
+function idbClose() {
+    if (_idb) { try { _idb.close(); } catch(e) {} _idb = null; }
+}
 async function idbGet(key) {
     const db = await openIDB();
     return new Promise((res, rej) => {
@@ -10050,14 +10058,21 @@ async function _saveChartEntries(entries) {
         importProgress.done = i + 1;
         // 렌더 빈도 축소(매 8개) → 메인스레드/메모리 부담 감소
         if (i % 8 === 0) renderCduContent();
-        // 증분 저장(매 15개) → 도중 리셋돼도 진행분 보존
-        if (i % 15 === 14) persistSaved();
-        // 주기적 긴 여유(매 12개) → IndexedDB flush 및 GC 시간 확보
-        await new Promise(r => setTimeout(r, (i % 12 === 11) ? 250 : 20));
+        // 증분 저장(매 10개) → 도중 리셋돼도 진행분 보존
+        if (i % 10 === 9) persistSaved();
+        // 매 10개마다 IndexedDB 연결을 닫아 버퍼된 쓰기를 디스크로 flush →
+        // WebKit 메모리 회수. 이어서 긴 여유(300ms)로 flush/GC 시간 확보.
+        if (i % 10 === 9) {
+            idbClose();
+            await new Promise(r => setTimeout(r, 300));
+        } else {
+            await new Promise(r => setTimeout(r, 20));
+        }
     }
 
     // 최종 저장
     persistSaved();
+    idbClose();
 
     // 완료 알림
     const msgs = [];
