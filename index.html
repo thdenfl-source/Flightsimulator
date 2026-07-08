@@ -10000,12 +10000,22 @@ async function _saveChartEntries(entries) {
     let saved = loadSavedCharts();
     let idbFailed = false;
 
+    // 진행 중 부분 저장(크래시 복구용). 용량 초과 시 최근분만 보존.
+    const persistSaved = () => {
+        try {
+            localStorage.setItem('savedCharts', JSON.stringify(saved));
+        } catch(storageErr) {
+            console.warn('localStorage 용량 초과, 최근 50개만 보존');
+            try { localStorage.setItem('savedCharts', JSON.stringify(saved.slice(-50))); } catch(e2) {}
+        }
+    };
+
     for (let i = 0; i < entries.length; i++) {
         const { getBuffer, icao, num, chartName, cat } = entries[i];
         try {
             // PDF를 ArrayBuffer로 추출 → IDB 저장 → 즉시 해제
             let buf = await getBuffer();
-            const blob = new Blob([buf], { type: 'application/pdf' });
+            let blob = new Blob([buf], { type: 'application/pdf' });
             buf = null; // ArrayBuffer 즉시 해제 → GC 유도
 
             if (!idbFailed) {
@@ -10017,6 +10027,7 @@ async function _saveChartEntries(entries) {
                     console.warn('IndexedDB 저장 실패:', idbErr.message);
                 }
             }
+            blob = null; // Blob 참조 즉시 해제 → 저메모리 기기 GC 유도
 
             const alreadyIn = saved.find(s => s.icao === icao && s.chartNum === num);
             if (!alreadyIn) {
@@ -10037,17 +10048,16 @@ async function _saveChartEntries(entries) {
         }
 
         importProgress.done = i + 1;
-        if (i % 3 === 0) renderCduContent();
-        await new Promise(r => setTimeout(r, 30));
+        // 렌더 빈도 축소(매 8개) → 메인스레드/메모리 부담 감소
+        if (i % 8 === 0) renderCduContent();
+        // 증분 저장(매 15개) → 도중 리셋돼도 진행분 보존
+        if (i % 15 === 14) persistSaved();
+        // 주기적 긴 여유(매 12개) → IndexedDB flush 및 GC 시간 확보
+        await new Promise(r => setTimeout(r, (i % 12 === 11) ? 250 : 20));
     }
 
-    // localStorage 저장 (용량 초과 시 오래된 것부터 제거)
-    try {
-        localStorage.setItem('savedCharts', JSON.stringify(saved));
-    } catch(storageErr) {
-        console.warn('localStorage 용량 초과, 최근 50개만 보존');
-        try { localStorage.setItem('savedCharts', JSON.stringify(saved.slice(-50))); } catch(e2) {}
-    }
+    // 최종 저장
+    persistSaved();
 
     // 완료 알림
     const msgs = [];
