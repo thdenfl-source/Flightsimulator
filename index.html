@@ -5018,6 +5018,16 @@ function simStep(ts){
   S.lastT=ts;
   updateHoverBtns();
   swRender();
+  // 자가치유: PFD가 보이는데 캔버스 크기가 표시영역과 어긋나면 재조정.
+  // (풀스크린→분할 복귀 시 레이아웃이 늦게 잡혀 캔버스가 0크기로 남아
+  //  PFD가 검게 되는 경우를 매 프레임 감지해 자동 복구)
+  if (leftPage === 0) {
+    const _pw = document.getElementById('pfd-wrap');
+    if (_pw && _pw.clientHeight > 0 &&
+        (cvs.width !== _pw.clientWidth || cvs.height !== _pw.clientHeight)) {
+      resizePFD();
+    }
+  }
   drawPFD();
   requestAnimationFrame(simStep);
 }
