@@ -446,9 +446,11 @@ body.solo-mode .solo-panel-visible {
   flex: 1 !important;
 }
 
-/* ── 지도 중앙 십자마크 ── */
+/* ── 지도 중앙 십자마크 ──
+   지도(#map)는 높이 80%(하단 20%는 terrain-cut)이므로 지도의 실제 세로 중앙은
+   맵랩의 40% 지점이다. leafMap.getCenter()(좌표 표시 기준)와 일치하도록 top:40%. */
 #map-crosshair {
-  position: absolute; left: 50%; top: 50%;
+  position: absolute; left: 50%; top: 40%;
   width: 0; height: 0; z-index: 500; pointer-events: none;   /* 마커 페인(600)보다 아래 → 헬기 아이콘이 위에 표시 */
 }
 #map-crosshair .ch-h, #map-crosshair .ch-v {
