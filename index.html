@@ -5085,6 +5085,14 @@ function setPage(n) {
   if (n === 2) scaleCdu();
 }
 
+// CDU 홈의 MAP 버튼 — 분할/전체화면 모두에서 MAP 창을 연다.
+// 전체화면(solo)에서는 map-wrap이 숨겨진 좌측 패널에 있을 수 있어 setPage(0)로는
+// 검은 화면이 되므로, solo 모드일 때는 solo MAP 화면으로 전환한다.
+function cduOpenMap() {
+  if (_soloActive) setSolo('map');
+  else setPage(0);
+}
+
 // ══════════════════════════════════════════════════════
 // SOLO (단일화면) 모드
 // ══════════════════════════════════════════════════════
@@ -7145,7 +7153,7 @@ if ('serviceWorker' in navigator) {
                                   btn.id === 'fpl'  ? `onclick="setPage(1)"` :
                                   btn.id === 'proc' ? `onclick="setPage(1); fpGo('IFR');"` :
                                   btn.id === 'util' ? `onclick="switchMode('UTIL')"` :
-                                  btn.id === 'map'  ? `onclick="setPage(0)"` :
+                                  btn.id === 'map'  ? `onclick="cduOpenMap()"` :
                                   btn.id === 'charts' ? `onclick="switchMode('CHARTS')"` : '';
                 gridHtml += `
                     <div class="home-icon-wrapper" ${clickAction}>
