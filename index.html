@@ -10893,6 +10893,7 @@ async function _pdfRenderHi() {
 }
 
 function _pdfApplyTransform() {
+    _pdfClampPan();   // 이동 범위를 차트 안으로 제한(회색 여백으로 끌려나감 방지)
     const c = document.getElementById('pdfCanvas');
     if (c) c.style.transform = `translate(${_pdfTx}px,${_pdfTy}px) scale(${_pdfScale})`;
     // 이동/줌이 시작되면 선명 오버레이는 위치가 어긋나므로 제거(미리보기만 표시)
@@ -10905,8 +10906,35 @@ function _pdfApplyTransform() {
 }
 
 const _PDF_ZOOM_STEP = 0.25;
-const _PDF_ZOOM_MIN  = 0.25;
+const _PDF_ZOOM_MIN  = 1;      // 화면맞춤(fit)보다 더 축소 금지 → 회색 여백 증가 방지
 const _PDF_ZOOM_MAX  = 8;
+
+// 이동(pan) 범위를 차트(페이지) 안으로 제한한다.
+// - 페이지가 뷰보다 큰 축: 가장자리가 뷰 안으로 들어오지 않게 clamp(회색 안 보임)
+// - 페이지가 뷰보다 작은 축(예: fit 상태의 레터박스): 가운데 정렬 고정
+function _pdfClampPan() {
+    const area = document.getElementById('pdfViewArea');
+    if (!area) return;
+    const AW = area.clientWidth, AH = area.clientHeight;
+    const pageW = _pdfBaseW * _pdfScale, pageH = _pdfBaseH * _pdfScale;
+    // 화면상 페이지 좌상단 = _pdfO* + _pdfT*  →  이 값을 허용범위로 clamp
+    if (pageW >= AW) {
+        const minLeft = AW - pageW, maxLeft = 0;      // [AW-pageW, 0]
+        let left = _pdfOx + _pdfTx;
+        left = Math.min(maxLeft, Math.max(minLeft, left));
+        _pdfTx = left - _pdfOx;
+    } else {
+        _pdfTx = (AW - pageW) / 2 - _pdfOx;            // 가운데 정렬
+    }
+    if (pageH >= AH) {
+        const minTop = AH - pageH, maxTop = 0;
+        let top = _pdfOy + _pdfTy;
+        top = Math.min(maxTop, Math.max(minTop, top));
+        _pdfTy = top - _pdfOy;
+    } else {
+        _pdfTy = (AH - pageH) / 2 - _pdfOy;
+    }
+}
 
 function _pdfZoomIn() {
     const area = document.getElementById('pdfViewArea');
@@ -11006,7 +11034,7 @@ function _pdfAttachTouch(area) {
             _pdfTy = t.ty0 + e.touches[0].clientY - t.y0;
             _pdfApplyTransform();
         } else if (t.mode === 'pinch' && e.touches.length >= 2) {
-            const newScale = Math.min(Math.max(t.s0 * dist(e.touches[0], e.touches[1]) / t.d0, 0.5), 8);
+            const newScale = Math.min(Math.max(t.s0 * dist(e.touches[0], e.touches[1]) / t.d0, _PDF_ZOOM_MIN), _PDF_ZOOM_MAX);
             const r = newScale / t.s0;
             _pdfScale = newScale;
             _pdfTx = (t.cx - _pdfOx) * (1 - r) + t.tx0 * r;
