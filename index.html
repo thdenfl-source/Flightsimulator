@@ -376,7 +376,8 @@ html, body {
 /* Push Leaflet bottom controls above the sim bar.
    #map 높이가 80%라 하단 가장자리가 이미 terrain-cut(하단 20%) 위에 있으므로
    bottom:0 기준 + margin 만 준다(20%를 또 더하면 축척이 좌표 위로 밀려 올라감). */
-#map-wrap .leaflet-bottom.leaflet-left  { margin-bottom: 44px; bottom: 0; }
+/* 좌하단 세로 순서: Visit → 축척 → 좌표. 축척(좌측 하단)은 좌표 위에 오도록 여유를 키움 */
+#map-wrap .leaflet-bottom.leaflet-left  { margin-bottom: 72px; bottom: 0; }
 #map-wrap .leaflet-bottom.leaflet-right { margin-bottom: 44px; bottom: 0; }
 /* ── Solo (single-screen) mode ── */
 #solo-bar {
@@ -456,9 +457,9 @@ body.solo-mode .solo-panel-visible {
 }
 #map-crosshair .ch-h { left: -11px; top: -1px; width: 22px; height: 2px; }
 #map-crosshair .ch-v { left: -1px; top: -11px; width: 2px; height: 22px; }
-/* ── 중앙 좌표 표시 (Visit 카운터 아래, 축척 위) ── */
+/* ── 중앙 좌표 표시 (좌하단 최하단: Visit → 축척 → 좌표) ── */
 #center-coord {
-  position: absolute; bottom: calc(20% + 92px); left: 10px; z-index: 1100;
+  position: absolute; bottom: calc(20% + 44px); left: 10px; z-index: 1100;
   background: rgba(0,0,0,0.72); border: 1px solid #444; border-radius: 4px;
   padding: 3px 7px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   font-size: 10px; font-weight: bold; line-height: 1.4; color: #ffd54f; white-space: nowrap;
