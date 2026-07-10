@@ -685,8 +685,12 @@ body.solo-mode .solo-panel-visible {
 
 #map-sim-bar {
   position: absolute; bottom: 20%; left: 0; right: 0; z-index: 1000;
-  display: flex; gap: 4px; padding: 5px 8px;
+  display: flex; gap: 3px; padding: 5px 6px;
   background: rgba(0,0,0,0.82); border-top: 1px solid #2a2a2a;
+}
+/* 심바로 옮긴 지도 버튼들의 활성 스타일이 sim-btn 그라데이션 위에서도 보이게 */
+#map-sim-bar #layer-btn.sat {
+  background: rgba(0,20,60,0.92); border-color: #4488ff; color: #88ccff;
 }
 #map-sim-bar .sim-btn { flex: 1; }
 /* ── TERRAIN CUT (전방 20NM 지형 단면, 맵 높이의 1/5) ── */
@@ -971,11 +975,12 @@ body.solo-mode .solo-panel-visible {
 .badge-app { background: #2e1a0d; color: #ff8844; border: 1px solid #664422; }
 .sim-btn.on { background: linear-gradient(to bottom, #0e2a0e, #050d05, #000); border-color: #00cc00; color: #00ee00; }
 .sim-btn {
-  flex: 1; background: linear-gradient(to bottom, #333, #111, #000);
+  flex: 1; min-width: 0; background: linear-gradient(to bottom, #333, #111, #000);
   border: 1px solid #444; color: #fff;
-  padding: 6px; font-size: 10px; cursor: pointer; border-radius: 4px;
+  padding: 6px 2px; font-size: 10px; cursor: pointer; border-radius: 4px;
   text-align: center; touch-action: manipulation; font-weight: bold;
   font-family: 'Helvetica Neue', Arial, sans-serif;
+  white-space: nowrap; overflow: hidden;
 }
 .sim-btn:active { background: linear-gradient(to bottom, #555, #222, #111); }
 .sim-btn.clr { border-color: #552222; color: #ee7777; }
@@ -1365,10 +1370,6 @@ body.solo-mode .solo-panel-visible {
         </div>
       </div>
       <div id="map-top-bar">
-        <button id="orient-btn" onclick="toggleMapOrient()">N↑</button>
-        <button id="follow-btn" onclick="toggleFollow()">1인칭</button>
-        <button id="layer-btn" class="sat" onclick="toggleLayer()">MAP</button>
-        <button id="layer-btn-3d" onclick="toggle3dMap()">3D</button>
         <button id="gps-btn" onclick="toggleGPS()">GPS</button>
         <button id="wx-btn" onclick="toggleWxPanel()">WX</button>
         <button id="pp-btn" onclick="togglePpMenu()">＋</button>
@@ -1438,6 +1439,10 @@ body.solo-mode .solo-panel-visible {
         <button class="sim-btn clr" onclick="clearFP()">✕ CLR</button>
         <button class="sim-btn" id="map-ship-btn" onclick="toggleShip()">⛵ SHIP</button>
         <button class="sim-btn" id="map-tcut-btn" onclick="toggleTcut()">⛰ T-CUT</button>
+        <button class="sim-btn" id="orient-btn" onclick="toggleMapOrient()">N↑</button>
+        <button class="sim-btn" id="follow-btn" onclick="toggleFollow()">1인칭</button>
+        <button class="sim-btn sat" id="layer-btn" onclick="toggleLayer()">MAP</button>
+        <button class="sim-btn" id="layer-btn-3d" onclick="toggle3dMap()">3D</button>
       </div>
 
       <!-- Weather Overlay Panel -->
