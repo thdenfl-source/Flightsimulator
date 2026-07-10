@@ -663,13 +663,15 @@ body.solo-mode .solo-panel-visible {
   color: #ccc; font-size: 10px; cursor: pointer; user-select: none;
 }
 .aspc-item input { accent-color: #ba68c8; margin: 0; }
+/* GPS 상태창: 하단 좌표창(#center-coord, left:10px) 오른쪽에 나란히 배치 */
 #gps-status {
-  position: absolute; top: 44px; right: 8px; z-index: 1000;
+  position: absolute; bottom: calc(20% + 44px); left: 235px; z-index: 1100;
   background: rgba(0,20,0,0.80); border: 1px solid #226622; color: #00cc66;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 9px;
   padding: 3px 7px; border-radius: 3px; display: none;
-  max-width: 130px; text-align: right; line-height: 1.5;
+  text-align: left; line-height: 1.5; white-space: nowrap;
 }
+#map-wrap.tcut-off #gps-status { bottom: 44px; }
 #wx-btn.wx-active {
   background: rgba(0,20,40,0.92); border-color: #00aaff; color: #66ccff;
   box-shadow: 0 0 8px rgba(0,170,255,0.4);
@@ -4007,8 +4009,9 @@ function applyGPS(pos) {
   updateNav();
   // Status overlay (좌표 + 속도/고도/방위 요약)
   const acc = c.accuracy ? c.accuracy.toFixed(0) + 'm' : '--';
+  // 좌표창 오른쪽에 한 줄로 표시(높이 통일)
   document.getElementById('gps-status').innerHTML =
-    `${decToDMS(S.lat, true)}<br>${decToDMS(S.lon, false)}<br>` +
+    `● ${decToDMS(S.lat, true)} ${decToDMS(S.lon, false)} · ` +
     `${S.spd}kt · ${S.alt}ft · ${String(Math.round(S.hdg)).padStart(3,'0')}° · ±${acc}`;
 }
 
@@ -4049,7 +4052,7 @@ function updateGpsBtn() {
   status.style.borderColor = '';
   status.style.color = '';
   if (gpsMode) {
-    btn.textContent = '● GPS ON';
+    btn.textContent = 'GPS';   // 글자는 그대로, 색상(.active)만 변경 → 버튼 높이 불변
     btn.classList.add('active');
     status.style.display = 'block';
   } else {
