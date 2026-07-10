@@ -353,10 +353,10 @@ html, body {
 #map3d .maplibregl-ctrl-bottom-right { bottom: 44px; }
 /* 좌하단 축척은 좌표창(20%+44px)과 Visit(20%+120px) 사이에 균등 간격으로 배치 */
 #map3d .maplibregl-ctrl-bottom-left { bottom: 62px; }
-/* 3D 축척은 2D와 동일한 .vfr-scale 위젯 사용 → maplibre 기본값이 덮어쓰지 않도록
-   배경·패딩·정렬을 2D와 동일하게 명시(박스가 Visit·좌표 박스와 좌측 정렬됨) */
-#map3d .maplibregl-ctrl-bottom-left .vfr-scale {
-  box-shadow: none; margin: 0 0 0 10px;
+/* 3D 축척(.vfr-scale)은 #map3d에 직접 절대배치(left:10px, bottom:62px).
+   maplibre 기본값이 섞이지 않도록 박스 스타일을 2D와 동일하게 명시 */
+#map3d .vfr-scale {
+  box-shadow: none;
   background: rgba(0,0,0,0.65); padding: 4px 7px 3px; border-radius: 3px;
   display: inline-block;
 }
@@ -3506,8 +3506,12 @@ function _init3dMap() {
   });
 
   _ml3d.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'bottom-right');
-  // 2D와 동일한 km+NM 이중 축척 위젯(.vfr-scale) 사용
-  _ml3d.addControl(new DualScale3D(), 'bottom-left');
+  // 2D와 동일한 km+NM 이중 축척 위젯(.vfr-scale) — maplibre 컨트롤 컨테이너를
+  // 거치지 않고 지도 컨테이너에 직접 절대배치(left:10px)해 2D와 픽셀 단위로 정렬
+  const _sc3d = new DualScale3D();
+  const _sc3dEl = _sc3d.onAdd(_ml3d);
+  _sc3dEl.style.cssText += ';position:absolute;left:10px;bottom:62px;z-index:850;margin:0;';
+  _ml3d.getContainer().appendChild(_sc3dEl);
 }
 
 // 3D(maplibre)용 이중 축척 — 2D L.Control.DualScale과 동일한 마크업/CSS·계산방식
