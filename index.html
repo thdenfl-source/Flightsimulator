@@ -11270,7 +11270,7 @@ function renderChartsScreen(container, footer, title, centerLabel) {
         <div onclick="${importProgress ? '' : 'triggerZipImport()'}" style="background:${importProgress ? '#1a1a1a' : '#0a1a2a'};color:${importProgress ? '#444' : '#29b6f6'};border:1px solid ${importProgress ? '#333' : '#29b6f6'};border-radius:5px;padding:8px 10px;font-size:10px;font-weight:bold;cursor:${importProgress ? 'default' : 'pointer'};white-space:nowrap;text-align:center;min-width:52px;">
             ${importProgress ? '⏳' : '📂'}<br><span style="font-size:8px;">ZIP 가져오기</span>
         </div>
-        <div onclick="${importProgress ? '' : 'triggerFolderImport()'}" style="background:${importProgress ? '#1a1a1a' : '#1a140a'};color:${importProgress ? '#444' : '#ffb74d'};border:1px solid ${importProgress ? '#333' : '#ffb74d'};border-radius:5px;padding:8px 10px;font-size:10px;font-weight:bold;cursor:${importProgress ? 'default' : 'pointer'};white-space:nowrap;text-align:center;min-width:52px;">
+        <div onclick="${importProgress ? '' : 'triggerFolderImport()'}" style="background:${importProgress ? '#1a1a1a' : '#1a140a'};color:${importProgress ? '#444' : '#ffb74d'};border:1px solid ${importProgress ? '#333' : '#ffb74d'};border-radius:5px;padding:3px 10px;font-size:10px;font-weight:bold;cursor:${importProgress ? 'default' : 'pointer'};white-space:nowrap;text-align:center;min-width:52px;line-height:1.25;">
             ${importProgress ? '⏳' : '📁'}<br><span style="font-size:8px;">폴더 가져오기</span><br><span style="font-size:7px;opacity:0.7;">메모리 부족 오류시</span>
         </div>
     </div>`;
