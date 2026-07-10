@@ -161,6 +161,13 @@ html, body {
 }
 .ctrl-group { display: flex; flex-direction: column; align-items: center; gap: 1px; }
 .ctrl-lbl { color: #bbb; font-size: 10px; letter-spacing: 0.5px; font-family: 'Helvetica Neue', Arial, sans-serif; }
+/* 누를 수 있는 FCP 라벨(IAS/HDG/CRS): 현재값 동기화 버튼 */
+.ctrl-lbl-btn {
+  cursor: pointer; color: #8ac6ff; border: 1px solid #2a4a6a; border-radius: 3px;
+  padding: 0 6px; background: rgba(20,35,55,0.6); touch-action: manipulation; user-select: none;
+}
+.ctrl-lbl-btn:active { background: #2a4a7a; color: #fff; }
+.ctrl-lbl-btn.flash { background: #1a5a2a; border-color: #00cc66; color: #7fffb0; }
 .ctrl-row { display: flex; gap: 2px; }
 .cbtn {
   background: #1c2c1c; border: 1px solid #2a5a2a; color: #fff;
@@ -1185,7 +1192,7 @@ body.solo-mode .solo-panel-visible {
       <div class="ctrl-sub-row">
 
         <div class="ctrl-group">
-          <div class="ctrl-lbl">IAS</div>
+          <div class="ctrl-lbl ctrl-lbl-btn" id="ias-lbl-btn" onclick="fcpSync('ias')">IAS</div>
           <div class="ctrl-row">
             <button class="cbtn" id="spd-dn">▼</button>
             <button class="cbtn" id="spd-up">▲</button>
@@ -1193,7 +1200,7 @@ body.solo-mode .solo-panel-visible {
         </div>
 
         <div class="ctrl-group">
-          <div class="ctrl-lbl">HDG</div>
+          <div class="ctrl-lbl ctrl-lbl-btn" id="hdg-lbl-btn" onclick="fcpSync('hdg')">HDG</div>
           <div class="ctrl-row">
             <button class="cbtn" id="hdg-dn">◄</button>
             <button class="cbtn" id="hdg-up">►</button>
@@ -1201,7 +1208,7 @@ body.solo-mode .solo-panel-visible {
         </div>
 
         <div class="ctrl-group">
-          <div class="ctrl-lbl">CRS</div>
+          <div class="ctrl-lbl ctrl-lbl-btn" id="crs-lbl-btn" onclick="fcpSync('crs')">CRS</div>
           <div class="ctrl-row">
             <button class="cbtn" id="crs-dn">◄</button>
             <button class="cbtn" id="crs-up">►</button>
@@ -4861,6 +4868,32 @@ function applyDelta(field, d){
     case 'wdir': windDir = normA(windDir + d); break;
     case 'wspd': windSpd = Math.max(0, Math.min(150, windSpd + d));    break;
   }
+}
+
+// FCP 라벨(IAS/HDG/CRS) 누름: 해당 상위모드 인게이지 + 현재값 동기화
+// - IAS: 속도 프리셀렉트(selSpd)를 현재 속도로
+// - HDG: 헤딩 프리셀렉트(selHdg)를 현재 기수방위로 + 현재 헤딩 유지(롤 AP)
+// - CRS: 현재 위치에서 NAV 소스(VOR/LOC 국·FMS 활성 웨이포인트)로의 코스 세팅(Direct-To)
+function fcpSync(which) {
+  if (which === 'ias') {
+    selSpd = Math.max(0, Math.round(S.spd));
+  } else if (which === 'hdg') {
+    selHdg = ((Math.round(S.hdg) + 359) % 360) + 1;   // 1–360
+    bankTarget = 0; rollApOn = true;                   // 현재 헤딩 유지
+  } else if (which === 'crs') {
+    if ((navSrc === 'VOR' || navSrc === 'LOC') && navLat !== null) {
+      vorObsCrs = normA(Math.round(bearing(S.lat, S.lon, navLat, navLon)));
+      updateNav();
+    } else if (navSrc === 'FMS' && S.awp >= 0) {
+      S.crs = normA(Math.round(bearing(S.lat, S.lon, S.wps[S.awp].lat, S.wps[S.awp].lon)));
+      updateNav();
+    } else {
+      return;   // 세팅할 NAV 소스 없음 → 피드백 없이 무시
+    }
+  }
+  // 시각 피드백(짧은 초록 플래시)
+  const el = document.getElementById(which === 'ias' ? 'ias-lbl-btn' : which === 'hdg' ? 'hdg-lbl-btn' : 'crs-lbl-btn');
+  if (el) { el.classList.add('flash'); setTimeout(() => el.classList.remove('flash'), 350); }
 }
 
 const btnMap={
