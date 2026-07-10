@@ -3504,6 +3504,8 @@ function _init3dMap() {
   }
 
   _ml3d.on('error', (e) => console.warn('[3D] map error:', e && e.error ? e.error.message : e));
+  // 사용자가 3D 지도를 수동 회전할 때도 마커가 실제 기수를 가리키도록 갱신
+  _ml3d.on('rotate', () => { try { _update3dMarker(); } catch(e) {} });
 
   _ml3d.on('load', () => {
     // Terrain is best-effort — a DEM failure must not blank the satellite view
@@ -3616,8 +3618,10 @@ function _update3dMarker() {
   if (!_ml3d || !_view3dOn || !_ml3dMarker) return;
   _ml3dMarker.setLngLat([S.lon, S.lat]);
   // Rotate the inner wrapper (outer element's transform is owned by maplibre)
+  // rotationAlignment:'viewport'(화면 기준)이므로 카메라 방위를 빼야
+  // 삼각형이 실제 기수방향을 가리킨다 (예: 팔로우 중에는 항상 화면 위쪽).
   const inner = _ml3dMarker.getElement().querySelector('.ac3d-inner');
-  if (inner) inner.style.transform = `rotate(${S.hdg}deg)`;
+  if (inner) inner.style.transform = `rotate(${S.hdg - _ml3d.getBearing()}deg)`;
 }
 
 let rainLayer = null;
