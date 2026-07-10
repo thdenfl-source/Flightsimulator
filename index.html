@@ -353,6 +353,13 @@ html, body {
 #map3d .maplibregl-ctrl-bottom-right { bottom: 44px; }
 /* 좌하단 축척은 좌표창(20%+44px)과 Visit(20%+120px) 사이에 균등 간격으로 배치 */
 #map3d .maplibregl-ctrl-bottom-left { bottom: 62px; }
+/* 3D 축척 km+NM 둘 다 표시 — 2D와 동일하게 km=흰색, NM=시안 */
+#map3d .maplibregl-ctrl-scale {
+  background: rgba(0,0,0,0.6); color: #fff; border-color: #fff; font-weight: bold;
+}
+#map3d .maplibregl-ctrl-bottom-left .maplibregl-ctrl-scale:last-child {
+  color: #00cfff; border-color: #00cfff;
+}
 /* 3D 모드: 우하단 FDR/REC 버튼을 zoom/tilt 컨트롤 위로 올려 겹침 방지 */
 #map-wrap.map3d-on #fdr-btn-wrap { bottom: calc(20% + 175px); }
 /* Dual-unit map scale bar (km + NM) */
@@ -3499,7 +3506,9 @@ function _init3dMap() {
   });
 
   _ml3d.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'bottom-right');
+  // km + NM 둘 다 표시(2D 축척과 동일). nautical = 해리(NM)
   _ml3d.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-left');
+  _ml3d.addControl(new maplibregl.ScaleControl({ unit: 'nautical' }), 'bottom-left');
 }
 
 function _update3dMarker() {
