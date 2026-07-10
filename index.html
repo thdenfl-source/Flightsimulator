@@ -43,14 +43,17 @@ html, body {
 }
 @media (orientation: landscape) {
   #app { display: flex; flex-direction: row; }
-  #left-panel  { flex: 0 0 55%; min-width: 100px; overflow: hidden; }
+  #left-panel  { flex: 1 1 0; min-width: 100px; overflow: hidden; }
   #right-panel { flex: 1 1 0; min-width: 80px; overflow: hidden; }
+  /* PFD를 표시하는 패널은 FCP 버튼이 전부 보이도록 넓은 쪽(55%)을 차지 */
+  #left-panel.pfd-host, #right-panel.pfd-host { flex: 0 0 55%; }
   #panel-divider { width: 2px; height: 100%; }
 }
 @media (orientation: portrait) {
   #app { display: flex; flex-direction: column; }
-  #left-panel  { flex: 0 0 55%; min-height: 100px; overflow: hidden; }
+  #left-panel  { flex: 1 1 0; min-height: 100px; overflow: hidden; }
   #right-panel { flex: 1 1 0; min-height: 80px; overflow: hidden; }
+  #left-panel.pfd-host, #right-panel.pfd-host { flex: 0 0 55%; }
   #panel-divider { height: 2px; width: 100%; }
 }
 #left-panel {
@@ -80,32 +83,36 @@ html, body {
   border-bottom: 1px solid #1e1e1e;
   flex-shrink: 0;
 }
+/* 탭 바(좌/우 공통): 5버튼(PFD/MAP/CDU/Full Screen/⟳) 동일 크기 + 흰 테두리 */
+#left-tabs, #page-tabs { gap: 4px; padding: 4px; }
 .page-tab {
   flex: 1;
+  min-width: 0;
   background: transparent;
-  border: none;
-  border-right: 1px solid #1e1e1e;
-  color: #555;
+  border: 1px solid rgba(255,255,255,0.75);
+  border-radius: 0;
+  color: #ccc;
   font-family: 'Helvetica Neue', Arial, sans-serif;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: bold;
-  letter-spacing: 1.5px;
-  padding: 9px 4px;
+  letter-spacing: 1px;
+  padding: 7px 2px;
   cursor: pointer;
   touch-action: manipulation;
+  white-space: nowrap; overflow: hidden;
   transition: color 0.15s, background 0.15s;
 }
-.page-tab:last-child { border-right: none; }
 #reload-btn {
-  flex: 0 0 auto;
+  flex: 1;
+  min-width: 0;
   background: transparent;
-  border: none;
-  border-left: 1px solid #1e1e1e;
+  border: 1px solid rgba(255,255,255,0.75);
+  border-radius: 0;
   color: #5aaefd;
-  font-size: 16px;
+  font-size: 14px;
   font-weight: bold;
   line-height: 1;
-  padding: 6px 12px;
+  padding: 6px 2px;
   cursor: pointer;
   touch-action: manipulation;
   transition: color 0.15s, background 0.15s;
@@ -117,20 +124,17 @@ html, body {
   background: #081808;
   box-shadow: inset 0 -2px 0 #00ff88;
 }
-/* ── Left-panel tab colors ── */
-#left-tabs .page-tab:nth-child(1)        { color: #5aaefd; }
-#left-tabs .page-tab:nth-child(1).active { color: #5aaefd; background: #051525; box-shadow: inset 0 -2px 0 #5aaefd; }
-#left-tabs .page-tab:nth-child(2)        { color: #00e07a; }
-#left-tabs .page-tab:nth-child(2).active { color: #00e07a; background: #001a0d; box-shadow: inset 0 -2px 0 #00e07a; }
-/* ── Right-panel tab colors ── */
-#page-tabs .page-tab:nth-child(1)        { color: #00e07a; }
-#page-tabs .page-tab:nth-child(1).active { color: #00e07a; background: #001a0d; box-shadow: inset 0 -2px 0 #00e07a; }
-#page-tabs .page-tab:nth-child(2)        { color: #ffaa33; }
-#page-tabs .page-tab:nth-child(2).active { color: #ffaa33; background: #1a0d00; box-shadow: inset 0 -2px 0 #ffaa33; }
-#page-tabs .page-tab:nth-child(3)        { color: #c084fc; }
-#page-tabs .page-tab:nth-child(3).active { color: #c084fc; background: #0d0020; box-shadow: inset 0 -2px 0 #c084fc; }
-#page-tabs .page-tab:nth-child(4)        { color: #facc15; font-size: 11px; }
-#page-tabs .page-tab:nth-child(4):hover  { color: #fff; background: #1a1500; }
+/* 같은 창을 양쪽에 선택하려 할 때 거부 피드백 */
+.page-tab.deny { border-color: #ff4444; color: #ff6655; background: #200808; }
+/* 탭 색상(좌/우 공통 5버튼 배치): PFD·MAP·CDU·Full Screen */
+#left-tabs [data-sel="pfd"], #page-tabs [data-sel="pfd"] { color: #5aaefd; }
+#left-tabs [data-sel="pfd"].active, #page-tabs [data-sel="pfd"].active { color: #5aaefd; background: #051525; box-shadow: inset 0 -2px 0 #5aaefd; }
+#left-tabs [data-sel="map"], #page-tabs [data-sel="map"] { color: #00e07a; }
+#left-tabs [data-sel="map"].active, #page-tabs [data-sel="map"].active { color: #00e07a; background: #001a0d; box-shadow: inset 0 -2px 0 #00e07a; }
+#left-tabs [data-sel="cdu"], #page-tabs [data-sel="cdu"] { color: #c084fc; }
+#left-tabs [data-sel="cdu"].active, #page-tabs [data-sel="cdu"].active { color: #c084fc; background: #0d0020; box-shadow: inset 0 -2px 0 #c084fc; }
+.page-tab.fullscreen-tab { color: #facc15; }
+.page-tab.fullscreen-tab:hover { color: #fff; background: #1a1500; }
 .page-content {
   flex: 1;
   overflow: hidden;
@@ -1181,8 +1185,11 @@ body.solo-mode .solo-panel-visible {
   <!-- ── LEFT PANEL (PFD / MAP) ── -->
   <div id="left-panel">
     <div id="left-tabs">
-      <button class="page-tab active" onclick="setLeftPage(0)">PFD</button>
-      <button class="page-tab" onclick="setLeftPage(1)">MAP</button>
+      <button class="page-tab active" data-sel="pfd" onclick="selectPanel('left','pfd')">PFD</button>
+      <button class="page-tab" data-sel="map" onclick="selectPanel('left','map')">MAP</button>
+      <button class="page-tab" data-sel="cdu" onclick="selectPanel('left','cdu')">CDU</button>
+      <button class="page-tab fullscreen-tab" onclick="enterSolo()" title="단일화면 모드">Full Screen</button>
+      <button id="reload-btn-left" class="page-tab" style="color:#5aaefd;font-size:14px;" onclick="location.reload()" title="새로고침">⟳</button>
     </div>
     <div id="pfd-wrap">
     <canvas id="pfd"></canvas>
@@ -1362,10 +1369,10 @@ body.solo-mode .solo-panel-visible {
   <div id="right-panel">
 
     <div id="page-tabs">
-      <button class="page-tab active" onclick="setPage(0)">MAP</button>
-      <button class="page-tab" onclick="setPage(1)">PLAN</button>
-      <button class="page-tab" onclick="setPage(2)">CDU</button>
-      <button class="page-tab" onclick="enterSolo()" title="단일화면 모드">Full Screen</button>
+      <button class="page-tab" data-sel="pfd" onclick="selectPanel('right','pfd')">PFD</button>
+      <button class="page-tab active" data-sel="map" onclick="selectPanel('right','map')">MAP</button>
+      <button class="page-tab" data-sel="cdu" onclick="selectPanel('right','cdu')">CDU</button>
+      <button class="page-tab fullscreen-tab" onclick="enterSolo()" title="단일화면 모드">Full Screen</button>
       <button id="reload-btn" onclick="location.reload()" title="새로고침">⟳</button>
     </div>
 
@@ -5155,7 +5162,8 @@ function simStep(ts){
   // 자가치유: PFD가 보이는데 캔버스 크기가 표시영역과 어긋나면 재조정.
   // (풀스크린→분할 복귀 시 레이아웃이 늦게 잡혀 캔버스가 0크기로 남아
   //  PFD가 검게 되는 경우를 매 프레임 감지해 자동 복구)
-  if (leftPage === 0) {
+  {
+    // (PFD가 좌/우 어느 패널에 있든 clientHeight>0 이면 표시 중)
     const _pw = document.getElementById('pfd-wrap');
     if (_pw && _pw.clientHeight > 0 &&
         (cvs.width !== _pw.clientWidth || cvs.height !== _pw.clientHeight)) {
@@ -5182,55 +5190,67 @@ function scaleCdu() {
   scaler.style.transform = `translate(${(w - 354*s)/2}px,${(h - 567*s)/2}px) scale(${s})`;
 }
 
-function setLeftPage(n) {
-  leftPage = n;
-  document.querySelectorAll('#left-tabs .page-tab').forEach((t, i) =>
-    t.classList.toggle('active', i === n));
+// ── 패널 선택 시스템: 좌/우 각각 PFD·MAP·CDU 중 하나를 표시 ──
+// pfd-wrap/map-wrap/cdu-wrap 은 각 1개뿐 → 선택된 패널로 DOM 이동.
+// 양쪽에 같은 창은 불가(사용자 클릭은 거부 피드백, 프로그램 호출은 스왑).
+let leftSel = 'pfd', rightSel = 'map';   // 'pfd' | 'map' | 'cdu' | (우측 한정 'plan')
 
-  const pfdWrap  = document.getElementById('pfd-wrap');
-  const leftPanel  = document.getElementById('left-panel');
-  const rightPanel = document.getElementById('right-panel');
-  const mapWrap  = document.getElementById('map-wrap');
-  const mapTab   = document.querySelector('#page-tabs .page-tab'); // MAP tab
-
-  if (n === 0) {
-    // 좌측 = PFD
-    pfdWrap.classList.remove('page-hidden');
-    // map-wrap을 right-panel의 fp-wrap 앞으로 복원
-    rightPanel.insertBefore(mapWrap, document.getElementById('fp-wrap'));
-    mapWrap.classList.toggle('page-hidden', currentPage !== 0);
-    mapTab.style.display = '';
-  } else {
-    // 좌측 = MAP
-    pfdWrap.classList.add('page-hidden');
-    leftPanel.appendChild(mapWrap);
-    mapWrap.classList.remove('page-hidden');
-    mapTab.style.display = 'none';
-    if (currentPage === 0) setPage(1); // MAP 탭이 숨겨지므로 PLAN으로 전환
+function selectPanel(side, sel, force) {
+  const otherSel = side === 'left' ? rightSel : leftSel;
+  if (otherSel === sel) {
+    if (!force) { _tabDenyFlash(side, sel); return; }
+    // 프로그램 호출: 반대쪽에 이쪽의 기존 창을 넘겨(스왑) 충돌 해소
+    if (side === 'left') rightSel = leftSel; else leftSel = rightSel;
   }
-  if (n === 0) {
-    requestAnimationFrame(() => {
-      resizePFD();
-      drawPFD();
-    });
-  }
-  setTimeout(() => leafMap.invalidateSize(), 50);
+  if (side === 'left') leftSel = sel; else rightSel = sel;
+  applyPanels();
 }
 
-function setPage(n) {
-  currentPage = n;
-  const ids = ['map-wrap', 'fp-wrap', 'cdu-wrap'];
-  ids.forEach((id, i) => {
-    const el = document.getElementById(id);
-    // map-wrap이 left-panel에 있을 때는 건드리지 않음
-    if (id === 'map-wrap' && leftPage === 1) return;
-    el.classList.toggle('page-hidden', i !== n);
+function _tabDenyFlash(side, sel) {
+  const bar = document.getElementById(side === 'left' ? 'left-tabs' : 'page-tabs');
+  const btn = bar && bar.querySelector(`[data-sel="${sel}"]`);
+  if (btn) { btn.classList.add('deny'); setTimeout(() => btn.classList.remove('deny'), 300); }
+}
+
+function applyPanels() {
+  const L = document.getElementById('left-panel');
+  const R = document.getElementById('right-panel');
+  const wrapIds = { pfd: 'pfd-wrap', map: 'map-wrap', cdu: 'cdu-wrap' };
+  ['pfd', 'map', 'cdu'].forEach(k => {
+    const el = document.getElementById(wrapIds[k]);
+    const host = leftSel === k ? L : (rightSel === k ? R : null);
+    if (host && el.parentElement !== host) host.appendChild(el);
+    el.classList.toggle('page-hidden', !host);
   });
-  document.querySelectorAll('#page-tabs .page-tab').forEach((btn, i) =>
-    btn.classList.toggle('active', i === n));
-  if (n === 0 && leftPage === 0) setTimeout(() => leafMap.invalidateSize(), 50);
-  if (n === 2) scaleCdu();
+  // PLAN(fp-wrap)은 우측 전용 내부 페이지(CDU FPL 버튼 등으로 진입)
+  document.getElementById('fp-wrap').classList.toggle('page-hidden', rightSel !== 'plan');
+
+  // PFD 호스트 패널은 FCP 버튼이 다 보이도록 넓은 쪽(55%) 차지
+  L.classList.toggle('pfd-host', leftSel === 'pfd');
+  R.classList.toggle('pfd-host', rightSel === 'pfd');
+
+  // 탭 활성 표시
+  document.querySelectorAll('#left-tabs [data-sel]').forEach(b =>
+    b.classList.toggle('active', b.dataset.sel === leftSel));
+  document.querySelectorAll('#page-tabs [data-sel]').forEach(b =>
+    b.classList.toggle('active', b.dataset.sel === rightSel));
+
+  // 레거시 상태 동기화(솔로 모드 진입 판단 등에서 사용)
+  leftPage = leftSel === 'map' ? 1 : 0;
+  currentPage = rightSel === 'map' ? 0 : rightSel === 'plan' ? 1 : rightSel === 'cdu' ? 2 : 0;
+
+  // 크기 재계산
+  requestAnimationFrame(() => { resizePFD(); drawPFD(); });
+  setTimeout(() => {
+    try { leafMap.invalidateSize(); } catch(e) {}
+    try { if (_ml3d) _ml3d.resize(); } catch(e) {}
+    scaleCdu();
+  }, 60);
 }
+
+// 레거시 래퍼 — 기존 호출부(CDU 버튼·솔로 모드 등) 호환
+function setLeftPage(n) { selectPanel('left', n === 0 ? 'pfd' : 'map', true); }
+function setPage(n) { selectPanel('right', ['map', 'plan', 'cdu'][n] || 'map', true); }
 
 // CDU 홈의 MAP 버튼 — 분할/전체화면 모두에서 MAP 창을 연다.
 // 전체화면(solo)에서는 map-wrap이 숨겨진 좌측 패널에 있을 수 있어 setPage(0)로는
@@ -6353,7 +6373,7 @@ function init(){
     icaoSel.value = navIcao;
   }
   setPage(0);
-  window.addEventListener('resize', () => { resizePFD(); if (currentPage === 0) leafMap.invalidateSize(); if (currentPage === 2) scaleCdu(); });
+  window.addEventListener('resize', () => { resizePFD(); try { leafMap.invalidateSize(); } catch(e) {} scaleCdu(); });
   setTimeout(() => leafMap.invalidateSize(), 100);
   if (!_simLoopRunning) { _simLoopRunning = true; requestAnimationFrame(simStep); }
 
