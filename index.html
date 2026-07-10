@@ -3926,6 +3926,7 @@ function startGPS() {
   gpsMode = true;
   lastGpsMs = 0;
   _gpsPrev = null;
+  startDevOrientation();   // 저속(10kt 미만) 헤딩용 기기 나침반(권한은 이 제스처에서 요청)
   updateGpsBtn();
   const status = document.getElementById('gps-status');
   if (status) { status.style.display = 'block'; status.innerHTML = '📡 위치 확인 중…'; }
@@ -3956,6 +3957,7 @@ function stopGPS() {
   if (gpsWatchId !== null) { navigator.geolocation.clearWatch(gpsWatchId); gpsWatchId = null; }
   gpsMode = false;
   _gpsPrev = null;
+  stopDevOrientation();
   updateGpsBtn();
   // Reset to simulation defaults
   S.spd = 80; S.hdg = 360; S.alt = 500;
@@ -3966,6 +3968,48 @@ function stopGPS() {
 }
 
 let _gpsPrev = null;   // 직전 GPS 위치(속도·방위각 산출용)
+
+// ── 기기 방향(나침반) — GPS 모드 저속(10kt 미만)용 헤딩 ──
+let _devHdg = null, _devHdgBound = false, _devHdgLastApply = 0;
+function _onDevOrientation(e) {
+  let h = null;
+  if (typeof e.webkitCompassHeading === 'number' && !isNaN(e.webkitCompassHeading)) {
+    h = e.webkitCompassHeading;                    // iOS: 진북 기준 시계방향
+  } else if (e.absolute === true && e.alpha !== null && !isNaN(e.alpha)) {
+    h = 360 - e.alpha;                             // 표준: alpha(반시계) → 방위
+  }
+  if (h === null) return;
+  _devHdg = normA(h);
+  // 저속에서는 GPS 갱신(3초)과 무관하게 헤딩을 즉시 반영(0.2초 스로틀)
+  const now = Date.now();
+  if (gpsMode && S.spd < 10 && now - _devHdgLastApply > 200) {
+    _devHdgLastApply = now;
+    S.hdg = _devHdg;
+    bankTarget = 0; S.bnk = 0;
+  }
+}
+function startDevOrientation() {
+  if (_devHdgBound) return;
+  const bind = () => {
+    window.addEventListener('deviceorientation', _onDevOrientation);
+    _devHdgBound = true;
+  };
+  try {
+    if (typeof DeviceOrientationEvent !== 'undefined' &&
+        typeof DeviceOrientationEvent.requestPermission === 'function') {
+      // iOS 13+: 사용자 제스처(GPS 버튼) 안에서 권한 요청
+      DeviceOrientationEvent.requestPermission()
+        .then(res => { if (res === 'granted') bind(); })
+        .catch(() => {});
+    } else {
+      bind();
+    }
+  } catch(e) {}
+}
+function stopDevOrientation() {
+  if (_devHdgBound) { window.removeEventListener('deviceorientation', _onDevOrientation); _devHdgBound = false; }
+  _devHdg = null;
+}
 
 function applyGPS(pos) {
   const c = pos.coords;
@@ -3985,14 +4029,18 @@ function applyGPS(pos) {
     S.pit = pitchFromSpd(S.spd);
   }
 
-  // ── 방위각 ── 기기 제공값 우선, 없으면 이전 위치로부터 계산(충분히 이동했을 때만)
+  // ── 방위각 ──
+  // 10kt 미만: 기기 방향(나침반) 사용 / 10kt 이상: 항적(track) 기준
   let hdg = null;
-  if (c.heading !== null && !isNaN(c.heading) && (c.speed == null || c.speed > 0.5)) {
-    hdg = c.heading;
+  if (spdKt !== null && spdKt < 10 && _devHdg !== null) {
+    hdg = _devHdg;
+  } else if (c.heading !== null && !isNaN(c.heading) && (c.speed == null || c.speed > 0.5)) {
+    hdg = c.heading;                                  // GPS 항적(track)
   } else if (_gpsPrev) {
     const dNM = distance(_gpsPrev.lat, _gpsPrev.lon, lat, lon);
     if (dNM > 0.0027) hdg = bearing(_gpsPrev.lat, _gpsPrev.lon, lat, lon);  // ~5m 이상 이동
   }
+  if (hdg === null && _devHdg !== null && (spdKt === null || spdKt < 10)) hdg = _devHdg;
   if (hdg !== null) {
     S.hdg = normA(hdg);
     bankTarget = 0; S.bnk = 0;
