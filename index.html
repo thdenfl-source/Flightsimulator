@@ -35,11 +35,29 @@ html, body {
   display: grid;
   overflow: hidden;
 }
-/* Static divider between the two panels (no resize) */
+/* Divider between the two panels — 가운데 그립을 드래그해 분할 비율 조절 */
 #panel-divider {
   background: #2a2a2a;
   z-index: 2000;
   flex-shrink: 0;
+  position: relative;
+}
+#divider-grip {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%);
+  z-index: 2001; cursor: col-resize; touch-action: none; user-select: none;
+  background: rgba(15,20,28,0.92); border: 1px solid #4a90d9; border-radius: 6px;
+  color: #7ab8f5; font-size: 12px; font-weight: bold; line-height: 1;
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'Helvetica Neue', Arial, sans-serif;
+}
+#divider-grip:active { background: #1a3a5a; color: #fff; }
+@media (orientation: landscape) {
+  #divider-grip { width: 26px; height: 56px; }
+  #divider-grip::before { content: '◀▶'; letter-spacing: -2px; }
+}
+@media (orientation: portrait) {
+  #divider-grip { width: 56px; height: 26px; cursor: row-resize; }
+  #divider-grip::before { content: '▲▼'; }
 }
 @media (orientation: landscape) {
   #app { display: flex; flex-direction: row; }
@@ -1359,7 +1377,7 @@ body.solo-mode .solo-panel-visible {
   </div><!-- end #left-panel -->
 
   <!-- ── RIGHT PANEL (3 pages) ── -->
-  <div id="panel-divider"></div>
+  <div id="panel-divider"><div id="divider-grip"></div></div>
 
   <div id="right-panel">
 
@@ -5310,6 +5328,57 @@ function applyPanels() {
 // 레거시 래퍼 — 기존 호출부(CDU 버튼·솔로 모드 등) 호환
 function setLeftPage(n) { selectPanel('left', n === 0 ? 'pfd' : 'map', true); }
 function setPage(n) { selectPanel('right', ['map', 'plan', 'cdu'][n] || 'map', true); }
+
+// ── 분할 비율 조절: 경계선 그립을 드래그(좌우/위아래) ──
+// 사용자가 조절하면 좌측 패널에 인라인 flex-basis를 지정(pfd-host 55% 규칙보다 우선)
+(function initDividerDrag() {
+  const grip = document.getElementById('divider-grip');
+  const app  = document.getElementById('app');
+  const L    = document.getElementById('left-panel');
+  if (!grip || !app || !L) return;
+
+  const applyRatio = pct => { L.style.flex = `0 0 ${pct}%`; };
+  const afterResize = () => {
+    requestAnimationFrame(() => { try { resizePFD(); drawPFD(); } catch(e) {} });
+    setTimeout(() => {
+      try { leafMap.invalidateSize(); } catch(e) {}
+      try { if (_ml3d) _ml3d.resize(); } catch(e) {}
+      try { scaleCdu(); } catch(e) {}
+    }, 60);
+  };
+
+  // 저장된 비율 복원
+  const saved = parseFloat(localStorage.getItem('splitRatio'));
+  if (!isNaN(saved) && saved >= 25 && saved <= 75) { applyRatio(saved); afterResize(); }
+
+  let dragging = false;
+  grip.addEventListener('pointerdown', e => {
+    e.preventDefault();
+    dragging = true;
+    try { grip.setPointerCapture(e.pointerId); } catch(err) {}
+  });
+  grip.addEventListener('pointermove', e => {
+    if (!dragging) return;
+    const r = app.getBoundingClientRect();
+    const landscape = r.width >= r.height;
+    let pct = landscape
+      ? (e.clientX - r.left) / r.width * 100
+      : (e.clientY - r.top) / r.height * 100;
+    pct = Math.max(25, Math.min(75, pct));
+    applyRatio(pct);
+    // 드래그 중에도 지도/PFD가 따라오도록 가볍게 갱신
+    try { resizePFD(); } catch(err) {}
+  });
+  const end = e => {
+    if (!dragging) return;
+    dragging = false;
+    const m = /0 0 ([\d.]+)%/.exec(L.style.flex || '');
+    if (m) try { localStorage.setItem('splitRatio', m[1]); } catch(err) {}
+    afterResize();
+  };
+  grip.addEventListener('pointerup', end);
+  grip.addEventListener('pointercancel', end);
+})();
 
 // CDU 홈의 MAP 버튼 — 분할/전체화면 모두에서 MAP 창을 연다.
 // 전체화면(solo)에서는 map-wrap이 숨겨진 좌측 패널에 있을 수 있어 setPage(0)로는
