@@ -11516,12 +11516,6 @@ function renderChartsScreen(container, footer, title, centerLabel) {
                 const k2 = (c2.chartNum || c2.chartName || '');
                 return k1.localeCompare(k2, undefined, { numeric: true, sensitivity: 'base' });
             });
-    const counts = { local: 0, link: 0 };
-            grp.charts.forEach(c => {
-                if (isSectionLink(c)) { counts.link++; return; }
-                if (localPdfKeys.has(`${c.icao}|${c.chartNum}`)) { counts.local++; }
-            });
-            const summary = `<span style="color:#29b6f6;">📂 ${counts.local}개</span> <span style="color:#7e57c2;">🔗 ${counts.link}개</span>`;
             const headTitle = section
                 ? `<span style="color:${section.color};">${section.label}</span> <span style="color:#aaa;font-size:9px;font-weight:normal;">${section.sub}</span>`
                 : `${icao} <span style="color:#aaa;font-size:9px;font-weight:normal;">${grp.name}</span>`;
@@ -11531,7 +11525,7 @@ function renderChartsScreen(container, footer, title, centerLabel) {
                     <div style="color:#0ff;font-size:11px;font-weight:bold;">${isOpen ? '▼' : '▶'}</div>
                     <div style="flex:1;min-width:0;">
                         <div style="color:#fff;font-size:11px;font-weight:bold;">${headTitle}</div>
-                        <div style="color:#666;font-size:8px;">${grp.charts.length}개 · ${summary}</div>
+                        <div style="color:#666;font-size:8px;">${grp.charts.length}개</div>
                     </div>
                     <div onclick="event.stopPropagation(); deleteAirportCharts('${icao}')" style="color:#f44336;font-size:9px;cursor:pointer;padding:2px 5px;border:1px solid #f44336;border-radius:3px;white-space:nowrap;">삭제</div>
                 </div>`;
