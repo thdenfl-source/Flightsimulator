@@ -353,13 +353,8 @@ html, body {
 #map3d .maplibregl-ctrl-bottom-right { bottom: 44px; }
 /* 좌하단 축척은 좌표창(20%+44px)과 Visit(20%+120px) 사이에 균등 간격으로 배치 */
 #map3d .maplibregl-ctrl-bottom-left { bottom: 62px; }
-/* 3D 축척 km+NM 둘 다 표시 — 2D와 동일하게 km=흰색, NM=시안 */
-#map3d .maplibregl-ctrl-scale {
-  background: rgba(0,0,0,0.6); color: #fff; border-color: #fff; font-weight: bold;
-}
-#map3d .maplibregl-ctrl-bottom-left .maplibregl-ctrl-scale:last-child {
-  color: #00cfff; border-color: #00cfff;
-}
+/* 3D 축척은 2D와 동일한 .vfr-scale 위젯 사용 → maplibre 기본 배경/그림자 제거 */
+#map3d .maplibregl-ctrl-bottom-left .vfr-scale { box-shadow: none; margin: 0; }
 /* 3D 모드: 우하단 FDR/REC 버튼을 zoom/tilt 컨트롤 위로 올려 겹침 방지 */
 #map-wrap.map3d-on #fdr-btn-wrap { bottom: calc(20% + 175px); }
 /* Dual-unit map scale bar (km + NM) */
@@ -3506,9 +3501,56 @@ function _init3dMap() {
   });
 
   _ml3d.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'bottom-right');
-  // km + NM 둘 다 표시(2D 축척과 동일). nautical = 해리(NM)
-  _ml3d.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-left');
-  _ml3d.addControl(new maplibregl.ScaleControl({ unit: 'nautical' }), 'bottom-left');
+  // 2D와 동일한 km+NM 이중 축척 위젯(.vfr-scale) 사용
+  _ml3d.addControl(new DualScale3D(), 'bottom-left');
+}
+
+// 3D(maplibre)용 이중 축척 — 2D L.Control.DualScale과 동일한 마크업/CSS·계산방식
+class DualScale3D {
+  onAdd(map) {
+    this._map = map;
+    const div = document.createElement('div');
+    div.className = 'vfr-scale';
+    const kmRow = document.createElement('div'); kmRow.className = 'vfr-scale-row';
+    this._kmBar = document.createElement('div'); this._kmBar.className = 'vfr-scale-bar vfr-scale-km';
+    this._kmLbl = document.createElement('span');
+    kmRow.appendChild(this._kmBar); kmRow.appendChild(this._kmLbl);
+    const nmRow = document.createElement('div'); nmRow.className = 'vfr-scale-row';
+    this._nmBar = document.createElement('div'); this._nmBar.className = 'vfr-scale-bar vfr-scale-nm';
+    this._nmLbl = document.createElement('span');
+    nmRow.appendChild(this._nmBar); nmRow.appendChild(this._nmLbl);
+    div.appendChild(kmRow); div.appendChild(nmRow);
+    this._div = div;
+    this._upd = () => this._update();
+    map.on('move', this._upd);
+    this._update();
+    return div;
+  }
+  onRemove() { if (this._map) this._map.off('move', this._upd); if (this._div) this._div.remove(); }
+  _mpp() {
+    // 화면 하단(축척 위치) 부근에서 가로 100px에 해당하는 지상거리로 m/px 산출
+    // → 3D 틸트/원근에서도 실제 축척과 근사
+    const c = this._map.getContainer();
+    const y = Math.max(1, c.clientHeight - 60);
+    const p0 = this._map.unproject([20, y]), p1 = this._map.unproject([120, y]);
+    return (distance(p0.lat, p0.lng, p1.lat, p1.lng) * 1852) / 100;   // m/px
+  }
+  _nice(maxM, unitM, unit, mpp) {
+    const steps = [0.01,0.02,0.05,0.1,0.2,0.5,1,2,5,10,20,50,100,200,500,1000];
+    const maxU = maxM / unitM;
+    let v = steps[0];
+    for (const s of steps) { if (s <= maxU) v = s; else break; }
+    return { px: v * unitM / mpp, label: v + ' ' + unit };
+  }
+  _update() {
+    const MAXW = 120, mpp = this._mpp();
+    if (!isFinite(mpp) || mpp <= 0) return;
+    const maxM = MAXW * mpp;
+    const km = this._nice(maxM, 1000, 'km', mpp);
+    const nm = this._nice(maxM, 1852, 'NM', mpp);
+    this._kmBar.style.width = Math.min(km.px, MAXW) + 'px'; this._kmLbl.textContent = km.label;
+    this._nmBar.style.width = Math.min(nm.px, MAXW) + 'px'; this._nmLbl.textContent = nm.label;
+  }
 }
 
 function _update3dMarker() {
