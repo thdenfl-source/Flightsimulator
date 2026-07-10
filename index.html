@@ -447,24 +447,26 @@ html, body {
   background: #081808;
   box-shadow: inset 0 -2px 0 #00ff88;
 }
+/* ✕(분할화면 복귀)는 우측 상단 끝에 배치 */
 #solo-bar button.solo-exit {
   flex: 0 0 40px;
   color: #ff4444;
   font-size: 15px;
   font-weight: bold;
-  border-right: 2px solid #ff4444;
+  border-left: 2px solid #ff4444;
+  border-right: none;
   background: rgba(80,0,0,0.5);
 }
 #solo-bar button.solo-exit:hover { color: #fff; background: #aa0000; }
-/* solo-bar tab colors */
-#solo-bar button:nth-child(2)        { color: #5aaefd; }
-#solo-bar button:nth-child(2).solo-active { color: #5aaefd; box-shadow: inset 0 -2px 0 #5aaefd; }
-#solo-bar button:nth-child(3)        { color: #00e07a; }
-#solo-bar button:nth-child(3).solo-active { color: #00e07a; box-shadow: inset 0 -2px 0 #00e07a; }
-#solo-bar button:nth-child(4)        { color: #ffaa33; }
-#solo-bar button:nth-child(4).solo-active { color: #ffaa33; box-shadow: inset 0 -2px 0 #ffaa33; }
-#solo-bar button:nth-child(5)        { color: #c084fc; }
-#solo-bar button:nth-child(5).solo-active { color: #c084fc; box-shadow: inset 0 -2px 0 #c084fc; }
+/* solo-bar tab colors (PFD/MAP/PLAN/CDU가 1~4번째, ✕는 마지막) */
+#solo-bar button:nth-child(1)        { color: #5aaefd; }
+#solo-bar button:nth-child(1).solo-active { color: #5aaefd; box-shadow: inset 0 -2px 0 #5aaefd; }
+#solo-bar button:nth-child(2)        { color: #00e07a; }
+#solo-bar button:nth-child(2).solo-active { color: #00e07a; box-shadow: inset 0 -2px 0 #00e07a; }
+#solo-bar button:nth-child(3)        { color: #ffaa33; }
+#solo-bar button:nth-child(3).solo-active { color: #ffaa33; box-shadow: inset 0 -2px 0 #ffaa33; }
+#solo-bar button:nth-child(4)        { color: #c084fc; }
+#solo-bar button:nth-child(4).solo-active { color: #c084fc; box-shadow: inset 0 -2px 0 #c084fc; }
 /* When solo bar is visible, push app down */
 body.solo-mode #app {
   position: fixed;
@@ -1190,11 +1192,11 @@ body.solo-mode .solo-panel-visible {
 <body>
 <!-- ── 단일화면 선택 바 (기본 숨김) ── -->
 <div id="solo-bar" style="display:none;">
-  <button class="solo-exit" onclick="exitSolo()" title="분할화면으로 돌아가기">✕</button>
   <button onclick="setSolo('pfd')">PFD</button>
   <button onclick="setSolo('map')">MAP</button>
   <button onclick="setSolo('plan')">PLAN</button>
   <button onclick="setSolo('cdu')">CDU</button>
+  <button class="solo-exit" onclick="exitSolo()" title="분할화면으로 돌아가기">✕</button>
 </div>
 <div id="app">
 
