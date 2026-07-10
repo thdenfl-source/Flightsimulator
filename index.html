@@ -8737,8 +8737,8 @@ function _aspcRenderPanel(){
     const col=_aspcColors[g];
     const open=!!_aspcOpen[g];
     const onCnt=AIRSPACE_DB.filter(a=>a.grp===g&&aspcOn[a.id]).length;
-    html+=`<div class="aspc-grp" style="color:${col};cursor:pointer;" onclick="_aspcToggleGrp('${g}')">
-      <span style="border:none;background:none;padding:0;margin:0;color:${col};font-size:10px;">${open?'▼':'▶'} ${g}${onCnt?` <b style=\"color:#fff;\">(${onCnt})</b>`:''}</span>
+    html+=`<div class="aspc-grp" style="color:#fff;cursor:pointer;" onclick="_aspcToggleGrp('${g}')">
+      <span style="border:none;background:none;padding:0;margin:0;color:#fff;font-size:10px;">${open?'▼':'▶'} <span style="color:${col};">■</span> ${g}${onCnt?` <b style=\"color:#fff;\">(${onCnt})</b>`:''}</span>
       <div style="flex-shrink:0;" onclick="event.stopPropagation()"><span onclick="_aspcGroupSet('${g}',true)">모두</span><span onclick="_aspcGroupSet('${g}',false)">해제</span></div></div>`;
     if(open){
       AIRSPACE_DB.filter(a=>a.grp===g).forEach(a=>{
