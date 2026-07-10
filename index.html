@@ -5244,9 +5244,9 @@ function exitSolo() {
   rightPanel.style.display = '';
   divider.style.display = '';
 
-  // 원래 상태 복원
-  setLeftPage(leftPage);
-  setPage(currentPage);
+  // 분할 화면 복귀 시 기본 배치: 좌측 PFD, 우측 MAP
+  setLeftPage(0);
+  setPage(0);
   setTimeout(() => {
     leafMap.invalidateSize();
     resizePFD();
