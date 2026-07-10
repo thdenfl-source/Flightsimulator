@@ -1187,9 +1187,6 @@ body.solo-mode .solo-panel-visible {
     <div id="left-tabs">
       <button class="page-tab active" data-sel="pfd" onclick="selectPanel('left','pfd')">PFD</button>
       <button class="page-tab" data-sel="map" onclick="selectPanel('left','map')">MAP</button>
-      <button class="page-tab" data-sel="cdu" onclick="selectPanel('left','cdu')">CDU</button>
-      <button class="page-tab fullscreen-tab" onclick="enterSolo()" title="단일화면 모드">Full Screen</button>
-      <button id="reload-btn-left" class="page-tab" style="color:#5aaefd;font-size:14px;" onclick="location.reload()" title="새로고침">⟳</button>
     </div>
     <div id="pfd-wrap">
     <canvas id="pfd"></canvas>
@@ -5216,7 +5213,13 @@ function selectPanel(side, sel, force) {
   if (otherSel === sel) {
     if (!force) { _tabDenyFlash(side, sel); return; }
     // 프로그램 호출: 반대쪽에 이쪽의 기존 창을 넘겨(스왑) 충돌 해소
-    if (side === 'left') rightSel = leftSel; else leftSel = rightSel;
+    // 좌측은 PFD/MAP 전용 → 스왑으로 CDU 등이 넘어가지 않게 보정
+    if (side === 'left') {
+      rightSel = leftSel;
+    } else {
+      leftSel = ((rightSel === 'pfd' || rightSel === 'map') && rightSel !== sel)
+        ? rightSel : (sel === 'pfd' ? 'map' : 'pfd');
+    }
   }
   if (side === 'left') leftSel = sel; else rightSel = sel;
   applyPanels();
