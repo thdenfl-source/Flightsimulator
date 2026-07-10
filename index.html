@@ -353,8 +353,9 @@ html, body {
 #map3d .maplibregl-ctrl-bottom-right { bottom: 44px; }
 /* 좌하단 축척은 좌표창(20%+44px)과 Visit(20%+120px) 사이에 균등 간격으로 배치 */
 #map3d .maplibregl-ctrl-bottom-left { bottom: 62px; }
-/* 3D 축척은 2D와 동일한 .vfr-scale 위젯 사용 → maplibre 기본 배경/그림자 제거 */
-#map3d .maplibregl-ctrl-bottom-left .vfr-scale { box-shadow: none; margin: 0; }
+/* 3D 축척은 2D와 동일한 .vfr-scale 위젯 사용 → maplibre 기본 배경/그림자 제거.
+   좌측 정렬은 Visit·좌표(left:10px)와 맞도록 margin-left:10px 유지 */
+#map3d .maplibregl-ctrl-bottom-left .vfr-scale { box-shadow: none; margin: 0 0 0 10px; }
 /* 3D 모드: 우하단 FDR/REC 버튼을 zoom/tilt 컨트롤 위로 올려 겹침 방지 */
 #map-wrap.map3d-on #fdr-btn-wrap { bottom: calc(20% + 175px); }
 /* Dual-unit map scale bar (km + NM) */
