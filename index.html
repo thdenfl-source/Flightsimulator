@@ -352,7 +352,7 @@ html, body {
 /* #map3d 는 높이 80%라 하단 가장자리가 이미 terrain-cut 위에 있음 → px만 올림 */
 #map3d .maplibregl-ctrl-bottom-right { bottom: 44px; }
 /* 좌하단 축척은 좌표창(20%+44px)과 Visit(20%+120px) 사이에 균등 간격으로 배치 */
-#map3d .maplibregl-ctrl-bottom-left { bottom: 52px; }
+#map3d .maplibregl-ctrl-bottom-left { bottom: 62px; }
 /* 3D 모드: 우하단 FDR/REC 버튼을 zoom/tilt 컨트롤 위로 올려 겹침 방지 */
 #map-wrap.map3d-on #fdr-btn-wrap { bottom: calc(20% + 175px); }
 /* Dual-unit map scale bar (km + NM) */
@@ -381,7 +381,7 @@ html, body {
    bottom:0 기준 + margin 만 준다(20%를 또 더하면 축척이 좌표 위로 밀려 올라감). */
 /* 좌하단 세로 순서: Visit(20%+120px) → 축척 → 좌표(20%+44px).
    세 요소의 간격이 균등해지도록 축척 위치를 가운데로 맞춤 */
-#map-wrap .leaflet-bottom.leaflet-left  { margin-bottom: 52px; bottom: 0; }
+#map-wrap .leaflet-bottom.leaflet-left  { margin-bottom: 62px; bottom: 0; }
 #map-wrap .leaflet-bottom.leaflet-right { margin-bottom: 44px; bottom: 0; }
 /* ── Solo (single-screen) mode ── */
 #solo-bar {
