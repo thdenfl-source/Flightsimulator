@@ -2169,6 +2169,9 @@ let rollApOn = true;   // false when manual bank trim overrides roll axis
 let navSrc  = 'FMS';   // 'FMS' | 'VOR' | 'LOC'
 let navIcao = '';      // selected ICAO for VOR/LOC mode
 let navLat  = null, navLon = null;
+// Direct-To 앵커: 이전 leg가 없는 활성 WP의 코스 선 기준점(선택 시점의 위치).
+// 이 앵커→WP 선을 leg처럼 고정 추적해 '포인트로 수렴'하지 않게 한다.
+let _dtoLat = null, _dtoLon = null;
 let rnp     = 1.0;     // RNP value for FMS CDI scale
 
 // pitch is always derived from speed — helper
@@ -2212,10 +2215,8 @@ function setNavSrc(src) {
   const icaoSel = document.getElementById('nav-icao-sel');
   const isVorLoc = src === 'VOR' || src === 'LOC';
   icaoSel.style.display = isVorLoc ? 'block' : 'none';
-  // VOR/LOC: vorObsCrs 초기화 (S.crs/FMS 코스는 건드리지 않음)
-  if (isVorLoc && navLat !== null) {
-    vorObsCrs = normA(Math.round(bearing(S.lat, S.lon, navLat, navLon)));
-  }
+  // VOR/LOC 전환 시 vorObsCrs를 자동으로 덮어쓰지 않음 —
+  // 사용자가 CRS 노브(또는 CRS 라벨 버튼)로 정한 래디얼을 그대로 유지
   // Reset NAV AP PID integrator on source change to prevent heading bias from
   // accumulated cross-track error on the previous source bleeding into the new course.
   updateCrsButtons(); // VOR/LOC ↔ FMS 전환 시 버튼 상태 갱신
@@ -2226,10 +2227,7 @@ function setNavIcao(icao) {
   const a = AIRPORTS.find(x => x.ident === icao);
   if (a) { navLat = a.lat; navLon = a.lon; }
   else    { navLat = null; navLon = null; }
-  // VOR/LOC 국소 변경 시 vorObsCrs 만 갱신 — S.crs(FMS) 불변
-  if (navLat !== null && (navSrc === 'VOR' || navSrc === 'LOC')) {
-    vorObsCrs = normA(Math.round(bearing(S.lat, S.lon, navLat, navLon)));
-  }
+  // 선국 변경 시에도 vorObsCrs는 자동 변경하지 않음(사용자 설정 래디얼 유지)
   updateNav();
 }
 function setRnp(val) {
@@ -4766,6 +4764,9 @@ function updateNav(){
         S.xtk = crossTrack(bwdPt[0], bwdPt[1], wp.lat, wp.lon, S.lat, S.lon);
       } else if (S.fwp>=0) {
         S.xtk = crossTrack(S.wps[S.fwp].lat,S.wps[S.fwp].lon,wp.lat,wp.lon,S.lat,S.lon);
+      } else if (_dtoLat !== null) {
+        // Direct-To: 선택 시점 앵커→WP 선을 leg처럼 고정 추적(포인트 수렴 방지)
+        S.xtk = crossTrack(_dtoLat, _dtoLon, wp.lat, wp.lon, S.lat, S.lon);
       } else {
         // Approximate XTK: positive = right of course (consistent with crossTrack)
         S.xtk = -Math.sin(normAS(S.brg - S.crs) * D2R) * S.dtw;
@@ -5039,7 +5040,10 @@ function removeWP(i){
 }
 function selectWP(i){
   S.fwp=S.awp;S.awp=i;
-  if (!obsOn) S.crs=bearing(S.lat,S.lon,S.wps[i].lat,S.wps[i].lon);
+  if (!obsOn) {
+    S.crs=bearing(S.lat,S.lon,S.wps[i].lat,S.wps[i].lon);
+    _dtoLat = S.lat; _dtoLon = S.lon;   // Direct-To 라인 고정(선택 시점 위치)
+  }
   updateWpMarkers();fpRender();updateNav();
 }
 function setBrg2(i){
@@ -5119,6 +5123,8 @@ function fcpSync(which) {
       updateNav();
     } else if (navSrc === 'FMS' && S.awp >= 0) {
       S.crs = normA(Math.round(bearing(S.lat, S.lon, S.wps[S.awp].lat, S.wps[S.awp].lon)));
+      _dtoLat = S.lat; _dtoLon = S.lon;   // 새 Direct-To 라인 고정
+      S.fwp = -1;                          // 이전 leg 대신 이 라인을 추적
       updateNav();
     } else {
       return;   // 세팅할 NAV 소스 없음 → 피드백 없이 무시
