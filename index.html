@@ -215,6 +215,13 @@ html, body {
 }
 .sw-btn:active { background: #264426; }
 .sw-btn.run { border-color: #00ff88; color: #00ff88; }
+/* 현재 시각(스톱워치 오른쪽) */
+.clock-group { border-color: #2a3a4a; }
+#clock-display { color: #7ab8f5; min-width: 80px; }
+.clock-lbl {
+  color: #557; font-size: 9px; font-weight: bold; letter-spacing: 1px;
+  font-family: 'Helvetica Neue', Arial, sans-serif; padding: 3px 0 4px;
+}
 
 /* ── BRG Toggle ── */
 .brg-tog-group { display: flex; flex-direction: column; align-items: center; gap: 2px; }
@@ -1271,6 +1278,11 @@ body.solo-mode .solo-panel-visible {
           </div>
         </div>
 
+        <div class="sw-group clock-group">
+          <div class="sw-display" id="clock-display">--:--:--</div>
+          <div class="clock-lbl">LOCAL</div>
+        </div>
+
       </div><!-- end ctrl-sub-row 1 -->
 
       <!-- 2행: WDIR / WSPD / AP(OBS·NAV) / BRG -->
@@ -2137,6 +2149,16 @@ function swRender() {
   document.getElementById('sw-display').textContent =
     String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0') + '.' + t;
 }
+
+// 현재 시각(로컬) — 스톱워치 오른쪽, 1초 주기 갱신
+function clockRender() {
+  const el = document.getElementById('clock-display');
+  if (!el) return;
+  const d = new Date(), p2 = n => String(n).padStart(2, '0');
+  el.textContent = `${p2(d.getHours())}:${p2(d.getMinutes())}:${p2(d.getSeconds())}`;
+}
+setInterval(clockRender, 1000);
+clockRender();
 
 // ══════════════════════════════════════════════════════
 // MATH
