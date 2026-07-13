@@ -2855,7 +2855,7 @@ function drawHSI(x, y, w, h) {
     ctx.restore();
   }
 
-  // ── GS / TAS readout (HSI bottom-left) ──
+  // ── 좌하단 2줄 정보: ①TAS·OAT ②GS·ISA ──
   {
     // TAS: altitude-corrected from displayed speed (~+2% per 1000 ft)
     const tas = S.spd * (1 + 0.02 * S.alt / 1000);
@@ -2866,29 +2866,39 @@ function drawHSI(x, y, w, h) {
     const gsN = tas * Math.cos(S.hdg * D2R) + wEff * Math.cos(wto);
     const gsE = tas * Math.sin(S.hdg * D2R) + wEff * Math.sin(wto);
     const gs  = Math.sqrt(gsN*gsN + gsE*gsE);
+    // ISA: 표준대기 온도, OAT: 지면 METAR 온도 기준 감률 보정(-1.98°C/1000ft)
+    const isaC = 15 - 1.98 * S.alt / 1000;
+    const oatC = _oatSurfaceC - 1.98 * S.alt / 1000;
 
     const colX  = leftX + sideW / 2;
-    const valFs = Math.max(11, r * 0.13);
-    const lblFs = Math.max(8, r * 0.085);
-    const gsY   = y + h * 0.78;
-    const tasY  = y + h * 0.92;
+    const valFs = Math.max(10, r * 0.115);
+    const lblFs = Math.max(8, r * 0.08);
+    const row1Y = y + h * 0.83;
+    const row2Y = y + h * 0.95;
 
     ctx.save();
-    ctx.textAlign = 'center';
-    // GS
-    ctx.font = `${lblFs}px Helvetica Neue, Arial, sans-serif`;
-    ctx.fillStyle = '#888';
-    ctx.fillText('GS', colX, gsY);
-    ctx.font = `bold ${valFs}px Helvetica Neue, Arial, sans-serif`;
-    ctx.fillStyle = '#00cc44';
-    ctx.fillText(`${Math.round(gs)}kt`, colX, gsY + valFs);
-    // TAS
-    ctx.font = `${lblFs}px Helvetica Neue, Arial, sans-serif`;
-    ctx.fillStyle = '#888';
-    ctx.fillText('TAS', colX, tasY);
-    ctx.font = `bold ${valFs}px Helvetica Neue, Arial, sans-serif`;
-    ctx.fillStyle = '#88ccff';
-    ctx.fillText(`${Math.round(tas)}kt`, colX, tasY + valFs);
+    // 한 줄에 [라벨, 값, 라벨, 값]을 이어 그려 가운데 정렬
+    const lblFont = `${lblFs}px Helvetica Neue, Arial, sans-serif`;
+    const valFont = `bold ${valFs}px Helvetica Neue, Arial, sans-serif`;
+    const drawRow = (yPos, parts) => {
+      let total = 0;
+      parts.forEach(p => { ctx.font = p[2]; total += ctx.measureText(p[0]).width; });
+      let x = colX - total / 2;
+      ctx.textAlign = 'left';
+      parts.forEach(p => {
+        ctx.font = p[2]; ctx.fillStyle = p[1];
+        ctx.fillText(p[0], x, yPos);
+        x += ctx.measureText(p[0]).width;
+      });
+    };
+    drawRow(row1Y, [
+      ['TAS ', '#888', lblFont], [`${Math.round(tas)}kt`, '#88ccff', valFont],
+      ['  OAT ', '#888', lblFont], [`${Math.round(oatC)}°C`, '#ffd54f', valFont],
+    ]);
+    drawRow(row2Y, [
+      ['GS ', '#888', lblFont], [`${Math.round(gs)}kt`, '#00cc44', valFont],
+      ['  ISA ', '#888', lblFont], [`${Math.round(isaC)}°C`, '#aaa', valFont],
+    ]);
     ctx.restore();
   }
 
@@ -6852,6 +6862,8 @@ function _wxTime(t) {
 // aviationweather.gov blocks some proxies → wider net + JSON wrapper
 // (allorigins /get) lets us verify upstream HTTP status to filter HTML errors.
 
+// PFD OAT용 지면 온도(°C) — METAR 조회 시 갱신, 기본은 ISA 해면온도 15°C
+window._oatSurfaceC = window._oatSurfaceC ?? 15;
 const _wxCache = new Map();
 const WX_CACHE_TTL = 10 * 60 * 1000;
 
@@ -7048,6 +7060,8 @@ function _parseMetar(raw) {
   if (tdm) {
     const toC = s => s.startsWith('M') ? `-${s.slice(1)}°C` : `${s}°C`;
     p.temp = `${toC(tdm[1])} / DP ${toC(tdm[2])}`;
+    // PFD OAT 계산용 지면 온도 갱신(가장 최근 조회한 METAR 기준)
+    _oatSurfaceC = parseInt(tdm[1].replace('M', '-'), 10);
   }
 
   // QNH
