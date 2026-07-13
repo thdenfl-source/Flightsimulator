@@ -5029,9 +5029,26 @@ document.addEventListener('keydown', e => {
   e.preventDefault();
   applyDelta(m[0], m[1]);
 });
+// Enter: Force Trim Release · 우측 Shift: GSPD 토글 · 방향키: 트림(←→↑↓)
+const _keyTrimMap = { 'ArrowLeft': 'L', 'ArrowRight': 'R', 'ArrowUp': 'F', 'ArrowDown': 'A' };
+document.addEventListener('keydown', e => {
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  const t = e.target;
+  if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+  if (e.key === 'Enter') { e.preventDefault(); forceTrim(); return; }
+  if (e.key === 'Shift' && e.location === KeyboardEvent.DOM_KEY_LOCATION_RIGHT && !e.repeat) {
+    e.preventDefault(); toggleGspd(); return;
+  }
+  const dir = _keyTrimMap[e.key];
+  if (dir) {
+    e.preventDefault();
+    if (!e.repeat) startTrimHold(dir);   // 버튼 홀드와 동일(자체 반복 타이머 사용)
+  }
+});
 document.addEventListener('keyup', e => {
   // HDG 키(3/4)를 떼면 버튼과 동일하게 뱅크 목표 해제(수평 복귀)
   if (e.key === '3' || e.key === '4') bankTarget = 0;
+  if (_keyTrimMap[e.key]) stopTrimHold();
 });
 
 const btnMap={
