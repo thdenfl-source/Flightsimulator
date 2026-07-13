@@ -1825,6 +1825,7 @@ function toggleGspd() {
       S.spd = Math.max(0, gspdActFwd);
       gspdCoasting = false;
     }
+    S.pit = pitchFromSpd(S.spd);   // 해제 시 속도 기준 자세 복원
     gspdRefLat = null;
     gspdRefFwd = null;
   }
@@ -4239,35 +4240,54 @@ function updateSpeedVector() {
   const wt = normA(windDir + 180) * D2R;
   const wN = wEff * Math.cos(wt), wE = wEff * Math.sin(wt);
 
-  // 선회율(°/s): 시뮬 물리(협조선회)와 동일 — g·tan(bank)/V
-  let turnRate = 0;
-  if (simMode && Math.abs(S.bnk) > 2 && airSpd > 5) {
-    const V_ms = Math.max(10, airSpd) * 0.5144;
-    turnRate = 9.81 * Math.tan(S.bnk * D2R) / V_ms / D2R;
-  }
-
-  // 60초 적분(2초 스텝) — 직진이면 1스텝 직선과 동일
-  const dt = 2, steps = 30;
-  const pts = [[S.lat, S.lon]];
-  let lat = S.lat, lon = S.lon, hdg = S.hdg || 0, lastTrk = S.hdg || 0;
-  for (let i = 0; i < steps; i++) {
-    const vN = airSpd * Math.cos(hdg * D2R) + wN;
-    const vE = airSpd * Math.sin(hdg * D2R) + wE;
-    const gsI = Math.hypot(vN, vE);
-    if (gsI > 0.5) {
-      lastTrk = normA(Math.atan2(vE, vN) / D2R);
-      const p = destPoint(lat, lon, lastTrk, gsI * dt / 3600);
-      lat = p[0]; lon = p[1];
+  let pts, lastTrk, totalNM;
+  if (simMode && (gspdOn || gspdCoasting)) {
+    // ── GSPD: 호버 디스플레이의 전후(gspdActFwd)/좌우(gspdActLat) 벡터 그대로 ──
+    // 물리 이동과 동일하게 기체좌표 → 지상좌표 변환(바람 미적용), 직선 1분 예측
+    const ch = Math.cos(S.hdg * D2R), sh = Math.sin(S.hdg * D2R);
+    const gsN = gspdActFwd * ch - gspdActLat * sh;
+    const gsE = gspdActFwd * sh + gspdActLat * ch;
+    const gs = Math.min(Math.hypot(gsN, gsE), 130);
+    if (gs < 3) {   // 사실상 정지 → 숨김
+      spdVecLine.setLatLngs([]);
+      spdVecHead.setLatLngs([]);
+      return;
     }
-    pts.push([lat, lon]);
-    hdg = normA(hdg + turnRate * dt);
-  }
+    lastTrk = normA(Math.atan2(gsE, gsN) / D2R);
+    totalNM = gs / 60;
+    pts = [[S.lat, S.lon], destPoint(S.lat, S.lon, lastTrk, totalNM)];
+  } else {
+    // 선회율(°/s): 시뮬 물리(협조선회)와 동일 — g·tan(bank)/V
+    let turnRate = 0;
+    if (simMode && Math.abs(S.bnk) > 2 && airSpd > 5) {
+      const V_ms = Math.max(10, airSpd) * 0.5144;
+      turnRate = 9.81 * Math.tan(S.bnk * D2R) / V_ms / D2R;
+    }
 
-  const totalNM = airSpd / 60;
-  if (totalNM * 60 < 3 && wEff < 3) {   // 사실상 정지 → 숨김
-    spdVecLine.setLatLngs([]);
-    spdVecHead.setLatLngs([]);
-    return;
+    // 60초 적분(2초 스텝) — 직진이면 1스텝 직선과 동일
+    const dt = 2, steps = 30;
+    pts = [[S.lat, S.lon]];
+    let lat = S.lat, lon = S.lon, hdg = S.hdg || 0;
+    lastTrk = S.hdg || 0;
+    for (let i = 0; i < steps; i++) {
+      const vN = airSpd * Math.cos(hdg * D2R) + wN;
+      const vE = airSpd * Math.sin(hdg * D2R) + wE;
+      const gsI = Math.hypot(vN, vE);
+      if (gsI > 0.5) {
+        lastTrk = normA(Math.atan2(vE, vN) / D2R);
+        const p = destPoint(lat, lon, lastTrk, gsI * dt / 3600);
+        lat = p[0]; lon = p[1];
+      }
+      pts.push([lat, lon]);
+      hdg = normA(hdg + turnRate * dt);
+    }
+
+    totalNM = airSpd / 60;
+    if (totalNM * 60 < 3 && wEff < 3) {   // 사실상 정지 → 숨김
+      spdVecLine.setLatLngs([]);
+      spdVecHead.setLatLngs([]);
+      return;
+    }
   }
 
   // 화살촉(채워진 삼각형): 궤적 끝점, 마지막 진행방향 기준 (HSI 니들 스타일)
@@ -5138,10 +5158,15 @@ function simStep(ts){
   if(S.running && !gpsMode && !_fdrPlaying && S.lastT!==null){
     const dt=(ts-S.lastT)/1000;
     if(dt>0&&dt<0.5){
-      // smooth bank toward target
-      const bankDiff=bankTarget-S.bnk;
+      // smooth bank toward target — GSPD 중에는 ADI 자세 변화 없음(수평 유지)
+      const bt = gspdOn ? 0 : bankTarget;
+      const bankDiff=bt-S.bnk;
       S.bnk+=Math.sign(bankDiff)*Math.min(Math.abs(bankDiff),50*dt);
-      if(Math.abs(bankTarget-S.bnk)<0.3) S.bnk=bankTarget;
+      if(Math.abs(bt-S.bnk)<0.3) S.bnk=bt;
+      // GSPD 중 피치도 수평(0°)으로 수렴 — 지상속도 제어라 자세 지시 없음
+      if (gspdOn && Math.abs(S.pit) > 0.05) {
+        S.pit -= Math.sign(S.pit) * Math.min(Math.abs(S.pit), 15 * dt);
+      }
 
       if (!acDragging) {
         let gsN, gsE;
