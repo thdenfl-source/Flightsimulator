@@ -1268,13 +1268,13 @@ body.solo-mode .solo-panel-visible {
         <div class="ctrl-div"></div>
 
         <div class="sw-group">
-          <div class="sw-display" id="sw-display">00:00.0</div>
-          <div class="sw-btns" id="sw-btns-sw">
+          <div class="sw-display clock-mode" id="sw-display">--:--:--</div>
+          <div class="sw-btns" id="sw-btns-sw" style="display:none;">
             <button class="sw-btn" id="sw-toggle" onclick="swToggle()">GO</button>
             <button class="sw-btn" onclick="swReset()">RESET</button>
             <button class="sw-btn sw-btn-time" onclick="swSetMode('clock')">TIME</button>
           </div>
-          <div class="sw-btns" id="sw-btns-clock" style="display:none;">
+          <div class="sw-btns" id="sw-btns-clock">
             <button class="sw-btn sw-btn-time" onclick="swSetMode('sw')">STOP WATCH</button>
           </div>
         </div>
@@ -2138,7 +2138,7 @@ function setRnp(val) {
   if (el) el.classList.add('active');
 }
 // 스톱워치 ↔ 현재 시각 통합 위젯 (TIME/STOP WATCH 버튼으로 전환)
-let _swMode = 'sw';   // 'sw' | 'clock'
+let _swMode = 'clock';   // 'sw' | 'clock' — 기본은 현재 시각 표시
 function swSetMode(m) {
   _swMode = m;
   document.getElementById('sw-btns-sw').style.display    = m === 'sw' ? 'flex' : 'none';
@@ -2163,6 +2163,7 @@ function clockRender() {
     `${p2(d.getHours())}:${p2(d.getMinutes())}:${p2(d.getSeconds())}`;
 }
 setInterval(clockRender, 1000);
+clockRender();   // 기본 모드가 시계이므로 즉시 1회 표시
 
 // ══════════════════════════════════════════════════════
 // MATH
