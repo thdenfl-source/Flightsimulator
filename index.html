@@ -1191,10 +1191,111 @@ body.solo-mode .solo-panel-visible {
 .ship-clr { background: radial-gradient(circle at 35% 35%, #3a1010, #1a0000) !important; border-color: #772222 !important; font-size: 9px !important; }
 .ship-ent { background: radial-gradient(circle at 35% 35%, #0d1f4a, #060e20) !important; border-color: #3355bb !important; color: #88aaff !important; font-size: 9px !important; }
 .sim-btn.ship-active { background: #1a3050; border-color: #7ab8f5; color: #7ab8f5; }
+
+/* ── 시작 안내 오버레이 ── */
+#help-overlay {
+  position: fixed; inset: 0; z-index: 5000;
+  background: rgba(0,0,0,0.72);
+  display: flex; align-items: center; justify-content: center;
+}
+#help-panel {
+  width: min(560px, 92vw); max-height: 86vh;
+  background: #0c1118; border: 1px solid #3a6ea5; border-radius: 10px;
+  display: flex; flex-direction: column; overflow: hidden;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.8);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+#help-head {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 10px 14px; background: #101a28; border-bottom: 1px solid #24405e;
+  color: #7ab8f5; font-size: 14px; font-weight: bold; letter-spacing: 0.5px;
+}
+#help-head button {
+  background: none; border: none; color: #ff6655; font-size: 16px; font-weight: bold;
+  cursor: pointer; padding: 0 4px;
+}
+#help-body {
+  padding: 10px 16px; overflow-y: auto; -webkit-overflow-scrolling: touch;
+  color: #ccc; font-size: 12px; line-height: 1.55;
+}
+#help-body h3 { color: #8ac6ff; font-size: 12px; margin: 10px 0 4px; letter-spacing: 0.5px; }
+#help-body ul { margin: 0 0 4px; padding-left: 18px; }
+#help-body li { margin-bottom: 2px; }
+#help-body b { color: #ffd54f; font-weight: bold; }
+#help-body table {
+  width: 100%; border-collapse: collapse; margin: 4px 0; font-size: 11px;
+}
+#help-body td { border: 1px solid #223349; padding: 3px 7px; }
+#help-body td b { color: #7fffb0; }
+#help-body .help-note { color: #778; font-size: 10px; margin-top: 4px; }
+#help-foot {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 9px 14px; background: #101a28; border-top: 1px solid #24405e;
+}
+#help-foot label { color: #99a; font-size: 11px; display: flex; align-items: center; gap: 6px; cursor: pointer; }
+#help-foot button {
+  background: #14324f; border: 1px solid #4a90d9; color: #8ac6ff;
+  font-size: 12px; font-weight: bold; padding: 7px 20px; border-radius: 5px; cursor: pointer;
+}
+#help-foot button:active { background: #1e4a75; color: #fff; }
 </style>
 </head>
 <body>
 <!-- ── 단일화면 선택 바 (기본 숨김) ── -->
+<!-- ── 시작 안내(사용법/키보드) 오버레이 ── -->
+<div id="help-overlay" style="display:none;">
+  <div id="help-panel">
+    <div id="help-head">
+      <span>✈ VFR Flight Simulator 사용 안내</span>
+      <button onclick="closeHelp()" title="닫기">✕</button>
+    </div>
+    <div id="help-body">
+      <h3>1. 화면 구성</h3>
+      <ul>
+        <li>좌측 창: <b>PFD / MAP</b>, 우측 창: <b>PFD / MAP / CDU</b> 탭으로 전환. 양쪽에 같은 창을 선택하면 반대쪽이 자동으로 바뀝니다.</li>
+        <li><b>Full Screen</b>: 한 화면 전체 보기 — 상단 바에서 PFD/MAP/PLAN/CDU 전환, 우측 <b>✕</b>로 분할 복귀.</li>
+        <li>가운데 경계선의 <b>◀▶ 그립</b>을 드래그하면 분할 비율 조절(자동 저장). <b>⟳</b>은 새로고침.</li>
+      </ul>
+      <h3>2. 기본 비행 (시뮬레이션)</h3>
+      <ul>
+        <li>MAP 하단 <b>▶ FLY</b>로 비행 시작(다시 누르면 PAUSE), <b>RESET</b> 초기화, <b>CLR</b> 비행계획 삭제.</li>
+        <li>PFD 하단 FCP에서 <b>IAS·HDG·CRS·VS·ALT·CRHT</b>를 ▲▼/◀▶로 조절.</li>
+        <li><b>IAS/HDG/CRS 라벨 버튼</b>을 누르면 현재 값으로 즉시 동기화(CRS는 NAV 소스로 Direct-To).</li>
+      </ul>
+      <h3>3. MAP 창</h3>
+      <ul>
+        <li>상단: GPS(실기기 위치)·WX(METAR)·＋(웨이포인트)·RAIN·WIND·NOTAM·FIX·AWY·공역.</li>
+        <li>하단: FLY/RESET/CLR/SHIP/<b>T-CUT</b>(전방 20NM 지형 단면)/N↑/1인칭/MAP(위성)/3D.</li>
+        <li>우하단 <b>REC</b>(항적 기록, GPX/KML) · <b>FDR</b>(항적 리플레이).</li>
+      </ul>
+      <h3>4. CDU / 차트 / 비행계획</h3>
+      <ul>
+        <li>CDU 홈에서 MAP·FPL·PERF·Avionics·CHARTS 이동, 하단 <b>Full</b>은 전체화면.</li>
+        <li><b>CHARTS</b>: AIM eAIP 접속, AIRAC ZIP/폴더 가져오기, 공항별 차트 열람.</li>
+        <li><b>FPL</b>: 웨이포인트 추가·삭제, 하단 <b>Home</b>으로 CDU 홈 복귀.</li>
+      </ul>
+      <h3>5. GPS 모드 (실비행)</h3>
+      <ul>
+        <li>GPS 버튼을 켜면 실제 위치·속도·고도로 계기가 움직입니다.</li>
+        <li>헤딩: <b>10kt 미만은 기기 나침반</b>, 10kt 이상은 항적 기준(첫 실행 시 나침반 권한 허용).</li>
+      </ul>
+      <h3>6. 키보드 조작</h3>
+      <table>
+        <tr><td><b>1 / 2</b></td><td>IAS −1 / +1 kt</td><td><b>- / =</b></td><td>CRHT −10 / +10 ft</td></tr>
+        <tr><td><b>3 / 4</b></td><td>HDG 좌 / 우 1°</td><td><b>Space</b></td><td>FLY / PAUSE</td></tr>
+        <tr><td><b>5 / 6</b></td><td>CRS 좌 / 우 1°</td><td><b>Enter</b></td><td>Force Trim Release</td></tr>
+        <tr><td><b>7 / 8</b></td><td>VS −10 / +10 fpm</td><td><b>우측 Shift</b></td><td>GSPD 켜기/끄기</td></tr>
+        <tr><td><b>9 / 0</b></td><td>ALT −10 / +10 ft</td><td><b>← → ↑ ↓</b></td><td>트림 좌/우/전/후</td></tr>
+      </table>
+      <div class="help-note">※ 숫자·트림 키는 누르고 있으면 연속 조작됩니다. 입력창 타이핑 중에는 동작하지 않습니다.</div>
+    </div>
+    <div id="help-foot">
+      <label><input type="checkbox" id="help-dontshow"> 다시 보지 않기</label>
+      <button onclick="closeHelp()">시작하기</button>
+    </div>
+  </div>
+</div>
+
 <div id="solo-bar" style="display:none;">
   <button onclick="setSolo('pfd')">PFD</button>
   <button onclick="setSolo('map')">MAP</button>
@@ -6612,8 +6713,22 @@ function addAppWps() {
   fpGo('LIST');
 }
 
+// ── 시작 안내 오버레이 ──
+function closeHelp() {
+  if (document.getElementById('help-dontshow')?.checked) {
+    try { localStorage.setItem('helpDismissed', '1'); } catch(e) {}
+  }
+  document.getElementById('help-overlay').style.display = 'none';
+}
+function showHelpOnLaunch() {
+  let dismissed = false;
+  try { dismissed = localStorage.getItem('helpDismissed') === '1'; } catch(e) {}
+  if (!dismissed) document.getElementById('help-overlay').style.display = 'flex';
+}
+
 function init(){
   resizePFD();
+  showHelpOnLaunch();
   fpRender();
   renderNavBox();
   updateAcOnMap();
