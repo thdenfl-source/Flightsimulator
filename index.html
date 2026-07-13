@@ -215,13 +215,10 @@ html, body {
 }
 .sw-btn:active { background: #264426; }
 .sw-btn.run { border-color: #00ff88; color: #00ff88; }
-/* 현재 시각(스톱워치 오른쪽) */
-.clock-group { border-color: #2a3a4a; }
-#clock-display { color: #7ab8f5; min-width: 80px; }
-.clock-lbl {
-  color: #557; font-size: 9px; font-weight: bold; letter-spacing: 1px;
-  font-family: 'Helvetica Neue', Arial, sans-serif; padding: 3px 0 4px;
-}
+/* 스톱워치 ↔ 현재 시각 전환 버튼 */
+.sw-btn-time { border-color: #2a4a6a; color: #7ab8f5; }
+.sw-btn-time:active { background: #1a2c44; }
+.sw-display.clock-mode { color: #7ab8f5; }
 
 /* ── BRG Toggle ── */
 .brg-tog-group { display: flex; flex-direction: column; align-items: center; gap: 2px; }
@@ -1272,15 +1269,14 @@ body.solo-mode .solo-panel-visible {
 
         <div class="sw-group">
           <div class="sw-display" id="sw-display">00:00.0</div>
-          <div class="sw-btns">
+          <div class="sw-btns" id="sw-btns-sw">
             <button class="sw-btn" id="sw-toggle" onclick="swToggle()">GO</button>
             <button class="sw-btn" onclick="swReset()">RESET</button>
+            <button class="sw-btn sw-btn-time" onclick="swSetMode('clock')">TIME</button>
           </div>
-        </div>
-
-        <div class="sw-group clock-group">
-          <div class="sw-display" id="clock-display">--:--:--</div>
-          <div class="clock-lbl">LOCAL</div>
+          <div class="sw-btns" id="sw-btns-clock" style="display:none;">
+            <button class="sw-btn sw-btn-time" onclick="swSetMode('sw')">STOP WATCH</button>
+          </div>
         </div>
 
       </div><!-- end ctrl-sub-row 1 -->
@@ -2141,7 +2137,17 @@ function setRnp(val) {
   const el = document.getElementById(idMap[val]);
   if (el) el.classList.add('active');
 }
+// 스톱워치 ↔ 현재 시각 통합 위젯 (TIME/STOP WATCH 버튼으로 전환)
+let _swMode = 'sw';   // 'sw' | 'clock'
+function swSetMode(m) {
+  _swMode = m;
+  document.getElementById('sw-btns-sw').style.display    = m === 'sw' ? 'flex' : 'none';
+  document.getElementById('sw-btns-clock').style.display = m === 'clock' ? 'flex' : 'none';
+  document.getElementById('sw-display').classList.toggle('clock-mode', m === 'clock');
+  m === 'clock' ? clockRender() : swRender();
+}
 function swRender() {
+  if (_swMode !== 'sw') return;   // 시계 모드에서는 스톱워치 표시 생략(카운트는 내부 유지)
   const ms  = swElapsedMs();
   const m   = Math.floor(ms / 60000);
   const s   = Math.floor((ms % 60000) / 1000);
@@ -2149,16 +2155,14 @@ function swRender() {
   document.getElementById('sw-display').textContent =
     String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0') + '.' + t;
 }
-
-// 현재 시각(로컬) — 스톱워치 오른쪽, 1초 주기 갱신
+// 현재 시각(로컬) — 1초 주기 갱신(시계 모드일 때만 표시)
 function clockRender() {
-  const el = document.getElementById('clock-display');
-  if (!el) return;
+  if (_swMode !== 'clock') return;
   const d = new Date(), p2 = n => String(n).padStart(2, '0');
-  el.textContent = `${p2(d.getHours())}:${p2(d.getMinutes())}:${p2(d.getSeconds())}`;
+  document.getElementById('sw-display').textContent =
+    `${p2(d.getHours())}:${p2(d.getMinutes())}:${p2(d.getSeconds())}`;
 }
 setInterval(clockRender, 1000);
-clockRender();
 
 // ══════════════════════════════════════════════════════
 // MATH
