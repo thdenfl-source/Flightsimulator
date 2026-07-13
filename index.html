@@ -5036,6 +5036,11 @@ document.addEventListener('keydown', e => {
   const t = e.target;
   if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
   if (e.key === 'Enter') { e.preventDefault(); forceTrim(); return; }
+  if (e.key === ' ' || e.code === 'Space') {
+    e.preventDefault();                        // 페이지 스크롤 방지
+    if (!e.repeat) toggleSim();                // FLY ⇄ PAUSE
+    return;
+  }
   if (e.key === 'Shift' && e.location === KeyboardEvent.DOM_KEY_LOCATION_RIGHT && !e.repeat) {
     e.preventDefault(); toggleGspd(); return;
   }
