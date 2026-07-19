@@ -4092,7 +4092,8 @@ function startGPS() {
   const status = document.getElementById('gps-status');
   if (status) { status.style.display = 'block'; status.innerHTML = '📡 위치 확인 중…'; }
 
-  const opts = { enableHighAccuracy: true, maximumAge: 1000, timeout: 20000 };
+  // maximumAge 3초: OS가 최근 위치를 재사용하게 해 GPS 칩 부하·발열 완화
+  const opts = { enableHighAccuracy: true, maximumAge: 3000, timeout: 20000 };
   const onPos = pos => {
     if (!gpsMode) return;          // 그 사이 GPS를 껐다면 무시
     lastGpsMs = Date.now();
@@ -4171,6 +4172,18 @@ function stopDevOrientation() {
   if (_devHdgBound) { window.removeEventListener('deviceorientation', _onDevOrientation); _devHdgBound = false; }
   _devHdg = null;
 }
+// 발열 저감: 항적 헤딩 구간(≥12kt)에서는 나침반 이벤트 일시 해제,
+// 저속(<8kt) 복귀 시 재바인딩(히스테리시스로 경계 떨림 방지)
+function _devHdgAuto(spdKt) {
+  if (!gpsMode || spdKt === null) return;
+  if (spdKt >= 12 && _devHdgBound) {
+    window.removeEventListener('deviceorientation', _onDevOrientation);
+    _devHdgBound = false; _devHdg = null;
+  } else if (spdKt < 8 && !_devHdgBound) {
+    window.addEventListener('deviceorientation', _onDevOrientation);
+    _devHdgBound = true;
+  }
+}
 
 function applyGPS(pos) {
   const c = pos.coords;
@@ -4189,6 +4202,7 @@ function applyGPS(pos) {
     S.spd = Math.max(0, Math.round(spdKt));
     S.pit = pitchFromSpd(S.spd);
   }
+  _devHdgAuto(spdKt);   // 속도에 따라 나침반 이벤트 자동 on/off(발열 저감)
 
   // ── 방위각 ──
   // 10kt 미만: 기기 방향(나침반) 사용 / 10kt 이상: 항적(track) 기준
@@ -4482,7 +4496,13 @@ function updateTerrainCut() {
     g.fillText('지형 데이터 로딩 중…', W / 2, H / 2); g.textAlign = 'left';
   }
 }
-setInterval(() => { try { updateTerrainCut(); } catch(e) {} }, 1000);
+// 발열 저감: GPS 모드에서는 지형 단면을 4초 주기로 완화(시뮬은 1초 유지)
+let _tcTick = 0;
+setInterval(() => {
+  _tcTick++;
+  if (gpsMode && _tcTick % 4 !== 0) return;
+  try { updateTerrainCut(); } catch(e) {}
+}, 1000);
 
 // T-CUT 버튼: vertical situation(지형 단면) 패널 표시/숨김 토글.
 // 지도 높이가 80%↔100%로 바뀌므로 Leaflet/3D 리사이즈 필수 —
@@ -5259,6 +5279,7 @@ function resetSim(){
 }
 
 let _simLastTick = 0;   // 렌더 루프 생존 감시용
+let _pfdDrawLast = 0;   // GPS 모드 PFD 10fps 제한용
 function simStep(ts){
   _simLastTick = performance.now();
   try {
@@ -5447,18 +5468,25 @@ function simStep(ts){
   S.lastT=ts;
   updateHoverBtns();
   swRender();
-  // 자가치유: PFD가 보이는데 캔버스 크기가 표시영역과 어긋나면 재조정.
-  // (풀스크린→분할 복귀 시 레이아웃이 늦게 잡혀 캔버스가 0크기로 남아
-  //  PFD가 검게 되는 경우를 매 프레임 감지해 자동 복구)
-  {
-    // (PFD가 좌/우 어느 패널에 있든 clientHeight>0 이면 표시 중)
-    const _pw = document.getElementById('pfd-wrap');
-    if (_pw && _pw.clientHeight > 0 &&
-        (cvs.width !== _pw.clientWidth || cvs.height !== _pw.clientHeight)) {
-      resizePFD();
+  // 발열 저감: GPS 모드(데이터 3초 주기)에서는 PFD를 10fps로 제한.
+  // 시뮬 비행·FDR 리플레이는 기존 60fps 유지.
+  let _lowFps = false;
+  if (gpsMode) { try { _lowFps = !_fdrPlaying; } catch(e) { _lowFps = true; } }
+  if (!_lowFps || performance.now() - _pfdDrawLast >= 100) {
+    _pfdDrawLast = performance.now();
+    // 자가치유: PFD가 보이는데 캔버스 크기가 표시영역과 어긋나면 재조정.
+    // (풀스크린→분할 복귀 시 레이아웃이 늦게 잡혀 캔버스가 0크기로 남아
+    //  PFD가 검게 되는 경우를 감지해 자동 복구)
+    {
+      // (PFD가 좌/우 어느 패널에 있든 clientHeight>0 이면 표시 중)
+      const _pw = document.getElementById('pfd-wrap');
+      if (_pw && _pw.clientHeight > 0 &&
+          (cvs.width !== _pw.clientWidth || cvs.height !== _pw.clientHeight)) {
+        resizePFD();
+      }
     }
+    drawPFD();
   }
-  drawPFD();
   } catch(e) {
     // 한 프레임의 예외로 rAF 체인이 끊겨 PFD가 검게 멈추는 것을 방지
     console.warn('simStep error:', e);
