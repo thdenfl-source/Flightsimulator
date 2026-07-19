@@ -696,6 +696,27 @@ body.solo-mode .solo-panel-visible {
   color: #ccc; font-size: 10px; cursor: pointer; user-select: none;
 }
 .aspc-item input { accent-color: #ba68c8; margin: 0; }
+/* ── 경보 INHIBIT 메뉴 ── */
+#inhib-menu {
+  display: none;
+  position: absolute; bottom: calc(20% + 40px); left: 8px; z-index: 1250;
+  background: rgba(8,8,14,0.95); border: 1px solid #ffaa00; border-radius: 6px;
+  padding: 5px; flex-direction: column; gap: 4px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+#map-wrap.tcut-off #inhib-menu { bottom: 40px; }
+#inhib-menu.open { display: flex; }
+#inhib-menu button {
+  background: rgba(20,20,20,0.9); border: 1px solid #444; border-radius: 4px;
+  color: #cfe; font-size: 11px; font-weight: bold; padding: 7px 12px;
+  cursor: pointer; white-space: nowrap; text-align: left;
+  display: flex; justify-content: space-between; gap: 12px;
+}
+#inhib-menu button span { color: #00e07a; }
+#inhib-menu button.inhibited { border-color: #ffaa00; }
+#inhib-menu button.inhibited span { color: #ffaa00; }
+#inhib-btn.inhib-active { background: rgba(60,45,0,0.92); border-color: #ffaa00; color: #ffcc44; }
+
 /* ── 공역 접근/진입 경보 배너 ── */
 #aspc-alert {
   display: none;
@@ -1601,6 +1622,11 @@ body.solo-mode .solo-panel-visible {
       </div>
 
       <div id="gps-status"></div>
+      <div id="inhib-menu">
+        <div style="color:#889;font-size:9px;font-weight:bold;letter-spacing:1px;padding:2px 4px;">경보 INHIBIT</div>
+        <button id="inhib-aspc-btn" onclick="toggleInhib('aspc')">공역경보 <span>ON</span></button>
+        <button id="inhib-taws-btn" onclick="toggleInhib('taws')">HTAWS <span>ON</span></button>
+      </div>
       <div id="aspc-alert"></div>
       <div id="terrain-alert">⚠ TERRAIN</div>
       <div id="terrain-cut"><canvas id="tcut-canvas"></canvas><div id="tcut-title">TERRAIN — 전방 20NM</div></div>
@@ -1610,6 +1636,7 @@ body.solo-mode .solo-panel-visible {
         <button class="sim-btn clr" onclick="clearFP()">✕ CLR</button>
         <button class="sim-btn" id="map-ship-btn" onclick="toggleShip()">⛵ SHIP</button>
         <button class="sim-btn" id="map-tcut-btn" onclick="toggleTcut()">⛰ T-CUT</button>
+        <button class="sim-btn" id="inhib-btn" onclick="toggleInhibMenu()">INHIB</button>
         <button class="sim-btn" id="orient-btn" onclick="toggleMapOrient()">N↑</button>
         <button class="sim-btn" id="follow-btn" onclick="toggleFollow()">1인칭</button>
         <button class="sim-btn sat" id="layer-btn" onclick="toggleLayer()">MAP</button>
@@ -4529,6 +4556,12 @@ function updateTerrainCut() {
   // 간이 TAWS: 전방 10NM 이내(샘플 절반)에 여유고도 100ft 미만 지형이 있으면 경고
   {
     let danger = false;
+    // INHIBIT 시 경고 억제 (inhibTaws는 뒤에서 선언되므로 방어적 접근)
+    let _inh = false; try { _inh = inhibTaws; } catch(e) {}
+    if (_inh) {
+      const ta0 = document.getElementById('terrain-alert');
+      if (ta0) ta0.classList.remove('on');
+    } else {
     for (let i = 0; i < N / 2; i++) {
       if (acFt - Math.max(elevs[i], elevs[i + 1]) < 100 && Math.max(elevs[i], elevs[i+1]) > 0) { danger = true; break; }
     }
@@ -4537,6 +4570,7 @@ function updateTerrainCut() {
       const was = ta.classList.contains('on');
       ta.classList.toggle('on', danger);
       if (danger && !was) { try { navigator.vibrate && navigator.vibrate([300,100,300]); } catch(e) {} }
+    }
     }
   }
 }
@@ -8886,6 +8920,40 @@ document.addEventListener('visibilitychange', () => {
 const ASPC_WARN_NM = 3;          // 접근 경보 거리
 let _aspcAlertState = {};        // id → 'in' | 'near' | undefined
 
+// ── 경보 INHIBIT (공역경보 / HTAWS) ──
+let inhibAspc = false, inhibTaws = false;
+try {
+  inhibAspc = localStorage.getItem('inhibAspc') === '1';
+  inhibTaws = localStorage.getItem('inhibTaws') === '1';
+} catch(e) {}
+function toggleInhibMenu(force) {
+  const m = document.getElementById('inhib-menu');
+  if (force === false) m.classList.remove('open');
+  else m.classList.toggle('open');
+  _inhibRender();
+}
+function toggleInhib(which) {
+  if (which === 'aspc') {
+    inhibAspc = !inhibAspc;
+    try { localStorage.setItem('inhibAspc', inhibAspc ? '1' : '0'); } catch(e) {}
+    if (inhibAspc) { const el = document.getElementById('aspc-alert'); if (el) el.className = ''; _aspcAlertState = {}; }
+  } else {
+    inhibTaws = !inhibTaws;
+    try { localStorage.setItem('inhibTaws', inhibTaws ? '1' : '0'); } catch(e) {}
+    if (inhibTaws) { const ta = document.getElementById('terrain-alert'); if (ta) ta.classList.remove('on'); }
+  }
+  _inhibRender();
+}
+function _inhibRender() {
+  const a = document.getElementById('inhib-aspc-btn');
+  const t = document.getElementById('inhib-taws-btn');
+  if (a) { a.classList.toggle('inhibited', inhibAspc); a.querySelector('span').textContent = inhibAspc ? 'INHIBIT' : 'ON'; }
+  if (t) { t.classList.toggle('inhibited', inhibTaws); t.querySelector('span').textContent = inhibTaws ? 'INHIBIT' : 'ON'; }
+  const b = document.getElementById('inhib-btn');
+  if (b) b.classList.toggle('inhib-active', inhibAspc || inhibTaws);
+}
+setTimeout(_inhibRender, 100);   // 초기 상태 반영
+
 function _aspcPointIn(a, lat, lon) {
   if (a.circle) return distance(lat, lon, a.circle.c[0], a.circle.c[1]) <= a.circle.r;
   // ray casting
@@ -8919,7 +8987,7 @@ function _aspcDistNM(a, lat, lon) {
 function _aspcAlertCheck() {
   const el = document.getElementById('aspc-alert');
   if (!el) return;
-  if (!(gpsMode || S.running)) { el.className = ''; _aspcAlertState = {}; return; }
+  if (inhibAspc || !(gpsMode || S.running)) { el.className = ''; _aspcAlertState = {}; return; }
   let insideA = null, nearA = null, nearD = ASPC_WARN_NM;
   AIRSPACE_DB.forEach(a => {
     if (!aspcOn[a.id]) return;
