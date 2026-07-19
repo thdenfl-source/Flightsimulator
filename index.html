@@ -8692,15 +8692,29 @@ switchMode('HOME');
 let _trkRec = false;
 let _trkPts = [];        // {lat, lon, altM, t(ms)}
 let _trkTimer = null;
+const TRK_BAK_KEY = 'trkRecBackup';   // 새로고침/크래시 대비 진행분 백업
+
+// 진행 중 항적을 localStorage에 백업(간이 배열 포맷으로 용량 절약)
+function _trkSaveBackup() {
+  try {
+    localStorage.setItem(TRK_BAK_KEY, JSON.stringify(
+      _trkPts.map(p => [ +p.lat.toFixed(6), +p.lon.toFixed(6), Math.round(p.altM), p.t ])
+    ));
+  } catch(e) {}
+}
+function _trkClearBackup() { try { localStorage.removeItem(TRK_BAK_KEY); } catch(e) {} }
+function _trkStartTimer() {
+  document.getElementById('rec-btn').classList.add('active');
+  document.getElementById('rec-btn').textContent = '● REC';
+  _trkCapture();
+  _trkTimer = setInterval(_trkCapture, 2000);   // 2초 간격 기록
+}
 
 function toggleTrackRec() {
   if (_trkRec) { _trkStop(); return; }
   _trkRec = true;
   _trkPts = [];
-  document.getElementById('rec-btn').classList.add('active');
-  document.getElementById('rec-btn').textContent = '● REC';
-  _trkCapture();
-  _trkTimer = setInterval(_trkCapture, 2000);   // 2초 간격 기록
+  _trkStartTimer();
 }
 function _trkCapture() {
   if (typeof S === 'undefined' || S.lat == null) return;
@@ -8708,12 +8722,20 @@ function _trkCapture() {
   // 정지 상태 중복 기록 방지(약 5m 미만 이동 시 60초에 1점만)
   if (last && distance(last.lat, last.lon, S.lat, S.lon) < 0.0027 && Date.now() - last.t < 60000) return;
   _trkPts.push({ lat: S.lat, lon: S.lon, altM: (S.alt || 0) * 0.3048, t: Date.now() });
+  // 10초(5점)마다 백업 → 새로고침·크래시에도 진행분 보존
+  if (_trkPts.length % 5 === 0) _trkSaveBackup();
 }
+// 화면 이탈/새로고침 직전 마지막 상태 백업
+window.addEventListener('pagehide', () => { if (_trkRec) _trkSaveBackup(); });
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden' && _trkRec) _trkSaveBackup();
+});
 function _trkStop() {
   _trkRec = false;
   if (_trkTimer) { clearInterval(_trkTimer); _trkTimer = null; }
   const btn = document.getElementById('rec-btn');
   btn.classList.remove('active'); btn.textContent = 'REC';
+  _trkClearBackup();   // 정상 종료 → 백업 불필요
   if (_trkPts.length < 2) { alert('기록된 항적이 없습니다 (2점 미만).'); return; }
   const asGpx = confirm(`항적 ${_trkPts.length}점 기록 완료.\n\n확인 = GPX로 저장\n취소 = KML로 저장`);
   const d = new Date(_trkPts[0].t);
@@ -8734,6 +8756,28 @@ function _trkToKml() {
   const coords = _trkPts.map(p => `<gx:coord>${p.lon.toFixed(6)} ${p.lat.toFixed(6)} ${p.altM.toFixed(1)}</gx:coord>`).join('\n');
   return `<?xml version="1.0" encoding="UTF-8"?>\n<kml xmlns="http://www.opengis.net/kml/2.2" xmlns:gx="http://www.google.com/kml/ext/2.2">\n<Document><Placemark><name>Flight Track</name>\n<gx:Track>\n${whens}\n${coords}\n</gx:Track>\n</Placemark></Document>\n</kml>`;
 }
+// 시작 시 미종료 백업이 있으면 복구 제안(새로고침·크래시로 끊긴 녹화)
+setTimeout(() => {
+  let bak = null;
+  try { bak = JSON.parse(localStorage.getItem(TRK_BAK_KEY) || 'null'); } catch(e) {}
+  if (!Array.isArray(bak) || bak.length < 2) return;
+  const pts = bak.map(a => ({ lat: a[0], lon: a[1], altM: a[2], t: a[3] }));
+  const from = new Date(pts[0].t), p2 = n => String(n).padStart(2, '0');
+  const resume = confirm(
+    `이전 세션에서 녹화 중이던 항적 ${pts.length}점이 복구되었습니다.\n` +
+    `(시작: ${p2(from.getHours())}:${p2(from.getMinutes())})\n\n` +
+    `확인 = 이어서 녹화 계속\n취소 = 지금 파일로 저장하고 종료`
+  );
+  _trkPts = pts;
+  if (resume) {
+    _trkRec = true;
+    _trkStartTimer();
+  } else {
+    _trkRec = false;
+    _trkStop();   // 저장 다이얼로그(GPX/KML) → 백업 정리
+  }
+}, 1500);
+
 function _trkDownload(name, text, mime) {
   const blob = new Blob([text], { type: mime });
   const a = document.createElement('a');
