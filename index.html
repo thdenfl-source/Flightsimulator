@@ -696,6 +696,31 @@ body.solo-mode .solo-panel-visible {
   color: #ccc; font-size: 10px; cursor: pointer; user-select: none;
 }
 .aspc-item input { accent-color: #ba68c8; margin: 0; }
+/* ── 공역 접근/진입 경보 배너 ── */
+#aspc-alert {
+  display: none;
+  position: absolute; top: 46px; left: 50%; transform: translateX(-50%);
+  z-index: 1300; max-width: 86%;
+  padding: 6px 14px; border-radius: 6px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-size: 12px; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  pointer-events: none;
+}
+#aspc-alert.near { display: block; background: rgba(60,45,0,0.92); border: 1px solid #ffaa00; color: #ffcc44; }
+#aspc-alert.inside { display: block; background: rgba(70,0,0,0.94); border: 1px solid #ff3322; color: #ff7766; animation: aspcBlink 1s step-end infinite; }
+@keyframes aspcBlink { 50% { opacity: 0.45; } }
+/* ── 지형 접근 경고(T-CUT 기반) ── */
+#terrain-alert {
+  display: none;
+  position: absolute; top: 78px; left: 50%; transform: translateX(-50%);
+  z-index: 1300; padding: 5px 16px; border-radius: 6px;
+  background: rgba(70,0,0,0.94); border: 1px solid #ff3322; color: #ff7766;
+  font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 13px; font-weight: bold;
+  letter-spacing: 2px; pointer-events: none;
+  animation: aspcBlink 1s step-end infinite;
+}
+#terrain-alert.on { display: block; }
+
 /* GPS 상태창: 하단 좌표창(#center-coord, left:10px) 오른쪽에 나란히 배치 */
 #gps-status {
   position: absolute; bottom: calc(20% + 44px); left: 235px; z-index: 1100;
@@ -1569,9 +1594,15 @@ body.solo-mode .solo-panel-visible {
           <input type="range" id="fdr-slider" min="0" value="0" oninput="fdrSeek(this.value)">
           <div id="fdr-time-label" style="text-align:right;color:#888;font-size:9px;margin-top:2px;"></div>
         </div>
+        <div style="margin-top:7px;border-top:1px solid #2a4a7a;padding-top:5px;">
+          <div style="color:#7ab8f5;font-size:10px;font-weight:bold;letter-spacing:1px;">📒 로그북 (REC 항적)</div>
+          <div id="logbook-list" style="max-height:130px;overflow-y:auto;-webkit-overflow-scrolling:touch;"></div>
+        </div>
       </div>
 
       <div id="gps-status"></div>
+      <div id="aspc-alert"></div>
+      <div id="terrain-alert">⚠ TERRAIN</div>
       <div id="terrain-cut"><canvas id="tcut-canvas"></canvas><div id="tcut-title">TERRAIN — 전방 20NM</div></div>
       <div id="map-sim-bar">
         <button class="sim-btn" id="map-fly-btn" onclick="toggleSim()">▶ FLY</button>
@@ -4495,6 +4526,19 @@ function updateTerrainCut() {
     g.fillStyle = '#889'; g.textAlign = 'center';
     g.fillText('지형 데이터 로딩 중…', W / 2, H / 2); g.textAlign = 'left';
   }
+  // 간이 TAWS: 전방 10NM 이내(샘플 절반)에 여유고도 100ft 미만 지형이 있으면 경고
+  {
+    let danger = false;
+    for (let i = 0; i < N / 2; i++) {
+      if (acFt - Math.max(elevs[i], elevs[i + 1]) < 100 && Math.max(elevs[i], elevs[i+1]) > 0) { danger = true; break; }
+    }
+    const ta = document.getElementById('terrain-alert');
+    if (ta) {
+      const was = ta.classList.contains('on');
+      ta.classList.toggle('on', danger);
+      if (danger && !was) { try { navigator.vibrate && navigator.vibrate([300,100,300]); } catch(e) {} }
+    }
+  }
 }
 // 발열 저감: GPS 모드에서는 지형 단면을 4초 주기로 완화(시뮬은 1초 유지)
 let _tcTick = 0;
@@ -4829,10 +4873,26 @@ let fpIfrPhase = 'dep';
 
 function fpGo(mode) { fpMode = mode; if(mode==='IDENT'||mode==='LAT'||mode==='LON') fpInputBuf=''; fpRender(); }
 
+// FPL 자동 저장 — 새로고침해도 비행계획 유지
+function _fplPersist() {
+  try { localStorage.setItem('fplSave', JSON.stringify({ wps: S.wps, awp: S.awp })); } catch(e) {}
+}
+function _fplRestore() {
+  try {
+    const s = JSON.parse(localStorage.getItem('fplSave') || 'null');
+    if (s && Array.isArray(s.wps) && s.wps.length) {
+      S.wps = s.wps;
+      S.awp = (typeof s.awp === 'number' && s.awp < s.wps.length) ? s.awp : -1;
+      updateWpMarkers(); updateNav();
+    }
+  } catch(e) {}
+}
+
 function fpRender() {
   const area   = document.getElementById('fp-content-area');
   const title  = document.getElementById('fp-mode-title');
   const footer = document.getElementById('fp-footer-nav');
+  _fplPersist();   // FPL 변경 경로마다 호출되므로 여기서 자동 저장
   if (!area) return;
   switch(fpMode) {
     case 'LIST':  fpRenderList(area, title, footer);  break;
@@ -6763,6 +6823,7 @@ function showHelpOnLaunch() {
 function init(){
   resizePFD();
   showHelpOnLaunch();
+  _fplRestore();   // 저장된 비행계획 복원(새로고침 대비)
   fpRender();
   renderNavBox();
   updateAcOnMap();
@@ -8737,23 +8798,32 @@ function _trkStop() {
   btn.classList.remove('active'); btn.textContent = 'REC';
   _trkClearBackup();   // 정상 종료 → 백업 불필요
   if (_trkPts.length < 2) { alert('기록된 항적이 없습니다 (2점 미만).'); return; }
-  const asGpx = confirm(`항적 ${_trkPts.length}점 기록 완료.\n\n확인 = GPX로 저장\n취소 = KML로 저장`);
-  const d = new Date(_trkPts[0].t);
-  const p2 = n => String(n).padStart(2, '0');
-  const fname = `track_${d.getFullYear()}${p2(d.getMonth()+1)}${p2(d.getDate())}_${p2(d.getHours())}${p2(d.getMinutes())}`;
-  if (asGpx) _trkDownload(fname + '.gpx', _trkToGpx(), 'application/gpx+xml');
-  else       _trkDownload(fname + '.kml', _trkToKml(), 'application/vnd.google-earth.kml+xml');
+  // 로그북(IndexedDB)에 자동 저장 → 나중에 FDR 패널에서 내보내기/삭제 가능
+  const rec = {
+    id: Date.now(), t0: _trkPts[0].t, t1: _trkPts[_trkPts.length-1].t,
+    n: _trkPts.length, distNM: _logTrackDist(_trkPts), pts: _trkPts
+  };
+  _logPut(rec).catch(e => console.warn('로그북 저장 실패:', e.message));
+  const asGpx = confirm(
+    `항적 ${_trkPts.length}점 · 로그북 저장 완료.\n\n` +
+    `확인 = 지금 GPX로 내보내기\n취소 = 나중에 (FDR 패널 → 로그북에서 GPX/KML 내보내기)`);
+  if (asGpx) {
+    const d = new Date(_trkPts[0].t);
+    const p2 = n => String(n).padStart(2, '0');
+    const fname = `track_${d.getFullYear()}${p2(d.getMonth()+1)}${p2(d.getDate())}_${p2(d.getHours())}${p2(d.getMinutes())}`;
+    _trkDownload(fname + '.gpx', _trkToGpx(_trkPts), 'application/gpx+xml');
+  }
 }
-function _trkToGpx() {
-  const pts = _trkPts.map(p =>
+function _trkToGpx(trkPts = _trkPts) {
+  const pts = trkPts.map(p =>
     `<trkpt lat="${p.lat.toFixed(6)}" lon="${p.lon.toFixed(6)}"><ele>${p.altM.toFixed(1)}</ele><time>${new Date(p.t).toISOString()}</time></trkpt>`
   ).join('\n');
   return `<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="FlightSimulator" xmlns="http://www.topografix.com/GPX/1/1">\n<trk><name>Flight Track</name><trkseg>\n${pts}\n</trkseg></trk>\n</gpx>`;
 }
-function _trkToKml() {
+function _trkToKml(trkPts = _trkPts) {
   // gx:Track(시간 포함) — 앱 FDR로 그대로 리플레이 가능
-  const whens  = _trkPts.map(p => `<when>${new Date(p.t).toISOString()}</when>`).join('\n');
-  const coords = _trkPts.map(p => `<gx:coord>${p.lon.toFixed(6)} ${p.lat.toFixed(6)} ${p.altM.toFixed(1)}</gx:coord>`).join('\n');
+  const whens  = trkPts.map(p => `<when>${new Date(p.t).toISOString()}</when>`).join('\n');
+  const coords = trkPts.map(p => `<gx:coord>${p.lon.toFixed(6)} ${p.lat.toFixed(6)} ${p.altM.toFixed(1)}</gx:coord>`).join('\n');
   return `<?xml version="1.0" encoding="UTF-8"?>\n<kml xmlns="http://www.opengis.net/kml/2.2" xmlns:gx="http://www.google.com/kml/ext/2.2">\n<Document><Placemark><name>Flight Track</name>\n<gx:Track>\n${whens}\n${coords}\n</gx:Track>\n</Placemark></Document>\n</kml>`;
 }
 // 시작 시 미종료 백업이 있으면 복구 제안(새로고침·크래시로 끊긴 녹화)
@@ -8789,6 +8859,172 @@ function _trkDownload(name, text, mime) {
 }
 
 // ═══════════════════════════════════════════════════════════════
+//  화면 꺼짐 방지 (Wake Lock) — GPS/비행/녹화 중 자동 유지
+// ═══════════════════════════════════════════════════════════════
+let _wakeLock = null;
+async function _wakeAcquire() {
+  try {
+    if (!_wakeLock && 'wakeLock' in navigator) {
+      _wakeLock = await navigator.wakeLock.request('screen');
+      _wakeLock.addEventListener('release', () => { _wakeLock = null; });
+    }
+  } catch(e) {}
+}
+function _wakeRelease() {
+  try { if (_wakeLock) { _wakeLock.release(); _wakeLock = null; } } catch(e) {}
+}
+function _wakeWanted() { return gpsMode || S.running || _trkRec; }
+setInterval(() => { _wakeWanted() ? _wakeAcquire() : _wakeRelease(); }, 5000);
+// 백그라운드 복귀 시 OS가 해제한 락 재획득
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && _wakeWanted()) _wakeAcquire();
+});
+
+// ═══════════════════════════════════════════════════════════════
+//  공역 접근/진입 경보 — 패널에서 켠(aspcOn) 구역 대상
+// ═══════════════════════════════════════════════════════════════
+const ASPC_WARN_NM = 3;          // 접근 경보 거리
+let _aspcAlertState = {};        // id → 'in' | 'near' | undefined
+
+function _aspcPointIn(a, lat, lon) {
+  if (a.circle) return distance(lat, lon, a.circle.c[0], a.circle.c[1]) <= a.circle.r;
+  // ray casting
+  const p = a.poly; let inside = false;
+  for (let i = 0, j = p.length - 1; i < p.length; j = i++) {
+    const yi = p[i][0], xi = p[i][1], yj = p[j][0], xj = p[j][1];
+    if ((yi > lat) !== (yj > lat) && lon < (xj - xi) * (lat - yi) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+function _aspcDistNM(a, lat, lon) {
+  if (a.circle) return Math.max(0, distance(lat, lon, a.circle.c[0], a.circle.c[1]) - a.circle.r);
+  if (_aspcPointIn(a, lat, lon)) return 0;
+  // 등장방형 근사 평면에서 점-선분 최소거리(NM)
+  const k = Math.cos(lat * D2R);
+  const px = lon * k * 60, py = lat * 60;
+  let best = Infinity;
+  const p = a.poly;
+  for (let i = 0, j = p.length - 1; i < p.length; j = i++) {
+    const ax = p[j][1] * k * 60, ay = p[j][0] * 60;
+    const bx = p[i][1] * k * 60, by = p[i][0] * 60;
+    const dx = bx - ax, dy = by - ay;
+    const L2 = dx * dx + dy * dy;
+    let t = L2 ? ((px - ax) * dx + (py - ay) * dy) / L2 : 0;
+    t = Math.max(0, Math.min(1, t));
+    const qx = ax + t * dx, qy = ay + t * dy;
+    best = Math.min(best, Math.hypot(px - qx, py - qy));
+  }
+  return best;
+}
+function _aspcAlertCheck() {
+  const el = document.getElementById('aspc-alert');
+  if (!el) return;
+  if (!(gpsMode || S.running)) { el.className = ''; _aspcAlertState = {}; return; }
+  let insideA = null, nearA = null, nearD = ASPC_WARN_NM;
+  AIRSPACE_DB.forEach(a => {
+    if (!aspcOn[a.id]) return;
+    const d = _aspcDistNM(a, S.lat, S.lon);
+    if (d <= 0.001) { if (!insideA) insideA = a; }
+    else if (d < nearD) { nearD = d; nearA = a; }
+  });
+  // 상태 전이 시에만 진동(반복 경보 방지)
+  if (insideA) {
+    if (_aspcAlertState[insideA.id] !== 'in') {
+      _aspcAlertState = { [insideA.id]: 'in' };
+      try { navigator.vibrate && navigator.vibrate([200, 100, 200]); } catch(e) {}
+    }
+    el.textContent = `⚠ ${insideA.name} 진입`;
+    el.className = 'inside';
+  } else if (nearA) {
+    if (_aspcAlertState[nearA.id] !== 'near') {
+      _aspcAlertState = { [nearA.id]: 'near' };
+      try { navigator.vibrate && navigator.vibrate(150); } catch(e) {}
+    }
+    el.textContent = `${nearA.name} 접근 ${nearD.toFixed(1)}NM`;
+    el.className = 'near';
+  } else {
+    _aspcAlertState = {};
+    el.className = '';
+  }
+}
+setInterval(() => { try { _aspcAlertCheck(); } catch(e) {} }, 5000);
+
+// ═══════════════════════════════════════════════════════════════
+//  항적 로그북 — REC 종료 시 IndexedDB 자동 저장, FDR 패널에서 관리
+// ═══════════════════════════════════════════════════════════════
+function _logDB() {
+  return new Promise((res, rej) => {
+    const q = indexedDB.open('TrackLog', 1);
+    q.onupgradeneeded = e => e.target.result.createObjectStore('tracks', { keyPath: 'id' });
+    q.onsuccess = e => res(e.target.result);
+    q.onerror = e => rej(e.target.error);
+  });
+}
+async function _logPut(rec) {
+  const db = await _logDB();
+  return new Promise((res, rej) => {
+    const tx = db.transaction('tracks', 'readwrite');
+    tx.objectStore('tracks').put(rec);
+    tx.oncomplete = res; tx.onerror = e => rej(e.target.error);
+  });
+}
+async function _logAll() {
+  const db = await _logDB();
+  return new Promise((res, rej) => {
+    const q = db.transaction('tracks', 'readonly').objectStore('tracks').getAll();
+    q.onsuccess = e => res(e.target.result || []);
+    q.onerror = e => rej(e.target.error);
+  });
+}
+async function _logDel(id) {
+  const db = await _logDB();
+  return new Promise((res, rej) => {
+    const tx = db.transaction('tracks', 'readwrite');
+    tx.objectStore('tracks').delete(id);
+    tx.oncomplete = res; tx.onerror = e => rej(e.target.error);
+  });
+}
+function _logTrackDist(pts) {
+  let d = 0;
+  for (let i = 1; i < pts.length; i++) d += distance(pts[i-1].lat, pts[i-1].lon, pts[i].lat, pts[i].lon);
+  return d;
+}
+async function renderLogbook() {
+  const box = document.getElementById('logbook-list');
+  if (!box) return;
+  let recs = [];
+  try { recs = await _logAll(); } catch(e) {}
+  recs.sort((a, b) => b.id - a.id);
+  if (!recs.length) { box.innerHTML = '<div style="color:#556;font-size:9px;padding:3px 0;">저장된 항적 없음</div>'; return; }
+  const p2 = n => String(n).padStart(2, '0');
+  box.innerHTML = recs.map(r => {
+    const d = new Date(r.id);
+    const mins = Math.round((r.t1 - r.t0) / 60000);
+    return `<div style="display:flex;align-items:center;gap:5px;padding:3px 0;border-bottom:1px solid #1a2436;font-size:9px;color:#aab;">
+      <div style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+        ${d.getMonth()+1}/${d.getDate()} ${p2(d.getHours())}:${p2(d.getMinutes())} · ${mins}분 · ${r.distNM.toFixed(1)}NM</div>
+      <span onclick="logExport(${r.id},'gpx')" style="cursor:pointer;color:#7ab8f5;border:1px solid #2a4a6a;border-radius:3px;padding:1px 5px;">GPX</span>
+      <span onclick="logExport(${r.id},'kml')" style="cursor:pointer;color:#8bc34a;border:1px solid #3a5a2a;border-radius:3px;padding:1px 5px;">KML</span>
+      <span onclick="logDelete(${r.id})" style="cursor:pointer;color:#f44336;border:1px solid #5a2222;border-radius:3px;padding:1px 5px;">✕</span>
+    </div>`;
+  }).join('');
+}
+async function logExport(id, fmt) {
+  const recs = await _logAll();
+  const r = recs.find(x => x.id === id);
+  if (!r) return;
+  const d = new Date(r.t0), p2 = n => String(n).padStart(2, '0');
+  const fname = `track_${d.getFullYear()}${p2(d.getMonth()+1)}${p2(d.getDate())}_${p2(d.getHours())}${p2(d.getMinutes())}`;
+  if (fmt === 'gpx') _trkDownload(fname + '.gpx', _trkToGpx(r.pts), 'application/gpx+xml');
+  else               _trkDownload(fname + '.kml', _trkToKml(r.pts), 'application/vnd.google-earth.kml+xml');
+}
+async function logDelete(id) {
+  if (!confirm('이 항적을 로그북에서 삭제할까요?')) return;
+  await _logDel(id);
+  renderLogbook();
+}
+
+// ═══════════════════════════════════════════════════════════════
 //  FDR (GPX REPLAY)
 // ═══════════════════════════════════════════════════════════════
 let _fdrTrack      = [];     // interpolated track for playback
@@ -8808,6 +9044,7 @@ function toggleFdrPanel() {
   const btn   = document.getElementById('fdr-btn');
   const open  = panel.classList.toggle('open');
   btn.classList.toggle('active', open);
+  if (open) { try { renderLogbook(); } catch(e) {} }
 }
 
 // ── NOTAM / KML / GPX overlay ──────────────────────────
