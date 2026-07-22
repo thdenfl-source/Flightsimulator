@@ -1617,7 +1617,12 @@ body.solo-mode .solo-panel-visible {
         </div>
         <div style="margin-top:7px;border-top:1px solid #2a4a7a;padding-top:5px;">
           <div style="color:#7ab8f5;font-size:10px;font-weight:bold;letter-spacing:1px;">📒 로그북 (REC 항적)</div>
-          <div id="logbook-list" style="max-height:130px;overflow-y:auto;-webkit-overflow-scrolling:touch;"></div>
+          <div style="color:#667;font-size:8px;margin:1px 0 3px;">☁ 업로드 → 공유 코드 발급 (다른 기기에서 코드로 받기)</div>
+          <div id="logbook-list" style="max-height:120px;overflow-y:auto;-webkit-overflow-scrolling:touch;"></div>
+          <div style="display:flex;gap:4px;margin-top:5px;">
+            <input id="logbook-code" inputmode="numeric" placeholder="공유 코드 입력" style="flex:1;min-width:0;background:#0a1018;border:1px solid #2a4a6a;border-radius:4px;color:#cde;font-size:10px;padding:5px 7px;">
+            <button onclick="logDownload()" style="background:#14324f;border:1px solid #4a90d9;border-radius:4px;color:#8ac6ff;font-size:10px;font-weight:bold;padding:5px 10px;cursor:pointer;white-space:nowrap;">코드로 받기</button>
+          </div>
         </div>
       </div>
 
@@ -9071,6 +9076,7 @@ async function renderLogbook() {
     return `<div style="display:flex;align-items:center;gap:5px;padding:3px 0;border-bottom:1px solid #1a2436;font-size:9px;color:#aab;">
       <div style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
         ${d.getMonth()+1}/${d.getDate()} ${p2(d.getHours())}:${p2(d.getMinutes())} · ${mins}분 · ${r.distNM.toFixed(1)}NM</div>
+      <span onclick="logUpload(${r.id})" style="cursor:pointer;color:#ffcc44;border:1px solid #6a5a2a;border-radius:3px;padding:1px 5px;">☁</span>
       <span onclick="logExport(${r.id},'gpx')" style="cursor:pointer;color:#7ab8f5;border:1px solid #2a4a6a;border-radius:3px;padding:1px 5px;">GPX</span>
       <span onclick="logExport(${r.id},'kml')" style="cursor:pointer;color:#8bc34a;border:1px solid #3a5a2a;border-radius:3px;padding:1px 5px;">KML</span>
       <span onclick="logDelete(${r.id})" style="cursor:pointer;color:#f44336;border:1px solid #5a2222;border-radius:3px;padding:1px 5px;">✕</span>
@@ -9090,6 +9096,54 @@ async function logDelete(id) {
   if (!confirm('이 항적을 로그북에서 삭제할까요?')) return;
   await _logDel(id);
   renderLogbook();
+}
+
+// ── 클라우드 공유 (jsonblob.com — 무키·무계정, 기기 간 전송용) ──
+// 업로드 시 공유 코드(블롭 ID) 발급 → 다른 기기에서 코드 입력해 로그북으로 받기.
+// 무료 공용 저장소이므로 원본 보관은 로그북/파일에 두고 전송용으로만 사용.
+const CLOUD_API = 'https://jsonblob.com/api/jsonBlob';
+async function logUpload(id) {
+  let recs = [];
+  try { recs = await _logAll(); } catch(e) {}
+  const r = recs.find(x => x.id === id);
+  if (!r) return;
+  try {
+    const payload = { v: 1, t0: r.t0, t1: r.t1, distNM: r.distNM,
+      pts: r.pts.map(p => [ +p.lat.toFixed(6), +p.lon.toFixed(6), Math.round(p.altM), p.t ]) };
+    const res = await fetch(CLOUD_API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const loc = res.headers.get('Location') || res.headers.get('location') || '';
+    const code = loc.split('/').filter(Boolean).pop();
+    if (!code) throw new Error('공유 코드 수신 실패(서버 응답)');
+    try { await navigator.clipboard.writeText(code); } catch(e) {}
+    prompt('☁ 업로드 완료! (클립보드에 복사됨)\n\n아래 공유 코드를 다른 기기의 로그북 "코드로 받기"에 입력하세요.\n※ 무료 저장소라 장기 보관은 보장되지 않으니 전송용으로만 사용하세요.', code);
+  } catch(e) {
+    alert('클라우드 업로드 실패:\n' + e.message + '\n\n네트워크를 확인하거나 GPX 내보내기로 파일 공유를 이용해 주세요.');
+  }
+}
+async function logDownload() {
+  const input = document.getElementById('logbook-code');
+  const code = (input && input.value || '').trim();
+  if (!code) { alert('공유 코드를 입력하세요.'); return; }
+  try {
+    const res = await fetch(CLOUD_API + '/' + encodeURIComponent(code), { headers: { 'Accept': 'application/json' } });
+    if (!res.ok) throw new Error(res.status === 404 ? '해당 코드의 항적을 찾을 수 없습니다' : 'HTTP ' + res.status);
+    const data = await res.json();
+    if (!data || !Array.isArray(data.pts) || data.pts.length < 2) throw new Error('항적 데이터 형식이 아닙니다');
+    const pts = data.pts.map(a => ({ lat: a[0], lon: a[1], altM: a[2], t: a[3] }));
+    const rec = { id: Date.now(), t0: data.t0 || pts[0].t, t1: data.t1 || pts[pts.length-1].t,
+      n: pts.length, distNM: data.distNM || _logTrackDist(pts), pts };
+    await _logPut(rec);
+    if (input) input.value = '';
+    renderLogbook();
+    alert(`항적 ${pts.length}점을 로그북에 받았습니다.`);
+  } catch(e) {
+    alert('다운로드 실패:\n' + e.message);
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════
