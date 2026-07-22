@@ -9107,7 +9107,23 @@ const CLOUD_API = 'https://jsonblob.com/api/jsonBlob';
 function _cloudErr(e) {
   if (e && e.name === 'TypeError')
     return '네트워크 차단 또는 접속 실패\n(모바일/사내망에서 저장소 접속이 막혀 있을 수 있음)';
+  if (e && e._429)
+    return '저장소 요청 제한(429) — 잠시 후 다시 시도해 주세요.\n(모바일 통신망은 공용 IP라 제한에 자주 걸립니다.\n확실한 대안: GPX 내보내 파일로 공유)';
   return e && e.message ? e.message : String(e);
+}
+// 429/5xx에 지수 백오프 재시도(모바일 NAT의 일시적 제한 대응)
+async function _cloudFetch(url, opts) {
+  let last;
+  for (let i = 0; i < 4; i++) {
+    if (i) await new Promise(r => setTimeout(r, 800 * Math.pow(2, i - 1)));  // 0.8/1.6/3.2s
+    const res = await fetch(url, opts);
+    if (res.ok) return res;
+    last = res;
+    if (res.status !== 429 && res.status < 500) return res;  // 재시도 무의미
+  }
+  const err = new Error('업로드 거부(HTTP ' + last.status + ')');
+  if (last.status === 429) err._429 = true;
+  throw err;
 }
 async function logUpload(id) {
   let recs = [];
@@ -9119,12 +9135,11 @@ async function logUpload(id) {
       pts: r.pts.map(p => [ +p.lat.toFixed(6), +p.lon.toFixed(6), Math.round(p.altM), p.t ]) };
     // text/plain = CORS "단순 요청" → 프리플라이트(OPTIONS) 미유발(차단 원인 제거).
     // jsonblob은 본문이 유효 JSON이면 content-type과 무관하게 저장한다.
-    const res = await fetch(CLOUD_API, {
+    const res = await _cloudFetch(CLOUD_API, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
       body: JSON.stringify(payload)
     });
-    if (!res.ok) throw new Error('업로드 거부(HTTP ' + res.status + ')');
     const code = (res.headers.get('Location') || '').split('/').filter(Boolean).pop();
     if (!code) throw new Error('서버가 공유 코드를 반환하지 않았습니다');
     try { await navigator.clipboard.writeText(code); } catch(e) {}
@@ -9153,7 +9168,7 @@ async function logDownload() {
   const code = (input && input.value || '').trim();
   if (!code) { alert('공유 코드를 입력하세요.'); return; }
   try {
-    const res = await fetch(CLOUD_API + '/' + encodeURIComponent(code));   // GET = 단순 요청(프리플라이트 없음)
+    const res = await _cloudFetch(CLOUD_API + '/' + encodeURIComponent(code));   // GET = 단순 요청
     if (!res.ok) throw new Error(res.status === 404 ? '해당 코드의 항적을 찾을 수 없습니다(만료되었을 수 있음)' : '수신 거부(HTTP ' + res.status + ')');
     const data = await res.json();
     if (!data || !Array.isArray(data.pts) || data.pts.length < 2) throw new Error('항적 데이터 형식이 아닙니다');
