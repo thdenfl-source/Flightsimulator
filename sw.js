@@ -1,6 +1,6 @@
 // VFR Flight Sim — Service Worker
 // 버전을 올리면 캐시가 갱신됩니다
-const CACHE = 'vfr-flight-v172';
+const CACHE = 'vfr-flight-v173';
 const CORE  = [
   './index.html',
   './manifest.json',
@@ -32,11 +32,9 @@ self.addEventListener('activate', e => {
 
 // 네트워크 우선 → 실패 시 캐시 (Leaflet 타일은 네트워크 필요)
 self.addEventListener('fetch', e => {
-  // GET 외(POST 등)는 SW가 관여하지 않음 — 클라우드 항적 업로드 등 그대로 통과
+  // GET 외(POST 등)는 SW가 관여하지 않음
   if (e.request.method !== 'GET') return;
   const url = e.request.url;
-  // 클라우드 공유 API는 항상 네트워크로 (캐시 안 함)
-  if (url.includes('jsonblob.com')) return;
 
   // OSM 지도 타일: 캐시 우선
   if (url.includes('tile.openstreetmap.org')) {

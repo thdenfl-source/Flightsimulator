@@ -1597,7 +1597,6 @@ body.solo-mode .solo-panel-visible {
         </div>
         <div id="fdr-status">파일을 선택하세요</div>
         <div id="fdr-track-info"></div>
-        <button id="fdr-savelog-btn" onclick="fdrSaveToLog()" style="display:none;width:100%;margin-top:4px;background:#14324f;border:1px solid #4a90d9;border-radius:4px;color:#8ac6ff;font-size:10px;font-weight:bold;padding:6px;cursor:pointer;">📒 이 파일을 로그북에 저장 (☁ 공유용)</button>
         <div id="fdr-controls" style="display:none;gap:4px;display:none;">
           <button id="fdr-play-btn"  onclick="fdrPlay()">▶</button>
           <button id="fdr-pause-btn" onclick="fdrPause()">⏸</button>
@@ -1618,12 +1617,7 @@ body.solo-mode .solo-panel-visible {
         </div>
         <div style="margin-top:7px;border-top:1px solid #2a4a7a;padding-top:5px;">
           <div style="color:#7ab8f5;font-size:10px;font-weight:bold;letter-spacing:1px;">📒 로그북 (REC 항적)</div>
-          <div style="color:#667;font-size:8px;margin:1px 0 3px;">☁ 업로드 → 공유 코드 발급 (다른 기기에서 코드로 받기)</div>
-          <div id="logbook-list" style="max-height:120px;overflow-y:auto;-webkit-overflow-scrolling:touch;"></div>
-          <div style="display:flex;gap:4px;margin-top:5px;">
-            <input id="logbook-code" inputmode="numeric" placeholder="공유 코드 입력" style="flex:1;min-width:0;background:#0a1018;border:1px solid #2a4a6a;border-radius:4px;color:#cde;font-size:10px;padding:5px 7px;">
-            <button onclick="logDownload()" style="background:#14324f;border:1px solid #4a90d9;border-radius:4px;color:#8ac6ff;font-size:10px;font-weight:bold;padding:5px 10px;cursor:pointer;white-space:nowrap;">코드로 받기</button>
-          </div>
+          <div id="logbook-list" style="max-height:130px;overflow-y:auto;-webkit-overflow-scrolling:touch;"></div>
         </div>
       </div>
 
@@ -9077,7 +9071,6 @@ async function renderLogbook() {
     return `<div style="display:flex;align-items:center;gap:5px;padding:3px 0;border-bottom:1px solid #1a2436;font-size:9px;color:#aab;">
       <div style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
         ${d.getMonth()+1}/${d.getDate()} ${p2(d.getHours())}:${p2(d.getMinutes())} · ${mins}분 · ${r.distNM.toFixed(1)}NM</div>
-      <span onclick="logUpload(${r.id})" style="cursor:pointer;color:#ffcc44;border:1px solid #6a5a2a;border-radius:3px;padding:1px 5px;">☁</span>
       <span onclick="logExport(${r.id},'gpx')" style="cursor:pointer;color:#7ab8f5;border:1px solid #2a4a6a;border-radius:3px;padding:1px 5px;">GPX</span>
       <span onclick="logExport(${r.id},'kml')" style="cursor:pointer;color:#8bc34a;border:1px solid #3a5a2a;border-radius:3px;padding:1px 5px;">KML</span>
       <span onclick="logDelete(${r.id})" style="cursor:pointer;color:#f44336;border:1px solid #5a2222;border-radius:3px;padding:1px 5px;">✕</span>
@@ -9097,91 +9090,6 @@ async function logDelete(id) {
   if (!confirm('이 항적을 로그북에서 삭제할까요?')) return;
   await _logDel(id);
   renderLogbook();
-}
-
-// ── 클라우드 공유 (jsonblob.com — 무키·무계정, 기기 간 전송용) ──
-// 업로드 시 공유 코드(블롭 ID) 발급 → 다른 기기에서 코드 입력해 로그북으로 받기.
-// 무료 공용 저장소이므로 원본 보관은 로그북/파일에 두고 전송용으로만 사용.
-const CLOUD_API = 'https://jsonblob.com/api/jsonBlob';
-// 실패 원인을 사람이 알아볼 수 있게 변환(네트워크/CORS 차단 vs 서버 응답)
-function _cloudErr(e) {
-  if (e && e.name === 'TypeError')
-    return '네트워크 차단 또는 접속 실패\n(모바일/사내망에서 저장소 접속이 막혀 있을 수 있음)';
-  if (e && e._429)
-    return '저장소 요청 제한(429) — 잠시 후 다시 시도해 주세요.\n(모바일 통신망은 공용 IP라 제한에 자주 걸립니다.\n확실한 대안: GPX 내보내 파일로 공유)';
-  return e && e.message ? e.message : String(e);
-}
-// 429/5xx에 지수 백오프 재시도(모바일 NAT의 일시적 제한 대응)
-async function _cloudFetch(url, opts) {
-  let last;
-  for (let i = 0; i < 4; i++) {
-    if (i) await new Promise(r => setTimeout(r, 800 * Math.pow(2, i - 1)));  // 0.8/1.6/3.2s
-    const res = await fetch(url, opts);
-    if (res.ok) return res;
-    last = res;
-    if (res.status !== 429 && res.status < 500) return res;  // 재시도 무의미
-  }
-  const err = new Error('업로드 거부(HTTP ' + last.status + ')');
-  if (last.status === 429) err._429 = true;
-  throw err;
-}
-async function logUpload(id) {
-  let recs = [];
-  try { recs = await _logAll(); } catch(e) {}
-  const r = recs.find(x => x.id === id);
-  if (!r) return;
-  try {
-    const payload = { v: 1, t0: r.t0, t1: r.t1, distNM: r.distNM,
-      pts: r.pts.map(p => [ +p.lat.toFixed(6), +p.lon.toFixed(6), Math.round(p.altM), p.t ]) };
-    // text/plain = CORS "단순 요청" → 프리플라이트(OPTIONS) 미유발(차단 원인 제거).
-    // jsonblob은 본문이 유효 JSON이면 content-type과 무관하게 저장한다.
-    const res = await _cloudFetch(CLOUD_API, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
-      body: JSON.stringify(payload)
-    });
-    const code = (res.headers.get('Location') || '').split('/').filter(Boolean).pop();
-    if (!code) throw new Error('서버가 공유 코드를 반환하지 않았습니다');
-    try { await navigator.clipboard.writeText(code); } catch(e) {}
-    prompt('☁ 업로드 완료! (코드가 클립보드에 복사됨)\n\n아래 공유 코드를 다른 기기의 로그북 "코드로 받기"에 입력하세요.\n※ 무료 저장소라 장기 보관은 보장되지 않으니 전송용으로만 사용하세요.', code);
-  } catch(e) {
-    alert('클라우드 업로드 실패:\n' + _cloudErr(e) + '\n\n대안: 로그북에서 GPX로 내보내 카카오톡/AirDrop으로 파일을 전달하세요.');
-  }
-}
-// FDR로 불러온 파일(GPX/KML)을 로그북에 저장 → 이후 ☁ 업로드/공유 가능
-async function fdrSaveToLog() {
-  const src = (_fdrRawTrack && _fdrRawTrack.length >= 2) ? _fdrRawTrack : _fdrTrack;
-  if (!src || src.length < 2) { alert('불러온 항적이 없습니다.'); return; }
-  const pts = src.map(p => ({ lat: p.lat, lon: p.lon, altM: p.altM || 0, t: p.timeMs }));
-  const rec = { id: Date.now(), t0: pts[0].t, t1: pts[pts.length-1].t,
-    n: pts.length, distNM: _logTrackDist(pts), pts };
-  try {
-    await _logPut(rec);
-    renderLogbook();
-    alert(`로그북에 저장했습니다 (${pts.length}점).\n목록의 ☁ 버튼으로 공유 코드를 만들 수 있습니다.`);
-  } catch(e) {
-    alert('로그북 저장 실패:\n' + e.message);
-  }
-}
-async function logDownload() {
-  const input = document.getElementById('logbook-code');
-  const code = (input && input.value || '').trim();
-  if (!code) { alert('공유 코드를 입력하세요.'); return; }
-  try {
-    const res = await _cloudFetch(CLOUD_API + '/' + encodeURIComponent(code));   // GET = 단순 요청
-    if (!res.ok) throw new Error(res.status === 404 ? '해당 코드의 항적을 찾을 수 없습니다(만료되었을 수 있음)' : '수신 거부(HTTP ' + res.status + ')');
-    const data = await res.json();
-    if (!data || !Array.isArray(data.pts) || data.pts.length < 2) throw new Error('항적 데이터 형식이 아닙니다');
-    const pts = data.pts.map(a => ({ lat: a[0], lon: a[1], altM: a[2], t: a[3] }));
-    const rec = { id: Date.now(), t0: data.t0 || pts[0].t, t1: data.t1 || pts[pts.length-1].t,
-      n: pts.length, distNM: data.distNM || _logTrackDist(pts), pts };
-    await _logPut(rec);
-    if (input) input.value = '';
-    renderLogbook();
-    alert(`항적 ${pts.length}점을 로그북에 받았습니다.`);
-  } catch(e) {
-    alert('다운로드 실패:\n' + _cloudErr(e));
-  }
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -10330,7 +10238,6 @@ function loadFdrFile(input) {
       info.textContent = `${_fdrTrack.length}pt · ${hh?hh+'h ':''}${mm}m ${ss}s`;
       info.style.display = 'block';
       // show controls
-      document.getElementById('fdr-savelog-btn').style.display = 'block';
       document.getElementById('fdr-controls').style.display = 'flex';
       document.getElementById('fdr-speed').style.display    = 'flex';
       document.getElementById('fdr-timeline').style.display = 'block';
