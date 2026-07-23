@@ -7495,9 +7495,10 @@ if ('serviceWorker' in navigator) {
     
     let xpdrState = { mode: 'Auto', code: '1234', active: 'XPDR2', adsb: true, flightId: 'TERRY' };
     let hfState = { tuning: 'Simplex', emission: 'LSB V', sql: 'SQ3', pwr: 'High' };
-    let utilTab    = 'MFEET'; // active sub-tab in Utilities screen
+    let utilTab    = 'MENU'; // 현재 페이지: MENU | DIST | COORD | WEIGHT | PRESS | FUEL | DENSALT
     let utilActive = 'm';    // focused field key for numpad input
     let utilInput  = '';     // numpad buffer
+    let fuelLbGal  = 6.7;    // 연료 밀도(lb/US gal) — FUEL 페이지에서 순환
     const _UF = {
       m:    { label:'미터',       unit:'m',   neg:false, dec:3 },
       ft:   { label:'피트',       unit:'ft',  neg:false, dec:3 },
@@ -7510,8 +7511,35 @@ if ('serviceWorker' in navigator) {
       dmsd: { label:'DMS 도',     unit:'°',   neg:true,  dec:0 },
       dmsm: { label:'DMS 분',     unit:"'",   neg:false, dec:0 },
       dmss: { label:'DMS 초',     unit:'"',   neg:false, dec:2 },
+      // Weight / Mass
+      wkg:  { label:'kilograms',        unit:'kg',  neg:false, dec:2 },
+      wlb:  { label:'pounds',           unit:'lb',  neg:false, dec:2 },
+      wg:   { label:'grams',            unit:'g',   neg:false, dec:0 },
+      woz:  { label:'ounce',            unit:'oz',  neg:false, dec:2 },
+      wmt:  { label:'metric ton',       unit:'t',   neg:false, dec:4 },
+      // Pressure
+      phpa: { label:'hectopascal / mbar', unit:'hPa',  neg:false, dec:2 },
+      pinhg:{ label:'inch mercury',       unit:'inHg', neg:false, dec:2 },
+      pkpa: { label:'kilopascal',         unit:'kPa',  neg:false, dec:2 },
+      ppsi: { label:'pounds/sq inch',     unit:'psi',  neg:false, dec:2 },
+      pmmhg:{ label:'millimeter mercury', unit:'mmHg', neg:false, dec:2 },
+      patm: { label:'atmosphere',         unit:'atm',  neg:false, dec:4 },
+      // Fuel
+      flb:  { label:'pounds',        unit:'lb',  neg:false, dec:1 },
+      fkg:  { label:'kilograms',     unit:'kg',  neg:false, dec:1 },
+      fusgal:{ label:'US gallons',   unit:'gal', neg:false, dec:2 },
+      fltr: { label:'litres',        unit:'L',   neg:false, dec:2 },
+      // Density Altitude
+      daIA: { label:'Indicated Alt',    unit:'ft',   neg:true,  dec:0 },
+      daAS: { label:'Altimeter Setting',unit:'inHg', neg:false, dec:2 },
+      daOAT:{ label:'Outside Air Temp', unit:'°C',   neg:true,  dec:0 },
+      daOut:{ label:'Density Altitude', unit:'ft',   neg:true,  dec:0 },
     };
-    const _UV = { m:0, ft:0, km:0, nm:0, sm:0, dd:0, dmd:0, dmm:0, dmsd:0, dmsm:0, dmss:0 };
+    const _UV = { m:0, ft:0, km:0, nm:0, sm:0, dd:0, dmd:0, dmm:0, dmsd:0, dmsm:0, dmss:0,
+      wkg:0, wlb:0, wg:0, woz:0, wmt:0,
+      phpa:1013.25, pinhg:29.92, pkpa:101.325, ppsi:14.696, pmmhg:760.0, patm:1,
+      flb:0, fkg:0, fusgal:0, fltr:0,
+      daIA:0, daAS:29.92, daOAT:15, daOut:0 };
 
     // --- EXACT EXCEL PERF DATA ENGINE ---
     let perfData = { alt: "0", temp: "20", weight: "16000", vs: "0" };
@@ -7826,7 +7854,7 @@ if ('serviceWorker' in navigator) {
                                   btn.id === 'perf' ? `onclick="switchMode('PERF')"` :
                                   btn.id === 'fpl'  ? `onclick="setPage(1)"` :
                                   btn.id === 'proc' ? `onclick="setPage(1); fpGo('IFR');"` :
-                                  btn.id === 'util' ? `onclick="switchMode('UTIL')"` :
+                                  btn.id === 'util' ? `onclick="utilOpen('MENU')"` :
                                   btn.id === 'map'  ? `onclick="cduOpenMap()"` :
                                   btn.id === 'charts' ? `onclick="switchMode('CHARTS')"` : '';
                 gridHtml += `
@@ -8305,16 +8333,44 @@ if ('serviceWorker' in navigator) {
 
     // ── Utilities: Unit Converter (numpad-driven) ────────────────────────────
 
-    function utilSetTab(id) {
-      utilTab    = id;
-      utilActive = id === 'MFEET' ? 'm' : id === 'KMNM' ? 'km' : 'dd';
-      utilInput  = '';
+    // 페이지 정의 (메뉴에서 선택)
+    const _UPAGES = {
+      DIST:    { title:'Length / Distance', fields:['m','ft','km','nm','sm'] },
+      COORD:   { title:'GPS Coordinates', coord:true },
+      WEIGHT:  { title:'Weight / Mass', fields:['wkg','wlb','wg','woz','wmt'] },
+      PRESS:   { title:'Pressure', fields:['phpa','pinhg','pkpa','ppsi','pmmhg','patm'] },
+      FUEL:    { title:'Fuel Conversion', fields:['flb','fkg','fusgal','fltr'], fuel:true },
+      DENSALT: { title:'Density Altitude', densalt:true },
+    };
+    const _UMENU = [
+      { id:'DIST',    name:'Length / Distance', sub:'m · ft · km · NM · SM' },
+      { id:'COORD',   name:'GPS Coordinates',   sub:'DD · DM · DMS' },
+      { id:'WEIGHT',  name:'Weight / Mass',     sub:'kg · lb · g · oz · ton' },
+      { id:'PRESS',   name:'Pressure',          sub:'inHg · hPa · kPa · psi · mmHg · atm' },
+      { id:'FUEL',    name:'Fuel Conversion',   sub:'gal · L · lb · kg' },
+      { id:'DENSALT', name:'Density Altitude',  sub:'IA · Alt setting · OAT → DA' },
+    ];
+
+    function utilOpen(id) {
+      utilTab   = id;
+      utilInput = '';
+      if (id !== 'MENU') {
+        const p = _UPAGES[id];
+        utilActive = p.coord ? 'dd' : p.densalt ? 'daIA' : p.fields[0];
+      }
       switchMode('UTIL');
     }
 
     function utilFocus(fld) {
       utilActive = fld;
       utilInput  = '';
+      switchMode('UTIL');
+    }
+
+    function utilFuelDensity() {
+      const presets = [6.7, 6.0, 6.8];   // Jet A / Avgas / Jet A(hot)
+      fuelLbGal = presets[(presets.indexOf(fuelLbGal) + 1) % presets.length];
+      _utilConvert('flb', _UV.flb);      // 현재 값 기준 재환산
       switchMode('UTIL');
     }
 
@@ -8352,7 +8408,33 @@ if ('serviceWorker' in navigator) {
       else if (src === 'dmd' || src === 'dmm') {
         const sgn = _UV.dmd < 0 ? -1 : 1;
         _utilDDtoAll(sgn * (Math.abs(_UV.dmd) + _UV.dmm / 60));
-      } else {
+      }
+      // ── Weight (base kg) ──
+      else if (['wkg','wlb','wg','woz','wmt'].includes(src)) {
+        const kg = src==='wkg'?v : src==='wlb'?v/2.20462 : src==='wg'?v/1000 : src==='woz'?v/35.27396 : v*1000;
+        _UV.wkg=+kg.toFixed(2); _UV.wlb=+(kg*2.20462).toFixed(2); _UV.wg=+(kg*1000).toFixed(0);
+        _UV.woz=+(kg*35.27396).toFixed(2); _UV.wmt=+(kg/1000).toFixed(4);
+      }
+      // ── Pressure (base hPa) ──
+      else if (['phpa','pinhg','pkpa','ppsi','pmmhg','patm'].includes(src)) {
+        const h = src==='phpa'?v : src==='pinhg'?v*33.8639 : src==='pkpa'?v*10 : src==='ppsi'?v*68.9476 : src==='pmmhg'?v/0.7500617 : v*1013.25;
+        _UV.phpa=+h.toFixed(2); _UV.pinhg=+(h/33.8639).toFixed(2); _UV.pkpa=+(h/10).toFixed(2);
+        _UV.ppsi=+(h/68.9476).toFixed(2); _UV.pmmhg=+(h*0.7500617).toFixed(2); _UV.patm=+(h/1013.25).toFixed(4);
+      }
+      // ── Fuel (base lb, 밀도 fuelLbGal) ──
+      else if (['flb','fkg','fusgal','fltr'].includes(src)) {
+        const d = fuelLbGal;
+        const lb = src==='flb'?v : src==='fkg'?v*2.20462 : src==='fusgal'?v*d : (v/3.785412)*d;
+        _UV.flb=+lb.toFixed(1); _UV.fkg=+(lb/2.20462).toFixed(1);
+        _UV.fusgal=+(lb/d).toFixed(2); _UV.fltr=+(lb/d*3.785412).toFixed(2);
+      }
+      // ── Density Altitude (계산) ──
+      else if (['daIA','daAS','daOAT'].includes(src)) {
+        const pa  = _UV.daIA + (29.92 - _UV.daAS) * 1000;
+        const isa = 15 - 1.98 * (pa / 1000);
+        _UV.daOut = Math.round((pa + 120 * (_UV.daOAT - isa)) / 10) * 10;
+      }
+      else {
         const sgn = _UV.dmsd < 0 ? -1 : 1;
         _utilDDtoAll(sgn * (Math.abs(_UV.dmsd) + _UV.dmsm / 60 + _UV.dmss / 3600));
       }
@@ -8370,48 +8452,56 @@ if ('serviceWorker' in navigator) {
     }
 
     function renderUtilScreen(container, footer, title, centerLabel) {
-      title.innerText = 'Utilities — Unit Converter';
-      centerLabel.innerText = 'UNIT CONV';
+      centerLabel.innerText = 'UTIL';
 
-      const tabs = [
-        { id: 'MFEET', label: 'M ↔ FT' },
-        { id: 'KMNM',  label: 'KM↔NM/SM' },
-        { id: 'COORD', label: '좌표 변환' },
-      ];
-      const tabHtml = tabs.map(t => {
-        const on = utilTab === t.id;
-        return `<button onclick="utilSetTab('${t.id}')" style="` +
-          `flex:1;padding:5px 1px;font-size:9px;font-weight:bold;cursor:pointer;border-radius:3px;` +
-          `font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica Neue,Arial,sans-serif;letter-spacing:0.3px;` +
-          `background:${on ? '#002a10' : '#111'};color:${on ? '#00ff88' : '#555'};` +
-          `border:1px solid ${on ? '#00ff88' : '#2a2a2a'};">${t.label}</button>`;
-      }).join('');
+      // ── 메뉴 목록 ──
+      if (utilTab === 'MENU') {
+        title.innerText = 'Utilities — Menu';
+        container.innerHTML =
+          `<div style="color:#556;font-size:9px;letter-spacing:1px;margin:2px 0 6px;">기능을 선택하세요</div>` +
+          _UMENU.map(it =>
+            `<div onclick="utilOpen('${it.id}')" style="display:flex;align-items:center;justify-content:space-between;` +
+              `padding:10px 10px;margin-bottom:5px;border:1px solid #1e3a2a;border-radius:5px;background:#0a1410;cursor:pointer;">` +
+              `<div><div style="color:#00e07a;font-size:12px;font-weight:bold;">${it.name}</div>` +
+              `<div style="color:#567;font-size:9px;margin-top:1px;">${it.sub}</div></div>` +
+              `<div style="color:#00993a;font-size:14px;">›</div></div>`
+          ).join('');
+        footer.innerHTML =
+          `<div class="nav-btn" onclick="switchMode('HOME')"><span>↩</span>Back</div>` +
+          `<div class="nav-btn" onclick="switchMode('HOME')"><span>🏠</span>Home</div>` +
+          `<div class="nav-btn"><span>✉</span>Msg</div>` +
+          `<div class="nav-btn" onclick="cduFullScreen()"><span>✥</span>Full</div>`;
+        return;
+      }
+
+      const page = _UPAGES[utilTab];
+      title.innerText = 'Utilities — ' + page.title;
+
+      // 목록으로 돌아가기 버튼
+      const backToMenu = `<div onclick="utilOpen('MENU')" style="display:inline-flex;align-items:center;gap:4px;` +
+        `padding:5px 10px;margin-bottom:7px;border:1px solid #2a4a3a;border-radius:4px;background:#0a1410;color:#00cc66;` +
+        `font-size:10px;font-weight:bold;cursor:pointer;">☰ 목록</div>`;
 
       // Tappable field row
-      const ROW = fld => {
-        const c = _UF[fld], isAct = utilActive === fld;
+      const ROW = (fld, answer) => {
+        const c = _UF[fld], isAct = !answer && utilActive === fld;
         const val = (isAct && utilInput) ? utilInput : _UV[fld].toFixed(c.dec);
-        return `<div onclick="utilFocus('${fld}')" style="` +
+        const bg = answer ? '#0d2a16' : (isAct ? '#001a0a' : 'transparent');
+        const bd = answer ? '#00cc66' : (isAct ? '#00ff88' : '#1a1a1a');
+        const vc = answer ? '#00ff88' : (isAct ? '#00ff88' : '#aaa');
+        const click = answer ? '' : `onclick="utilFocus('${fld}')"`;
+        return `<div ${click} style="` +
           `display:flex;align-items:center;justify-content:space-between;` +
-          `padding:6px 8px;border-radius:4px;cursor:pointer;margin-bottom:3px;` +
-          `background:${isAct ? '#001a0a' : 'transparent'};` +
-          `border:1px solid ${isAct ? '#00ff88' : '#1a1a1a'};` +
-          `">` +
-          `<span style="color:#666;font-size:9px;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica Neue,Arial,sans-serif;letter-spacing:0.5px;">${c.label}</span>` +
-          `<span style="color:${isAct ? '#00ff88' : '#aaa'};font-size:14px;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica Neue,Arial,sans-serif;font-weight:bold;letter-spacing:1px;">` +
+          `padding:7px 8px;border-radius:4px;cursor:${answer?'default':'pointer'};margin-bottom:3px;` +
+          `background:${bg};border:1px solid ${bd};">` +
+          `<span style="color:${answer?'#8fbfa0':'#666'};font-size:9px;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica Neue,Arial,sans-serif;letter-spacing:0.5px;">${c.label}</span>` +
+          `<span style="color:${vc};font-size:14px;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica Neue,Arial,sans-serif;font-weight:bold;letter-spacing:1px;">` +
             `${val}<span style="color:#446;font-size:10px;margin-left:3px;">${c.unit}</span>` +
-          `</span>` +
-          `</div>`;
+          `</span></div>`;
       };
 
       let fieldsHtml = '';
-      if (utilTab === 'MFEET') {
-        fieldsHtml = ROW('m') +
-          `<div style="text-align:center;color:#00993a;font-size:14px;margin:2px 0;">⇅</div>` +
-          ROW('ft');
-      } else if (utilTab === 'KMNM') {
-        fieldsHtml = ROW('km') + ROW('nm') + ROW('sm');
-      } else {
+      if (page.coord) {
         fieldsHtml =
           `<div style="color:#333;font-size:8px;letter-spacing:1px;margin:2px 0 3px;">── DD ──────────────────</div>` +
           ROW('dd') +
@@ -8419,6 +8509,21 @@ if ('serviceWorker' in navigator) {
           ROW('dmd') + ROW('dmm') +
           `<div style="color:#333;font-size:8px;letter-spacing:1px;margin:4px 0 3px;">── DMS ─────────────────</div>` +
           ROW('dmsd') + ROW('dmsm') + ROW('dmss');
+      } else if (page.densalt) {
+        fieldsHtml =
+          `<div style="color:#556;font-size:9px;letter-spacing:1px;margin:2px 0 4px;">INPUT (값 입력 후 ENT)</div>` +
+          ROW('daIA') + ROW('daAS') + ROW('daOAT') +
+          `<div style="color:#556;font-size:9px;letter-spacing:1px;margin:8px 0 4px;">ANSWER</div>` +
+          ROW('daOut', true);
+      } else if (page.fuel) {
+        fieldsHtml =
+          `<div onclick="utilFuelDensity()" style="display:flex;align-items:center;justify-content:space-between;` +
+            `padding:6px 8px;margin-bottom:6px;border:1px solid #2a4a6a;border-radius:4px;background:#0a1420;cursor:pointer;">` +
+            `<span style="color:#88aacc;font-size:9px;">Fuel Type (밀도)</span>` +
+            `<span style="color:#8ac6ff;font-size:12px;font-weight:bold;">${fuelLbGal.toFixed(1)} lb/gal ⟳</span></div>` +
+          page.fields.map(f => ROW(f)).join('');
+      } else {
+        fieldsHtml = page.fields.map(f => ROW(f)).join('');
       }
 
       // Numpad
@@ -8450,12 +8555,10 @@ if ('serviceWorker' in navigator) {
           `</div>` +
         `</div>`;
 
-      container.innerHTML =
-        `<div style="display:flex;gap:4px;margin-bottom:8px;">${tabHtml}</div>` +
-        fieldsHtml + numpadHtml;
+      container.innerHTML = backToMenu + fieldsHtml + numpadHtml;
 
       footer.innerHTML =
-        `<div class="nav-btn" onclick="switchMode('HOME')"><span>↩</span>Back</div>` +
+        `<div class="nav-btn" onclick="utilOpen('MENU')"><span>↩</span>Back</div>` +
         `<div class="nav-btn" onclick="switchMode('HOME')"><span>🏠</span>Home</div>` +
         `<div class="nav-btn"><span>✉</span>Msg</div>` +
         `<div class="nav-btn" onclick="cduFullScreen()"><span>✥</span>Full</div>`;
