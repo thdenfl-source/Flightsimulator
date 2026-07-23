@@ -8399,11 +8399,13 @@ if ('serviceWorker' in navigator) {
 
     function _utilConvert(src, v) {
       _UV[src] = v;
-      if      (src === 'm')  { _UV.ft  = +(v * 3.28084).toFixed(3); }
-      else if (src === 'ft') { _UV.m   = +(v / 3.28084).toFixed(3); }
-      else if (src === 'km') { _UV.nm  = +(v / 1.852).toFixed(4);   _UV.sm = +(v / 1.60934).toFixed(4); }
-      else if (src === 'nm') { _UV.km  = +(v * 1.852).toFixed(4);   _UV.sm = +(v * 1.15078).toFixed(4); }
-      else if (src === 'sm') { _UV.km  = +(v * 1.60934).toFixed(4); _UV.nm = +(v / 1.15078).toFixed(4); }
+      // ── Length / Distance (base 미터) — m·ft·km·nm·sm 상호 변환 ──
+      if (['m','ft','km','nm','sm'].includes(src)) {
+        const meters = src==='m'?v : src==='ft'?v*0.3048 : src==='km'?v*1000 : src==='nm'?v*1852 : v*1609.344;
+        _UV.m  = +meters.toFixed(3);        _UV.ft = +(meters/0.3048).toFixed(3);
+        _UV.km = +(meters/1000).toFixed(4); _UV.nm = +(meters/1852).toFixed(4);
+        _UV.sm = +(meters/1609.344).toFixed(4);
+      }
       else if (src === 'dd') { _utilDDtoAll(v); }
       else if (src === 'dmd' || src === 'dmm') {
         const sgn = _UV.dmd < 0 ? -1 : 1;
