@@ -7498,7 +7498,15 @@ if ('serviceWorker' in navigator) {
     let utilTab    = 'MENU'; // 현재 페이지: MENU | DIST | COORD | WEIGHT | PRESS | FUEL | DENSALT
     let utilActive = 'm';    // focused field key for numpad input
     let utilInput  = '';     // numpad buffer
-    let fuelLbGal  = 6.7;    // 연료 밀도(lb/US gal) — FUEL 페이지에서 순환
+    // 항공유 유종별 밀도(lb/US gal). Jet A를 기본값으로.
+    const _FUELS = [
+      { name:'Jet A',        d:6.8 },
+      { name:'Jet A-1',      d:6.7 },
+      { name:'Avgas 100LL',  d:6.0 },
+      { name:'Jet B',        d:6.4 },
+    ];
+    let fuelTypeIdx = 0;              // 현재 유종(_FUELS 인덱스)
+    let fuelLbGal   = _FUELS[0].d;    // 현재 밀도(lb/US gal)
     const _UF = {
       m:    { label:'미터',       unit:'m',   neg:false, dec:3 },
       ft:   { label:'피트',       unit:'ft',  neg:false, dec:3 },
@@ -8368,8 +8376,8 @@ if ('serviceWorker' in navigator) {
     }
 
     function utilFuelDensity() {
-      const presets = [6.7, 6.0, 6.8];   // Jet A / Avgas / Jet A(hot)
-      fuelLbGal = presets[(presets.indexOf(fuelLbGal) + 1) % presets.length];
+      fuelTypeIdx = (fuelTypeIdx + 1) % _FUELS.length;   // 유종 순환
+      fuelLbGal   = _FUELS[fuelTypeIdx].d;
       _utilConvert('flb', _UV.flb);      // 현재 값 기준 재환산
       switchMode('UTIL');
     }
@@ -8521,8 +8529,8 @@ if ('serviceWorker' in navigator) {
         fieldsHtml =
           `<div onclick="utilFuelDensity()" style="display:flex;align-items:center;justify-content:space-between;` +
             `padding:6px 8px;margin-bottom:6px;border:1px solid #2a4a6a;border-radius:4px;background:#0a1420;cursor:pointer;">` +
-            `<span style="color:#88aacc;font-size:9px;">Fuel Type (밀도)</span>` +
-            `<span style="color:#8ac6ff;font-size:12px;font-weight:bold;">${fuelLbGal.toFixed(1)} lb/gal ⟳</span></div>` +
+            `<span style="color:#88aacc;font-size:9px;">Fuel Type</span>` +
+            `<span style="color:#8ac6ff;font-size:12px;font-weight:bold;">${_FUELS[fuelTypeIdx].name} · ${fuelLbGal.toFixed(1)} lb/gal ⟳</span></div>` +
           page.fields.map(f => ROW(f)).join('');
       } else {
         fieldsHtml = page.fields.map(f => ROW(f)).join('');
