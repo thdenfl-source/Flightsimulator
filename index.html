@@ -8463,10 +8463,10 @@ if ('serviceWorker' in navigator) {
           `<div style="color:#556;font-size:9px;letter-spacing:1px;margin:2px 0 6px;">기능을 선택하세요</div>` +
           _UMENU.map(it =>
             `<div onclick="utilOpen('${it.id}')" style="display:flex;align-items:center;justify-content:space-between;` +
-              `padding:10px 10px;margin-bottom:5px;border:1px solid #1e3a2a;border-radius:5px;background:#0a1410;cursor:pointer;">` +
-              `<div><div style="color:#00e07a;font-size:12px;font-weight:bold;">${it.name}</div>` +
+              `padding:10px 10px;margin-bottom:5px;border:1px solid #1e3a4a;border-radius:5px;background:#0a1620;cursor:pointer;">` +
+              `<div><div style="color:#00cfff;font-size:12px;font-weight:bold;">${it.name}</div>` +
               `<div style="color:#567;font-size:9px;margin-top:1px;">${it.sub}</div></div>` +
-              `<div style="color:#00993a;font-size:14px;">›</div></div>`
+              `<div style="color:#0090b0;font-size:14px;">›</div></div>`
           ).join('');
         footer.innerHTML =
           `<div class="nav-btn" onclick="switchMode('HOME')"><span>↩</span>Back</div>` +
@@ -8481,22 +8481,22 @@ if ('serviceWorker' in navigator) {
 
       // 목록으로 돌아가기 버튼
       const backToMenu = `<div onclick="utilOpen('MENU')" style="display:inline-flex;align-items:center;gap:4px;` +
-        `padding:5px 10px;margin-bottom:7px;border:1px solid #2a4a3a;border-radius:4px;background:#0a1410;color:#00cc66;` +
+        `padding:5px 10px;margin-bottom:7px;border:1px solid #2a4a5a;border-radius:4px;background:#0a1620;color:#00cfff;` +
         `font-size:10px;font-weight:bold;cursor:pointer;">☰ 목록</div>`;
 
       // Tappable field row
       const ROW = (fld, answer) => {
         const c = _UF[fld], isAct = !answer && utilActive === fld;
         const val = (isAct && utilInput) ? utilInput : _UV[fld].toFixed(c.dec);
-        const bg = answer ? '#0d2a16' : (isAct ? '#001a0a' : 'transparent');
-        const bd = answer ? '#00cc66' : (isAct ? '#00ff88' : '#1a1a1a');
-        const vc = answer ? '#00ff88' : (isAct ? '#00ff88' : '#aaa');
+        const bg = answer ? '#0d2230' : (isAct ? '#001e28' : 'transparent');
+        const bd = answer ? '#00cfff' : (isAct ? '#00e5ff' : '#1a1a1a');
+        const vc = answer ? '#00e5ff' : (isAct ? '#00e5ff' : '#aaa');
         const click = answer ? '' : `onclick="utilFocus('${fld}')"`;
         return `<div ${click} style="` +
           `display:flex;align-items:center;justify-content:space-between;` +
           `padding:7px 8px;border-radius:4px;cursor:${answer?'default':'pointer'};margin-bottom:3px;` +
           `background:${bg};border:1px solid ${bd};">` +
-          `<span style="color:${answer?'#8fbfa0':'#666'};font-size:9px;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica Neue,Arial,sans-serif;letter-spacing:0.5px;">${c.label}</span>` +
+          `<span style="color:${answer?'#8fb8bf':'#666'};font-size:9px;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica Neue,Arial,sans-serif;letter-spacing:0.5px;">${c.label}</span>` +
           `<span style="color:${vc};font-size:14px;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica Neue,Arial,sans-serif;font-weight:bold;letter-spacing:1px;">` +
             `${val}<span style="color:#446;font-size:10px;margin-left:3px;">${c.unit}</span>` +
           `</span></div>`;
@@ -8533,12 +8533,12 @@ if ('serviceWorker' in navigator) {
       const dispVal = utilInput || (cfg ? _UV[utilActive].toFixed(cfg.dec) : '0');
       const BN = `display:flex;align-items:center;justify-content:center;` +
         `background:#111;border:1px solid #333;border-radius:3px;cursor:pointer;` +
-        `font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica Neue,Arial,sans-serif;font-weight:bold;color:#00ff88;` +
+        `font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica Neue,Arial,sans-serif;font-weight:bold;color:#00e5ff;` +
         `font-size:14px;padding:8px 0;user-select:none;`;
       const numpadHtml =
-        `<div style="background:#050e05;border:1px solid #1a1a1a;border-radius:5px;padding:7px;margin-top:8px;">` +
+        `<div style="background:#050f14;border:1px solid #1a1a1a;border-radius:5px;padding:7px;margin-top:8px;">` +
           `<div id="unp-disp" style="background:#000;border:1.5px solid #333;border-radius:4px;` +
-            `color:#c8ff00;font-size:20px;text-align:right;padding:4px 10px;margin-bottom:4px;` +
+            `color:#00e5ff;font-size:20px;text-align:right;padding:4px 10px;margin-bottom:4px;` +
             `font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica Neue,Arial,sans-serif;min-height:32px;display:flex;align-items:center;justify-content:flex-end;` +
             `letter-spacing:1px;">${dispVal}</div>` +
           `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:4px;margin-bottom:4px;">` +
@@ -8553,7 +8553,7 @@ if ('serviceWorker' in navigator) {
           `</div>` +
           `<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:4px;">` +
             `<div style="${BN}color:#ff6666;" onclick="utilNumKey('CLR')">CLR</div>` +
-            `<div style="${BN}background:#002a10;color:#00ff88;border-color:#00ff88;" onclick="utilNumKey('ENT')">ENT</div>` +
+            `<div style="${BN}background:#00252e;color:#00e5ff;border-color:#00e5ff;" onclick="utilNumKey('ENT')">ENT</div>` +
           `</div>` +
         `</div>`;
 
