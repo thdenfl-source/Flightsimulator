@@ -1543,7 +1543,7 @@ body.solo-mode .solo-panel-visible {
       <button class="page-tab active" data-sel="map" onclick="selectPanel('right','map')">MAP</button>
       <button class="page-tab" data-sel="cdu" onclick="selectPanel('right','cdu')">CDU</button>
       <button class="page-tab fullscreen-tab" onclick="enterSolo()" title="단일화면 모드">Full Screen</button>
-      <button id="reload-btn" onclick="location.reload()" title="새로고침">⟳</button>
+      <button id="reload-btn" onclick="hardReload()" title="새로고침(상태 초기화)">⟳</button>
     </div>
 
     <!-- Page 1: Map -->
@@ -6854,10 +6854,86 @@ function showHelpOnLaunch() {
   if (!dismissed) document.getElementById('help-overlay').style.display = 'flex';
 }
 
+// ═══════════════════════════════════════════════════════════════
+//  세션 상태 지속/복원 — 화면 꺼짐·앱 전환으로 탭이 자동 리로드돼도
+//  마지막 상태를 그대로 복원한다. (모바일 브라우저는 백그라운드에서 JS를
+//  계속 돌릴 수 없으므로, "리로드 후 즉시 복원"으로 연속성을 확보)
+//  ⟳ 새로고침 버튼(hardReload)만 세션을 지워 초기 상태로 시작한다.
+// ═══════════════════════════════════════════════════════════════
+const SESSION_KEY = 'flightSession';
+const SESSION_TTL = 6 * 3600 * 1000;   // 6시간 이내 스냅샷만 복원
+
+function saveSession() {
+  try {
+    const snap = {
+      v: 1, ts: Date.now(),
+      s: { lat:S.lat, lon:S.lon, hdg:S.hdg, spd:S.spd, alt:S.alt, pit:S.pit, bnk:S.bnk,
+           crs:S.crs, vs:S.vs, running:S.running, wps:S.wps, awp:S.awp, fwp:S.fwp, brg2wp:S.brg2wp },
+      gps: gpsMode,
+      fcp: { selSpd, selAlt, selCrht, selVS, selHdg, altHoldOn, crhtOn, gspdOn, rollApOn, bankTarget,
+             gspdActLat, gspdActFwd, gspdRefLat, gspdRefFwd, gspdCoasting },
+      nav: { obsOn, navSrc, navIcao, vorObsCrs, dtoLat:_dtoLat, dtoLon:_dtoLon },
+      view: { mapHdgUp, followMode, leftSel, rightSel },
+    };
+    localStorage.setItem(SESSION_KEY, JSON.stringify(snap));
+  } catch(e) {}
+}
+
+function restoreSession() {
+  let snap = null;
+  try { snap = JSON.parse(localStorage.getItem(SESSION_KEY) || 'null'); } catch(e) {}
+  if (!snap || snap.v !== 1 || (Date.now() - snap.ts) > SESSION_TTL) return false;
+  try {
+    const s = snap.s || {};
+    Object.assign(S, {
+      lat:s.lat, lon:s.lon, hdg:s.hdg, spd:s.spd, alt:s.alt, pit:s.pit, bnk:s.bnk,
+      crs:s.crs, vs:s.vs, running:!!s.running, lastT:null,
+      wps:Array.isArray(s.wps)?s.wps:[], awp:s.awp??-1, fwp:s.fwp??-1, brg2wp:s.brg2wp??-1,
+    });
+    const f = snap.fcp || {};
+    if (f.selSpd!=null) selSpd=f.selSpd; if (f.selAlt!=null) selAlt=f.selAlt;
+    if (f.selCrht!=null) selCrht=f.selCrht; if (f.selVS!=null) selVS=f.selVS; if (f.selHdg!=null) selHdg=f.selHdg;
+    altHoldOn=!!f.altHoldOn; crhtOn=!!f.crhtOn; gspdOn=!!f.gspdOn; rollApOn=f.rollApOn!==false;
+    bankTarget=f.bankTarget||0;
+    gspdActLat=f.gspdActLat||0; gspdActFwd=f.gspdActFwd||0;
+    gspdRefLat=(f.gspdRefLat===undefined?null:f.gspdRefLat); gspdRefFwd=(f.gspdRefFwd===undefined?null:f.gspdRefFwd);
+    gspdCoasting=!!f.gspdCoasting;
+    const n = snap.nav || {};
+    obsOn=!!n.obsOn; navSrc=n.navSrc||'FMS'; vorObsCrs=n.vorObsCrs??360;
+    _dtoLat=(n.dtoLat===undefined?null:n.dtoLat); _dtoLon=(n.dtoLon===undefined?null:n.dtoLon);
+    if (n.navIcao) { try { setNavIcao(n.navIcao); } catch(e) {} }
+    const v = snap.view || {};
+    mapHdgUp=!!v.mapHdgUp; followMode=!!v.followMode;
+    if (v.leftSel) leftSel=v.leftSel; if (v.rightSel) rightSel=v.rightSel;
+    // 재적용
+    try { updateFlyBtns(); } catch(e) {}
+    try { updateHoverBtns(); } catch(e) {}
+    try { updateCrsButtons(); } catch(e) {}
+    try { setNavSrc(navSrc); } catch(e) {}
+    try { applyPanels(); } catch(e) {}
+    try { updateWpMarkers(); fpRender(); updateNav(); } catch(e) {}
+    try { updateAcOnMap(); leafMap.setView([S.lat, S.lon]); } catch(e) {}
+    if (snap.gps) { try { startGPS(); } catch(e) {} }   // GPS 켜져 있었으면 재개
+    return true;
+  } catch(e) { return false; }
+}
+
+// ⟳ 새로고침: 세션을 지우고 초기 상태로 리로드(백그라운드 복원 종료)
+function hardReload() {
+  try { localStorage.removeItem(SESSION_KEY); } catch(e) {}
+  location.reload();
+}
+
+// 주기적 + 이탈 시점 저장
+setInterval(saveSession, 4000);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') saveSession(); });
+window.addEventListener('pagehide', saveSession);
+
 function init(){
   resizePFD();
   showHelpOnLaunch();
-  _fplRestore();   // 저장된 비행계획 복원(새로고침 대비)
+  const _restored = restoreSession();   // 자동 리로드 복원(있으면 FPL 복원 생략)
+  if (!_restored) _fplRestore();        // 저장된 비행계획 복원(새로고침 대비)
   fpRender();
   renderNavBox();
   updateAcOnMap();
@@ -6869,13 +6945,15 @@ function init(){
     opt.value = a.ident; opt.textContent = a.ident;
     icaoSel.appendChild(opt);
   });
-  if (AIRPORTS.length > 0) {
+  if (_restored && navIcao) {
+    icaoSel.value = navIcao;   // 복원된 선국 반영
+  } else if (AIRPORTS.length > 0) {
     navIcao = AIRPORTS[0].ident;
     navLat  = AIRPORTS[0].lat;
     navLon  = AIRPORTS[0].lon;
     icaoSel.value = navIcao;
   }
-  setPage(0);
+  if (!_restored) setPage(0);   // 복원 시엔 restoreSession의 applyPanels로 배치 유지
   window.addEventListener('resize', () => { resizePFD(); try { leafMap.invalidateSize(); } catch(e) {} scaleCdu(); });
   setTimeout(() => leafMap.invalidateSize(), 100);
   if (!_simLoopRunning) { _simLoopRunning = true; requestAnimationFrame(simStep); }
