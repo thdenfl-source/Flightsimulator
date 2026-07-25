@@ -7942,6 +7942,7 @@ if ('serviceWorker' in navigator) {
                                   btn.id === 'proc' ? `onclick="setPage(1); fpGo('IFR');"` :
                                   btn.id === 'util' ? `onclick="utilOpen('MENU')"` :
                                   btn.id === 'map'  ? `onclick="cduOpenMap()"` :
+                                  btn.id === 'check' ? `onclick="clOpen()"` :
                                   btn.id === 'charts' ? `onclick="switchMode('CHARTS')"` : '';
                 gridHtml += `
                     <div class="home-icon-wrapper" ${clickAction}>
@@ -8652,6 +8653,562 @@ if ('serviceWorker' in navigator) {
         `<div class="nav-btn" onclick="cduFullScreen()"><span>✥</span>Full</div>`;
     }
 
+
+    // ══════════════════════════════════════════════════════════════
+    //  CHECK LIST — KUH-1CG 조종사 점검표 (정상/특수/비상)
+    //  '› ' 로 시작하는 항목은 조건 안내(체크 없음)
+    // ══════════════════════════════════════════════════════════════
+    const CL = {
+      normal: { name:'정상 절차', color:'#00e07a', children:[
+        { name:'외부 점검 전 점검', items:[
+          '탑재용 항공일지·발간물·서류 – 확인',
+          '조종사 음성표본(파일) 보유 – 확인',
+          '항공기 커버·잠금장치·타이다운·접지선 – 제거 및 저장',
+          'DTC – 장착',
+          '연료 – 점검. 임무 필요량',
+          '연료 샘플 오염 여부 – 확인(당일 첫 비행 전)',
+          '배터리 – 점검. 25V 이상(-18℃ 미만 24V 이상)',
+        ]},
+        { name:'외부 점검', children:[
+          { name:'기수 부분(제1구역)', items:[
+            '메인로터 블레이드 – 점검. 긁힘·패임·균열·안정성',
+            '기체 – 점검(전선절단기·윈드실드·와이퍼·트랙커·피토관·하부창·OAT감지기)',
+            '레이돔 – 점검. 청결·문 잠금', '기수부 – 점검. 장비 안정성·문 잠금',
+            'EO/IR 터릿 – 점검. 균열·청결·습도지시기(정상 청색)',
+            '착륙등·탐색등 – 점검', '전륜 착륙장치 – 점검', '안테나 – 점검', 'PA 확성기 – 점검',
+          ]},
+          { name:'조종실 우측(제2구역)', items:[
+            '조종실 – 점검(문·투하장치·의자·벨트·비상조명)', '전방 비상부주 조립체 – 점검',
+            '비상부주 입수감지기 – 점검', '착빙 탐지기 – 점검',
+            '축압기 – 점검. 1,985~3,200 psi(최대 4,000)', '엔진 오일 수준 – 점검',
+            '승객실 전방 창문 – 점검', '외장형 호이스트(O) – 점검',
+          ]},
+          { name:'승객실 내부(제3구역)', items:[
+            '승객실 – 점검(문·소화기·구급낭·회로차단기·모니터·의자·비상조명)',
+            '임무장비 – 필요시 점검', '연료필터 적색 버튼 – 점검', '내부 인테리어 – 점검',
+            '전이부 – 점검(결속·정비등·APU CONT 3RD In·환기구·응축기)',
+            'CPI SIU SYSTEM SHUT OFF 스위치 – OFF',
+          ]},
+          { name:'상부 데크(제4구역)', items:[
+            '편대등 – 점검', '카울링 – 개방', '엔진 공기 흡입구 – 점검(이물질·빙결)',
+            '엔진 격실 – 점검(돌출버튼·누유·배기구)', '메인기어박스 오일 수준 – 점검',
+            '유압계통 – 점검(저장조·오일·필터)', '로터 제동장치 – 점검', '소화기 – 점검',
+            'APU – 점검(오일·이물질·누유)', '메인로터 계통 – 점검(블레이드·댐퍼·마스트)',
+            '상부데크 모든 카울링 – 잠금 및 확인',
+          ]},
+          { name:'동체 우측(제5구역)', items:[
+            '승객실 후방창 – 점검', '외부 보조 연료탱크(O) – 점검',
+            '위치등·편대등·하부 충돌방지등 – 점검',
+            '주륜 착륙장치 – 점검(가스실린더 압력·브레이크·완충기·타이어)',
+            '외부 전원·공압·유압 연결구 – 점검', '비상부주 조립체 – 점검',
+            '비상부주 입수감지기 – 점검', '전이부 통풍구 – 점검', '테일 구동축 – 점검. 덮개 잠금',
+          ]},
+          { name:'미부 동체(제6구역)', items:[
+            '사다리 – 장착', '중간 기어박스 – 점검(오일·누유·마개)', '수직 안정판 – 점검',
+            '수평 안정판 – 점검', '테일로터 블레이드 – 점검', '테일로터 – 점검(로드·댐퍼)',
+            '테일기어박스 – 점검(오일·누유·마개)', '충돌방지등·편대등·위치등 – 점검',
+            '테일 범퍼 – 점검', '사다리 – 제거 및 저장', '전이부 문 – 잠금', 'AD-ELT BEACON – 점검',
+          ]},
+          { name:'동체 좌측(제7구역)', items:[
+            '비상부주 조립체 – 점검', '외부 보조 연료탱크(좌측,O) – 점검',
+            '기체 – 점검(유압 연결구·배터리 격실·급유구)', '주륜 착륙장치 – 점검',
+            '위치등·편대등 – 점검', '비상부주 입수감지기 – 점검', '후방 중력식 급유구 – 점검',
+            '승객실 후방창 – 점검',
+          ]},
+          { name:'조종실 좌측(제8구역)', items:[
+            '승객실 문·전방 창문 – 점검', '전방 중력식 급유구 – 점검', '엔진 오일 수준 – 점검',
+            '탐조등(O) – 점검', '조종실 – 점검(문·투하장치·의자·벨트·비상조명)',
+            '비상부주 조립체 – 점검', '비상부주 입수감지기 – 점검',
+            '승무원 및 탑승자 브리핑 – 수행',
+          ]},
+        ]},
+        { name:'조종실 장비 점검', items:[
+          '부기장 컬렉티브 – 연장 및 잠금', '중량 선택레버/허리지지대 – 조절',
+          '조종석 의자·페달 – 조절', '안전벨트 – 결속 및 점검', '출입문 – 잠금·안정성',
+          'PARKING BRAKE – ON', 'NOSE WHEEL LOCK – LOCK', '회로차단기 – In',
+          '상부콘솔 스위치 – 설정(WIPER OFF·GEN1/2 ON·TRU1/2 ON·BATT OFF·AIR SOUR OFF)',
+          'FIRE EXTGH – OFF, FIRE DETECTOR – OPER', 'ENG ANTI ICE – OFF',
+          'EMERG PUMP – OFF', 'PITOT HEAT – AUTO', 'BATT HEAT – OFF',
+          'PCD – OFF', 'ENG FUEL SYS 레버 – FUEL OPEN', 'ENG FIRE 레버 – 최대 전방',
+          '계기패널(예비나침반·ISI·MFD·FCP·PIP·시계) – 확인',
+          'ENGINE IGNITION – OFF', '중앙콘솔 – 확인 및 설정',
+          'FUEL 패널 스위치 – OFF(XFER AUTO)', 'AHRS/RCU – 모두 N',
+          'EMERG FLOATS ARMED/OFF – OFF', 'HOIST ENABLE(O) – OFF',
+          '헤드셋 및 조종 장갑 – 착용',
+        ]},
+        { name:'엔진 시동 전 점검', items:[
+          'BATT 스위치 – ON', '내부 통화 – 점검', 'NLG LOCK·PRK ON 조언 – 확인',
+          '주 경고패널 작동(Lamp Test) – 확인 후 해제', 'ISI 정상 지시 – 확인',
+          '연료계기 – 연료량 확인', 'EIS 정상 지시 – 확인', 'FIRE DETECTOR – TEST 후 OPER',
+          'FUEL BP2 – ON. P2 14 psi 이상', 'APU 배기구 안정성 – 확인',
+          'APU CONTR – ON(APU ON 조언)', 'APU/GPU – APU GEN', 'AIR SOUR – APU',
+          'MFD3·CDU2·DB 유효기간 – 확인', 'ECS 패널 – 설정', 'U/VHF-AM/FM 무전기 – On',
+          'VHF/FM MN – On', 'MPP RADAR·EGPWS·DMM – On', 'AVCS POWER – On',
+          '통신장비 – 설정 및 점검', 'AHRS1·AHRS2 – On', 'TRIM FEEL – On',
+          'EMERG FLOATS ARMED/OFF – ARMED', 'HOIST ENABLE(O) – OFF',
+          'CPI SIU SHUT OFF – ARM', 'MC 상태 – 점검(Avionics Status·CVFDR)',
+          'GPS – 점검(GPS1/2 녹색)', '시스템 메시지 – 점검',
+          '임무 필요 데이터 – 입력(INIT·W&B·Flight Plan·Accept·PERF Config)',
+          '기압고도계 수정치 – 설정(PFD·ISI)', 'CHIP DETECTOR – TEST',
+          'EMERG PUMP – AUTO(E-PUMP ON 조언)', '컬렉티브 – 잠금 해제',
+          '조종간 – 점검(전 범위·걸림/뻑뻑함 확인)', '컬렉티브 – 잠금',
+          'EIS ACCP 압력 1,985~3,200 psi – 확인', 'EMERG PUMP – OFF',
+        ]},
+        { name:'엔진 시동', items:[
+          'MPP RADAR – OFF', 'FUEL BP1 – ON(F5 XFER AUTO). 1 F/L PRES 미시현, P1 14 psi 이상',
+          'ENGINE IGNITION – ON', 'NO.1·NO.2 ENG FUEL SYS 레버 FUEL OPEN – 확인',
+          '로터 브레이크 – 해제 또는 적용. 150~165 bar', '로터 회전 지역 장애물 – 확인',
+          '화재 경계 요원 – 배치', '조종간 – 파지',
+          'FUEL X-FEED – 해당 엔진(당일 첫 시동)',
+          '한 엔진 – 시동(PCD IDLE, ENG STRT·NG·TGT·NP·NR·EOP 증가)',
+          'FUEL X-FEED – 다른 엔진(당일 첫 시동)', '다른 엔진 – 시동(상기 반복)',
+          'FUEL X-FEED – OFF', '로터 브레이크 – 적용 시 해제', '사이클릭 – 필요한 적용',
+          '시스템 – 점검(NG 68%·EOP 23~100·MGB P 6↑·HYD P 2,700~3,200)',
+          'EMERG PUMP – AUTO',
+        ]},
+        { name:'엔진 Runup', items:[
+          '조종간 – 파지', '컬렉티브 – 잠금 해제', 'NOSE WHEEL LOCK – LOCK 확인',
+          'PCD – FLY(LOW ROTOR RPM 미시현, 1/2 GEN 미시현)',
+          '시스템 – 점검(TQ1/TQ2 5% 이내·MGB P 6↑)', 'AIR SOUR – 설정',
+          'APU/GPU – OFF', 'APU CONTR – OFF', 'HEELS – ARM', '연료 이송 – 점검',
+          '외부 보조 연료탱크(O) – 필요시 점검',
+          'AFCS 비행 전 시험 – 수행(AP1/AP2 TEST OK)',
+          '사이클릭 AFCS FAST CUT OFF – 점검', '엔진 성능/동력 추이 – 점검(해당 시)',
+          '비행 계기 – 점검 및 설정', 'CDU 정상 상태 – 확인',
+        ]},
+        { name:'지상 활주', items:[
+          '고임목 – 제거', '출입문 – 잠금·안정성', 'PARKING BRAKE – REL',
+          'NOSE WHEEL LOCK – 설정', '페달 브레이크 – 필요시 점검',
+          '› 사이클릭 움직임 최소화, 착륙등/탐색등 전개 시 지면 이격 주의',
+        ]},
+        { name:'이륙', children:[
+          { name:'이륙 전 점검', items:[
+            'PCD – FLY. NP/NR 100%', '시스템 – 점검(경고/주의·System Message 정상)',
+            'CNS 및 항공전자장비 – 설정', 'MPP RADAR – ON(필요시)',
+            '방빙·제빙장치 – 설정', '내·외부 등화 – 설정', '승무원·탑승자·임무장비 – 안전 확인',
+          ]},
+          { name:'제자리비행 점검', items:[
+            '시스템 – 점검(경고/주의·System Message 정상)', 'PFD·ISI 정상 시현',
+            '동력 – 점검 및 예상 데이터 비교',
+          ]},
+          { name:'이륙 후 점검', items:[
+            'EO/IR – 필요시 INS 정렬(50 kt 이상)', '탐조등 EO/IR – 필요시 연동',
+            '탐색 레이더 – 필요시 운용',
+          ]},
+        ]},
+        { name:'착륙', children:[
+          { name:'착륙 전 점검', items:[
+            'NOSE WHEEL LOCK – LOCK 확인', 'PARKING BRAKE – 설정', '승무원·탑승자 – 안전 확인',
+            '임무장비 – 안전 확인·설정', '탐조등 – Off(STOW)', 'EO/IR HCU STOW – 누름',
+            'VCC RDR TX – 해제', 'MPP RADAR – OFF',
+          ]},
+          { name:'착륙 후 점검', items:[
+            'NOSE WHEEL LOCK – 설정', '외부 등화 – 설정', '항공전자/임무장비 – 설정',
+          ]},
+        ]},
+        { name:'주기 및 엔진 정지', items:[
+          'NOSE WHEEL LOCK – LOCK', 'PARKING BRAKE – ON',
+          '조종간 – 파지(사이클릭 중립·페달 중앙·컬렉티브 최하단·잠금)', '고임목 – 설치',
+          '방빙·제빙 스위치 – OFF', 'AP1·AP2 – OFF', 'EMERG FLOATS ARMED/OFF – OFF',
+          'APU CONTR – ON', 'APU/GPU – APU GEN', 'AIR SOUR – APU', 'PCD – IDLE',
+          'ENGINE IGNITION – OFF', 'FUEL BP1 – OFF', 'EMERG PUMP – OFF',
+          'PCD – NG 90% 이하 2분 냉각 후 OFF', 'TGT – 관찰(540℃↑ 시 MTRING)',
+          '로터 브레이크 – NR 50% 미만 적용', 'MPP EGPWS·DMM – OFF', 'AVCS POWER – OFF',
+          '무전기 전원 – Off', 'AHRS1·AHRS2 – OFF', 'PA VOL – OFF', '임무장비 – Off',
+          '내·외부 등화 – 저장 및 OFF', '상부콘솔 스위치 – 설정', '승객실 장비 – OFF',
+          'FUEL 패널 스위치 – OFF', 'AIR SOUR – OFF', 'APU/GPU – OFF', 'APU CONTR – OFF',
+          'BATT – OFF', 'DTC – 제거', '부기장석 컬렉티브 – 돌려 넣음',
+        ]},
+        { name:'항공기 이탈 전 점검', items:[
+          '항공기 – 점검(손상·누유·오일 수준)', '임무장비 안전성 – 확인',
+          '항공기 기록부 – 작성', '항공기 안정성 – 확인',
+        ]},
+      ]},
+
+      special: { name:'특수 점검 절차', color:'#ffaa33', children:[
+        { name:'증기 배출(Vapor Vent) 절차', items:[
+          'FUEL BP1·BP2 – ON', 'ENG FUEL SYS 레버 – OPEN',
+          'VAPOR VENT – ON. 연료 배출 확인', 'VAPOR VENT – OFF',
+          'FUEL X-FEED – 해당 ENG(반복)', 'FUEL X-FEED – OFF',
+          'ENG FUEL SYS 레버 – 설정', 'BP1·BP2 – 설정',
+        ]},
+        { name:'MAS 보정', children:[
+          { name:'MAS 지상 보정', items:[
+            '항공기 착륙', 'AHRS1·AHRS2 – OFF',
+            'COMP1 누른 상태 AHRS1 – On(COMP 점등)', 'COMP2 누른 상태 AHRS2 – On(COMP 점등)',
+            '약 2분 대기(COMP1/2 점등, DG/MG1/2 DG 점등)', 'AUTO TRIM – On',
+            '› 지상 보정 후 10분 이내 공중 보정 진입',
+          ]},
+          { name:'MAS 공중 보정', items:[
+            '› 경사 20° 이내, AGL 1,500±200 ft, 100±20 KIAS',
+            'COMP1·COMP2 – 약 2초 동시 누름', '30° 우경사 – 유지(COMP 점멸=진입)',
+            '우경사 25~35° 유지 약 2분(COMP 점등=완료)', '약 5초 우경사 유지 후 수평 복귀',
+            '30° 좌경사 – 유지(COMP 점멸=진입)', '좌경사 25~35° 유지 약 2분(COMP 소등=완료)',
+          ]},
+        ]},
+        { name:'최대 동력 점검', items:[
+          '고도계 – 29.92 설정', 'AIR SOUR – OFF', 'ECS 모드 – OFF', 'ENG ANTI ICE – OFF',
+          'Engines 화면 – 선택', 'System Test – 터치', '모든 상위 모드 – 해제',
+          '속도 – 80 KIAS', '점검 안 하는 엔진 TRAINING – TRNG(NP 95%)',
+          '컬렉티브 – 증가(고도 유지). TGT 951±5℃ 또는 NG 한계 확인·기록',
+        ]},
+        { name:'엔진 동력 점검(대체 절차)', items:[
+          '› 80≤IAS≤160, ENG ANTI ICE OFF, 초기 TGT 10℃ 이내',
+          '고도계 – 29.92 설정', 'AIR SOUR – OFF', 'ECS 모드 – OFF', 'ENG ANTI-ICE – OFF',
+          'Engines 화면 – 선택. ETF 기록', 'System Test – 선택', '모든 상위 모드 – 해제',
+          '컬렉티브 – 조절(Vh 동력·NR 100%·30초 안정)', 'Engine # – 선택',
+          '약 20초 후 Completed 시 ETF – 기록', '컬렉티브 – 감소', 'AIR SOUR – 설정',
+          '기록 ETF 비교', '다른 엔진 – 반복',
+        ]},
+      ]},
+
+      emerg: { name:'비상 및 고장 조치 절차', color:'#ff5555', children:[
+        { name:'제 1 절 엔진계통', children:[
+          { name:'한 엔진 고장', items:[
+            '컬렉티브 – 조절. NR 운용 범위 유지', '한 엔진 속도 유지', '내·외부 화물 – 필요시 투하',
+            '› 계속 비행 불가 시', 'LAND AS SOON AS POSSIBLE',
+            '› 계속 비행 가능 시', 'LAND AS SOON AS PRACTICABLE',
+          ]},
+          { name:'비행 중 엔진 재시동', items:[
+            'EMER APU START', 'AIR SOUR – APU', '해당 PCD – OFF', '해당 PCD – FLY',
+          ]},
+          { name:'두 엔진 고장', items:[
+            'AUTOROTATE', '› 시간 가용 시', 'EMERG PUMP – ON', 'EMER APU START',
+          ]},
+          { name:'#FADEC 주의 / ENG# FAIL FIX(PFL)', items:[
+            '컬렉티브 – 조절. NR 운용 범위', '내·외부 화물 – 필요시 투하',
+            'LAND AS SOON AS PRACTICABLE', '› NR 유지 불가 시', '한 엔진 속도 유지',
+            '정상 엔진 – TQ 15% 이상 유지', 'EMER ENG SHUTDOWN(해당 엔진)',
+            '한 엔진 고장 절차 – 수행',
+          ]},
+          { name:'#FADEC 주의 / ENG# FIX-PWR(PFL)', items:[
+            '컬렉티브 – 조절. NR 운용 범위', '내·외부 화물 – 필요시 투하',
+            'LAND AS SOON AS PRACTICABLE', '› NR 유지 불가 시', '한 엔진 속도 유지',
+            '정상 엔진 – TQ 15% 이상 유지', 'EMER ENG SHUTDOWN(해당 엔진)', '한 엔진 고장 절차 – 수행',
+          ]},
+          { name:'#FADEC 주의 / PFL 미시현', items:[
+            '컬렉티브 – 조절. NR 운용 범위', '내·외부 화물 – 필요시 투하',
+            'LAND AS SOON AS PRACTICABLE', '› NR 유지 불가 시', '한 엔진 속도 유지',
+            '정상 엔진 – TQ 15% 이상 유지', 'EMER ENG SHUTDOWN(해당 엔진)', '한 엔진 고장 절차 – 수행',
+          ]},
+          { name:'#FADEC / FADEC# TEMP HIGH(PFL)', items:[ 'LAND AS SOON AS PRACTICABLE' ]},
+          { name:'#ENG FAULT / ENG# TRAN LIMIT(PFL)', items:[
+            '컬렉티브 – 천천히 조작(급조작 금지)', 'LAND AS SOON AS PRACTICABLE',
+          ]},
+          { name:'#ENG FAULT / ENG# PWR LIMIT(PFL)', items:[
+            '컬렉티브 – 조절', 'LAND AS SOON AS PRACTICABLE',
+          ]},
+          { name:'1/2 INLET A/I 주의 시현', items:[ '착빙 지역 – 이탈' ]},
+          { name:'엔진 압축기 실속', items:[
+            '컬렉티브 – 감소', '› 실속 지속 시', '해당 PCD – IDLE', '› 실속 사라지면', '해당 PCD – FLY',
+            '› 실속 재발생 시', '한 엔진 속도 유지', 'EMER ENG SHUTDOWN(해당 엔진)', '한 엔진 고장 절차 – 수행',
+          ]},
+          { name:'비정상 엔진 소음', items:[ '컬렉티브 – 감소', 'LAND AS SOON AS PRACTICABLE' ]},
+          { name:'엔진 주 구동축 고장', items:[
+            '컬렉티브 – 조절. NR 운용 범위', '한 엔진 속도 유지',
+            'EMER ENG SHUTDOWN(해당 엔진). 재시동 금지', '한 엔진 고장 절차 – 수행',
+          ]},
+          { name:'#ENG OIL P / OIL T / CHIP 주의', items:[
+            '› 한 엔진 비행 불가 시', 'LAND AS SOON AS POSSIBLE',
+            '› 한 엔진 비행 가능 시', '한 엔진 속도로 조절', '해당 PCD – IDLE', 'LAND AS SOON AS PRACTICABLE',
+          ]},
+        ]},
+        { name:'제 2 절 메인로터 및 조종계통', children:[
+          { name:'비행 중 테일로터 추력 상실', items:[
+            '속도 – 조절. 75 KIAS 이상', 'AUTOROTATE', 'PCD – OFF(감속 조작 시)',
+          ]},
+          { name:'제자리/저속 테일로터 추력 상실(좌회전)', items:[
+            '컬렉티브 – 감소', 'PCD – OFF(접지 5~10 ft 전)',
+          ]},
+          { name:'좌측 페달 고정(낮은 피치)', items:[
+            '75 KIAS 얕은각 접근', '정풍 또는 우전방풍으로 시도', '15~20 ft에서 감속',
+            '활주로 정대', '유연한 착륙', '페달 브레이크로 기수 유지',
+          ]},
+          { name:'우측 페달 고정(높은 피치)', items:[
+            '정풍 또는 좌전방풍 접근', '컬렉티브 적절히 내려 강하', '20° 편요 내 좌경사 비행',
+            '컬렉티브 증가로 기수 정대', 'PCD – 필요시 OFF(접지 5~10 ft 전)',
+            '유연한 접지', '페달 브레이크로 기수 유지',
+          ]},
+          { name:'T/R CABLE 주의 시현', items:[
+            '좌·우 페달 – 적용. 조종 가능 여부 확인',
+            '› 페달 조종 가능 시', 'LAND AS SOON AS PRACTICABLE',
+            '› 페달 조종 불가 시', '컬렉티브 – 조절', 'LAND AS SOON AS PRACTICABLE(활주 착륙)',
+          ]},
+          { name:'RTR BRK ON 주의 시현', items:[
+            '로터 브레이크 레버 – OFF 확인', '2차 징후(소음·냄새·연기) – 확인',
+            '› 2차 징후 있으면', 'LAND AS SOON AS POSSIBLE',
+            '› 2차 징후 없으면', 'LAND AS SOON AS PRACTICABLE',
+          ]},
+          { name:'조종계통 고장', items:[ 'LAND AS SOON AS POSSIBLE', '착륙 후 EMER ENG SHUTDOWN' ]},
+          { name:'메인로터계통 고장', items:[
+            'LAND AS SOON AS POSSIBLE', '착륙 후 EMER ENG SHUTDOWN',
+            '› 로터 완전 정지 후 이탈',
+          ]},
+        ]},
+        { name:'제 3 절 동력전달계통', children:[
+          { name:'CHIP DETECT MGB/IGB/TGB 주의', items:[ '속도 – 조절. 75 KIAS', 'LAND AS SOON AS PRACTICABLE' ]},
+          { name:'MGB TOT P 경고', items:[
+            'LAND AS SOON AS POSSIBLE', '› 시간 가용 시', '속도 – 75 KIAS', 'EMER APU START', 'GEN1·GEN2 – OFF',
+          ]},
+          { name:'MGB TEMP 주의', items:[
+            '속도 – 75 KIAS 이하', '› 5분 이상 지속 시', 'LAND AS SOON AS PRACTICABLE',
+            '› 사라지면', '계속 비행',
+          ]},
+          { name:'MGB MAIN P 주의', items:[
+            'MGB T·MGB P – 확인', '› MGB T 120℃ 초과 시', '속도 – 75 KIAS', 'LAND AS SOON AS PRACTICABLE',
+            '› MGB P 6 psi↑·T 120℃ 이하 유지 시', '계속 비행',
+          ]},
+          { name:'MGB EM P 주의', items:[ '속도 – 75 KIAS', 'LAND AS SOON AS PRACTICABLE' ]},
+          { name:'IGB/TGB TEMP 주의', items:[ '속도 – 75 KIAS', 'LAND AS SOON AS POSSIBLE' ]},
+        ]},
+        { name:'제 4 절 연료계통', children:[
+          { name:'#ENG F/FLT 또는 #F/L FILT 주의', items:[
+            'FUEL X-FEED – 해당 엔진', 'FUEL XFER·AUX XFER·F5 XFER – OFF', 'LAND AS SOON AS PRACTICABLE',
+          ]},
+          { name:'1&2 ENG F/FLT 또는 F/L FILT 주의', items:[ 'LAND AS SOON AS POSSIBLE' ]},
+          { name:'1/2 FUEL LOW 주의', items:[
+            '급격한 기동 제한, 착륙 시 피치 10° 이내', 'LAND AS SOON AS PRACTICABLE',
+          ]},
+          { name:'#ENG FUEL P 주의', items:[
+            '› 한 엔진 비행 불가 시', 'X-FEED – 해당 엔진', 'LAND AS SOON AS POSSIBLE', '착륙 후 EMER ENG SHUTDOWN',
+            '› 한 엔진 비행 가능 시', '한 엔진 속도 유지', '해당 BP – OFF', 'LAND AS SOON AS PRACTICABLE',
+          ]},
+          { name:'1&2 ENG FUEL P 주의', items:[ 'LAND AS SOON AS POSSIBLE', '착륙 후 EMER ENG SHUTDOWN' ]},
+          { name:'#F/L PRES 주의', items:[
+            '› 5,000 ft↑ 엔진정지 위험·30° 이상 경사 금지',
+            'FUEL BP1·BP2 – ON 확인', '해당 FUEL P – 확인', 'X-FEED – 해당 엔진', 'LAND AS SOON AS PRACTICABLE',
+          ]},
+          { name:'1&2 F/L PRES 주의', items:[
+            'FUEL BP1·BP2 – ON 확인', 'FUEL P1·P2 – 확인', 'LAND AS SOON AS POSSIBLE',
+          ]},
+          { name:'AUX-P 주의', items:[
+            '해당 AUX XFER – OFF', '정상 AUX XFER – ON. 이송 확인',
+            '› 외부탱크 850 lb 이상 시', 'LAND AS SOON AS PRACTICABLE',
+            '› 850 lb 미만 시', '총 연료량 따라 임무 판단', '필요시 탑승자·화물 – 앞으로 이동',
+          ]},
+          { name:'AUX-C 주의', items:[ 'AUX1·AUX2 XFER – ON. 이송·균형 확인' ]},
+        ]},
+        { name:'제 5 절 전기계통', children:[
+          { name:'1&2 GEN 주의', items:[
+            '모든 제빙/방빙·Hoist·에어컨·불필요장비 – OFF', 'GEN1·GEN2 – OFF 후 ON',
+            '› 미회복 시', 'EMB RST1·RST2 – 누름', '› 미회복 시', 'GEN1·GEN2 – OFF',
+            'EMER APU START', 'LAND AS SOON AS PRACTICABLE',
+          ]},
+          { name:'#GEN 주의', items:[
+            'BLADE DEICE POWER – OFF', '해당 GEN – OFF 후 ON',
+            '› 미회복 시', '해당 EMB RST – 누름', '› 미회복 시', '해당 GEN – OFF',
+            '필요시 EMER APU START', '필요시 BLADE DEICE POWER – ON', 'LAND AS SOON AS PRACTICABLE',
+          ]},
+          { name:'1&2 TRU 주의', items:[
+            'TRU1·TRU2 – OFF 후 ON', '› 미회복 시', 'EMB RST1·RST2 – 누름', '› 미회복 시',
+            'TRU1·TRU2 – OFF', '비필수 직류전원 장비 – OFF', 'LAND AS SOON AS PRACTICABLE',
+          ]},
+          { name:'#TRU 주의', items:[
+            '해당 TRU – OFF 후 ON', '› 미회복 시', '해당 EMB RST – 누름', '› 미회복 시', '해당 TRU – OFF',
+          ]},
+          { name:'BATT TEMP 주의', items:[ 'BATT – OFF', 'LAND AS SOON AS PRACTICABLE' ]},
+          { name:'BATT LOW 주의', items:[ '› 배터리가 유일 전원 시', 'LAND AS SOON AS POSSIBLE(10분 이내)' ]},
+        ]},
+        { name:'제 6 절 유압계통', children:[
+          { name:'1 HYD PUMP 주의', items:[
+            'EMERG PUMP – ON', '› E-PUMP ON 미시현 시', 'LAND AS SOON AS POSSIBLE', '정지 시 주기 브레이크 사용',
+            '› E-PUMP ON 시현 시', 'LAND AS SOON AS PRACTICABLE',
+          ]},
+          { name:'2 HYD PUMP 주의', items:[ 'LAND AS SOON AS POSSIBLE' ]},
+          { name:'1&2 HYD PUMP 주의', items:[
+            'EMERG PUMP – ON', 'E-PUMP ON 조언 – 확인', 'HYD P1 – 확인', 'LAND AS SOON AS POSSIBLE',
+          ]},
+          { name:'#M/R ACT 또는 #T/R ACT 주의', items:[ '조종간 – 유연한 조작. 경사 30° 이내', 'LAND AS SOON AS POSSIBLE' ]},
+          { name:'1 RSVR LOW 주의', items:[ 'LAND AS SOON AS POSSIBLE', '정지 시 주기 브레이크 사용' ]},
+          { name:'2 RSVR LOW 주의', items:[ 'LAND AS SOON AS POSSIBLE' ]},
+          { name:'HYD TEMP 주의', items:[
+            'HYD T1·T2 – 확인', '› 135℃ 초과 시', 'LAND AS SOON AS POSSIBLE',
+            '› 135℃ 이하 시', 'LAND AS SOON AS PRACTICABLE',
+          ]},
+          { name:'HYD P 2,700 psi 미만', items:[ 'HYD P1·P2 – 확인', 'LAND AS SOON AS PRACTICABLE' ]},
+          { name:'HYD P 3,200 psi 이상', items:[
+            'HYD P1·P2 – 확인', '› 3,600 psi 초과 시', 'LAND AS SOON AS PRACTICABLE',
+            '› 3,200~3,600 유지 시', '계속 비행(착륙 후 재이륙 제한)',
+          ]},
+        ]},
+        { name:'제 7 절 계기 및 자동비행 조종계통', children:[
+          { name:'ADC 고장', items:[
+            '› 황색박스 IAS/ALT', 'ADC 노브 – 1 또는 2(ISI 근접)',
+            '› 흰색박스·적색 X', 'ADC 노브 – 정상 센서', '› 미복구 시', 'ADC 노브 – BACKUP',
+            'LAND AS SOON AS PRACTICABLE',
+          ]},
+          { name:'1개 MFD 고장 / REV 점등', items:[ 'REV 주의등 – 누름' ]},
+          { name:'3개 이상 MFD 또는 2개 CDU 고장', items:[
+            'MFD/CDU 회로차단기 – Out 후 In', '› 미회복 시', 'LAND AS SOON AS PRACTICABLE',
+          ]},
+          { name:'GPS/INS 고장', items:[ 'LAND AS SOON AS PRACTICABLE' ]},
+          { name:'AFCS FAIL 경고', items:[ '조종간 – 파지', '속도 – 130 KIAS 이내', 'LAND AS SOON AS PRACTICABLE' ]},
+          { name:'COLL LINK 주의', items:[
+            '조종간 – 유연한 조작', 'AP2 – OFF 후 ON', '› 계속 시현 시', '속도 – 130 KIAS 이내', '컬렉티브 – 수동 조절',
+          ]},
+          { name:'PITOT HEAT 주의', items:[
+            '› 1개 고장', 'ADC 노브 – 정상 작동 쪽', '계속 비행',
+            '› 2개 모두 고장', 'PITOT HEAT – OFF 후 AUTO', '계속 시현 시 OFF 후 ON', '착빙 지역 – 이탈',
+          ]},
+          { name:'트림 작동기 고착', items:[
+            '조종간 – 유연한 조작', '안전 절단핀 – 필요시 절단', '속도 – 130 KIAS 이내', 'LAND AS SOON AS PRACTICABLE',
+          ]},
+          { name:'2개 SEMA 또는 SEMA2 고장', items:[
+            '조종간 – 유연한 조작', '속도 – 130 KIAS 이내', 'LAND AS SOON AS PRACTICABLE',
+          ]},
+        ]},
+        { name:'제 8 절 보조동력장치계통', children:[
+          { name:'APU OIL TEMP 주의', items:[
+            'APU CONTR – OFF', '오일량 확인 전 재시동 금지(최소 30분 냉각)',
+          ]},
+          { name:'APU FAIL 주의', items:[
+            'APU CONTR – OFF(2분 대기, ESU 코드 확인)', 'APU CONTR – ON',
+          ]},
+        ]},
+        { name:'제 9 절 화재 및 낙뢰', children:[
+          { name:'지상 엔진/기체 화재', items:[
+            'No.1·No.2 PCD – OFF', '해당 ENG FIRE 레버 – 당김', 'FIRE EXTGH – MAIN 또는 RESERVE',
+            'FUEL BP1·BP2 – OFF', 'APU CONTR – OFF',
+          ]},
+          { name:'APU 격실 화재', items:[
+            'APU FIRE EXTGH T핸들 – 당김', 'FIRE EXTGH – MAIN 또는 RESERVE', 'LAND AS SOON AS POSSIBLE',
+          ]},
+          { name:'비행 중 MGB 격실 화재', items:[
+            'LAND AS SOON AS POSSIBLE', '휴대용 소화기 준비', '승객실 문 – 필요시 개방',
+          ]},
+          { name:'비행 중 엔진 화재', items:[
+            '한 엔진 속도 유지', '해당 PCD – OFF', '해당 ENG FIRE 레버 – 당김',
+            'FIRE EXTGH – MAIN 또는 RESERVE', '해당 BP – OFF', 'LAND AS SOON AS POSSIBLE',
+          ]},
+          { name:'비행 중 전기계통 화재', items:[
+            'GEN1·GEN2 – OFF', 'BATT – 필요시 OFF', 'LAND AS SOON AS POSSIBLE',
+          ]},
+          { name:'비행 중 외부 보조연료탱크 화재', items:[
+            'AUX1·AUX2 XFER – OFF', '속도 – 75 KIAS 이하', 'LAND AS SOON AS POSSIBLE',
+          ]},
+          { name:'연기 또는 타는 냄새 제거', items:[
+            'ECS 모드 – VENT', 'ECS AIR SEL – EXT AIR', '› 미제거 시', '속도 – 75 KIAS 이하',
+            '승객실 문·창문 – 개방', '페달 조종 OUT OF TRIM 유지', 'LAND AS SOON AS PRACTICABLE',
+          ]},
+          { name:'낙뢰', items:[
+            '› FADEC 정상 작동 안 하면', 'PCD – IDLE(해당 엔진)',
+            '› FADEC 반응 없으면', 'EMER ENG SHUTDOWN(해당 엔진)', '한 엔진 고장 절차 – 수행',
+          ]},
+        ]},
+        { name:'제 10 절 비상착륙 및 불시착수', children:[
+          { name:'산림지역 비상 착륙(무동력)', items:[
+            'AUTOROTATE. 나무 높이에서 전진속도 0', '컬렉티브 – 조절(가지 닿기 전 최대량)',
+          ]},
+          { name:'불시 착수 – 유동력', items:[
+            '착수 전 점검(벨트·화물 고정, 탐조등 OFF/-90°)', 'EMERG FLOATS ARMED/OFF – ARMED',
+            '브리핑 – 승무원·승객', 'WINDSHIELD WIPER – HI', '접근 및 제자리비행',
+            '착수 – 수평~기수 약간 들림(5° 이내)', '비상부주 – 팽창 확인(미작동 시 FLOAT)',
+            '컬렉티브 – 최하단', 'EMER ENG SHUTDOWN', '로터 브레이크 – 필요시 적용',
+            '항공기 전원 – 차단', '이탈 및 구명정 탑승',
+          ]},
+          { name:'불시 착수 – 무동력', items:[
+            'AUTOROTATE', '착수 전 점검 – 시간 가용 시', 'EMERG FLOATS ARMED/OFF – ARMED',
+            '브리핑', 'WINDSHIELD WIPER – HI', 'AGL 100 ft 감속 자세(5~10°)',
+            '착수 – 수평, 30 KIAS 이하, 300 fpm 이하', '비상부주 – 팽창 확인(미작동 시 FLOAT)',
+            '컬렉티브 – 최하단', 'EMER ENG SHUTDOWN', '항공기 전원 – 차단', '이탈 및 구명정 탑승',
+          ]},
+        ]},
+        { name:'제 11 절 임무장비 및 기타', children:[
+          { name:'호이스트 비상투하', items:[ 'CABLE CUT 스위치 – 누름(조종사/승무원 패널)' ]},
+          { name:'호이스트 완전 풀림', items:[
+            'PILOT OVERRIDE – UP 또는 DOWN', '› 조절 불가 시', 'HOIST ENABLE – OFF', '브리핑 지시 절차 조치',
+          ]},
+          { name:'호이스트 케이블 고착', items:[
+            'HOIST ENABLE – OFF', '항공기 고도 – 강하', 'CABLE CUT – 상황에 따라 누름',
+          ]},
+          { name:'MR/TR DIC FAULT/FAIL 주의', items:[
+            '착빙 지역 – 이탈', 'BLADE DEICE POWER – OFF', '› 진동 증가 시', 'LAND AS SOON AS POSSIBLE',
+          ]},
+          { name:'BLADE DEICE AUTO FAIL', items:[
+            'BLADE DEICE MODE – MANUAL 적절한 강도', '› 진동/토크 증가 시', 'LAND AS SOON AS PRACTICABLE',
+          ]},
+          { name:'ICE DETECD 주의', items:[
+            'BLADE DEICE POWER – ON', 'BLADE DEICE MODE – AUTO', '토크 증가·진동 – 관찰',
+          ]},
+          { name:'WIRE CUTTER 주의', items:[ 'ANTI ICE WIRE CUTTER – OFF 후 ON', '› 계속 시현 시', '착빙 지역 – 이탈' ]},
+          { name:'WINDSHIELD LH/RH FAIL', items:[ 'ANTI ICE WINDSHIELD – OFF 후 ON', '› 계속 시현 시', '착빙 지역 – 이탈' ]},
+          { name:'COWLING UNLOCK 주의', items:[ '속도 – 75 KIAS 이하', 'LAND AS SOON AS POSSIBLE' ]},
+          { name:'CABIN DOOR OPEN LH/RH 주의', items:[ '속도 – 60 KIAS 이하', '문 닫거나 완전 개방 고정' ]},
+          { name:'비행 중 윈드실드 파손', items:[ '속도 – 75 KIAS 이하, 피치 -5° 이상 유지', 'LAND AS SOON AS PRACTICABLE' ]},
+          { name:'비행 중 비상부주 우발 팽창', items:[
+            '속도 – 70 KIAS 이하(선회 10°·상승/강하 ±500 fpm)', 'LAND AS SOON AS PRACTICABLE',
+          ]},
+          { name:'임무 컴퓨터(2개 MC) 고장', items:[ 'LAND AS SOON AS PRACTICABLE' ]},
+          { name:'냉방장치 주의등', items:[ 'ECS 모드 – VENT 또는 OFF(필요시)' ]},
+        ]},
+      ]},
+    };
+
+    let clPath = [];              // 현재 경로(인덱스 배열)
+    const clChecked = {};         // 완료 체크 상태(경로+인덱스 키)
+    function _clRoot() { return { name:'CHECK LIST', children:[CL.normal, CL.special, CL.emerg] }; }
+    function _clNode() { let n = _clRoot(); for (const i of clPath) n = (n.children||[])[i]; return n || _clRoot(); }
+    function _clColor() { return clPath.length ? (_clRoot().children[clPath[0]].color || '#00e5ff') : '#00e5ff'; }
+    function clOpen()  { clPath = []; switchMode('CHECKLIST'); }
+    function clInto(i) { clPath.push(i); switchMode('CHECKLIST'); }
+    function clBack()  { if (clPath.length) { clPath.pop(); switchMode('CHECKLIST'); } else { switchMode('HOME'); } }
+    function clToggle(i) { const k = clPath.join('.') + '#' + i; clChecked[k] = !clChecked[k]; switchMode('CHECKLIST'); }
+    function clResetLeaf() { const p = clPath.join('.'); Object.keys(clChecked).forEach(k => { if (k.startsWith(p + '#')) delete clChecked[k]; }); switchMode('CHECKLIST'); }
+
+    function renderChecklistScreen(container, footer, title, centerLabel) {
+      centerLabel.innerText = 'CHECK';
+      const node = _clNode();
+      const col = _clColor();
+      // 브레드크럼 제목
+      const crumbs = []; let n = _clRoot(); crumbs.push(n.name);
+      for (const i of clPath) { n = n.children[i]; crumbs.push(n.name); }
+      title.innerText = clPath.length ? node.name : 'CHECK LIST';
+
+      const crumbBar = `<div style="color:#667;font-size:8px;letter-spacing:0.5px;margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${crumbs.join(' › ')}</div>`;
+
+      if (node.children) {
+        // 목록 화면
+        const listHtml = node.children.map((c, i) => {
+          const c2 = c.color || col;
+          const cnt = c.children ? `${c.children.length}개 절차` : (c.items ? `${c.items.filter(x=>!x.startsWith('› ')).length}개 항목` : '');
+          return `<div onclick="clInto(${i})" style="display:flex;align-items:center;justify-content:space-between;` +
+            `padding:9px 10px;margin-bottom:5px;border:1px solid ${c2}44;border-radius:5px;background:#0a1116;cursor:pointer;">` +
+            `<div><div style="color:${c2};font-size:12px;font-weight:bold;">${c.name}</div>` +
+            (cnt ? `<div style="color:#567;font-size:9px;margin-top:1px;">${cnt}</div>` : '') + `</div>` +
+            `<div style="color:${c2}aa;font-size:14px;">›</div></div>`;
+        }).join('');
+        container.innerHTML = crumbBar + listHtml;
+      } else {
+        // 체크리스트 항목 화면
+        let idx = 0;
+        const rows = (node.items || []).map((it, i) => {
+          if (it.startsWith('› ')) {
+            return `<div style="color:#ffcc44;font-size:10px;font-style:italic;margin:6px 2px 2px;letter-spacing:0.3px;">${it.slice(2)}</div>`;
+          }
+          const k = clPath.join('.') + '#' + i;
+          const done = !!clChecked[k];
+          idx++;
+          return `<div onclick="clToggle(${i})" style="display:flex;align-items:center;gap:8px;` +
+            `padding:7px 8px;margin-bottom:3px;border:1px solid ${done ? col : '#1e2630'};border-radius:4px;` +
+            `background:${done ? col+'18' : '#0a1116'};cursor:pointer;">` +
+            `<div style="flex:0 0 18px;width:18px;height:18px;border-radius:3px;border:1.5px solid ${done ? col : '#3a4653'};` +
+            `display:flex;align-items:center;justify-content:center;color:${col};font-size:12px;font-weight:bold;">${done ? '✓' : ''}</div>` +
+            `<div style="flex:1;color:${done ? '#8fb8bf' : '#cdd6df'};font-size:11px;line-height:1.35;` +
+            `text-decoration:${done ? 'line-through' : 'none'};">${it}</div></div>`;
+        }).join('');
+        const resetBtn = `<div onclick="clResetLeaf()" style="text-align:right;margin-bottom:6px;">` +
+          `<span style="display:inline-block;color:#ff8877;font-size:9px;border:1px solid #5a2a2a;border-radius:3px;padding:3px 9px;cursor:pointer;">전체 해제</span></div>`;
+        container.innerHTML = crumbBar + resetBtn + rows;
+      }
+
+      footer.innerHTML =
+        `<div class="nav-btn" onclick="clBack()"><span>↩</span>Back</div>` +
+        `<div class="nav-btn" onclick="switchMode('HOME')"><span>🏠</span>Home</div>` +
+        `<div class="nav-btn"><span>✉</span>Msg</div>` +
+        `<div class="nav-btn" onclick="cduFullScreen()"><span>✥</span>Full</div>`;
+    }
+
+
     // --- Main Content Renderer Route ---
     function renderContent() {
         window._cduRenderContent = renderContent; // 전역 노출 (Charts 기능에서 참조)
@@ -8674,6 +9231,7 @@ if ('serviceWorker' in navigator) {
             case 'XPDR_MODE': renderXpdrModeScreen(container, footer, title, centerLabel); break;
             case 'XPDR_CODE': renderXpdrCodeScreen(container, footer, title, centerLabel); break;
             case 'UTIL': renderUtilScreen(container, footer, title, centerLabel); break;
+            case 'CHECKLIST': renderChecklistScreen(container, footer, title, centerLabel); break;
             case 'CHARTS': renderChartsScreen(container, footer, title, centerLabel); break;
         }
 
