@@ -9547,20 +9547,50 @@ if ('serviceWorker' in navigator) {
     }
     function _parseTrackFile(text) {
       const doc = new DOMParser().parseFromString(text, 'application/xml');
-      const pts = [];
+      let pts = [];
+      // GPX rtept/trkpt — 고도(ele)·시간(time) 포함
       ['rtept', 'trkpt'].forEach(tag => Array.from(doc.getElementsByTagNameNS('*', tag)).forEach(p => {
         const lat = parseFloat(p.getAttribute('lat')), lon = parseFloat(p.getAttribute('lon'));
         if (isNaN(lat)) return;
         const nm = p.getElementsByTagNameNS('*', 'name')[0];
-        pts.push({ ident: (nm && nm.textContent.trim()) || undefined, lat, lon });
+        const el = p.getElementsByTagNameNS('*', 'ele')[0];
+        const tm = p.getElementsByTagNameNS('*', 'time')[0];
+        const o = { ident: (nm && nm.textContent.trim()) || undefined, lat, lon };
+        if (el) o.altM = parseFloat(el.textContent);
+        if (tm) { const ms = Date.parse(tm.textContent); if (!isNaN(ms)) o.t = ms; }
+        pts.push(o);
       }));
+      // KML gx:Track (when + gx:coord) — 고도·시간
+      if (!pts.length) {
+        const whens = Array.from(doc.getElementsByTagNameNS('*', 'when'));
+        const coords = Array.from(doc.getElementsByTagNameNS('*', 'coord'));
+        if (coords.length) coords.forEach((c, i) => {
+          const [lon, lat, alt] = c.textContent.trim().split(/\s+/).map(Number);
+          if (isNaN(lat)) return;
+          const o = { lat, lon };
+          if (!isNaN(alt)) o.altM = alt;
+          if (whens[i]) { const ms = Date.parse(whens[i].textContent); if (!isNaN(ms)) o.t = ms; }
+          pts.push(o);
+        });
+      }
+      // KML LineString coordinates (lon,lat[,alt])
       if (!pts.length) {
         const ls = doc.getElementsByTagNameNS('*', 'LineString')[0];
         const co = ls && ls.getElementsByTagNameNS('*', 'coordinates')[0];
         if (co) co.textContent.trim().split(/\s+/).forEach(c => {
-          const [lon, lat] = c.split(',').map(Number);
-          if (!isNaN(lat)) pts.push({ lat, lon });
+          const [lon, lat, alt] = c.split(',').map(Number);
+          if (isNaN(lat)) return;
+          const o = { lat, lon };
+          if (!isNaN(alt) && alt !== 0) o.altM = alt;
+          pts.push(o);
         });
+      }
+      // 시간 정보가 있으면 구간 속도(kt) 계산
+      for (let i = 1; i < pts.length; i++) {
+        if (pts[i].t != null && pts[i-1].t != null) {
+          const dtH = (pts[i].t - pts[i-1].t) / 3600000;
+          if (dtH > 0) pts[i].spdKt = +(distance(pts[i-1].lat, pts[i-1].lon, pts[i].lat, pts[i].lon) / dtH).toFixed(1);
+        }
       }
       return pts;
     }
@@ -9597,13 +9627,39 @@ if ('serviceWorker' in navigator) {
       arr.push({ name, pts: S.wps.map(w => ({ ident: w.ident, lat: w.lat, lon: w.lon })) });
       _tpSave('tpTracks', arr); switchMode('TRACKPOINT');
     }
-    function tpDelTrack(i) { const a = tpTracks(); a.splice(i, 1); _tpSave('tpTracks', a); switchMode('TRACKPOINT'); }
+    function tpDelTrack(i) { if (_tpTrackShownIdx === i) tpHideTrack(); const a = tpTracks(); a.splice(i, 1); _tpSave('tpTracks', a); switchMode('TRACKPOINT'); }
     function tpLoadTrack(i) {
       const t = tpTracks()[i]; if (!t || !t.pts.length) return;
       if (S.wps.length && !confirm('현재 비행계획을 이 트랙으로 대체할까요?')) return;
       S.wps = t.pts.map((p, k) => ({ ident: p.ident || ('WP' + (k + 1)), lat: p.lat, lon: p.lon }));
       S.awp = -1; S.fwp = -1; S.brg2wp = -1;
       selectWP(0);
+      try { cduOpenMap(); } catch(e) {}
+    }
+    // 트랙을 지도에 선으로 표시(포인트는 탭 시에만 속도·위치·고도 팝업)
+    let _tpTrackLayer = null, _tpTrackShownIdx = null;
+    function tpHideTrack() { if (_tpTrackLayer) { leafMap.removeLayer(_tpTrackLayer); _tpTrackLayer = null; } _tpTrackShownIdx = null; }
+    function tpShowTrack(i) {
+      const t = tpTracks()[i]; if (!t || !t.pts.length) return;
+      tpHideTrack();
+      const g = L.layerGroup();
+      const latlngs = t.pts.map(p => [p.lat, p.lon]);
+      if (latlngs.length > 1) L.polyline(latlngs, { color: '#00e5ff', weight: 2.5, opacity: 0.9 }).addTo(g);
+      t.pts.forEach((p, k) => {
+        const m = L.circleMarker([p.lat, p.lon], { radius: 5, color: '#00e5ff', weight: 2, fillColor: '#00303f', fillOpacity: 1 });
+        const name = p.ident || ('P' + (k + 1));
+        const rows = [
+          `<div style="color:#0077aa;font-weight:bold;font-size:12px;margin-bottom:3px;">📍 ${name}</div>`,
+          `<div>위치: ${_tpDMS(p.lat, true)} ${_tpDMS(p.lon, false)}</div>`,
+        ];
+        if (p.altM != null) rows.push(`<div>고도: ${Math.round(p.altM * 3.28084)} ft</div>`);
+        if (p.spdKt != null) rows.push(`<div>속도: ${Math.round(p.spdKt)} kt</div>`);
+        m.bindPopup(`<div style="font-family:-apple-system,Segoe UI,Arial,sans-serif;font-size:11px;color:#333;line-height:1.5;">${rows.join('')}</div>`);
+        m.addTo(g);
+      });
+      _tpTrackLayer = g.addTo(leafMap);
+      _tpTrackShownIdx = i;
+      try { if (latlngs.length > 1) leafMap.fitBounds(latlngs, { padding: [40, 40], maxZoom: 13 }); else leafMap.setView(latlngs[0], 13); } catch(e) {}
       try { cduOpenMap(); } catch(e) {}
     }
     function tpExportTrack(i, fmt) {
@@ -9683,16 +9739,20 @@ if ('serviceWorker' in navigator) {
         const trks = tpTracks();
         body += `<div style="display:flex;gap:5px;margin-bottom:8px;">` +
           btnC('tpSaveTrackFromFP()', '＋ 비행계획을 트랙으로') + btnC('tpImportTrack()', '가져오기', '#ffcc44') + `</div>`;
-        body += trks.length ? trks.map((t, i) =>
-          `<div style="padding:7px 8px;margin-bottom:4px;border:1px solid #1e2630;border-radius:4px;background:#0a1116;">` +
+        body += trks.length ? trks.map((t, i) => {
+          const shown = _tpTrackShownIdx === i;
+          return `<div style="padding:7px 8px;margin-bottom:4px;border:1px solid ${shown?'#00e5ff':'#1e2630'};border-radius:4px;background:${shown?'#001e28':'#0a1116'};">` +
             `<div style="display:flex;align-items:center;gap:6px;">` +
               `<div style="flex:1;min-width:0;"><div style="color:#cdd6df;font-size:11px;font-weight:bold;">━ ${t.name}</div>` +
               `<div style="color:#667;font-size:9px;">${t.pts.length}개 지점</div></div>` +
-              `<span onclick="tpLoadTrack(${i})" style="cursor:pointer;color:#00e5ff;border:1px solid #00e5ff66;border-radius:3px;padding:3px 7px;font-size:10px;font-weight:bold;">불러오기</span>` +
+              (shown
+                ? `<span onclick="tpHideTrack();switchMode('TRACKPOINT')" style="cursor:pointer;color:#ffcc44;border:1px solid #6a5a2a;border-radius:3px;padding:3px 7px;font-size:10px;font-weight:bold;">숨김</span>`
+                : `<span onclick="tpShowTrack(${i})" style="cursor:pointer;color:#00e5ff;border:1px solid #00e5ff66;border-radius:3px;padding:3px 7px;font-size:10px;font-weight:bold;">지도 표시</span>`) +
               `<span onclick="tpDelTrack(${i})" style="cursor:pointer;color:#ff8877;border:1px solid #5a2a2a;border-radius:3px;padding:3px 7px;font-size:10px;">✕</span></div>` +
             `<div style="display:flex;gap:5px;margin-top:5px;">` +
-              btnC(`tpExportTrack(${i},'gpx')`, 'GPX', '#8ac6ff') + btnC(`tpExportTrack(${i},'kml')`, 'KML', '#8bc34a') + `</div></div>`
-        ).join('') : `<div style="color:#556;font-size:10px;padding:8px 2px;">저장된 트랙이 없습니다.</div>`;
+              btnC(`tpLoadTrack(${i})`, '비행계획으로', '#00cfff') +
+              btnC(`tpExportTrack(${i},'gpx')`, 'GPX', '#8ac6ff') + btnC(`tpExportTrack(${i},'kml')`, 'KML', '#8bc34a') + `</div></div>`;
+        }).join('') : `<div style="color:#556;font-size:10px;padding:8px 2px;">저장된 트랙이 없습니다.</div>`;
       }
       container.innerHTML = tabs + body;
       footer.innerHTML =
