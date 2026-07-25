@@ -9566,8 +9566,16 @@ if ('serviceWorker' in navigator) {
     }
     function _tpPickFile(cb) {
       const inp = document.createElement('input');
-      inp.type = 'file'; inp.accept = '.gpx,.kml,application/gpx+xml,application/vnd.google-earth.kml+xml';
-      inp.onchange = () => { const f = inp.files[0]; if (!f) return; const r = new FileReader(); r.onload = e => cb(e.target.result, f.name); r.readAsText(f); };
+      inp.type = 'file';
+      // iOS 파일앱은 accept의 UTI가 안 맞으면 GPX/KML을 선택 불가(회색)로 처리 →
+      // 제한을 두지 않아 모든 파일을 고를 수 있게 하고, 파서가 GPX/KML을 판별한다.
+      inp.style.display = 'none';
+      document.body.appendChild(inp);
+      inp.onchange = () => {
+        const f = inp.files[0];
+        if (f) { const r = new FileReader(); r.onload = e => cb(e.target.result, f.name); r.readAsText(f); }
+        inp.remove();
+      };
       inp.click();
     }
     function tpImportPoints() {
