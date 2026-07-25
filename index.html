@@ -9474,8 +9474,16 @@ if ('serviceWorker' in navigator) {
     function tpApplyIcon(emoji) {
       if (!_tpIconPick) return;
       const f = tpFolders();
-      if (_tpIconPick.type === 'folder') { if (f[_tpIconPick.fi]) f[_tpIconPick.fi].icon = emoji; }
-      else { const fd = f[_tpIconPick.fi]; if (fd && fd.pts[_tpIconPick.pi]) fd.pts[_tpIconPick.pi].icon = emoji; }
+      if (_tpIconPick.type === 'folder') {
+        const fd = f[_tpIconPick.fi];
+        if (fd) {
+          fd.icon = emoji;
+          // 폴더 아이콘은 폴더 내 모든 포인트에 일괄 적용(개별 아이콘 초기화 → 폴더 아이콘 상속)
+          (fd.pts || []).forEach(p => { delete p.icon; });
+        }
+      } else {
+        const fd = f[_tpIconPick.fi]; if (fd && fd.pts[_tpIconPick.pi]) fd.pts[_tpIconPick.pi].icon = emoji;
+      }
       _tpSave('tpFolders', f); _tpIconPick = null; _tpRenderMapPoints(); switchMode('TRACKPOINT');
     }
     function tpIconCancel() { _tpIconPick = null; switchMode('TRACKPOINT'); }
@@ -9754,7 +9762,8 @@ if ('serviceWorker' in navigator) {
       // 아이콘 선택 화면(오버레이)
       if (_tpIconPick) {
         const isF = _tpIconPick.type === 'folder';
-        body = `<div style="color:#00cfff;font-size:12px;font-weight:bold;margin-bottom:8px;">${isF ? '폴더' : '포인트'} 아이콘 선택</div>` +
+        body = `<div style="color:#00cfff;font-size:12px;font-weight:bold;margin-bottom:2px;">${isF ? '폴더' : '포인트'} 아이콘 선택</div>` +
+          (isF ? `<div style="color:#667;font-size:9px;margin-bottom:8px;">이 폴더의 모든 포인트에 적용됩니다</div>` : `<div style="margin-bottom:8px;"></div>`) +
           `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px;">` +
           TP_ICONS.map(e => `<div onclick="tpApplyIcon('${e}')" style="text-align:center;font-size:26px;padding:10px 0;border:1px solid #1e2630;border-radius:6px;background:#0a1116;cursor:pointer;">${e}</div>`).join('') +
           `</div>` +
@@ -9790,8 +9799,10 @@ if ('serviceWorker' in navigator) {
           const pts = cf.folder.pts, selN = _tpSelCount();
           body += `<div onclick="tpFolderBack()" style="display:inline-flex;align-items:center;gap:4px;padding:5px 10px;margin-bottom:7px;` +
             `border:1px solid #2a4a5a;border-radius:4px;background:#0a1620;color:#00cfff;font-size:10px;font-weight:bold;cursor:pointer;">☰ 폴더 목록</div>` +
-            `<div style="color:#00cfff;font-size:12px;font-weight:bold;margin-bottom:2px;">${cf.folder.icon || '📁'} ${cf.folder.name}</div>` +
-            `<div style="color:#667;font-size:9px;margin-bottom:6px;">✓ 체크한 포인트가 지도에 표시됩니다</div>`;
+            `<div style="color:#00cfff;font-size:12px;font-weight:bold;margin-bottom:2px;">` +
+              `<span onclick="tpPickIcon('folder',${tpFolderIdx})" style="cursor:pointer;" title="폴더 아이콘(전체 적용)">${cf.folder.icon || '📁'}</span> ${cf.folder.name}` +
+              `<span onclick="tpPickIcon('folder',${tpFolderIdx})" style="margin-left:8px;font-size:9px;color:#8ac6ff;border:1px solid #2a4a6a;border-radius:3px;padding:2px 7px;cursor:pointer;font-weight:normal;">폴더 아이콘</span></div>` +
+            `<div style="color:#667;font-size:9px;margin-bottom:6px;">✓ 체크한 포인트가 지도에 표시됩니다 · 폴더 아이콘은 전체 포인트에 적용</div>`;
           body += `<div style="display:flex;gap:5px;margin-bottom:6px;">` +
             btnC("tpAddPoint('pos')", '＋ 현재위치') + btnC("tpAddPoint('cross')", '＋ 지도중심') + btnC("tpAddPoint('manual')", '＋ 좌표입력') + `</div>`;
           body += `<div style="display:flex;gap:5px;margin-bottom:8px;">` +
