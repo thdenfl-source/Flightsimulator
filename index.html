@@ -1237,6 +1237,14 @@ body.solo-mode .solo-panel-visible {
 .ship-clr { background: radial-gradient(circle at 35% 35%, #3a1010, #1a0000) !important; border-color: #772222 !important; font-size: 9px !important; }
 .ship-ent { background: radial-gradient(circle at 35% 35%, #0d1f4a, #060e20) !important; border-color: #3355bb !important; color: #88aaff !important; font-size: 9px !important; }
 .sim-btn.ship-active { background: #1a3050; border-color: #7ab8f5; color: #7ab8f5; }
+/* ── 야간(Night) 모드: 밝은 지도/차트를 어둡게, 붉은 딤 오버레이 ── */
+body.night-mode #map, body.night-mode #map3d { filter: brightness(0.5) contrast(1.05); }
+body.night-mode #pfd { filter: brightness(0.72); }
+body.night-mode #pdfViewArea, body.night-mode #cdu-wrap { filter: brightness(0.72); }
+body.night-mode::after {
+  content: ''; position: fixed; inset: 0; z-index: 4000; pointer-events: none;
+  background: rgba(40,0,0,0.16); mix-blend-mode: multiply;
+}
 
 /* ── 시작 안내 오버레이 ── */
 #help-overlay {
@@ -4800,12 +4808,52 @@ function toggleMapOrient() {
   }
   updateAcOnMap();
 }
+// ── 레인지 링(거리·방위 링) ──
+let rangeRingsOn = false, ringRadii = [5, 10];   // NM
+try { rangeRingsOn = localStorage.getItem('rangeRingsOn') === '1'; } catch(e) {}
+let _ringLayer = null;
+function _updateRangeRings() {
+  if (_ringLayer) { leafMap.removeLayer(_ringLayer); _ringLayer = null; }
+  if (!rangeRingsOn) return;
+  const g = L.layerGroup();
+  ringRadii.forEach(nm => {
+    L.circle([S.lat, S.lon], { radius: nm * 1852, color: '#00e5ff', weight: 1, opacity: 0.6, fill: false, dashArray: '4 5', interactive: false }).addTo(g);
+    const edge = destPoint(S.lat, S.lon, mapHdgUp ? S.hdg : 0, nm);   // 상단(기수/북) 라벨
+    L.marker(edge, { interactive: false, icon: L.divIcon({ className: '', html: `<div style="color:#00e5ff;font-size:9px;font-weight:bold;text-shadow:1px 1px 2px #000;transform:translate(-50%,-50%);">${nm}NM</div>`, iconSize: [0,0] }) }).addTo(g);
+  });
+  // 방위 눈금(외곽 링에 30°마다)
+  const rOut = ringRadii[ringRadii.length - 1];
+  for (let b = 0; b < 360; b += 30) {
+    const p = destPoint(S.lat, S.lon, b, rOut);
+    L.circleMarker(p, { radius: 1.5, color: '#00e5ff', opacity: 0.5, fill: true, fillOpacity: 0.5, interactive: false }).addTo(g);
+  }
+  _ringLayer = g.addTo(leafMap);
+}
+function toggleRangeRings() {
+  rangeRingsOn = !rangeRingsOn;
+  try { localStorage.setItem('rangeRingsOn', rangeRingsOn ? '1' : '0'); } catch(e) {}
+  _ringLastLat = null;   // 즉시 갱신 강제
+  _updateRangeRings();
+}
+// 매 프레임 재생성은 부담 → 이동/회전 시에만 재구성
+let _ringLastLat = null, _ringLastLon = null, _ringLastHdg = null;
+function _maybeUpdateRings() {
+  if (!rangeRingsOn) { if (_ringLayer) { leafMap.removeLayer(_ringLayer); _ringLayer = null; } return; }
+  const moved = _ringLastLat === null || !_ringLayer ||
+    distance(_ringLastLat, _ringLastLon, S.lat, S.lon) > 0.02 ||
+    (mapHdgUp && Math.abs((_ringLastHdg ?? 0) - S.hdg) > 1);
+  if (!moved) return;
+  _ringLastLat = S.lat; _ringLastLon = S.lon; _ringLastHdg = S.hdg;
+  _updateRangeRings();
+}
+
 function updateAcOnMap(){
   if (!acDragging) {
     acMarker.setLatLng([S.lat,S.lon]);
     acMarker.setIcon(makeAircraftIcon(S.hdg));
     _bindAcPointerDown(); // re-bind after setIcon creates a new DOM element
   }
+  _maybeUpdateRings();   // 레인지 링 위치 갱신(이동 시에만)
   updateSpeedVector();   // 헤딩 방향 속도 벡터(1분 예상위치) 갱신
   if (followMode) updateCenterCoord();   // 1인칭: 항공기 기준 좌표 갱신
   _update3dMarker();
@@ -6918,6 +6966,81 @@ function restoreSession() {
   } catch(e) { return false; }
 }
 
+// ── 야간 모드 ──
+let nightMode = false;
+try { nightMode = localStorage.getItem('nightMode') === '1'; } catch(e) {}
+function applyNightMode() { document.body.classList.toggle('night-mode', nightMode); }
+function toggleNightMode() {
+  nightMode = !nightMode;
+  try { localStorage.setItem('nightMode', nightMode ? '1' : '0'); } catch(e) {}
+  applyNightMode();
+}
+
+// ── 근처 공항 자동 METAR → OAT/QNH 자동 반영 ──
+let autoMetarOn = true, _autoMetarLast = 0, _autoMetarIcao = '';
+try { autoMetarOn = localStorage.getItem('autoMetarOn') !== '0'; } catch(e) {}
+function _nearestAirport() {
+  let best = null, bd = Infinity;
+  (WX_AIRPORTS || []).forEach(a => {
+    const d = distance(S.lat, S.lon, a.lat, a.lon);
+    if (d < bd) { bd = d; best = a; }
+  });
+  return best ? { a: best, d: bd } : null;
+}
+async function _autoMetarTick() {
+  if (!autoMetarOn) return;
+  if (!(gpsMode || S.running)) return;             // 실제 비행/시뮬 중에만
+  if (Date.now() - _autoMetarLast < 5 * 60 * 1000) return;   // 5분 스로틀
+  const near = _nearestAirport();
+  if (!near || near.d > 60) return;                // 60NM 넘으면 생략
+  _autoMetarLast = Date.now();
+  _autoMetarIcao = near.a.icao;
+  try {
+    const ctl = new AbortController();
+    setTimeout(() => ctl.abort(), 6000);
+    let raw = null;
+    try { raw = await _ivaoMetar(near.a.icao, ctl.signal); }
+    catch(e) { try { raw = await _vatsimMetar(near.a.icao, ctl.signal); } catch(e2) {} }
+    if (raw) _parseMetar(raw.split('\n')[0]);       // _oatSurfaceC 자동 갱신
+  } catch(e) {}
+}
+setInterval(() => { try { _autoMetarTick(); } catch(e) {} }, 30000);
+
+// ── PWA 설치 프롬프트 ──
+let _deferredPrompt = null;
+window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); _deferredPrompt = e; });
+function pwaInstall() {
+  if (_deferredPrompt) { _deferredPrompt.prompt(); _deferredPrompt = null; }
+  else alert('홈 화면에 추가:\n\niOS Safari — 공유 버튼 → "홈 화면에 추가"\nAndroid Chrome — 메뉴(⋮) → "앱 설치"');
+}
+
+// ── 지도 타일 프리캐시(현재 화면 주변) — 음영지역 대비 ──
+function _lonLatToTile(lon, lat, z) {
+  const n = 1 << z;
+  const x = Math.floor((lon + 180) / 360 * n);
+  const latR = lat * Math.PI / 180;
+  const y = Math.floor((1 - Math.log(Math.tan(latR) + 1 / Math.cos(latR)) / Math.PI) / 2 * n);
+  return { x, y, n };
+}
+async function prefetchTiles() {
+  const c = leafMap.getCenter(), z0 = Math.round(leafMap.getZoom());
+  const sat = document.getElementById('layer-btn')?.classList.contains('sat');
+  const urlFor = (z, x, y) => sat
+    ? `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${z}/${y}/${x}`
+    : `https://tile.openstreetmap.org/${z}/${x}/${y}.png`;
+  let count = 0;
+  const zs = [z0, Math.min(18, z0 + 1)];
+  for (const z of zs) {
+    const t = _lonLatToTile(c.lng, c.lat, z);
+    for (let dx = -3; dx <= 3; dx++) for (let dy = -3; dy <= 3; dy++) {
+      const x = t.x + dx, y = t.y + dy;
+      if (x < 0 || y < 0 || x >= t.n || y >= t.n) continue;
+      try { await fetch(urlFor(z, x, y), { mode: 'no-cors' }); count++; } catch(e) {}
+    }
+  }
+  alert(`주변 지도 타일 ${count}개를 캐시했습니다.\n(오프라인/음영지역에서 이 영역이 표시됩니다)`);
+}
+
 // ⟳ 새로고침: 세션을 지우고 초기 상태로 리로드(백그라운드 복원 종료)
 function hardReload() {
   try { localStorage.removeItem(SESSION_KEY); } catch(e) {}
@@ -6931,6 +7054,7 @@ window.addEventListener('pagehide', saveSession);
 
 function init(){
   resizePFD();
+  applyNightMode();   // 야간 모드 복원
   showHelpOnLaunch();
   const _restored = restoreSession();   // 자동 리로드 복원(있으면 FPL 복원 생략)
   if (!_restored) _fplRestore();        // 저장된 비행계획 복원(새로고침 대비)
@@ -8436,9 +8560,11 @@ if ('serviceWorker' in navigator) {
       { id:'PRESS',   name:'Pressure',          sub:'inHg · hPa · kPa · psi · mmHg · atm' },
       { id:'FUEL',    name:'Fuel Conversion',   sub:'gal · L · lb · kg' },
       { id:'DENSALT', name:'Density Altitude',  sub:'IA · Alt setting · OAT → DA' },
+      { id:'SETTINGS',name:'⚙ 설정 (Settings)',  sub:'야간 · 레인지 링 · 자동 METAR · 경보 · 설치' },
     ];
 
     function utilOpen(id) {
+      if (id === 'SETTINGS') { switchMode('SETTINGS'); return; }
       utilTab   = id;
       utilInput = '';
       if (id !== 'MENU') {
@@ -9246,6 +9372,55 @@ if ('serviceWorker' in navigator) {
     }
 
 
+    // ── 설정(Settings) 화면 ──
+    function _setToggle(which) {
+      if (which === 'night') toggleNightMode();
+      else if (which === 'rings') toggleRangeRings();
+      else if (which === 'metar') { autoMetarOn = !autoMetarOn; try { localStorage.setItem('autoMetarOn', autoMetarOn ? '1' : '0'); } catch(e) {} }
+      else if (which === 'aspc') toggleInhib('aspc');
+      else if (which === 'taws') toggleInhib('taws');
+      switchMode('SETTINGS');
+    }
+    function renderSettingsScreen(container, footer, title, centerLabel) {
+      title.innerText = 'Settings';
+      centerLabel.innerText = 'SETUP';
+      const back = `<div onclick="utilOpen('MENU')" style="display:inline-flex;align-items:center;gap:4px;` +
+        `padding:5px 10px;margin-bottom:8px;border:1px solid #2a4a5a;border-radius:4px;background:#0a1620;color:#00cfff;` +
+        `font-size:10px;font-weight:bold;cursor:pointer;">☰ 목록</div>`;
+      const TOG = (which, label, sub, on) =>
+        `<div onclick="_setToggle('${which}')" style="display:flex;align-items:center;justify-content:space-between;` +
+          `padding:9px 10px;margin-bottom:5px;border:1px solid ${on ? '#00e5ff66' : '#1e2630'};border-radius:5px;` +
+          `background:#0a1116;cursor:pointer;">` +
+          `<div><div style="color:#cdd6df;font-size:12px;font-weight:bold;">${label}</div>` +
+          `<div style="color:#567;font-size:9px;margin-top:1px;">${sub}</div></div>` +
+          `<div style="flex:0 0 auto;width:46px;height:22px;border-radius:11px;background:${on ? '#00485a' : '#20262e'};` +
+          `border:1px solid ${on ? '#00e5ff' : '#3a4653'};position:relative;">` +
+          `<div style="position:absolute;top:1px;${on ? 'right:1px' : 'left:1px'};width:18px;height:18px;border-radius:50%;` +
+          `background:${on ? '#00e5ff' : '#6b7683'};"></div></div></div>`;
+      const ACT = (fn, label, sub) =>
+        `<div onclick="${fn}" style="display:flex;align-items:center;justify-content:space-between;` +
+          `padding:9px 10px;margin-bottom:5px;border:1px solid #2a3a4a;border-radius:5px;background:#0a1420;cursor:pointer;">` +
+          `<div><div style="color:#8ac6ff;font-size:12px;font-weight:bold;">${label}</div>` +
+          `<div style="color:#567;font-size:9px;margin-top:1px;">${sub}</div></div>` +
+          `<div style="color:#4a7aaa;font-size:14px;">›</div></div>`;
+      container.innerHTML = back +
+        `<div style="color:#556;font-size:9px;letter-spacing:1px;margin:2px 0 5px;">표시 / 경보</div>` +
+        TOG('night', '야간 모드', '지도·화면 저휘도 + 붉은 딤', nightMode) +
+        TOG('rings', '레인지 링', `항공기 중심 ${ringRadii.join('/')} NM 거리·방위 링`, rangeRingsOn) +
+        TOG('metar', '자동 METAR', '근처 공항 METAR로 OAT 자동 반영', autoMetarOn) +
+        TOG('aspc', '공역 경보', inhibAspc ? 'INHIBIT(억제됨)' : '접근/진입 경보 사용', !inhibAspc) +
+        TOG('taws', 'HTAWS 지형경보', inhibTaws ? 'INHIBIT(억제됨)' : '전방 지형 경보 사용', !inhibTaws) +
+        `<div style="color:#556;font-size:9px;letter-spacing:1px;margin:10px 0 5px;">앱 / 오프라인</div>` +
+        ACT('pwaInstall()', '홈 화면에 추가', 'PWA 설치(앱처럼 실행)') +
+        ACT('prefetchTiles()', '주변 지도 캐시', '현재 화면 주변 타일 미리 저장') +
+        ACT("document.getElementById('help-overlay').style.display='flex'", '사용 안내 다시 보기', '시작 안내 오버레이 표시');
+      footer.innerHTML =
+        `<div class="nav-btn" onclick="switchMode('HOME')"><span>↩</span>Back</div>` +
+        `<div class="nav-btn" onclick="switchMode('HOME')"><span>🏠</span>Home</div>` +
+        `<div class="nav-btn"><span>✉</span>Msg</div>` +
+        `<div class="nav-btn" onclick="cduFullScreen()"><span>✥</span>Full</div>`;
+    }
+
     // --- Main Content Renderer Route ---
     function renderContent() {
         window._cduRenderContent = renderContent; // 전역 노출 (Charts 기능에서 참조)
@@ -9269,6 +9444,7 @@ if ('serviceWorker' in navigator) {
             case 'XPDR_CODE': renderXpdrCodeScreen(container, footer, title, centerLabel); break;
             case 'UTIL': renderUtilScreen(container, footer, title, centerLabel); break;
             case 'CHECKLIST': renderChecklistScreen(container, footer, title, centerLabel); break;
+            case 'SETTINGS': renderSettingsScreen(container, footer, title, centerLabel); break;
             case 'CHARTS': renderChartsScreen(container, footer, title, centerLabel); break;
         }
 
