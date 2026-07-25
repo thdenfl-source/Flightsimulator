@@ -9154,6 +9154,18 @@ if ('serviceWorker' in navigator) {
     function clBack()  { if (clPath.length) { clPath.pop(); switchMode('CHECKLIST'); } else { switchMode('HOME'); } }
     function clToggle(i) { const k = clPath.join('.') + '#' + i; clChecked[k] = !clChecked[k]; switchMode('CHECKLIST'); }
     function clResetLeaf() { const p = clPath.join('.'); Object.keys(clChecked).forEach(k => { if (k.startsWith(p + '#')) delete clChecked[k]; }); switchMode('CHECKLIST'); }
+    function _clParent() { let n = _clRoot(); for (let i = 0; i < clPath.length - 1; i++) n = n.children[i]; return n; }
+    // 같은 단계의 이전/다음 형제 항목으로 이동
+    function clSibling(dir) {
+      if (!clPath.length) return;
+      const parent = _clParent();
+      const cur = clPath[clPath.length - 1];
+      const nx = cur + dir;
+      if (parent.children && nx >= 0 && nx < parent.children.length) {
+        clPath[clPath.length - 1] = nx;
+        switchMode('CHECKLIST');
+      }
+    }
 
     function renderChecklistScreen(container, footer, title, centerLabel) {
       centerLabel.innerText = 'CHECK';
@@ -9166,6 +9178,31 @@ if ('serviceWorker' in navigator) {
 
       const crumbBar = `<div style="color:#667;font-size:8px;letter-spacing:0.5px;margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${crumbs.join(' › ')}</div>`;
 
+      // 이전/다음 형제 이동 바 (2단계 이상에서 표시)
+      let sibBar = '';
+      if (clPath.length) {
+        const parent = _clParent();
+        const cur = clPath[clPath.length - 1];
+        const total = parent.children ? parent.children.length : 1;
+        const prevN = cur > 0 ? parent.children[cur - 1].name : null;
+        const nextN = cur < total - 1 ? parent.children[cur + 1].name : null;
+        const cell = (dir, label, name) => {
+          const on = !!name;
+          const arrow = dir < 0 ? '◀' : '▶';
+          const txt = on ? (dir < 0 ? `${arrow} ${label}` : `${label} ${arrow}`) : `${dir < 0 ? arrow + ' 처음' : '마지막 ' + arrow}`;
+          return `<div ${on ? `onclick="clSibling(${dir})"` : ''} style="flex:1;min-width:0;text-align:${dir<0?'left':'right'};` +
+            `padding:6px 9px;border:1px solid ${on ? col+'66' : '#1b222a'};border-radius:4px;` +
+            `background:${on ? '#0a1620' : '#0a0e12'};cursor:${on?'pointer':'default'};overflow:hidden;">` +
+            `<div style="color:${on ? col : '#3a4653'};font-size:11px;font-weight:bold;">${dir<0?arrow+' 이전':'다음 '+arrow}</div>` +
+            (on ? `<div style="color:#778;font-size:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${name}</div>` : '') +
+            `</div>`;
+        };
+        sibBar = `<div style="display:flex;gap:5px;align-items:stretch;margin-bottom:7px;">` +
+          cell(-1, '이전', prevN) +
+          `<div style="flex:0 0 auto;display:flex;align-items:center;color:#667;font-size:9px;padding:0 2px;">${cur+1}/${total}</div>` +
+          cell(1, '다음', nextN) + `</div>`;
+      }
+
       if (node.children) {
         // 목록 화면
         const listHtml = node.children.map((c, i) => {
@@ -9177,7 +9214,7 @@ if ('serviceWorker' in navigator) {
             (cnt ? `<div style="color:#567;font-size:9px;margin-top:1px;">${cnt}</div>` : '') + `</div>` +
             `<div style="color:${c2}aa;font-size:14px;">›</div></div>`;
         }).join('');
-        container.innerHTML = crumbBar + listHtml;
+        container.innerHTML = crumbBar + sibBar + listHtml;
       } else {
         // 체크리스트 항목 화면
         let idx = 0;
@@ -9198,7 +9235,7 @@ if ('serviceWorker' in navigator) {
         }).join('');
         const resetBtn = `<div onclick="clResetLeaf()" style="text-align:right;margin-bottom:6px;">` +
           `<span style="display:inline-block;color:#ff8877;font-size:9px;border:1px solid #5a2a2a;border-radius:3px;padding:3px 9px;cursor:pointer;">전체 해제</span></div>`;
-        container.innerHTML = crumbBar + resetBtn + rows;
+        container.innerHTML = crumbBar + sibBar + resetBtn + rows;
       }
 
       footer.innerHTML =
