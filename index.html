@@ -9443,7 +9443,7 @@ if ('serviceWorker' in navigator) {
       return f;
     }
     function tpTracks() { return _tpLoad('tpTracks'); }
-    function tpSetTab(t) { tpTab = t; tpFolderIdx = null; _tpIconPick = null; switchMode('TRACKPOINT'); }
+    function tpSetTab(t) { tpTab = t; tpFolderIdx = null; _tpIconPick = null; _tpRepoView = false; switchMode('TRACKPOINT'); }
 
     // ── 지도에 포인트 마커 표시(show=true인 포인트, 전 폴더 대상) ──
     let _tpPointLayer = null;
@@ -9666,6 +9666,36 @@ if ('serviceWorker' in navigator) {
       });
     }
 
+    // ── 저장소(GitHub Pages)의 공용 포인트 불러오기 (points/index.json) ──
+    let _tpRepoView = false, _tpRepoList = null;
+    async function tpRepoOpen() {
+      try {
+        const r = await fetch('points/index.json?_=' + Date.now());
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const list = await r.json();
+        if (!Array.isArray(list) || !list.length) { alert('저장소에 등록된 포인트가 없습니다.\n(points/index.json 에 목록 추가)'); return; }
+        _tpRepoList = list; _tpRepoView = true; switchMode('TRACKPOINT');
+      } catch(e) { alert('저장소 목록을 불러오지 못했습니다.\n' + e.message + '\n(points/index.json 확인)'); }
+    }
+    function tpRepoBack() { _tpRepoView = false; switchMode('TRACKPOINT'); }
+    async function tpRepoImport(i) {
+      const e = _tpRepoList && _tpRepoList[i]; if (!e || !e.file) return;
+      try {
+        const r = await fetch('points/' + e.file + '?_=' + Date.now());
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const text = await r.text();
+        const pts = _parsePointsFile(text);
+        if (!pts.length) { alert('파일에서 포인트를 찾지 못했습니다: ' + e.file); return; }
+        const fname = String(e.folder || e.name || e.file);
+        const f = tpFolders();
+        let fd = f.find(x => x.name === fname);
+        if (!fd) { fd = { name: fname, pts: [] }; if (e.icon) fd.icon = e.icon; f.push(fd); }
+        fd.pts.push(...pts); _tpSave('tpFolders', f); _tpRenderMapPoints();
+        alert(`${pts.length}개 포인트를 "${fname}" 폴더로 가져왔습니다.`);
+        _tpRepoView = false; tpFolderIdx = null; switchMode('TRACKPOINT');
+      } catch(err) { alert('가져오기 실패: ' + err.message); }
+    }
+
     // ── 트랙 ──
     function tpSaveTrackFromFP() {
       if (!S.wps.length) { alert('저장할 비행계획(웨이포인트)이 없습니다.\nFlight Plan에서 웨이포인트를 먼저 입력하세요.'); return; }
@@ -9759,6 +9789,28 @@ if ('serviceWorker' in navigator) {
         `background:#0a1620;color:${col||'#00cfff'};font-size:10px;font-weight:bold;cursor:pointer;white-space:nowrap;">${label}</div>`;
       let body = '';
 
+      // 저장소 포인트 목록(오버레이)
+      if (_tpRepoView) {
+        const list = _tpRepoList || [];
+        body = `<div onclick="tpRepoBack()" style="display:inline-flex;align-items:center;gap:4px;padding:5px 10px;margin-bottom:8px;` +
+          `border:1px solid #2a4a5a;border-radius:4px;background:#0a1620;color:#00cfff;font-size:10px;font-weight:bold;cursor:pointer;">☰ 뒤로</div>` +
+          `<div style="color:#00cfff;font-size:12px;font-weight:bold;margin-bottom:6px;">☁ 저장소 포인트</div>` +
+          list.map((e, i) =>
+            `<div onclick="tpRepoImport(${i})" style="display:flex;align-items:center;gap:6px;padding:9px 8px;margin-bottom:4px;border:1px solid #1e2630;border-radius:4px;background:#0a1116;cursor:pointer;">` +
+              `<span style="font-size:18px;">${e.icon || '📥'}</span>` +
+              `<div style="flex:1;min-width:0;"><div style="color:#cdd6df;font-size:11px;font-weight:bold;">${e.name || e.file}</div>` +
+              `<div style="color:#667;font-size:9px;">${e.file}${e.folder ? ' → ' + e.folder + ' 폴더' : ''}</div></div>` +
+              `<span style="color:#00e5ff;font-size:10px;font-weight:bold;">가져오기 ›</span></div>`
+          ).join('');
+        container.innerHTML = body;
+        footer.innerHTML =
+          `<div class="nav-btn" onclick="tpRepoBack()"><span>↩</span>Back</div>` +
+          `<div class="nav-btn" onclick="switchMode('HOME')"><span>🏠</span>Home</div>` +
+          `<div class="nav-btn"><span>✉</span>Msg</div>` +
+          `<div class="nav-btn" onclick="cduFullScreen()"><span>✥</span>Full</div>`;
+        return;
+      }
+
       // 아이콘 선택 화면(오버레이)
       if (_tpIconPick) {
         const isF = _tpIconPick.type === 'folder';
@@ -9781,7 +9833,7 @@ if ('serviceWorker' in navigator) {
         if (tpFolderIdx === null) {
           // 폴더 목록
           const folders = tpFolders();
-          body += `<div style="display:flex;gap:5px;margin-bottom:8px;">` + btnC('tpFolderAdd()', '＋ 새 폴더') + `</div>`;
+          body += `<div style="display:flex;gap:5px;margin-bottom:8px;">` + btnC('tpFolderAdd()', '＋ 새 폴더') + btnC('tpRepoOpen()', '☁ 저장소에서 불러오기', '#8ac6ff') + `</div>`;
           body += folders.length ? folders.map((fd, i) =>
             `<div style="display:flex;align-items:center;gap:6px;padding:9px 8px;margin-bottom:4px;border:1px solid #1e2630;border-radius:4px;background:#0a1116;">` +
               `<span onclick="tpPickIcon('folder',${i})" style="font-size:20px;cursor:pointer;flex:0 0 auto;" title="아이콘">${fd.icon || '📁'}</span>` +
