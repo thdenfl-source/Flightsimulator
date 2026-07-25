@@ -11025,13 +11025,9 @@ const AIRSPACE_DB = [
   {id:'RA_R155B',grp:'제한구역(R)',name:'R155B Seongju (반원 근사)',alt:'FL196/SFC',circle:{c:[36.04528,128.22583],r:3}},
   {id:'RA_R157',grp:'제한구역(R)',name:'R157 Jangsan',alt:'6 000 ft AMSL/SFC',circle:{c:[35.20056,129.15083],r:0.7}},
   {id:'RA_R158',grp:'제한구역(R)',name:'R158 Jonjae',alt:'6 400 ft AMSL/SFC',circle:{c:[34.85444,127.22972],r:0.7}},
-  // ── ENR 5.1 위험구역(Danger) — 원전(고리·월성·한빛·한울) 포함 ──
-  {id:'DA_D1',grp:'위험구역(D)',name:'D1 Gori (고리원전)',alt:'10 000 ft AGL/GND',circle:{c:[35.31667,129.3],r:2}},
-  {id:'DA_D2',grp:'위험구역(D)',name:'D2 Wolseong (월성원전)',alt:'10 000 ft AGL/GND',circle:{c:[35.7,129.46667],r:2}},
+  // ── ENR 5.1 위험구역(Danger) ── (원전은 금지구역(P) P61~P65로 별도 관리)
   {id:'DA_D5',grp:'위험구역(D)',name:'D5 Wanju',alt:'3 000 ft AGL/GND',circle:{c:[35.71389,127.2125],r:1}},
   {id:'DA_D6',grp:'위험구역(D)',name:'D6 Yeongdong',alt:'3 000 ft AGL/GND',circle:{c:[36.15222,127.73139],r:1.7}},
-  {id:'DA_D7',grp:'위험구역(D)',name:'D7 Hanbit (한빛원전)',alt:'10 000 ft AGL/GND',circle:{c:[35.40806,126.40806],r:2}},
-  {id:'DA_D8',grp:'위험구역(D)',name:'D8 Hanul (한울원전)',alt:'8 000 ft AGL/GND',circle:{c:[37.1,129.38333],r:2}},
   {id:'DA_D9',grp:'위험구역(D)',name:'D9 Yeongcheon',alt:'3 000 ft AGL/GND',circle:{c:[35.96083,128.97667],r:1}},
   {id:'DA_D13',grp:'위험구역(D)',name:'D13 Seonghwan',alt:'3 000 ft AGL/GND',circle:{c:[36.92639,127.16194],r:1.1}},
   {id:'DA_D14',grp:'위험구역(D)',name:'D14 Jaecheon',alt:'3 000 ft AGL/GND',circle:{c:[37.10139,128.24694],r:1.8}},
@@ -11058,11 +11054,12 @@ const AIRSPACE_DB = [
   {id:'DA_D35',grp:'위험구역(D)',name:'D35 Seomyeon',alt:'2 000 ft AGL/GND',poly:[[35.15722, 129.04833], [35.16389, 129.05806], [35.14694, 129.07389], [35.14028, 129.06417]]},
   {id:'DA_D36',grp:'위험구역(D)',name:'D36 Haeundae',alt:'2 000 ft AGL/GND',poly:[[35.17861, 129.11056], [35.18667, 129.12083], [35.15889, 129.16194], [35.14694, 129.145]]},
   {id:'DA_D37',grp:'위험구역(D)',name:'D37 Moonten',alt:'1 600 ft AGL/GND',poly:[[35.17083, 129.18278], [35.16, 129.17056], [35.15361, 129.17917], [35.16444, 129.19111]]},
-  // 원전 반경 5NM 버퍼존
-  {id:'DA_D1_BUF',grp:'위험구역(D)',name:'고리원전 버퍼존 (5NM)',alt:'주의권고',circle:{c:[35.31667,129.3],r:5}},
-  {id:'DA_D2_BUF',grp:'위험구역(D)',name:'월성원전 버퍼존 (5NM)',alt:'주의권고',circle:{c:[35.7,129.46667],r:5}},
-  {id:'DA_D7_BUF',grp:'위험구역(D)',name:'한빛원전 버퍼존 (5NM)',alt:'주의권고',circle:{c:[35.40806,126.40806],r:5}},
-  {id:'DA_D8_BUF',grp:'위험구역(D)',name:'한울원전 버퍼존 (5NM)',alt:'주의권고',circle:{c:[37.1,129.38333],r:5}},
+  // ── 원자력발전소 비행금지구역(Prohibited) — 원전중심 18.6km(10NM) ──
+  {id:'PA_P61',grp:'금지구역(P)',name:'P61 고리원전 (부산)',alt:'GND ~ UNL / 18.6km(10NM)',circle:{c:[35.31667,129.3],r:10.04}},
+  {id:'PA_P62',grp:'금지구역(P)',name:'P62 월성원전 (경주)',alt:'GND ~ UNL / 18.6km(10NM)',circle:{c:[35.7,129.46667],r:10.04}},
+  {id:'PA_P63',grp:'금지구역(P)',name:'P63 한빛원전 (영광)',alt:'GND ~ UNL / 18.6km(10NM)',circle:{c:[35.40806,126.40806],r:10.04}},
+  {id:'PA_P64',grp:'금지구역(P)',name:'P64 한울원전 (울진)',alt:'GND ~ UNL / 18.6km(10NM)',circle:{c:[37.1,129.38333],r:10.04}},
+  {id:'PA_P65',grp:'금지구역(P)',name:'P65 대전 원자력연구소 (대전)',alt:'GND ~ UNL / 18.6km(10NM)',circle:{c:[36.3903,127.366],r:10.04}},
   {id:'FIR_Incheon',grp:'FIR',name:'Incheon FIR',alt:'GND ~ UNL',poly:[[38.0,124.0],[38.0,124.85],[38.6333,128.3667],[38.6333,133.65],[38.0,133.0],[37.5,133.0],[34.6667,129.1667],[32.5,127.5],[32.5,126.8333],[30.0,125.4167],[30.0,124.0]]},
   {id:'KADIZ',grp:'KADIZ',name:'Korea ADIZ (KADIZ)',alt:'SFC ~ UNL',poly:[[39.0,123.5],[39.0,133.0],[37.2833,133.0],[36.0,130.5],[35.2167,129.8],[34.7167,129.15],[34.2833,128.8667],[32.5,127.5],[32.5,126.8333],[30.0,125.4167],[30.0,124.0],[37.0,124.0],[39.0,123.5]]},
   {id:'JJB_1',grp:'제주 Class B',name:'1구역 (5NM)',alt:'SFC ~ 10,000ft',circle:{c:[33.51222,126.49278],r:5}},
