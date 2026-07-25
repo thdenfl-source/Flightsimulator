@@ -9456,16 +9456,45 @@ if ('serviceWorker' in navigator) {
     function _tpRenderMapPoints() {
       if (_tpPointLayer) { leafMap.removeLayer(_tpPointLayer); _tpPointLayer = null; }
       const g = L.layerGroup();
-      tpFolders().forEach(fd => (fd.pts || []).forEach(p => {
+      tpFolders().forEach((fd, fi) => (fd.pts || []).forEach((p, pi) => {
         if (!p.show) return;
         const emoji = p.icon || fd.icon || '📍';
         const m = L.marker([p.lat, p.lon], { icon: _tpMarkerIcon(emoji, p.name) });
-        m.bindPopup(`<div style="font-family:-apple-system,Segoe UI,Arial,sans-serif;font-size:11px;color:#333;line-height:1.5;">` +
+        const btn = 'cursor:pointer;border-radius:4px;padding:4px 6px;font-size:10px;font-weight:bold;text-align:center;flex:1;';
+        m.bindPopup(`<div style="font-family:-apple-system,Segoe UI,Arial,sans-serif;font-size:11px;color:#333;line-height:1.5;min-width:180px;">` +
           `<div style="color:#0077aa;font-weight:bold;font-size:12px;margin-bottom:3px;">${emoji} ${p.name}</div>` +
-          `<div>위치: ${_tpDMS(p.lat, true)} ${_tpDMS(p.lon, false)}</div></div>`);
+          `<div>위치: ${_tpDMS(p.lat, true)} ${_tpDMS(p.lon, false)}</div>` +
+          `<div style="display:flex;gap:5px;margin-top:6px;">` +
+            `<span onclick="tpMapHide(${fi},${pi})" style="${btn}background:#eee;color:#555;">숨기기</span>` +
+            `<span onclick="tpMapAddFpl(${fi},${pi})" style="${btn}background:#e3f2ee;color:#00796b;border:1px solid #00796b55;">플랜 추가</span>` +
+            `<span onclick="tpMapDirect(${fi},${pi})" style="${btn}background:#e8f1fb;color:#0077aa;border:1px solid #0077aa55;">Direct</span>` +
+          `</div></div>`);
         m.addTo(g);
       }));
       _tpPointLayer = g.addTo(leafMap);
+    }
+    // ── 지도 포인트 팝업 동작 ──
+    function _tpMapPt(fi, pi) { const fd = tpFolders()[fi]; return fd && fd.pts ? { f: tpFolders(), fd, p: fd.pts[pi] } : null; }
+    function tpMapHide(fi, pi) {
+      const r = _tpMapPt(fi, pi); if (!r || !r.p) return;
+      r.p.show = false; _tpSave('tpFolders', r.f); _tpRenderMapPoints();
+      if (currentMode === 'TRACKPOINT') switchMode('TRACKPOINT');
+    }
+    function _tpFplIdent(name) {
+      const c = String(name || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);
+      if (c) return c;
+      return 'PT' + (S.wps.filter(w => /^PT\d*$/.test(w.ident)).length + 1);
+    }
+    function tpMapAddFpl(fi, pi) {
+      const r = _tpMapPt(fi, pi); if (!r || !r.p) return;
+      pushWP({ ident: _tpFplIdent(r.p.name), lat: r.p.lat, lon: r.p.lon });
+      try { leafMap.closePopup(); } catch (e) {}
+    }
+    function tpMapDirect(fi, pi) {
+      const r = _tpMapPt(fi, pi); if (!r || !r.p) return;
+      pushWP({ ident: _tpFplIdent(r.p.name), lat: r.p.lat, lon: r.p.lon });
+      selectWP(S.wps.length - 1);   // 현재 위치 → 이 포인트로 Direct-To
+      try { leafMap.closePopup(); } catch (e) {}
     }
     function _curFolderObj() { const f = tpFolders(); return f[tpFolderIdx]; }
 
