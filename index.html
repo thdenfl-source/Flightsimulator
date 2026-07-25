@@ -7080,6 +7080,7 @@ function init(){
   if (!_restored) setPage(0);   // 복원 시엔 restoreSession의 applyPanels로 배치 유지
   window.addEventListener('resize', () => { resizePFD(); try { leafMap.invalidateSize(); } catch(e) {} scaleCdu(); });
   setTimeout(() => leafMap.invalidateSize(), 100);
+  try { _tpRenderMapPoints(); } catch(e) {}   // 저장된 표시 포인트를 지도에 복원
   if (!_simLoopRunning) { _simLoopRunning = true; requestAnimationFrame(simStep); }
 
   // ── PFD canvas tap-to-edit ──
@@ -9426,7 +9427,9 @@ if ('serviceWorker' in navigator) {
     // ══════════════════════════════════════════════════════════════
     let tpTab = 'POINT';
     let tpFolderIdx = null;         // null=폴더 목록, 숫자=폴더 내부
-    let tpSel = new Set();          // 폴더 내 선택된 포인트 인덱스
+    let _tpIconPick = null;         // 아이콘 선택 대상 {type:'point'|'folder', fi, pi}
+    // 지도 표시용 아이콘 세트(이모지)
+    const TP_ICONS = ['📍','🔴','🔺','⭐','🚩','🏁','❌','⚓','🚁','🏥','⚠️','⛵','🔷','🟢','🟡','🟣'];
     function _tpLoad(key) { try { return JSON.parse(localStorage.getItem(key) || '[]'); } catch(e) { return []; } }
     function _tpSave(key, arr) { try { localStorage.setItem(key, JSON.stringify(arr)); } catch(e) {} }
     // 폴더 구조: [{name, pts:[{name,lat,lon}]}]. 구버전 평면 tpPoints는 '기본' 폴더로 이전.
@@ -9440,7 +9443,42 @@ if ('serviceWorker' in navigator) {
       return f;
     }
     function tpTracks() { return _tpLoad('tpTracks'); }
-    function tpSetTab(t) { tpTab = t; tpFolderIdx = null; tpSel = new Set(); switchMode('TRACKPOINT'); }
+    function tpSetTab(t) { tpTab = t; tpFolderIdx = null; _tpIconPick = null; switchMode('TRACKPOINT'); }
+
+    // ── 지도에 포인트 마커 표시(show=true인 포인트, 전 폴더 대상) ──
+    let _tpPointLayer = null;
+    function _tpMarkerIcon(emoji, name) {
+      return L.divIcon({ className: '', iconSize: [0, 0], html:
+        `<div style="position:relative;transform:translate(-50%,-100%);white-space:nowrap;">` +
+        `<div style="font-size:20px;line-height:1;filter:drop-shadow(0 0 2px #000);">${emoji || '📍'}</div>` +
+        `<div style="position:absolute;left:15px;top:1px;color:#fff;font-size:9px;font-weight:bold;text-shadow:1px 1px 2px #000,-1px -1px 2px #000;">${name || ''}</div></div>` });
+    }
+    function _tpRenderMapPoints() {
+      if (_tpPointLayer) { leafMap.removeLayer(_tpPointLayer); _tpPointLayer = null; }
+      const g = L.layerGroup();
+      tpFolders().forEach(fd => (fd.pts || []).forEach(p => {
+        if (!p.show) return;
+        const emoji = p.icon || fd.icon || '📍';
+        const m = L.marker([p.lat, p.lon], { icon: _tpMarkerIcon(emoji, p.name) });
+        m.bindPopup(`<div style="font-family:-apple-system,Segoe UI,Arial,sans-serif;font-size:11px;color:#333;line-height:1.5;">` +
+          `<div style="color:#0077aa;font-weight:bold;font-size:12px;margin-bottom:3px;">${emoji} ${p.name}</div>` +
+          `<div>위치: ${_tpDMS(p.lat, true)} ${_tpDMS(p.lon, false)}</div></div>`);
+        m.addTo(g);
+      }));
+      _tpPointLayer = g.addTo(leafMap);
+    }
+    function _curFolderObj() { const f = tpFolders(); return f[tpFolderIdx]; }
+
+    // 아이콘 선택 화면 열기/적용
+    function tpPickIcon(type, fi, pi) { _tpIconPick = { type, fi, pi }; switchMode('TRACKPOINT'); }
+    function tpApplyIcon(emoji) {
+      if (!_tpIconPick) return;
+      const f = tpFolders();
+      if (_tpIconPick.type === 'folder') { if (f[_tpIconPick.fi]) f[_tpIconPick.fi].icon = emoji; }
+      else { const fd = f[_tpIconPick.fi]; if (fd && fd.pts[_tpIconPick.pi]) fd.pts[_tpIconPick.pi].icon = emoji; }
+      _tpSave('tpFolders', f); _tpIconPick = null; _tpRenderMapPoints(); switchMode('TRACKPOINT');
+    }
+    function tpIconCancel() { _tpIconPick = null; switchMode('TRACKPOINT'); }
 
     function _tpDMS(dd, isLat) {
       const a = Math.abs(dd), d = Math.floor(a), m = Math.floor((a - d) * 60), s = Math.round(((a - d) * 60 - m) * 60);
@@ -9455,8 +9493,8 @@ if ('serviceWorker' in navigator) {
       if (!name) return;
       f.push({ name, pts: [] }); _tpSave('tpFolders', f); switchMode('TRACKPOINT');
     }
-    function tpFolderOpen(i) { tpFolderIdx = i; tpSel = new Set(); switchMode('TRACKPOINT'); }
-    function tpFolderBack() { tpFolderIdx = null; tpSel = new Set(); switchMode('TRACKPOINT'); }
+    function tpFolderOpen(i) { tpFolderIdx = i; _tpIconPick = null; switchMode('TRACKPOINT'); }
+    function tpFolderBack() { tpFolderIdx = null; _tpIconPick = null; switchMode('TRACKPOINT'); }
     function tpFolderRename(i) {
       const f = tpFolders(); const name = (prompt('폴더 이름', f[i].name) || '').trim();
       if (name) { f[i].name = name; _tpSave('tpFolders', f); switchMode('TRACKPOINT'); }
@@ -9464,7 +9502,7 @@ if ('serviceWorker' in navigator) {
     function tpFolderDel(i) {
       const f = tpFolders();
       if (!confirm(`폴더 "${f[i].name}"(포인트 ${f[i].pts.length}개)를 삭제할까요?`)) return;
-      f.splice(i, 1); _tpSave('tpFolders', f); switchMode('TRACKPOINT');
+      f.splice(i, 1); _tpSave('tpFolders', f); _tpRenderMapPoints(); switchMode('TRACKPOINT');
     }
     function _curFolder() { const f = tpFolders(); return f[tpFolderIdx] ? { f, folder: f[tpFolderIdx] } : null; }
 
@@ -9485,17 +9523,18 @@ if ('serviceWorker' in navigator) {
       cf.folder.pts.push({ name, lat: +lat.toFixed(6), lon: +lon.toFixed(6) });
       _tpSave('tpFolders', cf.f); switchMode('TRACKPOINT');
     }
-    function tpDelPoint(i) { const cf = _curFolder(); if (!cf) return; cf.folder.pts.splice(i, 1); tpSel.delete(i); _tpSave('tpFolders', cf.f); switchMode('TRACKPOINT'); }
+    function tpDelPoint(i) { const cf = _curFolder(); if (!cf) return; cf.folder.pts.splice(i, 1); _tpSave('tpFolders', cf.f); _tpRenderMapPoints(); switchMode('TRACKPOINT'); }
     function tpNavPoint(i) {
       const cf = _curFolder(); if (!cf) return; const p = cf.folder.pts[i]; if (!p) return;
       pushWP({ ident: p.name, lat: p.lat, lon: p.lon });
       selectWP(S.wps.length - 1);
       try { cduOpenMap(); } catch(e) {}
     }
-    // 선택
-    function tpSelToggle(i) { tpSel.has(i) ? tpSel.delete(i) : tpSel.add(i); switchMode('TRACKPOINT'); }
-    function tpSelAll() { const cf = _curFolder(); if (!cf) return; cf.folder.pts.forEach((_, i) => tpSel.add(i)); switchMode('TRACKPOINT'); }
-    function tpSelNone() { tpSel = new Set(); switchMode('TRACKPOINT'); }
+    // 선택 = 지도 표시(show). 체크 시 지도에 마커, 내보내기 대상도 됨.
+    function tpSelToggle(i) { const cf = _curFolder(); if (!cf) return; const p = cf.folder.pts[i]; p.show = !p.show; _tpSave('tpFolders', cf.f); _tpRenderMapPoints(); switchMode('TRACKPOINT'); }
+    function tpSelAll() { const cf = _curFolder(); if (!cf) return; cf.folder.pts.forEach(p => p.show = true); _tpSave('tpFolders', cf.f); _tpRenderMapPoints(); switchMode('TRACKPOINT'); }
+    function tpSelNone() { const cf = _curFolder(); if (!cf) return; cf.folder.pts.forEach(p => p.show = false); _tpSave('tpFolders', cf.f); _tpRenderMapPoints(); switchMode('TRACKPOINT'); }
+    function _tpSelCount() { const cf = _curFolder(); return cf ? cf.folder.pts.filter(p => p.show).length : 0; }
 
     // ── GPX/KML 빌더 ──
     function _xmlEsc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
@@ -9518,8 +9557,8 @@ if ('serviceWorker' in navigator) {
     // ── 포인트 내보내기(선택 또는 전체) ──
     function tpExportPoints(fmt) {
       const cf = _curFolder(); if (!cf) return;
-      const idxs = tpSel.size ? [...tpSel].sort((a,b)=>a-b) : cf.folder.pts.map((_, i) => i);
-      const pts = idxs.map(i => cf.folder.pts[i]);
+      const shown = cf.folder.pts.filter(p => p.show);
+      const pts = shown.length ? shown : cf.folder.pts;
       if (!pts.length) { alert('내보낼 포인트가 없습니다.'); return; }
       const base = cf.folder.name.replace(/[^\w가-힣]+/g, '_');
       if (fmt === 'gpx') _trkDownload(base + '.gpx', _gpxPts(pts), 'application/gpx+xml');
@@ -9712,6 +9751,23 @@ if ('serviceWorker' in navigator) {
         `background:#0a1620;color:${col||'#00cfff'};font-size:10px;font-weight:bold;cursor:pointer;white-space:nowrap;">${label}</div>`;
       let body = '';
 
+      // 아이콘 선택 화면(오버레이)
+      if (_tpIconPick) {
+        const isF = _tpIconPick.type === 'folder';
+        body = `<div style="color:#00cfff;font-size:12px;font-weight:bold;margin-bottom:8px;">${isF ? '폴더' : '포인트'} 아이콘 선택</div>` +
+          `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px;">` +
+          TP_ICONS.map(e => `<div onclick="tpApplyIcon('${e}')" style="text-align:center;font-size:26px;padding:10px 0;border:1px solid #1e2630;border-radius:6px;background:#0a1116;cursor:pointer;">${e}</div>`).join('') +
+          `</div>` +
+          `<div onclick="tpIconCancel()" style="text-align:center;padding:8px;border:1px solid #5a2a2a;border-radius:4px;color:#ff8877;font-size:11px;font-weight:bold;cursor:pointer;">취소</div>`;
+        container.innerHTML = body;
+        footer.innerHTML =
+          `<div class="nav-btn" onclick="tpIconCancel()"><span>↩</span>Back</div>` +
+          `<div class="nav-btn" onclick="switchMode('HOME')"><span>🏠</span>Home</div>` +
+          `<div class="nav-btn"><span>✉</span>Msg</div>` +
+          `<div class="nav-btn" onclick="cduFullScreen()"><span>✥</span>Full</div>`;
+        return;
+      }
+
       if (tpTab === 'POINT') {
         if (tpFolderIdx === null) {
           // 폴더 목록
@@ -9719,9 +9775,10 @@ if ('serviceWorker' in navigator) {
           body += `<div style="display:flex;gap:5px;margin-bottom:8px;">` + btnC('tpFolderAdd()', '＋ 새 폴더') + `</div>`;
           body += folders.length ? folders.map((fd, i) =>
             `<div style="display:flex;align-items:center;gap:6px;padding:9px 8px;margin-bottom:4px;border:1px solid #1e2630;border-radius:4px;background:#0a1116;">` +
+              `<span onclick="tpPickIcon('folder',${i})" style="font-size:20px;cursor:pointer;flex:0 0 auto;" title="아이콘">${fd.icon || '📁'}</span>` +
               `<div onclick="tpFolderOpen(${i})" style="flex:1;min-width:0;cursor:pointer;">` +
-                `<div style="color:#00cfff;font-size:12px;font-weight:bold;">📁 ${fd.name}</div>` +
-                `<div style="color:#667;font-size:9px;">${fd.pts.length}개 포인트</div></div>` +
+                `<div style="color:#00cfff;font-size:12px;font-weight:bold;">${fd.name}</div>` +
+                `<div style="color:#667;font-size:9px;">${fd.pts.length}개 포인트 · 표시 ${(fd.pts||[]).filter(p=>p.show).length}</div></div>` +
               `<span onclick="tpFolderRename(${i})" style="cursor:pointer;color:#889;border:1px solid #333;border-radius:3px;padding:3px 7px;font-size:10px;">이름</span>` +
               `<span onclick="tpFolderDel(${i})" style="cursor:pointer;color:#ff8877;border:1px solid #5a2a2a;border-radius:3px;padding:3px 7px;font-size:10px;">✕</span>` +
               `<span onclick="tpFolderOpen(${i})" style="cursor:pointer;color:#00cfffaa;font-size:14px;">›</span></div>`
@@ -9730,25 +9787,27 @@ if ('serviceWorker' in navigator) {
           // 폴더 내부
           const cf = _curFolder();
           if (!cf) { tpFolderIdx = null; return renderTrackPointScreen(container, footer, title, centerLabel); }
-          const pts = cf.folder.pts;
+          const pts = cf.folder.pts, selN = _tpSelCount();
           body += `<div onclick="tpFolderBack()" style="display:inline-flex;align-items:center;gap:4px;padding:5px 10px;margin-bottom:7px;` +
             `border:1px solid #2a4a5a;border-radius:4px;background:#0a1620;color:#00cfff;font-size:10px;font-weight:bold;cursor:pointer;">☰ 폴더 목록</div>` +
-            `<div style="color:#00cfff;font-size:12px;font-weight:bold;margin-bottom:6px;">📁 ${cf.folder.name}</div>`;
+            `<div style="color:#00cfff;font-size:12px;font-weight:bold;margin-bottom:2px;">${cf.folder.icon || '📁'} ${cf.folder.name}</div>` +
+            `<div style="color:#667;font-size:9px;margin-bottom:6px;">✓ 체크한 포인트가 지도에 표시됩니다</div>`;
           body += `<div style="display:flex;gap:5px;margin-bottom:6px;">` +
             btnC("tpAddPoint('pos')", '＋ 현재위치') + btnC("tpAddPoint('cross')", '＋ 지도중심') + btnC("tpAddPoint('manual')", '＋ 좌표입력') + `</div>`;
           body += `<div style="display:flex;gap:5px;margin-bottom:8px;">` +
-            btnC('tpSelAll()', `전체선택`) + btnC('tpSelNone()', '해제') +
-            btnC("tpExportPoints('gpx')", `GPX 내보내기${tpSel.size?'('+tpSel.size+')':''}`, '#8ac6ff') +
-            btnC("tpExportPoints('kml')", `KML 내보내기${tpSel.size?'('+tpSel.size+')':''}`, '#8bc34a') +
+            btnC('tpSelAll()', `전체표시`) + btnC('tpSelNone()', '전체숨김') +
+            btnC("tpExportPoints('gpx')", `GPX${selN?'('+selN+')':''}`, '#8ac6ff') +
+            btnC("tpExportPoints('kml')", `KML${selN?'('+selN+')':''}`, '#8bc34a') +
             btnC('tpImportPoints()', '가져오기', '#ffcc44') + `</div>`;
           body += pts.length ? pts.map((p, i) => {
-            const sel = tpSel.has(i);
+            const sel = !!p.show, emoji = p.icon || cf.folder.icon || '📍';
             return `<div style="display:flex;align-items:center;gap:6px;padding:6px 8px;margin-bottom:4px;border:1px solid ${sel?'#00e5ff':'#1e2630'};border-radius:4px;background:${sel?'#001e28':'#0a1116'};">` +
               `<div onclick="tpSelToggle(${i})" style="flex:0 0 18px;width:18px;height:18px;border-radius:3px;border:1.5px solid ${sel?'#00e5ff':'#3a4653'};display:flex;align-items:center;justify-content:center;color:#00e5ff;font-size:12px;font-weight:bold;cursor:pointer;">${sel?'✓':''}</div>` +
-              `<div style="flex:1;min-width:0;"><div style="color:#cdd6df;font-size:11px;font-weight:bold;">📍 ${p.name}</div>` +
+              `<span onclick="tpPickIcon('point',${tpFolderIdx},${i})" style="font-size:18px;cursor:pointer;flex:0 0 auto;" title="아이콘">${emoji}</span>` +
+              `<div style="flex:1;min-width:0;"><div style="color:#cdd6df;font-size:11px;font-weight:bold;">${p.name}</div>` +
               `<div style="color:#667;font-size:9px;">${_tpDMS(p.lat,true)} ${_tpDMS(p.lon,false)}</div></div>` +
-              `<span onclick="tpNavPoint(${i})" style="cursor:pointer;color:#00e5ff;border:1px solid #00e5ff66;border-radius:3px;padding:3px 7px;font-size:10px;font-weight:bold;">→ 항법</span>` +
-              `<span onclick="tpDelPoint(${i})" style="cursor:pointer;color:#ff8877;border:1px solid #5a2a2a;border-radius:3px;padding:3px 7px;font-size:10px;">✕</span></div>`;
+              `<span onclick="tpNavPoint(${i})" style="cursor:pointer;color:#00e5ff;border:1px solid #00e5ff66;border-radius:3px;padding:3px 6px;font-size:10px;font-weight:bold;">→ 항법</span>` +
+              `<span onclick="tpDelPoint(${i})" style="cursor:pointer;color:#ff8877;border:1px solid #5a2a2a;border-radius:3px;padding:3px 6px;font-size:10px;">✕</span></div>`;
           }).join('') : `<div style="color:#556;font-size:10px;padding:8px 2px;">이 폴더에 포인트가 없습니다.</div>`;
         }
       } else {
