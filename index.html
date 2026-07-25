@@ -9636,27 +9636,43 @@ if ('serviceWorker' in navigator) {
       selectWP(0);
       try { cduOpenMap(); } catch(e) {}
     }
-    // 트랙을 지도에 선으로 표시(포인트는 탭 시에만 속도·위치·고도 팝업)
+    // 트랙 선 색상(선택 가능, 저장)
+    const TRK_COLORS = ['#00e5ff', '#ff5252', '#ffd54f', '#00e07a', '#e040fb', '#ffffff', '#ff9800'];
+    let trkColor = '#00e5ff';
+    try { const c = localStorage.getItem('trkColor'); if (c && TRK_COLORS.includes(c)) trkColor = c; } catch(e) {}
+    function tpSetColor(c) {
+      trkColor = c; try { localStorage.setItem('trkColor', c); } catch(e) {}
+      if (_tpTrackShownIdx !== null) { const i = _tpTrackShownIdx; tpShowTrack(i); }   // 표시 중이면 즉시 반영
+      switchMode('TRACKPOINT');
+    }
+
+    // 트랙을 지도에 단순 선으로 표시(포인트 마커 없음). 선을 탭하면 가장 가까운 지점 정보 팝업.
     let _tpTrackLayer = null, _tpTrackShownIdx = null;
     function tpHideTrack() { if (_tpTrackLayer) { leafMap.removeLayer(_tpTrackLayer); _tpTrackLayer = null; } _tpTrackShownIdx = null; }
     function tpShowTrack(i) {
       const t = tpTracks()[i]; if (!t || !t.pts.length) return;
       tpHideTrack();
-      const g = L.layerGroup();
       const latlngs = t.pts.map(p => [p.lat, p.lon]);
-      if (latlngs.length > 1) L.polyline(latlngs, { color: '#00e5ff', weight: 2.5, opacity: 0.9 }).addTo(g);
-      t.pts.forEach((p, k) => {
-        const m = L.circleMarker([p.lat, p.lon], { radius: 5, color: '#00e5ff', weight: 2, fillColor: '#00303f', fillOpacity: 1 });
-        const name = p.ident || ('P' + (k + 1));
-        const rows = [
-          `<div style="color:#0077aa;font-weight:bold;font-size:12px;margin-bottom:3px;">📍 ${name}</div>`,
-          `<div>위치: ${_tpDMS(p.lat, true)} ${_tpDMS(p.lon, false)}</div>`,
-        ];
-        if (p.altM != null) rows.push(`<div>고도: ${Math.round(p.altM * 3.28084)} ft</div>`);
-        if (p.spdKt != null) rows.push(`<div>속도: ${Math.round(p.spdKt)} kt</div>`);
-        m.bindPopup(`<div style="font-family:-apple-system,Segoe UI,Arial,sans-serif;font-size:11px;color:#333;line-height:1.5;">${rows.join('')}</div>`);
-        m.addTo(g);
-      });
+      const g = L.layerGroup();
+      if (latlngs.length > 1) {
+        const pl = L.polyline(latlngs, { color: trkColor, weight: 3, opacity: 0.95 });
+        pl.on('click', (e) => {
+          let best = null, bd = Infinity;
+          t.pts.forEach((p, k) => { const d = distance(e.latlng.lat, e.latlng.lng, p.lat, p.lon); if (d < bd) { bd = d; best = { p, k }; } });
+          if (!best) return;
+          const p = best.p, name = p.ident || ('P' + (best.k + 1));
+          const rows = [
+            `<div style="color:#0077aa;font-weight:bold;font-size:12px;margin-bottom:3px;">📍 ${name}</div>`,
+            `<div>위치: ${_tpDMS(p.lat, true)} ${_tpDMS(p.lon, false)}</div>`,
+          ];
+          if (p.altM != null) rows.push(`<div>고도: ${Math.round(p.altM * 3.28084)} ft</div>`);
+          if (p.spdKt != null) rows.push(`<div>속도: ${Math.round(p.spdKt)} kt</div>`);
+          L.popup().setLatLng([p.lat, p.lon])
+            .setContent(`<div style="font-family:-apple-system,Segoe UI,Arial,sans-serif;font-size:11px;color:#333;line-height:1.5;">${rows.join('')}</div>`)
+            .openOn(leafMap);
+        });
+        pl.addTo(g);
+      }
       _tpTrackLayer = g.addTo(leafMap);
       _tpTrackShownIdx = i;
       try { if (latlngs.length > 1) leafMap.fitBounds(latlngs, { padding: [40, 40], maxZoom: 13 }); else leafMap.setView(latlngs[0], 13); } catch(e) {}
@@ -9739,6 +9755,11 @@ if ('serviceWorker' in navigator) {
         const trks = tpTracks();
         body += `<div style="display:flex;gap:5px;margin-bottom:8px;">` +
           btnC('tpSaveTrackFromFP()', '＋ 비행계획을 트랙으로') + btnC('tpImportTrack()', '가져오기', '#ffcc44') + `</div>`;
+        // 선 색상 선택
+        body += `<div style="display:flex;align-items:center;gap:7px;margin-bottom:9px;padding:6px 8px;border:1px solid #1e2630;border-radius:4px;background:#0a1116;">` +
+          `<span style="color:#889;font-size:10px;">선 색상</span>` +
+          TRK_COLORS.map(c => `<span onclick="tpSetColor('${c}')" style="width:20px;height:20px;border-radius:50%;background:${c};cursor:pointer;` +
+            `border:2px solid ${trkColor === c ? '#fff' : 'transparent'};box-shadow:${trkColor===c?'0 0 5px '+c:'none'};"></span>`).join('') + `</div>`;
         body += trks.length ? trks.map((t, i) => {
           const shown = _tpTrackShownIdx === i;
           return `<div style="padding:7px 8px;margin-bottom:4px;border:1px solid ${shown?'#00e5ff':'#1e2630'};border-radius:4px;background:${shown?'#001e28':'#0a1116'};">` +
