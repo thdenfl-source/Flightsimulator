@@ -9425,19 +9425,52 @@ if ('serviceWorker' in navigator) {
     //  TRACK & POINT — 포인트/트랙 저장(기기 저장소) 및 항법 사용
     // ══════════════════════════════════════════════════════════════
     let tpTab = 'POINT';
+    let tpFolderIdx = null;         // null=폴더 목록, 숫자=폴더 내부
+    let tpSel = new Set();          // 폴더 내 선택된 포인트 인덱스
     function _tpLoad(key) { try { return JSON.parse(localStorage.getItem(key) || '[]'); } catch(e) { return []; } }
     function _tpSave(key, arr) { try { localStorage.setItem(key, JSON.stringify(arr)); } catch(e) {} }
-    function tpPoints() { return _tpLoad('tpPoints'); }
+    // 폴더 구조: [{name, pts:[{name,lat,lon}]}]. 구버전 평면 tpPoints는 '기본' 폴더로 이전.
+    function tpFolders() {
+      let f = _tpLoad('tpFolders');
+      if (!Array.isArray(f) || !f.length) {
+        const old = _tpLoad('tpPoints');
+        if (Array.isArray(old) && old.length) { f = [{ name: '기본', pts: old }]; _tpSave('tpFolders', f); }
+        else if (!Array.isArray(f)) f = [];
+      }
+      return f;
+    }
     function tpTracks() { return _tpLoad('tpTracks'); }
-    function tpSetTab(t) { tpTab = t; switchMode('TRACKPOINT'); }
+    function tpSetTab(t) { tpTab = t; tpFolderIdx = null; tpSel = new Set(); switchMode('TRACKPOINT'); }
 
     function _tpDMS(dd, isLat) {
       const a = Math.abs(dd), d = Math.floor(a), m = Math.floor((a - d) * 60), s = Math.round(((a - d) * 60 - m) * 60);
       const dir = isLat ? (dd >= 0 ? 'N' : 'S') : (dd >= 0 ? 'E' : 'W');
       return `${d}°${String(m).padStart(2,'0')}'${String(s).padStart(2,'0')}"${dir}`;
     }
-    // 포인트 추가: src = 'pos'(현재위치) | 'cross'(지도중심) | 'manual'(좌표입력)
+
+    // ── 폴더 CRUD ──
+    function tpFolderAdd() {
+      const f = tpFolders();
+      const name = (prompt('새 폴더 이름', '폴더' + (f.length + 1)) || '').trim();
+      if (!name) return;
+      f.push({ name, pts: [] }); _tpSave('tpFolders', f); switchMode('TRACKPOINT');
+    }
+    function tpFolderOpen(i) { tpFolderIdx = i; tpSel = new Set(); switchMode('TRACKPOINT'); }
+    function tpFolderBack() { tpFolderIdx = null; tpSel = new Set(); switchMode('TRACKPOINT'); }
+    function tpFolderRename(i) {
+      const f = tpFolders(); const name = (prompt('폴더 이름', f[i].name) || '').trim();
+      if (name) { f[i].name = name; _tpSave('tpFolders', f); switchMode('TRACKPOINT'); }
+    }
+    function tpFolderDel(i) {
+      const f = tpFolders();
+      if (!confirm(`폴더 "${f[i].name}"(포인트 ${f[i].pts.length}개)를 삭제할까요?`)) return;
+      f.splice(i, 1); _tpSave('tpFolders', f); switchMode('TRACKPOINT');
+    }
+    function _curFolder() { const f = tpFolders(); return f[tpFolderIdx] ? { f, folder: f[tpFolderIdx] } : null; }
+
+    // ── 폴더 내 포인트 ──
     function tpAddPoint(src) {
+      const cf = _curFolder(); if (!cf) return;
       let lat, lon;
       if (src === 'pos') { lat = S.lat; lon = S.lon; }
       else if (src === 'cross') { const c = leafMap.getCenter(); lat = c.lat; lon = c.lng; }
@@ -9448,27 +9481,113 @@ if ('serviceWorker' in navigator) {
         if (m.length < 2 || isNaN(m[0]) || isNaN(m[1])) { alert('좌표 형식이 올바르지 않습니다.'); return; }
         lat = m[0]; lon = m[1];
       }
-      const arr = tpPoints();
-      const name = (prompt('포인트 이름', 'PT' + (arr.length + 1)) || '').trim() || ('PT' + (arr.length + 1));
-      arr.push({ name, lat: +lat.toFixed(6), lon: +lon.toFixed(6) });
-      _tpSave('tpPoints', arr);
-      switchMode('TRACKPOINT');
+      const name = (prompt('포인트 이름', 'PT' + (cf.folder.pts.length + 1)) || '').trim() || ('PT' + (cf.folder.pts.length + 1));
+      cf.folder.pts.push({ name, lat: +lat.toFixed(6), lon: +lon.toFixed(6) });
+      _tpSave('tpFolders', cf.f); switchMode('TRACKPOINT');
     }
-    function tpDelPoint(i) { const a = tpPoints(); a.splice(i, 1); _tpSave('tpPoints', a); switchMode('TRACKPOINT'); }
+    function tpDelPoint(i) { const cf = _curFolder(); if (!cf) return; cf.folder.pts.splice(i, 1); tpSel.delete(i); _tpSave('tpFolders', cf.f); switchMode('TRACKPOINT'); }
     function tpNavPoint(i) {
-      const p = tpPoints()[i]; if (!p) return;
-      pushWP({ ident: p.name, lat: p.lat, lon: p.lon });   // 비행계획에 추가
-      selectWP(S.wps.length - 1);                          // Direct-To 설정
-      try { cduOpenMap(); } catch(e) {}                    // 지도 표시
+      const cf = _curFolder(); if (!cf) return; const p = cf.folder.pts[i]; if (!p) return;
+      pushWP({ ident: p.name, lat: p.lat, lon: p.lon });
+      selectWP(S.wps.length - 1);
+      try { cduOpenMap(); } catch(e) {}
     }
-    // 트랙: 현재 비행계획(S.wps)을 이름 붙여 저장
+    // 선택
+    function tpSelToggle(i) { tpSel.has(i) ? tpSel.delete(i) : tpSel.add(i); switchMode('TRACKPOINT'); }
+    function tpSelAll() { const cf = _curFolder(); if (!cf) return; cf.folder.pts.forEach((_, i) => tpSel.add(i)); switchMode('TRACKPOINT'); }
+    function tpSelNone() { tpSel = new Set(); switchMode('TRACKPOINT'); }
+
+    // ── GPX/KML 빌더 ──
+    function _xmlEsc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+    function _gpxPts(pts) {
+      return `<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="FlightSimulator" xmlns="http://www.topografix.com/GPX/1/1">\n` +
+        pts.map(p => `<wpt lat="${p.lat}" lon="${p.lon}"><name>${_xmlEsc(p.name)}</name></wpt>`).join('\n') + `\n</gpx>`;
+    }
+    function _kmlPts(pts, docName) {
+      return `<?xml version="1.0" encoding="UTF-8"?>\n<kml xmlns="http://www.opengis.net/kml/2.2">\n<Document><name>${_xmlEsc(docName||'Points')}</name>\n` +
+        pts.map(p => `<Placemark><name>${_xmlEsc(p.name)}</name><Point><coordinates>${p.lon},${p.lat},0</coordinates></Point></Placemark>`).join('\n') + `\n</Document></kml>`;
+    }
+    function _gpxTrack(t) {
+      return `<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="FlightSimulator" xmlns="http://www.topografix.com/GPX/1/1">\n<rte><name>${_xmlEsc(t.name)}</name>\n` +
+        t.pts.map(p => `<rtept lat="${p.lat}" lon="${p.lon}"><name>${_xmlEsc(p.ident||'')}</name></rtept>`).join('\n') + `\n</rte>\n</gpx>`;
+    }
+    function _kmlTrack(t) {
+      return `<?xml version="1.0" encoding="UTF-8"?>\n<kml xmlns="http://www.opengis.net/kml/2.2">\n<Document><name>${_xmlEsc(t.name)}</name>\n<Placemark><name>${_xmlEsc(t.name)}</name><LineString><coordinates>\n` +
+        t.pts.map(p => `${p.lon},${p.lat},0`).join(' ') + `\n</coordinates></LineString></Placemark>\n</Document></kml>`;
+    }
+    // ── 포인트 내보내기(선택 또는 전체) ──
+    function tpExportPoints(fmt) {
+      const cf = _curFolder(); if (!cf) return;
+      const idxs = tpSel.size ? [...tpSel].sort((a,b)=>a-b) : cf.folder.pts.map((_, i) => i);
+      const pts = idxs.map(i => cf.folder.pts[i]);
+      if (!pts.length) { alert('내보낼 포인트가 없습니다.'); return; }
+      const base = cf.folder.name.replace(/[^\w가-힣]+/g, '_');
+      if (fmt === 'gpx') _trkDownload(base + '.gpx', _gpxPts(pts), 'application/gpx+xml');
+      else _trkDownload(base + '.kml', _kmlPts(pts, cf.folder.name), 'application/vnd.google-earth.kml+xml');
+    }
+    // ── 파일 파서 ──
+    function _parsePointsFile(text) {
+      const doc = new DOMParser().parseFromString(text, 'application/xml');
+      const out = [];
+      Array.from(doc.getElementsByTagNameNS('*', 'wpt')).forEach(w => {
+        const lat = parseFloat(w.getAttribute('lat')), lon = parseFloat(w.getAttribute('lon'));
+        if (isNaN(lat)) return;
+        const nm = w.getElementsByTagNameNS('*', 'name')[0];
+        out.push({ name: (nm && nm.textContent.trim()) || 'PT', lat: +lat.toFixed(6), lon: +lon.toFixed(6) });
+      });
+      Array.from(doc.getElementsByTagNameNS('*', 'Placemark')).forEach(pm => {
+        const pt = pm.getElementsByTagNameNS('*', 'Point')[0]; if (!pt) return;
+        const co = pt.getElementsByTagNameNS('*', 'coordinates')[0]; if (!co) return;
+        const [lon, lat] = co.textContent.trim().split(',').map(Number);
+        if (isNaN(lat)) return;
+        const nm = pm.getElementsByTagNameNS('*', 'name')[0];
+        out.push({ name: (nm && nm.textContent.trim()) || 'PT', lat: +lat.toFixed(6), lon: +lon.toFixed(6) });
+      });
+      return out;
+    }
+    function _parseTrackFile(text) {
+      const doc = new DOMParser().parseFromString(text, 'application/xml');
+      const pts = [];
+      ['rtept', 'trkpt'].forEach(tag => Array.from(doc.getElementsByTagNameNS('*', tag)).forEach(p => {
+        const lat = parseFloat(p.getAttribute('lat')), lon = parseFloat(p.getAttribute('lon'));
+        if (isNaN(lat)) return;
+        const nm = p.getElementsByTagNameNS('*', 'name')[0];
+        pts.push({ ident: (nm && nm.textContent.trim()) || undefined, lat, lon });
+      }));
+      if (!pts.length) {
+        const ls = doc.getElementsByTagNameNS('*', 'LineString')[0];
+        const co = ls && ls.getElementsByTagNameNS('*', 'coordinates')[0];
+        if (co) co.textContent.trim().split(/\s+/).forEach(c => {
+          const [lon, lat] = c.split(',').map(Number);
+          if (!isNaN(lat)) pts.push({ lat, lon });
+        });
+      }
+      return pts;
+    }
+    function _tpPickFile(cb) {
+      const inp = document.createElement('input');
+      inp.type = 'file'; inp.accept = '.gpx,.kml,application/gpx+xml,application/vnd.google-earth.kml+xml';
+      inp.onchange = () => { const f = inp.files[0]; if (!f) return; const r = new FileReader(); r.onload = e => cb(e.target.result, f.name); r.readAsText(f); };
+      inp.click();
+    }
+    function tpImportPoints() {
+      const cf = _curFolder(); if (!cf) return;
+      _tpPickFile((text) => {
+        let pts = []; try { pts = _parsePointsFile(text); } catch(e) {}
+        if (!pts.length) { alert('파일에서 포인트를 찾지 못했습니다.\n(GPX wpt / KML Placemark Point 지원)'); return; }
+        cf.folder.pts.push(...pts); _tpSave('tpFolders', cf.f);
+        alert(`${pts.length}개 포인트를 "${cf.folder.name}" 폴더에 가져왔습니다.`);
+        switchMode('TRACKPOINT');
+      });
+    }
+
+    // ── 트랙 ──
     function tpSaveTrackFromFP() {
       if (!S.wps.length) { alert('저장할 비행계획(웨이포인트)이 없습니다.\nFlight Plan에서 웨이포인트를 먼저 입력하세요.'); return; }
       const arr = tpTracks();
       const name = (prompt('트랙 이름', 'TRK' + (arr.length + 1)) || '').trim() || ('TRK' + (arr.length + 1));
       arr.push({ name, pts: S.wps.map(w => ({ ident: w.ident, lat: w.lat, lon: w.lon })) });
-      _tpSave('tpTracks', arr);
-      switchMode('TRACKPOINT');
+      _tpSave('tpTracks', arr); switchMode('TRACKPOINT');
     }
     function tpDelTrack(i) { const a = tpTracks(); a.splice(i, 1); _tpSave('tpTracks', a); switchMode('TRACKPOINT'); }
     function tpLoadTrack(i) {
@@ -9478,6 +9597,24 @@ if ('serviceWorker' in navigator) {
       S.awp = -1; S.fwp = -1; S.brg2wp = -1;
       selectWP(0);
       try { cduOpenMap(); } catch(e) {}
+    }
+    function tpExportTrack(i, fmt) {
+      const t = tpTracks()[i]; if (!t) return;
+      const base = t.name.replace(/[^\w가-힣]+/g, '_');
+      if (fmt === 'gpx') _trkDownload(base + '.gpx', _gpxTrack(t), 'application/gpx+xml');
+      else _trkDownload(base + '.kml', _kmlTrack(t), 'application/vnd.google-earth.kml+xml');
+    }
+    function tpImportTrack() {
+      _tpPickFile((text) => {
+        let pts = []; try { pts = _parseTrackFile(text); } catch(e) {}
+        if (pts.length < 2) { alert('파일에서 트랙(경로)을 찾지 못했습니다.\n(GPX rte/trk / KML LineString 지원)'); return; }
+        const arr = tpTracks();
+        const name = (prompt('트랙 이름', 'TRK' + (arr.length + 1)) || '').trim() || ('TRK' + (arr.length + 1));
+        arr.push({ name, pts: pts.map((p, k) => ({ ident: p.ident || ('WP' + (k + 1)), lat: p.lat, lon: p.lon })) });
+        _tpSave('tpTracks', arr);
+        alert(`트랙 "${name}"(${pts.length}개 지점)을 가져왔습니다.`);
+        switchMode('TRACKPOINT');
+      });
     }
 
     function renderTrackPointScreen(container, footer, title, centerLabel) {
@@ -9490,30 +9627,63 @@ if ('serviceWorker' in navigator) {
           `border:1px solid ${on ? '#00e5ff' : '#2a2a2a'};font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;">${label}</button>`;
       };
       const tabs = `<div style="display:flex;gap:5px;margin-bottom:8px;">${tabBtn('POINT','● POINT')}${tabBtn('TRACK','━ TRACK')}</div>`;
-      const addBtn = (fn, label) =>
-        `<div onclick="${fn}" style="flex:1;min-width:0;text-align:center;padding:7px 4px;border:1px solid #2a4a5a;border-radius:4px;` +
-        `background:#0a1620;color:#00cfff;font-size:10px;font-weight:bold;cursor:pointer;white-space:nowrap;">${label}</div>`;
+      const btnC = (fn, label, col) =>
+        `<div onclick="${fn}" style="flex:1;min-width:0;text-align:center;padding:7px 4px;border:1px solid ${col||'#2a4a5a'};border-radius:4px;` +
+        `background:#0a1620;color:${col||'#00cfff'};font-size:10px;font-weight:bold;cursor:pointer;white-space:nowrap;">${label}</div>`;
       let body = '';
+
       if (tpTab === 'POINT') {
-        const pts = tpPoints();
-        body += `<div style="display:flex;gap:5px;margin-bottom:8px;">` +
-          addBtn("tpAddPoint('pos')", '＋ 현재위치') + addBtn("tpAddPoint('cross')", '＋ 지도중심') + addBtn("tpAddPoint('manual')", '＋ 좌표입력') + `</div>`;
-        body += pts.length ? pts.map((p, i) =>
-          `<div style="display:flex;align-items:center;gap:6px;padding:7px 8px;margin-bottom:4px;border:1px solid #1e2630;border-radius:4px;background:#0a1116;">` +
-            `<div style="flex:1;min-width:0;"><div style="color:#cdd6df;font-size:11px;font-weight:bold;">📍 ${p.name}</div>` +
-            `<div style="color:#667;font-size:9px;">${_tpDMS(p.lat,true)} ${_tpDMS(p.lon,false)}</div></div>` +
-            `<span onclick="tpNavPoint(${i})" style="cursor:pointer;color:#00e5ff;border:1px solid #00e5ff66;border-radius:3px;padding:3px 7px;font-size:10px;font-weight:bold;">→ 항법</span>` +
-            `<span onclick="tpDelPoint(${i})" style="cursor:pointer;color:#ff8877;border:1px solid #5a2a2a;border-radius:3px;padding:3px 7px;font-size:10px;">✕</span></div>`
-        ).join('') : `<div style="color:#556;font-size:10px;padding:8px 2px;">저장된 포인트가 없습니다.</div>`;
+        if (tpFolderIdx === null) {
+          // 폴더 목록
+          const folders = tpFolders();
+          body += `<div style="display:flex;gap:5px;margin-bottom:8px;">` + btnC('tpFolderAdd()', '＋ 새 폴더') + `</div>`;
+          body += folders.length ? folders.map((fd, i) =>
+            `<div style="display:flex;align-items:center;gap:6px;padding:9px 8px;margin-bottom:4px;border:1px solid #1e2630;border-radius:4px;background:#0a1116;">` +
+              `<div onclick="tpFolderOpen(${i})" style="flex:1;min-width:0;cursor:pointer;">` +
+                `<div style="color:#00cfff;font-size:12px;font-weight:bold;">📁 ${fd.name}</div>` +
+                `<div style="color:#667;font-size:9px;">${fd.pts.length}개 포인트</div></div>` +
+              `<span onclick="tpFolderRename(${i})" style="cursor:pointer;color:#889;border:1px solid #333;border-radius:3px;padding:3px 7px;font-size:10px;">이름</span>` +
+              `<span onclick="tpFolderDel(${i})" style="cursor:pointer;color:#ff8877;border:1px solid #5a2a2a;border-radius:3px;padding:3px 7px;font-size:10px;">✕</span>` +
+              `<span onclick="tpFolderOpen(${i})" style="cursor:pointer;color:#00cfffaa;font-size:14px;">›</span></div>`
+          ).join('') : `<div style="color:#556;font-size:10px;padding:8px 2px;">폴더가 없습니다. "＋ 새 폴더"로 만드세요.</div>`;
+        } else {
+          // 폴더 내부
+          const cf = _curFolder();
+          if (!cf) { tpFolderIdx = null; return renderTrackPointScreen(container, footer, title, centerLabel); }
+          const pts = cf.folder.pts;
+          body += `<div onclick="tpFolderBack()" style="display:inline-flex;align-items:center;gap:4px;padding:5px 10px;margin-bottom:7px;` +
+            `border:1px solid #2a4a5a;border-radius:4px;background:#0a1620;color:#00cfff;font-size:10px;font-weight:bold;cursor:pointer;">☰ 폴더 목록</div>` +
+            `<div style="color:#00cfff;font-size:12px;font-weight:bold;margin-bottom:6px;">📁 ${cf.folder.name}</div>`;
+          body += `<div style="display:flex;gap:5px;margin-bottom:6px;">` +
+            btnC("tpAddPoint('pos')", '＋ 현재위치') + btnC("tpAddPoint('cross')", '＋ 지도중심') + btnC("tpAddPoint('manual')", '＋ 좌표입력') + `</div>`;
+          body += `<div style="display:flex;gap:5px;margin-bottom:8px;">` +
+            btnC('tpSelAll()', `전체선택`) + btnC('tpSelNone()', '해제') +
+            btnC("tpExportPoints('gpx')", `GPX 내보내기${tpSel.size?'('+tpSel.size+')':''}`, '#8ac6ff') +
+            btnC("tpExportPoints('kml')", `KML 내보내기${tpSel.size?'('+tpSel.size+')':''}`, '#8bc34a') +
+            btnC('tpImportPoints()', '가져오기', '#ffcc44') + `</div>`;
+          body += pts.length ? pts.map((p, i) => {
+            const sel = tpSel.has(i);
+            return `<div style="display:flex;align-items:center;gap:6px;padding:6px 8px;margin-bottom:4px;border:1px solid ${sel?'#00e5ff':'#1e2630'};border-radius:4px;background:${sel?'#001e28':'#0a1116'};">` +
+              `<div onclick="tpSelToggle(${i})" style="flex:0 0 18px;width:18px;height:18px;border-radius:3px;border:1.5px solid ${sel?'#00e5ff':'#3a4653'};display:flex;align-items:center;justify-content:center;color:#00e5ff;font-size:12px;font-weight:bold;cursor:pointer;">${sel?'✓':''}</div>` +
+              `<div style="flex:1;min-width:0;"><div style="color:#cdd6df;font-size:11px;font-weight:bold;">📍 ${p.name}</div>` +
+              `<div style="color:#667;font-size:9px;">${_tpDMS(p.lat,true)} ${_tpDMS(p.lon,false)}</div></div>` +
+              `<span onclick="tpNavPoint(${i})" style="cursor:pointer;color:#00e5ff;border:1px solid #00e5ff66;border-radius:3px;padding:3px 7px;font-size:10px;font-weight:bold;">→ 항법</span>` +
+              `<span onclick="tpDelPoint(${i})" style="cursor:pointer;color:#ff8877;border:1px solid #5a2a2a;border-radius:3px;padding:3px 7px;font-size:10px;">✕</span></div>`;
+          }).join('') : `<div style="color:#556;font-size:10px;padding:8px 2px;">이 폴더에 포인트가 없습니다.</div>`;
+        }
       } else {
         const trks = tpTracks();
-        body += `<div style="display:flex;gap:5px;margin-bottom:8px;">` + addBtn('tpSaveTrackFromFP()', '＋ 현재 비행계획을 트랙으로 저장') + `</div>`;
+        body += `<div style="display:flex;gap:5px;margin-bottom:8px;">` +
+          btnC('tpSaveTrackFromFP()', '＋ 비행계획을 트랙으로') + btnC('tpImportTrack()', '가져오기', '#ffcc44') + `</div>`;
         body += trks.length ? trks.map((t, i) =>
-          `<div style="display:flex;align-items:center;gap:6px;padding:7px 8px;margin-bottom:4px;border:1px solid #1e2630;border-radius:4px;background:#0a1116;">` +
-            `<div style="flex:1;min-width:0;"><div style="color:#cdd6df;font-size:11px;font-weight:bold;">━ ${t.name}</div>` +
-            `<div style="color:#667;font-size:9px;">${t.pts.length}개 지점</div></div>` +
-            `<span onclick="tpLoadTrack(${i})" style="cursor:pointer;color:#00e5ff;border:1px solid #00e5ff66;border-radius:3px;padding:3px 7px;font-size:10px;font-weight:bold;">불러오기</span>` +
-            `<span onclick="tpDelTrack(${i})" style="cursor:pointer;color:#ff8877;border:1px solid #5a2a2a;border-radius:3px;padding:3px 7px;font-size:10px;">✕</span></div>`
+          `<div style="padding:7px 8px;margin-bottom:4px;border:1px solid #1e2630;border-radius:4px;background:#0a1116;">` +
+            `<div style="display:flex;align-items:center;gap:6px;">` +
+              `<div style="flex:1;min-width:0;"><div style="color:#cdd6df;font-size:11px;font-weight:bold;">━ ${t.name}</div>` +
+              `<div style="color:#667;font-size:9px;">${t.pts.length}개 지점</div></div>` +
+              `<span onclick="tpLoadTrack(${i})" style="cursor:pointer;color:#00e5ff;border:1px solid #00e5ff66;border-radius:3px;padding:3px 7px;font-size:10px;font-weight:bold;">불러오기</span>` +
+              `<span onclick="tpDelTrack(${i})" style="cursor:pointer;color:#ff8877;border:1px solid #5a2a2a;border-radius:3px;padding:3px 7px;font-size:10px;">✕</span></div>` +
+            `<div style="display:flex;gap:5px;margin-top:5px;">` +
+              btnC(`tpExportTrack(${i},'gpx')`, 'GPX', '#8ac6ff') + btnC(`tpExportTrack(${i},'kml')`, 'KML', '#8bc34a') + `</div></div>`
         ).join('') : `<div style="color:#556;font-size:10px;padding:8px 2px;">저장된 트랙이 없습니다.</div>`;
       }
       container.innerHTML = tabs + body;
