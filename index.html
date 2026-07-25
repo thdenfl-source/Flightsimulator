@@ -9154,7 +9154,7 @@ if ('serviceWorker' in navigator) {
     function clBack()  { if (clPath.length) { clPath.pop(); switchMode('CHECKLIST'); } else { switchMode('HOME'); } }
     function clToggle(i) { const k = clPath.join('.') + '#' + i; clChecked[k] = !clChecked[k]; switchMode('CHECKLIST'); }
     function clResetLeaf() { const p = clPath.join('.'); Object.keys(clChecked).forEach(k => { if (k.startsWith(p + '#')) delete clChecked[k]; }); switchMode('CHECKLIST'); }
-    function _clParent() { let n = _clRoot(); for (let i = 0; i < clPath.length - 1; i++) n = n.children[i]; return n; }
+    function _clParent() { let n = _clRoot(); for (let i = 0; i < clPath.length - 1; i++) n = n.children[clPath[i]]; return n; }
     // 같은 단계의 이전/다음 형제 항목으로 이동
     function clSibling(dir) {
       if (!clPath.length) return;
