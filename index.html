@@ -7975,7 +7975,7 @@ if ('serviceWorker' in navigator) {
         { id: 'perf', text: 'PERF', icon: '<svg viewBox="0 0 100 100"><line x1="18" y1="15" x2="18" y2="82" stroke="#fff" stroke-width="4"/><line x1="18" y1="82" x2="88" y2="82" stroke="#fff" stroke-width="4"/><rect x="26" y="48" width="15" height="34" rx="2" fill="#e91e63"/><rect x="48" y="28" width="15" height="54" rx="2" fill="#00e5ff"/><rect x="70" y="38" width="15" height="44" rx="2" fill="#e91e63"/></svg>' },
         /* Row 3 */
         /* Aircraft Systems — monitor screen */
-        { id: 'sys', text: 'Avionics', icon: '<svg viewBox="0 0 100 100"><rect x="12" y="20" width="76" height="52" rx="5" fill="none" stroke="#9e9e9e" stroke-width="5"/><line x1="38" y1="72" x2="35" y2="85" stroke="#9e9e9e" stroke-width="4"/><line x1="62" y1="72" x2="65" y2="85" stroke="#9e9e9e" stroke-width="4"/><line x1="30" y1="85" x2="70" y2="85" stroke="#9e9e9e" stroke-width="4"/><path d="M35 55 L50 30 L65 55 Z" fill="none" stroke="#9e9e9e" stroke-width="3"/><line x1="43" y1="43" x2="50" y2="30" stroke="#9e9e9e" stroke-width="2"/></svg>' },
+        { id: 'sys', text: 'Track &<br>Point', icon: '<svg viewBox="0 0 100 100"><polyline points="18,80 42,52 60,64 84,26" fill="none" stroke="#00e5ff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="7,5"/><circle cx="18" cy="80" r="6" fill="#00e5ff"/><circle cx="42" cy="52" r="6" fill="#00e5ff"/><circle cx="60" cy="64" r="6" fill="#00e5ff"/><path d="M84 12 C74 12 70 20 70 26 C70 34 84 44 84 44 C84 44 98 34 98 26 C98 20 94 12 84 12 Z" fill="#ff5252" transform="translate(-8,0)"/><circle cx="76" cy="25" r="4" fill="#fff"/></svg>' },
         /* Flight Plan — dashed waypoint path */
         { id: 'fpl', text: 'Flight Plan', icon: '<svg viewBox="0 0 100 100"><circle cx="18" cy="78" r="6" fill="#00e5ff"/><circle cx="45" cy="45" r="6" fill="#00e5ff"/><circle cx="82" cy="22" r="6" fill="#00e5ff"/><line x1="18" y1="78" x2="45" y2="45" stroke="#00e5ff" stroke-width="4" stroke-dasharray="6,4"/><line x1="45" y1="45" x2="82" y2="22" stroke="#00e5ff" stroke-width="4" stroke-dasharray="6,4"/></svg>' },
         /* PROC — Y-fork cyan */
@@ -8060,7 +8060,7 @@ if ('serviceWorker' in navigator) {
                         <div class="icon-label">${btn.text}</div>
                     </a>`;
             } else {
-                let clickAction = btn.id === 'sys' ? `onclick="switchMode('AUDIO'); switchAudioTab('COM');"` :
+                let clickAction = btn.id === 'sys' ? `onclick="switchMode('TRACKPOINT')"` :
                                   btn.id === 'perf' ? `onclick="switchMode('PERF')"` :
                                   btn.id === 'fpl'  ? `onclick="setPage(1)"` :
                                   btn.id === 'proc' ? `onclick="setPage(1); fpGo('IFR');"` :
@@ -9421,6 +9421,109 @@ if ('serviceWorker' in navigator) {
         `<div class="nav-btn" onclick="cduFullScreen()"><span>✥</span>Full</div>`;
     }
 
+    // ══════════════════════════════════════════════════════════════
+    //  TRACK & POINT — 포인트/트랙 저장(기기 저장소) 및 항법 사용
+    // ══════════════════════════════════════════════════════════════
+    let tpTab = 'POINT';
+    function _tpLoad(key) { try { return JSON.parse(localStorage.getItem(key) || '[]'); } catch(e) { return []; } }
+    function _tpSave(key, arr) { try { localStorage.setItem(key, JSON.stringify(arr)); } catch(e) {} }
+    function tpPoints() { return _tpLoad('tpPoints'); }
+    function tpTracks() { return _tpLoad('tpTracks'); }
+    function tpSetTab(t) { tpTab = t; switchMode('TRACKPOINT'); }
+
+    function _tpDMS(dd, isLat) {
+      const a = Math.abs(dd), d = Math.floor(a), m = Math.floor((a - d) * 60), s = Math.round(((a - d) * 60 - m) * 60);
+      const dir = isLat ? (dd >= 0 ? 'N' : 'S') : (dd >= 0 ? 'E' : 'W');
+      return `${d}°${String(m).padStart(2,'0')}'${String(s).padStart(2,'0')}"${dir}`;
+    }
+    // 포인트 추가: src = 'pos'(현재위치) | 'cross'(지도중심) | 'manual'(좌표입력)
+    function tpAddPoint(src) {
+      let lat, lon;
+      if (src === 'pos') { lat = S.lat; lon = S.lon; }
+      else if (src === 'cross') { const c = leafMap.getCenter(); lat = c.lat; lon = c.lng; }
+      else {
+        const v = prompt('좌표 입력 (위도,경도) 십진수\n예: 37.3895, 126.6550', '');
+        if (!v) return;
+        const m = v.split(',').map(x => parseFloat(x.trim()));
+        if (m.length < 2 || isNaN(m[0]) || isNaN(m[1])) { alert('좌표 형식이 올바르지 않습니다.'); return; }
+        lat = m[0]; lon = m[1];
+      }
+      const arr = tpPoints();
+      const name = (prompt('포인트 이름', 'PT' + (arr.length + 1)) || '').trim() || ('PT' + (arr.length + 1));
+      arr.push({ name, lat: +lat.toFixed(6), lon: +lon.toFixed(6) });
+      _tpSave('tpPoints', arr);
+      switchMode('TRACKPOINT');
+    }
+    function tpDelPoint(i) { const a = tpPoints(); a.splice(i, 1); _tpSave('tpPoints', a); switchMode('TRACKPOINT'); }
+    function tpNavPoint(i) {
+      const p = tpPoints()[i]; if (!p) return;
+      pushWP({ ident: p.name, lat: p.lat, lon: p.lon });   // 비행계획에 추가
+      selectWP(S.wps.length - 1);                          // Direct-To 설정
+      try { cduOpenMap(); } catch(e) {}                    // 지도 표시
+    }
+    // 트랙: 현재 비행계획(S.wps)을 이름 붙여 저장
+    function tpSaveTrackFromFP() {
+      if (!S.wps.length) { alert('저장할 비행계획(웨이포인트)이 없습니다.\nFlight Plan에서 웨이포인트를 먼저 입력하세요.'); return; }
+      const arr = tpTracks();
+      const name = (prompt('트랙 이름', 'TRK' + (arr.length + 1)) || '').trim() || ('TRK' + (arr.length + 1));
+      arr.push({ name, pts: S.wps.map(w => ({ ident: w.ident, lat: w.lat, lon: w.lon })) });
+      _tpSave('tpTracks', arr);
+      switchMode('TRACKPOINT');
+    }
+    function tpDelTrack(i) { const a = tpTracks(); a.splice(i, 1); _tpSave('tpTracks', a); switchMode('TRACKPOINT'); }
+    function tpLoadTrack(i) {
+      const t = tpTracks()[i]; if (!t || !t.pts.length) return;
+      if (S.wps.length && !confirm('현재 비행계획을 이 트랙으로 대체할까요?')) return;
+      S.wps = t.pts.map((p, k) => ({ ident: p.ident || ('WP' + (k + 1)), lat: p.lat, lon: p.lon }));
+      S.awp = -1; S.fwp = -1; S.brg2wp = -1;
+      selectWP(0);
+      try { cduOpenMap(); } catch(e) {}
+    }
+
+    function renderTrackPointScreen(container, footer, title, centerLabel) {
+      title.innerText = 'Track & Point';
+      centerLabel.innerText = 'T&P';
+      const tabBtn = (id, label) => {
+        const on = tpTab === id;
+        return `<button onclick="tpSetTab('${id}')" style="flex:1;padding:6px 2px;font-size:11px;font-weight:bold;cursor:pointer;` +
+          `border-radius:4px;background:${on ? '#002733' : '#111'};color:${on ? '#00e5ff' : '#556'};` +
+          `border:1px solid ${on ? '#00e5ff' : '#2a2a2a'};font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;">${label}</button>`;
+      };
+      const tabs = `<div style="display:flex;gap:5px;margin-bottom:8px;">${tabBtn('POINT','● POINT')}${tabBtn('TRACK','━ TRACK')}</div>`;
+      const addBtn = (fn, label) =>
+        `<div onclick="${fn}" style="flex:1;min-width:0;text-align:center;padding:7px 4px;border:1px solid #2a4a5a;border-radius:4px;` +
+        `background:#0a1620;color:#00cfff;font-size:10px;font-weight:bold;cursor:pointer;white-space:nowrap;">${label}</div>`;
+      let body = '';
+      if (tpTab === 'POINT') {
+        const pts = tpPoints();
+        body += `<div style="display:flex;gap:5px;margin-bottom:8px;">` +
+          addBtn("tpAddPoint('pos')", '＋ 현재위치') + addBtn("tpAddPoint('cross')", '＋ 지도중심') + addBtn("tpAddPoint('manual')", '＋ 좌표입력') + `</div>`;
+        body += pts.length ? pts.map((p, i) =>
+          `<div style="display:flex;align-items:center;gap:6px;padding:7px 8px;margin-bottom:4px;border:1px solid #1e2630;border-radius:4px;background:#0a1116;">` +
+            `<div style="flex:1;min-width:0;"><div style="color:#cdd6df;font-size:11px;font-weight:bold;">📍 ${p.name}</div>` +
+            `<div style="color:#667;font-size:9px;">${_tpDMS(p.lat,true)} ${_tpDMS(p.lon,false)}</div></div>` +
+            `<span onclick="tpNavPoint(${i})" style="cursor:pointer;color:#00e5ff;border:1px solid #00e5ff66;border-radius:3px;padding:3px 7px;font-size:10px;font-weight:bold;">→ 항법</span>` +
+            `<span onclick="tpDelPoint(${i})" style="cursor:pointer;color:#ff8877;border:1px solid #5a2a2a;border-radius:3px;padding:3px 7px;font-size:10px;">✕</span></div>`
+        ).join('') : `<div style="color:#556;font-size:10px;padding:8px 2px;">저장된 포인트가 없습니다.</div>`;
+      } else {
+        const trks = tpTracks();
+        body += `<div style="display:flex;gap:5px;margin-bottom:8px;">` + addBtn('tpSaveTrackFromFP()', '＋ 현재 비행계획을 트랙으로 저장') + `</div>`;
+        body += trks.length ? trks.map((t, i) =>
+          `<div style="display:flex;align-items:center;gap:6px;padding:7px 8px;margin-bottom:4px;border:1px solid #1e2630;border-radius:4px;background:#0a1116;">` +
+            `<div style="flex:1;min-width:0;"><div style="color:#cdd6df;font-size:11px;font-weight:bold;">━ ${t.name}</div>` +
+            `<div style="color:#667;font-size:9px;">${t.pts.length}개 지점</div></div>` +
+            `<span onclick="tpLoadTrack(${i})" style="cursor:pointer;color:#00e5ff;border:1px solid #00e5ff66;border-radius:3px;padding:3px 7px;font-size:10px;font-weight:bold;">불러오기</span>` +
+            `<span onclick="tpDelTrack(${i})" style="cursor:pointer;color:#ff8877;border:1px solid #5a2a2a;border-radius:3px;padding:3px 7px;font-size:10px;">✕</span></div>`
+        ).join('') : `<div style="color:#556;font-size:10px;padding:8px 2px;">저장된 트랙이 없습니다.</div>`;
+      }
+      container.innerHTML = tabs + body;
+      footer.innerHTML =
+        `<div class="nav-btn" onclick="switchMode('HOME')"><span>↩</span>Back</div>` +
+        `<div class="nav-btn" onclick="switchMode('HOME')"><span>🏠</span>Home</div>` +
+        `<div class="nav-btn"><span>✉</span>Msg</div>` +
+        `<div class="nav-btn" onclick="cduFullScreen()"><span>✥</span>Full</div>`;
+    }
+
     // --- Main Content Renderer Route ---
     function renderContent() {
         window._cduRenderContent = renderContent; // 전역 노출 (Charts 기능에서 참조)
@@ -9445,6 +9548,7 @@ if ('serviceWorker' in navigator) {
             case 'UTIL': renderUtilScreen(container, footer, title, centerLabel); break;
             case 'CHECKLIST': renderChecklistScreen(container, footer, title, centerLabel); break;
             case 'SETTINGS': renderSettingsScreen(container, footer, title, centerLabel); break;
+            case 'TRACKPOINT': renderTrackPointScreen(container, footer, title, centerLabel); break;
             case 'CHARTS': renderChartsScreen(container, footer, title, centerLabel); break;
         }
 
