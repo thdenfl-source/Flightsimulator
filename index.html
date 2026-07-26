@@ -105,7 +105,10 @@ html, body {
   flex-shrink: 0;
 }
 /* 탭 바(좌/우 공통): 5버튼(PFD/MAP/CDU/Full Screen/⟳) 동일 크기 + 흰 테두리 */
-#left-tabs, #page-tabs { gap: 4px; padding: 4px; }
+/* iOS 상태바(시계·배터리)와 겹치지 않도록 상단 safe-area 여백 추가 */
+#left-tabs, #page-tabs { gap: 4px; padding: 4px; padding-top: calc(4px + env(safe-area-inset-top)); }
+#left-tabs { padding-left: calc(4px + env(safe-area-inset-left)); }
+#page-tabs { padding-right: calc(4px + env(safe-area-inset-right)); }
 .page-tab {
   flex: 1;
   min-width: 0;
@@ -432,7 +435,10 @@ html, body {
   display: flex;
   background: rgba(0,0,0,0.88);
   border-bottom: 1px solid #333;
-  height: 36px;
+  height: calc(36px + env(safe-area-inset-top));
+  padding-top: env(safe-area-inset-top);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
   align-items: stretch;
 }
 #solo-bar button {
@@ -477,7 +483,7 @@ html, body {
 /* When solo bar is visible, push app down */
 body.solo-mode #app {
   position: fixed;
-  top: 36px; bottom: 0; left: 0; right: 0;
+  top: calc(36px + env(safe-area-inset-top)); bottom: 0; left: 0; right: 0;
 }
 /* Solo mode: one panel fills everything */
 body.solo-mode #left-panel,
