@@ -4149,6 +4149,11 @@ function startGPS() {
     showGpsError('이 기기에서 GPS를 사용할 수 없습니다');
     return;
   }
+  // 보안 컨텍스트(HTTPS/localhost)가 아니면 브라우저가 위치를 차단함
+  if (window.isSecureContext === false) {
+    showGpsError('보안 연결(HTTPS)에서만 GPS 사용 가능');
+    return;
+  }
   // 이전 watch가 남아있으면 정리(중복 방지)
   if (gpsWatchId !== null) { try { navigator.geolocation.clearWatch(gpsWatchId); } catch(e){} gpsWatchId = null; }
 
@@ -4162,7 +4167,6 @@ function startGPS() {
   if (status) { status.style.display = 'block'; status.innerHTML = '📡 위치 확인 중…'; }
 
   // maximumAge 3초: OS가 최근 위치를 재사용하게 해 GPS 칩 부하·발열 완화
-  const opts = { enableHighAccuracy: true, maximumAge: 3000, timeout: 20000 };
   const onPos = pos => {
     if (!gpsMode) return;          // 그 사이 GPS를 껐다면 무시
     lastGpsMs = Date.now();
@@ -4170,9 +4174,15 @@ function startGPS() {
   };
 
   // ① 첫 위치는 one-shot으로 빠르게 획득(watch가 늦게 뜨는 문제 완화)
-  navigator.geolocation.getCurrentPosition(onPos, () => {}, opts);
+  //    첫 시도는 timeout을 둬서 권한 거부 시 즉시 안내(gpsError에서 code 1만 치명적 처리)
+  navigator.geolocation.getCurrentPosition(
+    onPos, gpsError,
+    { enableHighAccuracy: true, maximumAge: 3000, timeout: 15000 }
+  );
 
   // ② 이후 연속 갱신은 watch로(3초 스로틀)
+  //    watch에는 timeout을 주지 않는다 — 신호가 잠깐 끊겨도 spurious TIMEOUT으로
+  //    GPS가 꺼지지 않도록(신호가 돌아오면 자동 재개)
   gpsWatchId = navigator.geolocation.watchPosition(
     pos => {
       if (!gpsMode) return;
@@ -4180,7 +4190,7 @@ function startGPS() {
       if (now - lastGpsMs >= 3000) { lastGpsMs = now; applyGPS(pos); }
     },
     gpsError,
-    opts
+    { enableHighAccuracy: true, maximumAge: 3000 }
   );
 }
 
@@ -4340,9 +4350,23 @@ function showGpsError(msg) {
 }
 
 function gpsError(err) {
-  const msgs = { 1:'위치 권한 거부\n설정 → Safari → 위치 허용', 2:'위치 확인 불가', 3:'응답 시간 초과' };
-  showGpsError((msgs[err.code] || err.message).replace('\n','<br>'));
-  stopGPS();
+  // 권한 거부(code 1)만 치명적 → GPS 종료 후 안내
+  if (err && err.code === 1) {
+    showGpsError('위치 권한이 거부되었습니다<br>설정 → Safari(브라우저) → 위치 → 허용');
+    stopGPS();
+    return;
+  }
+  // 위치 불가(2)·시간 초과(3)는 일시적일 수 있음 → 감시는 유지하고 대기 안내만
+  if (!gpsMode) return;
+  const status = document.getElementById('gps-status');
+  if (status) {
+    status.style.display = 'block';
+    status.style.borderColor = '';
+    status.style.color = '';
+    status.innerHTML = (err && err.code === 3)
+      ? '📡 위치 신호 대기 중… (하늘이 트인 곳에서 더 잘 잡힙니다)'
+      : '📡 위치 확인 중… (신호 불안정, 재시도)';
+  }
 }
 
 function updateGpsBtn() {
