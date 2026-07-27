@@ -5079,8 +5079,8 @@ function fpRenderAdd(area, title, footer) {
       <span style="font-size:18px;">✈</span><span>IFR PROCEDURES</span>
     </div>`;
   footer.innerHTML = `
-    <div class="fp-nav-btn" onclick="fpGo('LIST')"><span>↩</span>Back</div>
-    <div class="fp-nav-btn" onclick="fpGo('LIST')"><span>📋</span>FP List</div>`;
+    <div class="fp-nav-btn" onclick="fpGo('LIST')"><span>📋</span>FP List</div>
+    <div class="fp-nav-btn" onclick="fpGo('LIST')"><span>↩</span>Back</div>`;
 }
 
 function fpAddPreset(ident) {
@@ -5167,8 +5167,8 @@ function fpRenderIfr(area, title, footer) {
     if(s&&s.options.length===0){Object.keys(IFR_DB).forEach(k=>{const o=document.createElement('option');o.value=k;o.textContent=k+' – '+IFR_DB[k].name;s.appendChild(o);});loadStars();loadApproaches();}
   }
   footer.innerHTML = `
-    <div class="fp-nav-btn" onclick="fpGo('ADD')"><span>↩</span>Back</div>
-    <div class="fp-nav-btn" onclick="fpGo('LIST')"><span>📋</span>FP</div>`;
+    <div class="fp-nav-btn" onclick="fpGo('LIST')"><span>📋</span>FP</div>
+    <div class="fp-nav-btn" onclick="fpGo('ADD')"><span>↩</span>Back</div>`;
 }
 
 function fpSetIfrPhase(phase) {
