@@ -5049,13 +5049,16 @@ function fpRenderList(area, title, footer) {
     html+=`</div>`;
     area.innerHTML = html;
   }
-  const flyOn = S.running ? 'fp-nav-active' : '';
+  const fullBtn = _soloActive
+    ? `<div class="fp-nav-btn" onclick="exitSolo()"><span>✥</span>Half</div>`
+    : `<div class="fp-nav-btn" onclick="planFullScreen()"><span>✥</span>Full</div>`;
   footer.innerHTML = `
+    <div class="fp-nav-btn" onclick="fpGoCduHome()"><span>🏠</span>Home</div>
+    ${fullBtn}
+    <div class="fp-nav-btn" onclick="fpBackToCdu()"><span>↩</span>Back</div>
     <div class="fp-nav-btn" onclick="fpGo('ADD')"><span>＋</span>Add WPT</div>
-    <div class="fp-nav-btn" onclick="clearFP()"><span>✕</span>Clear</div>
-    <div class="fp-nav-btn ${flyOn}" id="fly-btn" onclick="toggleSim()"><span>▶</span>FLY</div>
-    <div class="fp-nav-btn" onclick="resetSim()"><span>⟳</span>Reset</div>
-    <div class="fp-nav-btn" onclick="fpGoCduHome()"><span>🏠</span>Home</div>`;
+    <div class="fp-nav-btn" onclick="clearFP()"><span>✕</span>Clr</div>
+    <div class="fp-nav-btn" onclick="resetSim()"><span>⟳</span>Rst</div>`;
 }
 
 function fpRenderAdd(area, title, footer) {
@@ -5829,6 +5832,38 @@ function cduFullScreen() {
   setSolo('cdu');
 }
 
+// ── CDU 하단 푸터 표준화 ──
+// 전체화면(solo)일 땐 FULL → HALF(우측 상단 ✕와 동일: exitSolo)
+function cduFullNavBtn() {
+  return _soloActive
+    ? `<div class="nav-btn" onclick="exitSolo()"><span>✥</span>Half</div>`
+    : `<div class="nav-btn" onclick="cduFullScreen()"><span>✥</span>Full</div>`;
+}
+// PLAN 버튼 — Flight Plan 화면 열기(분할/전체화면 모두 대응)
+function openFlightPlan() {
+  if (_soloActive) setSolo('plan'); else setPage(1);
+}
+// Flight Plan 화면의 FULL — 플랜을 전체화면으로
+function planFullScreen() {
+  _soloActive = true;
+  document.getElementById('solo-bar').style.display = 'flex';
+  setSolo('plan');
+}
+// Flight Plan 화면의 BACK — CDU(직전 화면)로 복귀
+function fpBackToCdu() {
+  if (_soloActive) setSolo('cdu'); else setPage(2);
+}
+// 표준 CDU 푸터: HOME · FULL/HALF · PLAN · BACK (+ 필요 시 Enter 등 extra)
+// backOnclick이 비어있으면 BACK 버튼은 생략(예: HOME 화면)
+function cduFooter(backOnclick, extra) {
+  let h = `<div class="nav-btn" onclick="switchMode('HOME')"><span>🏠</span>Home</div>`
+        + cduFullNavBtn()
+        + `<div class="nav-btn" onclick="openFlightPlan()"><span>✈</span>Plan</div>`;
+  if (backOnclick) h += `<div class="nav-btn" onclick="${backOnclick}"><span>↩</span>Back</div>`;
+  if (extra) h += extra;
+  return h;
+}
+
 // ══════════════════════════════════════════════════════
 // SOLO (단일화면) 모드
 // ══════════════════════════════════════════════════════
@@ -5885,6 +5920,13 @@ function setSolo(screen) {
     setPage(2);
     setTimeout(() => scaleCdu(), 80);
   }
+  _refreshCduFooters();   // FULL⇄HALF 라벨 갱신
+}
+
+// solo 상태 변화 시 CDU/Flight Plan 푸터를 다시 그려 FULL⇄HALF 반영
+function _refreshCduFooters() {
+  try { renderCduContent(); } catch (e) {}
+  try { if (typeof fpRender === 'function') fpRender(); } catch (e) {}
 }
 
 function exitSolo() {
@@ -5906,6 +5948,7 @@ function exitSolo() {
   // 분할 화면 복귀 시 기본 배치: 좌측 PFD, 우측 MAP
   setLeftPage(0);
   setPage(0);
+  _refreshCduFooters();   // FULL⇄HALF 라벨 갱신
   setTimeout(() => {
     leafMap.invalidateSize();
     resizePFD();
@@ -8111,7 +8154,7 @@ if ('serviceWorker' in navigator) {
         });
         gridHtml += `</div>`;
         container.innerHTML = gridHtml;
-        footer.innerHTML = `<div class="nav-btn"><span>✔️</span>INIT</div><div class="nav-btn" onclick="switchMode('HOME')"><span>🏠</span>Home</div><div class="nav-btn"><span>✉</span>Msg</div><div class="nav-btn" onclick="cduFullScreen()"><span>✥</span>Full</div>`;
+        footer.innerHTML = cduFooter('');
     }
 
     function renderPerfScreen(container, footer, title, centerLabel) {
@@ -8199,7 +8242,7 @@ if ('serviceWorker' in navigator) {
                 </div>
             </div>
         `;
-        footer.innerHTML = `<div class="nav-btn" onclick="switchMode('HOME')"><span>↩</span>Back</div><div class="nav-btn" onclick="switchMode('HOME')"><span>🏠</span>Home</div><div class="nav-btn"><span>✉</span>Msg</div><div class="nav-btn" onclick="cduFullScreen()"><span>✥</span>Full</div>`;
+        footer.innerHTML = cduFooter("switchMode('HOME')");
     }
 
     function renderPerfInputScreen(container, footer, title) {
@@ -8223,7 +8266,7 @@ if ('serviceWorker' in navigator) {
                 <div></div>
             </div></div>`;
         
-        footer.innerHTML = `<div class="nav-btn" onclick="switchMode('PERF')"><span>↩</span>Cancel</div><div class="nav-btn" onclick="switchMode('HOME')"><span>🏠</span>Home</div><div class="nav-btn"><span>✉</span>Msg</div><div></div><div class="nav-btn enter-btn-blue" onclick="confirmPerfInput()"><span>↩</span>Enter</div>`;
+        footer.innerHTML = cduFooter("switchMode('PERF')", `<div class="nav-btn enter-btn-blue" onclick="confirmPerfInput()"><span>↩</span>Enter</div>`);
     }
 
     function renderAudioScreen(container, footer, title, centerLabel) {
@@ -8341,7 +8384,7 @@ if ('serviceWorker' in navigator) {
             <div class="panel-border">
                 ${audioContent}
             </div>`;
-        footer.innerHTML = `<div class="nav-btn" onclick="switchMode('HOME')"><span>↩</span>Back</div><div class="nav-btn" onclick="switchMode('HOME')"><span>🏠</span>Home</div><div class="nav-btn"><span>✉</span>Msg</div><div class="nav-btn" style="color:var(--active-blue)"><span>✥</span>Half</div><div class="nav-btn"><span>▲</span>Up</div><div class="nav-btn"><span>▼</span>Down</div>`;
+        footer.innerHTML = cduFooter("switchMode('HOME')");
     }
 
     function renderIntercomScreen(container, footer, title, centerLabel) {
@@ -8372,7 +8415,7 @@ if ('serviceWorker' in navigator) {
                     <div class="item-btn ${icStates.Loop5?'on':''}" style="flex:1; height:45px;" onclick="toggleIC('Loop5')">Loop 5<br>All<div class="status-line"></div></div>
                 </div>
             </div>`;
-        footer.innerHTML = `<div class="nav-btn" onclick="switchMode('HOME')"><span>↩</span>Back</div><div class="nav-btn" onclick="switchMode('HOME')"><span>🏠</span>Home</div><div class="nav-btn"><span>✉</span>Msg</div><div class="nav-btn"><span>✥</span>Half</div>`;
+        footer.innerHTML = cduFooter("switchMode('HOME')");
     }
 
     function renderSelcalInputScreen(container, footer, title, centerLabel) {
@@ -8399,7 +8442,7 @@ if ('serviceWorker' in navigator) {
                 </div>
             </div>
         `;
-        footer.innerHTML = `<div class="nav-btn" onclick="switchMode('AUDIO'); switchAudioTab('Mission');"><span>↩</span>Cancel</div><div class="nav-btn" onclick="switchMode('HOME')"><span>🏠</span>Home</div><div class="nav-btn"><span>✉</span>Msg</div><div class="nav-btn" onclick="cduFullScreen()"><span>✥</span>Full</div><div class="nav-btn enter-btn-blue" onclick="confirmSelcal()"><span>↩</span>Enter</div>`;
+        footer.innerHTML = cduFooter("switchMode('AUDIO'); switchAudioTab('Mission');", `<div class="nav-btn enter-btn-blue" onclick="confirmSelcal()"><span>↩</span>Enter</div>`);
     }
 
     function renderVoxModeScreen(container, footer, title, centerLabel) {
@@ -8431,7 +8474,7 @@ if ('serviceWorker' in navigator) {
                 </div>
             </div>
         `;
-        footer.innerHTML = `<div class="nav-btn" onclick="switchMode('INTERCOM')"><span>↩</span>Back</div><div class="nav-btn" onclick="switchMode('HOME')"><span>🏠</span>Home</div><div class="nav-btn"><span>✉</span>Msg</div><div class="nav-btn"><span>✥</span>Half</div>`;
+        footer.innerHTML = cduFooter("switchMode('INTERCOM')");
     }
 
     function renderHfControlScreen(container, footer, title, centerLabel) {
@@ -8485,7 +8528,7 @@ if ('serviceWorker' in navigator) {
                 </div>
             </div>
         `;
-        footer.innerHTML = `<div class="nav-btn" onclick="switchMode('AUDIO')"><span>↩</span>Back</div><div class="nav-btn" onclick="switchMode('HOME')"><span>🏠</span>Home</div><div class="nav-btn"><span>✉</span>Msg</div><div class="nav-btn" style="color:var(--active-blue)"><span>✥</span>Half</div>`;
+        footer.innerHTML = cduFooter("switchMode('AUDIO')");
     }
 
     function renderComInputScreen(container, footer, title) {
@@ -8527,7 +8570,7 @@ if ('serviceWorker' in navigator) {
             </div></div>`;
         
         let backMode = inputTarget === 'hf' ? "'HF_CONTROL'" : "'AUDIO'";
-        footer.innerHTML = `<div class="nav-btn" onclick="switchMode(${backMode}, '${inputTarget}')"><span>↩</span>Back</div><div class="nav-btn" onclick="switchMode('HOME')"><span>🏠</span>Home</div><div class="nav-btn"><span>✉</span>Msg</div><div class="nav-btn" onclick="cduFullScreen()"><span>✥</span>Full</div><div class="nav-btn enter-btn-blue" onclick="confirmInput()"><span>↩</span>Enter</div>`;
+        footer.innerHTML = cduFooter(`switchMode(${backMode}, '${inputTarget}')`, `<div class="nav-btn enter-btn-blue" onclick="confirmInput()"><span>↩</span>Enter</div>`);
     }
 
     function renderXpdrModeScreen(container, footer, title, centerLabel) {
@@ -8550,7 +8593,7 @@ if ('serviceWorker' in navigator) {
                 </div>
             </div>
         `;
-        footer.innerHTML = `<div class="nav-btn" onclick="switchMode('HOME')"><span>↩</span>Back</div><div class="nav-btn" onclick="switchMode('HOME')"><span>🏠</span>Home</div><div class="nav-btn"><span>✉</span>Msg</div><div class="nav-btn" onclick="cduFullScreen()"><span>✥</span>Full</div>`;
+        footer.innerHTML = cduFooter("switchMode('HOME')");
     }
 
     function renderXpdrCodeScreen(container, footer, title, centerLabel) {
@@ -8573,7 +8616,7 @@ if ('serviceWorker' in navigator) {
                 </div>
             </div>
         `;
-        footer.innerHTML = `<div class="nav-btn" onclick="switchMode('XPDR_MODE')"><span>↩</span>Back</div><div class="nav-btn" onclick="switchMode('HOME')"><span>🏠</span>Home</div><div class="nav-btn"><span>✉</span>Msg</div><div class="nav-btn" onclick="cduFullScreen()"><span>✥</span>Full</div><div class="nav-btn enter-btn-blue" onclick="confirmXpdr()"><span>↩</span>Enter</div>`;
+        footer.innerHTML = cduFooter("switchMode('XPDR_MODE')", `<div class="nav-btn enter-btn-blue" onclick="confirmXpdr()"><span>↩</span>Enter</div>`);
     }
 
     // ── Utilities: Unit Converter (numpad-driven) ────────────────────────────
@@ -8715,11 +8758,7 @@ if ('serviceWorker' in navigator) {
               `<div style="color:#567;font-size:9px;margin-top:1px;">${it.sub}</div></div>` +
               `<div style="color:#0090b0;font-size:14px;">›</div></div>`
           ).join('');
-        footer.innerHTML =
-          `<div class="nav-btn" onclick="switchMode('HOME')"><span>↩</span>Back</div>` +
-          `<div class="nav-btn" onclick="switchMode('HOME')"><span>🏠</span>Home</div>` +
-          `<div class="nav-btn"><span>✉</span>Msg</div>` +
-          `<div class="nav-btn" onclick="cduFullScreen()"><span>✥</span>Full</div>`;
+        footer.innerHTML = cduFooter("switchMode('HOME')");
         return;
       }
 
@@ -8806,11 +8845,7 @@ if ('serviceWorker' in navigator) {
 
       container.innerHTML = backToMenu + fieldsHtml + numpadHtml;
 
-      footer.innerHTML =
-        `<div class="nav-btn" onclick="utilOpen('MENU')"><span>↩</span>Back</div>` +
-        `<div class="nav-btn" onclick="switchMode('HOME')"><span>🏠</span>Home</div>` +
-        `<div class="nav-btn"><span>✉</span>Msg</div>` +
-        `<div class="nav-btn" onclick="cduFullScreen()"><span>✥</span>Full</div>`;
+      footer.innerHTML = cduFooter("utilOpen('MENU')");
     }
 
 
@@ -9398,11 +9433,7 @@ if ('serviceWorker' in navigator) {
         container.innerHTML = crumbBar + sibBar + resetBtn + rows;
       }
 
-      footer.innerHTML =
-        `<div class="nav-btn" onclick="clBack()"><span>↩</span>Back</div>` +
-        `<div class="nav-btn" onclick="switchMode('HOME')"><span>🏠</span>Home</div>` +
-        `<div class="nav-btn"><span>✉</span>Msg</div>` +
-        `<div class="nav-btn" onclick="cduFullScreen()"><span>✥</span>Full</div>`;
+      footer.innerHTML = cduFooter("clBack()");
     }
 
 
@@ -9448,11 +9479,7 @@ if ('serviceWorker' in navigator) {
         ACT('pwaInstall()', '홈 화면에 추가', 'PWA 설치(앱처럼 실행)') +
         ACT('prefetchTiles()', '주변 지도 캐시', '현재 화면 주변 타일 미리 저장') +
         ACT("document.getElementById('help-overlay').style.display='flex'", '사용 안내 다시 보기', '시작 안내 오버레이 표시');
-      footer.innerHTML =
-        `<div class="nav-btn" onclick="switchMode('HOME')"><span>↩</span>Back</div>` +
-        `<div class="nav-btn" onclick="switchMode('HOME')"><span>🏠</span>Home</div>` +
-        `<div class="nav-btn"><span>✉</span>Msg</div>` +
-        `<div class="nav-btn" onclick="cduFullScreen()"><span>✥</span>Full</div>`;
+      footer.innerHTML = cduFooter("switchMode('HOME')");
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -9865,11 +9892,7 @@ if ('serviceWorker' in navigator) {
               `<span style="color:#00e5ff;font-size:10px;font-weight:bold;">가져오기 ›</span></div>`
           ).join('');
         container.innerHTML = body;
-        footer.innerHTML =
-          `<div class="nav-btn" onclick="tpRepoBack()"><span>↩</span>Back</div>` +
-          `<div class="nav-btn" onclick="switchMode('HOME')"><span>🏠</span>Home</div>` +
-          `<div class="nav-btn"><span>✉</span>Msg</div>` +
-          `<div class="nav-btn" onclick="cduFullScreen()"><span>✥</span>Full</div>`;
+        footer.innerHTML = cduFooter("tpRepoBack()");
         return;
       }
 
@@ -9883,11 +9906,7 @@ if ('serviceWorker' in navigator) {
           `</div>` +
           `<div onclick="tpIconCancel()" style="text-align:center;padding:8px;border:1px solid #5a2a2a;border-radius:4px;color:#ff8877;font-size:11px;font-weight:bold;cursor:pointer;">취소</div>`;
         container.innerHTML = body;
-        footer.innerHTML =
-          `<div class="nav-btn" onclick="tpIconCancel()"><span>↩</span>Back</div>` +
-          `<div class="nav-btn" onclick="switchMode('HOME')"><span>🏠</span>Home</div>` +
-          `<div class="nav-btn"><span>✉</span>Msg</div>` +
-          `<div class="nav-btn" onclick="cduFullScreen()"><span>✥</span>Full</div>`;
+        footer.innerHTML = cduFooter("tpIconCancel()");
         return;
       }
 
@@ -9960,11 +9979,7 @@ if ('serviceWorker' in navigator) {
         }).join('') : `<div style="color:#556;font-size:10px;padding:8px 2px;">저장된 트랙이 없습니다.</div>`;
       }
       container.innerHTML = tabs + body;
-      footer.innerHTML =
-        `<div class="nav-btn" onclick="switchMode('HOME')"><span>↩</span>Back</div>` +
-        `<div class="nav-btn" onclick="switchMode('HOME')"><span>🏠</span>Home</div>` +
-        `<div class="nav-btn"><span>✉</span>Msg</div>` +
-        `<div class="nav-btn" onclick="cduFullScreen()"><span>✥</span>Full</div>`;
+      footer.innerHTML = cduFooter("switchMode('HOME')");
     }
 
     // --- Main Content Renderer Route ---
@@ -13826,7 +13841,7 @@ function renderChartsScreen(container, footer, title, centerLabel) {
     html += `</div></div>`;
 
     container.innerHTML = html;
-    footer.innerHTML = `<div class="nav-btn" onclick="switchMode('HOME')"><span>↩</span>Back</div><div class="nav-btn" onclick="switchMode('HOME')"><span>🏠</span>Home</div><div class="nav-btn"><span>✉</span>Msg</div><div class="nav-btn" onclick="cduFullScreen()"><span>✥</span>Full</div>`;
+    footer.innerHTML = cduFooter("switchMode('HOME')");
 }
 
 // renderCduContent는 CDU 내부의 renderContent를 가리킴
