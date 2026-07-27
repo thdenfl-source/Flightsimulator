@@ -5055,10 +5055,10 @@ function fpRenderList(area, title, footer) {
   footer.innerHTML = `
     <div class="fp-nav-btn" onclick="fpGoCduHome()"><span>🏠</span>Home</div>
     ${fullBtn}
-    <div class="fp-nav-btn" onclick="fpBackToCdu()"><span>↩</span>Back</div>
     <div class="fp-nav-btn" onclick="fpGo('ADD')"><span>＋</span>Add WPT</div>
     <div class="fp-nav-btn" onclick="clearFP()"><span>✕</span>Clr</div>
-    <div class="fp-nav-btn" onclick="resetSim()"><span>⟳</span>Rst</div>`;
+    <div class="fp-nav-btn" onclick="resetSim()"><span>⟳</span>Rst</div>
+    <div class="fp-nav-btn" onclick="fpBackToCdu()"><span>↩</span>Back</div>`;
 }
 
 function fpRenderAdd(area, title, footer) {
@@ -5859,8 +5859,9 @@ function cduFooter(backOnclick, extra) {
   let h = `<div class="nav-btn" onclick="switchMode('HOME')"><span>🏠</span>Home</div>`
         + cduFullNavBtn()
         + `<div class="nav-btn" onclick="openFlightPlan()"><span>✈</span>Plan</div>`;
-  if (backOnclick) h += `<div class="nav-btn" onclick="${backOnclick}"><span>↩</span>Back</div>`;
   if (extra) h += extra;
+  // BACK은 항상 제일 우측
+  if (backOnclick) h += `<div class="nav-btn" onclick="${backOnclick}"><span>↩</span>Back</div>`;
   return h;
 }
 
