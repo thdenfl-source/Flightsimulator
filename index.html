@@ -10178,6 +10178,8 @@ if ('serviceWorker' in navigator) {
 
     // ── 비행장 정보 화면 ──
     let _afldIdx = null;
+    // 2자리 표준 코드는 ICAO(RK__)로 표기, 그 외(G515 등)는 원본 유지
+    function _afldIcao(a) { return (a.code && a.code.length === 2) ? 'RK' + a.code : a.code; }
     function openAirfield(i) { _afldIdx = i; switchMode('AIRFIELD_DETAIL'); }
     function renderAirfieldScreen(container, footer, title, centerLabel) {
         title.innerText = '비행장 정보';
@@ -10185,7 +10187,7 @@ if ('serviceWorker' in navigator) {
         const rows = list.map((a, i) => `
             <div onclick="openAirfield(${i})" style="display:grid;grid-template-columns:1fr 52px 64px;align-items:center;gap:6px;
                 padding:9px 10px;margin-bottom:5px;border:1px solid #234;border-radius:6px;cursor:pointer;">
-              <span style="color:#fff;font-weight:bold;font-size:13px;">${a.name}${a.code ? ` <span style="color:#7fe0c0;font-size:10px;">(${a.code})</span>` : ''}</span>
+              <span style="color:#fff;font-weight:bold;font-size:13px;">${a.name}${a.code ? ` <span style="color:#7fe0c0;font-size:10px;">(${_afldIcao(a)})</span>` : ''}</span>
               <span style="color:#00e5ff;font-size:11px;text-align:right;">${a.elev != null ? a.elev + 'ft' : '-'}</span>
               <span style="color:#9fb4c8;font-size:10px;text-align:right;">${(a.rwy || '').split(' ')[0]}</span>
             </div>`).join('');
@@ -10198,7 +10200,7 @@ if ('serviceWorker' in navigator) {
         const list = (typeof AIRFIELD_INFO !== 'undefined' ? AIRFIELD_INFO : []);
         const a = list[_afldIdx];
         if (!a) { switchMode('AIRFIELD'); return; }
-        title.innerText = a.name + (a.code ? ` (${a.code})` : '');
+        title.innerText = a.name + (a.code ? ` (${_afldIcao(a)})` : '');
         const row = (lbl, val, color) => `<div style="display:grid;grid-template-columns:74px 1fr;gap:8px;padding:7px 4px;border-bottom:1px solid #1a2a38;">
             <span style="color:#7a90a4;font-size:11px;font-weight:bold;">${lbl}</span>
             <span style="color:${color || '#e6eef6'};font-size:12px;line-height:1.45;word-break:break-all;">${val || '-'}</span></div>`;
