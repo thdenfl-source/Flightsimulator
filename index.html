@@ -4686,7 +4686,12 @@ function updateTerrainCut() {
     elevs.push(ft); if (ft > maxFt) maxFt = ft;
   }
   const acFt = S.alt || 0;
-  const top = Math.max(maxFt, acFt, 800) * 1.25;
+  // VNAV 활성 시 경로고도(요구고도)를 스케일에 포함해 축을 안정화
+  // → 고도가 바뀌면 항공기 고도선이 화면상에서 실제로 위/아래로 움직여 반영됨
+  let _vn = null; try { _vn = vnavCalc(); } catch(e) {}
+  let vnTop = 0;
+  if (_vn && !_vn.err) vnTop = Math.min(_vn.reqAlt, acFt + 3000);   // 과도 축소 방지 상한
+  const top = Math.max(maxFt, acFt, vnTop, 800) * 1.25;
   g.fillStyle = '#06090d'; g.fillRect(0, 0, W, H);
   // 지형 세그먼트: 여유고도별 색(적: <100ft, 황: <500ft, 녹: 그 이상)
   for (let i = 0; i < N; i++) {
@@ -4721,7 +4726,7 @@ function updateTerrainCut() {
   }
   // ── VNAV 강하/상승선(마젠타) : 현재→타깃 거리 기준 경로 ──
   try {
-    const vn = vnavCalc();
+    const vn = _vn;
     if (vn && !vn.err) {
       const xt = W * Math.min(vn.d, DIST) / DIST;               // 타깃 x위치(20NM 창 기준)
       // 클램프하지 않아야 실제 각도(기울기)가 유지되고, 거리가 줄면 교차점이 항공기로 다가옴
