@@ -668,6 +668,12 @@ body.solo-mode .solo-panel-visible {
   background: rgba(0,40,0,0.92); border-color: #00dd44; color: #00ff88;
   box-shadow: 0 0 8px rgba(0,220,80,0.4);
 }
+/* MAP 상단 FULL/HALF 토글 버튼 — 눈에 띄는 노랑, 폭은 콤팩트 */
+#map-full-btn {
+  flex: 0 0 auto; min-width: 58px;
+  border-color: #b8860b; color: #facc15;
+}
+#map-full-btn:active { background: rgba(40,32,0,0.92); }
 #notam-btn.active {
   background: rgba(40,25,0,0.92); border-color: #ff9800; color: #ffb74d;
   box-shadow: 0 0 8px rgba(255,152,0,0.4);
@@ -1612,6 +1618,7 @@ body.night-mode::after {
         <button id="fix-btn" onclick="toggleFixLayer()">FIX</button>
         <button id="awy-btn" onclick="toggleAwyLayer()">AWY</button>
         <button id="aspc-btn" onclick="toggleAspcPanel()">공역</button>
+        <button id="map-full-btn" onclick="toggleMapFull()" title="전체화면/분할 전환">FULL</button>
       </div>
       <div id="aspc-panel"></div>
       <div id="awy-panel"></div>
@@ -5846,6 +5853,14 @@ function cduOpenMap() {
   else setPage(0);
 }
 
+// MAP 상단 툴바의 FULL/HALF 토글 — 상황에 맞게 전체화면 진입/분할 복귀
+function toggleMapFull() {
+  if (_soloActive) { exitSolo(); return; }
+  _soloActive = true;
+  document.getElementById('solo-bar').style.display = 'flex';
+  setSolo('map');
+}
+
 // Flight Plan 하단 Home 버튼 — CDU 홈 화면으로 전환
 function fpGoCduHome() {
   if (_soloActive) setSolo('cdu');
@@ -5955,9 +5970,13 @@ function setSolo(screen) {
     setPage(2);
     setTimeout(() => scaleCdu(), 80);
   }
-  // MAP/PFD처럼 하단 푸터가 없는 화면에서는 떠 있는 HALF 버튼 표시
+  // PFD 전체화면은 하단 푸터가 없으므로 떠 있는 HALF 버튼 표시
+  // (MAP은 상단 툴바의 FULL/HALF 버튼 사용)
   const halfBtn = document.getElementById('solo-half-btn');
-  if (halfBtn) halfBtn.classList.toggle('show', screen === 'pfd' || screen === 'map');
+  if (halfBtn) halfBtn.classList.toggle('show', screen === 'pfd');
+  // MAP 상단 툴바 버튼 라벨: 전체화면(map)일 때 HALF, 그 외 FULL
+  const mapFullBtn = document.getElementById('map-full-btn');
+  if (mapFullBtn) mapFullBtn.textContent = (screen === 'map') ? 'HALF' : 'FULL';
   _refreshCduFooters();   // FULL⇄HALF 라벨 갱신
 }
 
@@ -5973,6 +5992,8 @@ function exitSolo() {
   document.getElementById('solo-bar').style.display = 'none';
   const halfBtn = document.getElementById('solo-half-btn');
   if (halfBtn) halfBtn.classList.remove('show');
+  const mapFullBtn = document.getElementById('map-full-btn');
+  if (mapFullBtn) mapFullBtn.textContent = 'FULL';
   document.body.classList.remove('solo-mode');
 
   const leftPanel  = document.getElementById('left-panel');
