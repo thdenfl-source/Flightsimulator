@@ -480,11 +480,17 @@ html, body {
 #solo-bar button:nth-child(3).solo-active { color: #ffaa33; box-shadow: inset 0 -2px 0 #ffaa33; }
 #solo-bar button:nth-child(4)        { color: #c084fc; }
 #solo-bar button:nth-child(4).solo-active { color: #c084fc; box-shadow: inset 0 -2px 0 #c084fc; }
-/* When solo bar is visible, push app down */
+/* 전체화면(solo)에서는 상단 바를 모두 숨기고 계기가 화면을 꽉 채움
+   (내비게이션은 하단 푸터 Home/Half/Plan 으로) */
 body.solo-mode #app {
   position: fixed;
-  top: calc(36px + env(safe-area-inset-top)); bottom: 0; left: 0; right: 0;
+  top: env(safe-area-inset-top); bottom: 0; left: 0; right: 0;
 }
+/* solo 모드에서 패널 자체 탭바(page-tabs/left-tabs) 숨김 — solo-bar와 중복 */
+body.solo-mode #page-tabs,
+body.solo-mode #left-tabs { display: none !important; }
+/* solo 전용 상단 스위처 바도 숨김(하단 푸터로 대체) */
+body.solo-mode #solo-bar { display: none !important; }
 /* Solo mode: one panel fills everything */
 body.solo-mode #left-panel,
 body.solo-mode #right-panel {
