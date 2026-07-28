@@ -8154,7 +8154,9 @@ if ('serviceWorker' in navigator) {
         /* Utilities — wrench */
         { id: 'util', text: 'Utilities', icon: '<svg viewBox="0 0 100 100"><path d="M62 22 C75 22, 84 32, 80 44 L48 76 C44 88, 28 88, 22 78 C16 68, 22 54, 34 52 L66 20" fill="none" stroke="#9e9e9e" stroke-width="8" stroke-linecap="round"/><circle cx="34" cy="66" r="8" fill="none" stroke="#9e9e9e" stroke-width="5"/><line x1="72" y1="22" x2="82" y2="12" stroke="#9e9e9e" stroke-width="6" stroke-linecap="round"/></svg>' },
         /* AS-565 Performance — orange trend line */
-        { id: 'as565', text: 'AS-565<br>Performance', icon: '<svg viewBox="0 0 100 100"><polyline points="15,80 35,55 55,65 80,22" fill="none" stroke="#ff9800" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/><circle cx="80" cy="22" r="6" fill="#ff9800"/><text x="50" y="97" font-size="15" fill="#fff" font-weight="bold" text-anchor="middle" font-family="monospace">AS565</text></svg>' }
+        { id: 'as565', text: 'AS-565<br>Performance', icon: '<svg viewBox="0 0 100 100"><polyline points="15,80 35,55 55,65 80,22" fill="none" stroke="#ff9800" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/><circle cx="80" cy="22" r="6" fill="#ff9800"/><text x="50" y="97" font-size="15" fill="#fff" font-weight="bold" text-anchor="middle" font-family="monospace">AS565</text></svg>' },
+        /* 비행장 정보 — control tower + freq */
+        { id: 'afld', text: '비행장<br>정보', icon: '<svg viewBox="0 0 100 100"><rect x="42" y="30" width="16" height="52" fill="#00e5ff"/><polygon points="34,30 66,30 58,18 42,18" fill="#00e5ff"/><circle cx="50" cy="12" r="4" fill="#ff5252"/><path d="M62 20 a14 14 0 0 1 10 10" fill="none" stroke="#ffca28" stroke-width="4"/><path d="M38 20 a14 14 0 0 0 -10 10" fill="none" stroke="#ffca28" stroke-width="4"/><rect x="30" y="82" width="40" height="6" fill="#00e5ff"/></svg>' }
     ];
 
     function switchMode(mode, target = '') {
@@ -8214,7 +8216,7 @@ if ('serviceWorker' in navigator) {
                 'parkcctv': "https://m.knps.or.kr/main/menuctrl.do?menuNo=10"
             };
 
-            let isActiveBtn = ['weather', 'charts', 'notam', 'metar', 'directTo', 'map', 'fpl', 'serv', 'sys', 'perf', 'as565', 'util', 'proc', 'badacctv', 'parkcctv', 'check'].includes(btn.id);
+            let isActiveBtn = ['weather', 'charts', 'notam', 'metar', 'directTo', 'map', 'fpl', 'serv', 'sys', 'perf', 'as565', 'util', 'proc', 'badacctv', 'parkcctv', 'check', 'afld'].includes(btn.id);
             let boxClass = isActiveBtn ? 'icon-box func-active' : 'icon-box';
 
             if (links[btn.id]) {
@@ -8231,6 +8233,7 @@ if ('serviceWorker' in navigator) {
                                   btn.id === 'util' ? `onclick="utilOpen('MENU')"` :
                                   btn.id === 'map'  ? `onclick="cduOpenMap()"` :
                                   btn.id === 'check' ? `onclick="clOpen()"` :
+                                  btn.id === 'afld' ? `onclick="switchMode('AIRFIELD')"` :
                                   btn.id === 'charts' ? `onclick="switchMode('CHARTS')"` : '';
                 gridHtml += `
                     <div class="home-icon-wrapper" ${clickAction}>
@@ -10089,6 +10092,8 @@ if ('serviceWorker' in navigator) {
             case 'HF_CONTROL': renderHfControlScreen(container, footer, title, centerLabel); break;
             case 'COM_INPUT': renderComInputScreen(container, footer, title); break;
             case 'NAV_SEL': renderNavSelectScreen(container, footer, title, centerLabel); break;
+            case 'AIRFIELD': renderAirfieldScreen(container, footer, title, centerLabel); break;
+            case 'AIRFIELD_DETAIL': renderAirfieldDetailScreen(container, footer, title, centerLabel); break;
             case 'XPDR_MODE': renderXpdrModeScreen(container, footer, title, centerLabel); break;
             case 'XPDR_CODE': renderXpdrCodeScreen(container, footer, title, centerLabel); break;
             case 'UTIL': renderUtilScreen(container, footer, title, centerLabel); break;
@@ -10171,6 +10176,45 @@ if ('serviceWorker' in navigator) {
         freqs[_navSelTarget].id  = v.id;
         try { setNavRadio(_navSelTarget === 'nav1' ? 'NAV1' : 'NAV2', v.freq, v.id); } catch(e) {}
         switchMode('AUDIO');
+    }
+
+    // ── 비행장 정보 화면 ──
+    let _afldIdx = null;
+    function openAirfield(i) { _afldIdx = i; switchMode('AIRFIELD_DETAIL'); }
+    function renderAirfieldScreen(container, footer, title, centerLabel) {
+        title.innerText = '비행장 정보';
+        const list = (typeof AIRFIELD_INFO !== 'undefined' ? AIRFIELD_INFO : []);
+        const rows = list.map((a, i) => `
+            <div onclick="openAirfield(${i})" style="display:grid;grid-template-columns:1fr 52px 64px;align-items:center;gap:6px;
+                padding:9px 10px;margin-bottom:5px;border:1px solid #234;border-radius:6px;cursor:pointer;">
+              <span style="color:#fff;font-weight:bold;font-size:13px;">${a.name}${a.code ? ` <span style="color:#7fe0c0;font-size:10px;">(${a.code})</span>` : ''}</span>
+              <span style="color:#00e5ff;font-size:11px;text-align:right;">${a.elev != null ? a.elev + 'ft' : '-'}</span>
+              <span style="color:#9fb4c8;font-size:10px;text-align:right;">${(a.rwy || '').split(' ')[0]}</span>
+            </div>`).join('');
+        container.innerHTML = `<div style="padding:8px 6px;overflow-y:auto;height:100%;">
+            <div style="color:#9fb4c8;font-size:10px;margin-bottom:8px;">국내 비행장 주파수 · VOR · ILS · RWY · 표고 (2022.1). 비행장을 선택하세요.</div>
+            ${rows}</div>`;
+        footer.innerHTML = cduFooter("switchMode('HOME')");
+    }
+    function renderAirfieldDetailScreen(container, footer, title, centerLabel) {
+        const list = (typeof AIRFIELD_INFO !== 'undefined' ? AIRFIELD_INFO : []);
+        const a = list[_afldIdx];
+        if (!a) { switchMode('AIRFIELD'); return; }
+        title.innerText = a.name + (a.code ? ` (${a.code})` : '');
+        const row = (lbl, val, color) => `<div style="display:grid;grid-template-columns:74px 1fr;gap:8px;padding:7px 4px;border-bottom:1px solid #1a2a38;">
+            <span style="color:#7a90a4;font-size:11px;font-weight:bold;">${lbl}</span>
+            <span style="color:${color || '#e6eef6'};font-size:12px;line-height:1.45;word-break:break-all;">${val || '-'}</span></div>`;
+        container.innerHTML = `<div style="padding:8px 8px;overflow-y:auto;height:100%;">
+            ${row('표고', a.elev != null ? a.elev + ' ft' : '-', '#00e5ff')}
+            ${row('RWY', a.rwy)}
+            ${row('TWR', a.twr, '#8fe6c8')}
+            ${row('APP', a.app)}
+            ${row('GND', a.gnd)}
+            ${row('VOR/ATIS', a.vor, '#ffd54f')}
+            ${row('ILS(LLZ)', a.ils, '#9fd0ff')}
+            ${a.note ? row('비고', a.note, '#c8b0ff') : ''}
+        </div>`;
+        footer.innerHTML = cduFooter("switchMode('AIRFIELD')");
     }
 
     function renderMissionRow(label, id) {
@@ -10855,6 +10899,40 @@ if (fixLayerOn) {
 }
 
 // ── VOR 표지소 + 항로(AWY) 오버레이 (AIP ENR 4.1 / 3.x) ──
+// ── 국내 비행장 주파수/VOR/ILS/ATIS/RWY/표고 (2022.1 자료) ──
+const AIRFIELD_INFO = [
+  { code:'JJ', name:'광주',        elev:48,  rwy:'04R-22R / 04L-22L', twr:'118.05, 254.6', app:'광주APP 130.0 / 228.9', gnd:'121.8, 275.8', vor:'114.4 (128.475 / 234.7)', ils:'app037°R 111.1 / app217°L 108.5' },
+  { code:'JM', name:'목포',        elev:23,  rwy:'06-24', twr:'134.4, 235.1', app:'광주APP 130.0 / 228.9', gnd:'-', vor:'117.8 (MKP) (CH 125)', ils:'-' },
+  { code:'JB', name:'무안',        elev:51,  rwy:'01-19', twr:'118.25, 118.85', app:'무안APP 120.475 / 130.0', gnd:'121.7, 317.45', vor:'111.0 (127.425 / 335.425)', ils:'app007° 111.9 / app187° 108.9' },
+  { code:'JK', name:'군산',        elev:29,  rwy:'18-36', twr:'126.5, 292.3', app:'군산APP 124.1, 292.65', gnd:'123.5, 273.525', vor:'112.8 (120.225 / 304.8)', ils:'app351°R 110.3 / app186°R 110.3' },
+  { code:'JY', name:'여수',        elev:53,  rwy:'17-35', twr:'122.5, 121.5, 240.9, 243.0', app:'사천APP 135.4, 344.7', gnd:'118.525', vor:'115.7 (128.275)', ils:'app345° 109.7 / app165° 111.5' },
+  { code:'PC', name:'제주',        elev:119, rwy:'07-25 / 13-31', twr:'118.2, 121.65, 236.6', app:'121.2, 124.05, 279.8, 317.7', gnd:'121.65', vor:'109.0 (YDM) / 116.1 (VORTAC) (126.8 / 239.5)', ils:'app065° 109.9 / app245° 111.3' },
+  { code:'ND', name:'속초',        elev:98,  rwy:'23-05', twr:'125.450, 346.775', app:'-', gnd:'236.60', vor:'110.8 (SHO) app 229°', ils:'-' },
+  { code:'NY', name:'양양',        elev:241, rwy:'15-33', twr:'118.85', app:'강릉APP 124.6', gnd:'123.15, 240.4, 124.375', vor:'110.6 (YAG) (128.825 / 233.975)', ils:'109.3 / 330°' },
+  { code:'NN', name:'강릉',        elev:32,  rwy:'08-26', twr:'126.2', app:'강릉APP 124.6', gnd:'275.8', vor:'(126.675 / 226.175)', ils:'111.75 / 256°' },
+  { code:'NW', name:'원주',        elev:330, rwy:'03-21', twr:'126.2, 118.325, 236.6, 265.5', app:'원주APP 130.2, 255.0, 234.4', gnd:'275.8', vor:'110.2 (CH 39) (128.4 / 225.575)', ils:'app028° VOR/DME-A' },
+  { code:'RN', name:'이천',        elev:255, rwy:'10L-28R / 10R-28L', twr:'124.9, 346.7, 45.00', app:'오산APP 127.9, 306.3', gnd:'127.8, 40.00', vor:'117.2 (ICN)', ils:'app093°' },
+  { code:'SW', name:'수원',        elev:88,  rwy:'15L-33L / 15R-33R', twr:'126.2, 236.6, 244.4', app:'오산APP 127.9, 234.3', gnd:'275.8', vor:'SWN (CH 22) (126.425 / 225.975)', ils:'app332°L 108.5' },
+  { code:'SI', name:'인천 / 영종도(RE)', elev:23, rwy:'15L-33R / 15R-33L / 16-34', twr:'118.2, 118.275, 118.8, 231.8', app:'서울APP 119.05, 119.9, 124.1, 293.3', gnd:'121.925, 121.7, 121.75, 226.9', vor:'113.8 (NCN) A(128.4 / 230.25) / 112.9 (WNG) (128.65 / 344.2)', ils:'app153°L 111.9 / app153°R 109.1 / app333°L 109.3 / app333°R 108.9 / RWY16 110.35 / RWY34 108.10' },
+  { code:'SS', name:'김포',        elev:59,  rwy:'14R-32R / 14L-32L', twr:'118.1, 118.05, 240.9', app:'서울APP 119.05, 119.9, 119.1, 119.75, 120.8, 121.35', gnd:'121.90, 121.95, DLVRY 125.975', vor:'113.6 (KIP) (126.4 / 317.8) / 115.5 (SEL) (CH 102X)', ils:'app143°L 109.9 / app143°R 108.7 / app323°L 108.3 / app323°R 110.7' },
+  { code:'',   name:'포승',        elev:27,  rwy:'30-02', twr:'120.2, 385.2, 42.20', app:'-', gnd:'134.1, 231.4', vor:'CH 51X', ils:'-' },
+  { code:'TI', name:'중원',        elev:281, rwy:'18R-36R / 18L-36L', twr:'126.2, 236.6, 230.15', app:'중원APP 306.7, 132.55', gnd:'275.8', vor:'(CH 31X) (126.875 / 226.275)', ils:'app003°R 111.3' },
+  { code:'TU', name:'청주',        elev:192, rwy:'06L-24L / 06R-24R', twr:'118.7, 126.2, 236.6, 249.6', app:'청주APP 134.0, 265.75', gnd:'121.875', vor:'109.0 (CHO) (128.85 / 305.5)', ils:'app240°R 111.7' },
+  { code:'TY', name:'예천',        elev:null, rwy:'06-24', twr:'126.2, 236.6, 269.5', app:'예천APP 134.5, 229.35', gnd:'275.8', vor:'YCN (CH 26) (126.625 / 226.075)', ils:'app277° 109.3' },
+  { code:'G515', name:'논산',      elev:104, rwy:'11L-29R / 11R-29L', twr:'133.350, 30.20', app:'군산APP 124.1, 292.65', gnd:'386.4, 계룡OPS 46.30', vor:'117.5', ils:'RWY11 109.7' },
+  { code:'UC', name:'조치원',      elev:89,  rwy:'14-32', twr:'121.850, 346.750, 36.40', app:'중원APP 132.55, 306.7', gnd:'NIL', vor:'NIL', ils:'NIL' },
+  { code:'TN', name:'대구',        elev:120, rwy:'13L-31L / 13R-31R', twr:'126.2, 236.6, 365.0', app:'대구APP 135.9, 346.3', gnd:'121.95, 275.8', vor:'116.5 (DOC) / 112.2 (TGU) (127.65 / 240.6)', ils:'app132°R 108.7 / app312°L 108.7 / app312°L 111.9' },
+  { code:'TL', name:'울진',        elev:175, rwy:'17-35', twr:'118.55, 317.45', app:'울진ARR 120.875, 317.65', gnd:'121.775, 317.450', vor:'115.3 (UJN) (CH 100X)', ils:'app351° 108.1 / app171° 108.1' },
+  { code:'TH', name:'포항',        elev:76,  rwy:'10-28 (1200S / 900N)', twr:'118.05, 236.6, 308.5', app:'120.2, 124.25, 232.4', gnd:'126.2, 275.8', vor:'109.6 (NPH) CH33X / 110.9 (I-KPO) / 112.5 (KPO) (127.4 / 317.375)', ils:'VT 100°/275° / I 097° / PA 097°' },
+  { code:'UY', name:'영천',        elev:376, rwy:'09-27 (1400S)', twr:'133.350 / 346.675, 31.00', app:'대구APP', gnd:'-', vor:'-', ils:'52S DE 83732 86768' },
+  { code:'PU', name:'울산',        elev:42,  rwy:'18-36', twr:'118.75, 225.55, 236.6', app:'포항APP 124.25, 120.2, 232.4', gnd:'121.75', vor:'111.4 (USN) (CH 51) (126.625 / 233.55)', ils:'app004° 110.3' },
+  { code:'PK', name:'김해',        elev:13,  rwy:'18L-36L / 18R-36R', twr:'118.1, 118.45, 233.3, 236.6', app:'125.5, 364.0', gnd:'121.9(GND), 121.65(APRON), 221.8(DLVRY)', vor:'113.8 (CH 98X) (126.6 / 235.1)', ils:'app001°R 109.5 / app001°L 108.5' },
+  { code:'PE', name:'진해',        elev:12,  rwy:'18-36', twr:'236.6, 350.0, 126.2, 42.20', app:'김해APP 135.7, 225.1', gnd:'275.8, 120.2', vor:'NUE (CH 12)', ils:'NIL' },
+  { code:'PS', name:'사천',        elev:25,  rwy:'06L-24R / 06R-24L', twr:'118.675, 236.6, 305.4', app:'사천APP 135.4, 344.7', gnd:'118.675, 275.8(DLVRY)', vor:'115.1 (SAC) (126.425 / 225.475)', ils:'app063°L 108.1 / app243°R 108.1' },
+  { code:'DD', name:'독도헬기장',  elev:390, rwy:'080-260', twr:'130.35', app:'-', gnd:'-', vor:'-', ils:'-', note:'N 37-14-52 E 131-52-06 · 독항대 054-791-0001 / 118전대 054-791-0242' },
+  { code:'',   name:'동해가스전',  elev:null, rwy:'017-350', twr:'130.50 / CH72(156.625)', app:'-', gnd:'-', vor:'-', ils:'-', note:'N 35-26 E 130-00 · 052-240-4754 / 4727 · KADIZ 이탈/진입 N 35-31 E 129-58' }
+];
+
 const ENR_VORS = [
   { id: 'SEL', name: 'ANYANG VORTAC', freq: '115.5', lat: 37.41361, lon: 126.92833 },   // 372449N 1265542E
   { id: 'PSN', name: 'BUSAN VORTAC', freq: '114.0', lat: 35.1225, lon: 128.99944 },   // 350721N 1285958E
