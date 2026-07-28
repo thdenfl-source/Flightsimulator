@@ -4614,6 +4614,26 @@ async function _tcFetch(key, x, y) {
   } catch(e) { _TC.tiles[key] = null; }
   delete _TC.pend[key];
 }
+// ── VNAV (수직항법) : 타깃 WP까지 거리 기준 입력 각도의 강하/상승선 ──
+let vnavActive = false, vnavTgtAlt = 0, vnavAngle = -3;   // angle: 음수=강하
+const FT_PER_NM = 6076.12;
+function vnavCalc() {
+  if (!vnavActive) return null;
+  if (S.awp < 0 || S.awp >= S.wps.length) return { err: '활성 웨이포인트(타깃) 없음' };
+  const wp = S.wps[S.awp];
+  const d = distance(S.lat, S.lon, wp.lat, wp.lon);           // NM
+  const slope = Math.tan(Math.abs(vnavAngle) * D2R);
+  const sign = vnavAngle < 0 ? 1 : -1;                        // 강하각이면 타깃보다 높은 곳이 경로
+  const pathH = d * FT_PER_NM * slope * sign;                 // 타깃 대비 현재 거리에서의 경로 고도차
+  const reqAlt = vnavTgtAlt + pathH;                          // 현재 위치에서 경로상 고도
+  const dev = S.alt - reqAlt;                                 // +면 경로 위(높음)
+  const gs = Math.max(1, S.spd);                              // GS 근사
+  const vs = -sign * gs * FT_PER_NM / 60 * slope;             // 유지 수직속도(ft/min)
+  const todFromTgt = (S.alt - vnavTgtAlt) / (FT_PER_NM * slope); // 타깃에서 강하시작점까지 거리
+  const todDist = d - todFromTgt;                             // 현재→강하시작(TOD)까지 남은 거리
+  return { wp: wp.ident, d, reqAlt, dev, vs, todDist, tgtAlt: vnavTgtAlt, ang: vnavAngle };
+}
+
 function updateTerrainCut() {
   const cv = document.getElementById('tcut-canvas');
   if (!cv || cv.clientWidth === 0) return;   // 맵 페이지 숨김 상태 등
@@ -4663,6 +4683,25 @@ function updateTerrainCut() {
     g.fillStyle = '#889'; g.textAlign = 'center';
     g.fillText('지형 데이터 로딩 중…', W / 2, H / 2); g.textAlign = 'left';
   }
+  // ── VNAV 강하/상승선(마젠타) : 현재→타깃 거리 기준 경로 ──
+  try {
+    const vn = vnavCalc();
+    if (vn && !vn.err) {
+      const xt = W * Math.min(vn.d, DIST) / DIST;               // 타깃 x위치(20NM 창 기준)
+      const yNow = Math.max(0, Math.min(H, H - vn.reqAlt / top * H));  // 현재 위치 경로고도
+      const yTgt = Math.max(0, Math.min(H, H - vn.tgtAlt / top * H));  // 타깃 고도
+      g.strokeStyle = '#ff4dd2'; g.lineWidth = 2; g.setLineDash([]);
+      g.beginPath(); g.moveTo(0, yNow); g.lineTo(xt, yTgt); g.stroke();
+      // 타깃 마커
+      g.fillStyle = '#ff4dd2';
+      g.beginPath(); g.arc(xt, yTgt, 3.5, 0, Math.PI * 2); g.fill();
+      // 라벨(각도/편차)
+      g.font = 'bold 10px -apple-system, Segoe UI, Roboto, sans-serif';
+      g.textAlign = 'left'; g.fillStyle = '#ff9de8';
+      const devTxt = (vn.dev >= 0 ? '+' : '') + Math.round(vn.dev);
+      g.fillText(`VNAV ${vn.ang.toFixed(1)}°  Δ${devTxt}ft`, 4, H - 16);
+    }
+  } catch(e) {}
   // 간이 TAWS: 전방 10NM 이내(샘플 절반)에 여유고도 100ft 미만 지형이 있으면 경고
   {
     let danger = false;
@@ -7908,12 +7947,16 @@ if ('serviceWorker' in navigator) {
       daAS: { label:'Altimeter Setting',unit:'inHg', neg:false, dec:2 },
       daOAT:{ label:'Outside Air Temp', unit:'°C',   neg:true,  dec:0 },
       daOut:{ label:'Density Altitude', unit:'ft',   neg:true,  dec:0 },
+      // VNAV
+      vnavAlt:{ label:'타깃 고도',  unit:'ft',  neg:false, dec:0 },
+      vnavAng:{ label:'강하/상승 각', unit:'°', neg:true,  dec:1 },
     };
     const _UV = { m:0, ft:0, km:0, nm:0, sm:0, dd:0, dmd:0, dmm:0, dmsd:0, dmsm:0, dmss:0,
       wkg:0, wlb:0, wg:0, woz:0, wmt:0,
       phpa:1013.25, pinhg:29.92, pkpa:101.325, ppsi:14.696, pmmhg:760.0, patm:1,
       flb:0, fkg:0, fusgal:0, fltr:0,
-      daIA:0, daAS:29.92, daOAT:15, daOut:0 };
+      daIA:0, daAS:29.92, daOAT:15, daOut:0,
+      vnavAlt:0, vnavAng:-3 };
 
     // --- EXACT EXCEL PERF DATA ENGINE ---
     let perfData = { alt: "0", temp: "20", weight: "16000", vs: "0" };
@@ -8717,6 +8760,7 @@ if ('serviceWorker' in navigator) {
       PRESS:   { title:'Pressure', fields:['phpa','pinhg','pkpa','ppsi','pmmhg','patm'] },
       FUEL:    { title:'Fuel Conversion', fields:['flb','fkg','fusgal','fltr'], fuel:true },
       DENSALT: { title:'Density Altitude', densalt:true },
+      VNAV:    { title:'VNAV', fields:['vnavAlt','vnavAng'], vnav:true },
     };
     const _UMENU = [
       { id:'DIST',    name:'Length / Distance', sub:'m · ft · km · NM · SM' },
@@ -8725,6 +8769,7 @@ if ('serviceWorker' in navigator) {
       { id:'PRESS',   name:'Pressure',          sub:'inHg · hPa · kPa · psi · mmHg · atm' },
       { id:'FUEL',    name:'Fuel Conversion',   sub:'gal · L · lb · kg' },
       { id:'DENSALT', name:'Density Altitude',  sub:'IA · Alt setting · OAT → DA' },
+      { id:'VNAV',    name:'VNAV',              sub:'타깃 고도·각도 → 강하선(T-CUT 연동)' },
       { id:'SETTINGS',name:'⚙ 설정 (Settings)',  sub:'야간 · 레인지 링 · 자동 METAR · 경보 · 설치' },
     ];
 
@@ -8814,6 +8859,11 @@ if ('serviceWorker' in navigator) {
         const isa = 15 - 1.98 * (pa / 1000);
         _UV.daOut = Math.round((pa + 120 * (_UV.daOAT - isa)) / 10) * 10;
       }
+      // ── VNAV (타깃 고도·각도 입력 → 전역 상태 동기화, T-CUT 연동) ──
+      else if (src === 'vnavAlt' || src === 'vnavAng') {
+        try { vnavTgtAlt = _UV.vnavAlt; vnavAngle = _UV.vnavAng; vnavActive = true; } catch(e) {}
+        try { updateTerrainCut(); } catch(e) {}
+      }
       else {
         const sgn = _UV.dmsd < 0 ? -1 : 1;
         _utilDDtoAll(sgn * (Math.abs(_UV.dmsd) + _UV.dmsm / 60 + _UV.dmss / 3600));
@@ -8891,6 +8941,33 @@ if ('serviceWorker' in navigator) {
           ROW('daIA') + ROW('daAS') + ROW('daOAT') +
           `<div style="color:#556;font-size:9px;letter-spacing:1px;margin:8px 0 4px;">ANSWER</div>` +
           ROW('daOut', true);
+      } else if (page.vnav) {
+        let readout;
+        let vn = null; try { vn = vnavCalc(); } catch(e) {}
+        if (!vnavActive) {
+          readout = `<div style="color:#567;font-size:10px;padding:8px 4px;">타깃 고도와 각도(강하 −, 상승 +)를 입력하고 ENT 하세요. 활성 웨이포인트가 타깃입니다.</div>`;
+        } else if (vn && vn.err) {
+          readout = `<div style="color:#e8a; font-size:11px;padding:8px 4px;">⚠ ${vn.err} — Flight Plan에서 웨이포인트를 활성화하세요.</div>`;
+        } else if (vn) {
+          const R = (l,v,c) => `<div style="display:flex;justify-content:space-between;padding:5px 6px;border-bottom:1px solid #12212c;">` +
+            `<span style="color:#6a8494;font-size:10px;">${l}</span><span style="color:${c||'#dfeaf2'};font-size:13px;font-weight:bold;">${v}</span></div>`;
+          const devC = Math.abs(vn.dev) < 100 ? '#4ade80' : (vn.dev > 0 ? '#ffd54f' : '#ff8a65');
+          const devTxt = (vn.dev>=0?'+':'') + Math.round(vn.dev) + ' ft ' + (vn.dev>0?'(경로 위)':(vn.dev<0?'(경로 아래)':''));
+          readout =
+            `<div style="border:1px solid #223a4a;border-radius:6px;background:#08131c;padding:4px 6px;margin-top:2px;">` +
+            R('타깃 WP', vn.wp, '#00e5ff') +
+            R('타깃까지 거리', vn.d.toFixed(1)+' NM') +
+            R('경로상 요구고도(현재)', Math.round(vn.reqAlt)+' ft', '#9fd0ff') +
+            R('편차', devTxt, devC) +
+            R('요구 수직속도', Math.round(vn.vs)+' fpm', '#ffb0ea') +
+            R('TOD까지', (vn.todDist>0? vn.todDist.toFixed(1)+' NM 후 강하' : '지금 강하'), '#facc15') +
+            `</div>`;
+        }
+        fieldsHtml =
+          `<div style="color:#556;font-size:9px;letter-spacing:1px;margin:2px 0 4px;">INPUT (값 입력 후 ENT)</div>` +
+          ROW('vnavAlt') + ROW('vnavAng') +
+          `<div style="color:#556;font-size:9px;letter-spacing:1px;margin:8px 0 4px;">VNAV</div>` +
+          readout;
       } else if (page.fuel) {
         fieldsHtml =
           `<div onclick="utilFuelDensity()" style="display:flex;align-items:center;justify-content:space-between;` +
