@@ -4670,6 +4670,39 @@ function vnavAlertCheck() {
 }
 setInterval(() => { try { vnavAlertCheck(); } catch(e) {} }, 1000);
 
+// VNAV 리드아웃 HTML(실시간 갱신용) — UTIL VNAV 화면에서 재사용
+function _vnavReadoutHtml() {
+  let vn = null; try { vn = vnavCalc(); } catch(e) {}
+  if (!vnavActive) {
+    return `<div style="color:#567;font-size:10px;padding:8px 4px;">타깃 고도와 각도(강하 −, 상승 +)를 입력하고 ENT 하세요. 활성 웨이포인트가 타깃입니다.</div>`;
+  }
+  if (vn && vn.err) {
+    return `<div style="color:#e8a;font-size:11px;padding:8px 4px;">⚠ ${vn.err} — Flight Plan에서 웨이포인트를 활성화하세요.</div>`;
+  }
+  if (!vn) return '';
+  const R = (l, v, c) => `<div style="display:flex;justify-content:space-between;padding:5px 6px;border-bottom:1px solid #12212c;">` +
+    `<span style="color:#6a8494;font-size:10px;">${l}</span><span style="color:${c||'#dfeaf2'};font-size:13px;font-weight:bold;">${v}</span></div>`;
+  const devC = Math.abs(vn.dev) < 100 ? '#4ade80' : (vn.dev > 0 ? '#ffd54f' : '#ff8a65');
+  const devTxt = (vn.dev>=0?'+':'') + Math.round(vn.dev) + ' ft ' + (vn.dev>0?'(경로 위)':(vn.dev<0?'(경로 아래)':''));
+  return `<div style="border:1px solid #223a4a;border-radius:6px;background:#08131c;padding:4px 6px;margin-top:2px;">` +
+    R('타깃 WP', vn.wp, '#00e5ff') +
+    R('타깃까지 거리', vn.d.toFixed(1)+' NM') +
+    R('경로상 요구고도(현재)', Math.round(vn.reqAlt)+' ft', '#9fd0ff') +
+    R('편차', devTxt, devC) +
+    R('요구 수직속도', Math.round(vn.vs)+' fpm', '#ffb0ea') +
+    R('TOD까지', (vn.todDist>0? vn.todDist.toFixed(1)+' NM 후 강하' : '지금 강하'), '#facc15') +
+    `</div>`;
+}
+// UTIL VNAV 화면이 열려 있으면 리드아웃을 1초마다 실시간 갱신(입력 포커스는 유지)
+setInterval(() => {
+  try {
+    if (typeof currentMode !== 'undefined' && currentMode === 'UTIL' && typeof utilTab !== 'undefined' && utilTab === 'VNAV') {
+      const el = document.getElementById('vnav-readout');
+      if (el) el.innerHTML = _vnavReadoutHtml();
+    }
+  } catch(e) {}
+}, 1000);
+
 function updateTerrainCut() {
   const cv = document.getElementById('tcut-canvas');
   if (!cv || cv.clientWidth === 0) return;   // 맵 페이지 숨김 상태 등
@@ -8998,32 +9031,11 @@ if ('serviceWorker' in navigator) {
           `<div style="color:#556;font-size:9px;letter-spacing:1px;margin:8px 0 4px;">ANSWER</div>` +
           ROW('daOut', true);
       } else if (page.vnav) {
-        let readout;
-        let vn = null; try { vn = vnavCalc(); } catch(e) {}
-        if (!vnavActive) {
-          readout = `<div style="color:#567;font-size:10px;padding:8px 4px;">타깃 고도와 각도(강하 −, 상승 +)를 입력하고 ENT 하세요. 활성 웨이포인트가 타깃입니다.</div>`;
-        } else if (vn && vn.err) {
-          readout = `<div style="color:#e8a; font-size:11px;padding:8px 4px;">⚠ ${vn.err} — Flight Plan에서 웨이포인트를 활성화하세요.</div>`;
-        } else if (vn) {
-          const R = (l,v,c) => `<div style="display:flex;justify-content:space-between;padding:5px 6px;border-bottom:1px solid #12212c;">` +
-            `<span style="color:#6a8494;font-size:10px;">${l}</span><span style="color:${c||'#dfeaf2'};font-size:13px;font-weight:bold;">${v}</span></div>`;
-          const devC = Math.abs(vn.dev) < 100 ? '#4ade80' : (vn.dev > 0 ? '#ffd54f' : '#ff8a65');
-          const devTxt = (vn.dev>=0?'+':'') + Math.round(vn.dev) + ' ft ' + (vn.dev>0?'(경로 위)':(vn.dev<0?'(경로 아래)':''));
-          readout =
-            `<div style="border:1px solid #223a4a;border-radius:6px;background:#08131c;padding:4px 6px;margin-top:2px;">` +
-            R('타깃 WP', vn.wp, '#00e5ff') +
-            R('타깃까지 거리', vn.d.toFixed(1)+' NM') +
-            R('경로상 요구고도(현재)', Math.round(vn.reqAlt)+' ft', '#9fd0ff') +
-            R('편차', devTxt, devC) +
-            R('요구 수직속도', Math.round(vn.vs)+' fpm', '#ffb0ea') +
-            R('TOD까지', (vn.todDist>0? vn.todDist.toFixed(1)+' NM 후 강하' : '지금 강하'), '#facc15') +
-            `</div>`;
-        }
         fieldsHtml =
           `<div style="color:#556;font-size:9px;letter-spacing:1px;margin:2px 0 4px;">INPUT (값 입력 후 ENT)</div>` +
           ROW('vnavAlt') + ROW('vnavAng') +
-          `<div style="color:#556;font-size:9px;letter-spacing:1px;margin:8px 0 4px;">VNAV</div>` +
-          readout;
+          `<div style="color:#556;font-size:9px;letter-spacing:1px;margin:8px 0 4px;">VNAV (실시간)</div>` +
+          `<div id="vnav-readout">${_vnavReadoutHtml()}</div>`;
       } else if (page.fuel) {
         fieldsHtml =
           `<div onclick="utilFuelDensity()" style="display:flex;align-items:center;justify-content:space-between;` +
