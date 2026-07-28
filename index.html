@@ -10739,6 +10739,7 @@ function _aspcAlertCheck() {
   let insideA = null, nearA = null, nearD = ASPC_WARN_NM;
   AIRSPACE_DB.forEach(a => {
     if (!aspcOn[a.id]) return;
+    if (a.grp === 'FIR' || a.grp === 'KADIZ') return;   // 광역 경계는 진입 경보 제외
     const d = _aspcDistNM(a, S.lat, S.lon);
     if (d <= 0.001) { if (!insideA) insideA = a; }
     else if (d < nearD) { nearD = d; nearA = a; }
