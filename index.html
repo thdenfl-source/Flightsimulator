@@ -10182,30 +10182,36 @@ if ('serviceWorker' in navigator) {
     // 2자리 표준 코드는 ICAO(RK__)로 표기, 그 외(G515 등)는 원본 유지
     function _afldIcao(a) { return (a.code && a.code.length === 2) ? 'RK' + a.code : a.code; }
     let _afldMsg = '';   // 튜닝 결과 안내(상세 화면 상단)
-    function openAirfield(i) { _afldIdx = i; _afldMsg = ''; switchMode('AIRFIELD_DETAIL'); }
+    function openAirfield(i) { _afldIdx = i; _afldMsg = ''; _afldPending = null; switchMode('AIRFIELD_DETAIL'); }
+    let _afldPending = null;   // 튜닝 대상 선택 대기: { freq, type:'COM'|'NAV' }
     // 주파수 문자열에서 VHF(COM)·NAV(VOR/LLZ) 주파수를 탭 가능한 링크로 변환(UHF/기타는 평문)
     function _afldFreqHtml(str) {
         if (!str) return '-';
         return String(str).replace(/\d{2,3}\.\d{1,3}/g, (m) => {
             const f = parseFloat(m);
-            if (f >= 108 && f < 118)  return `<span onclick="afldTuneNav('${m}')" style="color:#9fd0ff;text-decoration:underline;cursor:pointer;">${m}</span>`;
-            if (f >= 118 && f < 137)  return `<span onclick="afldTuneCom('${m}')" style="color:#8fe6c8;text-decoration:underline;cursor:pointer;">${m}</span>`;
+            if (f >= 108 && f < 118)  return `<span onclick="afldPick('${m}','NAV')" style="color:#9fd0ff;text-decoration:underline;cursor:pointer;">${m}</span>`;
+            if (f >= 118 && f < 137)  return `<span onclick="afldPick('${m}','COM')" style="color:#8fe6c8;text-decoration:underline;cursor:pointer;">${m}</span>`;
             return m;   // UHF(225~400)·기타(HF/CH)는 평문
         });
     }
-    // VHF/ATIS → COM1 대기(STBY) 튜닝
-    function afldTuneCom(freq) {
-        freqs.com1.stb = freq;
-        _afldMsg = `COM1 STBY ← ${freq}`;
+    // 주파수 탭 → 어느 라디오에 넣을지 선택 대기
+    function afldPick(freq, type) { _afldPending = { freq, type }; _afldMsg = ''; switchMode('AIRFIELD_DETAIL'); }
+    function afldCancelPick() { _afldPending = null; switchMode('AIRFIELD_DETAIL'); }
+    // VHF/ATIS → 선택한 COM(STBY)
+    function afldPutCom(freq, id) {   // id: 'com1' | 'com2'
+        freqs[id].stb = freq;
+        _afldMsg = `${id.toUpperCase()} STBY ← ${freq}`;
+        _afldPending = null;
         switchMode('AIRFIELD_DETAIL');
     }
-    // NAV/LLZ → NAV1 튜닝 + VOR 매칭 + PFD 연동
-    function afldTuneNav(freq) {
-        freqs.nav1.act = freq;
+    // NAV/LLZ → 선택한 NAV + VOR 매칭 + PFD 연동
+    function afldPutNav(freq, id) {    // id: 'nav1' | 'nav2'
+        freqs[id].act = freq;
         const m = (typeof ENR_VORS !== 'undefined' ? ENR_VORS : []).find(x => x.freq && Math.abs(parseFloat(x.freq) - parseFloat(freq)) < 0.001);
-        freqs.nav1.id = m ? m.id : '';
-        try { setNavRadio('NAV1', freq, m ? m.id : null); } catch(e) {}
-        _afldMsg = `NAV1 ← ${freq}${m ? ' (' + m.id + ')' : ''}`;
+        freqs[id].id = m ? m.id : '';
+        try { setNavRadio(id === 'nav1' ? 'NAV1' : 'NAV2', freq, m ? m.id : null); } catch(e) {}
+        _afldMsg = `${id.toUpperCase()} ← ${freq}${m ? ' (' + m.id + ')' : ''}`;
+        _afldPending = null;
         switchMode('AIRFIELD_DETAIL');
     }
     // 상단 ALL 버튼 — 코드 입력 시 전체(군공항 포함) 공개, 실패 시 AIP 공개 공항만
@@ -10250,9 +10256,22 @@ if ('serviceWorker' in navigator) {
             <span style="color:${color || '#e6eef6'};font-size:12px;line-height:1.45;word-break:break-all;">${val || '-'}</span></div>`;
         // 주파수 필드는 탭 튜닝 링크로 변환
         const frow = (lbl, val, color) => row(lbl, _afldFreqHtml(val), color);
-        const msg = _afldMsg
-            ? `<div style="background:#062a1c;border:1px solid #0a6;border-radius:5px;color:#4ade80;font-size:11px;font-weight:bold;padding:6px 8px;margin-bottom:8px;">✓ ${_afldMsg} 튜닝됨</div>`
-            : `<div style="color:#7a90a4;font-size:10px;margin-bottom:8px;">파란/초록 주파수를 누르면 NAV1/COM1에 자동 튜닝됩니다 (UHF 제외).</div>`;
+        // 라디오 선택 대기 배너(COM1/COM2 또는 NAV1/NAV2)
+        let msg;
+        if (_afldPending) {
+            const f = _afldPending.freq, isCom = _afldPending.type === 'COM';
+            const btn = (id, label, col) => `<span onclick="${isCom ? 'afldPutCom' : 'afldPutNav'}('${f}','${id}')" style="cursor:pointer;padding:6px 14px;border-radius:5px;font-weight:bold;font-size:12px;border:1px solid ${col};color:${col};">${label}</span>`;
+            msg = `<div style="background:#0a1626;border:1px solid #2a4a7a;border-radius:6px;padding:8px;margin-bottom:8px;">
+                <div style="color:#cfe0f0;font-size:11px;margin-bottom:7px;"><b style="color:${isCom ? '#8fe6c8' : '#9fd0ff'};">${f}</b> — 어느 라디오에 넣을까요?</div>
+                <div style="display:flex;gap:8px;align-items:center;">
+                    ${isCom ? btn('com1','COM1','#8fe6c8') + btn('com2','COM2','#8fe6c8') : btn('nav1','NAV1','#9fd0ff') + btn('nav2','NAV2','#9fd0ff')}
+                    <span onclick="afldCancelPick()" style="cursor:pointer;padding:6px 12px;border-radius:5px;font-size:12px;border:1px solid #555;color:#aaa;">취소</span>
+                </div></div>`;
+        } else if (_afldMsg) {
+            msg = `<div style="background:#062a1c;border:1px solid #0a6;border-radius:5px;color:#4ade80;font-size:11px;font-weight:bold;padding:6px 8px;margin-bottom:8px;">✓ ${_afldMsg} 튜닝됨</div>`;
+        } else {
+            msg = `<div style="color:#7a90a4;font-size:10px;margin-bottom:8px;">파란(NAV)/초록(COM) 주파수를 누르면 넣을 라디오(1/2)를 선택합니다 (UHF 제외).</div>`;
+        }
         container.innerHTML = `<div style="padding:8px 8px;overflow-y:auto;height:100%;">
             ${msg}
             ${row('표고', a.elev != null ? a.elev + ' ft' : '-', '#00e5ff')}
