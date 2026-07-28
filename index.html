@@ -8154,9 +8154,8 @@ if ('serviceWorker' in navigator) {
         /* Utilities — wrench */
         { id: 'util', text: 'Utilities', icon: '<svg viewBox="0 0 100 100"><path d="M62 22 C75 22, 84 32, 80 44 L48 76 C44 88, 28 88, 22 78 C16 68, 22 54, 34 52 L66 20" fill="none" stroke="#9e9e9e" stroke-width="8" stroke-linecap="round"/><circle cx="34" cy="66" r="8" fill="none" stroke="#9e9e9e" stroke-width="5"/><line x1="72" y1="22" x2="82" y2="12" stroke="#9e9e9e" stroke-width="6" stroke-linecap="round"/></svg>' },
         /* AS-565 Performance — orange trend line */
-        { id: 'as565', text: 'AS-565<br>Performance', icon: '<svg viewBox="0 0 100 100"><polyline points="15,80 35,55 55,65 80,22" fill="none" stroke="#ff9800" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/><circle cx="80" cy="22" r="6" fill="#ff9800"/><text x="50" y="97" font-size="15" fill="#fff" font-weight="bold" text-anchor="middle" font-family="monospace">AS565</text></svg>' },
-        /* 비행장 정보 — control tower + freq */
-        { id: 'afld', text: '비행장<br>정보', icon: '<svg viewBox="0 0 100 100"><rect x="42" y="30" width="16" height="52" fill="#00e5ff"/><polygon points="34,30 66,30 58,18 42,18" fill="#00e5ff"/><circle cx="50" cy="12" r="4" fill="#ff5252"/><path d="M62 20 a14 14 0 0 1 10 10" fill="none" stroke="#ffca28" stroke-width="4"/><path d="M38 20 a14 14 0 0 0 -10 10" fill="none" stroke="#ffca28" stroke-width="4"/><rect x="30" y="82" width="40" height="6" fill="#00e5ff"/></svg>' }
+        /* INFO — 비행장 정보 (control tower + freq) */
+        { id: 'afld', text: 'INFO', icon: '<svg viewBox="0 0 100 100"><rect x="42" y="30" width="16" height="52" fill="#00e5ff"/><polygon points="34,30 66,30 58,18 42,18" fill="#00e5ff"/><circle cx="50" cy="12" r="4" fill="#ff5252"/><path d="M62 20 a14 14 0 0 1 10 10" fill="none" stroke="#ffca28" stroke-width="4"/><path d="M38 20 a14 14 0 0 0 -10 10" fill="none" stroke="#ffca28" stroke-width="4"/><rect x="30" y="82" width="40" height="6" fill="#00e5ff"/></svg>' }
     ];
 
     function switchMode(mode, target = '') {
@@ -8209,14 +8208,13 @@ if ('serviceWorker' in navigator) {
                 'weather': "https://customwidgethosting.web.app/embed.html?ffCompiledSrc=https%3A%2F%2Fstorage.googleapis.com%2Fflutterflow-io-6f20.appspot.com%2Fbuild_outputs%2Fintegrated-flight-preparation-assistant-mlvjyo%2Fweb%2FQMZqWepPgY9jqDmcO2Uu%2Fmain.dart.js",
                 'notam': "https://aim.koca.go.kr/xNotam/index.do?type=search2&language=ko_KR",
                 'serv': "https://thdenfl.tistory.com",
-                'as565': "https://thdenfl-source.github.io/AS565/",
                 'metar': "https://global.amo.go.kr/observation/metar.do",
                 'directTo': "https://global.amo.go.kr/aami/lamis/main",
                 'badacctv': "https://www.badatime.com/cctv",
                 'parkcctv': "https://m.knps.or.kr/main/menuctrl.do?menuNo=10"
             };
 
-            let isActiveBtn = ['weather', 'charts', 'notam', 'metar', 'directTo', 'map', 'fpl', 'serv', 'sys', 'perf', 'as565', 'util', 'proc', 'badacctv', 'parkcctv', 'check', 'afld'].includes(btn.id);
+            let isActiveBtn = ['weather', 'charts', 'notam', 'metar', 'directTo', 'map', 'fpl', 'serv', 'sys', 'perf', 'util', 'proc', 'badacctv', 'parkcctv', 'check', 'afld'].includes(btn.id);
             let boxClass = isActiveBtn ? 'icon-box func-active' : 'icon-box';
 
             if (links[btn.id]) {
