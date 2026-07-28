@@ -5167,6 +5167,8 @@ function fpRenderIfr(area, title, footer) {
     if(s&&s.options.length===0){Object.keys(IFR_DB).forEach(k=>{const o=document.createElement('option');o.value=k;o.textContent=k+' – '+IFR_DB[k].name;s.appendChild(o);});loadStars();loadApproaches();}
   }
   footer.innerHTML = `
+    <div class="fp-nav-btn" onclick="fpGoCduHome()"><span>🏠</span>Home</div>
+    ${fpFullBtn()}
     <div class="fp-nav-btn" onclick="fpGo('LIST')"><span>📋</span>FP</div>
     <div class="fp-nav-btn" onclick="fpGo('ADD')"><span>↩</span>Back</div>`;
 }
@@ -5848,6 +5850,12 @@ function planFullScreen() {
   _soloActive = true;
   document.getElementById('solo-bar').style.display = 'flex';
   setSolo('plan');
+}
+// Flight Plan 푸터용 FULL/HALF 버튼(solo 상태 반영)
+function fpFullBtn() {
+  return _soloActive
+    ? `<div class="fp-nav-btn" onclick="exitSolo()"><span>✥</span>Half</div>`
+    : `<div class="fp-nav-btn" onclick="planFullScreen()"><span>✥</span>Full</div>`;
 }
 // Flight Plan 화면의 BACK — CDU(직전 화면)로 복귀
 function fpBackToCdu() {
