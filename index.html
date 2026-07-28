@@ -9079,9 +9079,10 @@ if ('serviceWorker' in navigator) {
           `</div>` +
         `</div>`;
 
-      container.innerHTML = backToMenu + fieldsHtml + numpadHtml;
+      // VNAV는 독립 기능이라 상단 '목록' 버튼 없이 표시하고, Back은 HOME으로
+      container.innerHTML = (page.vnav ? '' : backToMenu) + fieldsHtml + numpadHtml;
 
-      footer.innerHTML = cduFooter("utilOpen('MENU')");
+      footer.innerHTML = cduFooter(page.vnav ? "switchMode('HOME')" : "utilOpen('MENU')");
     }
 
 
