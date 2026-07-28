@@ -491,6 +491,25 @@ body.solo-mode #page-tabs,
 body.solo-mode #left-tabs { display: none !important; }
 /* solo 전용 상단 스위처 바도 숨김(하단 푸터로 대체) */
 body.solo-mode #solo-bar { display: none !important; }
+/* 전체화면에서 MAP/PFD 등 하단 푸터가 없는 화면용 떠 있는 HALF 버튼 */
+#solo-half-btn {
+  display: none;
+  position: fixed;
+  top: calc(env(safe-area-inset-top) + 58px);   /* 상단 툴바(공역 등) 아래로 */
+  right: calc(env(safe-area-inset-right) + 10px);
+  z-index: 3500;
+  background: rgba(10,15,22,0.92);
+  border: 1px solid #4a90d9;
+  border-radius: 7px;
+  color: #7ab8f5;
+  font-family: 'Helvetica Neue', Arial, sans-serif;
+  font-size: 12px; font-weight: bold; letter-spacing: 1px;
+  padding: 7px 12px;
+  cursor: pointer; touch-action: manipulation;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.5);
+}
+#solo-half-btn:active { background: #1a3a5a; color: #fff; }
+body.solo-mode #solo-half-btn.show { display: block; }
 /* Solo mode: one panel fills everything */
 body.solo-mode #left-panel,
 body.solo-mode #right-panel {
@@ -1372,6 +1391,8 @@ body.night-mode::after {
   <button onclick="setSolo('cdu')">CDU</button>
   <button class="solo-exit" onclick="exitSolo()" title="분할화면으로 돌아가기">✕</button>
 </div>
+<!-- 전체화면(solo)에서 하단 푸터가 없는 화면(MAP/PFD)용 분할복귀 버튼 -->
+<button id="solo-half-btn" onclick="exitSolo()" title="분할화면으로 돌아가기">✥ HALF</button>
 <div id="app">
 
   <!-- ── LEFT PANEL (PFD / MAP) ── -->
@@ -5934,6 +5955,9 @@ function setSolo(screen) {
     setPage(2);
     setTimeout(() => scaleCdu(), 80);
   }
+  // MAP/PFD처럼 하단 푸터가 없는 화면에서는 떠 있는 HALF 버튼 표시
+  const halfBtn = document.getElementById('solo-half-btn');
+  if (halfBtn) halfBtn.classList.toggle('show', screen === 'pfd' || screen === 'map');
   _refreshCduFooters();   // FULL⇄HALF 라벨 갱신
 }
 
@@ -5947,6 +5971,8 @@ function exitSolo() {
   _soloActive = false;
   _soloCurrent = null;
   document.getElementById('solo-bar').style.display = 'none';
+  const halfBtn = document.getElementById('solo-half-btn');
+  if (halfBtn) halfBtn.classList.remove('show');
   document.body.classList.remove('solo-mode');
 
   const leftPanel  = document.getElementById('left-panel');
