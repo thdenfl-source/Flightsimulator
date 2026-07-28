@@ -10181,7 +10181,33 @@ if ('serviceWorker' in navigator) {
     let _afldUnlocked = false;   // 군공항 포함 전체 공개 여부(보안)
     // 2자리 표준 코드는 ICAO(RK__)로 표기, 그 외(G515 등)는 원본 유지
     function _afldIcao(a) { return (a.code && a.code.length === 2) ? 'RK' + a.code : a.code; }
-    function openAirfield(i) { _afldIdx = i; switchMode('AIRFIELD_DETAIL'); }
+    let _afldMsg = '';   // 튜닝 결과 안내(상세 화면 상단)
+    function openAirfield(i) { _afldIdx = i; _afldMsg = ''; switchMode('AIRFIELD_DETAIL'); }
+    // 주파수 문자열에서 VHF(COM)·NAV(VOR/LLZ) 주파수를 탭 가능한 링크로 변환(UHF/기타는 평문)
+    function _afldFreqHtml(str) {
+        if (!str) return '-';
+        return String(str).replace(/\d{2,3}\.\d{1,3}/g, (m) => {
+            const f = parseFloat(m);
+            if (f >= 108 && f < 118)  return `<span onclick="afldTuneNav('${m}')" style="color:#9fd0ff;text-decoration:underline;cursor:pointer;">${m}</span>`;
+            if (f >= 118 && f < 137)  return `<span onclick="afldTuneCom('${m}')" style="color:#8fe6c8;text-decoration:underline;cursor:pointer;">${m}</span>`;
+            return m;   // UHF(225~400)·기타(HF/CH)는 평문
+        });
+    }
+    // VHF/ATIS → COM1 대기(STBY) 튜닝
+    function afldTuneCom(freq) {
+        freqs.com1.stb = freq;
+        _afldMsg = `COM1 STBY ← ${freq}`;
+        switchMode('AIRFIELD_DETAIL');
+    }
+    // NAV/LLZ → NAV1 튜닝 + VOR 매칭 + PFD 연동
+    function afldTuneNav(freq) {
+        freqs.nav1.act = freq;
+        const m = (typeof ENR_VORS !== 'undefined' ? ENR_VORS : []).find(x => x.freq && Math.abs(parseFloat(x.freq) - parseFloat(freq)) < 0.001);
+        freqs.nav1.id = m ? m.id : '';
+        try { setNavRadio('NAV1', freq, m ? m.id : null); } catch(e) {}
+        _afldMsg = `NAV1 ← ${freq}${m ? ' (' + m.id + ')' : ''}`;
+        switchMode('AIRFIELD_DETAIL');
+    }
     // 상단 ALL 버튼 — 코드 입력 시 전체(군공항 포함) 공개, 실패 시 AIP 공개 공항만
     function afldToggleAll() {
         if (_afldUnlocked) { _afldUnlocked = false; switchMode('AIRFIELD'); return; }
@@ -10222,14 +10248,20 @@ if ('serviceWorker' in navigator) {
         const row = (lbl, val, color) => `<div style="display:grid;grid-template-columns:74px 1fr;gap:8px;padding:7px 4px;border-bottom:1px solid #1a2a38;">
             <span style="color:#7a90a4;font-size:11px;font-weight:bold;">${lbl}</span>
             <span style="color:${color || '#e6eef6'};font-size:12px;line-height:1.45;word-break:break-all;">${val || '-'}</span></div>`;
+        // 주파수 필드는 탭 튜닝 링크로 변환
+        const frow = (lbl, val, color) => row(lbl, _afldFreqHtml(val), color);
+        const msg = _afldMsg
+            ? `<div style="background:#062a1c;border:1px solid #0a6;border-radius:5px;color:#4ade80;font-size:11px;font-weight:bold;padding:6px 8px;margin-bottom:8px;">✓ ${_afldMsg} 튜닝됨</div>`
+            : `<div style="color:#7a90a4;font-size:10px;margin-bottom:8px;">파란/초록 주파수를 누르면 NAV1/COM1에 자동 튜닝됩니다 (UHF 제외).</div>`;
         container.innerHTML = `<div style="padding:8px 8px;overflow-y:auto;height:100%;">
+            ${msg}
             ${row('표고', a.elev != null ? a.elev + ' ft' : '-', '#00e5ff')}
             ${row('RWY', a.rwy)}
-            ${row('TWR', a.twr, '#8fe6c8')}
-            ${row('APP', a.app)}
-            ${row('GND', a.gnd)}
-            ${row('VOR/ATIS', a.vor, '#ffd54f')}
-            ${row('ILS(LLZ)', a.ils, '#9fd0ff')}
+            ${frow('TWR', a.twr, '#8fe6c8')}
+            ${frow('APP', a.app)}
+            ${frow('GND', a.gnd)}
+            ${frow('VOR/ATIS', a.vor, '#ffd54f')}
+            ${frow('ILS(LLZ)', a.ils, '#9fd0ff')}
             ${a.note ? row('비고', a.note, '#c8b0ff') : ''}
         </div>`;
         footer.innerHTML = cduFooter("switchMode('AIRFIELD')");
@@ -10940,7 +10972,7 @@ const AIRFIELD_INFO = [
   { code:'G515', name:'논산',      elev:104, rwy:'11L-29R / 11R-29L', twr:'133.350, 30.20', app:'군산APP 124.1, 292.65', gnd:'386.4, 계룡OPS 46.30', vor:'117.5', ils:'RWY11 109.7' },
   { code:'UC', name:'조치원',      elev:89,  rwy:'14-32', twr:'121.850, 346.750, 36.40', app:'중원APP 132.55, 306.7', gnd:'NIL', vor:'NIL', ils:'NIL' },
   { pub:1, code:'TN', name:'대구',        elev:120, rwy:'13L-31L / 13R-31R', twr:'126.2, 236.6, 365.0', app:'대구APP 135.9, 346.3', gnd:'121.95, 275.8', vor:'116.5 (DOC) / 112.2 (TGU) (127.65 / 240.6)', ils:'app132°R 108.7 / app312°L 108.7 / app312°L 111.9' },
-  { code:'TL', name:'울진',        elev:175, rwy:'17-35', twr:'118.55, 317.45', app:'울진ARR 120.875, 317.65', gnd:'121.775, 317.450', vor:'115.3 (UJN) (CH 100X)', ils:'app351° 108.1 / app171° 108.1' },
+  { pub:1, code:'TL', name:'울진',        elev:175, rwy:'17-35', twr:'118.55, 317.45', app:'울진ARR 120.875, 317.65', gnd:'121.775, 317.450', vor:'115.3 (UJN) (CH 100X)', ils:'app351° 108.1 / app171° 108.1' },
   { pub:1, code:'TH', name:'포항',        elev:76,  rwy:'10-28 (1200S / 900N)', twr:'118.05, 236.6, 308.5', app:'120.2, 124.25, 232.4', gnd:'126.2, 275.8', vor:'109.6 (NPH) CH33X / 110.9 (I-KPO) / 112.5 (KPO) (127.4 / 317.375)', ils:'VT 100°/275° / I 097° / PA 097°' },
   { code:'UY', name:'영천',        elev:376, rwy:'09-27 (1400S)', twr:'133.350 / 346.675, 31.00', app:'대구APP', gnd:'-', vor:'-', ils:'52S DE 83732 86768' },
   { pub:1, code:'PU', name:'울산',        elev:42,  rwy:'18-36', twr:'118.75, 225.55, 236.6', app:'포항APP 124.25, 120.2, 232.4', gnd:'121.75', vor:'111.4 (USN) (CH 51) (126.625 / 233.55)', ils:'app004° 110.3' },
