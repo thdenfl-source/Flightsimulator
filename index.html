@@ -6048,6 +6048,8 @@ function cduFullNavBtn() {
 }
 // PLAN 버튼 — Flight Plan 화면 열기(분할/전체화면 모두 대응)
 function openFlightPlan() {
+  // 직전에 PROC(IFR) 등을 열어 fpMode가 남아있으면 플랜 목록으로 되돌림
+  try { fpMode = 'LIST'; fpRender(); } catch(e) {}
   if (_soloActive) setSolo('plan'); else setPage(1);
 }
 // Flight Plan 화면의 FULL — 플랜을 전체화면으로
