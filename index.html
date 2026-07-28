@@ -11533,9 +11533,14 @@ function _aspcDraw(item){
   const color=_aspcColors[item.grp];
   const tip=`${item.grp} · ${item.name}`+(item.alt?`<br>${item.alt}`:'');
   const ls=[];
+  // FIR·KADIZ는 영역이 넓어 채우면 하부 레이어 선택을 막으므로 테두리만(클릭 통과)
+  const outlineOnly = (item.grp === 'FIR' || item.grp === 'KADIZ');
   if(item.poly){
-    const p=L.polygon(item.poly,{color,weight:1.5,opacity:0.9,fillColor:color,fillOpacity:0.07});
-    p.bindTooltip(tip,{sticky:true}); p.addTo(leafMap); ls.push(p);
+    const p = outlineOnly
+      ? L.polygon(item.poly,{color,weight:1.5,opacity:0.9,fill:false,interactive:false})
+      : L.polygon(item.poly,{color,weight:1.5,opacity:0.9,fillColor:color,fillOpacity:0.07});
+    if(!outlineOnly) p.bindTooltip(tip,{sticky:true});
+    p.addTo(leafMap); ls.push(p);
   } else if(item.circle){
     const c=L.circle(item.circle.c,{radius:item.circle.r*1852,color,weight:1.5,opacity:0.9,fillColor:color,fillOpacity:0.06});
     c.bindTooltip(tip,{sticky:true}); c.addTo(leafMap); ls.push(c);
