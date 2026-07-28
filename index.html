@@ -787,6 +787,16 @@ body.solo-mode .solo-panel-visible {
   animation: aspcBlink 1s step-end infinite;
 }
 #terrain-alert.on { display: block; }
+/* ── VNAV 강하 알림 ── */
+#vnav-alert {
+  display: none;
+  position: absolute; top: 110px; left: 50%; transform: translateX(-50%);
+  z-index: 1300; padding: 5px 16px; border-radius: 6px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-size: 12px; font-weight: bold; letter-spacing: 1px; white-space: nowrap; pointer-events: none;
+}
+#vnav-alert.pre   { display: block; background: rgba(60,45,0,0.92); border: 1px solid #ffaa00; color: #ffd24d; }
+#vnav-alert.begin { display: block; background: rgba(50,0,50,0.94); border: 1px solid #ff4dd2; color: #ff9de8; animation: aspcBlink 1s step-end infinite; }
 
 /* GPS 상태창: 하단 좌표창(#center-coord, left:10px) 오른쪽에 나란히 배치 */
 #gps-status {
@@ -1685,6 +1695,7 @@ body.night-mode::after {
       </div>
       <div id="aspc-alert"></div>
       <div id="terrain-alert">⚠ TERRAIN</div>
+      <div id="vnav-alert"></div>
       <div id="terrain-cut"><canvas id="tcut-canvas"></canvas><div id="tcut-title">TERRAIN — 전방 20NM</div></div>
       <div id="map-sim-bar">
         <button class="sim-btn" id="map-fly-btn" onclick="toggleSim()">▶ FLY</button>
@@ -4634,6 +4645,31 @@ function vnavCalc() {
   return { wp: wp.ident, d, reqAlt, dev, vs, todDist, tgtAlt: vnavTgtAlt, ang: vnavAngle };
 }
 
+// VNAV 강하 알림: TOD 10초 전 예고 + Begin Descent
+let _vnavAlertState = '';   // '' | 'pre' | 'begin'
+function vnavAlertCheck() {
+  const el = document.getElementById('vnav-alert');
+  if (!el) return;
+  const vn = (vnavActive ? vnavCalc() : null);
+  // 강하(각도<0)이고 비행 중일 때만
+  if (!vn || vn.err || vnavAngle >= 0 || !(gpsMode || S.running)) {
+    if (_vnavAlertState) { _vnavAlertState = ''; el.className = ''; el.textContent = ''; }
+    return;
+  }
+  const gs = Math.max(1, S.spd);
+  const tToTod = vn.todDist / gs * 3600;   // TOD까지 초
+  let st = '';
+  if (vn.todDist <= 0.05 && vn.dev > 30) st = 'begin';        // TOD 도달·아직 경로 위 → 강하 시작
+  else if (tToTod > 0 && tToTod <= 10 && vn.dev > 30) st = 'pre';   // 10초 전 예고
+  if (st !== _vnavAlertState) {
+    _vnavAlertState = st;
+    if (st === 'pre')  { el.className = 'pre';   el.textContent = '▼ VNAV: 강하 시작 10초 전'; try { navigator.vibrate && navigator.vibrate(150); } catch(e) {} }
+    else if (st === 'begin') { el.className = 'begin'; el.textContent = '▼ BEGIN DESCENT — ' + Math.round(vn.vs) + ' fpm'; try { navigator.vibrate && navigator.vibrate([250,100,250]); } catch(e) {} }
+    else { el.className = ''; el.textContent = ''; }
+  }
+}
+setInterval(() => { try { vnavAlertCheck(); } catch(e) {} }, 1000);
+
 function updateTerrainCut() {
   const cv = document.getElementById('tcut-canvas');
   if (!cv || cv.clientWidth === 0) return;   // 맵 페이지 숨김 상태 등
@@ -4688,13 +4724,26 @@ function updateTerrainCut() {
     const vn = vnavCalc();
     if (vn && !vn.err) {
       const xt = W * Math.min(vn.d, DIST) / DIST;               // 타깃 x위치(20NM 창 기준)
-      const yNow = Math.max(0, Math.min(H, H - vn.reqAlt / top * H));  // 현재 위치 경로고도
-      const yTgt = Math.max(0, Math.min(H, H - vn.tgtAlt / top * H));  // 타깃 고도
+      // 클램프하지 않아야 실제 각도(기울기)가 유지되고, 거리가 줄면 교차점이 항공기로 다가옴
+      const yNow = H - vn.reqAlt / top * H;                     // 현재 위치의 경로고도(캔버스 밖일 수 있음)
+      const yTgt = H - vn.tgtAlt / top * H;                     // 타깃 고도
+      g.save();
+      g.beginPath(); g.rect(0, 0, W, H); g.clip();              // 캔버스 밖은 자동 클립
       g.strokeStyle = '#ff4dd2'; g.lineWidth = 2; g.setLineDash([]);
       g.beginPath(); g.moveTo(0, yNow); g.lineTo(xt, yTgt); g.stroke();
+      g.restore();
       // 타깃 마커
       g.fillStyle = '#ff4dd2';
-      g.beginPath(); g.arc(xt, yTgt, 3.5, 0, Math.PI * 2); g.fill();
+      g.beginPath(); g.arc(xt, Math.max(0, Math.min(H, yTgt)), 3.5, 0, Math.PI * 2); g.fill();
+      // TOD(강하 시작점) 마커 — 경로가 현재 고도와 만나는 지점(거리 감소에 따라 좌측으로 이동)
+      if (vn.todDist > 0 && vn.todDist <= DIST) {
+        const xi = W * vn.todDist / DIST, yi = ay;             // ay=항공기 고도선 y
+        g.strokeStyle = '#ff4dd2'; g.lineWidth = 1; g.setLineDash([3, 3]);
+        g.beginPath(); g.moveTo(xi, yi); g.lineTo(xi, H); g.stroke(); g.setLineDash([]);
+        g.fillStyle = '#ff4dd2'; g.beginPath(); g.arc(xi, yi, 4, 0, Math.PI * 2); g.fill();
+        g.font = 'bold 9px -apple-system, Segoe UI, Roboto, sans-serif';
+        g.textAlign = 'center'; g.fillStyle = '#ff9de8'; g.fillText('TOD', xi, yi - 6); g.textAlign = 'left';
+      }
       // 라벨(각도/편차)
       g.font = 'bold 10px -apple-system, Segoe UI, Roboto, sans-serif';
       g.textAlign = 'left'; g.fillStyle = '#ff9de8';
