@@ -253,6 +253,12 @@ html, body {
   font-size: 10px; padding: 1px 3px; border-radius: 2px;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; width: 70px;
 }
+/* NAV1/NAV2 튜닝 VOR 표시 라벨(PFD NAV SRC 하단) */
+.nav-icao-lbl {
+  color: #44aaff; font-size: 10px; font-weight: bold; letter-spacing: 0.5px;
+  text-align: center; margin-top: 1px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
 
 /* ── RNP ── */
 .rnp-group { display: flex; flex-direction: column; align-items: center; gap: 2px; }
@@ -1546,10 +1552,10 @@ body.night-mode::after {
           <div class="ctrl-lbl">NAV SRC</div>
           <div class="nav-src-btns">
             <button class="nav-src-btn active" id="nav-fms" onclick="setNavSrc('FMS')">FMS</button>
-            <button class="nav-src-btn" id="nav-vor" onclick="setNavSrc('VOR')">VOR</button>
-            <button class="nav-src-btn" id="nav-loc" onclick="setNavSrc('LOC')">LOC</button>
+            <button class="nav-src-btn" id="nav-nav1" onclick="setNavSrc('NAV1')">NAV1</button>
+            <button class="nav-src-btn" id="nav-nav2" onclick="setNavSrc('NAV2')">NAV2</button>
           </div>
-          <select class="nav-icao-sel" id="nav-icao-sel" onchange="setNavIcao(this.value)" style="display:none"></select>
+          <div class="nav-icao-lbl" id="nav-icao-lbl" style="display:none"></div>
         </div>
 
         <div class="ctrl-div"></div>
@@ -2191,12 +2197,12 @@ function computeTrack() {
 
 // 현재 navSrc 에 맞는 활성 코스 반환
 function activeCrs() {
-  return (navSrc === 'VOR' || navSrc === 'LOC') ? vorObsCrs : S.crs;
+  return (navSrc !== 'FMS') ? vorObsCrs : S.crs;
 }
 
 // CRS 버튼 활성/비활성: VOR/LOC 는 항상 활성, FMS 는 OBS ON 일 때만
 function updateCrsButtons() {
-  const enabled = obsOn || navSrc === 'VOR' || navSrc === 'LOC';
+  const enabled = obsOn || navSrc !== 'FMS';
   ['crs-dn', 'crs-up'].forEach(id => {
     const el = document.getElementById(id);
     el.disabled = !enabled;
@@ -2274,9 +2280,45 @@ function navInterceptOk() {
 let rollApOn = true;   // false when manual bank trim overrides roll axis
 
 // NAV source state
-let navSrc  = 'FMS';   // 'FMS' | 'VOR' | 'LOC'
-let navIcao = '';      // selected ICAO for VOR/LOC mode
+let navSrc  = 'FMS';   // 'FMS' | 'NAV1' | 'NAV2'
+let navIcao = '';      // 현재 소스가 튜닝한 VOR ident
 let navLat  = null, navLon = null;
+
+// ── NAV1/NAV2 무선 ↔ VOR 연동 ──
+// CDU Audio & Radios의 NAV 행에서 주파수 입력 또는 VOR 명칭 선택으로 튜닝
+let navRadios = {
+  NAV1: { freq: '115.50', id: 'SEL', lat: null, lon: null },   // 안양 VORTAC
+  NAV2: { freq: '116.10', id: 'CJU', lat: null, lon: null }    // 제주 VORTAC
+};
+// 주파수 또는 ident로 ENR_VORS에서 VOR 찾기(freq 매칭 오차 허용)
+function _resolveVor(freq, id) {
+  let list;
+  try { list = ENR_VORS; } catch(e) { return null; }   // 로드 중 TDZ 대비
+  if (!list) return null;
+  let v = null;
+  if (id)   v = list.find(x => x.id === id && x.freq);
+  if (!v && freq) v = list.find(x => x.freq && Math.abs(parseFloat(x.freq) - parseFloat(freq)) < 0.001);
+  return v || null;
+}
+// CDU에서 NAV1/NAV2 튜닝 시 호출 — 무선 상태 갱신 + 현재 소스면 PFD 반영
+function setNavRadio(navId, freq, id) {
+  const r = navRadios[navId]; if (!r) return;
+  if (freq != null) r.freq = freq;
+  if (id != null)   r.id = id;
+  const v = _resolveVor(r.freq, r.id);
+  if (v) { r.lat = v.lat; r.lon = v.lon; r.id = v.id; r.freq = v.freq; }
+  else   { r.lat = null; r.lon = null; }
+  if (navSrc === navId) applyNavRadioToPfd();
+}
+// 현재 navSrc(NAV1/NAV2)의 튜닝 VOR를 PFD 항법 상태로 반영
+function applyNavRadioToPfd() {
+  const r = navRadios[navSrc];
+  if (!r) { navLat = navLon = null; navIcao = ''; return; }
+  if (r.lat === null) { const v = _resolveVor(r.freq, r.id); if (v) { r.lat = v.lat; r.lon = v.lon; r.id = v.id; } }
+  navLat = r.lat; navLon = r.lon; navIcao = r.id || '';
+  const lbl = document.getElementById('nav-icao-lbl');
+  if (lbl) { lbl.style.display = 'block'; lbl.textContent = (r.id || '----') + (r.freq ? ' ' + r.freq : ''); }
+}
 // Direct-To 앵커: 이전 leg가 없는 활성 WP의 코스 선 기준점(선택 시점의 위치).
 // 이 앵커→WP 선을 leg처럼 고정 추적해 '포인트로 수렴'하지 않게 한다.
 let _dtoLat = null, _dtoLon = null;
@@ -2319,23 +2361,17 @@ function swReset() {
 function setNavSrc(src) {
   navSrc = src;
   document.querySelectorAll('.nav-src-btn').forEach(b => b.classList.remove('active'));
-  document.getElementById('nav-' + src.toLowerCase()).classList.add('active');
-  const icaoSel = document.getElementById('nav-icao-sel');
-  const isVorLoc = src === 'VOR' || src === 'LOC';
-  icaoSel.style.display = isVorLoc ? 'block' : 'none';
-  // VOR/LOC 전환 시 vorObsCrs를 자동으로 덮어쓰지 않음 —
-  // 사용자가 CRS 노브(또는 CRS 라벨 버튼)로 정한 래디얼을 그대로 유지
-  // Reset NAV AP PID integrator on source change to prevent heading bias from
-  // accumulated cross-track error on the previous source bleeding into the new course.
-  updateCrsButtons(); // VOR/LOC ↔ FMS 전환 시 버튼 상태 갱신
-  updateNav();
-}
-function setNavIcao(icao) {
-  navIcao = icao;
-  const a = AIRPORTS.find(x => x.ident === icao);
-  if (a) { navLat = a.lat; navLon = a.lon; }
-  else    { navLat = null; navLon = null; }
-  // 선국 변경 시에도 vorObsCrs는 자동 변경하지 않음(사용자 설정 래디얼 유지)
+  const btn = document.getElementById('nav-' + src.toLowerCase());
+  if (btn) btn.classList.add('active');
+  const lbl = document.getElementById('nav-icao-lbl');
+  if (src === 'FMS') {
+    navLat = navLon = null; navIcao = '';
+    if (lbl) lbl.style.display = 'none';
+  } else {
+    applyNavRadioToPfd();   // NAV1/NAV2 튜닝 VOR를 CDI/BRG에 반영
+  }
+  // NAV 전환 시 vorObsCrs는 자동으로 덮어쓰지 않음(사용자 설정 래디얼 유지)
+  updateCrsButtons();
   updateNav();
 }
 function setRnp(val) {
@@ -3186,11 +3222,11 @@ function drawHSI(x, y, w, h) {
     }
     cdiOff = Math.max(-1, Math.min(1, -xtk / rnp)) * 2 * dotGap;
     cdbActive = true;
-  } else if ((navSrc === 'VOR' || navSrc === 'LOC') && navLat !== null) {
+  } else if ((navSrc !== 'FMS') && navLat !== null) {
     cdbWp = { lat: navLat, lon: navLon };
     const brgFromNav = bearing(navLat, navLon, S.lat, S.lon);
     const devDeg     = normAS(brgFromNav - normA(vorObsCrs + 180));
-    const fullScale  = navSrc === 'VOR' ? 15 : 2.5;
+    const fullScale  = 15;   // NAV1/NAV2 = VOR full-scale
     cdiOff = Math.max(-1, Math.min(1,
       Math.sin(devDeg * D2R) / Math.sin(fullScale * D2R))) * 2 * dotGap;
     cdbActive = true;
@@ -4718,7 +4754,7 @@ let vorStationMarker = null;
 let wpMarkers = [];
 
 function updateCrsLine() {
-  if (navSrc === 'VOR' || navSrc === 'LOC') {
+  if (navSrc !== 'FMS') {
     crsLine.setLatLngs([]);
     if (navLat === null) {
       vorCrsLine.setLatLngs([]);
@@ -5304,7 +5340,7 @@ function applyDelta(field, d){
       rollApOn = true;
       break;
     case 'crs':
-      if (navSrc === 'VOR' || navSrc === 'LOC') {
+      if (navSrc !== 'FMS') {
         vorObsCrs = normA(vorObsCrs + d); updateNav();
       } else if (obsOn) {
         S.crs = normA(S.crs + d); updateNav();
@@ -5351,7 +5387,7 @@ function fcpSync(which) {
     selHdg = ((Math.round(S.hdg) + 359) % 360) + 1;   // 1–360
     bankTarget = 0; rollApOn = true;                   // 현재 헤딩 유지
   } else if (which === 'crs') {
-    if ((navSrc === 'VOR' || navSrc === 'LOC') && navLat !== null) {
+    if ((navSrc !== 'FMS') && navLat !== null) {
       vorObsCrs = normA(Math.round(bearing(S.lat, S.lon, navLat, navLon)));
       updateNav();
     } else if (navSrc === 'FMS' && S.awp >= 0) {
@@ -7057,7 +7093,7 @@ function saveSession() {
       gps: gpsMode,
       fcp: { selSpd, selAlt, selCrht, selVS, selHdg, altHoldOn, crhtOn, gspdOn, rollApOn, bankTarget,
              gspdActLat, gspdActFwd, gspdRefLat, gspdRefFwd, gspdCoasting },
-      nav: { obsOn, navSrc, navIcao, vorObsCrs, dtoLat:_dtoLat, dtoLon:_dtoLon },
+      nav: { obsOn, navSrc, navRadios, vorObsCrs, dtoLat:_dtoLat, dtoLon:_dtoLon },
       view: { mapHdgUp, followMode, leftSel, rightSel },
     };
     localStorage.setItem(SESSION_KEY, JSON.stringify(snap));
@@ -7086,7 +7122,7 @@ function restoreSession() {
     const n = snap.nav || {};
     obsOn=!!n.obsOn; navSrc=n.navSrc||'FMS'; vorObsCrs=n.vorObsCrs??360;
     _dtoLat=(n.dtoLat===undefined?null:n.dtoLat); _dtoLon=(n.dtoLon===undefined?null:n.dtoLon);
-    if (n.navIcao) { try { setNavIcao(n.navIcao); } catch(e) {} }
+    if (n.navRadios) { try { ['NAV1','NAV2'].forEach(k => { if (n.navRadios[k]) navRadios[k] = Object.assign({}, navRadios[k], n.navRadios[k]); }); } catch(e) {} }
     const v = snap.view || {};
     mapHdgUp=!!v.mapHdgUp; followMode=!!v.followMode;
     if (v.leftSel) leftSel=v.leftSel; if (v.rightSel) rightSel=v.rightSel;
@@ -7199,21 +7235,11 @@ function init(){
   renderNavBox();
   updateAcOnMap();
   S.pit = pitchFromSpd(S.spd);
-  // Populate ICAO selector and set default
-  const icaoSel = document.getElementById('nav-icao-sel');
-  AIRPORTS.forEach(a => {
-    const opt = document.createElement('option');
-    opt.value = a.ident; opt.textContent = a.ident;
-    icaoSel.appendChild(opt);
-  });
-  if (_restored && navIcao) {
-    icaoSel.value = navIcao;   // 복원된 선국 반영
-  } else if (AIRPORTS.length > 0) {
-    navIcao = AIRPORTS[0].ident;
-    navLat  = AIRPORTS[0].lat;
-    navLon  = AIRPORTS[0].lon;
-    icaoSel.value = navIcao;
-  }
+  // NAV1/NAV2 무선의 튜닝 VOR 좌표 해석(ENR_VORS 정의 이후에 실행되도록 지연)
+  setTimeout(() => {
+    try { ['NAV1','NAV2'].forEach(k => setNavRadio(k, navRadios[k].freq, navRadios[k].id)); } catch(e) {}
+    try { setNavSrc(navSrc); } catch(e) {}   // 현재 소스 라벨/CDI 반영
+  }, 0);
   if (!_restored) setPage(0);   // 복원 시엔 restoreSession의 applyPanels로 배치 유지
   window.addEventListener('resize', () => { resizePFD(); try { leafMap.invalidateSize(); } catch(e) {} scaleCdu(); });
   setTimeout(() => leafMap.invalidateSize(), 100);
@@ -10062,6 +10088,7 @@ if ('serviceWorker' in navigator) {
             case 'VOX_MODE': renderVoxModeScreen(container, footer, title, centerLabel); break;
             case 'HF_CONTROL': renderHfControlScreen(container, footer, title, centerLabel); break;
             case 'COM_INPUT': renderComInputScreen(container, footer, title); break;
+            case 'NAV_SEL': renderNavSelectScreen(container, footer, title, centerLabel); break;
             case 'XPDR_MODE': renderXpdrModeScreen(container, footer, title, centerLabel); break;
             case 'XPDR_CODE': renderXpdrCodeScreen(container, footer, title, centerLabel); break;
             case 'UTIL': renderUtilScreen(container, footer, title, centerLabel); break;
@@ -10102,14 +10129,48 @@ if ('serviceWorker' in navigator) {
                 <span class="wedge-text">${volumes[id]}%</span>
                 <div class="wedge-fill" style="width:${volumes[id]}%"></div>
             </div>
-            <div class="freq-display-box" style="align-items:center; padding:0; justify-content:center; cursor:pointer;" onclick="switchMode('COM_INPUT', '${id}')">
+            <div class="freq-display-box" style="align-items:center; padding:0; justify-content:center; cursor:pointer;" onclick="openNavSel('${id}')">
                 <div style="display:flex; gap:4px; font-size:12px; font-weight:bold; margin-bottom:2px;">
                     <span style="color:var(--text-green);">${freqs[id].act}</span>
                     <span style="color:white;">${freqs[id].id}</span>
                 </div>
-                <div style="color:var(--text-cyan); font-size:12px; font-weight:bold;">${freqs[id].stb}</div>
+                <div style="color:var(--text-cyan); font-size:9px; font-weight:bold;">▾ VOR 선택</div>
             </div>
         </div>`;
+    }
+
+    // ── NAV1/NAV2 VOR 튜닝 화면 ──
+    let _navSelTarget = 'nav1';   // 현재 튜닝 대상 무선
+    function openNavSel(id) { _navSelTarget = id; switchMode('NAV_SEL'); }
+    function renderNavSelectScreen(container, footer, title, centerLabel) {
+        title.innerText = (_navSelTarget === 'nav1' ? 'NAV1' : 'NAV2') + ' — VOR 선택';
+        const cur = freqs[_navSelTarget];
+        const rows = (typeof ENR_VORS !== 'undefined' ? ENR_VORS : []).filter(v => v.freq).map(v => {
+            const sel = (v.id === cur.id) ? 'border-color:#00e5ff;background:#03202a;' : '';
+            return `<div onclick="pickNavVor('${v.id}')" style="display:grid;grid-template-columns:56px 1fr 64px;align-items:center;gap:8px;
+                padding:9px 10px;margin-bottom:6px;border:1px solid #234;border-radius:6px;cursor:pointer;${sel}">
+                <span style="color:#fff;font-weight:bold;font-size:13px;">${v.id}</span>
+                <span style="color:#9fb4c8;font-size:11px;">${v.name}</span>
+                <span style="color:#00e5ff;font-weight:bold;font-size:12px;text-align:right;">${v.freq}</span>
+            </div>`;
+        }).join('');
+        container.innerHTML = `<div style="padding:8px 6px;overflow-y:auto;height:100%;">
+            <div style="color:#9fb4c8;font-size:10px;margin-bottom:8px;">현재: <b style="color:#00e5ff;">${cur.id||'----'} ${cur.act||''}</b>
+                &nbsp;·&nbsp;VOR 명칭을 선택하거나 아래 버튼으로 주파수를 직접 입력하세요.</div>
+            <div onclick="switchMode('COM_INPUT','${_navSelTarget}')" style="text-align:center;padding:9px;margin-bottom:10px;
+                border:1px solid #b8860b;border-radius:6px;color:#facc15;font-weight:bold;font-size:12px;cursor:pointer;">⌨ 직접 주파수 입력</div>
+            ${rows}
+        </div>`;
+        footer.innerHTML = cduFooter("switchMode('AUDIO')");
+    }
+    // VOR 명칭 선택 → 무선 튜닝 + PFD 연동
+    function pickNavVor(vorId) {
+        const v = (typeof ENR_VORS !== 'undefined' ? ENR_VORS : []).find(x => x.id === vorId);
+        if (!v) return;
+        freqs[_navSelTarget].act = v.freq;
+        freqs[_navSelTarget].id  = v.id;
+        try { setNavRadio(_navSelTarget === 'nav1' ? 'NAV1' : 'NAV2', v.freq, v.id); } catch(e) {}
+        switchMode('AUDIO');
     }
 
     function renderMissionRow(label, id) {
@@ -10326,7 +10387,15 @@ if ('serviceWorker' in navigator) {
             } else {
                 if (!v.includes('.') && v.length > 3) v = v.slice(0, 3) + "." + v.slice(3);
             }
-            freqs[inputTarget].stb = v;
+            // NAV1/NAV2는 입력 주파수를 즉시 활성(ACT)으로 튜닝 + VOR 자동 매칭 + PFD 연동
+            if (inputTarget === 'nav1' || inputTarget === 'nav2') {
+                freqs[inputTarget].act = v;
+                let match = (typeof ENR_VORS !== 'undefined' ? ENR_VORS : []).find(x => x.freq && Math.abs(parseFloat(x.freq) - parseFloat(v)) < 0.001);
+                freqs[inputTarget].id = match ? match.id : '';
+                try { setNavRadio(inputTarget === 'nav1' ? 'NAV1' : 'NAV2', v, match ? match.id : null); } catch(e) {}
+            } else {
+                freqs[inputTarget].stb = v;
+            }
         }
         let backMode = inputTarget === 'hf' ? 'HF_CONTROL' : 'AUDIO';
         switchMode(backMode, inputTarget);
