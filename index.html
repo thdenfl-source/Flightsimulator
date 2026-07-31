@@ -1730,6 +1730,10 @@ body.night-mode::after {
       <!-- Ship Control Panel -->
       <div id="ship-panel">
         <div id="ship-panel-header" style="color:#7ab8f5;font-size:9px;font-weight:bold;text-align:center;letter-spacing:1px;border-bottom:1px solid #222;padding-bottom:6px;margin-bottom:8px;position:relative;cursor:grab;user-select:none;">⛵ SHIP CONTROL<button onclick="closeShipPanel()" style="position:absolute;top:-2px;right:0;background:none;border:none;color:#666;font-size:14px;line-height:1;cursor:pointer;padding:0;" title="닫기">✕</button></div>
+        <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px;">
+          <span style="color:#889;font-size:8px;font-weight:bold;flex:1;letter-spacing:0.5px;">배 시현 (SHIP)</span>
+          <button id="ship-onoff-btn" onclick="shipToggleOn()" style="border-radius:5px;font-size:10px;font-weight:bold;padding:5px 16px;cursor:pointer;background:#2a2a2a;border:1px solid #555;color:#999;">OFF</button>
+        </div>
         <div style="display:flex;gap:4px;margin-bottom:8px;">
           <button id="ship-tab-spd" class="ship-tab ship-tab-active" onclick="shipSetMode('SPD')">SPD</button>
           <button id="ship-tab-crs" class="ship-tab" onclick="shipSetMode('CRS')">CRS</button>
@@ -7472,17 +7476,40 @@ function shipIcon() {
   });
 }
 
+// 하단 SHIP 버튼: 설정 패널 열기/닫기(INHIBIT 버튼처럼). 배 on/off는 패널 안 토글로.
 function toggleShip() {
-  // 배가 없으면 → 배 생성. 배가 있든 없든 → 설정 창을 연다.
-  if (!shipVisible) {
+  const panel = document.getElementById('ship-panel');
+  if (panel.style.display === 'block') { panel.style.display = 'none'; }
+  else { openShipPanel(); }
+}
+
+// 패널 안 ON/OFF 토글: 배(마커) 생성/제거
+function shipToggleOn() {
+  if (shipVisible) {
+    if (shipMarker) { leafMap.removeLayer(shipMarker); shipMarker = null; }
+    shipVisible = false;
+    shipTrail = []; updateShipTrail();
+  } else {
     const c = leafMap.getCenter();
     shipLat = c.lat; shipLon = c.lng;
     shipTrail = []; updateShipTrail();
     shipVisible = true;
     createShipMarker();
-    document.getElementById('map-ship-btn').classList.add('ship-active');
   }
-  openShipPanel();
+  renderShipOnOff();
+}
+
+// ON/OFF 버튼·하단 SHIP 버튼 상태 갱신
+function renderShipOnOff() {
+  const b = document.getElementById('ship-onoff-btn');
+  if (b) {
+    b.textContent = shipVisible ? 'ON' : 'OFF';
+    b.style.background  = shipVisible ? '#0d3a14' : '#2a2a2a';
+    b.style.borderColor = shipVisible ? '#33cc55' : '#555';
+    b.style.color       = shipVisible ? '#4ade80' : '#999';
+  }
+  const mb = document.getElementById('map-ship-btn');
+  if (mb) mb.classList.toggle('ship-active', shipVisible);
 }
 
 function createShipMarker() {
@@ -7508,6 +7535,7 @@ function updateShipMarker() {
 function openShipPanel() {
   shipSetMode(shipInputMode);
   updateShipStatus();
+  renderShipOnOff();
   document.getElementById('ship-panel').style.display = 'block';
 }
 
