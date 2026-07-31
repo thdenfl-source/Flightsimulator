@@ -77,6 +77,9 @@ html, body {
   #left-panel.pfd-host, #right-panel.pfd-host { flex: 0 0 55%; }
   #panel-divider { height: 2px; width: 100%; }
 }
+/* 사용자가 분할 비율을 지정하면 좌측만 고정폭이 되고 우측은 남은 공간을 채운다.
+   (PFD 호스트의 flex:0 0 55%가 함께 걸리면 합이 100%를 넘어 우측이 잘리므로 무효화) */
+#app.split-custom #right-panel { flex: 1 1 0; }
 #left-panel {
   display: flex;
   flex-direction: column;
@@ -5995,7 +5998,8 @@ function setPage(n) { selectPanel('right', ['map', 'plan', 'cdu'][n] || 'map', t
   const L    = document.getElementById('left-panel');
   if (!grip || !app || !L) return;
 
-  const applyRatio = pct => { L.style.flex = `0 0 ${pct}%`; };
+  // 좌측을 고정폭으로 두고, 우측은 남은 공간을 채우도록(split-custom) 전환
+  const applyRatio = pct => { L.style.flex = `0 0 ${pct}%`; app.classList.add('split-custom'); };
   const afterResize = () => {
     requestAnimationFrame(() => { try { resizePFD(); drawPFD(); } catch(e) {} });
     setTimeout(() => {
