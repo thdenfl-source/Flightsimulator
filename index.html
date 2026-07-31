@@ -7473,25 +7473,16 @@ function shipIcon() {
 }
 
 function toggleShip() {
-  const panel = document.getElementById('ship-panel');
-  if (shipVisible) {
-    // 배가 있는데 설정 창이 닫혀 있으면 → 창을 다시 연다(재설정)
-    if (panel.style.display !== 'block') { openShipPanel(); return; }
-    // 창이 열린 상태에서 다시 누르면 → 배 제거(off)
-    if (shipMarker) { leafMap.removeLayer(shipMarker); shipMarker = null; }
-    shipVisible = false;
-    shipTrail = []; updateShipTrail();
-    panel.style.display = 'none';
-    document.getElementById('map-ship-btn').classList.remove('ship-active');
-  } else {
+  // 배가 없으면 → 배 생성. 배가 있든 없든 → 설정 창을 연다.
+  if (!shipVisible) {
     const c = leafMap.getCenter();
     shipLat = c.lat; shipLon = c.lng;
     shipTrail = []; updateShipTrail();
     shipVisible = true;
     createShipMarker();
     document.getElementById('map-ship-btn').classList.add('ship-active');
-    openShipPanel();
   }
+  openShipPanel();
 }
 
 function createShipMarker() {
