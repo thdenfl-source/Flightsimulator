@@ -7494,7 +7494,14 @@ function createShipMarker() {
   shipMarker = L.marker([shipLat, shipLon], { icon: shipIcon(), draggable: true, zIndexOffset: 500 }).addTo(leafMap);
   shipMarker.on('drag', e => { shipLat = e.latlng.lat; shipLon = e.latlng.lng; shipDragging = true; });
   shipMarker.on('dragend', () => { shipDragging = false; shipTrail = []; updateShipTrail(); });
-  shipMarker.on('click', openShipPanel);
+  // 배를 두 번 터치(더블탭/더블클릭)하면 속도·방향 설정 창 다시 열기
+  let _shipLastTap = 0;
+  shipMarker.on('click', e => {
+    const t = Date.now();
+    if (t - _shipLastTap < 450) { try { L.DomEvent.stop(e); } catch(_) {} openShipPanel(); _shipLastTap = 0; }
+    else { _shipLastTap = t; }
+  });
+  shipMarker.on('dblclick', e => { try { L.DomEvent.stop(e); } catch(_) {} openShipPanel(); });
 }
 
 function updateShipMarker() {
