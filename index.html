@@ -8377,7 +8377,7 @@ if ('serviceWorker' in navigator) {
         });
         gridHtml += `</div>`;
         container.innerHTML = gridHtml;
-        footer.innerHTML = cduFooter('');
+        footer.innerHTML = cduFooter('', `<div class="nav-btn" onclick="window.open('https://ubikais.fois.go.kr:8030/common/login?systemId=sysUbikais','_blank')"><span>🛰</span>UBIKAIS</div>`);
     }
 
     function renderPerfScreen(container, footer, title, centerLabel) {
