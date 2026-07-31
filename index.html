@@ -762,6 +762,25 @@ body.solo-mode .solo-panel-visible {
 #inhib-menu button.inhibited { border-color: #ffaa00; }
 #inhib-menu button.inhibited span { color: #ffaa00; }
 #inhib-btn.inhib-active { background: rgba(60,45,0,0.92); border-color: #ffaa00; color: #ffcc44; }
+/* ── SHIP 선택 메뉴(INHIBIT식) ── */
+#ship-menu {
+  display: none;
+  position: absolute; bottom: calc(20% + 40px); left: 8px; z-index: 1250;
+  background: rgba(8,8,14,0.95); border: 1px solid #7ab8f5; border-radius: 6px;
+  padding: 5px; flex-direction: column; gap: 4px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+#map-wrap.tcut-off #ship-menu { bottom: 40px; }
+#ship-menu.open { display: flex; }
+#ship-menu button {
+  background: rgba(20,20,20,0.9); border: 1px solid #444; border-radius: 4px;
+  color: #cfe; font-size: 11px; font-weight: bold; padding: 7px 12px;
+  cursor: pointer; white-space: nowrap; text-align: left;
+  display: flex; justify-content: space-between; gap: 12px;
+}
+#ship-menu button span { color: #888; }
+#ship-menu button.on { border-color: #33cc55; }
+#ship-menu button.on span { color: #4ade80; }
 
 /* ── 공역 접근/진입 경보 배너 ── */
 #aspc-alert {
@@ -1693,6 +1712,11 @@ body.night-mode::after {
         <div style="color:#889;font-size:9px;font-weight:bold;letter-spacing:1px;padding:2px 4px;">경보 INHIBIT</div>
         <button id="inhib-aspc-btn" onclick="toggleInhib('aspc')">공역경보 <span>ON</span></button>
         <button id="inhib-taws-btn" onclick="toggleInhib('taws')">HTAWS <span>ON</span></button>
+      </div>
+      <div id="ship-menu">
+        <div style="color:#889;font-size:9px;font-weight:bold;letter-spacing:1px;padding:2px 4px;">⛵ SHIP</div>
+        <button id="ship-menu-show" onclick="shipToggleOn()">배 표시 <span>OFF</span></button>
+        <button id="ship-menu-panel" onclick="shipTogglePanel()">설정창 <span>OFF</span></button>
       </div>
       <div id="aspc-alert"></div>
       <div id="terrain-alert">⚠ TERRAIN</div>
@@ -7476,19 +7500,21 @@ function shipIcon() {
   });
 }
 
-// 하단 SHIP 버튼: 설정 패널 열기/닫기(INHIBIT 버튼처럼). 배 on/off는 패널 안 토글로.
-function toggleShip() {
-  const panel = document.getElementById('ship-panel');
-  if (panel.style.display === 'block') { panel.style.display = 'none'; }
-  else { openShipPanel(); }
+// 하단 SHIP 버튼: INHIBIT처럼 선택 메뉴(배 표시 / 설정창) 열기·닫기
+function toggleShip(force) {
+  const m = document.getElementById('ship-menu');
+  if (force === false) m.classList.remove('open');
+  else m.classList.toggle('open');
+  renderShipOnOff();
 }
 
-// 패널 안 ON/OFF 토글: 배(마커) 생성/제거
+// 메뉴: 배 표시 ON/OFF (마커 생성/제거)
 function shipToggleOn() {
   if (shipVisible) {
     if (shipMarker) { leafMap.removeLayer(shipMarker); shipMarker = null; }
     shipVisible = false;
     shipTrail = []; updateShipTrail();
+    document.getElementById('ship-panel').style.display = 'none';   // 배 끄면 설정창도 닫음
   } else {
     const c = leafMap.getCenter();
     shipLat = c.lat; shipLon = c.lng;
@@ -7499,8 +7525,25 @@ function shipToggleOn() {
   renderShipOnOff();
 }
 
-// ON/OFF 버튼·하단 SHIP 버튼 상태 갱신
+// 메뉴: 설정창 ON/OFF (배가 있어야 열림)
+function shipTogglePanel() {
+  const panel = document.getElementById('ship-panel');
+  const open = panel.style.display === 'block';
+  if (open) { panel.style.display = 'none'; }
+  else {
+    if (!shipVisible) shipToggleOn();   // 설정창을 열면 배도 자동 ON
+    openShipPanel();
+  }
+  renderShipOnOff();
+}
+
+// 상태 표시 갱신(메뉴·패널 토글·하단 버튼)
 function renderShipOnOff() {
+  const panelOpen = document.getElementById('ship-panel').style.display === 'block';
+  const sShow = document.getElementById('ship-menu-show');
+  if (sShow) { sShow.classList.toggle('on', shipVisible); sShow.querySelector('span').textContent = shipVisible ? 'ON' : 'OFF'; }
+  const sPanel = document.getElementById('ship-menu-panel');
+  if (sPanel) { sPanel.classList.toggle('on', panelOpen); sPanel.querySelector('span').textContent = panelOpen ? 'ON' : 'OFF'; }
   const b = document.getElementById('ship-onoff-btn');
   if (b) {
     b.textContent = shipVisible ? 'ON' : 'OFF';
@@ -7541,6 +7584,7 @@ function openShipPanel() {
 
 function closeShipPanel() {
   document.getElementById('ship-panel').style.display = 'none';
+  renderShipOnOff();
 }
 
 function shipSetMode(mode) {
