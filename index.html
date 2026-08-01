@@ -2523,12 +2523,26 @@ const R_NM = 3440.065;
 // ══════════════════════════════════════════════════════
 // 표시 단위 설정 (정보 표시용) — PFD 계기는 항공 표준대로 ft/kt/NM 고정
 // ══════════════════════════════════════════════════════
-let unitAlt = 'ft', unitDist = 'NM', unitSpd = 'kt';
+let unitAlt = 'ft', unitDist = 'NM', unitSpd = 'kt', unitTemp = 'C';
 try {
   unitAlt  = localStorage.getItem('unitAlt')  || 'ft';
   unitDist = localStorage.getItem('unitDist') || 'NM';
   unitSpd  = localStorage.getItem('unitSpd')  || 'kt';
+  unitTemp = localStorage.getItem('unitTemp') || 'C';
 } catch(e) {}
+// ── 계기(PFD)용 원시 변환·라벨 헬퍼 (숫자만 반환) ──
+const A_CV = () => unitAlt  === 'm'   ? 0.3048  : 1;        // ft → 표시
+const S_CV = () => unitSpd  === 'kmh' ? 1.852   : 1;        // kt → 표시
+const D_CV = () => unitDist === 'km'  ? 1.852   : 1;        // NM → 표시
+const A_LBL = () => unitAlt  === 'm'   ? 'M'    : 'FT';
+const S_LBL = () => unitSpd  === 'kmh' ? 'KM/H' : 'KT';
+const D_LBL = () => unitDist === 'km'  ? 'km'   : 'NM';
+const T_LBL = () => unitTemp === 'F'   ? '°F'   : '°C';
+const tempCv = c => unitTemp === 'F' ? c * 9/5 + 32 : c;    // °C → 표시
+function uTemp(c, dec) {
+  if (c === null || c === undefined || isNaN(c)) return '---';
+  return tempCv(c).toFixed(dec ?? 0) + T_LBL();
+}
 // 고도(ft 입력) → 설정 단위 문자열
 function uAlt(ft, dec) {
   if (ft === null || ft === undefined || isNaN(ft)) return '---';
@@ -2548,6 +2562,9 @@ function setUnit(kind, val) {
   if (kind === 'alt')  { unitAlt  = val; try { localStorage.setItem('unitAlt',  val); } catch(e) {} }
   if (kind === 'dist') { unitDist = val; try { localStorage.setItem('unitDist', val); } catch(e) {} }
   if (kind === 'spd')  { unitSpd  = val; try { localStorage.setItem('unitSpd',  val); } catch(e) {} }
+  if (kind === 'temp') { unitTemp = val; try { localStorage.setItem('unitTemp', val); } catch(e) {} }
+  try { drawPFD(); } catch(e) {}
+  try { updateNav(); } catch(e) {}
   try { updateTerrainCut(); } catch(e) {}
   try { if (rangeRingsOn) _updateRangeRings(); } catch(e) {}
 }
@@ -2760,11 +2777,13 @@ function drawCrhtDisplay(x, y, w, h) {
   const tickColor = on ? '#44ff88' : '#555';
 
   // Tape ticks centred on target (within moving-scale region only)
-  const a0 = Math.floor((target - 1100) / 100) * 100;
-  for (let a = a0; a <= target + 1200; a += 100) {
-    const ty = cy - (a - target) * pp100 / 100;
+  const ccv = A_CV(), cMin = unitAlt === 'm' ? 50 : 100, cMaj = unitAlt === 'm' ? 100 : 500;
+  const dTgt = target * ccv;
+  const a0 = Math.floor((dTgt - 1100 * ccv) / cMin) * cMin;
+  for (let a = a0; a <= dTgt + 1200 * ccv; a += cMin) {
+    const ty = cy - (a / ccv - target) * pp100 / 100;
     if (ty < tapeY || ty > tapeY + tapeH) continue;
-    const maj = a % 500 === 0;
+    const maj = Math.abs(a % cMaj) < 1e-6;
     ctx.strokeStyle = maj ? tickColor : '#282828';
     ctx.lineWidth   = maj ? 1.5 : 0.8;
     ctx.beginPath(); ctx.moveTo(x + 7, ty); ctx.lineTo(x + (maj ? 16 : 10), ty); ctx.stroke();
@@ -2772,7 +2791,7 @@ function drawCrhtDisplay(x, y, w, h) {
       ctx.fillStyle  = tickColor;
       ctx.font       = `${Math.max(8, w * 0.14)}px Helvetica Neue, Arial, sans-serif`;
       ctx.textAlign  = 'left';
-      ctx.fillText(a, x + 18, ty + 4);
+      ctx.fillText(Math.round(a), x + 18, ty + 4);
     }
   }
 
@@ -2797,7 +2816,7 @@ function drawCrhtDisplay(x, y, w, h) {
   ctx.fillStyle   = on ? '#44ff88' : '#555';
   ctx.font        = `bold ${Math.max(10, w * 0.16)}px Helvetica Neue, Arial, sans-serif`;
   ctx.textAlign   = 'center';
-  ctx.fillText(Math.round(S.alt), x + w / 2, cy + 5);
+  ctx.fillText(Math.round(S.alt * ccv), x + w / 2, cy + 5);
 
   // ── CRHT setting + change-rate box (top header) — same style as ALT header ──
   ctx.fillStyle = '#000';
@@ -2810,11 +2829,11 @@ function drawCrhtDisplay(x, y, w, h) {
   ctx.font      = `bold ${Math.max(9, w * 0.14)}px Helvetica Neue, Arial, sans-serif`;
   ctx.textAlign = 'left';
   ctx.fillStyle = on ? '#44ff88' : '#555';
-  ctx.fillText('CRHT', x + 4, y + 11);
+  ctx.fillText('CRHT ' + A_LBL(), x + 4, y + 11);
   ctx.font      = `bold ${Math.max(10, w * 0.16)}px Helvetica Neue, Arial, sans-serif`;
   ctx.textAlign = 'right';
   ctx.fillStyle = on ? '#fff' : '#666';
-  ctx.fillText(selCrht, x + w - 4, y + 11);
+  ctx.fillText(Math.round(selCrht * ccv), x + w - 4, y + 11);
 
   // Line 2: VS change rate (500 fpm during convergence)
   let vsStr = '---';
@@ -2986,27 +3005,29 @@ function drawSpeedTape(x, y, w, h) {
     if (ty < y + 1 || ty > y + h - 1) continue;
     ctx.beginPath(); ctx.moveTo(x + 1, ty); ctx.lineTo(x + 8, ty); ctx.stroke();
   }
-  const s0=Math.floor((S.spd-44)/10)*10;
-  for(let s=s0;s<=S.spd+52;s++){
-    if(s<0) continue;
-    const ty=cy-(s-S.spd)*ppk;
-    if(ty<y||ty>y+h) continue;
-    const maj=s%10===0, m5=s%5===0;
-    if(!maj&&!m5) continue;
-    ctx.strokeStyle=maj?'#fff':'#555'; ctx.lineWidth=maj?1.5:0.8;
+  // 눈금은 표시 단위(kt 또는 km/h) 기준의 라운드 값으로 그린다
+  const scv = S_CV(), sMin = unitSpd === 'kmh' ? 10 : 5, sMaj = unitSpd === 'kmh' ? 20 : 10;
+  const dSpd = S.spd * scv;                       // 현재 속도(표시 단위)
+  const d0 = Math.floor((dSpd - 44 * scv) / sMin) * sMin;
+  for (let d = d0; d <= dSpd + 52 * scv; d += sMin) {
+    if (d < 0) continue;
+    const ty = cy - (d / scv - S.spd) * ppk;      // 위치는 내부(kt) 기준 유지
+    if (ty < y || ty > y + h) continue;
+    const maj = Math.abs(d % sMaj) < 1e-6;
+    ctx.strokeStyle = maj ? '#fff' : '#555'; ctx.lineWidth = maj ? 1.5 : 0.8;
     ctx.beginPath(); ctx.moveTo(x+w-6,ty); ctx.lineTo(x+w-(maj?15:10),ty); ctx.stroke();
-    if(maj){
+    if (maj) {
       ctx.fillStyle='#fff'; ctx.font=`${Math.max(9,w*0.17)}px Helvetica Neue, Arial, sans-serif`;
-      ctx.textAlign='right'; ctx.fillText(s,x+w-17,ty+4);
+      ctx.textAlign='right'; ctx.fillText(Math.round(d),x+w-17,ty+4);
     }
   }
   const bh=22;
   ctx.fillStyle='#000'; ctx.fillRect(x,cy-bh/2,w,bh);
   ctx.strokeStyle='#fff'; ctx.lineWidth=1.5; ctx.strokeRect(x,cy-bh/2,w,bh);
   ctx.fillStyle='#fff'; ctx.font=`bold ${Math.max(13,w*0.2)}px Helvetica Neue, Arial, sans-serif`;
-  ctx.textAlign='center'; ctx.fillText(Math.round(S.spd),x+w/2,cy+6);
+  ctx.textAlign='center'; ctx.fillText(Math.round(S.spd*scv),x+w/2,cy+6);
   ctx.fillStyle='#aaa'; ctx.font='bold 8px Helvetica Neue, Arial, sans-serif';
-  ctx.fillText('KT',x+w/2,y+11);
+  ctx.fillText(S_LBL(),x+w/2,y+11);
   // Speed trend vector (magenta, 6-second extrapolation)
   if (Math.abs(spdTrend) > 0.5) {
     const trendY = cy - spdTrend * ppk;
@@ -3039,17 +3060,19 @@ function drawAltTape(x, y, w, h) {
   const cy     = tapeY + tapeH / 2;
   const pp100  = tapeH / 20;
 
-  // Tape ticks within the moving-scale region only
-  const a0 = Math.floor((S.alt - 1100) / 100) * 100;
-  for (let a = a0; a <= S.alt + 1200; a += 100) {
-    const ty = cy - (a - S.alt) * pp100 / 100;
+  // Tape ticks within the moving-scale region only (표시 단위 기준 라운드 눈금)
+  const acv = A_CV(), aMin = unitAlt === 'm' ? 50 : 100, aMaj = unitAlt === 'm' ? 100 : 500;
+  const dAlt = S.alt * acv;
+  const d0 = Math.floor((dAlt - 1100 * acv) / aMin) * aMin;
+  for (let d = d0; d <= dAlt + 1200 * acv; d += aMin) {
+    const ty = cy - (d / acv - S.alt) * pp100 / 100;
     if (ty < tapeY || ty > tapeY + tapeH) continue;
-    const maj = a % 500 === 0;
+    const maj = Math.abs(d % aMaj) < 1e-6;
     ctx.strokeStyle = maj ? '#fff' : '#555'; ctx.lineWidth = maj ? 1.5 : 0.8;
     ctx.beginPath(); ctx.moveTo(x + 7, ty); ctx.lineTo(x + (maj ? 16 : 10), ty); ctx.stroke();
     if (maj) {
       ctx.fillStyle = '#fff'; ctx.font = `${Math.max(9, w * 0.16)}px Helvetica Neue, Arial, sans-serif`;
-      ctx.textAlign = 'left'; ctx.fillText(a, x + 18, ty + 4);
+      ctx.textAlign = 'left'; ctx.fillText(Math.round(d), x + 18, ty + 4);
     }
   }
 
@@ -3071,7 +3094,7 @@ function drawAltTape(x, y, w, h) {
   ctx.fillStyle = '#000'; ctx.fillRect(x, cy - bh/2, w, bh);
   ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.strokeRect(x, cy - bh/2, w, bh);
   ctx.fillStyle = '#fff'; ctx.font = `bold ${Math.max(12, w * 0.17)}px Helvetica Neue, Arial, sans-serif`;
-  ctx.textAlign = 'center'; ctx.fillText(Math.round(S.alt), x + w/2, cy + 5);
+  ctx.textAlign = 'center'; ctx.fillText(Math.round(S.alt * acv), x + w/2, cy + 5);
 
   // ── ALT setting + change-rate box (top header) ──
   // Active when ALT hold is engaged; dim otherwise. Tappable for selAlt edit.
@@ -3086,11 +3109,11 @@ function drawAltTape(x, y, w, h) {
   ctx.font      = `bold ${Math.max(9, w * 0.14)}px Helvetica Neue, Arial, sans-serif`;
   ctx.textAlign = 'left';
   ctx.fillStyle = on ? '#00cfff' : '#666';
-  ctx.fillText('ALT', x + 4, y + 11);
+  ctx.fillText('ALT ' + A_LBL(), x + 4, y + 11);
   ctx.font      = `bold ${Math.max(10, w * 0.16)}px Helvetica Neue, Arial, sans-serif`;
   ctx.textAlign = 'right';
   ctx.fillStyle = on ? '#fff' : '#777';
-  ctx.fillText(selAlt, x + w - 4, y + 11);
+  ctx.fillText(Math.round(selAlt * acv), x + w - 4, y + 11);
 
   // Line 2: VS preselect (selVS) — pilot-settable rate for ALT hold mode.
   // When ALT hold is active, shows signed rate matching convergence direction.
@@ -3136,19 +3159,25 @@ function drawAltTape(x, y, w, h) {
 function drawVSI(x, y, w, h) {
   ctx.save(); ctx.beginPath(); ctx.rect(x,y,w,h); ctx.clip();
   ctx.fillStyle='#0d0d0d'; ctx.fillRect(x,y,w,h);
-  const vsRange=2000, cy=y+h/2, ppm=(h*0.44)/vsRange;
+  // 고도 단위가 m이면 수직속도는 m/s로 표시(눈금도 라운드 m/s 기준)
+  const met = unitAlt === 'm';
+  const vsRange = met ? 10 : 2000;              // 표시 단위 최대치 (m/s | fpm)
+  const vsStep  = met ? 2.5 : 500;              // 눈금 간격
+  const vsMaj   = met ? 5   : 1000;             // 큰 눈금
+  const vsD     = fpm => met ? fpm * 0.00508 : fpm;   // fpm → 표시 단위
+  const cy=y+h/2, ppm=(h*0.44)/vsRange;
 
   // scale ticks
-  for(let v=-2000;v<=2000;v+=500){
+  for(let v=-vsRange;v<=vsRange+1e-6;v+=vsStep){
     const ty=cy-v*ppm;
     if(ty<y+2||ty>y+h-2) continue;
-    const maj=v!==0&&v%1000===0;
+    const maj=Math.abs(v)>1e-6 && Math.abs(v%vsMaj)<1e-6;
     ctx.strokeStyle=maj?'#888':'#444'; ctx.lineWidth=maj?1.5:0.8;
     const tw=maj?w*0.55:w*0.32;
     ctx.beginPath(); ctx.moveTo(x,ty); ctx.lineTo(x+tw,ty); ctx.stroke();
     if(maj){
       ctx.fillStyle='#ccc'; ctx.font=`${Math.max(7,w*0.17)}px Helvetica Neue, Arial, sans-serif`;
-      ctx.textAlign='left'; ctx.fillText(Math.abs(v/1000),x+tw+1,ty+3);
+      ctx.textAlign='left'; ctx.fillText(met?Math.abs(v):Math.abs(v/1000),x+tw+1,ty+3);
     }
   }
 
@@ -3157,9 +3186,9 @@ function drawVSI(x, y, w, h) {
   ctx.beginPath(); ctx.moveTo(x,cy); ctx.lineTo(x+w*0.65,cy); ctx.stroke();
 
   // pointer triangle
-  const vs=Math.max(-vsRange,Math.min(vsRange,S.vs));
+  const vs=Math.max(-vsRange,Math.min(vsRange,vsD(S.vs)));
   const py=Math.max(y+8,Math.min(y+h-24,cy-vs*ppm));
-  const pc=vs>50?'#00cc44':vs<-50?'#ff6644':'#aaa';
+  const pc=S.vs>50?'#00cc44':S.vs<-50?'#ff6644':'#aaa';
   ctx.fillStyle=pc;
   ctx.beginPath(); ctx.moveTo(x+w,py); ctx.lineTo(x+w-9,py-5); ctx.lineTo(x+w-9,py+5); ctx.closePath(); ctx.fill();
 
@@ -3168,11 +3197,11 @@ function drawVSI(x, y, w, h) {
   ctx.fillStyle='#000'; ctx.fillRect(x,y+h-bh,w,bh);
   ctx.strokeStyle='#333'; ctx.lineWidth=1; ctx.strokeRect(x,y+h-bh,w,bh);
   ctx.fillStyle=pc; ctx.font=`bold ${Math.max(9,w*0.2)}px Helvetica Neue, Arial, sans-serif`;
-  ctx.textAlign='center'; ctx.fillText(Math.round(vs),x+w/2,y+h-4);
+  ctx.textAlign='center'; ctx.fillText(met?vs.toFixed(1):Math.round(vs),x+w/2,y+h-4);
 
   // label at top
   ctx.fillStyle='#aaa'; ctx.font='bold 7px Helvetica Neue, Arial, sans-serif';
-  ctx.fillText('FPM',x+w/2,y+9);
+  ctx.fillText(met?'M/S':'FPM',x+w/2,y+9);
   ctx.restore();
 }
 
@@ -3211,7 +3240,7 @@ function drawHSI(x, y, w, h) {
       color:     '#44aaff',
       ident:     navIcao || '----',
       brg:       brg1NavActive ? fmtA(brg1NavBrg) + '°'        : '---°',
-      dist:      brg1NavActive ? brg1NavDist.toFixed(1) + 'NM'  : '--.-NM',
+      dist:      brg1NavActive ? (brg1NavDist*D_CV()).toFixed(1) + D_LBL()  : '--.-' + D_LBL(),
       needleSym: 'single',
       align:     'left',
     });
@@ -3228,7 +3257,7 @@ function drawHSI(x, y, w, h) {
       color:     '#00cc44',
       ident:     brg2FmsActive ? S.wps[S.awp].ident : '----',
       brg:       brg2FmsActive ? fmtA(brg2FmsBrg) + '°'        : '---°',
-      dist:      brg2FmsActive ? brg2FmsDist.toFixed(1) + 'NM'  : '--.-NM',
+      dist:      brg2FmsActive ? (brg2FmsDist*D_CV()).toFixed(1) + D_LBL()  : '--.-' + D_LBL(),
       needleSym: 'double',
       align:     'right',
     });
@@ -3300,13 +3329,14 @@ function drawHSI(x, y, w, h) {
         x += ctx.measureText(p[0]).width;
       });
     };
+    const _sl = S_LBL().toLowerCase();
     drawRow(row1Y, [
-      ['TAS ', '#888', lblFont], [`${Math.round(tas)}kt`, '#88ccff', valFont],
-      ['  OAT ', '#888', lblFont], [`${Math.round(oatC)}°C`, '#ffd54f', valFont],
+      ['TAS ', '#888', lblFont], [`${Math.round(tas*S_CV())}${_sl}`, '#88ccff', valFont],
+      ['  OAT ', '#888', lblFont], [uTemp(oatC), '#ffd54f', valFont],
     ]);
     drawRow(row2Y, [
-      ['GS ', '#888', lblFont], [`${Math.round(gs)}kt`, '#00cc44', valFont],
-      ['  ISA ', '#888', lblFont], [`${Math.round(isaC)}°C`, '#aaa', valFont],
+      ['GS ', '#888', lblFont], [`${Math.round(gs*S_CV())}${_sl}`, '#00cc44', valFont],
+      ['  ISA ', '#888', lblFont], [uTemp(isaC), '#aaa', valFont],
     ]);
     ctx.restore();
   }
@@ -5326,7 +5356,7 @@ function renderNavBox(){
   document.getElementById('nav-brg1').textContent = S.awp>=0    ? fmtA(S.brg)+'°'       : '---°';
   document.getElementById('nav-brg2').textContent = S.brg2wp>=0 ? fmtA(S.brg2)+'°'      : '---°';
   document.getElementById('nav-crs').textContent  = fmtA(activeCrs())+'°';
-  document.getElementById('nav-dtw').textContent  = S.awp>=0    ? S.dtw.toFixed(1)+'NM' : '---NM';
+  document.getElementById('nav-dtw').textContent  = S.awp>=0    ? (S.dtw*D_CV()).toFixed(1)+D_LBL() : '---'+D_LBL();
 }
 
 // ══════════════════════════════════════════════════════
@@ -8207,7 +8237,7 @@ function _parseMetar(raw) {
   // Temp/Dew: ##/## or M##/## etc.
   const tdm = raw.match(/\b(M?\d{1,2})\/(M?\d{1,2})\b/);
   if (tdm) {
-    const toC = s => s.startsWith('M') ? `-${s.slice(1)}°C` : `${s}°C`;
+    const toC = s => uTemp(parseInt(s.replace('M', '-'), 10));
     p.temp = `${toC(tdm[1])} / DP ${toC(tdm[2])}`;
     // PFD OAT 계산용 지면 온도 갱신(가장 최근 조회한 METAR 기준)
     _oatSurfaceC = parseInt(tdm[1].replace('M', '-'), 10);
@@ -10219,8 +10249,10 @@ if ('serviceWorker' in navigator) {
         UNI('alt',  '고도', [{v:'ft',t:'ft'},   {v:'m',t:'m'}],      unitAlt) +
         UNI('dist', '거리', [{v:'NM',t:'NM'},   {v:'km',t:'km'}],    unitDist) +
         UNI('spd',  '속도', [{v:'kt',t:'kt'},   {v:'kmh',t:'km/h'}], unitSpd) +
+        UNI('temp', '온도', [{v:'C',t:'°C'},    {v:'F',t:'°F'}],     unitTemp) +
         `<div style="color:#4a5563;font-size:9px;margin:-1px 0 8px 2px;line-height:1.4;">` +
-          `지도·T-CUT·VNAV·INFO·경보 표시에 적용됩니다.<br>PFD 계기는 항공 표준대로 ft·kt·NM으로 고정됩니다.</div>` +
+          `PFD 계기(속도·고도·CRHT·VSI·BRG)와 지도·T-CUT·VNAV·INFO·경보에 모두 적용됩니다.<br>` +
+          `고도를 m로 두면 수직속도(VSI)는 m/s로 표시됩니다.</div>` +
         `<div style="color:#556;font-size:9px;letter-spacing:1px;margin:2px 0 5px;">표시 / 경보</div>` +
         TOG('night', '야간 모드', '지도·화면 저휘도 + 붉은 딤', nightMode) +
         TOG('rings', '레인지 링', `항공기 중심 ${ringRadii.join('/')} NM 거리·방위 링`, rangeRingsOn) +
