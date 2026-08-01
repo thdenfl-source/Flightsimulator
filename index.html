@@ -2479,6 +2479,34 @@ function destPoint(lat, lon, brg, distNM) {
   const λ2 = λ1 + Math.atan2(Math.sin(b)*Math.sin(d)*Math.cos(φ1), Math.cos(d)-Math.sin(φ1)*Math.sin(φ2));
   return [φ2/D2R, λ2/D2R];
 }
+// ── 일출·일몰·시민박명 (NOAA sunrise equation) ──
+// lat/lon(십진도), date(대상 날짜) → {rise,set,dawn,dusk} Date | null(백야·극야)
+function _sunTimes(lat, lon, date) {
+  const dayMs = 86400000, R2D = 180 / Math.PI;
+  const jdate = Math.floor(date.getTime() / dayMs) + 2440587.5;   // 해당 날짜 00:00 UTC
+  const n = Math.ceil(jdate - 2451545.0 + 0.0008);
+  const Jstar = n + (-lon) / 360;                                  // lw = -lon(서경 +)
+  const M = (357.5291 + 0.98560028 * Jstar) % 360;
+  const C = 1.9148*Math.sin(M*D2R) + 0.0200*Math.sin(2*M*D2R) + 0.0003*Math.sin(3*M*D2R);
+  const lam = (M + C + 180 + 102.9372) % 360;
+  const Jt = 2451545.0 + Jstar + 0.0053*Math.sin(M*D2R) - 0.0069*Math.sin(2*lam*D2R);
+  const sinDec = Math.sin(lam*D2R) * Math.sin(23.44*D2R);
+  const dec = Math.asin(sinDec);
+  const ev = altDeg => {
+    const cosW = (Math.sin(altDeg*D2R) - Math.sin(lat*D2R)*sinDec) / (Math.cos(lat*D2R)*Math.cos(dec));
+    if (cosW > 1 || cosW < -1) return null;
+    const w = Math.acos(cosW) * R2D;
+    return { rise: Jt - w/360, set: Jt + w/360 };
+  };
+  const toDate = J => new Date((J - 2440587.5) * dayMs);
+  const sun = ev(-0.833), civ = ev(-6);
+  return {
+    rise: sun ? toDate(sun.rise) : null,
+    set:  sun ? toDate(sun.set)  : null,
+    dawn: civ ? toDate(civ.rise) : null,
+    dusk: civ ? toDate(civ.set)  : null,
+  };
+}
 function arcPoints(fromLat, fromLon, toLat, toLon, clat, clon, dir, n) {
   n = n || 32;
   const bFrom = bearing(clat, clon, fromLat, fromLon);
@@ -8141,6 +8169,20 @@ if ('serviceWorker' in navigator) {
       feEnd:  { label:'총 잔여시간',    unit:'min',   neg:false, dec:0 },
       feUse:  { label:'예비 제외 가용', unit:'min',   neg:false, dec:0 },
       feRange:{ label:'항속거리',       unit:'NM',    neg:false, dec:0 },
+      // Wind Component
+      wcCrs:  { label:'코스/활주로 방향', unit:'°',  neg:false, dec:0 },
+      wcDir:  { label:'풍향 (from)',      unit:'°',  neg:false, dec:0 },
+      wcSpd:  { label:'풍속',             unit:'kt', neg:false, dec:0 },
+      wcHead: { label:'정풍(+) / 배풍(−)', unit:'kt', neg:true, dec:1 },
+      wcCross:{ label:'측풍 (+우 / −좌)',  unit:'kt', neg:true, dec:1 },
+      wcAng:  { label:'상대각',           unit:'°',  neg:true,  dec:0 },
+      // True ↔ Magnetic
+      mvTrue: { label:'진방위 TRUE',       unit:'°', neg:false, dec:0 },
+      mvVar:  { label:'자기편차 (E+ / W−)', unit:'°', neg:true,  dec:1 },
+      mvMag:  { label:'자방위 MAG',        unit:'°', neg:false, dec:0 },
+      // Sunrise / Sunset
+      sunLat: { label:'위도',  unit:'°', neg:true, dec:4 },
+      sunLon: { label:'경도',  unit:'°', neg:true, dec:4 },
     };
     const _UV = { m:0, ft:0, km:0, nm:0, sm:0, dd:0, dmd:0, dmm:0, dmsd:0, dmsm:0, dmss:0,
       wkg:0, wlb:0, wg:0, woz:0, wmt:0,
@@ -8151,7 +8193,10 @@ if ('serviceWorker' in navigator) {
       skt:0, skmh:0, smph:0, sms:0,
       tc:15, tf:59, tk:288.2,
       tsdGs:80, tsdDist:0, tsdTime:0,
-      feQty:0, feFlow:600, feGs:80, feRsv:20, feEnd:0, feUse:0, feRange:0 };
+      feQty:0, feFlow:600, feGs:80, feRsv:20, feEnd:0, feUse:0, feRange:0,
+      wcCrs:0, wcDir:0, wcSpd:0, wcHead:0, wcCross:0, wcAng:0,
+      mvTrue:0, mvVar:-8, mvMag:8,
+      sunLat:37.5665, sunLon:126.9780 };
 
     // --- EXACT EXCEL PERF DATA ENGINE ---
     let perfData = { alt: "0", temp: "20", weight: "16000", vs: "0" };
@@ -8967,6 +9012,9 @@ if ('serviceWorker' in navigator) {
       TEMP:    { title:'Temperature', fields:['tc','tf','tk'] },
       TSD:     { title:'Time / Speed / Distance', fields:['tsdGs','tsdDist','tsdTime'] },
       FUELEND: { title:'Fuel Endurance', inputs:['feQty','feFlow','feGs','feRsv'], answers:['feEnd','feUse','feRange'] },
+      WIND:    { title:'Wind Component', inputs:['wcCrs','wcDir','wcSpd'], answers:['wcHead','wcCross','wcAng'] },
+      SUN:     { title:'Sunrise / Sunset', sun:true },
+      MAGVAR:  { title:'True ↔ Magnetic', fields:['mvTrue','mvVar','mvMag'] },
       COORD:   { title:'GPS Coordinates', coord:true },
       WEIGHT:  { title:'Weight / Mass', fields:['wkg','wlb','wg','woz','wmt'] },
       PRESS:   { title:'Pressure', fields:['phpa','pinhg','pkpa','ppsi','pmmhg','patm'] },
@@ -8980,6 +9028,9 @@ if ('serviceWorker' in navigator) {
       { id:'TEMP',    name:'Temperature',       sub:'°C · °F · K' },
       { id:'TSD',     name:'Time / Speed / Distance', sub:'GS · 거리 ↔ 소요시간' },
       { id:'FUELEND', name:'Fuel Endurance',    sub:'잔여연료 · 소모율 → 잔여시간 · 항속거리' },
+      { id:'WIND',    name:'Wind Component',    sub:'코스 · 풍향풍속 → 정풍 · 측풍' },
+      { id:'SUN',     name:'Sunrise / Sunset',  sub:'일출 · 일몰 · 시민박명' },
+      { id:'MAGVAR',  name:'True ↔ Magnetic',   sub:'진방위 ↔ 자방위 (자기편차)' },
       { id:'COORD',   name:'GPS Coordinates',   sub:'DD · DM · DMS' },
       { id:'WEIGHT',  name:'Weight / Mass',     sub:'kg · lb · g · oz · ton' },
       { id:'PRESS',   name:'Pressure',          sub:'inHg · hPa · kPa · psi · mmHg · atm' },
@@ -8993,7 +9044,8 @@ if ('serviceWorker' in navigator) {
       utilInput = '';
       if (id !== 'MENU') {
         const p = _UPAGES[id];
-        utilActive = p.coord ? 'dd' : p.densalt ? 'daIA' : (p.inputs ? p.inputs[0] : p.fields[0]);
+        utilActive = p.coord ? 'dd' : p.densalt ? 'daIA' : p.sun ? 'sunLat'
+                   : (p.inputs ? p.inputs[0] : p.fields[0]);
       }
       switchMode('UTIL');
     }
@@ -9002,6 +9054,38 @@ if ('serviceWorker' in navigator) {
       utilActive = fld;
       utilInput  = '';
       switchMode('UTIL');
+    }
+
+    // ── Sunrise/Sunset: 현재 위치 채우기 + 결과 렌더 ──
+    function utilSunHere() {
+      try { _UV.sunLat = +S.lat.toFixed(4); _UV.sunLon = +S.lon.toFixed(4); } catch(e) {}
+      utilInput = '';
+      switchMode('UTIL');
+    }
+    function _sunReadoutHtml() {
+      let t = null;
+      try { t = _sunTimes(_UV.sunLat, _UV.sunLon, new Date()); } catch(e) {}
+      if (!t) return `<div style="color:#e8a;font-size:11px;padding:8px 4px;">계산할 수 없습니다.</div>`;
+      const hm = d => d ? String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0') : '--:--';
+      const R = (l, v, c) => `<div style="display:flex;justify-content:space-between;padding:4px 6px;border-bottom:1px solid #12212c;">` +
+        `<span style="color:#6a8494;font-size:10px;">${l}</span>` +
+        `<span style="color:${c||'#dfeaf2'};font-size:13px;font-weight:bold;">${v}</span></div>`;
+      let dayTxt = '--';
+      if (t.rise && t.set) {
+        const mins = Math.round((t.set - t.rise) / 60000);
+        dayTxt = Math.floor(mins/60) + 'h ' + String(mins%60).padStart(2,'0') + 'm';
+      }
+      const today = new Date();
+      const dstr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+      return `<div style="border:1px solid #223a4a;border-radius:6px;background:#08131c;padding:2px 6px;">` +
+        R('날짜 (현지)', dstr, '#00e5ff') +
+        R('시민박명 시작', hm(t.dawn), '#ffd54f') +
+        R('일출', hm(t.rise), '#ffb74d') +
+        R('일몰', hm(t.set), '#ff8a65') +
+        R('시민박명 종료', hm(t.dusk), '#ba9bff') +
+        R('주간 길이', dayTxt) +
+        `</div>` +
+        `<div style="color:#4a6274;font-size:9px;margin-top:5px;line-height:1.4;">※ 기기 현지시각 기준 · 오차 약 ±2분<br>야간비행 판단은 박명 시각을 기준으로 하십시오.</div>`;
     }
 
     function utilFuelDensity() {
@@ -9101,6 +9185,21 @@ if ('serviceWorker' in navigator) {
         _UV.feUse   = Math.round(use);
         _UV.feRange = Math.round(use / 60 * _UV.feGs);
       }
+      // ── Wind Component (코스·풍향풍속 → 정풍/배풍·측풍) ──
+      else if (['wcCrs','wcDir','wcSpd'].includes(src)) {
+        const a = ((_UV.wcDir - _UV.wcCrs + 540) % 360) - 180;   // -180~+180
+        _UV.wcAng   = Math.round(a);
+        _UV.wcHead  = +(_UV.wcSpd * Math.cos(a * Math.PI/180)).toFixed(1);
+        _UV.wcCross = +(_UV.wcSpd * Math.sin(a * Math.PI/180)).toFixed(1);
+      }
+      // ── True ↔ Magnetic (편차 East +, West −) ──
+      else if (['mvTrue','mvVar','mvMag'].includes(src)) {
+        const norm = d => ((Math.round(d) % 360) + 360) % 360;
+        if (src === 'mvMag') _UV.mvTrue = norm(_UV.mvMag + _UV.mvVar);
+        else                 _UV.mvMag  = norm(_UV.mvTrue - _UV.mvVar);
+      }
+      // ── Sunrise/Sunset: 입력만 저장(표시는 _sunReadoutHtml에서 계산) ──
+      else if (src === 'sunLat' || src === 'sunLon') { /* no-op */ }
       // ── VNAV (타깃 고도·각도 입력 → 전역 상태 동기화, T-CUT 연동) ──
       else if (src === 'vnavAlt' || src === 'vnavAng') {
         try { vnavTgtAlt = _UV.vnavAlt; vnavAngle = _UV.vnavAng; vnavActive = true; } catch(e) {}
@@ -9189,6 +9288,15 @@ if ('serviceWorker' in navigator) {
           ROW('vnavAlt') + ROW('vnavAng') +
           `<div style="color:#556;font-size:9px;letter-spacing:1px;margin:8px 0 4px;">VNAV (실시간)</div>` +
           `<div id="vnav-readout">${_vnavReadoutHtml()}</div>`;
+      } else if (page.sun) {
+        fieldsHtml =
+          `<div onclick="utilSunHere()" style="display:inline-flex;align-items:center;gap:4px;` +
+            `padding:5px 10px;margin-bottom:7px;border:1px solid #2a4a5a;border-radius:4px;background:#0a1620;` +
+            `color:#00cfff;font-size:10px;font-weight:bold;cursor:pointer;">📍 현재 위치 사용</div>` +
+          `<div style="color:#556;font-size:9px;letter-spacing:1px;margin:2px 0 4px;">POSITION (값 입력 후 ENT)</div>` +
+          ROW('sunLat') + ROW('sunLon') +
+          `<div style="color:#556;font-size:9px;letter-spacing:1px;margin:8px 0 4px;">SUN (오늘)</div>` +
+          _sunReadoutHtml();
       } else if (page.inputs) {
         // 입력 → 계산 결과(ANSWER) 형태의 범용 페이지
         fieldsHtml =
