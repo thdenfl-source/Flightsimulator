@@ -8120,13 +8120,38 @@ if ('serviceWorker' in navigator) {
       // VNAV
       vnavAlt:{ label:'타깃 고도',  unit:'ft',  neg:false, dec:0 },
       vnavAng:{ label:'강하/상승 각', unit:'°', neg:true,  dec:1 },
+      // Speed
+      skt:  { label:'노트',          unit:'kt',   neg:false, dec:2 },
+      skmh: { label:'킬로미터/시',   unit:'km/h', neg:false, dec:2 },
+      smph: { label:'마일/시',       unit:'mph',  neg:false, dec:2 },
+      sms:  { label:'미터/초',       unit:'m/s',  neg:false, dec:3 },
+      // Temperature
+      tc:   { label:'섭씨',          unit:'°C',   neg:true,  dec:1 },
+      tf:   { label:'화씨',          unit:'°F',   neg:true,  dec:1 },
+      tk:   { label:'켈빈',          unit:'K',    neg:false, dec:1 },
+      // Time / Speed / Distance
+      tsdGs:   { label:'지상속도 GS', unit:'kt',  neg:false, dec:0 },
+      tsdDist: { label:'거리',        unit:'NM',  neg:false, dec:1 },
+      tsdTime: { label:'소요시간',    unit:'min', neg:false, dec:1 },
+      // Fuel Endurance
+      feQty:  { label:'잔여 연료',      unit:'lb',    neg:false, dec:0 },
+      feFlow: { label:'연료 소모율',    unit:'lb/hr', neg:false, dec:0 },
+      feGs:   { label:'지상속도 GS',    unit:'kt',    neg:false, dec:0 },
+      feRsv:  { label:'예비연료(시간)', unit:'min',   neg:false, dec:0 },
+      feEnd:  { label:'총 잔여시간',    unit:'min',   neg:false, dec:0 },
+      feUse:  { label:'예비 제외 가용', unit:'min',   neg:false, dec:0 },
+      feRange:{ label:'항속거리',       unit:'NM',    neg:false, dec:0 },
     };
     const _UV = { m:0, ft:0, km:0, nm:0, sm:0, dd:0, dmd:0, dmm:0, dmsd:0, dmsm:0, dmss:0,
       wkg:0, wlb:0, wg:0, woz:0, wmt:0,
       phpa:1013.25, pinhg:29.92, pkpa:101.325, ppsi:14.696, pmmhg:760.0, patm:1,
       flb:0, fkg:0, fusgal:0, fltr:0,
       daIA:0, daAS:29.92, daOAT:15, daOut:0,
-      vnavAlt:0, vnavAng:-3 };
+      vnavAlt:0, vnavAng:-3,
+      skt:0, skmh:0, smph:0, sms:0,
+      tc:15, tf:59, tk:288.2,
+      tsdGs:80, tsdDist:0, tsdTime:0,
+      feQty:0, feFlow:600, feGs:80, feRsv:20, feEnd:0, feUse:0, feRange:0 };
 
     // --- EXACT EXCEL PERF DATA ENGINE ---
     let perfData = { alt: "0", temp: "20", weight: "16000", vs: "0" };
@@ -8938,6 +8963,10 @@ if ('serviceWorker' in navigator) {
     // 페이지 정의 (메뉴에서 선택)
     const _UPAGES = {
       DIST:    { title:'Length / Distance', fields:['m','ft','km','nm','sm'] },
+      SPEED:   { title:'Speed', fields:['skt','skmh','smph','sms'] },
+      TEMP:    { title:'Temperature', fields:['tc','tf','tk'] },
+      TSD:     { title:'Time / Speed / Distance', fields:['tsdGs','tsdDist','tsdTime'] },
+      FUELEND: { title:'Fuel Endurance', inputs:['feQty','feFlow','feGs','feRsv'], answers:['feEnd','feUse','feRange'] },
       COORD:   { title:'GPS Coordinates', coord:true },
       WEIGHT:  { title:'Weight / Mass', fields:['wkg','wlb','wg','woz','wmt'] },
       PRESS:   { title:'Pressure', fields:['phpa','pinhg','pkpa','ppsi','pmmhg','patm'] },
@@ -8947,6 +8976,10 @@ if ('serviceWorker' in navigator) {
     };
     const _UMENU = [
       { id:'DIST',    name:'Length / Distance', sub:'m · ft · km · NM · SM' },
+      { id:'SPEED',   name:'Speed',             sub:'kt · km/h · mph · m/s' },
+      { id:'TEMP',    name:'Temperature',       sub:'°C · °F · K' },
+      { id:'TSD',     name:'Time / Speed / Distance', sub:'GS · 거리 ↔ 소요시간' },
+      { id:'FUELEND', name:'Fuel Endurance',    sub:'잔여연료 · 소모율 → 잔여시간 · 항속거리' },
       { id:'COORD',   name:'GPS Coordinates',   sub:'DD · DM · DMS' },
       { id:'WEIGHT',  name:'Weight / Mass',     sub:'kg · lb · g · oz · ton' },
       { id:'PRESS',   name:'Pressure',          sub:'inHg · hPa · kPa · psi · mmHg · atm' },
@@ -8960,7 +8993,7 @@ if ('serviceWorker' in navigator) {
       utilInput = '';
       if (id !== 'MENU') {
         const p = _UPAGES[id];
-        utilActive = p.coord ? 'dd' : p.densalt ? 'daIA' : p.fields[0];
+        utilActive = p.coord ? 'dd' : p.densalt ? 'daIA' : (p.inputs ? p.inputs[0] : p.fields[0]);
       }
       switchMode('UTIL');
     }
@@ -9039,6 +9072,34 @@ if ('serviceWorker' in navigator) {
         const pa  = _UV.daIA + (29.92 - _UV.daAS) * 1000;
         const isa = 15 - 1.98 * (pa / 1000);
         _UV.daOut = Math.round((pa + 120 * (_UV.daOAT - isa)) / 10) * 10;
+      }
+      // ── Speed (base m/s) ──
+      else if (['skt','skmh','smph','sms'].includes(src)) {
+        const ms = src==='sms'?v : src==='skt'?v/1.94384 : src==='skmh'?v/3.6 : v/2.23694;
+        _UV.sms=+ms.toFixed(3);          _UV.skt=+(ms*1.94384).toFixed(2);
+        _UV.skmh=+(ms*3.6).toFixed(2);   _UV.smph=+(ms*2.23694).toFixed(2);
+      }
+      // ── Temperature (base °C) ──
+      else if (['tc','tf','tk'].includes(src)) {
+        const c = src==='tc'?v : src==='tf'?(v-32)*5/9 : v-273.15;
+        _UV.tc=+c.toFixed(1); _UV.tf=+(c*9/5+32).toFixed(1); _UV.tk=+(c+273.15).toFixed(1);
+      }
+      // ── Time / Speed / Distance ──
+      // GS·거리를 넣으면 시간이, 시간을 넣으면 거리가 계산된다
+      else if (['tsdGs','tsdDist','tsdTime'].includes(src)) {
+        if (src === 'tsdTime') {
+          _UV.tsdDist = +(_UV.tsdGs * _UV.tsdTime / 60).toFixed(1);
+        } else {
+          _UV.tsdTime = _UV.tsdGs > 0 ? +(_UV.tsdDist / _UV.tsdGs * 60).toFixed(1) : 0;
+        }
+      }
+      // ── Fuel Endurance (잔여연료·소모율 → 잔여시간·항속거리) ──
+      else if (['feQty','feFlow','feGs','feRsv'].includes(src)) {
+        const total = _UV.feFlow > 0 ? _UV.feQty / _UV.feFlow * 60 : 0;   // 총 잔여시간(min)
+        const use   = Math.max(0, total - _UV.feRsv);                      // 예비 제외 가용(min)
+        _UV.feEnd   = Math.round(total);
+        _UV.feUse   = Math.round(use);
+        _UV.feRange = Math.round(use / 60 * _UV.feGs);
       }
       // ── VNAV (타깃 고도·각도 입력 → 전역 상태 동기화, T-CUT 연동) ──
       else if (src === 'vnavAlt' || src === 'vnavAng') {
@@ -9128,6 +9189,13 @@ if ('serviceWorker' in navigator) {
           ROW('vnavAlt') + ROW('vnavAng') +
           `<div style="color:#556;font-size:9px;letter-spacing:1px;margin:8px 0 4px;">VNAV (실시간)</div>` +
           `<div id="vnav-readout">${_vnavReadoutHtml()}</div>`;
+      } else if (page.inputs) {
+        // 입력 → 계산 결과(ANSWER) 형태의 범용 페이지
+        fieldsHtml =
+          `<div style="color:#556;font-size:9px;letter-spacing:1px;margin:2px 0 4px;">INPUT (값 입력 후 ENT)</div>` +
+          page.inputs.map(f => ROW(f)).join('') +
+          `<div style="color:#556;font-size:9px;letter-spacing:1px;margin:8px 0 4px;">ANSWER</div>` +
+          page.answers.map(f => ROW(f, true)).join('');
       } else if (page.fuel) {
         fieldsHtml =
           `<div onclick="utilFuelDensity()" style="display:flex;align-items:center;justify-content:space-between;` +
