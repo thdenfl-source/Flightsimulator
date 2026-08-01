@@ -2519,6 +2519,38 @@ clockRender();   // 기본 모드가 시계이므로 즉시 1회 표시
 // ══════════════════════════════════════════════════════
 const D2R = Math.PI / 180;
 const R_NM = 3440.065;
+
+// ══════════════════════════════════════════════════════
+// 표시 단위 설정 (정보 표시용) — PFD 계기는 항공 표준대로 ft/kt/NM 고정
+// ══════════════════════════════════════════════════════
+let unitAlt = 'ft', unitDist = 'NM', unitSpd = 'kt';
+try {
+  unitAlt  = localStorage.getItem('unitAlt')  || 'ft';
+  unitDist = localStorage.getItem('unitDist') || 'NM';
+  unitSpd  = localStorage.getItem('unitSpd')  || 'kt';
+} catch(e) {}
+// 고도(ft 입력) → 설정 단위 문자열
+function uAlt(ft, dec) {
+  if (ft === null || ft === undefined || isNaN(ft)) return '---';
+  return unitAlt === 'm' ? (ft * 0.3048).toFixed(dec ?? 0) + ' m' : Math.round(ft) + ' ft';
+}
+// 거리(NM 입력) → 설정 단위 문자열
+function uDist(nm, dec) {
+  if (nm === null || nm === undefined || isNaN(nm)) return '---';
+  return unitDist === 'km' ? (nm * 1.852).toFixed(dec ?? 1) + ' km' : nm.toFixed(dec ?? 1) + ' NM';
+}
+// 속도(kt 입력) → 설정 단위 문자열
+function uSpd(kt, dec) {
+  if (kt === null || kt === undefined || isNaN(kt)) return '---';
+  return unitSpd === 'kmh' ? Math.round(kt * 1.852) + ' km/h' : Math.round(kt) + ' kt';
+}
+function setUnit(kind, val) {
+  if (kind === 'alt')  { unitAlt  = val; try { localStorage.setItem('unitAlt',  val); } catch(e) {} }
+  if (kind === 'dist') { unitDist = val; try { localStorage.setItem('unitDist', val); } catch(e) {} }
+  if (kind === 'spd')  { unitSpd  = val; try { localStorage.setItem('unitSpd',  val); } catch(e) {} }
+  try { updateTerrainCut(); } catch(e) {}
+  try { if (rangeRingsOn) _updateRangeRings(); } catch(e) {}
+}
 function normA(a)  { return ((a % 360) + 360) % 360; }
 function normAS(a) { a = normA(a); return a > 180 ? a - 360 : a; }
 function fmtA(a)   { return normA(Math.round(a)).toString().padStart(3,'0'); }
@@ -4531,7 +4563,7 @@ function applyGPS(pos) {
   // 좌표창 오른쪽에 한 줄로 표시(높이 통일)
   document.getElementById('gps-status').innerHTML =
     `● ${decToDMS(S.lat, true)} ${decToDMS(S.lon, false)} · ` +
-    `${S.spd}kt · ${S.alt}ft · ${String(Math.round(S.hdg)).padStart(3,'0')}° · ±${acc}`;
+    `${uSpd(S.spd)} · ${uAlt(S.alt)} · ${String(Math.round(S.hdg)).padStart(3,'0')}° · ±${acc}`;
 }
 
 function decToDMS(deg, isLat) {
@@ -4808,11 +4840,11 @@ function _vnavReadoutHtml() {
   const devTxt = (vn.dev>=0?'+':'') + Math.round(vn.dev) + ' ft ' + (vn.dev>0?'(경로 위)':(vn.dev<0?'(경로 아래)':''));
   return `<div style="border:1px solid #223a4a;border-radius:6px;background:#08131c;padding:2px 6px;">` +
     R('타깃 WP', vn.wp, '#00e5ff') +
-    R('타깃까지 거리', vn.d.toFixed(1)+' NM') +
-    R('경로상 요구고도(현재)', Math.round(vn.reqAlt)+' ft', '#9fd0ff') +
+    R('타깃까지 거리', uDist(vn.d)) +
+    R('경로상 요구고도(현재)', uAlt(vn.reqAlt), '#9fd0ff') +
     R('편차', devTxt, devC) +
     R('요구 수직속도', Math.round(vn.vs)+' fpm', '#ffb0ea') +
-    R('TOD까지', (vn.todDist>0? vn.todDist.toFixed(1)+' NM 후 강하' : '지금 강하'), '#facc15') +
+    R('TOD까지', (vn.todDist>0? uDist(vn.todDist)+' 후 강하' : '지금 강하'), '#facc15') +
     `</div>`;
 }
 // UTIL VNAV 화면이 열려 있으면 리드아웃을 1초마다 실시간 갱신(입력 포커스는 유지)
@@ -4876,11 +4908,11 @@ function updateTerrainCut() {
   g.textAlign = 'right'; g.fillText('20NM', W - 3, H - 3);
   // 고도 라벨: 중앙(현재고도) + 상/하단(±VR)
   g.textAlign = 'left';
-  g.fillStyle = '#00e5ff'; g.fillText(Math.round(acFt) + ' ft', 18, ay - 5);
+  g.fillStyle = '#00e5ff'; g.fillText(uAlt(acFt), 18, ay - 5);
   g.fillStyle = '#4a6274';
-  g.fillText('+' + Math.round(VR) + ' ft', 4, 11);
-  g.fillText('-' + Math.round(VR) + ' ft', 4, H - 16);
-  g.textAlign = 'right'; g.fillStyle = '#e0c097'; g.fillText('MAX ' + Math.round(maxFt) + ' ft', W - 4, 11); g.textAlign = 'left';
+  g.fillText('+' + uAlt(VR), 4, 11);
+  g.fillText('-' + uAlt(VR), 4, H - 16);
+  g.textAlign = 'right'; g.fillStyle = '#e0c097'; g.fillText('MAX ' + uAlt(maxFt), W - 4, 11); g.textAlign = 'left';
   if (miss > N / 2) {
     g.fillStyle = '#889'; g.textAlign = 'center';
     g.fillText('지형 데이터 로딩 중…', W / 2, H / 2 + 16); g.textAlign = 'left';
@@ -5171,7 +5203,7 @@ function _updateRangeRings() {
   ringRadii.forEach(nm => {
     L.circle([S.lat, S.lon], { radius: nm * 1852, color: '#00e5ff', weight: 1, opacity: 0.6, fill: false, dashArray: '4 5', interactive: false }).addTo(g);
     const edge = destPoint(S.lat, S.lon, mapHdgUp ? S.hdg : 0, nm);   // 상단(기수/북) 라벨
-    L.marker(edge, { interactive: false, icon: L.divIcon({ className: '', html: `<div style="color:#00e5ff;font-size:9px;font-weight:bold;text-shadow:1px 1px 2px #000;transform:translate(-50%,-50%);">${nm}NM</div>`, iconSize: [0,0] }) }).addTo(g);
+    L.marker(edge, { interactive: false, icon: L.divIcon({ className: '', html: `<div style="color:#00e5ff;font-size:9px;font-weight:bold;text-shadow:1px 1px 2px #000;transform:translate(-50%,-50%);">${unitDist === 'km' ? (nm*1.852).toFixed(1)+'km' : nm+'NM'}</div>`, iconSize: [0,0] }) }).addTo(g);
   });
   // 방위 눈금(외곽 링에 30°마다)
   const rOut = ringRadii[ringRadii.length - 1];
@@ -10171,7 +10203,24 @@ if ('serviceWorker' in navigator) {
           `<div><div style="color:#8ac6ff;font-size:12px;font-weight:bold;">${label}</div>` +
           `<div style="color:#567;font-size:9px;margin-top:1px;">${sub}</div></div>` +
           `<div style="color:#4a7aaa;font-size:14px;">›</div></div>`;
+      // 단위 선택(2지선다) 행
+      const UNI = (kind, label, opts, cur) =>
+        `<div style="display:flex;align-items:center;justify-content:space-between;` +
+          `padding:8px 10px;margin-bottom:5px;border:1px solid #1e2630;border-radius:5px;background:#0a1116;">` +
+          `<div style="color:#cdd6df;font-size:12px;font-weight:bold;">${label}</div>` +
+          `<div style="display:flex;gap:4px;">` +
+          opts.map(o => `<div onclick="setUnit('${kind}','${o.v}');switchMode('SETTINGS')" ` +
+            `style="cursor:pointer;padding:4px 12px;border-radius:4px;font-size:11px;font-weight:bold;` +
+            `border:1px solid ${cur===o.v?'#00e5ff':'#3a4653'};background:${cur===o.v?'#00303c':'#161c23'};` +
+            `color:${cur===o.v?'#00e5ff':'#8a97a5'};">${o.t}</div>`).join('') +
+          `</div></div>`;
       container.innerHTML = back +
+        `<div style="color:#556;font-size:9px;letter-spacing:1px;margin:2px 0 5px;">단위 (정보 표시)</div>` +
+        UNI('alt',  '고도', [{v:'ft',t:'ft'},   {v:'m',t:'m'}],      unitAlt) +
+        UNI('dist', '거리', [{v:'NM',t:'NM'},   {v:'km',t:'km'}],    unitDist) +
+        UNI('spd',  '속도', [{v:'kt',t:'kt'},   {v:'kmh',t:'km/h'}], unitSpd) +
+        `<div style="color:#4a5563;font-size:9px;margin:-1px 0 8px 2px;line-height:1.4;">` +
+          `지도·T-CUT·VNAV·INFO·경보 표시에 적용됩니다.<br>PFD 계기는 항공 표준대로 ft·kt·NM으로 고정됩니다.</div>` +
         `<div style="color:#556;font-size:9px;letter-spacing:1px;margin:2px 0 5px;">표시 / 경보</div>` +
         TOG('night', '야간 모드', '지도·화면 저휘도 + 붉은 딤', nightMode) +
         TOG('rings', '레인지 링', `항공기 중심 ${ringRadii.join('/')} NM 거리·방위 링`, rangeRingsOn) +
@@ -10865,7 +10914,7 @@ if ('serviceWorker' in navigator) {
             <div onclick="openAirfield(${i})" style="display:grid;grid-template-columns:1fr 52px 64px;align-items:center;gap:6px;
                 padding:9px 10px;margin-bottom:5px;border:1px solid #234;border-radius:6px;cursor:pointer;">
               <span style="color:#fff;font-weight:bold;font-size:13px;">${a.name}${a.code ? ` <span style="color:#7fe0c0;font-size:10px;">(${_afldIcao(a)})</span>` : ''}${mil}</span>
-              <span style="color:#00e5ff;font-size:11px;text-align:right;">${a.elev != null ? a.elev + 'ft' : '-'}</span>
+              <span style="color:#00e5ff;font-size:11px;text-align:right;">${a.elev != null ? uAlt(a.elev) : '-'}</span>
               <span style="color:#9fb4c8;font-size:10px;text-align:right;">${(a.rwy || '').split(' ')[0]}</span>
             </div>`;
         }).join('');
@@ -10907,7 +10956,7 @@ if ('serviceWorker' in navigator) {
         }
         container.innerHTML = `<div style="padding:8px 8px;overflow-y:auto;height:100%;">
             ${msg}
-            ${row('표고', a.elev != null ? a.elev + ' ft' : '-', '#00e5ff')}
+            ${row('표고', a.elev != null ? uAlt(a.elev) : '-', '#00e5ff')}
             ${row('RWY', a.rwy)}
             ${frow('TWR', a.twr, '#8fe6c8')}
             ${frow('APP', a.app)}
@@ -11409,7 +11458,7 @@ function _aspcAlertCheck() {
       _aspcAlertState = { [nearA.id]: 'near' };
       try { navigator.vibrate && navigator.vibrate(150); } catch(e) {}
     }
-    el.textContent = `${nearA.name} 접근 ${nearD.toFixed(1)}NM`;
+    el.textContent = `${nearA.name} 접근 ${uDist(nearD)}`;
     el.className = 'near';
   } else {
     _aspcAlertState = {};
