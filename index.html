@@ -683,6 +683,27 @@ body.solo-mode .solo-panel-visible {
   border-color: #b8860b; color: #facc15;
 }
 #map-full-btn:active { background: rgba(40,32,0,0.92); }
+/* 거리·방위 측정자(Ruler) */
+#map-ruler-btn { flex: 0 0 auto; min-width: 40px; font-size: 14px; padding: 5px 2px; }
+#map-ruler-btn.ruler-active {
+  background: rgba(60,45,0,0.92); border-color: #ffd54f; color: #ffd54f;
+  box-shadow: 0 0 8px rgba(255,213,79,0.4);
+}
+#ruler-readout {
+  display: none;
+  position: absolute; top: 46px; left: 8px; z-index: 1260;
+  background: rgba(8,10,14,0.94); border: 1px solid #ffd54f; border-radius: 6px;
+  padding: 7px 9px; min-width: 168px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+#ruler-readout .rr-row { display: flex; justify-content: space-between; gap: 10px; font-size: 11px; padding: 2px 0; }
+#ruler-readout .rr-lbl { color: #8a9aa8; }
+#ruler-readout .rr-val { color: #ffd54f; font-weight: bold; }
+#ruler-readout .rr-btns { display: flex; gap: 5px; margin-top: 6px; }
+#ruler-readout .rr-btns button {
+  flex: 1; background: rgba(25,25,25,0.9); border: 1px solid #444; border-radius: 4px;
+  color: #cfe; font-size: 10px; font-weight: bold; padding: 5px 0; cursor: pointer;
+}
 #notam-btn.active {
   background: rgba(40,25,0,0.92); border-color: #ff9800; color: #ffb74d;
   box-shadow: 0 0 8px rgba(255,152,0,0.4);
@@ -1657,6 +1678,7 @@ body.night-mode::after {
         <button id="fix-btn" onclick="toggleFixLayer()">FIX</button>
         <button id="awy-btn" onclick="toggleAwyLayer()">AWY</button>
         <button id="aspc-btn" onclick="toggleAspcPanel()">공역</button>
+        <button id="map-ruler-btn" onclick="toggleRuler()" title="거리·방위 측정">📏</button>
         <button id="map-full-btn" onclick="toggleMapFull()" title="전체화면/분할 전환">FULL</button>
       </div>
       <div id="aspc-panel"></div>
@@ -1716,6 +1738,7 @@ body.night-mode::after {
         <button id="inhib-aspc-btn" onclick="toggleInhib('aspc')">공역경보 <span>ON</span></button>
         <button id="inhib-taws-btn" onclick="toggleInhib('taws')">HTAWS <span>ON</span></button>
       </div>
+      <div id="ruler-readout"></div>
       <div id="ship-menu">
         <div style="color:#889;font-size:9px;font-weight:bold;letter-spacing:1px;padding:2px 4px;">⛵ SHIP</div>
         <button id="ship-menu-show" onclick="shipToggleOn()">배 표시 <span>OFF</span></button>
@@ -6076,6 +6099,89 @@ function setPage(n) { selectPanel('right', ['map', 'plan', 'cdu'][n] || 'map', t
 function cduOpenMap() {
   if (_soloActive) setSolo('map');
   else setPage(0);
+}
+
+// ══════════════════════════════════════════════════════
+// RULER — 지도에서 두 점 이상을 찍어 거리·방위 측정
+// ══════════════════════════════════════════════════════
+let _rulerOn = false, _rulerPts = [], _rulerLayer = null;
+const RULER_VAR = -8;   // 한국 자기편차 약 8°W (MAG = TRUE − VAR)
+
+function toggleRuler() {
+  _rulerOn = !_rulerOn;
+  const b = document.getElementById('map-ruler-btn');
+  if (b) b.classList.toggle('ruler-active', _rulerOn);
+  if (_rulerOn) {
+    leafMap.on('click', _rulerClick);
+    try { leafMap.getContainer().style.cursor = 'crosshair'; } catch(e) {}
+    _rulerRender();
+  } else {
+    leafMap.off('click', _rulerClick);
+    try { leafMap.getContainer().style.cursor = ''; } catch(e) {}
+    _rulerClearAll();
+  }
+}
+function _rulerClick(e) { _rulerPts.push([e.latlng.lat, e.latlng.lng]); _rulerRender(); }
+function _rulerUndo() { _rulerPts.pop(); _rulerRender(); }
+function _rulerReset() { _rulerPts = []; _rulerRender(); }
+function _rulerClearAll() {
+  _rulerPts = [];
+  if (_rulerLayer) { try { leafMap.removeLayer(_rulerLayer); } catch(e) {} _rulerLayer = null; }
+  const el = document.getElementById('ruler-readout');
+  if (el) el.style.display = 'none';
+}
+function _rulerRender() {
+  if (_rulerLayer) { try { leafMap.removeLayer(_rulerLayer); } catch(e) {} _rulerLayer = null; }
+  const g = L.layerGroup();
+  const P = _rulerPts;
+  // 점 표시
+  P.forEach((p, i) => {
+    L.circleMarker(p, { radius: 4, color: '#ffd54f', weight: 2, fillColor: '#000', fillOpacity: 1, interactive: false }).addTo(g);
+    if (i === 0) L.marker(p, { interactive: false, icon: L.divIcon({ className:'', iconSize:[0,0],
+      html:`<div style="transform:translate(6px,-16px);color:#ffd54f;font-size:9px;font-weight:bold;text-shadow:1px 1px 2px #000;">START</div>` }) }).addTo(g);
+  });
+  let total = 0;
+  for (let i = 1; i < P.length; i++) {
+    const a = P[i-1], b = P[i];
+    const d = distance(a[0], a[1], b[0], b[1]);
+    const brg = bearing(a[0], a[1], b[0], b[1]);
+    total += d;
+    L.polyline([a, b], { color: '#ffd54f', weight: 2, opacity: 0.95, dashArray: '6 4', interactive: false }).addTo(g);
+    // 구간 라벨(중점)
+    const mid = [(a[0]+b[0])/2, (a[1]+b[1])/2];
+    L.marker(mid, { interactive: false, icon: L.divIcon({ className:'', iconSize:[0,0],
+      html:`<div style="transform:translate(-50%,-50%);background:rgba(8,10,14,0.85);border:1px solid #ffd54f88;border-radius:3px;` +
+           `padding:1px 4px;color:#ffd54f;font-size:9px;font-weight:bold;white-space:nowrap;">` +
+           `${String(Math.round(brg)).padStart(3,'0')}° · ${d.toFixed(1)}NM</div>` }) }).addTo(g);
+  }
+  _rulerLayer = g.addTo(leafMap);
+
+  // 판독창
+  const el = document.getElementById('ruler-readout');
+  if (!el) return;
+  if (!_rulerOn) { el.style.display = 'none'; return; }
+  const R = (l, v) => `<div class="rr-row"><span class="rr-lbl">${l}</span><span class="rr-val">${v}</span></div>`;
+  let html = '';
+  if (P.length < 2) {
+    html = `<div style="color:#8a9aa8;font-size:10px;line-height:1.5;">지도를 탭해 점을 찍으세요.<br>두 점 이상이면 거리·방위가 표시됩니다.</div>`;
+  } else {
+    const a = P[P.length-2], b = P[P.length-1];
+    const legD = distance(a[0], a[1], b[0], b[1]);
+    const legB = bearing(a[0], a[1], b[0], b[1]);
+    const magB = ((Math.round(legB - RULER_VAR) % 360) + 360) % 360;
+    html = R('구간 방위', `${String(Math.round(legB)).padStart(3,'0')}°T / ${String(magB).padStart(3,'0')}°M`)
+         + R('구간 거리', `${legD.toFixed(2)} NM`)
+         + R('합계', `${total.toFixed(2)} NM · ${(total*1.852).toFixed(2)} km`);
+    if (P.length > 2) {
+      const dd = distance(P[0][0], P[0][1], b[0], b[1]);
+      html += R('직선(시작→끝)', `${dd.toFixed(2)} NM`);
+    }
+  }
+  html += `<div class="rr-btns"><button onclick="_rulerUndo()">⟲ 취소</button>` +
+          `<button onclick="_rulerReset()">↺ 초기화</button>` +
+          `<button onclick="toggleRuler()">✕ 닫기</button></div>`;
+  el.innerHTML = html;
+  el.style.display = 'block';
 }
 
 // MAP 상단 툴바의 FULL/HALF 토글 — 상황에 맞게 전체화면 진입/분할 복귀
