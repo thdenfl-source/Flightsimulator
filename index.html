@@ -683,6 +683,36 @@ body.solo-mode .solo-panel-visible {
   border-color: #b8860b; color: #facc15;
 }
 #map-full-btn:active { background: rgba(40,32,0,0.92); }
+/* ── 화면 터치 잠금 ── */
+#lock-btn.locked { background: rgba(60,45,0,0.92); border-color: #ffaa00; color: #ffcc44; }
+#lock-overlay {
+  display: none;
+  position: fixed; inset: 0; z-index: 99999;
+  background: rgba(0,0,0,0.12);
+  flex-direction: column; align-items: center; justify-content: flex-end;
+  padding-bottom: calc(env(safe-area-inset-bottom) + 26px);
+  touch-action: none; -webkit-user-select: none; user-select: none;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+#lock-overlay.on { display: flex; }
+#lock-badge {
+  position: absolute; top: calc(env(safe-area-inset-top) + 10px); left: 50%; transform: translateX(-50%);
+  background: rgba(10,10,14,0.9); border: 1px solid #ffaa00; border-radius: 6px;
+  color: #ffcc44; font-size: 12px; font-weight: bold; letter-spacing: 1px; padding: 5px 14px;
+}
+#lock-unlock {
+  position: relative; overflow: hidden;
+  width: 210px; height: 46px; border-radius: 23px;
+  background: rgba(10,10,14,0.92); border: 1.5px solid #ffaa00;
+  display: flex; align-items: center; justify-content: center;
+  color: #ffcc44; font-size: 13px; font-weight: bold; letter-spacing: 1px;
+  box-shadow: 0 3px 10px rgba(0,0,0,0.6);
+}
+#lock-unlock-fill {
+  position: absolute; left: 0; top: 0; bottom: 0; width: 0%;
+  background: rgba(255,170,0,0.28); transition: width 0.08s linear;
+}
+#lock-unlock-txt { position: relative; z-index: 1; pointer-events: none; }
 /* 거리·방위 측정자(Ruler) */
 #map-ruler-btn { flex: 0 0 auto; min-width: 40px; font-size: 14px; padding: 5px 2px; }
 #map-ruler-btn.ruler-active {
@@ -1449,6 +1479,14 @@ body.night-mode::after {
   </div>
 </div>
 
+<!-- 화면 터치 잠금 오버레이 — 모든 터치를 흡수하고, 길게 눌러야 해제 -->
+<div id="lock-overlay">
+  <div id="lock-badge">🔒 화면 잠금</div>
+  <div id="lock-unlock">
+    <div id="lock-unlock-fill"></div>
+    <span id="lock-unlock-txt">길게 눌러 해제</span>
+  </div>
+</div>
 <div id="solo-bar" style="display:none;">
   <button onclick="setSolo('pfd')">PFD</button>
   <button onclick="setSolo('map')">MAP</button>
@@ -1759,6 +1797,7 @@ body.night-mode::after {
         <button class="sim-btn" id="follow-btn" onclick="toggleFollow()">1인칭</button>
         <button class="sim-btn sat" id="layer-btn" onclick="toggleLayer()">MAP</button>
         <button class="sim-btn" id="layer-btn-3d" onclick="toggle3dMap()">3D</button>
+        <button class="sim-btn" id="lock-btn" onclick="lockScreen()" title="화면 터치 잠금">🔒</button>
       </div>
 
       <!-- Weather Overlay Panel -->
@@ -6100,6 +6139,58 @@ function cduOpenMap() {
   if (_soloActive) setSolo('map');
   else setPage(0);
 }
+
+// ══════════════════════════════════════════════════════
+// 화면 터치 잠금 — 비행 중 오조작 방지 (길게 눌러 해제)
+// ══════════════════════════════════════════════════════
+const LOCK_HOLD_MS = 1200;
+let _screenLocked = false;
+function lockScreen() {
+  _screenLocked = true;
+  document.getElementById('lock-overlay').classList.add('on');
+  const b = document.getElementById('lock-btn'); if (b) b.classList.add('locked');
+  try { navigator.vibrate && navigator.vibrate(40); } catch(e) {}
+}
+function unlockScreen() {
+  _screenLocked = false;
+  document.getElementById('lock-overlay').classList.remove('on');
+  const b = document.getElementById('lock-btn'); if (b) b.classList.remove('locked');
+  const f = document.getElementById('lock-unlock-fill'); if (f) f.style.width = '0%';
+  const t = document.getElementById('lock-unlock-txt'); if (t) t.textContent = '길게 눌러 해제';
+  try { navigator.vibrate && navigator.vibrate([40, 60, 40]); } catch(e) {}
+}
+(function initScreenLock() {
+  const btn  = document.getElementById('lock-unlock');
+  const fill = document.getElementById('lock-unlock-fill');
+  const txt  = document.getElementById('lock-unlock-txt');
+  const ov   = document.getElementById('lock-overlay');
+  if (!btn || !ov) return;
+  let t0 = 0, raf = null;
+  const stop = () => {
+    if (raf) { cancelAnimationFrame(raf); raf = null; }
+    t0 = 0; fill.style.width = '0%'; txt.textContent = '길게 눌러 해제';
+  };
+  const tick = () => {
+    if (!t0) return;
+    const el = performance.now() - t0;
+    const p = Math.min(1, el / LOCK_HOLD_MS);
+    fill.style.width = (p * 100) + '%';
+    txt.textContent = p < 1 ? '해제 중…' : '해제';
+    if (p >= 1) { stop(); unlockScreen(); return; }
+    raf = requestAnimationFrame(tick);
+  };
+  btn.addEventListener('pointerdown', e => {
+    e.preventDefault(); e.stopPropagation();
+    try { btn.setPointerCapture(e.pointerId); } catch(err) {}
+    t0 = performance.now(); tick();
+  });
+  ['pointerup','pointercancel','pointerleave'].forEach(ev =>
+    btn.addEventListener(ev, e => { e.preventDefault(); e.stopPropagation(); stop(); }));
+  // 오버레이 자체는 모든 입력을 흡수(잠금 유지)
+  ['pointerdown','pointerup','click','touchstart','touchmove','wheel'].forEach(ev =>
+    ov.addEventListener(ev, e => { if (e.target === ov || e.target.id === 'lock-badge') { e.preventDefault(); e.stopPropagation(); } },
+      { passive: false }));
+})();
 
 // ══════════════════════════════════════════════════════
 // RULER — 지도에서 두 점 이상을 찍어 거리·방위 측정
