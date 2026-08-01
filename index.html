@@ -6106,7 +6106,7 @@ function fpBackToCdu() {
 function cduFooter(backOnclick, extra) {
   let h = `<div class="nav-btn" onclick="switchMode('HOME')"><span>🏠</span>Home</div>`
         + cduFullNavBtn()
-        + `<div class="nav-btn" onclick="openFlightPlan()"><span>✈</span>Plan</div>`;
+        + `<div class="nav-btn" onclick="switchMode('SETTINGS')"><span>⚙</span>Setting</div>`;
   if (extra) h += extra;
   // BACK은 항상 제일 우측
   if (backOnclick) h += `<div class="nav-btn" onclick="${backOnclick}"><span>↩</span>Back</div>`;
@@ -8952,7 +8952,6 @@ if ('serviceWorker' in navigator) {
       { id:'PRESS',   name:'Pressure',          sub:'inHg · hPa · kPa · psi · mmHg · atm' },
       { id:'FUEL',    name:'Fuel Conversion',   sub:'gal · L · lb · kg' },
       { id:'DENSALT', name:'Density Altitude',  sub:'IA · Alt setting · OAT → DA' },
-      { id:'SETTINGS',name:'⚙ 설정 (Settings)',  sub:'야간 · 레인지 링 · 자동 METAR · 경보 · 설치' },
     ];
 
     function utilOpen(id) {
@@ -9780,9 +9779,9 @@ if ('serviceWorker' in navigator) {
     function renderSettingsScreen(container, footer, title, centerLabel) {
       title.innerText = 'Settings';
       centerLabel.innerText = 'SETUP';
-      const back = `<div onclick="utilOpen('MENU')" style="display:inline-flex;align-items:center;gap:4px;` +
+      const back = `<div onclick="switchMode('HOME')" style="display:inline-flex;align-items:center;gap:4px;` +
         `padding:5px 10px;margin-bottom:8px;border:1px solid #2a4a5a;border-radius:4px;background:#0a1620;color:#00cfff;` +
-        `font-size:10px;font-weight:bold;cursor:pointer;">☰ 목록</div>`;
+        `font-size:10px;font-weight:bold;cursor:pointer;">🏠 홈</div>`;
       const TOG = (which, label, sub, on) =>
         `<div onclick="_setToggle('${which}')" style="display:flex;align-items:center;justify-content:space-between;` +
           `padding:9px 10px;margin-bottom:5px;border:1px solid ${on ? '#00e5ff66' : '#1e2630'};border-radius:5px;` +
