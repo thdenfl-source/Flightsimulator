@@ -3662,31 +3662,57 @@ function drawHsiHoverPage(x, y, w, h, cx, cy, rFull) {
 
   // ── SHIP 상대 위치 지시자 (지도 SHIP 기능 연동) ──
   // 로즈가 heading-up이므로 상대방위 = 화면 각도. 선박 방향으로 포인터를 그린다.
-  let _shipRel = null, _shipDistNM = null, _shipBrgT = null;
+  let _shipRel = null, _shipDistNM = null, _shipBrgT = null, _shipDistFt = null, _shipNear = false;
   if (typeof shipVisible !== 'undefined' && shipVisible && shipLat !== null && shipLon !== null) {
     _shipDistNM = distance(S.lat, S.lon, shipLat, shipLon);
     _shipBrgT   = bearing(S.lat, S.lon, shipLat, shipLon);
     _shipRel    = normA(_shipBrgT - S.hdg);
-    const rad = _shipRel * D2R;
-    const pr  = r * 0.70;
-    const px  = Math.sin(rad) * pr, py = -Math.cos(rad) * pr;
-    // 중심 → 선박 방향 점선
-    ctx.save();
-    ctx.strokeStyle = 'rgba(0,229,255,0.55)'; ctx.lineWidth = 1; ctx.setLineDash([4, 4]);
-    ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(px, py); ctx.stroke(); ctx.setLineDash([]);
-    // 선박 심볼(선체 모양) — 바깥쪽을 향하도록 회전
-    ctx.translate(px, py); ctx.rotate(rad);
-    const sz = Math.max(7, r * 0.10);
-    ctx.beginPath();
-    ctx.moveTo(0, -sz);                    // 이물
-    ctx.lineTo(sz * 0.55, sz * 0.35);
-    ctx.lineTo(sz * 0.35, sz * 0.75);
-    ctx.lineTo(-sz * 0.35, sz * 0.75);
-    ctx.lineTo(-sz * 0.55, sz * 0.35);
-    ctx.closePath();
-    ctx.fillStyle = 'rgba(0,229,255,0.35)'; ctx.fill();
-    ctx.strokeStyle = '#00e5ff'; ctx.lineWidth = 1.6; ctx.stroke();
-    ctx.restore();
+
+    // 호버 위치 지시자와 동일한 축척(전 반경 = 50 ft)으로 기체 기준 상대위치 산출
+    const M_PER_DEG = 111320, FT_PER_M = 3.28084, HOVER_FT = 50;
+    const relN_ft = (shipLat - S.lat) * M_PER_DEG * FT_PER_M;
+    const relE_ft = (shipLon - S.lon) * M_PER_DEG * Math.cos(S.lat * D2R) * FT_PER_M;
+    const chH = Math.cos(S.hdg * D2R), shH = Math.sin(S.hdg * D2R);
+    const bodyFwd =  relN_ft * chH + relE_ft * shH;
+    const bodyLat = -relN_ft * shH + relE_ft * chH;
+    _shipDistFt = Math.hypot(bodyFwd, bodyLat);
+    _shipNear   = _shipDistFt <= HOVER_FT;
+
+    // 선체 심볼(원점 기준, 이물이 -Y 방향)
+    const hull = sz => {
+      ctx.beginPath();
+      ctx.moveTo(0, -sz);
+      ctx.lineTo(sz * 0.55, sz * 0.35);
+      ctx.lineTo(sz * 0.35, sz * 0.75);
+      ctx.lineTo(-sz * 0.35, sz * 0.75);
+      ctx.lineTo(-sz * 0.55, sz * 0.35);
+      ctx.closePath();
+      ctx.fillStyle = 'rgba(0,229,255,0.35)'; ctx.fill();
+      ctx.strokeStyle = '#00e5ff'; ctx.lineWidth = 1.6; ctx.stroke();
+    };
+
+    if (_shipNear) {
+      // ── 반경 내: 실제 축척 위치에 표시(호버 위치 지시자와 동일 축척) ──
+      const pxPerFt = r / HOVER_FT;
+      const sx =  bodyLat * pxPerFt, sy = -bodyFwd * pxPerFt;
+      ctx.save();
+      ctx.beginPath(); ctx.arc(0, 0, r * 0.94, 0, Math.PI*2); ctx.clip();
+      ctx.translate(sx, sy);
+      ctx.rotate(normA(shipHdg - S.hdg) * D2R);   // 선박 침로 방향으로 정렬
+      hull(Math.max(9, r * 0.13));
+      ctx.restore();
+    } else {
+      // ── 반경 밖: 로즈 가장자리 니들 + 중심→선박 점선 ──
+      const rad = _shipRel * D2R;
+      const pr  = r * 0.70;
+      const px  = Math.sin(rad) * pr, py = -Math.cos(rad) * pr;
+      ctx.save();
+      ctx.strokeStyle = 'rgba(0,229,255,0.55)'; ctx.lineWidth = 1; ctx.setLineDash([4, 4]);
+      ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(px, py); ctx.stroke(); ctx.setLineDash([]);
+      ctx.translate(px, py); ctx.rotate(rad);     // 바깥쪽(선박 방향)을 향함
+      hull(Math.max(7, r * 0.10));
+      ctx.restore();
+    }
   }
 
   ctx.restore(); // end translate(cx, cy)
@@ -3696,7 +3722,9 @@ function drawHsiHoverPage(x, y, w, h, cx, cy, rFull) {
     const fs = Math.max(9, r * 0.115);
     const magB = ((Math.round(_shipBrgT - RULER_VAR) % 360) + 360) % 360;
     const relTxt = String(Math.round(_shipRel) % 360).padStart(3,'0');   // 360 → 000
-    const txt = `SHIP  R${relTxt}°  ${String(magB % 360).padStart(3,'0')}°M  ${uDist(_shipDistNM, 2)}`;
+    // 근접(반경 내)에서는 NM 대신 ft/m로 표기
+    const distTxt = _shipNear ? uAlt(_shipDistFt) : uDist(_shipDistNM, 2);
+    const txt = `SHIP  R${relTxt}°  ${String(magB % 360).padStart(3,'0')}°M  ${distTxt}`;
     ctx.save();
     ctx.font = `bold ${fs}px Helvetica Neue, Arial, sans-serif`;
     ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
