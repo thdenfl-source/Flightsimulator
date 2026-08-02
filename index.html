@@ -10939,8 +10939,12 @@ if ('serviceWorker' in navigator) {
     function renderAirfieldScreen(container, footer, title, centerLabel) {
         title.innerText = '비행장 정보';
         const list = (typeof AIRFIELD_INFO !== 'undefined' ? AIRFIELD_INFO : []);
-        const rows = list.map((a, i) => {
-            if (!_afldUnlocked && !a.pub) return '';   // 잠금 시 군공항 숨김
+        // 원래 인덱스를 유지한 채 이름 가나다순 정렬
+        const rows = list
+          .map((a, i) => ({ a, i }))
+          .filter(o => _afldUnlocked || o.a.pub)      // 잠금 시 군공항 숨김
+          .sort((x, y) => x.a.name.localeCompare(y.a.name, 'ko'))
+          .map(({ a, i }) => {
             const mil = a.pub ? '' : ` <span style="color:#ff8a65;font-size:9px;">군</span>`;
             return `
             <div onclick="openAirfield(${i})" style="display:grid;grid-template-columns:1fr 52px 64px;align-items:center;gap:6px;
