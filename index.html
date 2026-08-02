@@ -3664,9 +3664,56 @@ function drawHsiHoverPage(x, y, w, h, cx, cy, rFull) {
   }
   ctx.restore(); // end clip
 
-
+  // ── SHIP 상대 위치 지시자 (지도 SHIP 기능 연동) ──
+  // 로즈가 heading-up이므로 상대방위 = 화면 각도. 선박 방향으로 포인터를 그린다.
+  let _shipRel = null, _shipDistNM = null, _shipBrgT = null;
+  if (typeof shipVisible !== 'undefined' && shipVisible && shipLat !== null && shipLon !== null) {
+    _shipDistNM = distance(S.lat, S.lon, shipLat, shipLon);
+    _shipBrgT   = bearing(S.lat, S.lon, shipLat, shipLon);
+    _shipRel    = normA(_shipBrgT - S.hdg);
+    const rad = _shipRel * D2R;
+    const pr  = r * 0.70;
+    const px  = Math.sin(rad) * pr, py = -Math.cos(rad) * pr;
+    // 중심 → 선박 방향 점선
+    ctx.save();
+    ctx.strokeStyle = 'rgba(0,229,255,0.55)'; ctx.lineWidth = 1; ctx.setLineDash([4, 4]);
+    ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(px, py); ctx.stroke(); ctx.setLineDash([]);
+    // 선박 심볼(선체 모양) — 바깥쪽을 향하도록 회전
+    ctx.translate(px, py); ctx.rotate(rad);
+    const sz = Math.max(7, r * 0.10);
+    ctx.beginPath();
+    ctx.moveTo(0, -sz);                    // 이물
+    ctx.lineTo(sz * 0.55, sz * 0.35);
+    ctx.lineTo(sz * 0.35, sz * 0.75);
+    ctx.lineTo(-sz * 0.35, sz * 0.75);
+    ctx.lineTo(-sz * 0.55, sz * 0.35);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(0,229,255,0.35)'; ctx.fill();
+    ctx.strokeStyle = '#00e5ff'; ctx.lineWidth = 1.6; ctx.stroke();
+    ctx.restore();
+  }
 
   ctx.restore(); // end translate(cx, cy)
+
+  // ── 하단 SHIP 판독: 상대방위 · 자방위 · 거리 ──
+  if (_shipRel !== null) {
+    const fs = Math.max(9, r * 0.115);
+    const magB = ((Math.round(_shipBrgT - RULER_VAR) % 360) + 360) % 360;
+    const relTxt = String(Math.round(_shipRel) % 360).padStart(3,'0');   // 360 → 000
+    const txt = `SHIP  R${relTxt}°  ${String(magB % 360).padStart(3,'0')}°M  ${uDist(_shipDistNM, 2)}`;
+    ctx.save();
+    ctx.font = `bold ${fs}px Helvetica Neue, Arial, sans-serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+    const ty = Math.min(y + h - 3, cy + r + fs * 1.6);
+    const tw = ctx.measureText(txt).width;
+    ctx.fillStyle = 'rgba(0,10,16,0.75)';
+    ctx.fillRect(cx - tw/2 - 5, ty - fs - 2, tw + 10, fs + 6);
+    ctx.strokeStyle = '#00e5ff66'; ctx.lineWidth = 1;
+    ctx.strokeRect(cx - tw/2 - 5, ty - fs - 2, tw + 10, fs + 6);
+    ctx.fillStyle = '#00e5ff';
+    ctx.fillText(txt, cx, ty);
+    ctx.restore();
+  }
 
   // ── Side panels: speed readouts left (actual) / right (reference) ──
   if (sideW < 20) return;
