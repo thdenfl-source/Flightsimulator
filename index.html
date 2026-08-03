@@ -1435,34 +1435,71 @@ body.night-mode::after {
     <div id="help-body">
       <h3>1. 화면 구성</h3>
       <ul>
-        <li>좌측 창: <b>PFD / MAP</b>, 우측 창: <b>PFD / MAP / CDU</b> 탭으로 전환. 양쪽에 같은 창을 선택하면 반대쪽이 자동으로 바뀝니다.</li>
-        <li><b>Full Screen</b>: 한 화면 전체 보기 — 상단 바에서 PFD/MAP/PLAN/CDU 전환, 우측 <b>✕</b>로 분할 복귀.</li>
+        <li>좌·우 창 모두 <b>PFD / MAP / CDU</b> 탭으로 전환. 양쪽에 같은 창을 고르면 반대쪽이 자동으로 바뀝니다.</li>
+        <li><b>전체화면</b>: CDU·Flight Plan 하단 <b>Full</b>, MAP 상단 <b>FULL</b> 버튼. 되돌아올 때는 같은 자리의 <b>HALF</b>.</li>
         <li>가운데 경계선의 <b>◀▶ 그립</b>을 드래그하면 분할 비율 조절(자동 저장). <b>⟳</b>은 새로고침.</li>
       </ul>
+
       <h3>2. 기본 비행 (시뮬레이션)</h3>
       <ul>
-        <li>MAP 하단 <b>▶ FLY</b>로 비행 시작(다시 누르면 PAUSE), <b>RESET</b> 초기화, <b>CLR</b> 비행계획 삭제.</li>
+        <li>MAP 하단 <b>▶ FLY</b>로 시작(다시 누르면 PAUSE), <b>RESET</b> 초기화, <b>CLR</b> 비행계획 삭제.</li>
         <li>PFD 하단 FCP에서 <b>IAS·HDG·CRS·VS·ALT·CRHT</b>를 ▲▼/◀▶로 조절.</li>
         <li><b>IAS/HDG/CRS 라벨 버튼</b>을 누르면 현재 값으로 즉시 동기화(CRS는 NAV 소스로 Direct-To).</li>
       </ul>
+
       <h3>3. MAP 창</h3>
       <ul>
-        <li>상단: GPS(실기기 위치)·WX(METAR)·＋(웨이포인트)·RAIN·WIND·NOTAM·FIX·AWY·공역.</li>
-        <li>하단: FLY/RESET/CLR/SHIP/<b>T-CUT</b>(전방 20NM 지형 단면)/N↑/1인칭/MAP(위성)/3D.</li>
-        <li>우하단 <b>REC</b>(항적 기록, GPX/KML) · <b>FDR</b>(항적 리플레이).</li>
+        <li>상단: GPS·WX·＋(웨이포인트)·RAIN·WIND·NOTAM·FIX·AWY·<b>공역</b>·<b>📏 측정자</b>·FULL.</li>
+        <li>하단: FLY/RESET/CLR/<b>SHIP</b>/<b>T-CUT</b>/<b>INHIB</b>/N↑/1인칭/MAP(위성)/3D/<b>🔒 잠금</b>.</li>
+        <li><b>📏 측정자</b>: 지도를 탭해 점을 찍으면 구간 방위·거리, 합계, 시작→끝 직선거리 표시.</li>
+        <li><b>공역</b>: 관제권·금지(P)·제한(R)·위험(D)구역, FIR·KADIZ(테두리만). 접근/진입 시 경보.</li>
+        <li><b>FIX</b> 아이콘을 탭하면 좌표 확인·복사 또는 비행계획에 바로 추가할 수 있습니다.</li>
+        <li><b>SHIP</b>: 버튼을 누르면 「배 표시 / 설정창」 선택. 선박 속도·침로를 입력해 이동시킬 수 있습니다.</li>
+        <li><b>🔒 잠금</b>: 화면 터치를 차단(비행 중 오조작 방지). 해제는 하단 버튼을 <b>1.2초 길게</b> 누르기.</li>
+        <li>우하단 <b>REC</b>(항적 기록, GPX/KML 저장) · <b>FDR</b>(항적 리플레이).</li>
       </ul>
-      <h3>4. CDU / 차트 / 비행계획</h3>
+
+      <h3>4. PFD · HOVER PAGE</h3>
       <ul>
-        <li>CDU 홈에서 MAP·FPL·PERF·Avionics·CHARTS 이동, 하단 <b>Full</b>은 전체화면.</li>
-        <li><b>CHARTS</b>: AIM eAIP 접속, AIRAC ZIP/폴더 가져오기, 공항별 차트 열람.</li>
-        <li><b>FPL</b>: 웨이포인트 추가·삭제, 하단 <b>Home</b>으로 CDU 홈 복귀.</li>
+        <li><b>NAV SRC</b>: <b>FMS / NAV1 / NAV2</b>. NAV1·NAV2는 CDU에서 튜닝한 VOR을 따라갑니다.</li>
+        <li><b>HOVER PAGE</b>(80kt 미만): 호버 속도·위치 지시. <b>GSPD</b>로 기준 속도 설정, <b>HOVER POS</b>로 위치 고정.</li>
+        <li>지도에 SHIP이 켜져 있으면 호버 페이지에 <b>선박 상대위치</b>가 표시됩니다(멀면 니들, 50ft 이내면 실제 위치).</li>
+        <li><b>T-CUT</b>: 전방 20NM 지형 단면. 현재 고도가 화면 중앙에 오고 지형이 상대적으로 움직입니다.</li>
       </ul>
-      <h3>5. GPS 모드 (실비행)</h3>
+
+      <h3>5. CDU 홈 (20개 기능)</h3>
+      <ul>
+        <li><b>기상</b>: Windy · 저고도날씨 · METAR/TAF · Tide forecast</li>
+        <li><b>정보</b>: CCTV · Charts · NOTAM · <b>INFO</b>(비행장) · Services · SkyVector · ER availability · Wildfire status</li>
+        <li><b>항법</b>: Flight Plan · PROC · <b>VNAV</b> · Track &amp; Point · MAP</li>
+        <li><b>운영</b>: PERF · Checklist · Utilities · Setting</li>
+        <li>하단 공통 버튼: <b>Home · Full/Half · Setting · Back</b> (홈 화면에는 <b>UBIKAIS</b> 바로가기)</li>
+      </ul>
+
+      <h3>6. 주요 기능</h3>
+      <ul>
+        <li><b>INFO</b>: 비행장별 TWR·APP·GND 주파수, VOR/ATIS, ILS, RWY, 표고. <b>주파수를 탭하면 COM1/2·NAV1/2에 바로 튜닝</b>됩니다. 상단 <b>ALL</b>은 코드 입력 시 전체 공개(기본은 AIP 공개 공항만).</li>
+        <li><b>VNAV</b>: 타깃 고도와 강하각(−3° 등)을 넣으면 요구고도·편차·수직속도·TOD를 실시간 계산하고, T-CUT에 강하선을 그립니다. <b>강하 10초 전</b>과 <b>Begin Descent</b> 알림 제공.</li>
+        <li><b>Utilities</b>: 길이·속도·온도·중량·압력·연료 환산, Time/Speed/Distance, <b>Fuel Endurance</b>, <b>Wind Component</b>, <b>Sunrise/Sunset</b>, <b>True↔Magnetic</b>, 밀도고도, 좌표 변환.</li>
+        <li><b>Track &amp; Point</b>: 포인트·항적을 기기에 저장, 폴더·아이콘 관리, GPX/KML 내보내기·가져오기. 지도 포인트를 탭하면 <b>숨기기·플랜 추가·Direct</b> 선택.</li>
+        <li><b>Checklist</b>: KUH-1CG 정상·특수·비상 절차(계통별), 이전/다음 이동.</li>
+      </ul>
+
+      <h3>7. GPS 모드 (실비행)</h3>
       <ul>
         <li>GPS 버튼을 켜면 실제 위치·속도·고도로 계기가 움직입니다.</li>
         <li>헤딩: <b>10kt 미만은 기기 나침반</b>, 10kt 이상은 항적 기준(첫 실행 시 나침반 권한 허용).</li>
+        <li>신호가 잠시 끊겨도 GPS는 꺼지지 않고 자동으로 재개됩니다.</li>
       </ul>
-      <h3>6. 키보드 조작</h3>
+
+      <h3>8. 설정 (하단 Setting)</h3>
+      <ul>
+        <li><b>단위</b>: 고도 ft/m · 거리 NM/km · 속도 kt/km·h · 온도 °C/°F — PFD 계기까지 함께 전환됩니다.</li>
+        <li>야간 모드, 레인지 링, 자동 METAR, 공역·HTAWS 경보, <b>키보드 단축키</b> on/off.</li>
+        <li>홈 화면에 추가(PWA 설치), 주변 지도 캐시 저장, 사용 안내 다시 보기.</li>
+      </ul>
+
+      <h3>9. 키보드 조작</h3>
       <table>
         <tr><td><b>1 / 2</b></td><td>IAS −1 / +1 kt</td><td><b>- / =</b></td><td>CRHT −10 / +10 ft</td></tr>
         <tr><td><b>3 / 4</b></td><td>HDG 좌 / 우 1°</td><td><b>Space</b></td><td>FLY / PAUSE</td></tr>
@@ -1470,7 +1507,8 @@ body.night-mode::after {
         <tr><td><b>7 / 8</b></td><td>VS −10 / +10 fpm</td><td><b>우측 Shift</b></td><td>GSPD 켜기/끄기</td></tr>
         <tr><td><b>9 / 0</b></td><td>ALT −10 / +10 ft</td><td><b>← → ↑ ↓</b></td><td>트림 좌/우/전/후</td></tr>
       </table>
-      <div class="help-note">※ 숫자·트림 키는 누르고 있으면 연속 조작됩니다. 입력창 타이핑 중에는 동작하지 않습니다.</div>
+      <div class="help-note">※ 숫자·트림 키는 누르고 있으면 연속 조작됩니다. 입력창 타이핑 중에는 동작하지 않습니다.<br>
+      ※ DeX·데스크톱에서 물리 키보드로 입력할 때 계기가 움직이면 <b>설정 → 키보드 단축키</b>를 끄십시오.</div>
     </div>
     <div id="help-foot">
       <label><input type="checkbox" id="help-dontshow"> 다시 보지 않기</label>
@@ -7618,16 +7656,18 @@ function addAppWps() {
 }
 
 // ── 시작 안내 오버레이 ──
+// 안내 내용이 크게 바뀌면 이 버전을 올린다 → '다시 보지 않기'를 했어도 한 번 더 표시
+const HELP_VERSION = '2';
 function closeHelp() {
   if (document.getElementById('help-dontshow')?.checked) {
-    try { localStorage.setItem('helpDismissed', '1'); } catch(e) {}
+    try { localStorage.setItem('helpDismissed', HELP_VERSION); } catch(e) {}
   }
   document.getElementById('help-overlay').style.display = 'none';
 }
 function showHelpOnLaunch() {
-  let dismissed = false;
-  try { dismissed = localStorage.getItem('helpDismissed') === '1'; } catch(e) {}
-  if (!dismissed) document.getElementById('help-overlay').style.display = 'flex';
+  let dismissed = null;
+  try { dismissed = localStorage.getItem('helpDismissed'); } catch(e) {}
+  if (dismissed !== HELP_VERSION) document.getElementById('help-overlay').style.display = 'flex';
 }
 
 // ═══════════════════════════════════════════════════════════════
