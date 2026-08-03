@@ -2204,7 +2204,10 @@ function gspdTrimNudge(dir) {
 // normal flight (non-GSPD): F/A trims speed, L/R applies bank.
 let trimHoldTimer = null, trimHoldInt = null;
 let _trimNonGspdDir = null;
+let _trimGuard = null;
 function startTrimHold(dir) {
+  stopTrimHold();                       // 중복 시작 방지(이전 홀드가 남아 있으면 정리)
+  _trimGuard = setTimeout(stopTrimHold, 20000);   // 런어웨이 방지(최대 20초)
   if (gspdOn) {
     gspdTrim(dir);
     trimHoldTimer = setTimeout(() => {
@@ -2227,6 +2230,7 @@ function startTrimHold(dir) {
 function stopTrimHold() {
   if (trimHoldTimer) { clearTimeout(trimHoldTimer); trimHoldTimer = null; }
   if (trimHoldInt)   { clearInterval(trimHoldInt);  trimHoldInt   = null; }
+  if (_trimGuard)    { clearTimeout(_trimGuard);    _trimGuard    = null; }
   _trimNonGspdDir = null;
 }
 
@@ -5799,7 +5803,16 @@ const _keyMap = {
   '9': ['alt', -10], '0': ['alt', 10],
   '-': ['crht', -10], '=': ['crht', 10],
 };
+// 물리 키보드 단축키(DeX·데스크톱에서 오작동 시 설정에서 끌 수 있음)
+let kbdShortcuts = true;
+try { kbdShortcuts = localStorage.getItem('kbdShortcuts') !== '0'; } catch(e) {}
+function toggleKbdShortcuts() {
+  kbdShortcuts = !kbdShortcuts;
+  try { localStorage.setItem('kbdShortcuts', kbdShortcuts ? '1' : '0'); } catch(e) {}
+  stopAllHolds();
+}
 document.addEventListener('keydown', e => {
+  if (!kbdShortcuts) return;
   if (e.ctrlKey || e.metaKey || e.altKey) return;
   const t = e.target;
   if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
@@ -5811,6 +5824,7 @@ document.addEventListener('keydown', e => {
 // Enter: Force Trim Release · 우측 Shift: GSPD 토글 · 방향키: 트림(←→↑↓)
 const _keyTrimMap = { 'ArrowLeft': 'L', 'ArrowRight': 'R', 'ArrowUp': 'F', 'ArrowDown': 'A' };
 document.addEventListener('keydown', e => {
+  if (!kbdShortcuts) return;
   if (e.ctrlKey || e.metaKey || e.altKey) return;
   const t = e.target;
   if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
@@ -5848,19 +5862,39 @@ const btnMap={
 // Per-button independent hold state using PointerEvent.
 // Each button owns its timer/interval — simultaneous touches no longer bleed
 // into each other (fixes the multi-touch "stuck button" bug).
+// ── 홀드(연속 조작) 안전 장치 ──
+// DeX·데스크톱처럼 창 포커스가 바뀌는 환경에서는 pointerup/keyup을 놓칠 수 있고,
+// 그러면 반복 타이머가 살아남아 속도가 0으로 수렴하거나 계속 증가한다.
+// 활성 홀드만 등록해 두고 전역 이벤트에서 일괄 해제한다.
+const _holdStops = new Set();
+const HOLD_MAX_MS = 20000;      // 어떤 홀드도 20초를 넘기지 않음(런어웨이 방지)
+function stopAllHolds() {
+  Array.from(_holdStops).forEach(fn => { try { fn(); } catch(e) {} });
+  try { stopTrimHold(); } catch(e) {}
+}
+window.addEventListener('blur', stopAllHolds);
+document.addEventListener('visibilitychange', () => { if (document.hidden) stopAllHolds(); });
+document.addEventListener('pointerup', stopAllHolds);
+document.addEventListener('pointercancel', stopAllHolds);
+
 Object.entries(btnMap).forEach(([id,[f,d]])=>{
   const el=document.getElementById(id);
-  let timer=null, interval=null;
+  let timer=null, interval=null, guard=null;
   function start(e){
     e.preventDefault();
     if(timer||interval) return;
     applyDelta(f,d);
+    _holdStops.add(stop);
+    guard = setTimeout(stop, HOLD_MAX_MS);          // 런어웨이 방지
     timer=setTimeout(()=>{interval=setInterval(()=>applyDelta(f,d),80);},350);
   }
   function stop(){
+    const wasActive = !!(timer || interval);
     clearTimeout(timer); timer=null;
     clearInterval(interval); interval=null;
-    if(f==='hdg') bankTarget=0;
+    clearTimeout(guard); guard=null;
+    _holdStops.delete(stop);
+    if(wasActive && f==='hdg') bankTarget=0;
   }
   el.addEventListener('pointerdown',start);
   el.addEventListener('pointerup',stop);
@@ -10273,6 +10307,7 @@ if ('serviceWorker' in navigator) {
       else if (which === 'metar') { autoMetarOn = !autoMetarOn; try { localStorage.setItem('autoMetarOn', autoMetarOn ? '1' : '0'); } catch(e) {} }
       else if (which === 'aspc') toggleInhib('aspc');
       else if (which === 'taws') toggleInhib('taws');
+      else if (which === 'kbd') toggleKbdShortcuts();
       switchMode('SETTINGS');
     }
     function renderSettingsScreen(container, footer, title, centerLabel) {
@@ -10323,6 +10358,7 @@ if ('serviceWorker' in navigator) {
         TOG('metar', '자동 METAR', '근처 공항 METAR로 OAT 자동 반영', autoMetarOn) +
         TOG('aspc', '공역 경보', inhibAspc ? 'INHIBIT(억제됨)' : '접근/진입 경보 사용', !inhibAspc) +
         TOG('taws', 'HTAWS 지형경보', inhibTaws ? 'INHIBIT(억제됨)' : '전방 지형 경보 사용', !inhibTaws) +
+        TOG('kbd', '키보드 단축키', kbdShortcuts ? '숫자·방향키로 계기 조작' : '해제됨(DeX 등 물리 키보드 오작동 방지)', kbdShortcuts) +
         `<div style="color:#556;font-size:9px;letter-spacing:1px;margin:10px 0 5px;">앱 / 오프라인</div>` +
         ACT('pwaInstall()', '홈 화면에 추가', 'PWA 설치(앱처럼 실행)') +
         ACT('prefetchTiles()', '주변 지도 캐시', '현재 화면 주변 타일 미리 저장') +
