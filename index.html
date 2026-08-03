@@ -11719,18 +11719,61 @@ function _enrFixList() {
     return { name, lat: dms(la, 2), lon: dms(lo, 3) };
   });
 }
+// ── 항로 픽스 팝업: 좌표 확인·복사 / Flight Plan 추가 ──
+function _fixPopupHtml(name, lat, lon) {
+  const btn = 'cursor:pointer;border-radius:4px;padding:5px 8px;font-size:11px;font-weight:bold;text-align:center;flex:1;';
+  return `<div style="font-family:-apple-system,Segoe UI,Arial,sans-serif;font-size:11px;color:#333;line-height:1.5;min-width:200px;">` +
+    `<div style="color:#00788a;font-weight:bold;font-size:13px;margin-bottom:3px;">▲ ${name}</div>` +
+    `<div style="color:#333;">${decToDMS(lat, true)} ${decToDMS(lon, false)}</div>` +
+    `<div style="color:#777;font-size:10px;margin-bottom:6px;">${lat.toFixed(5)}, ${lon.toFixed(5)}</div>` +
+    `<div style="display:flex;gap:5px;">` +
+      `<span onclick="fixCopyCoord(this,'${name}',${lat},${lon})" style="${btn}background:#eef3f7;color:#3b5a70;border:1px solid #3b5a7055;">📋 좌표 복사</span>` +
+      `<span onclick="fixAddToPlan('${name}',${lat},${lon})" style="${btn}background:#e3f2ee;color:#00796b;border:1px solid #00796b55;">✈ 플랜 추가</span>` +
+    `</div></div>`;
+}
+// 클립보드 복사(비보안·구형 환경 폴백 포함) + 버튼 피드백
+function fixCopyCoord(el, name, lat, lon) {
+  const txt = `${name} ${decToDMS(lat, true)} ${decToDMS(lon, false)} (${lat.toFixed(5)}, ${lon.toFixed(5)})`;
+  const done = ok => {
+    if (!el) return;
+    const orig = el.textContent;
+    el.textContent = ok ? '✓ 복사됨' : '복사 실패';
+    setTimeout(() => { try { el.textContent = orig; } catch(e) {} }, 1200);
+  };
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(txt).then(() => done(true), () => done(false));
+      return;
+    }
+  } catch(e) {}
+  try {   // 폴백: 임시 textarea + execCommand
+    const ta = document.createElement('textarea');
+    ta.value = txt; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    const ok = document.execCommand('copy');
+    document.body.removeChild(ta);
+    done(ok);
+  } catch(e) { done(false); }
+}
+// 픽스를 비행계획 웨이포인트로 추가
+function fixAddToPlan(name, lat, lon) {
+  pushWP({ ident: name, lat, lon });
+  try { leafMap.closePopup(); } catch(e) {}
+}
+
 function _drawFixLayer() {
   _clearFixLayer();
   _enrFixList().forEach(f => {
     const icon = L.divIcon({
       html: `<div style="position:relative;">
+        <div style="position:absolute;left:-10px;top:-11px;width:30px;height:30px;"></div>
         <div style="width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-bottom:9px solid #26c6da;filter:drop-shadow(0 0 1.5px #000);"></div>
         <div style="position:absolute;left:11px;top:-2px;color:#4dd0e1;font-size:8px;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica Neue,Arial,sans-serif;font-weight:bold;white-space:nowrap;text-shadow:1px 1px 2px #000;">${f.name}</div>
       </div>`,
       iconSize: [10, 9], iconAnchor: [5, 5], className: ''
     });
     const mk = L.marker([f.lat, f.lon], { icon, interactive: true });
-    mk.bindTooltip(`${f.name}<br>${decToDMS(f.lat, true)} ${decToDMS(f.lon, false)}`, { sticky: true });
+    mk.bindPopup(_fixPopupHtml(f.name, f.lat, f.lon), { maxWidth: 260 });
     mk.addTo(leafMap);
     _fixMarkers.push(mk);
   });
