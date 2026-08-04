@@ -259,7 +259,7 @@ html, body {
 /* NAV1/NAV2 튜닝 VOR 표시 라벨(PFD NAV SRC 하단) */
 .nav-icao-lbl {
   color: #44aaff; font-size: 10px; font-weight: bold; letter-spacing: 0.5px;
-  text-align: center; margin-top: 1px;
+  text-align: center; margin-top: 1px; min-height: 12px; line-height: 12px;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
 }
 
@@ -1685,7 +1685,7 @@ body.night-mode::after {
             <button class="nav-src-btn" id="nav-nav1" onclick="setNavSrc('NAV1')">NAV1</button>
             <button class="nav-src-btn" id="nav-nav2" onclick="setNavSrc('NAV2')">NAV2</button>
           </div>
-          <div class="nav-icao-lbl" id="nav-icao-lbl" style="display:none"></div>
+          <div class="nav-icao-lbl" id="nav-icao-lbl" style="visibility:hidden">----</div>
         </div>
 
         <div class="ctrl-div"></div>
@@ -2447,7 +2447,15 @@ function _resolveVor(freq, id) {
 function setNavRadio(navId, freq, id) {
   const r = navRadios[navId]; if (!r) return;
   if (freq != null) r.freq = freq;
-  if (id != null)   r.id = id;
+  // id === null  : 호출측이 "이 주파수에 맞는 VOR 없음"을 명시 → 이전 ident를 반드시 버린다
+  // id === undefined : 지정 안 함 → 기존 ident 유지
+  if (id !== undefined) r.id = id || '';
+  // 주파수를 새로 넣었는데 남아있는 ident가 그 주파수와 다르면 ident를 버린다.
+  // (버리지 않으면 _resolveVor가 ident를 먼저 맞춰 이전 국으로 되돌아가고 입력 주파수까지 덮어쓴다)
+  if (freq != null && r.id) {
+    const byId = _resolveVor(null, r.id);
+    if (!byId || Math.abs(parseFloat(byId.freq) - parseFloat(r.freq)) >= 0.001) r.id = '';
+  }
   const v = _resolveVor(r.freq, r.id);
   if (v) { r.lat = v.lat; r.lon = v.lon; r.id = v.id; r.freq = v.freq; }
   else   { r.lat = null; r.lon = null; }
@@ -2460,7 +2468,7 @@ function applyNavRadioToPfd() {
   if (r.lat === null) { const v = _resolveVor(r.freq, r.id); if (v) { r.lat = v.lat; r.lon = v.lon; r.id = v.id; } }
   navLat = r.lat; navLon = r.lon; navIcao = r.id || '';
   const lbl = document.getElementById('nav-icao-lbl');
-  if (lbl) { lbl.style.display = 'block'; lbl.textContent = (r.id || '----') + (r.freq ? ' ' + r.freq : ''); }
+  if (lbl) { lbl.style.visibility = 'visible'; lbl.textContent = (r.id || '----') + (r.freq ? ' ' + r.freq : ''); }
 }
 // Direct-To 앵커: 이전 leg가 없는 활성 WP의 코스 선 기준점(선택 시점의 위치).
 // 이 앵커→WP 선을 leg처럼 고정 추적해 '포인트로 수렴'하지 않게 한다.
@@ -2509,7 +2517,7 @@ function setNavSrc(src) {
   const lbl = document.getElementById('nav-icao-lbl');
   if (src === 'FMS') {
     navLat = navLon = null; navIcao = '';
-    if (lbl) lbl.style.display = 'none';
+    if (lbl) lbl.style.visibility = 'hidden';
   } else {
     applyNavRadioToPfd();   // NAV1/NAV2 튜닝 VOR를 CDI/BRG에 반영
   }
@@ -3259,6 +3267,7 @@ function drawHSI(x, y, w, h) {
   // ── Hover Page mode: simplified HSI + GPS speed readouts ──
   if (hoverPageOn) {
     drawHsiHoverPage(x, y, w, h, cx, cy, r);
+    ctx.restore();   // 위의 outer save와 짝 — 없으면 캔버스 상태 스택이 프레임마다 쌓여 시현이 깨진다
     return;
   }
 
@@ -3269,7 +3278,7 @@ function drawHSI(x, y, w, h) {
 
   // ── BRG1 left panel (VOR/ILS, blue) ──
   if (brg1Visible) {
-    const brg1NavActive = navLat !== null;
+    const brg1NavActive = navLat !== null && navLon !== null;
     const brg1NavBrg    = brg1NavActive ? bearing(S.lat, S.lon, navLat, navLon) : 0;
     const brg1NavDist   = brg1NavActive ? distance(S.lat, S.lon, navLat, navLon) : 0;
     drawHSISidePanel(leftX, y, sideW, h, {
@@ -3455,7 +3464,7 @@ function drawHSI(x, y, w, h) {
     }
     cdiOff = Math.max(-1, Math.min(1, -xtk / rnp)) * 2 * dotGap;
     cdbActive = true;
-  } else if ((navSrc !== 'FMS') && navLat !== null) {
+  } else if ((navSrc !== 'FMS') && navLat !== null && navLon !== null) {
     cdbWp = { lat: navLat, lon: navLon };
     const brgFromNav = bearing(navLat, navLon, S.lat, S.lon);
     const devDeg     = normAS(brgFromNav - normA(vorObsCrs + 180));
@@ -3507,7 +3516,7 @@ function drawHSI(x, y, w, h) {
   ctx.restore();
 
   // ── BRG1 needle (VOR/ILS → 파란 단선, 머리 화살촉·꼬리 선) ──
-  if (brg1Visible && navLat !== null) {
+  if (brg1Visible && navLat !== null && navLon !== null) {
     const brg1 = bearing(S.lat, S.lon, navLat, navLon);
     ctx.save(); ctx.rotate((brg1 - S.hdg) * D2R);
     const C1 = '#44aaff';
