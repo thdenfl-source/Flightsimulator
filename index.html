@@ -5510,6 +5510,7 @@ function fpRender() {
     case 'LAT':   fpRenderCoord(area, title, footer, 'LAT'); break;
     case 'LON':   fpRenderCoord(area, title, footer, 'LON'); break;
     case 'IFR':   fpRenderIfr(area, title, footer);  break;
+    case 'SIDNEW': fpRenderSidNew(area, title, footer); break;
   }
 }
 
@@ -5628,7 +5629,23 @@ function fpRenderIfr(area, title, footer) {
   const tabsHtml = tabs.map(t=>`<div class="fp-ifr-tab${fpIfrPhase===t.toLowerCase()?' active':''}" onclick="fpSetIfrPhase('${t.toLowerCase()}')">${t}</div>`).join('');
   let panelHtml = '';
   if(fpIfrPhase==='dep'){
-    panelHtml=`<div class="fp-ifr-lbl">Departure Airport</div><select class="fp-ifr-sel" id="dep-icao" onchange="loadSids()"></select><div class="fp-ifr-lbl">SID Procedure</div><select class="fp-ifr-sel" id="dep-sid"></select><button class="fp-ifr-add" onclick="addSidWps()">＋ ADD SID TO PLAN</button>`;
+    panelHtml=
+      `<div class="fp-ifr-lbl">Departure Airport</div>` +
+      `<select class="fp-ifr-sel" id="dep-icao" onchange="loadSids()"></select>` +
+      `<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;">` +
+        `<div><div class="fp-ifr-lbl">RWY 필터</div><select class="fp-ifr-sel" id="dep-rwy" onchange="loadSids()"></select></div>` +
+        `<div><div class="fp-ifr-lbl">추가 방식</div><select class="fp-ifr-sel" id="dep-mode">` +
+          `<option value="append">현재 플랜 뒤에</option><option value="replace">플랜 비우고</option></select></div>` +
+      `</div>` +
+      `<div class="fp-ifr-lbl">SID Procedure</div>` +
+      `<select class="fp-ifr-sel" id="dep-sid" onchange="onSidSelect()"></select>` +
+      `<div id="sid-detail"></div>` +
+      `<button class="fp-ifr-add" onclick="addSidWps()">＋ ADD SID TO PLAN</button>` +
+      `<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;margin-top:4px;">` +
+        `<div class="fp-ifr-add" style="margin:0;font-size:9px;" onclick="sidShowOnMap()">🗺 지도</div>` +
+        `<div class="fp-ifr-add" style="margin:0;font-size:9px;" onclick="fpGo('SIDNEW')">＋ 사용자 SID</div>` +
+        `<div class="fp-ifr-add" style="margin:0;font-size:9px;" onclick="deleteUserSid()">🗑 삭제</div>` +
+      `</div>`;
   } else if(fpIfrPhase==='enr'){
     panelHtml=`<div class="fp-ifr-lbl">Airway</div><select class="fp-ifr-sel" id="enr-airway" onchange="loadAirwayFixes()"></select><div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;"><div><div class="fp-ifr-lbl">Entry Fix</div><select class="fp-ifr-sel" id="enr-entry"></select></div><div><div class="fp-ifr-lbl">Exit Fix</div><select class="fp-ifr-sel" id="enr-exit"></select></div></div><button class="fp-ifr-add" onclick="addAirwaySegment()">＋ ADD AIRWAY SEG</button><div class="fp-ifr-lbl" style="border-top:1px solid #152515;padding-top:5px;margin-top:5px;">Single Fix</div><select class="fp-ifr-sel" id="enr-fix"></select><button class="fp-ifr-add" onclick="addSingleFix()">＋ ADD FIX</button>`;
   } else {
@@ -5647,7 +5664,16 @@ function fpRenderIfr(area, title, footer) {
   // Populate selects dynamically
   if(fpIfrPhase==='dep'){
     const s=document.getElementById('dep-icao');
-    if(s&&s.options.length===0){Object.keys(IFR_DB).forEach(k=>{const o=document.createElement('option');o.value=k;o.textContent=k+' – '+IFR_DB[k].name;s.appendChild(o);});loadSids();}
+    // AIP 공개 공항 전체를 대상으로 한다(절차 미등록 공항도 사용자 SID 저장 가능)
+    if(s&&s.options.length===0){
+      aipAirportList().forEach(a=>{
+        const has=(IFR_DB[a.icao]&&IFR_DB[a.icao].sids||[]).length + ((customSids()[a.icao]||[]).length);
+        const o=document.createElement('option');o.value=a.icao;
+        o.textContent=a.icao+' – '+a.name+(has?'':' (절차 없음)');
+        s.appendChild(o);
+      });
+      loadSids();
+    }
   } else if(fpIfrPhase==='enr'){
     const aw=document.getElementById('enr-airway');
     if(aw&&aw.options.length===0){
@@ -5665,6 +5691,76 @@ function fpRenderIfr(area, title, footer) {
     ${fpFullBtn()}
     <div class="fp-nav-btn" onclick="fpGo('LIST')"><span>📋</span>FP</div>
     <div class="fp-nav-btn" onclick="fpGo('ADD')"><span>↩</span>Back</div>`;
+}
+
+// ══════════════════════════════════════════════════════
+// 사용자 정의 SID 만들기 (AIP 절차가 없는 공항도 사용 가능)
+// ══════════════════════════════════════════════════════
+let _sidNew = { icao:'', name:'', rwy:'', wps:[] };
+function sidNewSet(k, v) { _sidNew[k] = v; }
+function sidNewAddFix() {
+  const f = document.getElementById('sn-fix')?.value;
+  if (!f || !IFR_FIXES[f]) return;
+  _sidNew.wps.push(f);
+  fpRender();
+}
+function sidNewDelFix(i) { _sidNew.wps.splice(i, 1); fpRender(); }
+function sidNewSave() {
+  const icao = document.getElementById('sn-icao')?.value || '';
+  const name = (document.getElementById('sn-name')?.value || '').trim().toUpperCase();
+  const rwy  = (document.getElementById('sn-rwy')?.value || '').trim().toUpperCase();
+  if (!icao)            { alert('공항을 선택하세요.'); return; }
+  if (!name)            { alert('절차 이름을 입력하세요.'); return; }
+  if (!_sidNew.wps.length) { alert('경유점을 1개 이상 추가하세요.'); return; }
+  const all = customSids();
+  if (!all[icao]) all[icao] = [];
+  all[icao].push({ name, rwy: rwy || '-', wps: _sidNew.wps.map(id => ({ ident:id })) });
+  saveCustomSids(all);
+  _sidNew = { icao:'', name:'', rwy:'', wps:[] };
+  fpIfrPhase = 'dep';
+  fpGo('IFR');
+}
+function fpRenderSidNew(area, title, footer) {
+  title.textContent = '사용자 SID 만들기';
+  // 직전 DEP 탭에서 고른 공항을 기본값으로
+  if (!_sidNew.icao) _sidNew.icao = document.getElementById('dep-icao')?.value || '';
+  const aptOpts = aipAirportList().map(a =>
+    `<option value="${a.icao}"${a.icao === _sidNew.icao ? ' selected' : ''}>${a.icao} – ${a.name}</option>`).join('');
+  const fixOpts = Object.keys(IFR_FIXES).sort().map(k => `<option value="${k}">${k}</option>`).join('');
+  const chain = _sidNew.wps.length
+    ? _sidNew.wps.map((id, i) =>
+        `<div style="display:flex;align-items:center;justify-content:space-between;padding:4px 6px;margin-bottom:3px;` +
+        `border:1px solid #1e3a2a;border-radius:4px;background:#08140e;">` +
+        `<span style="color:#9fe6c0;font-size:11px;font-weight:bold;">${i+1}. ${id}</span>` +
+        `<span onclick="sidNewDelFix(${i})" style="color:#ff8a65;font-size:12px;cursor:pointer;padding:0 4px;">✕</span></div>`).join('')
+    : `<div style="color:#567;font-size:10px;padding:6px 2px;">아래에서 픽스를 골라 순서대로 추가하세요.</div>`;
+  area.innerHTML =
+    `<div class="fp-panel-border" style="overflow-y:auto;">` +
+      `<div class="fp-ifr-lbl">공항</div><select class="fp-ifr-sel" id="sn-icao">${aptOpts}</select>` +
+      `<div style="display:grid;grid-template-columns:1.4fr 1fr;gap:4px;">` +
+        `<div><div class="fp-ifr-lbl">절차 이름</div>` +
+          `<input id="sn-name" placeholder="예: BOPTA1D" style="width:100%;box-sizing:border-box;background:#08140e;` +
+          `border:1px solid #2a4a3a;border-radius:3px;color:#9fe6c0;font-size:12px;font-weight:bold;padding:5px 6px;"></div>` +
+        `<div><div class="fp-ifr-lbl">RWY</div>` +
+          `<input id="sn-rwy" placeholder="06L/06R" style="width:100%;box-sizing:border-box;background:#08140e;` +
+          `border:1px solid #2a4a3a;border-radius:3px;color:#9fe6c0;font-size:12px;font-weight:bold;padding:5px 6px;"></div>` +
+      `</div>` +
+      `<div class="fp-ifr-lbl" style="margin-top:6px;">경유점 순서 (${_sidNew.wps.length})</div>` +
+      chain +
+      `<div style="display:grid;grid-template-columns:1fr auto;gap:4px;margin-top:4px;">` +
+        `<select class="fp-ifr-sel" id="sn-fix" style="margin:0;">${fixOpts}</select>` +
+        `<div class="fp-ifr-add" style="margin:0;padding:6px 12px;" onclick="sidNewAddFix()">＋</div>` +
+      `</div>` +
+      `<button class="fp-ifr-add" style="margin-top:8px;" onclick="sidNewSave()">💾 절차 저장</button>` +
+      `<div style="color:#4a6274;font-size:9px;margin-top:5px;line-height:1.4;">` +
+        `저장한 절차는 SID 목록에 <b>★</b> 표시로 나타나며 기기에 보관됩니다.<br>` +
+        `좌표는 픽스 이름으로 자동 해석되므로 따로 입력할 필요가 없습니다.</div>` +
+    `</div>`;
+  footer.innerHTML =
+    `<div class="fp-nav-btn" onclick="fpGoCduHome()"><span>🏠</span>Home</div>` +
+    fpFullBtn() +
+    `<div class="fp-nav-btn" onclick="fpGo('LIST')"><span>📋</span>FP</div>` +
+    `<div class="fp-nav-btn" onclick="fpGo('IFR')"><span>↩</span>Back</div>`;
 }
 
 function fpSetIfrPhase(phase) {
@@ -7538,31 +7634,170 @@ initWxButtons();
 // ══════════════════════════════════════════════════════
 function closeFpInput() { fpGo('LIST'); }
 
+// ══════════════════════════════════════════════════════
+// SID: AIP 등록 절차 + 사용자 정의 절차
+// ══════════════════════════════════════════════════════
+function customSids() {
+  try { return JSON.parse(localStorage.getItem('customSids') || '{}'); } catch(e) { return {}; }
+}
+function saveCustomSids(o) {
+  try { localStorage.setItem('customSids', JSON.stringify(o)); } catch(e) {}
+}
+// 해당 공항의 SID 목록(AIP + 사용자). 표시 순서 = 인덱스
+function allSids(icao) {
+  const aip  = (IFR_DB[icao] && IFR_DB[icao].sids) || [];
+  const user = customSids()[icao] || [];
+  return aip.map(s => Object.assign({}, s, { _src: 'AIP' }))
+     .concat(user.map((s, i) => Object.assign({}, s, { _src: 'USER', _ui: i })));
+}
+// AIP 공개 공항 목록(ICAO, 이름) — 사용자 SID는 모든 AIP 공항에서 만들 수 있다
+function aipAirportList() {
+  const out = [];
+  try {
+    AIRFIELD_INFO.forEach(a => {
+      if (!a.pub || !a.code || a.code.length !== 2) return;
+      out.push({ icao: 'RK' + a.code, name: a.name });
+    });
+  } catch(e) {}
+  Object.keys(IFR_DB).forEach(k => {
+    if (!out.some(o => o.icao === k)) out.push({ icao: k, name: IFR_DB[k].name || '' });
+  });
+  return out.sort((a, b) => a.icao.localeCompare(b.icao));
+}
+// 절차 경유점 중 좌표를 해석하지 못한 이름 목록(입력 오류 검증용)
+function procUnresolved(proc) {
+  return (proc && proc.wps || []).filter(w => {
+    if (IFR_FIXES[w.ident]) return false;
+    return !(typeof w.lat === 'number' && typeof w.lon === 'number' && !isNaN(w.lat));
+  }).map(w => w.ident);
+}
+// 경유점 좌표 해석(픽스 DB 우선)
+function _resolveWp(w) {
+  const f = IFR_FIXES[w.ident];
+  if (f) return { ident: w.ident, lat: f.lat, lon: f.lon, arc: w.arc };
+  return { ident: w.ident, lat: w.lat, lon: w.lon, arc: w.arc };
+}
+
 function loadSids() {
   const icao = document.getElementById('dep-icao').value;
   const sel  = document.getElementById('dep-sid');
+  const rwyEl = document.getElementById('dep-rwy');
+  if (!sel) return;
+  const list = allSids(icao);
+
+  // ── RWY 필터 옵션 채우기(현재 선택 유지) ──
+  if (rwyEl) {
+    const cur = rwyEl.value;
+    const rwys = [];
+    list.forEach(s => String(s.rwy || '').split('/').forEach(r => {
+      r = r.trim(); if (r && !rwys.includes(r)) rwys.push(r);
+    }));
+    rwys.sort();
+    rwyEl.innerHTML = '<option value="">전체</option>' +
+      rwys.map(r => `<option value="${r}">${r}</option>`).join('');
+    if (rwys.includes(cur)) rwyEl.value = cur;
+  }
+  const rwyF = rwyEl ? rwyEl.value : '';
+
   sel.innerHTML = '';
-  const db = IFR_DB[icao];
-  if (!db) return;
-  db.sids.forEach((sid, i) => {
+  list.forEach((sid, i) => {
+    if (rwyF && !String(sid.rwy || '').split('/').map(x => x.trim()).includes(rwyF)) return;
     const opt = document.createElement('option');
     opt.value = i;
-    opt.textContent = sid.name + ' (' + sid.rwy + ')';
+    opt.textContent = (sid._src === 'USER' ? '★ ' : '') + sid.name + ' (' + (sid.rwy || '-') + ')';
     sel.appendChild(opt);
   });
+  if (!sel.options.length) sel.innerHTML = '<option value="">— 해당 RWY 절차 없음 —</option>';
+  onSidSelect();
+}
+
+// SID 선택 시: 경유점·검증 결과 표시 + 지도 미리보기 갱신
+function onSidSelect() {
+  const icao = document.getElementById('dep-icao')?.value;
+  const sel  = document.getElementById('dep-sid');
+  const box  = document.getElementById('sid-detail');
+  if (!box) return;
+  const sid = (sel && sel.value !== '') ? allSids(icao)[parseInt(sel.value)] : null;
+  if (!sid) { box.innerHTML = ''; clearProcPreview(); return; }
+  const bad = procUnresolved(sid);
+  const chain = (sid.wps || []).map(w => {
+    const ok = !bad.includes(w.ident);
+    return `<span style="color:${ok ? '#9fe6c0' : '#ff8a65'};font-weight:bold;">${w.ident}${ok ? '' : ' ⚠'}</span>`;
+  }).join('<span style="color:#456;"> › </span>');
+  box.innerHTML =
+    `<div style="border:1px solid #1e3a2a;border-radius:4px;background:#08140e;padding:5px 7px;margin:4px 0;">` +
+      `<div style="color:#6a8494;font-size:8px;letter-spacing:0.5px;margin-bottom:3px;">` +
+        `${sid._src === 'USER' ? '★ 사용자 절차' : 'AIP 절차'} · ${(sid.wps || []).length}개 경유점</div>` +
+      `<div style="font-size:10px;line-height:1.6;">${chain || '—'}</div>` +
+      (bad.length
+        ? `<div style="color:#ff8a65;font-size:9px;margin-top:4px;">⚠ 좌표 미해석: ${bad.join(', ')} — 픽스 DB에 없는 이름입니다.</div>`
+        : '') +
+    `</div>`;
+  procPreview((sid.wps || []).map(_resolveWp));
+}
+
+// ── 절차 지도 미리보기 ──
+let _procPreviewLayer = null;
+function clearProcPreview() {
+  if (_procPreviewLayer) { try { leafMap.removeLayer(_procPreviewLayer); } catch(e) {} _procPreviewLayer = null; }
+}
+function procPreview(wps) {
+  clearProcPreview();
+  const pts = (wps || []).filter(w => typeof w.lat === 'number' && !isNaN(w.lat)).map(w => [w.lat, w.lon]);
+  if (!pts.length) return;
+  const g = L.layerGroup();
+  if (pts.length > 1) {
+    L.polyline(pts, { color:'#ffd54f', weight:2.5, opacity:0.95, dashArray:'8 5', interactive:false }).addTo(g);
+  }
+  wps.filter(w => typeof w.lat === 'number' && !isNaN(w.lat)).forEach((w, i) => {
+    L.circleMarker([w.lat, w.lon], { radius:4, color:'#ffd54f', weight:2, fillColor:'#000', fillOpacity:1, interactive:false }).addTo(g);
+    L.marker([w.lat, w.lon], { interactive:false, icon: L.divIcon({ className:'', iconSize:[0,0],
+      html:`<div style="transform:translate(7px,-15px);color:#ffd54f;font-size:9px;font-weight:bold;white-space:nowrap;text-shadow:1px 1px 2px #000;">${i+1}. ${w.ident}</div>` }) }).addTo(g);
+  });
+  _procPreviewLayer = g.addTo(leafMap);
+}
+// 미리보기를 지도 화면으로 열고 범위 맞추기
+function sidShowOnMap() {
+  if (!_procPreviewLayer) return;
+  try {
+    const b = L.latLngBounds([]);
+    _procPreviewLayer.eachLayer(l => { if (l.getLatLng) b.extend(l.getLatLng()); });
+    cduOpenMap();
+    setTimeout(() => { try { leafMap.invalidateSize(); if (b.isValid()) leafMap.fitBounds(b, { padding:[45,45] }); } catch(e) {} }, 120);
+  } catch(e) {}
 }
 
 function addSidWps() {
   const icao   = document.getElementById('dep-icao').value;
-  const sidIdx = parseInt(document.getElementById('dep-sid').value);
-  const db     = IFR_DB[icao];
-  if (!db || isNaN(sidIdx)) return;
-  const sid = db.sids[sidIdx];
+  const selEl  = document.getElementById('dep-sid');
+  const sidIdx = parseInt(selEl && selEl.value);
+  if (isNaN(sidIdx)) return;
+  const sid = allSids(icao)[sidIdx];
   if (!sid) return;
+  const mode = document.getElementById('dep-mode')?.value || 'append';
+  if (mode === 'replace') clearFP();
   const ap = AIRPORTS.find(a => a.ident === icao);
   if (ap && S.wps.length === 0) pushWP({ident:ap.ident, lat:ap.lat, lon:ap.lon}, 'DEP');
-  sid.wps.forEach(wp => pushWP({ident:wp.ident, lat:wp.lat, lon:wp.lon, arc:wp.arc}, 'DEP'));
+  (sid.wps || []).forEach(wp => {
+    const r = _resolveWp(wp);
+    if (typeof r.lat !== 'number' || isNaN(r.lat)) return;   // 좌표 미해석 경유점은 제외
+    pushWP({ident:r.ident, lat:r.lat, lon:r.lon, arc:r.arc}, 'DEP');
+  });
+  clearProcPreview();
   fpGo('LIST');
+}
+
+// 사용자 SID 삭제
+function deleteUserSid() {
+  const icao = document.getElementById('dep-icao').value;
+  const sel  = document.getElementById('dep-sid');
+  const sid  = (sel && sel.value !== '') ? allSids(icao)[parseInt(sel.value)] : null;
+  if (!sid || sid._src !== 'USER') { alert('사용자가 만든 절차만 삭제할 수 있습니다.'); return; }
+  if (!confirm(`사용자 절차 "${sid.name}" 을(를) 삭제할까요?`)) return;
+  const all = customSids();
+  (all[icao] || []).splice(sid._ui, 1);
+  saveCustomSids(all);
+  loadSids();
 }
 
 function loadAirwayFixes() {
