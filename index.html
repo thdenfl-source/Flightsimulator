@@ -6745,6 +6745,8 @@ function exitSolo() {
 // ══════════════════════════════════════════════════════
 // IFR DATABASE
 // ══════════════════════════════════════════════════════
+// ── SID 터미널 픽스(AIP 코딩 테이블) — 항로 픽스에 없어 별도 등록 ──
+const TERMINAL_FIXES = {ANUBA:[35.12942,127.58967], BEMGA:[35.17053,126.38239], GUMAM:[35.36642,127.42603], IGBEM:[35.12861,127.21286], JB801:[35.09764,126.38208], JB802:[35.09672,126.22161], JB803:[34.97986,126.22272], JB804:[34.90556,126.30428], JB805:[34.67767,126.55303], JB806:[34.59247,126.64553], JB807:[34.50075,126.63592], JB808:[35.3815,126.89281], JB809:[35.30478,126.78522], JB851:[34.85025,126.38372], JB852:[34.85089,126.53469], JB853:[34.97758,126.68611], JB854:[34.84936,126.2035], JB855:[34.97789,126.20242], JB856:[34.54506,126.53933], JB857:[34.4425,126.62981], JB858:[35.19036,126.60672], JB859:[35.33669,126.88792], JISUN:[35.12756,127.01539], JJ221:[34.98522,126.85189], JJ222:[35.26794,126.88039], JJ223:[35.21489,127.03753], JJ224:[34.93858,126.68192], JJ401:[35.22253,126.97664], JJ402:[35.17878,127.08692], JJ403:[34.82403,126.66983], JY801:[34.65153,127.71381], JY802:[34.60903,127.83017], JY803:[34.74031,127.90056], JY804:[34.81547,127.50625], JY805:[35.03942,127.36936], JY806:[34.42017,127.72517], LILVI:[35.21878,126.87503], MARYO:[35.03517,126.74639], NAKZY:[35.21494,126.65961], POVOR:[34.25547,127.73325], PUMEG:[35.22572,127.06514], RELEX:[34.71978,126.38453]};
 const IFR_FIXES = {
   'ICN':   { lat: 37.460, lon: 126.441 },
   'GTC':   { lat: 37.558, lon: 126.794 },
@@ -7038,6 +7040,41 @@ const IFR_AIRWAYS = {
 };
 
 const IFR_DB = {
+  // ── AIP AD 2 SID 코딩 테이블 기반(2025~2026 AMDT) ──
+  RKJB: {
+    name: '무안',
+    stars: [], approaches: [],
+    sids: [
+      { name:'DOTOL1N', rwy:'01', wps:[{ident:'JB801',lat:35.09764,lon:126.38208}, {ident:'JB802',lat:35.09672,lon:126.22161}, {ident:'JB803',lat:34.97986,lon:126.22272}, {ident:'JB804',lat:34.90556,lon:126.30428}, {ident:'JB805',lat:34.67767,lon:126.55303}, {ident:'JB806',lat:34.59247,lon:126.64553}, {ident:'JB807',lat:34.50075,lon:126.63592}, {ident:'DOTOL',lat:34.25428,lon:126.61017}] },
+      { name:'MAKSA1N', rwy:'01', wps:[{ident:'BEMGA',lat:35.17053,lon:126.38239}, {ident:'NAKZY',lat:35.21494,lon:126.65961}, {ident:'JB809',lat:35.30478,lon:126.78522}, {ident:'JB808',lat:35.3815,lon:126.89281}, {ident:'MAKSA',lat:35.50314,lon:126.90611}] },
+      { name:'MAKSA1S', rwy:'19', wps:[{ident:'JB851',lat:34.85025,lon:126.38372}, {ident:'JB852',lat:34.85089,lon:126.53469}, {ident:'JB853',lat:34.97758,lon:126.68611}, {ident:'SAMUL',lat:35.12653,lon:126.86511}, {ident:'MAKSA',lat:35.50314,lon:126.90611}] },
+      { name:'MAKSA6S', rwy:'19', wps:[{ident:'JB851',lat:34.85025,lon:126.38372}, {ident:'JB854',lat:34.84936,lon:126.2035}, {ident:'JB855',lat:34.97789,lon:126.20242}, {ident:'JB858',lat:35.19036,lon:126.60672}, {ident:'JB859',lat:35.33669,lon:126.88792}, {ident:'MAKSA',lat:35.50314,lon:126.90611}] },
+      { name:'DOTOL1S', rwy:'19', wps:[{ident:'JB851',lat:34.85025,lon:126.38372}, {ident:'RELEX',lat:34.71978,lon:126.38453}, {ident:'JB856',lat:34.54506,lon:126.53933}, {ident:'JB857',lat:34.4425,lon:126.62981}, {ident:'DOTOL',lat:34.25428,lon:126.61017}] },
+    ],
+  },
+  RKJJ: {
+    name: '광주',
+    stars: [], approaches: [],
+    sids: [
+      { name:'LILVI1 · MAKSA', rwy:'04L/04R', wps:[{ident:'LILVI',lat:35.21878,lon:126.87503}, {ident:'MAKSA',lat:35.50314,lon:126.90611}] },
+      { name:'LILVI1 · IGDOK', rwy:'04L/04R', wps:[{ident:'LILVI',lat:35.21878,lon:126.87503}, {ident:'JJ401',lat:35.22253,lon:126.97664}, {ident:'PUMEG',lat:35.22572,lon:127.06514}, {ident:'GUMAM',lat:35.36642,lon:127.42603}, {ident:'IGDOK',lat:35.51767,lon:127.8185}] },
+      { name:'LILVI1 · TEDAN', rwy:'04L/04R', wps:[{ident:'LILVI',lat:35.21878,lon:126.87503}, {ident:'JJ401',lat:35.22253,lon:126.97664}, {ident:'JJ402',lat:35.17878,lon:127.08692}, {ident:'IGBEM',lat:35.12861,lon:127.21286}, {ident:'TEDAN',lat:35.12883,lon:127.31447}] },
+      { name:'LILVI1 · DOTOL', rwy:'04L/04R', wps:[{ident:'LILVI',lat:35.21878,lon:126.87503}, {ident:'JJ401',lat:35.22253,lon:126.97664}, {ident:'JISUN',lat:35.12756,lon:127.01539}, {ident:'JJ403',lat:34.82403,lon:126.66983}, {ident:'DOTOL',lat:34.25428,lon:126.61017}] },
+      { name:'MARYO1 · DOTOL', rwy:'22L/22R', wps:[{ident:'MARYO',lat:35.03517,lon:126.74639}, {ident:'JJ224',lat:34.93858,lon:126.68192}, {ident:'DOTOL',lat:34.25428,lon:126.61017}] },
+      { name:'MARYO1 · TEDAN', rwy:'22L/22R', wps:[{ident:'MARYO',lat:35.03517,lon:126.74639}, {ident:'JJ221',lat:34.98522,lon:126.85189}, {ident:'JISUN',lat:35.12756,lon:127.01539}, {ident:'TEDAN',lat:35.12883,lon:127.31447}] },
+      { name:'MARYO1 · IGDOK', rwy:'22L/22R', wps:[{ident:'MARYO',lat:35.03517,lon:126.74639}, {ident:'JJ221',lat:34.98522,lon:126.85189}, {ident:'JISUN',lat:35.12756,lon:127.01539}, {ident:'JJ223',lat:35.21489,lon:127.03753}, {ident:'GUMAM',lat:35.36642,lon:127.42603}, {ident:'IGDOK',lat:35.51767,lon:127.8185}] },
+      { name:'MARYO1 · MAKSA', rwy:'22L/22R', wps:[{ident:'MARYO',lat:35.03517,lon:126.74639}, {ident:'JJ221',lat:34.98522,lon:126.85189}, {ident:'JISUN',lat:35.12756,lon:127.01539}, {ident:'JJ222',lat:35.26794,lon:126.88039}, {ident:'MAKSA',lat:35.50314,lon:126.90611}] },
+    ],
+  },
+  RKJY: {
+    name: '여수',
+    stars: [], approaches: [],
+    sids: [
+      { name:'ANUBA1M', rwy:'17', wps:[{ident:'JY801',lat:34.65153,lon:127.71381}, {ident:'JY802',lat:34.60903,lon:127.83017}, {ident:'JY803',lat:34.74031,lon:127.90056}, {ident:'YSU',lat:34.84286,lon:127.61908}, {ident:'ANUBA',lat:35.12942,lon:127.58967}] },
+      { name:'POVOR1M', rwy:'17', wps:[{ident:'JY801',lat:34.65153,lon:127.71381}, {ident:'JY806',lat:34.42017,lon:127.72517}, {ident:'POVOR',lat:34.25547,lon:127.73325}] },
+      { name:'TEDAN1M', rwy:'17', wps:[{ident:'JY804',lat:34.81547,lon:127.50625}, {ident:'JY805',lat:35.03942,lon:127.36936}, {ident:'TEDAN',lat:35.12883,lon:127.31447}] },
+    ],
+  },
   RKSI: {
     name: '인천국제',
     stars: [],
@@ -12768,6 +12805,8 @@ try { AIRSPACE_DB.forEach(a=>{ if(aspcOn[a.id]) _aspcDraw(a); }); _aspcUpdateBtn
     // ② 항로: 임시 항로망 전면 교체 → AIP ENR 3.1/3.2의 53개 항로
     Object.keys(IFR_AIRWAYS).forEach(k => delete IFR_AIRWAYS[k]);
     ENR_ROUTES.forEach(r => { IFR_AIRWAYS[r.route] = r.wps.map(w => w.n); });
+    // ②-b 터미널 픽스 등록(항로 픽스에 없는 SID 전용 지점)
+    Object.entries(TERMINAL_FIXES).forEach(([k,v]) => { if (!IFR_FIXES[k]) IFR_FIXES[k] = { lat:v[0], lon:v[1] }; });
     // ③ SID/STAR/APP 절차 경유점 좌표를 AIP 픽스와 동기화(이름 일치 시)
     Object.values(IFR_DB).forEach(ap => {
       ['sids', 'stars', 'approaches'].forEach(k => (ap[k] || []).forEach(proc => {
