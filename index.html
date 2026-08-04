@@ -6840,31 +6840,6 @@ const IFR_FIXES = {
   'PC251': { lat: 33.483, lon: 126.399 },
   // RKJK Gunsan (actual AIP coordinates)
   'KUZ':   { lat: 35.9104, lon: 126.6114 },  // GUNSAN VORTAC 112.8
-  'COBET': { lat: 36.2441, lon: 126.6042 },  // IAF VOR36
-  'JINRO': { lat: 36.1607, lon: 126.6060 },
-  'WWOLF': { lat: 35.9405, lon: 126.9169 },  // IAF VOR36/18
-  'WYZRD': { lat: 35.8795, lon: 126.3060 },  // IAF VOR36/18
-  'TRASK': { lat: 35.5894, lon: 126.7240 },  // IAF VOR36/18
-  'BOREV': { lat: 35.6697, lon: 126.6960 },  // IF VOR36
-  'HALUN': { lat: 35.7403, lon: 126.6712 },
-  'TILIV': { lat: 35.8109, lon: 126.6464 },  // FAF VOR36
-  'WONAP': { lat: 35.8831, lon: 126.6210 },
-  'JEWEL': { lat: 36.2386, lon: 126.5368 },  // IAF ILS36/18
-  'BLAZZ': { lat: 36.1566, lon: 126.5556 },  // IF ILS36/18
-  'JULOP': { lat: 35.5832, lon: 126.6928 },  // IAF ILS36
-  'VIPIR': { lat: 35.6650, lon: 126.6725 },  // IF ILS36
-  'BOXOL': { lat: 35.7420, lon: 126.6543 },
-  'ROCEE': { lat: 35.8192, lon: 126.6360 },  // FAF ILS36
-  'BEZEE': { lat: 35.8831, lon: 126.6208 },
-  'KIXIS': { lat: 35.9988, lon: 126.6095 },  // FAF VOR18
-  'RETAG': { lat: 35.9237, lon: 126.6111 },
-  'LUKKI': { lat: 35.9936, lon: 126.5945 },  // FAF ILS/RNP18
-  'EKIVA': { lat: 36.2386, lon: 126.5369 },  // IAF RNP18
-  'UPMAN': { lat: 36.0784, lon: 126.5746 },  // IF RNP18
-  'WAROB': { lat: 35.7558, lon: 126.9289 },  // IAF RNP36
-  'HEDOD': { lat: 35.7010, lon: 126.7330 },  // IF RNP36
-  'CIKRA': { lat: 35.8270, lon: 126.6800 },  // FAF RNP36
-  'ZUDUX': { lat: 35.9140, lon: 126.6430 },  // MAPt RNP36
   'LINTA': { lat: 35.5211, lon: 126.8553 },
   'ENTEL': { lat: 36.3864, lon: 126.9514 },
   'PORIX': { lat: 35.6742, lon: 126.7614 },
@@ -7408,46 +7383,7 @@ const IFR_DB = {
       ]},
     ],
     stars: [],
-    approaches: [
-      { name:'ILS/LOC RWY 36', wps:[
-        {ident:'VIPIR', lat:35.6650, lon:126.6725},
-        {ident:'BOXOL', lat:35.7420, lon:126.6543},
-        {ident:'ROCEE', lat:35.8192, lon:126.6360},
-        {ident:'BEZEE', lat:35.8831, lon:126.6208},
-        {ident:'RW36',  lat:35.8916, lon:126.6188},
-      ]},
-      { name:'VOR/DME RWY 36', wps:[
-        {ident:'BOREV', lat:35.6697, lon:126.6960},
-        {ident:'HALUN', lat:35.7403, lon:126.6712},
-        {ident:'TILIV', lat:35.8109, lon:126.6464},
-        {ident:'WONAP', lat:35.8831, lon:126.6210},
-        {ident:'RW36',  lat:35.8916, lon:126.6188},
-      ]},
-      { name:'RNP RWY 36', wps:[
-        {ident:'WAROB', lat:35.7558, lon:126.9289},
-        {ident:'HEDOD', lat:35.7010, lon:126.7330, arc:{clat:35.7894,clon:126.8035,dir:'R'}},
-        {ident:'CIKRA', lat:35.8270, lon:126.6800, arc:{clat:35.7894,clon:126.8035,dir:'R'}},
-        {ident:'ZUDUX', lat:35.9140, lon:126.6430},
-        {ident:'RW36',  lat:35.8916, lon:126.6188},
-      ]},
-      { name:'ILS/LOC RWY 18', wps:[
-        {ident:'BLAZZ', lat:36.1566, lon:126.5556},
-        {ident:'LUKKI', lat:35.9936, lon:126.5945},
-        {ident:'RW18',  lat:35.9159, lon:126.6130},
-      ]},
-      { name:'VOR/DME RWY 18', wps:[
-        {ident:'JINRO', lat:36.1607, lon:126.6060},
-        {ident:'KIXIS', lat:35.9988, lon:126.6095},
-        {ident:'RETAG', lat:35.9237, lon:126.6111},
-        {ident:'RW18',  lat:35.9159, lon:126.6130},
-      ]},
-      { name:'RNP RWY 18', wps:[
-        {ident:'EKIVA', lat:36.2386, lon:126.5369},
-        {ident:'UPMAN', lat:36.0784, lon:126.5746},
-        {ident:'LUKKI', lat:35.9936, lon:126.5945},
-        {ident:'RW18',  lat:35.9159, lon:126.6130},
-      ]},
-    ],
+    approaches: [],
   },
   RKSM: {
     name: '서울공항(성남)',
