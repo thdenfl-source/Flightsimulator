@@ -6746,7 +6746,7 @@ function exitSolo() {
 // IFR DATABASE
 // ══════════════════════════════════════════════════════
 // ── SID 터미널 픽스(AIP 코딩 테이블) — 항로 픽스에 없어 별도 등록 ──
-const TERMINAL_FIXES = {ANUBA:[35.12942,127.58967], BEMGA:[35.17053,126.38239], GUMAM:[35.36642,127.42603], IGBEM:[35.12861,127.21286], JB801:[35.09764,126.38208], JB802:[35.09672,126.22161], JB803:[34.97986,126.22272], JB804:[34.90556,126.30428], JB805:[34.67767,126.55303], JB806:[34.59247,126.64553], JB807:[34.50075,126.63592], JB808:[35.3815,126.89281], JB809:[35.30478,126.78522], JB851:[34.85025,126.38372], JB852:[34.85089,126.53469], JB853:[34.97758,126.68611], JB854:[34.84936,126.2035], JB855:[34.97789,126.20242], JB856:[34.54506,126.53933], JB857:[34.4425,126.62981], JB858:[35.19036,126.60672], JB859:[35.33669,126.88792], JISUN:[35.12756,127.01539], JJ221:[34.98522,126.85189], JJ222:[35.26794,126.88039], JJ223:[35.21489,127.03753], JJ224:[34.93858,126.68192], JJ401:[35.22253,126.97664], JJ402:[35.17878,127.08692], JJ403:[34.82403,126.66983], JY801:[34.65153,127.71381], JY802:[34.60903,127.83017], JY803:[34.74031,127.90056], JY804:[34.81547,127.50625], JY805:[35.03942,127.36936], JY806:[34.42017,127.72517], LILVI:[35.21878,126.87503], MARYO:[35.03517,126.74639], NAKZY:[35.21494,126.65961], POVOR:[34.25547,127.73325], PUMEG:[35.22572,127.06514], RELEX:[34.71978,126.38453], AROKU:[37.66499,127.93747], ARUNA:[37.39502,127.77061], GANAM:[37.11113,127.66447], IKILA:[37.61324,128.06913], JY851:[34.94392,127.56747], JY852:[34.99197,127.71231], JY853:[34.89364,127.76031], JY854:[34.71314,127.65761], JY857:[34.78486,127.69833], JY865:[34.79958,127.51753], JY866:[34.68389,127.56364], RULRU:[37.19389,127.68693], SANUV:[37.34346,127.90192], AKPON:[33.78044,127.33139], ATIMO:[33.39792,126.73089], CJU:[33.38461,126.62411], IPDAS:[34.25408,126.71706], KAMIT:[34.25392,126.77158], LEDIN:[33.54503,126.17081], LIMDI:[33.55369,125.83139], MEXER:[33.45778,126.38667], OLLEH:[33.96172,126.74069], PALRI:[33.64089,126.74372], PANSI:[33.004,126.20697], PAPLU:[33.57814,127.06014], PC811:[33.70336,126.71356], PC813:[33.49875,126.84722], PC814:[33.26011,126.48708], PC816:[33.44903,126.32522], PC832:[33.67944,126.23108], PC833:[33.83578,126.51244], PC834:[33.9295,126.68214], PC841:[33.42853,126.32994], PC842:[33.29397,126.35481], PC845:[33.41756,126.89], PC846:[33.321,126.59128], PC861:[33.56217,126.40947], PC871:[33.65147,126.40889], PC872:[33.72136,126.52186], PC874:[33.81056,127.18578], TAMNA:[33.47097,127.33139], TOREN:[33.81022,126.66603], PD801:[33.43869,126.71128], PD802:[33.41642,126.83819], PD803:[33.34019,126.88167], PD804:[33.27681,126.78347], PD811:[33.24339,126.71239], PD812:[33.20139,126.60483], PD813:[33.25122,126.52022], PD814:[33.33772,126.52925]};
+const TERMINAL_FIXES = {ANUBA:[35.12942,127.58967], BEMGA:[35.17053,126.38239], GUMAM:[35.36642,127.42603], IGBEM:[35.12861,127.21286], JB801:[35.09764,126.38208], JB802:[35.09672,126.22161], JB803:[34.97986,126.22272], JB804:[34.90556,126.30428], JB805:[34.67767,126.55303], JB806:[34.59247,126.64553], JB807:[34.50075,126.63592], JB808:[35.3815,126.89281], JB809:[35.30478,126.78522], JB851:[34.85025,126.38372], JB852:[34.85089,126.53469], JB853:[34.97758,126.68611], JB854:[34.84936,126.2035], JB855:[34.97789,126.20242], JB856:[34.54506,126.53933], JB857:[34.4425,126.62981], JB858:[35.19036,126.60672], JB859:[35.33669,126.88792], JISUN:[35.12756,127.01539], JJ221:[34.98522,126.85189], JJ222:[35.26794,126.88039], JJ223:[35.21489,127.03753], JJ224:[34.93858,126.68192], JJ401:[35.22253,126.97664], JJ402:[35.17878,127.08692], JJ403:[34.82403,126.66983], JY801:[34.65153,127.71381], JY802:[34.60903,127.83017], JY803:[34.74031,127.90056], JY804:[34.81547,127.50625], JY805:[35.03942,127.36936], JY806:[34.42017,127.72517], LILVI:[35.21878,126.87503], MARYO:[35.03517,126.74639], NAKZY:[35.21494,126.65961], POVOR:[34.25547,127.73325], PUMEG:[35.22572,127.06514], RELEX:[34.71978,126.38453], AROKU:[37.66499,127.93747], ARUNA:[37.39502,127.77061], GANAM:[37.11113,127.66447], IKILA:[37.61324,128.06913], JY851:[34.94392,127.56747], JY852:[34.99197,127.71231], JY853:[34.89364,127.76031], JY854:[34.71314,127.65761], JY857:[34.78486,127.69833], JY865:[34.79958,127.51753], JY866:[34.68389,127.56364], RULRU:[37.19389,127.68693], SANUV:[37.34346,127.90192], AKPON:[33.78044,127.33139], ATIMO:[33.39792,126.73089], CJU:[33.38461,126.62411], IPDAS:[34.25408,126.71706], KAMIT:[34.25392,126.77158], LEDIN:[33.54503,126.17081], LIMDI:[33.55369,125.83139], MEXER:[33.45778,126.38667], OLLEH:[33.96172,126.74069], PALRI:[33.64089,126.74372], PANSI:[33.004,126.20697], PAPLU:[33.57814,127.06014], PC811:[33.70336,126.71356], PC813:[33.49875,126.84722], PC814:[33.26011,126.48708], PC816:[33.44903,126.32522], PC832:[33.67944,126.23108], PC833:[33.83578,126.51244], PC834:[33.9295,126.68214], PC841:[33.42853,126.32994], PC842:[33.29397,126.35481], PC845:[33.41756,126.89], PC846:[33.321,126.59128], PC861:[33.56217,126.40947], PC871:[33.65147,126.40889], PC872:[33.72136,126.52186], PC874:[33.81056,127.18578], TAMNA:[33.47097,127.33139], TOREN:[33.81022,126.66603], PD801:[33.43869,126.71128], PD802:[33.41642,126.83819], PD803:[33.34019,126.88167], PD804:[33.27681,126.78347], PD811:[33.24339,126.71239], PD812:[33.20139,126.60483], PD813:[33.25122,126.52022], PD814:[33.33772,126.52925], CG050:[37.37178,126.58528], CG100:[37.27119,126.62883], CP101:[37.10561,126.48267], ATNER:[37.10442,126.31458], HP121:[37.1025,126.09786], BELTU:[37.205,125.79972], BINIL:[37.397,125.23314], CD120:[37.12439,126.62533], VIMER:[36.98411,126.62358], EXUTO:[36.88572,126.62472], BOPTA:[36.73511,126.61622], CG101:[37.28525,126.88953], CG130:[37.16825,126.97861], SOT:[37.09436,127.03167], CG200:[36.92478,127.16211], OSPOT:[36.83836,127.34858], CK100:[37.30631,127.12261], CK099:[37.33922,127.24778], EGOBA:[37.48742,127.37942], HD050:[37.38572,126.48436], HD100:[37.27972,126.52028], AD020:[37.57919,126.35528], AD050:[37.57964,126.2085], AP140:[37.40469,125.75594], NOPIK:[37.40333,125.65139], YD070:[37.40872,126.13583], YD100:[37.32639,126.25389], YD130:[37.19436,126.44225], YD160:[37.03878,126.51617], YD190:[36.87731,126.56944], YG160:[37.12181,126.62914], YK130:[37.32461,126.45864], YK170:[37.32172,126.71078], YK210:[37.31814,127.00872], EG020:[37.55878,126.37347], EG040:[37.64094,126.34419], ASIDI:[37.67019,126.44736], EG070:[37.64144,126.54683], EG140:[37.41319,126.80736], EG160:[37.31989,126.89572], YD020:[37.50369,126.36881], YD040:[37.50822,126.18247], YP080:[37.40736,125.99011], UD050:[37.50053,126.86631], UD060:[37.37128,126.91794], UD080:[37.23425,127.03572], UG100:[37.10669,127.13719], UG130:[36.96269,127.25033], UP050:[37.39506,126.90814], UP060:[37.35847,126.76914], UP059:[37.41217,126.59381], UP100:[37.41075,126.37328], UD100:[37.09067,126.98069], UPDET:[36.931,126.91981], BULTI:[36.72286,126.82492], ZD080:[37.2295,127.09531], ZD100:[37.14089,127.19503], ZD120:[37.03728,127.19475], ZD119:[36.82508,126.94467], ZG130:[36.98386,127.27489], TD040:[37.63417,126.69269], TD050:[37.56142,126.59364], TP080:[37.52158,126.53953], TP120:[37.40986,126.25814], TD100:[37.40522,126.57256], TD120:[37.32356,126.59464], TD130:[37.22239,126.62803], TD180:[37.01761,126.69531], TD200:[36.90239,126.73314], QD040:[37.63417,126.69269], QD050:[37.56142,126.59364], QP080:[37.52158,126.53953], QP079:[37.48447,126.44575], QP120:[37.40986,126.25814], QD080:[37.47814,126.58997], QD090:[37.37178,126.58528], QD110:[37.27119,126.62883], QD150:[37.04433,126.81461], QD160:[36.88969,126.81958], MEESA:[37.57886,127.24578], MUGAR:[37.29597,127.31906], PINEV:[37.25278,127.31778], BIDBA:[37.34258,127.32069], YEOJU:[37.41289,127.44719], VEMUM:[37.53925,127.33678], UPTAD:[37.45592,127.1845], SEL:[37.41361,126.92836], ELAPI:[36.33722,128.8475], LOSTO:[36.33778,129.43], BULGA:[35.93583,129.82333], APARU:[35.41167,129.15889], LAPAL:[35.90361,129.08111], NPH:[35.98636,129.40883], KPO:[35.97722,129.47444], USN:[35.59861,129.35333]};
 const IFR_FIXES = {
   'ICN':   { lat: 37.460, lon: 126.441 },
   'GTC':   { lat: 37.558, lon: 126.794 },
@@ -7104,19 +7104,24 @@ const IFR_DB = {
     name: '인천국제',
     stars: [],
     sids: [
-      { name:'BOPTA1A', rwy:'15L/15R', wps:[
-        {ident:'AROSO',lat:37.301,lon:126.383},
-        {ident:'BOPTA',lat:36.7350,lon:126.6161},
-      ]},
-      { name:'KARPE1A', rwy:'33L/33R', wps:[
-        {ident:'KARPE',lat:37.550,lon:127.017},
-        {ident:'EMHIT',lat:37.817,lon:127.533},
-      ]},
-      { name:'AGAVO1A', rwy:'15L/15R', wps:[
-        {ident:'AROSO',lat:37.301,lon:126.383},
-        {ident:'BEACK',lat:36.500,lon:126.917},
-        {ident:'AGAVO',lat:37.1667,lon:124.0000},
-      ]},
+      { name:'BINIL3C', rwy:'15L/15R', wps:[{ident:'CG050'}, {ident:'CG100'}, {ident:'CP101'}, {ident:'ATNER'}, {ident:'HP121'}, {ident:'BELTU'}, {ident:'BINIL'}] },
+      { name:'BOPTA3C', rwy:'15L/15R', wps:[{ident:'CG050'}, {ident:'CG100'}, {ident:'CD120'}, {ident:'VIMER'}, {ident:'EXUTO'}, {ident:'BOPTA'}] },
+      { name:'OSPOT2C', rwy:'15L/15R', wps:[{ident:'CG050'}, {ident:'CG100'}, {ident:'CG101'}, {ident:'CG130'}, {ident:'SOT'}, {ident:'CG200'}, {ident:'OSPOT'}] },
+      { name:'EGOBA2C', rwy:'15L/15R', wps:[{ident:'CG050'}, {ident:'CG100'}, {ident:'CG101'}, {ident:'CK100'}, {ident:'CK099'}, {ident:'EGOBA'}] },
+      { name:'BINIL3H', rwy:'16L/16R', wps:[{ident:'HD050'}, {ident:'HD100'}, {ident:'ATNER'}, {ident:'HP121'}, {ident:'BELTU'}, {ident:'BINIL'}] },
+      { name:'BOPTA3H', rwy:'16L/16R', wps:[{ident:'HD050'}, {ident:'HD100'}, {ident:'CD120'}, {ident:'VIMER'}, {ident:'EXUTO'}, {ident:'BOPTA'}] },
+      { name:'OSPOT2H', rwy:'16L/16R', wps:[{ident:'HD050'}, {ident:'HD100'}, {ident:'CG100'}, {ident:'CG101'}, {ident:'CG130'}, {ident:'SOT'}, {ident:'CG200'}, {ident:'OSPOT'}] },
+      { name:'EGOBA2H', rwy:'16L/16R', wps:[{ident:'HD050'}, {ident:'HD100'}, {ident:'CG100'}, {ident:'CG101'}, {ident:'CK100'}, {ident:'CK099'}, {ident:'EGOBA'}] },
+      { name:'NOPIK2A', rwy:'33L/33R', wps:[{ident:'AD020'}, {ident:'AD050'}, {ident:'AP140'}, {ident:'NOPIK'}] },
+      { name:'BOPTA2A', rwy:'33L/33R', wps:[{ident:'AD020'}, {ident:'AD050'}, {ident:'YD070'}, {ident:'YD100'}, {ident:'YD130'}, {ident:'YD160'}, {ident:'YD190'}, {ident:'BOPTA'}] },
+      { name:'OSPOT2A', rwy:'33L/33R', wps:[{ident:'AD020'}, {ident:'AD050'}, {ident:'YD070'}, {ident:'YD100'}, {ident:'YD130'}, {ident:'YG160'}, {ident:'OSPOT'}] },
+      { name:'EGOBA2A', rwy:'33L/33R', wps:[{ident:'AD020'}, {ident:'AD050'}, {ident:'YD070'}, {ident:'YD100'}, {ident:'YK130'}, {ident:'YK170'}, {ident:'YK210'}, {ident:'EGOBA'}] },
+      { name:'OSPOT2E', rwy:'33L/33R', wps:[{ident:'EG020'}, {ident:'EG040'}, {ident:'ASIDI'}, {ident:'EG070'}, {ident:'EG140'}, {ident:'EG160'}, {ident:'OSPOT'}] },
+      { name:'EGOBA2E', rwy:'33L/33R', wps:[{ident:'EG020'}, {ident:'EG040'}, {ident:'ASIDI'}, {ident:'EG070'}, {ident:'EG140'}, {ident:'SEL'}, {ident:'EGOBA'}] },
+      { name:'NOPIK2Y', rwy:'34L/34R', wps:[{ident:'YD020'}, {ident:'YD040'}, {ident:'YP080'}, {ident:'NOPIK'}] },
+      { name:'BOPTA2Y', rwy:'34L/34R', wps:[{ident:'YD020'}, {ident:'YD040'}, {ident:'YD070'}, {ident:'YD100'}, {ident:'YD130'}, {ident:'YD160'}, {ident:'YD190'}, {ident:'BOPTA'}] },
+      { name:'OSPOT2Y', rwy:'34L/34R', wps:[{ident:'YD020'}, {ident:'YD040'}, {ident:'YD070'}, {ident:'YD100'}, {ident:'YD130'}, {ident:'YG160'}, {ident:'OSPOT'}] },
+      { name:'EGOBA2Y', rwy:'34L/34R', wps:[{ident:'YD020'}, {ident:'YD040'}, {ident:'YD070'}, {ident:'YD100'}, {ident:'YK130'}, {ident:'YK170'}, {ident:'YK210'}, {ident:'EGOBA'}] },
     ],
     approaches: [
       { name:'ILS Z 15L', wps:[
@@ -7138,13 +7143,16 @@ const IFR_DB = {
     name: '김포',
     stars: [],
     sids: [
-      { name:'KARPE1S', rwy:'14L/14R', wps:[
-        {ident:'GTC',  lat:37.558,lon:126.794},
-        {ident:'KARPE',lat:37.550,lon:127.017},
-      ]},
-      { name:'EMHIT1S', rwy:'32L/32R', wps:[
-        {ident:'EMHIT',lat:37.817,lon:127.533},
-      ]},
+      { name:'OSPOT2U', rwy:'14L/14R', wps:[{ident:'UD050'}, {ident:'UD060'}, {ident:'UD080'}, {ident:'UG100'}, {ident:'UG130'}, {ident:'OSPOT'}] },
+      { name:'EGOBA2U', rwy:'14L/14R', wps:[{ident:'UD050'}, {ident:'SEL'}, {ident:'EGOBA'}] },
+      { name:'NOPIK2U', rwy:'14L/14R', wps:[{ident:'UD050'}, {ident:'UP050'}, {ident:'UP060'}, {ident:'UP059'}, {ident:'UP100'}, {ident:'NOPIK'}] },
+      { name:'BULTI2U', rwy:'14L/14R', wps:[{ident:'UD050'}, {ident:'UD060'}, {ident:'UD080'}, {ident:'UD100'}, {ident:'UPDET'}, {ident:'BULTI'}] },
+      { name:'BULTI2Z', rwy:'14L/14R', wps:[{ident:'UD050'}, {ident:'UP050'}, {ident:'ZD080'}, {ident:'ZD100'}, {ident:'ZD120'}, {ident:'ZD119'}, {ident:'BULTI'}] },
+      { name:'OSPOT2Z', rwy:'14L/14R', wps:[{ident:'UD050'}, {ident:'UP050'}, {ident:'ZD080'}, {ident:'ZD100'}, {ident:'ZG130'}, {ident:'OSPOT'}] },
+      { name:'NOPIK2T', rwy:'32L/32R', wps:[{ident:'TD040'}, {ident:'TD050'}, {ident:'TP080'}, {ident:'TP120'}, {ident:'NOPIK'}] },
+      { name:'BULTI2T', rwy:'32L/32R', wps:[{ident:'TD040'}, {ident:'TD050'}, {ident:'TD100'}, {ident:'TD120'}, {ident:'TD130'}, {ident:'TD180'}, {ident:'TD200'}, {ident:'BULTI'}] },
+      { name:'NOPIK2Q', rwy:'32L/32R', wps:[{ident:'QD040'}, {ident:'QD050'}, {ident:'QP080'}, {ident:'QP079'}, {ident:'QP120'}, {ident:'NOPIK'}] },
+      { name:'BULTI2Q', rwy:'32L/32R', wps:[{ident:'QD040'}, {ident:'QD050'}, {ident:'QD080'}, {ident:'QD090'}, {ident:'QD110'}, {ident:'QD150'}, {ident:'QD160'}, {ident:'BULTI'}] },
     ],
     approaches: [
       { name:'ILS 14L', wps:[
@@ -7439,6 +7447,62 @@ const IFR_DB = {
         {ident:'LUKKI', lat:35.9936, lon:126.5945},
         {ident:'RW18',  lat:35.9159, lon:126.6130},
       ]},
+    ],
+  },
+  RKSM: {
+    name: '서울공항(성남)',
+    stars: [], approaches: [],
+    sids: [
+      { name:'RNAV MEESA 1', rwy:'01/02', wps:[{ident:'MEESA'}] },
+      { name:'MEESA 1 · KARBU', rwy:'01/02', wps:[{ident:'MEESA'}, {ident:'KARBU'}] },
+      { name:'MEESA 1 · PINEV', rwy:'01/02', wps:[{ident:'MEESA'}, {ident:'EGOBA'}, {ident:'MUGAR'}, {ident:'PINEV'}] },
+      { name:'RNAV MUGAR 1', rwy:'19/20', wps:[{ident:'MUGAR'}] },
+      { name:'RNAV SONGTAN 1', rwy:'19/20', wps:[{ident:'SOT'}] },
+      { name:'RNAV YEOJU 1', rwy:'19/20', wps:[{ident:'BIDBA'}, {ident:'YEOJU'}] },
+      { name:'YEOJU 1 · SEL', rwy:'19/20', wps:[{ident:'BIDBA'}, {ident:'YEOJU'}, {ident:'VEMUM'}, {ident:'UPTAD'}, {ident:'SEL'}] },
+      { name:'YEOJU 1 · KARBU', rwy:'19/20', wps:[{ident:'BIDBA'}, {ident:'YEOJU'}, {ident:'KARBU'}] },
+    ],
+  },
+  RKPU: {
+    name: '울산',
+    stars: [], approaches: [],
+    sids: [
+      { name:'RNAV KPO 1M', rwy:'18', wps:[{ident:'PU851'}, {ident:'PU852'}, {ident:'PU853'}, {ident:'KPO'}] },
+      { name:'RNAV APARU 1M', rwy:'18', wps:[{ident:'PU851'}, {ident:'APARU'}] },
+      { name:'KPO 1A (VOR)', rwy:'18', wps:[{ident:'KPO'}] },
+      { name:'KPO 7S (VOR)', rwy:'18', wps:[{ident:'KPO'}] },
+      { name:'APARU 7S (VOR)', rwy:'18', wps:[{ident:'APARU'}] },
+      { name:'RNAV KPO 1R', rwy:'36', wps:[{ident:'PU801'}, {ident:'PU802'}, {ident:'KPO'}] },
+      { name:'RNAV APARU 1R', rwy:'36', wps:[{ident:'PU801'}, {ident:'PU802'}, {ident:'PU803'}, {ident:'APARU'}] },
+      { name:'KPO 8N (VOR)', rwy:'36', wps:[{ident:'KPO'}] },
+      { name:'APARU 1A (VOR)', rwy:'36', wps:[{ident:'APARU'}] },
+      { name:'APARU 8N (VOR)', rwy:'36', wps:[{ident:'APARU'}] },
+    ],
+  },
+  RKTH: {
+    name: '포항경주',
+    stars: [], approaches: [],
+    sids: [
+      { name:'POHANG 5 · ELAPI (VOR)', rwy:'10', wps:[{ident:'NPH'}, {ident:'ELAPI'}] },
+      { name:'POHANG 5 · LOSTO (VOR)', rwy:'10', wps:[{ident:'NPH'}, {ident:'LOSTO'}] },
+      { name:'POHANG 5 · BULGA (VOR)', rwy:'10', wps:[{ident:'NPH'}, {ident:'BULGA'}] },
+      { name:'POHANG 5 · APARU (VOR)', rwy:'10', wps:[{ident:'NPH'}, {ident:'APARU'}] },
+      { name:'POHANG 5 · LAPAL (VOR)', rwy:'10', wps:[{ident:'NPH'}, {ident:'LAPAL'}] },
+      { name:'RNAV DORTI 1 · ELAPI', rwy:'10', wps:[{ident:'DORTI'}, {ident:'TH801'}, {ident:'TH802'}, {ident:'TH803'}, {ident:'ELAPI'}] },
+      { name:'RNAV DORTI 1 · LOSTO', rwy:'10', wps:[{ident:'DORTI'}, {ident:'TH801'}, {ident:'LOSTO'}] },
+      { name:'RNAV DORTI 1 · BULGA', rwy:'10', wps:[{ident:'DORTI'}, {ident:'TH804'}, {ident:'BULGA'}] },
+      { name:'RNAV DORTI 1 · APARU', rwy:'10', wps:[{ident:'DORTI'}, {ident:'TH805'}, {ident:'MAKUN'}, {ident:'APARU'}] },
+      { name:'RNAV DORTI 1 · LAPAL', rwy:'10', wps:[{ident:'DORTI'}, {ident:'TH805'}, {ident:'TH806'}, {ident:'LAPAL'}] },
+      { name:'POHANG 4 · ELAPI (VOR)', rwy:'28', wps:[{ident:'NPH'}, {ident:'ELAPI'}] },
+      { name:'POHANG 4 · LOSTO (VOR)', rwy:'28', wps:[{ident:'NPH'}, {ident:'LOSTO'}] },
+      { name:'POHANG 4 · BULGA (VOR)', rwy:'28', wps:[{ident:'NPH'}, {ident:'BULGA'}] },
+      { name:'POHANG 4 · APARU (VOR)', rwy:'28', wps:[{ident:'NPH'}, {ident:'APARU'}] },
+      { name:'POHANG 4 · LAPAL (VOR)', rwy:'28', wps:[{ident:'NPH'}, {ident:'LAPAL'}] },
+      { name:'RNAV MARMI 1 · ELAPI', rwy:'28', wps:[{ident:'MARMI'}, {ident:'TH903'}, {ident:'ELAPI'}] },
+      { name:'RNAV MARMI 1 · LOSTO', rwy:'28', wps:[{ident:'MARMI'}, {ident:'TH901'}, {ident:'TH902'}, {ident:'LOSTO'}] },
+      { name:'RNAV MARMI 1 · BULGA', rwy:'28', wps:[{ident:'MARMI'}, {ident:'TH904'}, {ident:'TH905'}, {ident:'TH906'}, {ident:'BULGA'}] },
+      { name:'RNAV MARMI 1 · APARU', rwy:'28', wps:[{ident:'MARMI'}, {ident:'TH904'}, {ident:'MAKUN'}, {ident:'APARU'}] },
+      { name:'RNAV MARMI 1 · LAPAL', rwy:'28', wps:[{ident:'MARMI'}, {ident:'LAPAL'}] },
     ],
   },
 };
