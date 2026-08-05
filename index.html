@@ -1444,6 +1444,9 @@ body.night-mode::after {
       <ul>
         <li>MAP 하단 <b>▶ FLY</b>로 시작(다시 누르면 PAUSE), <b>RESET</b> 초기화, <b>CLR</b> 비행계획 삭제.</li>
         <li>PFD 하단 FCP에서 <b>IAS·HDG·CRS·VS·ALT·CRHT</b>를 ▲▼/◀▶로 조절.</li>
+        <li><b>HDG ◀▶</b>는 기수를 즉시 돌리지 않고 <b>선택 헤딩(HSI 청록 벅)</b>만 옮깁니다.
+            AFCS가 <b>표준선회(360°/2분 = 3°/s)</b>로 선회하며, 뱅크각은 <b>속도의 16%</b>로 자동 산출됩니다
+            (100kt → 16°). 목표에 가까워지면 자동 롤아웃하고, 수동 뱅크 트림을 쓰면 해제됩니다.</li>
         <li><b>IAS/HDG/CRS 라벨 버튼</b>을 누르면 현재 값으로 즉시 동기화(CRS는 NAV 소스로 Direct-To).</li>
       </ul>
 
@@ -2024,6 +2027,14 @@ let selSpd  = 80;   // IAS preselect (kt)
 let selAlt  = 500;  // ALT preselect (ft) — target for ALT hold mode
 let selCrht = 500;  // CRHT preselect (ft) — target for CRHT hold mode
 let selHdg  = 360;  // HDG preselect (°, 1-360)
+// ── HDG SEL: 선택 헤딩으로 표준선회(360°/2분 = 3°/s)로 선회 ──
+// 뱅크각은 속도의 16% (표준선회 근사). 실제 선회율은 비행모델의 조정선회식
+// turnRate = g·tan(bank)/V 로 산출되므로 속도에 따라 자동으로 3°/s 부근이 된다.
+let hdgSelOn = false;              // HDG SEL(선회) 모드 인게이지
+const HDG_ROLLOUT_DEG = 6;         // 남은 각도가 이 이하면 뱅크를 비례 감소(롤아웃)
+function stdRateBank(spd) {        // 표준선회 뱅크각(°) — 속도의 16%, 최대 30°
+  return Math.max(2, Math.min(30, Math.abs(spd) * 0.16));
+}
 let selVS   = 1000; // VS preselect (fpm, magnitude) — used by ALT hold mode
                     // CRHT hold mode ignores this and always converges at 500 fpm
 let spdTrend = 0;   // 6-second speed trend (knots, smoothed)
@@ -2257,7 +2268,7 @@ function startTrimHold(dir) {
     _trimNonGspdDir = dir;
     if (dir === 'L' || dir === 'R') {
       bankTarget = Math.max(-60, Math.min(60, bankTarget + (dir === 'R' ? 1 : -1)));
-      rollApOn = false;
+      rollApOn = false; hdgSelOn = false;   // 수동 뱅크 → HDG SEL 해제
     } else {
       const d = dir === 'F' ? 1 : -1;
       applyDelta('spd', d);
@@ -2364,7 +2375,11 @@ function toggleObs() {
 function toggleNavAp() {
   navApOn = !navApOn;
   document.getElementById('nav-ap-btn').classList.toggle('on', navApOn);
-  if (!navApOn) bankTarget = 0;
+  if (!navApOn) {
+    bankTarget = 0;
+    selHdg = ((Math.round(S.hdg) + 359) % 360) + 1;   // 현재 헤딩 유지로 복귀
+    hdgSelOn = true; rollApOn = true;
+  }
 }
 
 // Compute fly-by anticipation distance (NM) for a turn from current course to nextCrs
@@ -2763,7 +2778,7 @@ function drawFMA(x, y, w) {
   //   Left   (collective): ALT or CRHT (or dim ALT when both holds are off)
   //   Middle (yaw/roll)  : HDG or GS when GSPD
   //   Right  (pitch)     : IAS — or GS when GSPD engaged
-  let left, leftOn, mid = navApOn ? 'NAV' : 'HDG', midOn = rollApOn || navApOn, right, rightOn;
+  let left, leftOn, mid = navApOn ? 'NAV' : (hdgSelOn ? 'HDG SEL' : 'HDG'), midOn = rollApOn || navApOn, right, rightOn;
 
   if (gspdOn) {
     // GSPD engaged: both yaw/roll (mid) and pitch (right) are driven by
@@ -3441,6 +3456,28 @@ function drawHSI(x, y, w, h) {
     ctx.lineTo(gtX, gtY + gs2);
     ctx.lineTo(gtX - gs2 * 0.55, gtY);
     ctx.closePath(); ctx.fill();
+  }
+
+  // ── HDG bug (선택 헤딩) — 컴퍼스 링 위 청록 노치 ──
+  {
+    const bugRel = normAS(selHdg - S.hdg) * D2R;
+    const bR = r * 0.99, bw = 5, bh = 7;
+    ctx.save();
+    ctx.rotate(bugRel);
+    ctx.fillStyle = hdgSelOn ? '#00e5ff' : '#4a6a72';
+    ctx.beginPath();
+    ctx.moveTo(-bw, -bR);        ctx.lineTo(bw, -bR);
+    ctx.lineTo(bw, -bR + bh);    ctx.lineTo(bw * 0.35, -bR + bh);
+    ctx.lineTo(0, -bR + bh * 0.45);
+    ctx.lineTo(-bw * 0.35, -bR + bh); ctx.lineTo(-bw, -bR + bh);
+    ctx.closePath(); ctx.fill();
+    ctx.restore();
+    // 선택 헤딩 수치(컴퍼스 상단)
+    ctx.fillStyle = hdgSelOn ? '#00e5ff' : '#4a6a72';
+    ctx.font = `bold ${Math.max(9, r * 0.115)}px Helvetica Neue, Arial, sans-serif`;
+    ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    ctx.fillText(String(Math.round(selHdg)).padStart(3, '0') + '°', -r + 2, -r + 6);
+    ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
   }
 
   // ── CRS arrow + CDB (Course Deviation Bar) ──
@@ -5867,8 +5904,9 @@ function applyDelta(field, d){
       S.pit = pitchFromSpd(S.spd);   // auto pitch from speed
       break;
     case 'hdg':
-      S.hdg = normA(S.hdg + d);
-      bankTarget = d > 0 ? 22 : -22;
+      // 기수를 즉시 돌리지 않고 선택 헤딩(HDG bug)만 이동 → AFCS가 표준선회로 추종
+      selHdg = ((Math.round(selHdg + d) + 359) % 360) + 1;   // 1–360
+      hdgSelOn = true;
       rollApOn = true;
       break;
     case 'crs':
@@ -5917,7 +5955,7 @@ function fcpSync(which) {
     selSpd = Math.max(0, Math.round(S.spd));
   } else if (which === 'hdg') {
     selHdg = ((Math.round(S.hdg) + 359) % 360) + 1;   // 1–360
-    bankTarget = 0; rollApOn = true;                   // 현재 헤딩 유지
+    hdgSelOn = true; bankTarget = 0; rollApOn = true;  // 현재 헤딩 유지
   } else if (which === 'crs') {
     if ((navSrc !== 'FMS') && navLat !== null) {
       vorObsCrs = normA(Math.round(bearing(S.lat, S.lon, navLat, navLon)));
@@ -5990,7 +6028,6 @@ document.addEventListener('keydown', e => {
 });
 document.addEventListener('keyup', e => {
   // HDG 키(3/4)를 떼면 버튼과 동일하게 뱅크 목표 해제(수평 복귀)
-  if (e.key === '3' || e.key === '4') bankTarget = 0;
   if (_keyTrimMap[e.key]) stopTrimHold();
 });
 
@@ -6039,7 +6076,6 @@ Object.entries(btnMap).forEach(([id,[f,d]])=>{
     clearInterval(interval); interval=null;
     clearTimeout(guard); guard=null;
     _holdStops.delete(stop);
-    if(wasActive && f==='hdg') bankTarget=0;
   }
   el.addEventListener('pointerdown',start);
   el.addEventListener('pointerup',stop);
@@ -6231,7 +6267,22 @@ function simStep(ts){
             navApOn = false;
             document.getElementById('nav-ap-btn').classList.remove('on');
             bankTarget = 0;
+            selHdg = ((Math.round(S.hdg) + 359) % 360) + 1; hdgSelOn = true;
           }
+        }
+      }
+
+      // HDG SEL: 선택 헤딩까지 표준선회(속도의 16% 뱅크). NAV AP·GSPD가 우선.
+      if (hdgSelOn && rollApOn && !navApOn && !gspdOn && !gspdCoasting) {
+        const err  = normAS(selHdg - S.hdg);            // -180 ~ +180
+        const bMax = stdRateBank(S.spd);
+        const aErr = Math.abs(err);
+        if (aErr < 0.5) { bankTarget = 0; S.hdg = normA(selHdg); }
+        else {
+          // 롤아웃 구간에서도 최소 뱅크를 유지 — 비행모델이 |bank|<=0.5°를 무시하므로
+          // 그 아래로 떨어지면 선회가 멈춘 채 오차가 남는다(저속에서 발생)
+          const b = aErr >= HDG_ROLLOUT_DEG ? bMax : Math.max(1.2, bMax * aErr / HDG_ROLLOUT_DEG);
+          bankTarget = Math.sign(err) * b;
         }
       }
 
@@ -6242,6 +6293,7 @@ function simStep(ts){
           navApOn = false;
           document.getElementById('nav-ap-btn').classList.remove('on');
           bankTarget = 0;
+          selHdg = ((Math.round(S.hdg) + 359) % 360) + 1; hdgSelOn = true;
         } else {
           bankTarget = navApBankTarget();
         }
@@ -7943,7 +7995,7 @@ function saveSession() {
       s: { lat:S.lat, lon:S.lon, hdg:S.hdg, spd:S.spd, alt:S.alt, pit:S.pit, bnk:S.bnk,
            crs:S.crs, vs:S.vs, running:S.running, wps:S.wps, awp:S.awp, fwp:S.fwp, brg2wp:S.brg2wp },
       gps: gpsMode,
-      fcp: { selSpd, selAlt, selCrht, selVS, selHdg, altHoldOn, crhtOn, gspdOn, rollApOn, bankTarget,
+      fcp: { selSpd, selAlt, selCrht, selVS, selHdg, hdgSelOn, altHoldOn, crhtOn, gspdOn, rollApOn, bankTarget,
              gspdActLat, gspdActFwd, gspdRefLat, gspdRefFwd, gspdCoasting },
       nav: { obsOn, navSrc, navRadios, vorObsCrs, dtoLat:_dtoLat, dtoLon:_dtoLon },
       view: { mapHdgUp, followMode, leftSel, rightSel },
@@ -7965,7 +8017,7 @@ function restoreSession() {
     });
     const f = snap.fcp || {};
     if (f.selSpd!=null) selSpd=f.selSpd; if (f.selAlt!=null) selAlt=f.selAlt;
-    if (f.selCrht!=null) selCrht=f.selCrht; if (f.selVS!=null) selVS=f.selVS; if (f.selHdg!=null) selHdg=f.selHdg;
+    if (f.selCrht!=null) selCrht=f.selCrht; if (f.selVS!=null) selVS=f.selVS; if (f.selHdg!=null) selHdg=f.selHdg; if (f.hdgSelOn!=null) hdgSelOn=f.hdgSelOn;
     altHoldOn=!!f.altHoldOn; crhtOn=!!f.crhtOn; gspdOn=!!f.gspdOn; rollApOn=f.rollApOn!==false;
     bankTarget=f.bankTarget||0;
     gspdActLat=f.gspdActLat||0; gspdActFwd=f.gspdActFwd||0;
@@ -8159,7 +8211,7 @@ function init(){
     if (py >= fmaTop && py <= fmaBtm) {
       if (boxIdx === 1) {
         const v = prompt('HDG preselect (1–360°):', selHdg);
-        if (v !== null) { const n = parseInt(v, 10); if (!isNaN(n)) selHdg = Math.max(1, Math.min(360, n)); }
+        if (v !== null) { const n = parseInt(v, 10); if (!isNaN(n)) { selHdg = Math.max(1, Math.min(360, n)); hdgSelOn = true; rollApOn = true; } }
       } else if (boxIdx === 2) {
         const v = prompt('IAS preselect (kt):', selSpd);
         if (v !== null) { const n = parseInt(v, 10); if (!isNaN(n) && n >= 0) selSpd = n; }
