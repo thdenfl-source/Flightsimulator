@@ -279,19 +279,19 @@ html, body {
 /* ── Hover Page / GSPD / Trim ── */
 .hover-group { display: flex; flex-direction: column; align-items: center; gap: 2px; }
 .hover-btns { display: flex; gap: 2px; }
-/* 모드 토글 버튼 공통(HOVER·GSPD·CRHT·ALT HOLD) */
-.hover-btn, .gspd-btn, .crht-btn, .alt-hold-btn {
+/* 모드 토글 버튼 공통(HOVER PAGE·HOVER POS·CRHT·ALT HOLD) */
+.hover-btn, .hover-pos-btn, .crht-btn, .alt-hold-btn {
   background: #1a1a1a; border: 1px solid #333; color: #555;
   font-size: 10px; font-weight: bold; padding: 3px 6px; cursor: pointer; border-radius: 2px;
   touch-action: manipulation; white-space: nowrap; font-family: 'Helvetica Neue', Arial, sans-serif;
   transition: background 0.15s, border-color 0.15s, color 0.15s;
 }
-.hover-btn:disabled, .gspd-btn:disabled {
+.hover-btn:disabled, .hover-pos-btn:disabled {
   opacity: 0.35; cursor: not-allowed;
 }
-.hover-btn.on { background: #1a0e2e; border-color: #cc66ff; color: #cc66ff; }
-.gspd-btn.on  { background: #2e0e1a; border-color: #ff6688; color: #ff8899;
-                box-shadow: 0 0 6px rgba(255,80,120,0.4); }
+.hover-btn.on     { background: #1a0e2e; border-color: #cc66ff; color: #cc66ff; }
+.hover-pos-btn.on { background: #2e2a0e; border-color: #ffcc00; color: #ffcc00;
+                    box-shadow: 0 0 6px rgba(255,204,0,0.45); }
 .crht-btn.on     { background: #0e2e1a; border-color: #44ff88; color: #44ff88;
                    box-shadow: 0 0 6px rgba(44,255,100,0.4); }
 .alt-hold-btn.on { background: #0e1a2e; border-color: #00cfff; color: #00cfff;
@@ -322,8 +322,8 @@ html, body {
 .trim-cell.tc-aft { grid-column: 2; grid-row: 2; }
 .trim-cell.tc-l   { grid-column: 1; grid-row: 1 / span 2; }
 .trim-cell.tc-r   { grid-column: 3; grid-row: 1 / span 2; }
-/* 원형 모드 버튼 공통(FORCE TRIM·HOVER POS) */
-.force-trim-btn, .hover-pos-btn {
+/* 원형 모드 버튼 공통(FORCE TRIM·GSPD) — 실제 조종간 배치에 맞춘 자리 */
+.force-trim-btn, .gspd-btn {
   width: 48px; height: 48px; border-radius: 50%;
   background: #1a1a1a; border: 2px solid #555; color: #888;
   font-size: 9px; font-weight: bold; cursor: pointer;
@@ -335,8 +335,9 @@ html, body {
 .force-trim-btn:active { background: #2a2a4a; }
 .force-trim-btn.active { border-color: #cc66ff; color: #cc66ff; }
 .force-trim-btn.disabled { opacity: 0.3; cursor: not-allowed; pointer-events: none; }
-.hover-pos-btn:active { background: #2a2a1a; }
-.hover-pos-btn.active { border-color: #ffcc00; color: #ffcc00; box-shadow: 0 0 6px rgba(255,204,0,0.45); }
+.gspd-btn:active { background: #2a1a1e; }
+.gspd-btn.on     { background: #2e0e1a; border-color: #ff6688; color: #ff8899;
+                   box-shadow: 0 0 6px rgba(255,80,120,0.4); }
 
 /* ── COLLECTIVE TRIM (파워 조작) ── */
 /* 지금은 VS ▲▼와 같은 동작. 상위모드 해제 기능이 들어가면 파워(출력) 직접 제어로 확장한다. */
@@ -1492,10 +1493,11 @@ body.night-mode::after {
       <h3>4. PFD · HOVER PAGE</h3>
       <ul>
         <li><b>NAV SRC</b>: <b>FMS / NAV1 / NAV2</b>. NAV1·NAV2는 CDU에서 튜닝한 VOR을 따라갑니다.</li>
-        <li><b>HOVER PAGE</b>(80kt 미만): 호버 속도·위치 지시. <b>GSPD</b>로 기준 속도 설정, <b>HOVER POS</b>로 위치 고정.</li>
+        <li><b>HOVER PAGE</b>(80kt 미만): 호버 속도·위치 지시. 좌측 HOVER 그룹의 <b>HOVER PAGE / HOVER POS</b> 사각 버튼으로 켜고,
+            기준 속도는 트림 옆 원형 <b>GSPD</b> 버튼으로 잡습니다(실제 조종간 배치에 맞춘 위치).</li>
         <li>HOVER PAGE에는 <b>SHIP</b>(청록)과 <b>비행계획 활성 웨이포인트</b>(빨강 삼각형)가 함께 표시됩니다.
             반경 50 ft 이내면 실제 축척 위치에, 밖이면 방향 니들과 점선으로 나타납니다.</li>
-        <li><b>ANTI-TORQUE PEDAL ◀▶</b>(HOVER POS 우측): 뱅크 없이 기수만 즉시 회전(홀드 시 약 12°/s).
+        <li><b>ANTI-TORQUE PEDAL ◀▶</b>(GSPD 우측): 뱅크 없이 기수만 즉시 회전(홀드 시 약 12°/s).
             <b>GSPD 작동 중에는 HDG 화살표가 기수와 분리</b>되므로 요 조작은 이 페달로 합니다.</li>
         <li><b>COLLECTIVE TRIM ▲▼</b>(4-way 트림 좌측): 현재는 VS ▲▼와 같은 동작(±100 fpm)입니다.
             4-way 트림은 <b>사이클릭</b>, 페달은 <b>요</b>, 컬렉티브는 <b>파워</b>를 맡는 수동 조작 구성으로
@@ -1705,8 +1707,8 @@ body.night-mode::after {
         <div class="hover-group">
           <div class="ctrl-lbl">HOVER</div>
           <div class="hover-btns">
-            <button class="hover-btn" id="hover-btn" onclick="toggleHoverPage()" disabled>HOVER PAGE</button>
-            <button class="gspd-btn"  id="gspd-btn"  onclick="toggleGspd()"      disabled>GSPD</button>
+            <button class="hover-btn"     id="hover-btn"     onclick="toggleHoverPage()" disabled>HOVER PAGE</button>
+            <button class="hover-pos-btn" id="hover-pos-btn" onclick="toggleHoverPosition()" title="Hover Position">HOVER POS</button>
           </div>
         </div>
 
@@ -1754,7 +1756,7 @@ body.night-mode::after {
             <button class="trim-cell tc-r"   id="trim-r"   data-trim-dir="R">►</button>
           </div>
           <button class="force-trim-btn" id="force-trim-btn" onclick="forceTrim()" title="Force Trim">FORCE<br>TRIM</button>
-          <button class="hover-pos-btn"   id="hover-pos-btn"  onclick="toggleHoverPosition()" title="Hover Position">HOVER<br>POS</button>
+          <button class="gspd-btn" id="gspd-btn" onclick="toggleGspd()" title="Ground Speed Hold">GSPD</button>
           <div class="pedal-group">
             <div class="pedal-lbl">ANTI-TORQUE<br>PEDAL</div>
             <div class="pedal-btns">
@@ -2338,7 +2340,7 @@ function toggleHoverPosition() {
     hoverPosLon = S.lon;
   }
   const btn = document.getElementById('hover-pos-btn');
-  if (btn) btn.classList.toggle('active', hoverPosOn);
+  if (btn) btn.classList.toggle('on', hoverPosOn);
 }
 
 // ── OBS (Omni Bearing Selector) ──
