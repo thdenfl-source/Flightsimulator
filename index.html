@@ -3385,7 +3385,8 @@ function drawHSI(x, y, w, h) {
     const lblFs = Math.max(7, r * 0.072);
     const lblFont = `${lblFs}px Helvetica Neue, Arial, sans-serif`;
     const valFont = `bold ${valFs}px Helvetica Neue, Arial, sans-serif`;
-    const rowY = [y + h * 0.32, y + h * 0.50, y + h * 0.68];
+    // 좌하단 TAS/OAT(0.83)·GS/ISA(0.95)와 같은 간격·같은 하단선으로 맞춰 좌우 균형을 맞춘다
+    const rowY = [y + h * 0.71, y + h * 0.83, y + h * 0.95];
 
     ctx.save();
     rows.forEach((rw, i) => {
