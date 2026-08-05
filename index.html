@@ -8908,6 +8908,12 @@ if ('serviceWorker' in navigator) {
     let perfData = { alt: "0", temp: "20", weight: "16000", vs: "0" };
     let perfResults = { oge: "0.0", ige: "0.0", oge_gonogo: "0.0", ige_gonogo: "0.0", mta30: "0.0", mta10: "0.0", mta25: "0.0", vy: "0.0", vsTq: "0.0", outOfLimits: false };
 
+    // ── AS-565 성능 데이터·보간 (내부 전용) ─────────────────────────────
+    // 성능표 11종과 보간 함수 3종은 calculatePerformance()만 쓰는데 전역에 노출돼
+    // 있었다. IIFE로 감싸 밖으로 내보내는 이름을 calculatePerformance 하나로 줄인다.
+    // (perfData·perfResults는 화면 렌더에서 읽고 쓰므로 바깥에 남긴다)
+    let calculatePerformance;
+    (function () {
     // Vy Tables
     const vyTemps = [-32, -20, -10, 0, 10, 20, 30, 40];
     const vyWeights = [16000, 18000, 19200];
@@ -9015,7 +9021,7 @@ if ('serviceWorker' in navigator) {
         return interpolate1D(aFrac, 0, 1, val0, val1);
     }
 
-    function calculatePerformance() {
+    calculatePerformance = function() {
         let alt = parseFloat(perfData.alt) || 0;
         let temp = parseFloat(perfData.temp) || 0;
         let wt = parseFloat(perfData.weight) || 16000;
@@ -9104,7 +9110,8 @@ if ('serviceWorker' in navigator) {
         } else {
             perfResults.vsTq = "0.0";
         }
-    }
+    };
+    })();
 
     // --- High-fidelity SVG Icons ---
     const homeButtons = [
