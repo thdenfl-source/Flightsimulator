@@ -2031,6 +2031,11 @@ let selHdg  = 360;  // HDG preselect (°, 1-360)
 // 뱅크각은 속도의 16% (표준선회 근사). 실제 선회율은 비행모델의 조정선회식
 // turnRate = g·tan(bank)/V 로 산출되므로 속도에 따라 자동으로 3°/s 부근이 된다.
 let hdgSelOn = false;              // HDG SEL(선회) 모드 인게이지
+// AFCS가 뱅크를 지령할 때의 롤 프로파일 — 각가속도를 제한해 롤인/롤아웃이 부드럽게
+// (즉시 뱅크가 서지 않고, 목표 뱅크에 오버슛 없이 사그라들며 들어간다)
+let _rollRate = 0;                 // 현재 롤 각속도(°/s)
+const ROLL_RATE_MAX = 6;           // AFCS 최대 롤율(°/s)
+const ROLL_ACC_MAX  = 8;           // AFCS 롤 각가속도(°/s²)
 const HDG_ROLLOUT_DEG = 6;         // 남은 각도가 이 이하면 뱅크를 비례 감소(롤아웃)
 function stdRateBank(spd) {        // 표준선회 뱅크각(°) — 속도의 16%, 최대 30°
   return Math.max(2, Math.min(30, Math.abs(spd) * 0.16));
@@ -4633,7 +4638,7 @@ function stopGPS() {
   updateGpsBtn();
   // Reset to simulation defaults
   S.spd = 80; S.hdg = 360; S.alt = 500;
-  S.pit = pitchFromSpd(80); S.bnk = 0; bankTarget = 0;
+  S.pit = pitchFromSpd(80); S.bnk = 0; bankTarget = 0; _rollRate = 0;
   rollApOn = true;
   S.running = false;
   updateFlyBtns();
@@ -4657,7 +4662,7 @@ function _onDevOrientation(e) {
   if (gpsMode && S.spd < 10 && now - _devHdgLastApply > 200) {
     _devHdgLastApply = now;
     S.hdg = _devHdg;
-    bankTarget = 0; S.bnk = 0;
+    bankTarget = 0; S.bnk = 0; _rollRate = 0;
   }
 }
 function startDevOrientation() {
@@ -4728,7 +4733,7 @@ function applyGPS(pos) {
   if (hdg === null && _devHdg !== null && (spdKt === null || spdKt < 10)) hdg = _devHdg;
   if (hdg !== null) {
     S.hdg = normA(hdg);
-    bankTarget = 0; S.bnk = 0;
+    bankTarget = 0; S.bnk = 0; _rollRate = 0;
   }
 
   // ── 고도 ── GPS 고도(m) → ft
@@ -6136,8 +6141,20 @@ function simStep(ts){
       // smooth bank toward target — GSPD 중에는 ADI 자세 변화 없음(수평 유지)
       const bt = gspdOn ? 0 : bankTarget;
       const bankDiff=bt-S.bnk;
-      S.bnk+=Math.sign(bankDiff)*Math.min(Math.abs(bankDiff),50*dt);
-      if(Math.abs(bt-S.bnk)<0.3) S.bnk=bt;
+      if ((hdgSelOn || navApOn) && !gspdOn) {
+        // AFCS 선회: 롤 각가속도 제한(사다리꼴 프로파일).
+        // 목표 롤율은 남은 뱅크차로 감속거리를 계산해 정하므로 오버슛 없이 수렴한다.
+        const want = Math.sign(bankDiff) *
+                     Math.min(ROLL_RATE_MAX, Math.sqrt(2 * ROLL_ACC_MAX * Math.abs(bankDiff)));
+        const dR = Math.max(-ROLL_ACC_MAX * dt, Math.min(ROLL_ACC_MAX * dt, want - _rollRate));
+        _rollRate += dR;
+        S.bnk += _rollRate * dt;
+        if (Math.abs(bt - S.bnk) < 0.05 && Math.abs(_rollRate) < 0.3) { S.bnk = bt; _rollRate = 0; }
+      } else {
+        _rollRate = 0;
+        S.bnk+=Math.sign(bankDiff)*Math.min(Math.abs(bankDiff),50*dt);
+        if(Math.abs(bt-S.bnk)<0.3) S.bnk=bt;
+      }
       // GSPD 중 피치도 수평(0°)으로 수렴 — 지상속도 제어라 자세 지시 없음
       if (gspdOn && Math.abs(S.pit) > 0.05) {
         S.pit -= Math.sign(S.pit) * Math.min(Math.abs(S.pit), 15 * dt);
