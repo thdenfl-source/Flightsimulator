@@ -1453,7 +1453,8 @@ body.night-mode::after {
         <li>하단: FLY/RESET/CLR/<b>SHIP</b>/<b>T-CUT</b>/<b>INHIB</b>/N↑/1인칭/MAP(위성)/3D/<b>🔒 잠금</b>.</li>
         <li><b>📏 측정자</b>: 지도를 탭해 점을 찍으면 구간 방위·거리, 합계, 시작→끝 직선거리 표시.</li>
         <li><b>공역</b>: 관제권·금지(P)·제한(R)·위험(D)구역, FIR·KADIZ(테두리만). 접근/진입 시 경보.</li>
-        <li><b>FIX</b> 아이콘을 탭하면 좌표 확인·복사 또는 비행계획에 바로 추가할 수 있습니다.</li>
+        <li><b>심볼 탭</b>: FIX·항로 경유점·<b>VOR</b>·<b>공항</b> 어느 것을 탭해도 좌표 확인·복사와 비행계획 추가가 가능합니다.
+            VOR은 <b>NAV1/NAV2 튜닝</b>, 공항은 <b>METAR/TAF</b>·<b>공항 정보</b>가 함께 나옵니다.</li>
         <li><b>SHIP</b>: 버튼을 누르면 「배 표시 / 설정창」 선택. 선박 속도·침로를 입력해 이동시킬 수 있습니다.</li>
         <li><b>🔒 잠금</b>: 화면 터치를 차단(비행 중 오조작 방지). 해제는 하단 버튼을 <b>1.2초 길게</b> 누르기.</li>
         <li>우하단 <b>REC</b>(항적 기록, GPX/KML 저장) · <b>FDR</b>(항적 리플레이).</li>
@@ -7621,7 +7622,17 @@ function initAirportLayer() {
       iconSize: [52, 28], iconAnchor: [26, 8], className: ''
     });
     L.marker(latlng, { icon, title: `${icao} ${name}`, zIndexOffset: 200 })
-      .on('click', (e) => { L.DomEvent.stopPropagation(e); showAptWx(icao, name, latlng); })
+      .bindPopup(() => {   // 열 때 생성: AIRFIELD_INFO·잠금해제 상태를 그 시점에 확인
+        const extra = [{ label: '☁ METAR/TAF',
+                         onclick: `mapAptWx('${icao}',${latlng[0]},${latlng[1]})`,
+                         fg: '#0b6b8a', bg: '#e6f4f9' }];
+        if (_aptInfoAvailable(icao))
+          extra.push({ label: 'ℹ 공항 정보', onclick: `_mapOpenAirfield('${icao}')`,
+                       fg: '#7a5b00', bg: '#fff6e0' });
+        return _mapSymPopup({ title: `◆ ${icao}`, color: '#a86b00', name: icao,
+                              lat: latlng[0], lon: latlng[1], sub: name, extra });
+      }, { maxWidth: 300 })
+      .on('click', (e) => L.DomEvent.stopPropagation(e))
       .addTo(leafMap);
   });
 }
@@ -12040,17 +12051,54 @@ function _enrFixList() {
     return { name, lat: dms(la, 2), lon: dms(lo, 3) };
   });
 }
-// ── 항로 픽스 팝업: 좌표 확인·복사 / Flight Plan 추가 ──
-function _fixPopupHtml(name, lat, lon) {
+// ── 지도 심볼 공통 팝업: 좌표 확인·복사 / Flight Plan 추가 (+심볼별 추가 동작) ──
+//   o = { title, color, name, lat, lon, sub, note, extra:[{label,onclick,fg,bg}] }
+function _mapSymPopup(o) {
   const btn = 'cursor:pointer;border-radius:4px;padding:5px 8px;font-size:11px;font-weight:bold;text-align:center;flex:1;';
-  return `<div style="font-family:-apple-system,Segoe UI,Arial,sans-serif;font-size:11px;color:#333;line-height:1.5;min-width:200px;">` +
-    `<div style="color:#00788a;font-weight:bold;font-size:13px;margin-bottom:3px;">▲ ${name}</div>` +
-    `<div style="color:#333;">${decToDMS(lat, true)} ${decToDMS(lon, false)}</div>` +
-    `<div style="color:#777;font-size:10px;margin-bottom:6px;">${lat.toFixed(5)}, ${lon.toFixed(5)}</div>` +
-    `<div style="display:flex;gap:5px;">` +
-      `<span onclick="fixCopyCoord(this,'${name}',${lat},${lon})" style="${btn}background:#eef3f7;color:#3b5a70;border:1px solid #3b5a7055;">📋 좌표 복사</span>` +
-      `<span onclick="fixAddToPlan('${name}',${lat},${lon})" style="${btn}background:#e3f2ee;color:#00796b;border:1px solid #00796b55;">✈ 플랜 추가</span>` +
-    `</div></div>`;
+  const extra = (o.extra || []).map(e =>
+    `<span onclick="${e.onclick}" style="${btn}background:${e.bg};color:${e.fg};border:1px solid ${e.fg}55;">${e.label}</span>`).join('');
+  return `<div style="font-family:-apple-system,Segoe UI,Arial,sans-serif;font-size:11px;color:#333;line-height:1.5;min-width:210px;">` +
+    `<div style="color:${o.color};font-weight:bold;font-size:13px;margin-bottom:2px;">${o.title}</div>` +
+    (o.sub ? `<div style="color:#555;font-size:10px;margin-bottom:2px;">${o.sub}</div>` : '') +
+    `<div style="color:#333;">${decToDMS(o.lat, true)} ${decToDMS(o.lon, false)}</div>` +
+    `<div style="color:#777;font-size:10px;">${o.lat.toFixed(5)}, ${o.lon.toFixed(5)}</div>` +
+    (o.note ? `<div style="color:#b26a00;font-size:10px;margin-top:2px;">${o.note}</div>` : '') +
+    `<div style="display:flex;gap:5px;margin-top:6px;">` +
+      `<span onclick="fixCopyCoord(this,'${o.name}',${o.lat},${o.lon})" style="${btn}background:#eef3f7;color:#3b5a70;border:1px solid #3b5a7055;">📋 좌표 복사</span>` +
+      `<span onclick="fixAddToPlan('${o.name}',${o.lat},${o.lon})" style="${btn}background:#e3f2ee;color:#00796b;border:1px solid #00796b55;">✈ 플랜 추가</span>` +
+    `</div>` +
+    (extra ? `<div style="display:flex;gap:5px;margin-top:5px;">${extra}</div>` : '') +
+    `</div>`;
+}
+// ── 항로 픽스 팝업 ──
+function _fixPopupHtml(name, lat, lon) {
+  return _mapSymPopup({ title: `▲ ${name}`, color: '#00788a', name, lat, lon });
+}
+// ── 지도에서 비행장 INFO 화면 열기 (CDU 패널로 전환) ──
+function _mapOpenAirfield(icao) {
+  try { leafMap.closePopup(); } catch(e) {}
+  let i = -1;
+  try { i = AIRFIELD_INFO.findIndex(a => _afldIcao(a) === icao); } catch(e) {}
+  if (i < 0) return;
+  if (leftSel !== 'cdu' && rightSel !== 'cdu') selectPanel(leftSel === 'map' ? 'right' : 'left', 'cdu');
+  try { openAirfield(i); } catch(e) {}
+}
+// INFO 목록에 있고, 공개 비행장이거나 잠금 해제된 경우에만 '공항 정보' 버튼을 준다(보안)
+function _aptInfoAvailable(icao) {
+  try {
+    const a = AIRFIELD_INFO.find(x => _afldIcao(x) === icao);
+    return !!a && (!!a.pub || _afldUnlocked);
+  } catch(e) { return false; }
+}
+// 지도 팝업 → 기존 METAR/TAF 팝업으로 전환
+function mapAptWx(icao, lat, lon) {
+  try { leafMap.closePopup(); } catch(e) {}
+  try { showAptWx(icao, APT_NAME[icao] || '', [lat, lon]); } catch(e) {}
+}
+// 지도 VOR 팝업 → NAV1/NAV2 튜닝
+function mapTuneNav(navId, freq, id) {
+  try { setNavRadio(navId, freq, id); } catch(e) {}
+  try { leafMap.closePopup(); } catch(e) {}
 }
 // 클립보드 복사(비보안·구형 환경 폴백 포함) + 버튼 피드백
 function fixCopyCoord(el, name, lat, lon) {
@@ -12293,6 +12341,10 @@ function _drawAwyLayer() {
         radius: 3.5, color: '#fff', weight: 1, fillColor: color, fillOpacity: 1
       });
       mk.bindTooltip(`${w.n} (${r.route})`, { sticky: true });
+      mk.bindPopup(_mapSymPopup({
+        title: `▲ ${w.n}`, color: '#00788a', name: w.n,
+        lat: coordsAll[i][0], lon: coordsAll[i][1], sub: `항로 ${r.route}`
+      }), { maxWidth: 260 });
       mk.addTo(leafMap); _awyLayers.push(mk);
       const nmLbl = L.marker(coordsAll[i], {
         icon: L.divIcon({
@@ -12326,8 +12378,16 @@ function _drawVorGroup(list, col, lblCol) {
       iconSize: [13, 13], iconAnchor: [6, 6], className: ''
     });
     const mk = L.marker([v.lat, v.lon], { icon });
-    mk.bindTooltip(`${v.name} (${v.id})${v.freq ? '<br>' + v.freq + ' MHz' : ''}<br>${decToDMS(v.lat, true)} ${decToDMS(v.lon, false)}`
-      + (approx ? '<br><span style="color:#ffb74d;">※ 좌표는 공항 기준점 근사값</span>' : ''), { sticky: true });
+    mk.bindTooltip(`${v.name} (${v.id})${v.freq ? '<br>' + v.freq + ' MHz' : ''}`, { sticky: true });
+    mk.bindPopup(_mapSymPopup({
+      title: `⬡ ${v.id}`, color: col, name: v.id, lat: v.lat, lon: v.lon,
+      sub: `${v.name}${v.freq ? ' · ' + v.freq + ' MHz' : ''}`,
+      note: approx ? '※ 좌표는 공항 기준점 근사값' : '',
+      extra: v.freq ? [
+        { label: 'NAV1 튜닝', onclick: `mapTuneNav('NAV1','${v.freq}','${v.id}')`, fg: '#3b5a70', bg: '#eef3f7' },
+        { label: 'NAV2 튜닝', onclick: `mapTuneNav('NAV2','${v.freq}','${v.id}')`, fg: '#3b5a70', bg: '#eef3f7' },
+      ] : []
+    }), { maxWidth: 280 });
     mk.addTo(leafMap); _awyLayers.push(mk);
   });
 }
