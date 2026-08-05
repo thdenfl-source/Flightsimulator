@@ -6757,7 +6757,6 @@ function exitSolo() {
 // ── SID 터미널 픽스(AIP 코딩 테이블) — 항로 픽스에 없어 별도 등록 ──
 const TERMINAL_FIXES = {ANUBA:[35.12942,127.58967], BEMGA:[35.17053,126.38239], GUMAM:[35.36642,127.42603], IGBEM:[35.12861,127.21286], JB801:[35.09764,126.38208], JB802:[35.09672,126.22161], JB803:[34.97986,126.22272], JB804:[34.90556,126.30428], JB805:[34.67767,126.55303], JB806:[34.59247,126.64553], JB807:[34.50075,126.63592], JB808:[35.3815,126.89281], JB809:[35.30478,126.78522], JB851:[34.85025,126.38372], JB852:[34.85089,126.53469], JB853:[34.97758,126.68611], JB854:[34.84936,126.2035], JB855:[34.97789,126.20242], JB856:[34.54506,126.53933], JB857:[34.4425,126.62981], JB858:[35.19036,126.60672], JB859:[35.33669,126.88792], JISUN:[35.12756,127.01539], JJ221:[34.98522,126.85189], JJ222:[35.26794,126.88039], JJ223:[35.21489,127.03753], JJ224:[34.93858,126.68192], JJ401:[35.22253,126.97664], JJ402:[35.17878,127.08692], JJ403:[34.82403,126.66983], JY801:[34.65153,127.71381], JY802:[34.60903,127.83017], JY803:[34.74031,127.90056], JY804:[34.81547,127.50625], JY805:[35.03942,127.36936], JY806:[34.42017,127.72517], LILVI:[35.21878,126.87503], MARYO:[35.03517,126.74639], NAKZY:[35.21494,126.65961], POVOR:[34.25547,127.73325], PUMEG:[35.22572,127.06514], RELEX:[34.71978,126.38453], AROKU:[37.66499,127.93747], ARUNA:[37.39502,127.77061], GANAM:[37.11113,127.66447], IKILA:[37.61324,128.06913], JY851:[34.94392,127.56747], JY852:[34.99197,127.71231], JY853:[34.89364,127.76031], JY854:[34.71314,127.65761], JY857:[34.78486,127.69833], JY865:[34.79958,127.51753], JY866:[34.68389,127.56364], RULRU:[37.19389,127.68693], SANUV:[37.34346,127.90192], AKPON:[33.78044,127.33139], ATIMO:[33.39792,126.73089], CJU:[33.38461,126.62411], IPDAS:[34.25408,126.71706], KAMIT:[34.25392,126.77158], LEDIN:[33.54503,126.17081], LIMDI:[33.55369,125.83139], MEXER:[33.45778,126.38667], OLLEH:[33.96172,126.74069], PALRI:[33.64089,126.74372], PANSI:[33.004,126.20697], PAPLU:[33.57814,127.06014], PC811:[33.70336,126.71356], PC813:[33.49875,126.84722], PC814:[33.26011,126.48708], PC816:[33.44903,126.32522], PC832:[33.67944,126.23108], PC833:[33.83578,126.51244], PC834:[33.9295,126.68214], PC841:[33.42853,126.32994], PC842:[33.29397,126.35481], PC845:[33.41756,126.89], PC846:[33.321,126.59128], PC861:[33.56217,126.40947], PC871:[33.65147,126.40889], PC872:[33.72136,126.52186], PC874:[33.81056,127.18578], TAMNA:[33.47097,127.33139], TOREN:[33.81022,126.66603], PD801:[33.43869,126.71128], PD802:[33.41642,126.83819], PD803:[33.34019,126.88167], PD804:[33.27681,126.78347], PD811:[33.24339,126.71239], PD812:[33.20139,126.60483], PD813:[33.25122,126.52022], PD814:[33.33772,126.52925], CG050:[37.37178,126.58528], CG100:[37.27119,126.62883], CP101:[37.10561,126.48267], ATNER:[37.10442,126.31458], HP121:[37.1025,126.09786], BELTU:[37.205,125.79972], BINIL:[37.397,125.23314], CD120:[37.12439,126.62533], VIMER:[36.98411,126.62358], EXUTO:[36.88572,126.62472], BOPTA:[36.73511,126.61622], CG101:[37.28525,126.88953], CG130:[37.16825,126.97861], SOT:[37.09436,127.03167], CG200:[36.92478,127.16211], OSPOT:[36.83836,127.34858], CK100:[37.30631,127.12261], CK099:[37.33922,127.24778], EGOBA:[37.48742,127.37942], HD050:[37.38572,126.48436], HD100:[37.27972,126.52028], AD020:[37.57919,126.35528], AD050:[37.57964,126.2085], AP140:[37.40469,125.75594], NOPIK:[37.40333,125.65139], YD070:[37.40872,126.13583], YD100:[37.32639,126.25389], YD130:[37.19436,126.44225], YD160:[37.03878,126.51617], YD190:[36.87731,126.56944], YG160:[37.12181,126.62914], YK130:[37.32461,126.45864], YK170:[37.32172,126.71078], YK210:[37.31814,127.00872], EG020:[37.55878,126.37347], EG040:[37.64094,126.34419], ASIDI:[37.67019,126.44736], EG070:[37.64144,126.54683], EG140:[37.41319,126.80736], EG160:[37.31989,126.89572], YD020:[37.50369,126.36881], YD040:[37.50822,126.18247], YP080:[37.40736,125.99011], UD050:[37.50053,126.86631], UD060:[37.37128,126.91794], UD080:[37.23425,127.03572], UG100:[37.10669,127.13719], UG130:[36.96269,127.25033], UP050:[37.39506,126.90814], UP060:[37.35847,126.76914], UP059:[37.41217,126.59381], UP100:[37.41075,126.37328], UD100:[37.09067,126.98069], UPDET:[36.931,126.91981], BULTI:[36.72286,126.82492], ZD080:[37.2295,127.09531], ZD100:[37.14089,127.19503], ZD120:[37.03728,127.19475], ZD119:[36.82508,126.94467], ZG130:[36.98386,127.27489], TD040:[37.63417,126.69269], TD050:[37.56142,126.59364], TP080:[37.52158,126.53953], TP120:[37.40986,126.25814], TD100:[37.40522,126.57256], TD120:[37.32356,126.59464], TD130:[37.22239,126.62803], TD180:[37.01761,126.69531], TD200:[36.90239,126.73314], QD040:[37.63417,126.69269], QD050:[37.56142,126.59364], QP080:[37.52158,126.53953], QP079:[37.48447,126.44575], QP120:[37.40986,126.25814], QD080:[37.47814,126.58997], QD090:[37.37178,126.58528], QD110:[37.27119,126.62883], QD150:[37.04433,126.81461], QD160:[36.88969,126.81958], MEESA:[37.57886,127.24578], MUGAR:[37.29597,127.31906], PINEV:[37.25278,127.31778], BIDBA:[37.34258,127.32069], YEOJU:[37.41289,127.44719], VEMUM:[37.53925,127.33678], UPTAD:[37.45592,127.1845], SEL:[37.41361,126.92836], ELAPI:[36.33722,128.8475], LOSTO:[36.33778,129.43], BULGA:[35.93583,129.82333], APARU:[35.41167,129.15889], LAPAL:[35.90361,129.08111], NPH:[35.98636,129.40883], KPO:[35.97722,129.47444], USN:[35.59861,129.35333], NOBUT:[37.12083,129.3325], UJN:[36.77639,129.4575], BUKIL:[36.80644,127.64269], TUTAE:[36.91233,127.5415], OWING:[36.72883,127.24567], OLMEN:[36.73706,126.991], UPTIL:[36.64992,127.38994], TU521:[36.7555,127.28864], CHO:[36.71806,127.49417], TGU:[35.80972,128.59083], DOC:[35.90378,128.64139], BITUX:[36.27914,128.02997], OPEDA:[35.86347,127.61444], MASTA:[35.47972,128.561], KALOD:[35.50336,128.77403], DOVUR:[35.83025,128.77275], TN131:[35.68058,128.68208], TN132:[35.71217,128.50206], VETUP:[36.11742,128.33928], PEDVA:[35.63694,128.13172], KABAS:[35.9475,128.56097], TN311:[35.83908,128.4105], TN312:[35.71414,128.54631], PK521:[35.22833,128.64228], PK522:[35.12508,128.74683], PK513:[34.90897,129.03328], PK514:[34.97897,129.1395]};
 const IFR_FIXES = {
-  'ICN':   { lat: 37.460, lon: 126.441 },
   'BOPTA': { lat: 36.7350, lon: 126.6161 },
   'AGAVO': { lat: 37.1667, lon: 124.0000 },
   // RKPK Gimhae
@@ -12162,24 +12161,29 @@ const ENR_VORS = [
   { id: 'SOT', name: 'SONGTAN VORTAC', freq: '116.9', lat: 37.09444, lon: 127.03167 },   // 370540N 1270154E
   { id: 'CUN', name: 'YECHEON VOR/DME', freq: '114.8', lat: 36.63194, lon: 128.32528 },   // 363755N 1281931E
   { id: 'KWJ', name: 'GWANGJU TACAN', freq: '', lat: 35.12306, lon: 126.80278 },   // 350723N 1264810E
-  // ── INFO 비행장 VOR (좌표: 공항 기준점 · 군 비행장은 근사값) ──
-  { id: 'MKP', name: '목포 VOR',   freq: '117.8', lat: 34.7585,  lon: 126.3806 },
-  { id: 'MUA', name: '무안 VOR',   freq: '111.0', lat: 34.9914,  lon: 126.3829 },
-  { id: 'YSU', name: '여수 VOR',   freq: '115.7', lat: 34.8423,  lon: 127.6170 },
-  { id: 'SHO', name: '속초 VOR',   freq: '110.8', lat: 38.1427,  lon: 128.5986 },
-  { id: 'YAG', name: '양양 VOR',   freq: '110.6', lat: 38.0613,  lon: 128.6693 },
-  { id: 'WJU', name: '원주 VOR',   freq: '110.2', lat: 37.4381,  lon: 127.9604 },
-  { id: 'ICN', name: '이천 VOR',   freq: '117.2', lat: 37.2028,  lon: 127.4746 },
-  { id: 'NCN', name: '인천 VOR',   freq: '113.8', lat: 37.4602,  lon: 126.4407 },
-  { id: 'WNG', name: '인천(WNG)',  freq: '112.9', lat: 37.4600,  lon: 126.4400 },
-  { id: 'KIP', name: '김포 VOR',   freq: '113.6', lat: 37.5583,  lon: 126.7942 },
-  { id: 'CHO', name: '청주 VOR',   freq: '109.0', lat: 36.7166,  lon: 127.4990 },
-  { id: 'NSN', name: '논산 VOR',   freq: '117.5', lat: 36.1636,  lon: 127.1147 },
-  { id: 'DOC', name: '대구 VOR',   freq: '116.5', lat: 35.8939,  lon: 128.6589 },
-  { id: 'UJN', name: '울진 VOR',   freq: '115.3', lat: 36.7770,  lon: 129.4626 },
-  { id: 'USN', name: '울산 VOR',   freq: '111.4', lat: 35.5934,  lon: 129.3520 },
-  { id: 'GHE', name: '김해 VOR',   freq: '113.8', lat: 35.1795,  lon: 128.9382 },
-  { id: 'SAC', name: '사천 VOR',   freq: '115.1', lat: 35.0886,  lon: 128.0703 },
+  // ── 비행장 VOR ──
+  //   apt:1  = 비행장 항행표지(AWY 패널의 '비행장 VOR' 항목으로 별도 제어)
+  //   pub:1  = AIP 공개 비행장 → 지도에 표시. 미표기(군 비행장)는 INFO 게이트와 동일하게 지도 미표시
+  //   src    = 'AIP' 공표 좌표(AD 2 차트/코딩테이블 판독) | 'ARP' 공항 기준점 근사값
+  { apt:1, pub:1, src:'ARP', id: 'NCN', name: '인천 VOR',   freq: '113.8', lat: 37.4602,  lon: 126.4407 },
+  { apt:1, pub:1, src:'ARP', id: 'WNG', name: '인천(WNG)',  freq: '112.9', lat: 37.4600,  lon: 126.4400 },
+  { apt:1, pub:1, src:'ARP', id: 'KIP', name: '김포 VOR',   freq: '113.6', lat: 37.5583,  lon: 126.7942 },
+  { apt:1, pub:1, src:'ARP', id: 'MUA', name: '무안 VOR',   freq: '111.0', lat: 34.9914,  lon: 126.3829 },
+  { apt:1, pub:1, src:'AIP', id: 'YSU', name: '여수 VOR',   freq: '115.7', lat: 34.84286, lon: 127.61908 },
+  { apt:1, pub:1, src:'ARP', id: 'YDM', name: '제주 VOR',   freq: '109.0', lat: 33.5108,  lon: 126.4947 },
+  { apt:1, pub:1, src:'AIP', id: 'YAG', name: '양양 VOR',   freq: '110.6', lat: 38.0633,  lon: 128.6615 },
+  { apt:1, pub:1, src:'ARP', id: 'WJU', name: '원주 VOR',   freq: '110.2', lat: 37.4381,  lon: 127.9604 },
+  { apt:1, pub:1, src:'AIP', id: 'CHO', name: '청주 VOR/DME', freq: '109.0', lat: 36.71806, lon: 127.49417 },
+  { apt:1, pub:1, src:'AIP', id: 'DOC', name: '동촌(대구) VOR/DME', freq: '116.5', lat: 35.90378, lon: 128.64139 },
+  { apt:1, pub:1, src:'AIP', id: 'UJN', name: '울진 VOR/DME', freq: '115.3', lat: 36.77639, lon: 129.4575 },
+  { apt:1, pub:1, src:'AIP', id: 'USN', name: '울산 VOR/DME', freq: '111.4', lat: 35.59861, lon: 129.35333 },
+  { apt:1, pub:1, src:'AIP', id: 'NPH', name: '포항 VORTAC', freq: '109.6', lat: 35.98636, lon: 129.40883 },
+  { apt:1, pub:1, src:'AIP', id: 'KMH', name: '김해 VOR/DME', freq: '113.8', lat: 35.19917, lon: 128.93556 },
+  { apt:1, pub:1, src:'ARP', id: 'SAC', name: '사천 VOR',   freq: '115.1', lat: 35.0886,  lon: 128.0703 },
+  // 아래는 AIP 미공개(군) 비행장 — INFO 자동 튜닝용으로만 유지하고 지도에는 표시하지 않음
+  { apt:1, src:'ARP', id: 'MKP', name: '목포 VOR',   freq: '117.8', lat: 34.7585,  lon: 126.3806 },
+  { apt:1, src:'ARP', id: 'SHO', name: '속초 VOR',   freq: '110.8', lat: 38.1427,  lon: 128.5986 },
+  { apt:1, src:'ARP', id: 'ICN', name: '이천 VOR',   freq: '117.2', lat: 37.2028,  lon: 127.4746 },
 ];
 // 항로(ATS Routes): VOR는 id 참조(vor:1), 그 외 경유점은 제공된 십진수 좌표 내장
 const ENR_ROUTES = [
@@ -12240,11 +12244,13 @@ const ENR_ROUTES = [
 
 let _awyLayers = [];
 // 카테고리별 표시 상태: Conventional 항로 / RNAV 항로 / VOR 표지소
-let awyCat = { conv: false, rnav: false, vor: false };
+let awyCat = { conv: false, rnav: false, vor: false, aptvor: false };
 try {
   const s = JSON.parse(localStorage.getItem('awyCat') || 'null');
-  if (s) awyCat = { conv: !!s.conv, rnav: !!s.rnav, vor: !!s.vor };
-  else if (localStorage.getItem('awyLayerOn') === '1') awyCat = { conv: true, rnav: true, vor: true };   // 구버전 마이그레이션
+  // 이전 버전은 VOR이 한 항목이었으므로, 저장값에 aptvor가 없으면 vor 상태를 물려받는다
+  if (s) awyCat = { conv: !!s.conv, rnav: !!s.rnav, vor: !!s.vor,
+                    aptvor: s.aptvor === undefined ? !!s.vor : !!s.aptvor };
+  else if (localStorage.getItem('awyLayerOn') === '1') awyCat = { conv: true, rnav: true, vor: true, aptvor: true };   // 구버전 마이그레이션
 } catch(e) {}
 
 // 경유점 → 좌표 (VOR는 id 참조, 그 외는 내장 좌표)
@@ -12297,18 +12303,31 @@ function _drawAwyLayer() {
       nmLbl.addTo(leafMap); _awyLayers.push(nmLbl);
     });
   });
-  // VOR 표지소 (육각형 심볼 + ID·주파수 라벨)
-  if (awyCat.vor) ENR_VORS.forEach(v => {
+  // VOR 표지소 — 항로(ENR 4.1) VOR과 비행장 VOR을 각각 제어
+  _drawVorGroup(enrVorList(),  '#8bc34a', '#aed581');   // 항로 VOR (연두)
+  _drawVorGroup(aptVorList(),  '#ffb74d', '#ffcc80');   // 비행장 VOR (호박색)
+}
+// AWY 패널 분류용 목록
+function enrVorList() { return awyCat.vor    ? ENR_VORS.filter(v => !v.apt) : []; }
+// 비행장 VOR은 AIP 공개 비행장만 지도에 표시(INFO의 공개 기준과 동일)
+function aptVorList() { return awyCat.aptvor ? ENR_VORS.filter(v => v.apt && v.pub) : []; }
+// 육각형 심볼 + ID·주파수 라벨. 좌표가 공항 기준점 근사값(src:'ARP')이면 속을 비워 구분한다.
+function _drawVorGroup(list, col, lblCol) {
+  list.forEach(v => {
+    const approx = v.src === 'ARP';
+    const body = approx
+      ? `<div style="width:13px;height:13px;background:${col};clip-path:polygon(25% 0,75% 0,100% 50%,75% 100%,25% 100%,0 50%);opacity:0.35;filter:drop-shadow(0 0 1.5px #000);"></div>`
+      : `<div style="width:13px;height:13px;background:${col};clip-path:polygon(25% 0,75% 0,100% 50%,75% 100%,25% 100%,0 50%);filter:drop-shadow(0 0 1.5px #000);"></div>`;
     const icon = L.divIcon({
-      html: `<div style="position:relative;">
-        <div style="width:13px;height:13px;background:#8bc34a;clip-path:polygon(25% 0,75% 0,100% 50%,75% 100%,25% 100%,0 50%);filter:drop-shadow(0 0 1.5px #000);"></div>
+      html: `<div style="position:relative;">${body}
         <div style="position:absolute;left:50%;top:50%;width:4px;height:4px;margin:-2px 0 0 -2px;background:#0a0a0a;border-radius:50%;"></div>
-        <div style="position:absolute;left:16px;top:-1px;color:#aed581;font-size:8px;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica Neue,Arial,sans-serif;font-weight:bold;white-space:nowrap;text-shadow:1px 1px 2px #000;">${v.id}${v.freq ? ' ' + v.freq : ''}</div>
+        <div style="position:absolute;left:16px;top:-1px;color:${lblCol};font-size:8px;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica Neue,Arial,sans-serif;font-weight:bold;white-space:nowrap;text-shadow:1px 1px 2px #000;">${v.id}${v.freq ? ' ' + v.freq : ''}</div>
       </div>`,
       iconSize: [13, 13], iconAnchor: [6, 6], className: ''
     });
     const mk = L.marker([v.lat, v.lon], { icon });
-    mk.bindTooltip(`${v.name} (${v.id})${v.freq ? '<br>' + v.freq + ' MHz' : ''}<br>${decToDMS(v.lat, true)} ${decToDMS(v.lon, false)}`, { sticky: true });
+    mk.bindTooltip(`${v.name} (${v.id})${v.freq ? '<br>' + v.freq + ' MHz' : ''}<br>${decToDMS(v.lat, true)} ${decToDMS(v.lon, false)}`
+      + (approx ? '<br><span style="color:#ffb74d;">※ 좌표는 공항 기준점 근사값</span>' : ''), { sticky: true });
     mk.addTo(leafMap); _awyLayers.push(mk);
   });
 }
@@ -12318,7 +12337,7 @@ function _clearAwyLayer() {
 }
 function _awySave() { try { localStorage.setItem('awyCat', JSON.stringify(awyCat)); } catch(e) {} }
 function _awyUpdateBtn() {
-  const any = awyCat.conv || awyCat.rnav || awyCat.vor;
+  const any = awyCat.conv || awyCat.rnav || awyCat.vor || awyCat.aptvor;
   const p = document.getElementById('awy-panel');
   document.getElementById('awy-btn').classList.toggle('active', any || (p && p.classList.contains('open')));
 }
@@ -12327,7 +12346,7 @@ function toggleAwyCat(k) {
   _drawAwyLayer(); _awySave(); _awyUpdateBtn(); _awyRenderPanel();
 }
 function _awySetAll(on) {
-  awyCat = { conv: on, rnav: on, vor: on };
+  awyCat = { conv: on, rnav: on, vor: on, aptvor: on };
   _drawAwyLayer(); _awySave(); _awyUpdateBtn(); _awyRenderPanel();
 }
 function _awyRenderPanel() {
@@ -12335,7 +12354,8 @@ function _awyRenderPanel() {
   const rows = [
     ['conv', 'Conventional 항로', '#8bc34a', ENR_ROUTES.filter(r=>r.type==='CONV').length + '개'],
     ['rnav', 'RNAV(Area) 항로',   '#4dd0e1', ENR_ROUTES.filter(r=>r.type==='RNAV').length + '개'],
-    ['vor',  'VOR 표지소',        '#aed581', ENR_VORS.length + '개소'],
+    ['vor',    '항로(ENR) VOR', '#aed581', ENR_VORS.filter(v=>!v.apt).length + '개소'],
+    ['aptvor', '비행장 VOR',    '#ffb74d', ENR_VORS.filter(v=>v.apt&&v.pub).length + '개소'],
   ];
   p.innerHTML = `<div class="aspc-grp" style="color:#8bc34a;">항로(AWY) 표시
       <div style="flex-shrink:0;"><span onclick="_awySetAll(true)">모두</span><span onclick="_awySetAll(false)">해제</span></div></div>` +
