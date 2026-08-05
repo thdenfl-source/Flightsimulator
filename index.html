@@ -1932,11 +1932,11 @@ body.night-mode::after {
         
         <div class="header-grid">
             <div class="header-box" style="padding:0; gap:0;">
-                <div class="top-func-btn" style="flex:1; width:100%; display:flex; align-items:center; justify-content:center; cursor:pointer;" onclick="switchMode('AUDIO'); switchAudioTab('COM');">
+                <div class="top-func-btn" style="flex:1; width:100%; display:flex; align-items:center; justify-content:center; cursor:pointer;" data-act="openAudioCom">
                     <div class="header-label" style="line-height:1.2;">Audio &<br>Radios</div>
                 </div>
                 <div style="width:80%; height:1px; background:#333;"></div>
-                <div class="top-func-btn" style="flex:1; width:100%; display:flex; align-items:center; justify-content:center; cursor:pointer;" onclick="switchMode('INTERCOM')">
+                <div class="top-func-btn" style="flex:1; width:100%; display:flex; align-items:center; justify-content:center; cursor:pointer;" data-act="switchMode" data-arg='["INTERCOM"]'>
                     <div class="header-label">Intercom</div>
                 </div>
             </div>
@@ -1944,7 +1944,7 @@ body.night-mode::after {
             <div class="header-box">
                 <div class="header-label">COM1</div>
                 <div class="freq-act" id="h-com1-act">133.30</div>
-                <div class="swap-arrow" onclick="swapFreq('com1')">↕</div>
+                <div class="swap-arrow" data-act="swapFreq" data-arg='["com1"]'>↕</div>
                 <div class="freq-stby" id="h-com1-stb">121.90</div>
             </div>
             
@@ -1958,17 +1958,17 @@ body.night-mode::after {
             <div class="header-box">
                 <div class="header-label">COM2</div>
                 <div class="freq-act" id="h-com2-act">128.20</div>
-                <div class="swap-arrow" onclick="swapFreq('com2')">↕</div>
+                <div class="swap-arrow" data-act="swapFreq" data-arg='["com2"]'>↕</div>
                 <div class="freq-stby" id="h-com2-stb">118.20</div>
             </div>
             
             <div class="header-box" style="padding:0; gap:0;">
-                <div style="flex:1; width:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; cursor:pointer;" onclick="switchMode('XPDR_MODE')">
+                <div style="flex:1; width:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; cursor:pointer;" data-act="switchMode" data-arg='["XPDR_MODE"]'>
                     <div class="header-label" style="color:var(--text-cyan); margin-bottom:1px;">XPDR2</div>
                     <div class="green-ind" id="top-xpdr-mode">AUTO</div>
                 </div>
                 <div style="width:80%; height:1px; background:#333;"></div>
-                <div style="flex:1; width:100%; display:flex; align-items:center; justify-content:center; cursor:pointer;" onclick="switchMode('XPDR_CODE')">
+                <div style="flex:1; width:100%; display:flex; align-items:center; justify-content:center; cursor:pointer;" data-act="switchMode" data-arg='["XPDR_CODE"]'>
                     <div class="freq-act" id="top-xpdr-code" style="color:var(--text-green); font-size:12px;">1234</div>
                 </div>
             </div>
@@ -8775,6 +8775,40 @@ if ('serviceWorker' in navigator) {
 }
 
 // ── CDU Logic ──
+// ── CDU 액션 위임 ────────────────────────────────────────────────────
+// 인라인 data-act="foo" data-arg='["X"]'은 전역 스코프에서만 동작한다. 그래서 CDU 내부 함수를
+// 캡슐화할 수 없고, 이름을 잘못 적어도 문자열이라 정적으로 잡히지 않아 버튼이
+// 조용히 죽는다. data-act/data-arg로 바꾸고 여기서 이름→함수를 명시적으로 잇는다.
+//   · data-act : 액션 이름(레지스트리 키)
+//   · data-arg : 인자 JSON 배열. 문자열 "$event"는 실제 이벤트 객체로 치환된다.
+// 위임은 #cdu-wrap 안에서만 동작하므로, CDU 밖의 인라인 핸들러는 종전 그대로 둔다.
+const CDU_ACT = {};
+function cduRegister(map) { Object.assign(CDU_ACT, map); }
+function act(name, ...args) {
+  if (!args.length) return `data-act="${name}"`;
+  return `data-act="${name}" data-arg='${JSON.stringify(args).replace(/'/g, "&#39;")}'`;
+}
+(function initCduDelegation() {
+  const root = document.getElementById('cdu-wrap');
+  if (!root) return;
+  // 기본은 click. 볼륨 슬라이더처럼 누르는 즉시 반응해야 하는 요소는 data-on="pointerdown".
+  const run = (e, kind) => {
+    const el = e.target.closest('[data-act]');
+    if (!el || !root.contains(el)) return;
+    if ((el.dataset.on || 'click') !== kind) return;
+    const fn = CDU_ACT[el.dataset.act];
+    if (typeof fn !== 'function') { console.warn('[CDU] 미등록 액션:', el.dataset.act); return; }
+    let args = [];
+    if (el.dataset.arg) {
+      try { args = JSON.parse(el.dataset.arg); }
+      catch (err) { console.warn('[CDU] 인자 파싱 실패:', el.dataset.arg); return; }
+    }
+    fn(...args.map(a => a === '$event' ? e : a === '$el' ? el : a));
+  };
+  root.addEventListener('click',       e => run(e, 'click'));
+  root.addEventListener('pointerdown', e => run(e, 'pointerdown'));
+})();
+
     // --- State Variables ---
     let currentMode = 'HOME';
     let audioTab = 'COM'; 
@@ -9231,17 +9265,17 @@ if ('serviceWorker' in navigator) {
                         <div class="icon-label">${btn.text}</div>
                     </a>`;
             } else {
-                let clickAction = btn.id === 'sys' ? `onclick="switchMode('TRACKPOINT')"` :
-                                  btn.id === 'perf' ? `onclick="switchMode('PERF')"` :
-                                  btn.id === 'fpl'  ? `onclick="openFlightPlan()"` :
-                                  btn.id === 'proc' ? `onclick="setPage(1); fpGo('IFR');"` :
-                                  btn.id === 'util' ? `onclick="utilOpen('MENU')"` :
-                                  btn.id === 'map'  ? `onclick="cduOpenMap()"` :
-                                  btn.id === 'check' ? `onclick="clOpen()"` :
-                                  btn.id === 'afld' ? `onclick="switchMode('AIRFIELD')"` :
-                                  btn.id === 'cctv' ? `onclick="switchMode('CCTV')"` :
-                                  btn.id === 'vnav' ? `onclick="utilOpen('VNAV')"` :
-                                  btn.id === 'charts' ? `onclick="switchMode('CHARTS')"` : '';
+                let clickAction = btn.id === 'sys' ? `data-act="switchMode" data-arg='["TRACKPOINT"]'` :
+                                  btn.id === 'perf' ? `data-act="switchMode" data-arg='["PERF"]'` :
+                                  btn.id === 'fpl'  ? `data-act="openFlightPlan"` :
+                                  btn.id === 'proc' ? `data-act="openProc"` :
+                                  btn.id === 'util' ? `data-act="utilOpen" data-arg='["MENU"]'` :
+                                  btn.id === 'map'  ? `data-act="cduOpenMap"` :
+                                  btn.id === 'check' ? `data-act="clOpen"` :
+                                  btn.id === 'afld' ? `data-act="switchMode" data-arg='["AIRFIELD"]'` :
+                                  btn.id === 'cctv' ? `data-act="switchMode" data-arg='["CCTV"]'` :
+                                  btn.id === 'vnav' ? `data-act="utilOpen" data-arg='["VNAV"]'` :
+                                  btn.id === 'charts' ? `data-act="switchMode" data-arg='["CHARTS"]'` : '';
                 gridHtml += `
                     <div class="home-icon-wrapper" ${clickAction}>
                         <div class="${boxClass}">${btn.icon}</div>
@@ -9251,7 +9285,7 @@ if ('serviceWorker' in navigator) {
         });
         gridHtml += `</div>`;
         container.innerHTML = gridHtml;
-        footer.innerHTML = cduFooter('', `<div class="nav-btn" onclick="window.open('https://ubikais.fois.go.kr:8030/common/login?systemId=sysUbikais','_blank')"><span>🛰</span>UBIKAIS</div>`);
+        footer.innerHTML = cduFooter('', `<div class="nav-btn" data-act="openUbikais"><span>🛰</span>UBIKAIS</div>`);
     }
 
     function renderPerfScreen(container, footer, title, centerLabel) {
@@ -9273,19 +9307,19 @@ if ('serviceWorker' in navigator) {
                 <div style="flex:1; display:flex; flex-direction:column; gap:8px; justify-content:flex-start;">
                     <div>
                         <div class="perf-label">ALTITUDE (FT)</div>
-                        <div class="perf-val-box" onclick="switchMode('PERF_INPUT', 'alt')">${perfData.alt}</div>
+                        <div class="perf-val-box" data-act="switchMode" data-arg='["PERF_INPUT","alt"]'>${perfData.alt}</div>
                     </div>
                     <div>
                         <div class="perf-label">TEMP (OAT °C)</div>
-                        <div class="perf-val-box" onclick="switchMode('PERF_INPUT', 'temp')">${perfData.temp}</div>
+                        <div class="perf-val-box" data-act="switchMode" data-arg='["PERF_INPUT","temp"]'>${perfData.temp}</div>
                     </div>
                     <div>
                         <div class="perf-label">GROSS WT (LBS)</div>
-                        <div class="perf-val-box" onclick="switchMode('PERF_INPUT', 'weight')">${perfData.weight}</div>
+                        <div class="perf-val-box" data-act="switchMode" data-arg='["PERF_INPUT","weight"]'>${perfData.weight}</div>
                     </div>
                     <div>
                         <div class="perf-label">V/S (FPM)</div>
-                        <div class="perf-val-box" onclick="switchMode('PERF_INPUT', 'vs')">${perfData.vs}</div>
+                        <div class="perf-val-box" data-act="switchMode" data-arg='["PERF_INPUT","vs"]'>${perfData.vs}</div>
                     </div>
                 </div>
                 
@@ -9354,16 +9388,16 @@ if ('serviceWorker' in navigator) {
         container.innerHTML = `<div style="display:flex; flex-direction:column; align-items:center; padding-top:20px;">
             <div class="input-row" style="margin-top:0;">
                 <div class="freq-box-main" style="width:150px;">${displayVal}</div>
-                <div class="item-btn" style="width:45px; height:45px;" onclick="backspaceInput()">⬅<br>Bksp</div>
+                <div class="item-btn" style="width:45px; height:45px;" data-act="backspaceInput">⬅<br>Bksp</div>
             </div>
             <div class="numpad-grid" style="margin-top:10px;">
-                ${[1,2,3,4,5,6,7,8,9].map(n => `<div class="num-circle" onclick="addInput('${n}')">${n}</div>`).join('')}
-                <div class="num-circle" onclick="addInput('-')">-</div>
-                <div class="num-circle" onclick="addInput('0')">0</div>
+                ${[1,2,3,4,5,6,7,8,9].map(n => `<div class="num-circle" data-act="addInput" data-arg='["${n}"]'>${n}</div>`).join('')}
+                <div class="num-circle" data-act="addInput" data-arg='["-"]'>-</div>
+                <div class="num-circle" data-act="addInput" data-arg='["0"]'>0</div>
                 <div></div>
             </div></div>`;
         
-        footer.innerHTML = cduFooter("switchMode('PERF')", `<div class="nav-btn enter-btn-blue" onclick="confirmPerfInput()"><span>↩</span>Enter</div>`);
+        footer.innerHTML = cduFooter("switchMode('PERF')", `<div class="nav-btn enter-btn-blue" data-act="confirmPerfInput"><span>↩</span>Enter</div>`);
     }
 
     function renderAudioScreen(container, footer, title, centerLabel) {
@@ -9382,7 +9416,7 @@ if ('serviceWorker' in navigator) {
                 ${renderAudioRow('U/VHF', 'uvhf')}
                 <div class="volume-row">
                     <div class="item-btn">▶<br>Playback</div>
-                    <div class="wedge-slider" style="grid-column: span 2;" onpointerdown="handleVol('pb', event)">
+                    <div class="wedge-slider" style="grid-column: span 2;" data-act="handleVol" data-on="pointerdown" data-arg='["pb","$event","$el"]'>
                         <span class="wedge-text">${volumes.pb}%</span>
                         <div class="wedge-fill" style="width:${volumes.pb}%"></div>
                     </div>
@@ -9399,8 +9433,8 @@ if ('serviceWorker' in navigator) {
                     <span>Volume</span><span>Control</span>
                 </div>
                 <div style="display: grid; grid-template-columns: 60px 1fr 80px; align-items: center; margin-bottom: 7px; gap: 6px;">
-                    <div class="item-btn ${monStates.speaker?'on':''}" onclick="toggleMon('speaker')">Speaker<div class="status-line"></div></div>
-                    <div class="wedge-slider" onpointerdown="handleVol('speaker', event)">
+                    <div class="item-btn ${monStates.speaker?'on':''}" data-act="toggleMon" data-arg='["speaker"]'>Speaker<div class="status-line"></div></div>
+                    <div class="wedge-slider" data-act="handleVol" data-on="pointerdown" data-arg='["speaker","$event","$el"]'>
                         <span class="wedge-text">${volumes.speaker}%</span>
                         <div class="wedge-fill" style="width:${volumes.speaker}%"></div>
                     </div>
@@ -9408,7 +9442,7 @@ if ('serviceWorker' in navigator) {
                 </div>
                 <div style="display: grid; grid-template-columns: 60px 1fr 80px; align-items: center; margin-bottom: 7px; gap: 6px;">
                     <div class="item-btn">▶<br>Playback</div>
-                    <div class="wedge-slider" onpointerdown="handleVol('pb', event)">
+                    <div class="wedge-slider" data-act="handleVol" data-on="pointerdown" data-arg='["pb","$event","$el"]'>
                         <span class="wedge-text">${volumes.pb}%</span>
                         <div class="wedge-fill" style="width:${volumes.pb}%"></div>
                     </div>
@@ -9433,10 +9467,10 @@ if ('serviceWorker' in navigator) {
                     ${renderMissionRow('HF', 'hf')}
                 </div>
                 <div class="volume-row">
-                    <div class="item-btn ${monStates.selcal?'on':''}" onclick="toggleMon('selcal')">SELCAL<div class="status-line"></div></div>
+                    <div class="item-btn ${monStates.selcal?'on':''}" data-act="toggleMon" data-arg='["selcal"]'>SELCAL<div class="status-line"></div></div>
                     <div></div>
                     <div></div>
-                    <div class="freq-display-box" style="align-items:center; justify-content:center;" onclick="switchMode('SELCAL_INPUT')">
+                    <div class="freq-display-box" style="align-items:center; justify-content:center;" data-act="switchMode" data-arg='["SELCAL_INPUT"]'>
                         <div style="color:white; font-size:7px; margin-bottom:2px;">SELCAL ID</div>
                         <div style="color:var(--text-cyan); font-size:11px; font-weight:bold;">${selcalCode}</div>
                     </div>
@@ -9449,17 +9483,17 @@ if ('serviceWorker' in navigator) {
                     <span>Volume</span><span>Control</span>
                 </div>
                 <div style="display: flex; gap: 8px; margin-bottom: 8px; padding-left: 5px;">
-                    <div class="item-btn" style="width: 65px; height: 35px;" onclick="toggleClicks()">
+                    <div class="item-btn" style="width: 65px; height: 35px;" data-act="toggleClicks">
                         <span style="font-size: 9px; color: white;">Clicks</span>
                         <span style="font-size: 10px; color: var(--text-cyan); font-weight: bold; margin-top: 2px;">${clicksState}</span>
                     </div>
-                    <div class="wedge-slider" style="width: 140px; height: 30px; align-self: center;" onpointerdown="handleVol('clicks', event)">
+                    <div class="wedge-slider" style="width: 140px; height: 30px; align-self: center;" data-act="handleVol" data-on="pointerdown" data-arg='["clicks","$event","$el"]'>
                         <span class="wedge-text">${volumes.clicks}%</span>
                         <div class="wedge-fill" style="width:${volumes.clicks}%"></div>
                     </div>
                 </div>
                 <div style="display: flex; gap: 8px; padding-left: 5px;">
-                    <div class="item-btn ${micSelected === 'PA' ? 'on' : ''}" style="width: 65px; height: 35px;" onclick="setMic('PA')">
+                    <div class="item-btn ${micSelected === 'PA' ? 'on' : ''}" style="width: 65px; height: 35px;" data-act="setMic" data-arg='["PA"]'>
                         <span style="font-size: 9px;">PA</span>
                         <div class="status-line"></div>
                     </div>
@@ -9472,10 +9506,10 @@ if ('serviceWorker' in navigator) {
             <div class="sub-header">
                 <div class="user-3d-btn" style="width:57px;">User<br><span style="color:var(--text-cyan)">Pilot</span></div>
                 <div class="tab-container">
-                    <div class="tab ${audioTab==='COM'?'active':''}" onclick="switchAudioTab('COM')">COM</div>
-                    <div class="tab ${audioTab==='NAV'?'active':''}" onclick="switchAudioTab('NAV')">NAV</div>
-                    <div class="tab ${audioTab==='Mission'?'active':''}" onclick="switchAudioTab('Mission')">Mission</div>
-                    <div class="tab ${audioTab==='Other'?'active':''}" onclick="switchAudioTab('Other')">Other</div>
+                    <div class="tab ${audioTab==='COM'?'active':''}" data-act="switchAudioTab" data-arg='["COM"]'>COM</div>
+                    <div class="tab ${audioTab==='NAV'?'active':''}" data-act="switchAudioTab" data-arg='["NAV"]'>NAV</div>
+                    <div class="tab ${audioTab==='Mission'?'active':''}" data-act="switchAudioTab" data-arg='["Mission"]'>Mission</div>
+                    <div class="tab ${audioTab==='Other'?'active':''}" data-act="switchAudioTab" data-arg='["Other"]'>Other</div>
                 </div>
             </div>
             <div class="panel-border">
@@ -9490,26 +9524,26 @@ if ('serviceWorker' in navigator) {
         container.innerHTML = `
             <div class="sub-header" style="justify-content: space-between; padding-bottom:5px;">
                 <div class="user-3d-btn" style="width:60px;">User<br><span style="color:var(--text-cyan)">CoPilot</span></div>
-                <div class="wedge-slider" style="flex:1; margin:0 8px;" onpointerdown="handleVol('intercom', event)">
+                <div class="wedge-slider" style="flex:1; margin:0 8px;" data-act="handleVol" data-on="pointerdown" data-arg='["intercom","$event","$el"]'>
                     <span class="wedge-text">${volumes.intercom}%</span>
                     <div class="wedge-fill" style="width:${volumes.intercom}%"></div>
                 </div>
-                <div class="item-btn ${icStates.Isolate?'on':''}" style="width:45px; height:37px;" onclick="toggleIsolate()">Isolate<div class="status-line"></div></div>
-                <div class="item-btn" style="width:40px; height:37px;" onclick="switchMode('VOX_MODE')">VOX<br><span style="color:var(--text-cyan)">${voxState.toUpperCase()}</span></div>
+                <div class="item-btn ${icStates.Isolate?'on':''}" style="width:45px; height:37px;" data-act="toggleIsolate">Isolate<div class="status-line"></div></div>
+                <div class="item-btn" style="width:40px; height:37px;" data-act="switchMode" data-arg='["VOX_MODE"]'>VOX<br><span style="color:var(--text-cyan)">${voxState.toUpperCase()}</span></div>
             </div>
             <div class="panel-border" style="padding-top:12px;">
                 <div class="intercom-grid">
-                    <div class="item-btn ${icStates.CoPilot?'on':''}" style="height:60px;" onclick="toggleIC('CoPilot')">👨‍✈️<br>CoPilot<div class="status-line"></div></div>
-                    <div class="item-btn ${icStates.Pilot?'on':''}" style="height:60px;" onclick="toggleIC('Pilot')">Pilot<div class="status-line"></div></div>
-                    <div class="item-btn ${icStates.Crew1?'on':''}" style="height:60px;" onclick="toggleIC('Crew1')">Crew 1<div class="status-line"></div></div>
-                    <div class="item-btn ${icStates.Pass?'on':''}" style="height:60px;" onclick="toggleIC('Pass')">Pass<div class="status-line"></div></div>
-                    <div class="item-btn ${icStates.Crew2?'on':''}" style="height:60px;" onclick="toggleIC('Crew2')">Crew 2<div class="status-line"></div></div>
-                    <div class="item-btn ${icStates.wICS?'on':''}" style="height:60px;" onclick="toggleIC('wICS')">wICS<div class="status-line"></div></div>
+                    <div class="item-btn ${icStates.CoPilot?'on':''}" style="height:60px;" data-act="toggleIC" data-arg='["CoPilot"]'>👨‍✈️<br>CoPilot<div class="status-line"></div></div>
+                    <div class="item-btn ${icStates.Pilot?'on':''}" style="height:60px;" data-act="toggleIC" data-arg='["Pilot"]'>Pilot<div class="status-line"></div></div>
+                    <div class="item-btn ${icStates.Crew1?'on':''}" style="height:60px;" data-act="toggleIC" data-arg='["Crew1"]'>Crew 1<div class="status-line"></div></div>
+                    <div class="item-btn ${icStates.Pass?'on':''}" style="height:60px;" data-act="toggleIC" data-arg='["Pass"]'>Pass<div class="status-line"></div></div>
+                    <div class="item-btn ${icStates.Crew2?'on':''}" style="height:60px;" data-act="toggleIC" data-arg='["Crew2"]'>Crew 2<div class="status-line"></div></div>
+                    <div class="item-btn ${icStates.wICS?'on':''}" style="height:60px;" data-act="toggleIC" data-arg='["wICS"]'>wICS<div class="status-line"></div></div>
                 </div>
                 <div class="loop-row">
-                    <div class="item-btn ${icStates.Loop1?'on':''}" style="flex:1; height:45px;" onclick="toggleIC('Loop1')">Loop 1<br>Mission Crew<div class="status-line"></div></div>
-                    <div class="item-btn ${icStates.Loop2?'on':''}" style="flex:1; height:45px;" onclick="toggleIC('Loop2')">Loop 2<br>All Pass<div class="status-line"></div></div>
-                    <div class="item-btn ${icStates.Loop5?'on':''}" style="flex:1; height:45px;" onclick="toggleIC('Loop5')">Loop 5<br>All<div class="status-line"></div></div>
+                    <div class="item-btn ${icStates.Loop1?'on':''}" style="flex:1; height:45px;" data-act="toggleIC" data-arg='["Loop1"]'>Loop 1<br>Mission Crew<div class="status-line"></div></div>
+                    <div class="item-btn ${icStates.Loop2?'on':''}" style="flex:1; height:45px;" data-act="toggleIC" data-arg='["Loop2"]'>Loop 2<br>All Pass<div class="status-line"></div></div>
+                    <div class="item-btn ${icStates.Loop5?'on':''}" style="flex:1; height:45px;" data-act="toggleIC" data-arg='["Loop5"]'>Loop 5<br>All<div class="status-line"></div></div>
                 </div>
             </div>`;
         footer.innerHTML = cduFooter("switchMode('HOME')");
@@ -9529,17 +9563,17 @@ if ('serviceWorker' in navigator) {
                 </div>
                 <div class="selcal-grid">
                     ${['A','B','C','D','E', 'F','G','H','J','K', 'L','M','P','Q','R'].map(c => 
-                        `<div class="num-circle" style="width:45px; height:45px; font-size:16px;" onclick="addSelcalInput('${c}')">${c}</div>`
+                        `<div class="num-circle" style="width:45px; height:45px; font-size:16px;" data-act="addSelcalInput" data-arg='["${c}"]'>${c}</div>`
                     ).join('')}
                     <div class="item-btn" style="width:45px; height:45px;">🔍<br>Find</div>
                     <div style="visibility:hidden"></div>
-                    <div class="num-circle" style="width:45px; height:45px; font-size:16px;" onclick="addSelcalInput('S')">S</div>
+                    <div class="num-circle" style="width:45px; height:45px; font-size:16px;" data-act="addSelcalInput" data-arg='["S"]'>S</div>
                     <div style="visibility:hidden"></div>
-                    <div class="item-btn" style="width:45px; height:45px;" onclick="backspaceSelcal()">⬅<br>Bksp</div>
+                    <div class="item-btn" style="width:45px; height:45px;" data-act="backspaceSelcal">⬅<br>Bksp</div>
                 </div>
             </div>
         `;
-        footer.innerHTML = cduFooter("switchMode('AUDIO'); switchAudioTab('Mission');", `<div class="nav-btn enter-btn-blue" onclick="confirmSelcal()"><span>↩</span>Enter</div>`);
+        footer.innerHTML = cduFooter("switchMode('AUDIO'); switchAudioTab('Mission');", `<div class="nav-btn enter-btn-blue" data-act="confirmSelcal"><span>↩</span>Enter</div>`);
     }
 
     function renderVoxModeScreen(container, footer, title, centerLabel) {
@@ -9556,7 +9590,7 @@ if ('serviceWorker' in navigator) {
                 
                 <div style="display:flex; gap:10px; width:90%; justify-content:center; margin-bottom:25px;">
                     ${['Off', 'Manual', 'Auto'].map(m => 
-                        `<div class="item-btn ${voxState === m ? 'on' : ''}" style="flex:1; height:45px; font-size:12px; font-weight:bold;" onclick="setVoxMode('${m}')">
+                        `<div class="item-btn ${voxState === m ? 'on' : ''}" style="flex:1; height:45px; font-size:12px; font-weight:bold;" data-act="setVoxMode" data-arg='["${m}"]'>
                             ${m.toUpperCase()}<div class="status-line"></div>
                         </div>`
                     ).join('')}
@@ -9564,7 +9598,7 @@ if ('serviceWorker' in navigator) {
 
                 <div style="width:90%; opacity:${sliderOpacity}; pointer-events:${pointerEvents}; transition: opacity 0.3s ease;">
                     <div style="font-size:9px; color:#ccc; margin-bottom:5px; text-align:left;">VOX SENSITIVITY (MANUAL)</div>
-                    <div class="wedge-slider" style="height:35px; border:1px solid #555; border-radius:4px; margin-bottom:10px;" onpointerdown="handleVol('vox', event)">
+                    <div class="wedge-slider" style="height:35px; border:1px solid #555; border-radius:4px; margin-bottom:10px;" data-act="handleVol" data-on="pointerdown" data-arg='["vox","$event","$el"]'>
                         <span class="wedge-text" style="font-size:12px; top:11px;">${volumes.vox}%</span>
                         <div class="wedge-fill" style="width:${volumes.vox}%"></div>
                     </div>
@@ -9591,17 +9625,17 @@ if ('serviceWorker' in navigator) {
                     </div>
                     <div style="position: relative; height: 50px; display: flex; justify-content: center; align-items: center;">
                         <div style="position: absolute; top: -5px; left: 5px; font-size: 9px; color: white;">Standby</div>
-                        <div class="item-btn" style="width: 130px; height: 35px; border: 1px solid var(--text-cyan); background: transparent; color: var(--text-cyan); font-size: 18px; font-weight: bold; cursor: pointer;" onclick="switchMode('COM_INPUT', 'hf')">
+                        <div class="item-btn" style="width: 130px; height: 35px; border: 1px solid var(--text-cyan); background: transparent; color: var(--text-cyan); font-size: 18px; font-weight: bold; cursor: pointer;" data-act="switchMode" data-arg='["COM_INPUT","hf"]'>
                             ${freqs.hf.stb}
                         </div>
                     </div>
                 </div>
                 <div style="display: flex; gap: 10px; margin-bottom: 2px;">
-                    <div class="item-btn" style="flex: 1; height: 45px;" onclick="toggleHfTuning()">
+                    <div class="item-btn" style="flex: 1; height: 45px;" data-act="toggleHfTuning">
                         <div style="font-size: 9px; color: white; margin-bottom: 3px;">Tuning Mode</div>
                         <div style="font-size: 12px; color: var(--text-cyan); font-weight: bold;">${hfState.tuning}</div>
                     </div>
-                    <div class="item-btn" style="flex: 1; height: 45px;" onclick="toggleHfEmission()">
+                    <div class="item-btn" style="flex: 1; height: 45px;" data-act="toggleHfEmission">
                         <div style="font-size: 9px; color: white; margin-bottom: 3px;">Emission Mode</div>
                         <div style="font-size: 12px; color: var(--text-cyan); font-weight: bold;">${hfState.emission}</div>
                     </div>
@@ -9611,15 +9645,15 @@ if ('serviceWorker' in navigator) {
                         <div style="font-size: 16px; margin-bottom: 2px;">🔍</div>
                         <div style="font-size: 8px; color: white;">Find</div>
                     </div>
-                    <div class="item-btn" style="flex: 1; height: 45px;" onclick="toggleHfSql()">
+                    <div class="item-btn" style="flex: 1; height: 45px;" data-act="toggleHfSql">
                         <div style="font-size: 9px; color: white; margin-bottom: 3px;">SQL LVL</div>
                         <div style="font-size: 12px; color: var(--text-cyan); font-weight: bold;">${hfState.sql}</div>
                     </div>
-                    <div class="item-btn" style="flex: 1; height: 45px;" onclick="toggleHfPwr()">
+                    <div class="item-btn" style="flex: 1; height: 45px;" data-act="toggleHfPwr">
                         <div style="font-size: 9px; color: white; margin-bottom: 3px;">XMIT PWR</div>
                         <div style="font-size: 12px; color: var(--text-cyan); font-weight: bold;">${hfState.pwr}</div>
                     </div>
-                    <div class="item-btn" style="width: 55px; height: 45px;" onclick="swapFreq('hf')">
+                    <div class="item-btn" style="width: 55px; height: 45px;" data-act="swapFreq" data-arg='["hf"]'>
                         <div style="font-size: 12px; color: white; font-weight: bold;">↕ XFER</div>
                     </div>
                 </div>
@@ -9658,16 +9692,16 @@ if ('serviceWorker' in navigator) {
             <div class="input-row" style="margin-top:0;">
                 <div class="item-btn" style="width:45px; height:45px;">🔍<br>Find</div>
                 <div class="freq-box-main">${displayVal}</div>
-                <div class="item-btn" style="width:45px; height:45px;" onclick="backspaceInput()">⬅<br>Bksp</div>
+                <div class="item-btn" style="width:45px; height:45px;" data-act="backspaceInput">⬅<br>Bksp</div>
             </div>
             <div class="numpad-grid">
-                ${[1,2,3,4,5,6,7,8,9].map(n => `<div class="num-circle" onclick="addInput('${n}')">${n}</div>`).join('')}
-                <div></div><div class="num-circle" onclick="addInput('0')">0</div>
-                <div class="item-btn" style="height:55px; font-size:12px;" onclick="handleInputXfer()">↕ XFER</div>
+                ${[1,2,3,4,5,6,7,8,9].map(n => `<div class="num-circle" data-act="addInput" data-arg='["${n}"]'>${n}</div>`).join('')}
+                <div></div><div class="num-circle" data-act="addInput" data-arg='["0"]'>0</div>
+                <div class="item-btn" style="height:55px; font-size:12px;" data-act="handleInputXfer">↕ XFER</div>
             </div></div>`;
         
         let backMode = inputTarget === 'hf' ? "'HF_CONTROL'" : "'AUDIO'";
-        footer.innerHTML = cduFooter(`switchMode(${backMode}, '${inputTarget}')`, `<div class="nav-btn enter-btn-blue" onclick="confirmInput()"><span>↩</span>Enter</div>`);
+        footer.innerHTML = cduFooter(`switchMode(${backMode}, '${inputTarget}')`, `<div class="nav-btn enter-btn-blue" data-act="confirmInput"><span>↩</span>Enter</div>`);
     }
 
     function renderXpdrModeScreen(container, footer, title, centerLabel) {
@@ -9678,14 +9712,14 @@ if ('serviceWorker' in navigator) {
                 <div style="flex:1; display:flex; flex-direction:column; gap:6px; border-right:1px solid #333; padding-right:10px;">
                     <div style="color:white; font-size:10px; padding-bottom:3px; border-bottom:1px solid #555;">XPDR/TCAS Mode</div>
                     ${['Auto', 'TA Only', 'Altitude Reporting', 'On', 'Standby'].map(m => 
-                        `<div class="item-btn ${xpdrState.mode === m ? 'on' : ''}" style="height:35px; font-size:9px;" onclick="setXpdrMode('${m}')">
+                        `<div class="item-btn ${xpdrState.mode === m ? 'on' : ''}" style="height:35px; font-size:9px;" data-act="setXpdrMode" data-arg='["${m}"]'>
                             ${m.replace(' ', '<br>')}<div class="status-line"></div>
                         </div>`
                     ).join('')}
                 </div>
                 <div style="flex:1; display:flex; flex-direction:column; gap:15px; padding-left:10px; justify-content:flex-start; padding-top:20px;">
                     <div class="item-btn" style="height:45px; font-size:10px;">Active<br><span style="color:var(--text-cyan); font-size:11px;">${xpdrState.active}</span></div>
-                    <div class="item-btn ${xpdrState.adsb ? 'on' : ''}" style="height:45px; font-size:10px;" onclick="toggleAdsb()">ADS-B TX<div class="status-line"></div></div>
+                    <div class="item-btn ${xpdrState.adsb ? 'on' : ''}" style="height:45px; font-size:10px;" data-act="toggleAdsb">ADS-B TX<div class="status-line"></div></div>
                     <div class="item-btn" style="height:45px; font-size:10px;">Flight ID<br><span style="color:var(--text-cyan); font-size:11px;">${xpdrState.flightId}</span></div>
                 </div>
             </div>
@@ -9701,19 +9735,19 @@ if ('serviceWorker' in navigator) {
             <div style="display:flex; flex-direction:column; align-items:center; padding-top:10px; height:100%;">
                 <div style="display:flex; gap:10px; margin-bottom:20px; align-items:center; width:100%; justify-content:center;">
                     <div style="background:#0a0a0a; border:1px solid #444; width:120px; height:35px; display:flex; align-items:center; justify-content:center; color:var(--text-cyan); font-size:20px; font-weight:bold; border-radius:4px;">${displayVal}</div>
-                    <div class="item-btn" style="width:45px; height:35px;" onclick="backspaceXpdr()">←<br>BKSP</div>
+                    <div class="item-btn" style="width:45px; height:35px;" data-act="backspaceXpdr">←<br>BKSP</div>
                 </div>
                 <div class="xpdr-numpad-grid">
-                    ${[0,1,2,3,4,5,6,7].map(n => `<div class="num-circle" style="width:45px; height:45px;" onclick="addXpdrInput('${n}')">${n}</div>`).join('')}
+                    ${[0,1,2,3,4,5,6,7].map(n => `<div class="num-circle" style="width:45px; height:45px;" data-act="addXpdrInput" data-arg='["${n}"]'>${n}</div>`).join('')}
                 </div>
                 <div style="display:flex; gap:10px; width:100%; justify-content:center; margin-top:10px;">
-                    <div class="item-btn" style="flex:1; height:35px; font-size:10px;" onclick="flashIdent()">IDENT</div>
-                    <div class="item-btn" style="flex:1; height:35px; font-size:10px;" onclick="setXpdrPreset('1200')">VFR</div>
-                    <div class="item-btn" style="flex:1; height:35px; font-size:10px;" onclick="setXpdrPreset('7700')">EMER</div>
+                    <div class="item-btn" style="flex:1; height:35px; font-size:10px;" data-act="flashIdent">IDENT</div>
+                    <div class="item-btn" style="flex:1; height:35px; font-size:10px;" data-act="setXpdrPreset" data-arg='["1200"]'>VFR</div>
+                    <div class="item-btn" style="flex:1; height:35px; font-size:10px;" data-act="setXpdrPreset" data-arg='["7700"]'>EMER</div>
                 </div>
             </div>
         `;
-        footer.innerHTML = cduFooter("switchMode('XPDR_MODE')", `<div class="nav-btn enter-btn-blue" onclick="confirmXpdr()"><span>↩</span>Enter</div>`);
+        footer.innerHTML = cduFooter("switchMode('XPDR_MODE')", `<div class="nav-btn enter-btn-blue" data-act="confirmXpdr"><span>↩</span>Enter</div>`);
     }
 
     // ── Utilities: Unit Converter (numpad-driven) ────────────────────────────
@@ -9944,7 +9978,7 @@ if ('serviceWorker' in navigator) {
         container.innerHTML =
           `<div style="color:#556;font-size:9px;letter-spacing:1px;margin:2px 0 6px;">기능을 선택하세요</div>` +
           _UMENU.map(it =>
-            `<div onclick="utilOpen('${it.id}')" style="display:flex;align-items:center;justify-content:space-between;` +
+            `<div data-act="utilOpen" data-arg='["${it.id}"]' style="display:flex;align-items:center;justify-content:space-between;` +
               `padding:10px 10px;margin-bottom:5px;border:1px solid #1e3a4a;border-radius:5px;background:#0a1620;cursor:pointer;">` +
               `<div><div style="color:#00cfff;font-size:12px;font-weight:bold;">${it.name}</div>` +
               `<div style="color:#567;font-size:9px;margin-top:1px;">${it.sub}</div></div>` +
@@ -9958,7 +9992,7 @@ if ('serviceWorker' in navigator) {
       title.innerText = 'Utilities — ' + page.title;
 
       // 목록으로 돌아가기 버튼
-      const backToMenu = `<div onclick="utilOpen('MENU')" style="display:inline-flex;align-items:center;gap:4px;` +
+      const backToMenu = `<div data-act="utilOpen" data-arg='["MENU"]' style="display:inline-flex;align-items:center;gap:4px;` +
         `padding:5px 10px;margin-bottom:7px;border:1px solid #2a4a5a;border-radius:4px;background:#0a1620;color:#00cfff;` +
         `font-size:10px;font-weight:bold;cursor:pointer;">☰ 목록</div>`;
 
@@ -9969,7 +10003,7 @@ if ('serviceWorker' in navigator) {
         const bg = answer ? '#0d2230' : (isAct ? '#001e28' : 'transparent');
         const bd = answer ? '#00cfff' : (isAct ? '#00e5ff' : '#1a1a1a');
         const vc = answer ? '#00e5ff' : (isAct ? '#00e5ff' : '#aaa');
-        const click = answer ? '' : `onclick="utilFocus('${fld}')"`;
+        const click = answer ? '' : `data-act="utilFocus" data-arg='["${fld}"]'`;
         return `<div ${click} style="` +
           `display:flex;align-items:center;justify-content:space-between;` +
           `padding:7px 8px;border-radius:4px;cursor:${answer?'default':'pointer'};margin-bottom:3px;` +
@@ -10003,7 +10037,7 @@ if ('serviceWorker' in navigator) {
           `<div id="vnav-readout">${_vnavReadoutHtml()}</div>`;
       } else if (page.sun) {
         fieldsHtml =
-          `<div onclick="utilSunHere()" style="display:inline-flex;align-items:center;gap:4px;` +
+          `<div data-act="utilSunHere" style="display:inline-flex;align-items:center;gap:4px;` +
             `padding:5px 10px;margin-bottom:7px;border:1px solid #2a4a5a;border-radius:4px;background:#0a1620;` +
             `color:#00cfff;font-size:10px;font-weight:bold;cursor:pointer;">📍 현재 위치 사용</div>` +
           `<div style="color:#556;font-size:9px;letter-spacing:1px;margin:2px 0 4px;">POSITION (값 입력 후 ENT)</div>` +
@@ -10019,7 +10053,7 @@ if ('serviceWorker' in navigator) {
           page.answers.map(f => ROW(f, true)).join('');
       } else if (page.fuel) {
         fieldsHtml =
-          `<div onclick="utilFuelDensity()" style="display:flex;align-items:center;justify-content:space-between;` +
+          `<div data-act="utilFuelDensity" style="display:flex;align-items:center;justify-content:space-between;` +
             `padding:6px 8px;margin-bottom:6px;border:1px solid #2a4a6a;border-radius:4px;background:#0a1420;cursor:pointer;">` +
             `<span style="color:#88aacc;font-size:9px;">Fuel Type</span>` +
             `<span style="color:#8ac6ff;font-size:12px;font-weight:bold;">${_FUELS[fuelTypeIdx].name} · ${fuelLbGal.toFixed(1)} lb/gal ⟳</span></div>` +
@@ -10048,15 +10082,15 @@ if ('serviceWorker' in navigator) {
           `<div style="display:flex;gap:6px;justify-content:center;align-items:stretch;">` +
             `<div style="display:grid;grid-template-columns:repeat(3,36px);gap:6px;">` +
               ['7','8','9','4','5','6','1','2','3'].map(n =>
-                `<div style="${CB}" onclick="utilNumKey('${n}')">${n}</div>`
+                `<div style="${CB}" data-act="utilNumKey" data-arg='["${n}"]'>${n}</div>`
               ).join('') +
-              `<div style="${CB}color:#aaa;" onclick="utilNumKey('±')">±</div>` +
-              `<div style="${CB}" onclick="utilNumKey('0')">0</div>` +
-              `<div style="${CB}color:#aaa;" onclick="utilNumKey('.')">.</div>` +
+              `<div style="${CB}color:#aaa;" data-act="utilNumKey" data-arg='["±"]'>±</div>` +
+              `<div style="${CB}" data-act="utilNumKey" data-arg='["0"]'>0</div>` +
+              `<div style="${CB}color:#aaa;" data-act="utilNumKey" data-arg='["."]'>.</div>` +
             `</div>` +
             `<div style="display:flex;flex-direction:column;gap:6px;width:54px;">` +
-              `<div style="${PBc}background:#2a0e0e;color:#ff6666;border:1px solid #663333;" onclick="utilNumKey('CLR')">CLR</div>` +
-              `<div style="${PBc}background:#00252e;color:#00e5ff;border:1px solid #00e5ff;" onclick="utilNumKey('ENT')">ENT</div>` +
+              `<div style="${PBc}background:#2a0e0e;color:#ff6666;border:1px solid #663333;" data-act="utilNumKey" data-arg='["CLR"]'>CLR</div>` +
+              `<div style="${PBc}background:#00252e;color:#00e5ff;border:1px solid #00e5ff;" data-act="utilNumKey" data-arg='["ENT"]'>ENT</div>` +
             `</div>` +
           `</div>` +
         `</div>`;
@@ -10604,7 +10638,7 @@ if ('serviceWorker' in navigator) {
           const on = !!name;
           const arrow = dir < 0 ? '◀' : '▶';
           const txt = on ? (dir < 0 ? `${arrow} ${label}` : `${label} ${arrow}`) : `${dir < 0 ? arrow + ' 처음' : '마지막 ' + arrow}`;
-          return `<div ${on ? `onclick="clSibling(${dir})"` : ''} style="flex:1;min-width:0;text-align:${dir<0?'left':'right'};` +
+          return `<div ${on ? `data-act="clSibling" data-arg='[${dir}]'` : ''} style="flex:1;min-width:0;text-align:${dir<0?'left':'right'};` +
             `padding:6px 9px;border:1px solid ${on ? col+'66' : '#1b222a'};border-radius:4px;` +
             `background:${on ? '#0a1620' : '#0a0e12'};cursor:${on?'pointer':'default'};overflow:hidden;">` +
             `<div style="color:${on ? col : '#3a4653'};font-size:11px;font-weight:bold;">${dir<0?arrow+' 이전':'다음 '+arrow}</div>` +
@@ -10622,7 +10656,7 @@ if ('serviceWorker' in navigator) {
         const listHtml = node.children.map((c, i) => {
           const c2 = c.color || col;
           const cnt = c.children ? `${c.children.length}개 절차` : (c.items ? `${c.items.filter(x=>!x.startsWith('› ')).length}개 항목` : '');
-          return `<div onclick="clInto(${i})" style="display:flex;align-items:center;justify-content:space-between;` +
+          return `<div data-act="clInto" data-arg='[${i}]' style="display:flex;align-items:center;justify-content:space-between;` +
             `padding:9px 10px;margin-bottom:5px;border:1px solid ${c2}44;border-radius:5px;background:#0a1116;cursor:pointer;">` +
             `<div><div style="color:${c2};font-size:12px;font-weight:bold;">${c.name}</div>` +
             (cnt ? `<div style="color:#567;font-size:9px;margin-top:1px;">${cnt}</div>` : '') + `</div>` +
@@ -10639,7 +10673,7 @@ if ('serviceWorker' in navigator) {
           const k = clPath.join('.') + '#' + i;
           const done = !!clChecked[k];
           idx++;
-          return `<div onclick="clToggle(${i})" style="display:flex;align-items:center;gap:8px;` +
+          return `<div data-act="clToggle" data-arg='[${i}]' style="display:flex;align-items:center;gap:8px;` +
             `padding:7px 8px;margin-bottom:3px;border:1px solid ${done ? col : '#1e2630'};border-radius:4px;` +
             `background:${done ? col+'18' : '#0a1116'};cursor:pointer;">` +
             `<div style="flex:0 0 18px;width:18px;height:18px;border-radius:3px;border:1.5px solid ${done ? col : '#3a4653'};` +
@@ -10647,7 +10681,7 @@ if ('serviceWorker' in navigator) {
             `<div style="flex:1;color:${done ? '#8fb8bf' : '#cdd6df'};font-size:11px;line-height:1.35;` +
             `text-decoration:${done ? 'line-through' : 'none'};">${it}</div></div>`;
         }).join('');
-        const resetBtn = `<div onclick="clResetLeaf()" style="text-align:right;margin-bottom:6px;">` +
+        const resetBtn = `<div data-act="clResetLeaf" style="text-align:right;margin-bottom:6px;">` +
           `<span style="display:inline-block;color:#ff8877;font-size:9px;border:1px solid #5a2a2a;border-radius:3px;padding:3px 9px;cursor:pointer;">전체 해제</span></div>`;
         container.innerHTML = crumbBar + sibBar + resetBtn + rows;
       }
@@ -10669,11 +10703,11 @@ if ('serviceWorker' in navigator) {
     function renderSettingsScreen(container, footer, title, centerLabel) {
       title.innerText = 'Settings';
       centerLabel.innerText = 'SETUP';
-      const back = `<div onclick="switchMode('HOME')" style="display:inline-flex;align-items:center;gap:4px;` +
+      const back = `<div data-act="switchMode" data-arg='["HOME"]' style="display:inline-flex;align-items:center;gap:4px;` +
         `padding:5px 10px;margin-bottom:8px;border:1px solid #2a4a5a;border-radius:4px;background:#0a1620;color:#00cfff;` +
         `font-size:10px;font-weight:bold;cursor:pointer;">🏠 홈</div>`;
       const TOG = (which, label, sub, on) =>
-        `<div onclick="_setToggle('${which}')" style="display:flex;align-items:center;justify-content:space-between;` +
+        `<div data-act="_setToggle" data-arg='["${which}"]' style="display:flex;align-items:center;justify-content:space-between;` +
           `padding:9px 10px;margin-bottom:5px;border:1px solid ${on ? '#00e5ff66' : '#1e2630'};border-radius:5px;` +
           `background:#0a1116;cursor:pointer;">` +
           `<div><div style="color:#cdd6df;font-size:12px;font-weight:bold;">${label}</div>` +
@@ -10682,8 +10716,8 @@ if ('serviceWorker' in navigator) {
           `border:1px solid ${on ? '#00e5ff' : '#3a4653'};position:relative;">` +
           `<div style="position:absolute;top:1px;${on ? 'right:1px' : 'left:1px'};width:18px;height:18px;border-radius:50%;` +
           `background:${on ? '#00e5ff' : '#6b7683'};"></div></div></div>`;
-      const ACT = (fn, label, sub) =>
-        `<div onclick="${fn}" style="display:flex;align-items:center;justify-content:space-between;` +
+      const ACT = (attrs, label, sub) =>
+        `<div ${attrs} style="display:flex;align-items:center;justify-content:space-between;` +
           `padding:9px 10px;margin-bottom:5px;border:1px solid #2a3a4a;border-radius:5px;background:#0a1420;cursor:pointer;">` +
           `<div><div style="color:#8ac6ff;font-size:12px;font-weight:bold;">${label}</div>` +
           `<div style="color:#567;font-size:9px;margin-top:1px;">${sub}</div></div>` +
@@ -10694,7 +10728,7 @@ if ('serviceWorker' in navigator) {
           `padding:8px 10px;margin-bottom:5px;border:1px solid #1e2630;border-radius:5px;background:#0a1116;">` +
           `<div style="color:#cdd6df;font-size:12px;font-weight:bold;">${label}</div>` +
           `<div style="display:flex;gap:4px;">` +
-          opts.map(o => `<div onclick="setUnit('${kind}','${o.v}');switchMode('SETTINGS')" ` +
+          opts.map(o => `<div data-act="setUnit" data-arg='["${kind}","${o.v}');switchMode('SETTINGS"]' ` +
             `style="cursor:pointer;padding:4px 12px;border-radius:4px;font-size:11px;font-weight:bold;` +
             `border:1px solid ${cur===o.v?'#00e5ff':'#3a4653'};background:${cur===o.v?'#00303c':'#161c23'};` +
             `color:${cur===o.v?'#00e5ff':'#8a97a5'};">${o.t}</div>`).join('') +
@@ -10716,9 +10750,9 @@ if ('serviceWorker' in navigator) {
         TOG('taws', 'HTAWS 지형경보', inhibTaws ? 'INHIBIT(억제됨)' : '전방 지형 경보 사용', !inhibTaws) +
         TOG('kbd', '키보드 단축키', kbdShortcuts ? '숫자·방향키로 계기 조작' : '해제됨(DeX 등 물리 키보드 오작동 방지)', kbdShortcuts) +
         `<div style="color:#556;font-size:9px;letter-spacing:1px;margin:10px 0 5px;">앱 / 오프라인</div>` +
-        ACT('pwaInstall()', '홈 화면에 추가', 'PWA 설치(앱처럼 실행)') +
-        ACT('prefetchTiles()', '주변 지도 캐시', '현재 화면 주변 타일 미리 저장') +
-        ACT("document.getElementById('help-overlay').style.display='flex'", '사용 안내 다시 보기', '시작 안내 오버레이 표시');
+        ACT(act('pwaInstall'), '홈 화면에 추가', 'PWA 설치(앱처럼 실행)') +
+        ACT(act('prefetchTiles'), '주변 지도 캐시', '현재 화면 주변 타일 미리 저장') +
+        ACT(act('showHelpOverlay'), '사용 안내 다시 보기', '시작 안내 오버레이 표시');
       footer.innerHTML = cduFooter("switchMode('HOME')");
     }
 
@@ -10761,6 +10795,7 @@ if ('serviceWorker' in navigator) {
         const emoji = p.icon || fd.icon || '📍';
         const m = L.marker([p.lat, p.lon], { icon: _tpMarkerIcon(emoji, p.name) });
         const btn = 'cursor:pointer;border-radius:4px;padding:4px 6px;font-size:10px;font-weight:bold;text-align:center;flex:1;';
+        // 이 팝업은 지도(#map-wrap) 위에 뜨므로 #cdu-wrap 위임이 닿지 않는다 → 인라인 onclick 유지
         m.bindPopup(`<div style="font-family:-apple-system,Segoe UI,Arial,sans-serif;font-size:11px;color:#333;line-height:1.5;min-width:180px;">` +
           `<div style="color:#0077aa;font-weight:bold;font-size:12px;margin-bottom:3px;">${emoji} ${p.name}</div>` +
           `<div>위치: ${_tpDMS(p.lat, true)} ${_tpDMS(p.lon, false)}</div>` +
@@ -11107,24 +11142,24 @@ if ('serviceWorker' in navigator) {
       centerLabel.innerText = 'T&P';
       const tabBtn = (id, label) => {
         const on = tpTab === id;
-        return `<button onclick="tpSetTab('${id}')" style="flex:1;padding:6px 2px;font-size:11px;font-weight:bold;cursor:pointer;` +
+        return `<button data-act="tpSetTab" data-arg='["${id}"]' style="flex:1;padding:6px 2px;font-size:11px;font-weight:bold;cursor:pointer;` +
           `border-radius:4px;background:${on ? '#002733' : '#111'};color:${on ? '#00e5ff' : '#556'};` +
           `border:1px solid ${on ? '#00e5ff' : '#2a2a2a'};font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;">${label}</button>`;
       };
       const tabs = `<div style="display:flex;gap:5px;margin-bottom:8px;">${tabBtn('POINT','● POINT')}${tabBtn('TRACK','━ TRACK')}</div>`;
-      const btnC = (fn, label, col) =>
-        `<div onclick="${fn}" style="flex:1;min-width:0;text-align:center;padding:7px 4px;border:1px solid ${col||'#2a4a5a'};border-radius:4px;` +
+      const btnC = (attrs, label, col) =>
+        `<div ${attrs} style="flex:1;min-width:0;text-align:center;padding:7px 4px;border:1px solid ${col||'#2a4a5a'};border-radius:4px;` +
         `background:#0a1620;color:${col||'#00cfff'};font-size:10px;font-weight:bold;cursor:pointer;white-space:nowrap;">${label}</div>`;
       let body = '';
 
       // 저장소 포인트 목록(오버레이)
       if (_tpRepoView) {
         const list = _tpRepoList || [];
-        body = `<div onclick="tpRepoBack()" style="display:inline-flex;align-items:center;gap:4px;padding:5px 10px;margin-bottom:8px;` +
+        body = `<div data-act="tpRepoBack" style="display:inline-flex;align-items:center;gap:4px;padding:5px 10px;margin-bottom:8px;` +
           `border:1px solid #2a4a5a;border-radius:4px;background:#0a1620;color:#00cfff;font-size:10px;font-weight:bold;cursor:pointer;">☰ 뒤로</div>` +
           `<div style="color:#00cfff;font-size:12px;font-weight:bold;margin-bottom:6px;">☁ 저장소 포인트</div>` +
           list.map((e, i) =>
-            `<div onclick="tpRepoImport(${i})" style="display:flex;align-items:center;gap:6px;padding:9px 8px;margin-bottom:4px;border:1px solid #1e2630;border-radius:4px;background:#0a1116;cursor:pointer;">` +
+            `<div data-act="tpRepoImport" data-arg='[${i}]' style="display:flex;align-items:center;gap:6px;padding:9px 8px;margin-bottom:4px;border:1px solid #1e2630;border-radius:4px;background:#0a1116;cursor:pointer;">` +
               `<span style="font-size:18px;">${e.icon || '📥'}</span>` +
               `<div style="flex:1;min-width:0;"><div style="color:#cdd6df;font-size:11px;font-weight:bold;">${e.name || e.file}</div>` +
               `<div style="color:#667;font-size:9px;">${e.file}${e.folder ? ' → ' + e.folder + ' 폴더' : ''}</div></div>` +
@@ -11141,9 +11176,9 @@ if ('serviceWorker' in navigator) {
         body = `<div style="color:#00cfff;font-size:12px;font-weight:bold;margin-bottom:2px;">${isF ? '폴더' : '포인트'} 아이콘 선택</div>` +
           (isF ? `<div style="color:#667;font-size:9px;margin-bottom:8px;">이 폴더의 모든 포인트에 적용됩니다</div>` : `<div style="margin-bottom:8px;"></div>`) +
           `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px;">` +
-          TP_ICONS.map(e => `<div onclick="tpApplyIcon('${e}')" style="text-align:center;font-size:26px;padding:10px 0;border:1px solid #1e2630;border-radius:6px;background:#0a1116;cursor:pointer;">${e}</div>`).join('') +
+          TP_ICONS.map(e => `<div data-act="tpApplyIcon" data-arg='["${e}"]' style="text-align:center;font-size:26px;padding:10px 0;border:1px solid #1e2630;border-radius:6px;background:#0a1116;cursor:pointer;">${e}</div>`).join('') +
           `</div>` +
-          `<div onclick="tpIconCancel()" style="text-align:center;padding:8px;border:1px solid #5a2a2a;border-radius:4px;color:#ff8877;font-size:11px;font-weight:bold;cursor:pointer;">취소</div>`;
+          `<div data-act="tpIconCancel" style="text-align:center;padding:8px;border:1px solid #5a2a2a;border-radius:4px;color:#ff8877;font-size:11px;font-weight:bold;cursor:pointer;">취소</div>`;
         container.innerHTML = body;
         footer.innerHTML = cduFooter("tpIconCancel()");
         return;
@@ -11153,54 +11188,54 @@ if ('serviceWorker' in navigator) {
         if (tpFolderIdx === null) {
           // 폴더 목록
           const folders = tpFolders();
-          body += `<div style="display:flex;gap:5px;margin-bottom:8px;">` + btnC('tpFolderAdd()', '＋ 새 폴더') + btnC('tpRepoOpen()', '☁ 저장소에서 불러오기', '#8ac6ff') + `</div>`;
+          body += `<div style="display:flex;gap:5px;margin-bottom:8px;">` + btnC(act('tpFolderAdd'), '＋ 새 폴더') + btnC(act('tpRepoOpen'), '☁ 저장소에서 불러오기', '#8ac6ff') + `</div>`;
           body += folders.length ? folders.map((fd, i) =>
             `<div style="display:flex;align-items:center;gap:6px;padding:9px 8px;margin-bottom:4px;border:1px solid #1e2630;border-radius:4px;background:#0a1116;">` +
-              `<span onclick="tpPickIcon('folder',${i})" style="font-size:20px;cursor:pointer;flex:0 0 auto;" title="아이콘">${fd.icon || '📁'}</span>` +
-              `<div onclick="tpFolderOpen(${i})" style="flex:1;min-width:0;cursor:pointer;">` +
+              `<span data-act="tpPickIcon" data-arg='["folder",${i}]' style="font-size:20px;cursor:pointer;flex:0 0 auto;" title="아이콘">${fd.icon || '📁'}</span>` +
+              `<div data-act="tpFolderOpen" data-arg='[${i}]' style="flex:1;min-width:0;cursor:pointer;">` +
                 `<div style="color:#00cfff;font-size:12px;font-weight:bold;">${fd.name}</div>` +
                 `<div style="color:#667;font-size:9px;">${fd.pts.length}개 포인트 · 표시 ${(fd.pts||[]).filter(p=>p.show).length}</div></div>` +
-              `<span onclick="tpFolderRename(${i})" style="cursor:pointer;color:#889;border:1px solid #333;border-radius:3px;padding:3px 7px;font-size:10px;">이름</span>` +
-              `<span onclick="tpFolderDel(${i})" style="cursor:pointer;color:#ff8877;border:1px solid #5a2a2a;border-radius:3px;padding:3px 7px;font-size:10px;">✕</span>` +
-              `<span onclick="tpFolderOpen(${i})" style="cursor:pointer;color:#00cfffaa;font-size:14px;">›</span></div>`
+              `<span data-act="tpFolderRename" data-arg='[${i}]' style="cursor:pointer;color:#889;border:1px solid #333;border-radius:3px;padding:3px 7px;font-size:10px;">이름</span>` +
+              `<span data-act="tpFolderDel" data-arg='[${i}]' style="cursor:pointer;color:#ff8877;border:1px solid #5a2a2a;border-radius:3px;padding:3px 7px;font-size:10px;">✕</span>` +
+              `<span data-act="tpFolderOpen" data-arg='[${i}]' style="cursor:pointer;color:#00cfffaa;font-size:14px;">›</span></div>`
           ).join('') : `<div style="color:#556;font-size:10px;padding:8px 2px;">폴더가 없습니다. "＋ 새 폴더"로 만드세요.</div>`;
         } else {
           // 폴더 내부
           const cf = _curFolder();
           if (!cf) { tpFolderIdx = null; return renderTrackPointScreen(container, footer, title, centerLabel); }
           const pts = cf.folder.pts, selN = _tpSelCount();
-          body += `<div onclick="tpFolderBack()" style="display:inline-flex;align-items:center;gap:4px;padding:5px 10px;margin-bottom:7px;` +
+          body += `<div data-act="tpFolderBack" style="display:inline-flex;align-items:center;gap:4px;padding:5px 10px;margin-bottom:7px;` +
             `border:1px solid #2a4a5a;border-radius:4px;background:#0a1620;color:#00cfff;font-size:10px;font-weight:bold;cursor:pointer;">☰ 폴더 목록</div>` +
             `<div style="color:#00cfff;font-size:12px;font-weight:bold;margin-bottom:2px;">` +
-              `<span onclick="tpPickIcon('folder',${tpFolderIdx})" style="cursor:pointer;" title="폴더 아이콘(전체 적용)">${cf.folder.icon || '📁'}</span> ${cf.folder.name}` +
-              `<span onclick="tpPickIcon('folder',${tpFolderIdx})" style="margin-left:8px;font-size:9px;color:#8ac6ff;border:1px solid #2a4a6a;border-radius:3px;padding:2px 7px;cursor:pointer;font-weight:normal;">폴더 아이콘</span></div>` +
+              `<span data-act="tpPickIcon" data-arg='["folder",${tpFolderIdx}]' style="cursor:pointer;" title="폴더 아이콘(전체 적용)">${cf.folder.icon || '📁'}</span> ${cf.folder.name}` +
+              `<span data-act="tpPickIcon" data-arg='["folder",${tpFolderIdx}]' style="margin-left:8px;font-size:9px;color:#8ac6ff;border:1px solid #2a4a6a;border-radius:3px;padding:2px 7px;cursor:pointer;font-weight:normal;">폴더 아이콘</span></div>` +
             `<div style="color:#667;font-size:9px;margin-bottom:6px;">✓ 체크한 포인트가 지도에 표시됩니다 · 폴더 아이콘은 전체 포인트에 적용</div>`;
           body += `<div style="display:flex;gap:5px;margin-bottom:6px;">` +
-            btnC("tpAddPoint('pos')", '＋ 현재위치') + btnC("tpAddPoint('cross')", '＋ 지도중심') + btnC("tpAddPoint('manual')", '＋ 좌표입력') + `</div>`;
+            btnC(act('tpAddPoint','pos'), '＋ 현재위치') + btnC(act('tpAddPoint','cross'), '＋ 지도중심') + btnC(act('tpAddPoint','manual'), '＋ 좌표입력') + `</div>`;
           body += `<div style="display:flex;gap:5px;margin-bottom:8px;">` +
-            btnC('tpSelAll()', `전체표시`) + btnC('tpSelNone()', '전체숨김') +
-            btnC("tpExportPoints('gpx')", `GPX${selN?'('+selN+')':''}`, '#8ac6ff') +
-            btnC("tpExportPoints('kml')", `KML${selN?'('+selN+')':''}`, '#8bc34a') +
-            btnC('tpImportPoints()', '가져오기', '#ffcc44') + `</div>`;
+            btnC(act('tpSelAll'), `전체표시`) + btnC(act('tpSelNone'), '전체숨김') +
+            btnC(act('tpExportPoints','gpx'), `GPX${selN?'('+selN+')':''}`, '#8ac6ff') +
+            btnC(act('tpExportPoints','kml'), `KML${selN?'('+selN+')':''}`, '#8bc34a') +
+            btnC(act('tpImportPoints'), '가져오기', '#ffcc44') + `</div>`;
           body += pts.length ? pts.map((p, i) => {
             const sel = !!p.show, emoji = p.icon || cf.folder.icon || '📍';
             return `<div style="display:flex;align-items:center;gap:6px;padding:6px 8px;margin-bottom:4px;border:1px solid ${sel?'#00e5ff':'#1e2630'};border-radius:4px;background:${sel?'#001e28':'#0a1116'};">` +
-              `<div onclick="tpSelToggle(${i})" style="flex:0 0 18px;width:18px;height:18px;border-radius:3px;border:1.5px solid ${sel?'#00e5ff':'#3a4653'};display:flex;align-items:center;justify-content:center;color:#00e5ff;font-size:12px;font-weight:bold;cursor:pointer;">${sel?'✓':''}</div>` +
-              `<span onclick="tpPickIcon('point',${tpFolderIdx},${i})" style="font-size:18px;cursor:pointer;flex:0 0 auto;" title="아이콘">${emoji}</span>` +
+              `<div data-act="tpSelToggle" data-arg='[${i}]' style="flex:0 0 18px;width:18px;height:18px;border-radius:3px;border:1.5px solid ${sel?'#00e5ff':'#3a4653'};display:flex;align-items:center;justify-content:center;color:#00e5ff;font-size:12px;font-weight:bold;cursor:pointer;">${sel?'✓':''}</div>` +
+              `<span data-act="tpPickIcon" data-arg='["point",${tpFolderIdx},${i}]' style="font-size:18px;cursor:pointer;flex:0 0 auto;" title="아이콘">${emoji}</span>` +
               `<div style="flex:1;min-width:0;"><div style="color:#cdd6df;font-size:11px;font-weight:bold;">${p.name}</div>` +
               `<div style="color:#667;font-size:9px;">${_tpDMS(p.lat,true)} ${_tpDMS(p.lon,false)}</div></div>` +
-              `<span onclick="tpNavPoint(${i})" style="cursor:pointer;color:#00e5ff;border:1px solid #00e5ff66;border-radius:3px;padding:3px 6px;font-size:10px;font-weight:bold;">→ 항법</span>` +
-              `<span onclick="tpDelPoint(${i})" style="cursor:pointer;color:#ff8877;border:1px solid #5a2a2a;border-radius:3px;padding:3px 6px;font-size:10px;">✕</span></div>`;
+              `<span data-act="tpNavPoint" data-arg='[${i}]' style="cursor:pointer;color:#00e5ff;border:1px solid #00e5ff66;border-radius:3px;padding:3px 6px;font-size:10px;font-weight:bold;">→ 항법</span>` +
+              `<span data-act="tpDelPoint" data-arg='[${i}]' style="cursor:pointer;color:#ff8877;border:1px solid #5a2a2a;border-radius:3px;padding:3px 6px;font-size:10px;">✕</span></div>`;
           }).join('') : `<div style="color:#556;font-size:10px;padding:8px 2px;">이 폴더에 포인트가 없습니다.</div>`;
         }
       } else {
         const trks = tpTracks();
         body += `<div style="display:flex;gap:5px;margin-bottom:8px;">` +
-          btnC('tpSaveTrackFromFP()', '＋ 비행계획을 트랙으로') + btnC('tpImportTrack()', '가져오기', '#ffcc44') + `</div>`;
+          btnC(act('tpSaveTrackFromFP'), '＋ 비행계획을 트랙으로') + btnC(act('tpImportTrack'), '가져오기', '#ffcc44') + `</div>`;
         // 선 색상 선택
         body += `<div style="display:flex;align-items:center;gap:7px;margin-bottom:9px;padding:6px 8px;border:1px solid #1e2630;border-radius:4px;background:#0a1116;">` +
           `<span style="color:#889;font-size:10px;">선 색상</span>` +
-          TRK_COLORS.map(c => `<span onclick="tpSetColor('${c}')" style="width:20px;height:20px;border-radius:50%;background:${c};cursor:pointer;` +
+          TRK_COLORS.map(c => `<span data-act="tpSetColor" data-arg='["${c}"]' style="width:20px;height:20px;border-radius:50%;background:${c};cursor:pointer;` +
             `border:2px solid ${trkColor === c ? '#fff' : 'transparent'};box-shadow:${trkColor===c?'0 0 5px '+c:'none'};"></span>`).join('') + `</div>`;
         body += trks.length ? trks.map((t, i) => {
           const shown = _tpTrackShownIdx === i;
@@ -11209,12 +11244,12 @@ if ('serviceWorker' in navigator) {
               `<div style="flex:1;min-width:0;"><div style="color:#cdd6df;font-size:11px;font-weight:bold;">━ ${t.name}</div>` +
               `<div style="color:#667;font-size:9px;">${t.pts.length}개 지점</div></div>` +
               (shown
-                ? `<span onclick="tpHideTrack();switchMode('TRACKPOINT')" style="cursor:pointer;color:#ffcc44;border:1px solid #6a5a2a;border-radius:3px;padding:3px 7px;font-size:10px;font-weight:bold;">숨김</span>`
-                : `<span onclick="tpShowTrack(${i})" style="cursor:pointer;color:#00e5ff;border:1px solid #00e5ff66;border-radius:3px;padding:3px 7px;font-size:10px;font-weight:bold;">지도 표시</span>`) +
-              `<span onclick="tpDelTrack(${i})" style="cursor:pointer;color:#ff8877;border:1px solid #5a2a2a;border-radius:3px;padding:3px 7px;font-size:10px;">✕</span></div>` +
+                ? `<span data-act="tpHideTrackAndBack" style="cursor:pointer;color:#ffcc44;border:1px solid #6a5a2a;border-radius:3px;padding:3px 7px;font-size:10px;font-weight:bold;">숨김</span>`
+                : `<span data-act="tpShowTrack" data-arg='[${i}]' style="cursor:pointer;color:#00e5ff;border:1px solid #00e5ff66;border-radius:3px;padding:3px 7px;font-size:10px;font-weight:bold;">지도 표시</span>`) +
+              `<span data-act="tpDelTrack" data-arg='[${i}]' style="cursor:pointer;color:#ff8877;border:1px solid #5a2a2a;border-radius:3px;padding:3px 7px;font-size:10px;">✕</span></div>` +
             `<div style="display:flex;gap:5px;margin-top:5px;">` +
-              btnC(`tpLoadTrack(${i})`, '비행계획으로', '#00cfff') +
-              btnC(`tpExportTrack(${i},'gpx')`, 'GPX', '#8ac6ff') + btnC(`tpExportTrack(${i},'kml')`, 'KML', '#8bc34a') + `</div></div>`;
+              btnC(act('tpLoadTrack', i), '비행계획으로', '#00cfff') +
+              btnC(act('tpExportTrack', i, 'gpx'), 'GPX', '#8ac6ff') + btnC(act('tpExportTrack', i, 'kml'), 'KML', '#8bc34a') + `</div></div>`;
         }).join('') : `<div style="color:#556;font-size:10px;padding:8px 2px;">저장된 트랙이 없습니다.</div>`;
       }
       container.innerHTML = tabs + body;
@@ -11261,15 +11296,15 @@ if ('serviceWorker' in navigator) {
         let isMicOn = (micSelected === label);
         let freqBoxHTML = id === 'uvhf' 
             ? `<div></div>` 
-            : `<div class="freq-display-box" onclick="switchMode('COM_INPUT', '${id}')">
+            : `<div class="freq-display-box" data-act="switchMode" data-arg='["COM_INPUT","${id}"]'>
                 <div style="color:white; font-size:10px; font-weight:bold;">${freqs[id].act}</div>
                 <div style="color:var(--text-cyan); font-size:8px;">${freqs[id].stb}</div>
                </div>`;
 
         return `<div class="volume-row">
-            <div class="item-btn ${monStates[id]?'on':''}" onclick="toggleMon('${id}')">${label}<div class="status-line"></div></div>
-            <div class="item-btn ${isMicOn?'on':''}" onclick="setMic('${label}')">MIC<div class="status-line"></div></div>
-            <div class="wedge-slider" onpointerdown="handleVol('${id}', event)">
+            <div class="item-btn ${monStates[id]?'on':''}" data-act="toggleMon" data-arg='["${id}"]'>${label}<div class="status-line"></div></div>
+            <div class="item-btn ${isMicOn?'on':''}" data-act="setMic" data-arg='["${label}"]'>MIC<div class="status-line"></div></div>
+            <div class="wedge-slider" data-act="handleVol" data-on="pointerdown" data-arg='["${id}","$event","$el"]'>
                 <span class="wedge-text">${volumes[id]}%</span>
                 <div class="wedge-fill" style="width:${volumes[id]}%"></div>
             </div>
@@ -11279,12 +11314,12 @@ if ('serviceWorker' in navigator) {
 
     function renderNavRow(label, id) {
         return `<div style="display: grid; grid-template-columns: 60px 1fr 80px; align-items: center; margin-bottom: 7px; gap: 6px;">
-            <div class="item-btn ${monStates[id]?'on':''}" onclick="toggleMon('${id}')">${label}<div class="status-line"></div></div>
-            <div class="wedge-slider" onpointerdown="handleVol('${id}', event)">
+            <div class="item-btn ${monStates[id]?'on':''}" data-act="toggleMon" data-arg='["${id}"]'>${label}<div class="status-line"></div></div>
+            <div class="wedge-slider" data-act="handleVol" data-on="pointerdown" data-arg='["${id}","$event","$el"]'>
                 <span class="wedge-text">${volumes[id]}%</span>
                 <div class="wedge-fill" style="width:${volumes[id]}%"></div>
             </div>
-            <div class="freq-display-box" style="align-items:center; padding:0; justify-content:center; cursor:pointer;" onclick="openNavSel('${id}')">
+            <div class="freq-display-box" style="align-items:center; padding:0; justify-content:center; cursor:pointer;" data-act="openNavSel" data-arg='["${id}"]'>
                 <div style="display:flex; gap:4px; font-size:12px; font-weight:bold; margin-bottom:2px;">
                     <span style="color:var(--text-green);">${freqs[id].act}</span>
                     <span style="color:white;">${freqs[id].id}</span>
@@ -11302,7 +11337,7 @@ if ('serviceWorker' in navigator) {
         const cur = freqs[_navSelTarget];
         const rows = (typeof ENR_VORS !== 'undefined' ? ENR_VORS : []).filter(v => v.freq).map(v => {
             const sel = (v.id === cur.id) ? 'border-color:#00e5ff;background:#03202a;' : '';
-            return `<div onclick="pickNavVor('${v.id}')" style="display:grid;grid-template-columns:56px 1fr 64px;align-items:center;gap:8px;
+            return `<div data-act="pickNavVor" data-arg='["${v.id}"]' style="display:grid;grid-template-columns:56px 1fr 64px;align-items:center;gap:8px;
                 padding:9px 10px;margin-bottom:6px;border:1px solid #234;border-radius:6px;cursor:pointer;${sel}">
                 <span style="color:#fff;font-weight:bold;font-size:13px;">${v.id}</span>
                 <span style="color:#9fb4c8;font-size:11px;">${v.name}</span>
@@ -11312,7 +11347,7 @@ if ('serviceWorker' in navigator) {
         container.innerHTML = `<div style="padding:8px 6px;overflow-y:auto;height:100%;">
             <div style="color:#9fb4c8;font-size:10px;margin-bottom:8px;">현재: <b style="color:#00e5ff;">${cur.id||'----'} ${cur.act||''}</b>
                 &nbsp;·&nbsp;VOR 명칭을 선택하거나 아래 버튼으로 주파수를 직접 입력하세요.</div>
-            <div onclick="switchMode('COM_INPUT','${_navSelTarget}')" style="text-align:center;padding:9px;margin-bottom:10px;
+            <div data-act="switchMode" data-arg='["COM_INPUT","${_navSelTarget}"]' style="text-align:center;padding:9px;margin-bottom:10px;
                 border:1px solid #b8860b;border-radius:6px;color:#facc15;font-weight:bold;font-size:12px;cursor:pointer;">⌨ 직접 주파수 입력</div>
             ${rows}
         </div>`;
@@ -11343,8 +11378,8 @@ if ('serviceWorker' in navigator) {
         if (!str) return '-';
         return String(str).replace(/\d{2,3}\.\d{1,3}/g, (m) => {
             const f = parseFloat(m);
-            if (f >= 108 && f < 118)  return `<span onclick="afldPick('${m}','NAV')" style="color:#9fd0ff;text-decoration:underline;cursor:pointer;">${m}</span>`;
-            if (f >= 118 && f < 137)  return `<span onclick="afldPick('${m}','COM')" style="color:#8fe6c8;text-decoration:underline;cursor:pointer;">${m}</span>`;
+            if (f >= 108 && f < 118)  return `<span data-act="afldPick" data-arg='["${m}","NAV"]' style="color:#9fd0ff;text-decoration:underline;cursor:pointer;">${m}</span>`;
+            if (f >= 118 && f < 137)  return `<span data-act="afldPick" data-arg='["${m}","COM"]' style="color:#8fe6c8;text-decoration:underline;cursor:pointer;">${m}</span>`;
             return m;   // UHF(225~400)·기타(HF/CH)는 평문
         });
     }
@@ -11404,14 +11439,14 @@ if ('serviceWorker' in navigator) {
           .map(({ a, i }) => {
             const mil = a.pub ? '' : ` <span style="color:#ff8a65;font-size:9px;">군</span>`;
             return `
-            <div onclick="openAirfield(${i})" style="display:grid;grid-template-columns:1fr 52px 64px;align-items:center;gap:6px;
+            <div data-act="openAirfield" data-arg='[${i}]' style="display:grid;grid-template-columns:1fr 52px 64px;align-items:center;gap:6px;
                 padding:9px 10px;margin-bottom:5px;border:1px solid #234;border-radius:6px;cursor:pointer;">
               <span style="color:#fff;font-weight:bold;font-size:13px;">${a.name}${a.code ? ` <span style="color:#7fe0c0;font-size:10px;">(${_afldIcao(a)})</span>` : ''}${mil}</span>
               <span style="color:#00e5ff;font-size:11px;text-align:right;">${a.elev != null ? uAlt(a.elev) : '-'}</span>
               <span style="color:#9fb4c8;font-size:10px;text-align:right;">${(a.rwy || '').split(' ')[0]}</span>
             </div>`;
         }).join('');
-        const allBtn = `<div onclick="afldToggleAll()" style="cursor:pointer;padding:6px 14px;border-radius:6px;font-weight:bold;font-size:12px;
+        const allBtn = `<div data-act="afldToggleAll" style="cursor:pointer;padding:6px 14px;border-radius:6px;font-weight:bold;font-size:12px;
             border:1px solid ${_afldUnlocked ? '#ff8a65' : '#4a90d9'};color:${_afldUnlocked ? '#ff8a65' : '#7ab8f5'};">${_afldUnlocked ? 'ALL ✓' : 'ALL'}</div>`;
         container.innerHTML = `<div style="padding:8px 6px;overflow-y:auto;height:100%;">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;gap:8px;">
@@ -11435,12 +11470,12 @@ if ('serviceWorker' in navigator) {
         let msg;
         if (_afldPending) {
             const f = _afldPending.freq, isCom = _afldPending.type === 'COM';
-            const btn = (id, label, col) => `<span onclick="${isCom ? 'afldPutCom' : 'afldPutNav'}('${f}','${id}')" style="cursor:pointer;padding:6px 14px;border-radius:5px;font-weight:bold;font-size:12px;border:1px solid ${col};color:${col};">${label}</span>`;
+            const btn = (id, label, col) => `<span ${act(isCom ? 'afldPutCom' : 'afldPutNav', f, id)} style="cursor:pointer;padding:6px 14px;border-radius:5px;font-weight:bold;font-size:12px;border:1px solid ${col};color:${col};">${label}</span>`;
             msg = `<div style="background:#0a1626;border:1px solid #2a4a7a;border-radius:6px;padding:8px;margin-bottom:8px;">
                 <div style="color:#cfe0f0;font-size:11px;margin-bottom:7px;"><b style="color:${isCom ? '#8fe6c8' : '#9fd0ff'};">${f}</b> — 어느 라디오에 넣을까요?</div>
                 <div style="display:flex;gap:8px;align-items:center;">
                     ${isCom ? btn('com1','COM1','#8fe6c8') + btn('com2','COM2','#8fe6c8') : btn('nav1','NAV1','#9fd0ff') + btn('nav2','NAV2','#9fd0ff')}
-                    <span onclick="afldCancelPick()" style="cursor:pointer;padding:6px 12px;border-radius:5px;font-size:12px;border:1px solid #555;color:#aaa;">취소</span>
+                    <span data-act="afldCancelPick" style="cursor:pointer;padding:6px 12px;border-radius:5px;font-size:12px;border:1px solid #555;color:#aaa;">취소</span>
                 </div></div>`;
         } else if (_afldMsg) {
             msg = `<div style="background:#062a1c;border:1px solid #0a6;border-radius:5px;color:#4ade80;font-size:11px;font-weight:bold;padding:6px 8px;margin-bottom:8px;">✓ ${_afldMsg} 튜닝됨</div>`;
@@ -11468,7 +11503,7 @@ if ('serviceWorker' in navigator) {
         if (id === 'vhffm') {
             rightBox = `<div style="background:black; border:0.7px solid #444; border-radius:4px; height:35px;"></div>`;
         } else if (id === 'hf') {
-            rightBox = `<div class="freq-display-box" style="align-items:flex-start; justify-content:center; padding:2px 6px; cursor:pointer;" onclick="switchMode('HF_CONTROL')">
+            rightBox = `<div class="freq-display-box" style="align-items:flex-start; justify-content:center; padding:2px 6px; cursor:pointer;" data-act="switchMode" data-arg='["HF_CONTROL"]'>
                             <div style="display:flex; justify-content:space-between; align-items:center; width:100%;">
                                 <div style="color:white; font-size:14px; font-weight:bold;">${freqs.hf.act}</div>
                                 <div style="color:var(--text-cyan); font-size:8px; font-weight:bold; margin-top:2px;">${hfState.sql}</div>
@@ -11478,9 +11513,9 @@ if ('serviceWorker' in navigator) {
         }
         
         return `<div class="volume-row" style="margin-bottom:0;">
-            <div class="item-btn ${monStates[id]?'on':''}" onclick="toggleMon('${id}')">${label}<div class="status-line"></div></div>
-            <div class="item-btn ${isMicOn?'on':''}" onclick="setMic('${label}')">MIC<div class="status-line"></div></div>
-            <div class="wedge-slider" onpointerdown="handleVol('${id}', event)">
+            <div class="item-btn ${monStates[id]?'on':''}" data-act="toggleMon" data-arg='["${id}"]'>${label}<div class="status-line"></div></div>
+            <div class="item-btn ${isMicOn?'on':''}" data-act="setMic" data-arg='["${label}"]'>MIC<div class="status-line"></div></div>
+            <div class="wedge-slider" data-act="handleVol" data-on="pointerdown" data-arg='["${id}","$event","$el"]'>
                 <span class="wedge-text">${volumes[id]}%</span>
                 <div class="wedge-fill" style="width:${volumes[id]}%"></div>
             </div>
@@ -11586,8 +11621,8 @@ if ('serviceWorker' in navigator) {
         if(xpdrCodeElem) xpdrCodeElem.innerText = xpdrState.code;
     }
 
-    function handleVol(id, e) {
-        const s = e.currentTarget;
+    function handleVol(id, e, el) {
+        const s = el || e.currentTarget;   // 위임에서는 currentTarget이 #cdu-wrap이므로 요소를 직접 받는다
         s.setPointerCapture(e.pointerId);
         const update = (pe) => {
             const r = s.getBoundingClientRect();
@@ -11700,6 +11735,97 @@ if ('serviceWorker' in navigator) {
 
 
 switchMode('HOME');
+
+    // ── CDU 액션 등록 ───────────────────────────────────────────────
+    // data-act 이름 → 실제 함수. 여기 없는 이름을 쓰면 콘솔에 경고가 찍히므로,
+    // 예전처럼 버튼이 조용히 죽지 않는다. 복합 동작은 아래에서 합성 액션으로 만든다.
+    cduRegister({
+      _setToggle,
+      addInput,
+      addSelcalInput,
+      addXpdrInput,
+      afldCancelPick,
+      afldPick,
+      afldPutCom,
+      afldPutNav,
+      afldToggleAll,
+      backspaceInput,
+      backspaceSelcal,
+      backspaceXpdr,
+      cduOpenMap,
+      clInto,
+      clOpen,
+      clResetLeaf,
+      clSibling,
+      clToggle,
+      confirmInput,
+      confirmPerfInput,
+      confirmSelcal,
+      confirmXpdr,
+      flashIdent,
+      handleInputXfer,
+      handleVol,
+      openAirfield,
+      openAudioCom: () => { switchMode('AUDIO'); switchAudioTab('COM'); },
+      openFlightPlan,
+      openNavSel,
+      openProc: () => { setPage(1); fpGo('IFR'); },
+      openUbikais: () => window.open('https://ubikais.fois.go.kr:8030/common/login?systemId=sysUbikais','_blank'),
+      pickNavVor,
+      prefetchTiles,
+      pwaInstall,
+      setMic,
+      setUnit,
+      setVoxMode,
+      setXpdrMode,
+      setXpdrPreset,
+      showHelpOverlay: () => { document.getElementById('help-overlay').style.display = 'flex'; },
+      swapFreq,
+      switchAudioTab,
+      switchMode,
+      toggleAdsb,
+      toggleClicks,
+      toggleHfEmission,
+      toggleHfPwr,
+      toggleHfSql,
+      toggleHfTuning,
+      toggleIC,
+      toggleIsolate,
+      toggleMon,
+      tpAddPoint,
+      tpApplyIcon,
+      tpDelPoint,
+      tpDelTrack,
+      tpExportPoints,
+      tpExportTrack,
+      tpFolderAdd,
+      tpFolderBack,
+      tpFolderDel,
+      tpFolderOpen,
+      tpFolderRename,
+      tpHideTrackAndBack: () => { tpHideTrack(); switchMode('TRACKPOINT'); },
+      tpIconCancel,
+      tpImportPoints,
+      tpImportTrack,
+      tpLoadTrack,
+      tpNavPoint,
+      tpPickIcon,
+      tpRepoBack,
+      tpRepoImport,
+      tpRepoOpen,
+      tpSaveTrackFromFP,
+      tpSelAll,
+      tpSelNone,
+      tpSelToggle,
+      tpSetColor,
+      tpSetTab,
+      tpShowTrack,
+      utilFocus,
+      utilFuelDensity,
+      utilNumKey,
+      utilOpen,
+      utilSunHere,
+    });
 
 // ── Startup: place aircraft at current GPS position, fallback to Songdo ──
 (function _initStartPos() {
