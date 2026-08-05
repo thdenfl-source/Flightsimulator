@@ -2040,6 +2040,9 @@ const HDG_ROLLOUT_DEG = 6;         // 남은 각도가 이 이하면 뱅크를 �
 function stdRateBank(spd) {        // 표준선회 뱅크각(°) — 속도의 16%, 최대 30°
   return Math.max(2, Math.min(30, Math.abs(spd) * 0.16));
 }
+// 리셋·GPS·나침반·FDR 리플레이처럼 기수를 외부에서 직접 바꾸는 경로에서 호출한다.
+// 동기화하지 않으면 시뮬레이션으로 돌아오는 순간 AFCS가 옛 HDG bug로 선회해 버린다.
+function syncHdgBug() { selHdg = ((Math.round(S.hdg) + 359) % 360) + 1; }
 let selVS   = 1000; // VS preselect (fpm, magnitude) — used by ALT hold mode
                     // CRHT hold mode ignores this and always converges at 500 fpm
 let spdTrend = 0;   // 6-second speed trend (knots, smoothed)
@@ -4052,7 +4055,9 @@ const AIRPORTS_KR = [
   { icao:'RKTY', name:'예천',  lat:36.6319, lon:128.3519 },
   { icao:'RKTI', name:'중원',  lat:37.0295, lon:127.8862 },
   { icao:'RKTL', name:'울진',  lat:36.7769, lon:129.4617 },
-  { icao:'RKUC', name:'이천',  lat:37.2011, lon:127.4719 },
+  // 이천의 ICAO는 RKRN이다. RKUC는 조치원 — 좌표(37.20N/127.47E)와 AIRFIELD_INFO의
+  // 코드 체계(이천 'RN' / 조치원 'UC') 두 곳이 모두 이천임을 가리켜 ICAO를 바로잡았다.
+  { icao:'RKRN', name:'이천',  lat:37.2011, lon:127.4719 },
   { icao:'RKPD', name:'정석',  lat:33.3983, lon:126.7131 },
   { icao:'RKSG', name:'평택',  lat:36.9600, lon:127.0333 },
 ];
@@ -4694,6 +4699,7 @@ function stopGPS() {
   // Reset to simulation defaults
   S.spd = 80; S.hdg = 360; S.alt = 500;
   S.pit = pitchFromSpd(80); S.bnk = 0; bankTarget = 0; _rollRate = 0;
+  syncHdgBug();
   rollApOn = true;
   S.running = false;
   updateFlyBtns();
@@ -4717,7 +4723,7 @@ function _onDevOrientation(e) {
   if (gpsMode && S.spd < 10 && now - _devHdgLastApply > 200) {
     _devHdgLastApply = now;
     S.hdg = _devHdg;
-    bankTarget = 0; S.bnk = 0; _rollRate = 0;
+    bankTarget = 0; S.bnk = 0; _rollRate = 0; syncHdgBug();
   }
 }
 function startDevOrientation() {
@@ -4788,7 +4794,7 @@ function applyGPS(pos) {
   if (hdg === null && _devHdg !== null && (spdKt === null || spdKt < 10)) hdg = _devHdg;
   if (hdg !== null) {
     S.hdg = normA(hdg);
-    bankTarget = 0; S.bnk = 0; _rollRate = 0;
+    bankTarget = 0; S.bnk = 0; _rollRate = 0; syncHdgBug();
   }
 
   // ── 고도 ── GPS 고도(m) → ft
@@ -11319,7 +11325,9 @@ if ('serviceWorker' in navigator) {
     let _afldIdx = null;
     let _afldUnlocked = false;   // 군공항 포함 전체 공개 여부(보안)
     // 2자리 표준 코드는 ICAO(RK__)로 표기, 그 외(G515 등)는 원본 유지
-    function _afldIcao(a) { return (a.code && a.code.length === 2) ? 'RK' + a.code : a.code; }
+    // icao 필드가 있으면 그것을 쓰고, 없으면 2자리 코드에서 'RK'+code로 파생한다.
+    // (군 비행장 일부는 파생 규칙이 실제 ICAO와 다를 수 있어 데이터로 덮어쓸 수 있게 둔다)
+    function _afldIcao(a) { return a.icao || ((a.code && a.code.length === 2) ? 'RK' + a.code : a.code); }
     let _afldMsg = '';   // 튜닝 결과 안내(상세 화면 상단)
     function openAirfield(i) { _afldIdx = i; _afldMsg = ''; _afldPending = null; switchMode('AIRFIELD_DETAIL'); }
     let _afldPending = null;   // 튜닝 대상 선택 대기: { freq, type:'COM'|'NAV' }
@@ -11726,6 +11734,7 @@ function _trkSaveBackup() {
 }
 function _trkClearBackup() { try { localStorage.removeItem(TRK_BAK_KEY); } catch(e) {} }
 function _trkStartTimer() {
+  if (_trkTimer) { clearInterval(_trkTimer); _trkTimer = null; }   // 이중 기동 방지
   document.getElementById('rec-btn').classList.add('active');
   document.getElementById('rec-btn').textContent = '● REC';
   _trkCapture();
@@ -12120,11 +12129,22 @@ function _mapSymPopup(o) {
 function _fixPopupHtml(name, lat, lon) {
   return _mapSymPopup({ title: `▲ ${name}`, color: '#00788a', name, lat, lon });
 }
-// ── 지도에서 비행장 INFO 화면 열기 (CDU 패널로 전환) ──
+// ── 지도 공항 ↔ CDU INFO 연결 ──
+// AIRFIELD_INFO는 2자리 코드에서 'RK'+code로 ICAO를 파생하는데, 군 비행장 일부는
+// 이 규칙이 AIRPORTS_KR의 ICAO와 어긋난다(예: 이천 = INFO 'RN' → RKRN vs 지도 RKUC).
+// 그래서 ICAO로 먼저 찾고, 실패하면 공항 명칭으로 한 번 더 찾는다.
+function _afldIndexOf(icao) {
+  try {
+    let i = AIRFIELD_INFO.findIndex(a => _afldIcao(a) === icao);
+    if (i >= 0) return i;
+    const nm = (typeof APT_NAME !== 'undefined') ? APT_NAME[icao] : '';
+    if (nm) i = AIRFIELD_INFO.findIndex(a => a.name === nm || a.name.startsWith(nm));
+    return i;
+  } catch(e) { return -1; }
+}
 function _mapOpenAirfield(icao) {
   try { leafMap.closePopup(); } catch(e) {}
-  let i = -1;
-  try { i = AIRFIELD_INFO.findIndex(a => _afldIcao(a) === icao); } catch(e) {}
+  const i = _afldIndexOf(icao);
   if (i < 0) return;
   if (leftSel !== 'cdu' && rightSel !== 'cdu') selectPanel(leftSel === 'map' ? 'right' : 'left', 'cdu');
   try { openAirfield(i); } catch(e) {}
@@ -12132,8 +12152,10 @@ function _mapOpenAirfield(icao) {
 // INFO 목록에 있고, 공개 비행장이거나 잠금 해제된 경우에만 '공항 정보' 버튼을 준다(보안)
 function _aptInfoAvailable(icao) {
   try {
-    const a = AIRFIELD_INFO.find(x => _afldIcao(x) === icao);
-    return !!a && (!!a.pub || _afldUnlocked);
+    const i = _afldIndexOf(icao);
+    if (i < 0) return false;
+    const a = AIRFIELD_INFO[i];
+    return !!a.pub || _afldUnlocked;
   } catch(e) { return false; }
 }
 // 지도 팝업 → 기존 METAR/TAF 팝업으로 전환
@@ -13534,6 +13556,7 @@ function _fdrRenderFrame(idx) {
   S.alt = p.altM * 3.28084;   // metres → feet
   S.spd = Math.round(p.speedKt);
   S.hdg = hdg;
+  syncHdgBug();   // 리플레이 종료 후 옛 HDG bug로 선회하지 않도록
 
   // Accumulate trail so 2D/3D trail lines update during FDR replay
   const last = S.trail[S.trail.length - 1];
