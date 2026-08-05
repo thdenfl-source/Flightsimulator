@@ -11309,11 +11309,10 @@ if ('serviceWorker' in navigator) {
     }
     // 상단 ALL 버튼 — 코드 입력 시 전체(군공항 포함) 공개, 실패 시 AIP 공개 공항만
     function afldToggleAll() {
-        if (_afldUnlocked) { _afldUnlocked = false; try { _drawAwyLayer(); _awyRenderPanel(); } catch(e) {} switchMode('AIRFIELD'); return; }
+        if (_afldUnlocked) { _afldUnlocked = false; switchMode('AIRFIELD'); return; }
         const p = prompt('전체 비행장 보기\n접근 코드를 입력하세요:');
         if (p === 'thdenfl') { _afldUnlocked = true; }
         else { _afldUnlocked = false; if (p !== null) alert('코드가 올바르지 않습니다.\nAIP 공개 공항만 표시됩니다.'); }
-        try { _drawAwyLayer(); _awyRenderPanel(); } catch(e) {}   // 지도 비행장 VOR 표시도 함께 갱신
         switchMode('AIRFIELD');
     }
     // ── CCTV 선택 화면 (BADA / Park → 외부 사이트) ──
@@ -12229,7 +12228,7 @@ const ENR_VORS = [
   { apt:1, pub:1, src:'AIP', id: 'NPH', name: '포항 VORTAC', freq: '109.6', lat: 35.98636, lon: 129.40883 },
   { apt:1, pub:1, src:'AIP', id: 'KMH', name: '김해 VOR/DME', freq: '113.8', lat: 35.19917, lon: 128.93556 },
   { apt:1, pub:1, src:'ARP', id: 'SAC', name: '사천 VOR',   freq: '115.1', lat: 35.0886,  lon: 128.0703 },
-  // 아래는 AIP 공개 목록 밖(군) 비행장 — 지도 표시는 INFO의 ALL 잠금해제와 연동
+  // 아래는 CDU INFO 목록에서 ALL 코드로 가려지는 비행장 — 항행표지 자체는 지도에 표시
   { apt:1, src:'ARP', id: 'MKP', name: '목포 VOR',   freq: '117.8', lat: 34.7585,  lon: 126.3806 },
   { apt:1, src:'ARP', id: 'NSN', name: '논산 VOR',   freq: '117.5', lat: 36.1636,  lon: 127.1147 },
   { apt:1, src:'ARP', id: 'SHO', name: '속초 VOR',   freq: '110.8', lat: 38.1427,  lon: 128.5986 },
@@ -12363,8 +12362,9 @@ function _drawAwyLayer() {
 }
 // AWY 패널 분류용 목록
 function enrVorList() { return awyCat.vor    ? ENR_VORS.filter(v => !v.apt) : []; }
-// 비행장 VOR 표시 기준은 INFO 화면과 동일 — 공개 비행장은 항상, 그 외는 ALL 잠금해제 시
-function _aptVorVisible(v) { let u = false; try { u = _afldUnlocked; } catch(e) {} return v.apt && (v.pub || u); }
+// 비행장 VOR은 AIP 게재 항행표지이므로 잠금 없이 모두 표시(군 비행장 포함).
+// CDU INFO 화면의 ALL 코드 게이트는 비행장 상세정보에만 적용되며 이 레이어와 무관하다.
+function _aptVorVisible(v) { return !!v.apt; }
 function aptVorList() { return awyCat.aptvor ? ENR_VORS.filter(_aptVorVisible) : []; }
 // 육각형 심볼 + ID·주파수 라벨. 좌표가 공항 기준점 근사값(src:'ARP')이면 속을 비워 구분한다.
 function _drawVorGroup(list, col, lblCol) {
