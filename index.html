@@ -350,6 +350,24 @@ html, body {
 .hover-pos-btn:active { background: #2a2a1a; }
 .hover-pos-btn.active { border-color: #ffcc00; color: #ffcc00; box-shadow: 0 0 6px rgba(255,204,0,0.45); }
 
+/* ── ANTI-TORQUE PEDAL (요 조작) ── */
+.pedal-group { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.pedal-lbl {
+  color: #7a8a99; font-size: 8px; font-weight: bold; letter-spacing: 0.3px;
+  text-align: center; line-height: 1.1; white-space: nowrap;
+  font-family: 'Helvetica Neue', Arial, sans-serif;
+}
+.pedal-btns { display: flex; gap: 3px; }
+.pedal-btn {
+  width: 34px; height: 34px; border-radius: 6px;
+  background: #12181e; border: 2px solid #3a4a5a; color: #9fb4c4;
+  font-size: 14px; font-weight: bold; cursor: pointer;
+  touch-action: manipulation; user-select: none; -webkit-user-select: none;
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'Helvetica Neue', Arial, sans-serif;
+}
+.pedal-btn:active { background: #1e3040; border-color: #4dd0e1; color: #4dd0e1; }
+
 /* ── OBS button ── */
 .obs-btn {
   background: #111; border: 1px solid #333; color: #555;
@@ -1468,6 +1486,10 @@ body.night-mode::after {
       <ul>
         <li><b>NAV SRC</b>: <b>FMS / NAV1 / NAV2</b>. NAV1·NAV2는 CDU에서 튜닝한 VOR을 따라갑니다.</li>
         <li><b>HOVER PAGE</b>(80kt 미만): 호버 속도·위치 지시. <b>GSPD</b>로 기준 속도 설정, <b>HOVER POS</b>로 위치 고정.</li>
+        <li>HOVER PAGE에는 <b>SHIP</b>(청록)과 <b>비행계획 활성 웨이포인트</b>(빨강 삼각형)가 함께 표시됩니다.
+            반경 50 ft 이내면 실제 축척 위치에, 밖이면 방향 니들과 점선으로 나타납니다.</li>
+        <li><b>ANTI-TORQUE PEDAL ◀▶</b>(HOVER POS 우측): 뱅크 없이 기수만 즉시 회전(홀드 시 약 12°/s).
+            <b>GSPD 작동 중에는 HDG 화살표가 기수와 분리</b>되므로 요 조작은 이 페달로 합니다.</li>
         <li>지도에 SHIP이 켜져 있으면 호버 페이지에 <b>선박 상대위치</b>가 표시됩니다(멀면 니들, 50ft 이내면 실제 위치).</li>
         <li><b>T-CUT</b>: 전방 20NM 지형 단면. 현재 고도가 화면 중앙에 오고 지형이 상대적으로 움직입니다.</li>
       </ul>
@@ -1716,6 +1738,13 @@ body.night-mode::after {
           </div>
           <button class="force-trim-btn" id="force-trim-btn" onclick="forceTrim()" title="Force Trim">FORCE<br>TRIM</button>
           <button class="hover-pos-btn"   id="hover-pos-btn"  onclick="toggleHoverPosition()" title="Hover Position">HOVER<br>POS</button>
+          <div class="pedal-group">
+            <div class="pedal-lbl">ANTI-TORQUE<br>PEDAL</div>
+            <div class="pedal-btns">
+              <button class="pedal-btn" id="ped-l" title="좌 페달(기수 좌선회)">◄</button>
+              <button class="pedal-btn" id="ped-r" title="우 페달(기수 우선회)">►</button>
+            </div>
+          </div>
         </div>
 
       </div><!-- end ctrl-sub-row 3 -->
@@ -2132,6 +2161,11 @@ function updateHoverBtns() {
     ft.classList.toggle('disabled', !gspdOn);
     ft.classList.toggle('active', gspdOn);
   }
+  // GSPD(호버) 중에는 HDG 화살표를 기수와 분리 — 요 조작은 ANTI-TORQUE PEDAL 전용
+  ['hdg-dn','hdg-up'].forEach(id => {
+    const e = document.getElementById(id);
+    if (e) { e.disabled = gspdOn; e.style.opacity = gspdOn ? '0.3' : '1'; }
+  });
 }
 
 function bodyFrameFromGroundVel() {
@@ -3810,7 +3844,79 @@ function drawHsiHoverPage(x, y, w, h, cx, cy, rFull) {
     }
   }
 
+  // ── 활성 비행계획 웨이포인트 상대 위치 (SHIP과 동일 방식, 빨간 삼각형) ──
+  let _wpRel = null, _wpDistNM = null, _wpBrgT = null, _wpDistFt = null, _wpNear = false, _wpName = '';
+  if (S.awp >= 0 && S.awp < S.wps.length) {
+    const wp = S.wps[S.awp];
+    _wpName   = wp.ident || 'WPT';
+    _wpDistNM = distance(S.lat, S.lon, wp.lat, wp.lon);
+    _wpBrgT   = bearing(S.lat, S.lon, wp.lat, wp.lon);
+    _wpRel    = normA(_wpBrgT - S.hdg);
+
+    const M_PER_DEG = 111320, FT_PER_M = 3.28084, HOVER_FT = 50;
+    const relN_ft = (wp.lat - S.lat) * M_PER_DEG * FT_PER_M;
+    const relE_ft = (wp.lon - S.lon) * M_PER_DEG * Math.cos(S.lat * D2R) * FT_PER_M;
+    const chH = Math.cos(S.hdg * D2R), shH = Math.sin(S.hdg * D2R);
+    const bodyFwd =  relN_ft * chH + relE_ft * shH;
+    const bodyLat = -relN_ft * shH + relE_ft * chH;
+    _wpDistFt = Math.hypot(bodyFwd, bodyLat);
+    _wpNear   = _wpDistFt <= HOVER_FT;
+
+    const tri = sz => {   // 위(-Y)를 향한 삼각형
+      ctx.beginPath();
+      ctx.moveTo(0, -sz);
+      ctx.lineTo(sz * 0.72, sz * 0.6);
+      ctx.lineTo(-sz * 0.72, sz * 0.6);
+      ctx.closePath();
+      ctx.fillStyle = 'rgba(255,45,45,0.4)'; ctx.fill();
+      ctx.strokeStyle = '#ff2d2d'; ctx.lineWidth = 1.6; ctx.stroke();
+    };
+
+    if (_wpNear) {
+      // 반경 내: 호버 위치 지시자와 동일 축척으로 실제 상대위치에 표시
+      const pxPerFt = r / HOVER_FT;
+      ctx.save();
+      ctx.beginPath(); ctx.arc(0, 0, r * 0.94, 0, Math.PI*2); ctx.clip();
+      ctx.translate(bodyLat * pxPerFt, -bodyFwd * pxPerFt);
+      tri(Math.max(8, r * 0.12));
+      ctx.restore();
+    } else {
+      // 반경 밖: 로즈 안쪽 니들 + 중심→웨이포인트 점선
+      const rad = _wpRel * D2R, pr = r * 0.58;
+      const px = Math.sin(rad) * pr, py = -Math.cos(rad) * pr;
+      ctx.save();
+      ctx.strokeStyle = 'rgba(255,45,45,0.55)'; ctx.lineWidth = 1; ctx.setLineDash([4, 4]);
+      ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(px, py); ctx.stroke(); ctx.setLineDash([]);
+      ctx.translate(px, py); ctx.rotate(rad);   // 바깥쪽(웨이포인트 방향)을 향함
+      tri(Math.max(7, r * 0.10));
+      ctx.restore();
+    }
+  }
+
   ctx.restore(); // end translate(cx, cy)
+
+  // ── 하단 WPT 판독: 상대방위 · 자방위 · 거리 ──
+  if (_wpRel !== null) {
+    const fs = Math.max(9, r * 0.115);
+    const magB = ((Math.round(_wpBrgT - RULER_VAR) % 360) + 360) % 360;
+    const relTxt = String(Math.round(_wpRel) % 360).padStart(3,'0');
+    const distTxt = _wpNear ? uAlt(_wpDistFt) : uDist(_wpDistNM, 2);
+    const txt = `${_wpName}  R${relTxt}°  ${String(magB % 360).padStart(3,'0')}°M  ${distTxt}`;
+    ctx.save();
+    ctx.font = `bold ${fs}px Helvetica Neue, Arial, sans-serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+    // SHIP 판독이 함께 나오면 그 위 줄에 배치
+    const shipShown = (typeof _shipRel !== 'undefined' && _shipRel !== null);
+    const ty = Math.min(y + h - 3, cy + r + fs * 1.6) - (shipShown ? fs + 7 : 0);
+    const tw = ctx.measureText(txt).width;
+    ctx.fillStyle = 'rgba(20,0,0,0.75)';
+    ctx.fillRect(cx - tw/2 - 5, ty - fs - 2, tw + 10, fs + 6);
+    ctx.strokeStyle = '#ff2d2d66'; ctx.lineWidth = 1;
+    ctx.strokeRect(cx - tw/2 - 5, ty - fs - 2, tw + 10, fs + 6);
+    ctx.fillStyle = '#ff5a5a';
+    ctx.fillText(txt, cx, ty);
+    ctx.restore();
+  }
 
   // ── 하단 SHIP 판독: 상대방위 · 자방위 · 거리 ──
   if (_shipRel !== null) {
@@ -5909,10 +6015,17 @@ function applyDelta(field, d){
       S.pit = pitchFromSpd(S.spd);   // auto pitch from speed
       break;
     case 'hdg':
+      // GSPD(호버) 중에는 HDG 화살표와 기수를 분리 — 요 조작은 ANTI-TORQUE PEDAL로만
+      if (gspdOn) break;
       // 기수를 즉시 돌리지 않고 선택 헤딩(HDG bug)만 이동 → AFCS가 표준선회로 추종
       selHdg = ((Math.round(selHdg + d) + 359) % 360) + 1;   // 1–360
       hdgSelOn = true;
       rollApOn = true;
+      break;
+    case 'yaw':
+      // ANTI-TORQUE PEDAL — 뱅크 없이 기수만 즉시 회전(홀드 시 약 12°/s)
+      S.hdg = normA(S.hdg + d);
+      selHdg = ((Math.round(S.hdg) + 359) % 360) + 1;   // HDG SEL이 되돌리지 않도록 동기
       break;
     case 'crs':
       if (navSrc !== 'FMS') {
@@ -6039,6 +6152,7 @@ document.addEventListener('keyup', e => {
 const btnMap={
   'spd-dn':['spd',-1],'spd-up':['spd',1],
   'hdg-dn':['hdg',-1],'hdg-up':['hdg',1],
+  'ped-l':['yaw',-1],'ped-r':['yaw',1],
   'crs-dn':['crs',-1],'crs-up':['crs',1],
   'vs-dn':['vs',-100],'vs-up':['vs',100],
   'alt-dn':['alt',-100],'alt-up':['alt',100],
