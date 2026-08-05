@@ -2008,23 +2008,7 @@ body.night-mode::after {
 // ══════════════════════════════════════════════════════
 // DATABASE
 // ══════════════════════════════════════════════════════
-const AIRPORTS = [
-  { ident:'RKSI', name:'인천국제', lat:37.4602, lon:126.4407 },
-  { ident:'RKSS', name:'김포',     lat:37.5583, lon:126.7942 },
-  { ident:'RKPK', name:'김해',     lat:35.1795, lon:128.9382 },
-  { ident:'RKPC', name:'제주',     lat:33.5113, lon:126.4930 },
-  { ident:'RKTU', name:'청주',     lat:36.7166, lon:127.4990 },
-  { ident:'RKJJ', name:'광주',     lat:35.1233, lon:126.8088 },
-  { ident:'RKJK', name:'군산',     lat:35.9038, lon:126.6159 },
-  { ident:'RKJY', name:'여수',     lat:34.8423, lon:127.6170 },
-  { ident:'RKJB', name:'무안',     lat:34.9914, lon:126.3829 },
-  { ident:'RKTL', name:'사천',     lat:35.0886, lon:128.0703 },
-  { ident:'RKTH', name:'포항경주', lat:35.9878, lon:129.4201 },
-  { ident:'RKDU', name:'울산',     lat:35.5934, lon:129.3520 },
-  { ident:'RKNN', name:'강릉',     lat:37.7537, lon:128.9437 },
-  { ident:'RKNY', name:'양양',     lat:38.0613, lon:128.6693 },
-  { ident:'RKNS', name:'속초',     lat:38.1427, lon:128.5986 },
-];
+// 공항 목록은 AIRPORTS_KR 단일 소스에서 파생한다(정의는 AIRPORTS_KR 직후).
 
 // ══════════════════════════════════════════════════════
 // STATE
@@ -2620,6 +2604,10 @@ clockRender();   // 기본 모드가 시계이므로 즉시 1회 표시
 // MATH
 // ══════════════════════════════════════════════════════
 const D2R = Math.PI / 180;
+// 한국 자기편차 — 현행 AIP AD 2 차트 기준 9°W (MAG = TRUE − VAR).
+// 울진·청주·김해 차트에 'MAG VAR 8°W → 9°W' 개정 이력이 명시되어 있다.
+// HOVER PAGE 판독(drawHsiHoverPage)에서도 참조하므로 여기서 선언해 TDZ를 피한다.
+const RULER_VAR = -9;
 const R_NM = 3440.065;
 
 // ══════════════════════════════════════════════════════
@@ -4117,6 +4105,16 @@ const AIRPORTS_KR = [
   { icao:'RKPD', name:'정석',  lat:33.3983, lon:126.7131 },
   { icao:'RKSG', name:'평택',  lat:36.9600, lon:127.0333 },
 ];
+
+// ── 공항 목록 단일 소스 ──
+// 과거에 AIRPORTS(15개)와 AIRPORTS_KR(26개)이 따로 있어 6개 공항 좌표가 어긋나 있었고,
+// 사천이 RKTL(실제 울진), 울산이 RKDU(존재하지 않는 코드)로 잘못 들어가 있었다.
+// 이제 AIRPORTS_KR만 유지하고 나머지는 전부 여기서 파생한다.
+const AIRPORTS = AIRPORTS_KR.map(a => ({ ident: a.icao, name: a.name, lat: a.lat, lon: a.lon }));
+// 비행계획 화면의 빠른 추가 버튼(표시 순서) — 좌표·명칭은 위 단일 소스에서 조회
+const FP_PRESET_ICAOS = ['RKSI','RKSS','RKPK','RKPC','RKTU','RKJJ','RKJK','RKJY',
+                         'RKJB','RKPS','RKTH','RKPU','RKNN','RKNY','RKNS'];
+const FP_PRESETS = FP_PRESET_ICAOS.map(ic => AIRPORTS.find(a => a.ident === ic)).filter(Boolean);
 
 
 function toggleLayer() {
@@ -5717,7 +5715,7 @@ function fpRenderList(area, title, footer) {
 
 function fpRenderAdd(area, title, footer) {
   title.textContent = 'ADD WAYPOINT';
-  const apBtns = AIRPORTS.map(a=>`<button class="fp-ap-btn" onclick="fpAddPreset('${a.ident}')" title="${a.name}">${a.ident}</button>`).join('');
+  const apBtns = FP_PRESETS.map(a=>`<button class="fp-ap-btn" onclick="fpAddPreset('${a.ident}')" title="${a.name}">${a.ident}</button>`).join('');
   area.innerHTML = `
     <div style="color:#87ceeb;font-size:8px;font-weight:bold;letter-spacing:0.5px;">KOREAN AIRPORTS</div>
     <div class="fp-ap-grid">${apBtns}</div>
@@ -6691,7 +6689,7 @@ function unlockScreen() {
 // RULER — 지도에서 두 점 이상을 찍어 거리·방위 측정
 // ══════════════════════════════════════════════════════
 let _rulerOn = false, _rulerPts = [], _rulerLayer = null;
-const RULER_VAR = -8;   // 한국 자기편차 약 8°W (MAG = TRUE − VAR)
+// RULER_VAR(자기편차)는 HOVER PAGE 판독에서도 쓰이므로 D2R 옆(상단)에 선언한다.
 
 function toggleRuler() {
   _rulerOn = !_rulerOn;
@@ -7790,8 +7788,6 @@ async function showAptWx(icao, name, latlng) {
     if (ctl.signal.aborted) return;
     div.innerHTML = `<div style="color:#ff5544;font-size:13px;padding:4px;">${icao}: 조회 실패</div>`;
     popup.update();
-  } finally {
-    clearTimeout(timer);
   }
 }
 
