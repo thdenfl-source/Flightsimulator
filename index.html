@@ -301,7 +301,8 @@ html, body {
 
 .trim-group { display: flex; align-items: center; gap: 6px; }
 .trim-pad {
-  position: relative; width: 160px; height: 54px;
+  /* 좌측에 COLLECTIVE TRIM을 두기 위해 폭을 2/3로 (160 → 107px) */
+  position: relative; width: 107px; height: 54px;
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
   grid-template-rows: 1fr 1fr;
@@ -336,6 +337,25 @@ html, body {
 .force-trim-btn.disabled { opacity: 0.3; cursor: not-allowed; pointer-events: none; }
 .hover-pos-btn:active { background: #2a2a1a; }
 .hover-pos-btn.active { border-color: #ffcc00; color: #ffcc00; box-shadow: 0 0 6px rgba(255,204,0,0.45); }
+
+/* ── COLLECTIVE TRIM (파워 조작) ── */
+/* 지금은 VS ▲▼와 같은 동작. 상위모드 해제 기능이 들어가면 파워(출력) 직접 제어로 확장한다. */
+.coll-group { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.coll-lbl {
+  color: #7a8a99; font-size: 8px; font-weight: bold; letter-spacing: 0.3px;
+  text-align: center; line-height: 1.1; white-space: nowrap;
+  font-family: 'Helvetica Neue', Arial, sans-serif;
+}
+.coll-btns { display: flex; flex-direction: column; gap: 2px; }
+.coll-btn {
+  width: 34px; height: 25px; border-radius: 4px;
+  background: #12181e; border: 2px solid #3a4a5a; color: #9fb4c4;
+  font-size: 13px; font-weight: bold; cursor: pointer;
+  touch-action: manipulation; user-select: none; -webkit-user-select: none;
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'Helvetica Neue', Arial, sans-serif;
+}
+.coll-btn:active { background: #1e3040; border-color: #4dd0e1; color: #4dd0e1; }
 
 /* ── ANTI-TORQUE PEDAL (요 조작) ── */
 .pedal-group { display: flex; flex-direction: column; align-items: center; gap: 2px; }
@@ -1477,6 +1497,9 @@ body.night-mode::after {
             반경 50 ft 이내면 실제 축척 위치에, 밖이면 방향 니들과 점선으로 나타납니다.</li>
         <li><b>ANTI-TORQUE PEDAL ◀▶</b>(HOVER POS 우측): 뱅크 없이 기수만 즉시 회전(홀드 시 약 12°/s).
             <b>GSPD 작동 중에는 HDG 화살표가 기수와 분리</b>되므로 요 조작은 이 페달로 합니다.</li>
+        <li><b>COLLECTIVE TRIM ▲▼</b>(4-way 트림 좌측): 현재는 VS ▲▼와 같은 동작(±100 fpm)입니다.
+            4-way 트림은 <b>사이클릭</b>, 페달은 <b>요</b>, 컬렉티브는 <b>파워</b>를 맡는 수동 조작 구성으로
+            확장하기 위한 배치입니다.</li>
         <li>지도에 SHIP이 켜져 있으면 호버 페이지에 <b>선박 상대위치</b>가 표시됩니다(멀면 니들, 50ft 이내면 실제 위치).</li>
         <li><b>T-CUT</b>: 전방 20NM 지형 단면. 현재 고도가 화면 중앙에 오고 지형이 상대적으로 움직입니다.</li>
       </ul>
@@ -1717,6 +1740,13 @@ body.night-mode::after {
         <div class="ctrl-div"></div>
 
         <div class="trim-group" id="trim-group">
+          <div class="coll-group">
+            <div class="coll-lbl">COLLECTIVE<br>TRIM</div>
+            <div class="coll-btns">
+              <button class="coll-btn" id="coll-up" title="컬렉티브 업(상승)">▲</button>
+              <button class="coll-btn" id="coll-dn" title="컬렉티브 다운(강하)">▼</button>
+            </div>
+          </div>
           <div class="trim-pad" id="trim-pad">
             <button class="trim-cell tc-l"   id="trim-l"   data-trim-dir="L">◄</button>
             <button class="trim-cell tc-fwd" id="trim-fwd" data-trim-dir="F">▲</button>
@@ -6109,6 +6139,9 @@ const btnMap={
   'ped-l':['yaw',-1],'ped-r':['yaw',1],
   'crs-dn':['crs',-1],'crs-up':['crs',1],
   'vs-dn':['vs',-100],'vs-up':['vs',100],
+  // COLLECTIVE TRIM — 현재는 VS ▲▼와 동일 동작.
+  // 상위모드(AFCS) 해제 기능이 들어가면 파워(출력) 직접 제어로 바꾼다.
+  'coll-up':['vs',100],'coll-dn':['vs',-100],
   'alt-dn':['alt',-100],'alt-up':['alt',100],
   'crht-dn':['crht',-10],'crht-up':['crht',10],
   'wdir-dn':['wdir',-5],'wdir-up':['wdir',5],
