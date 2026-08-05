@@ -1493,6 +1493,8 @@ body.night-mode::after {
       <h3>4. PFD · HOVER PAGE</h3>
       <ul>
         <li><b>NAV SRC</b>: <b>FMS / NAV1 / NAV2</b>. NAV1·NAV2는 CDU에서 튜닝한 VOR을 따라갑니다.</li>
+        <li><b>NAV SOURCE 판독</b>(PFD 우측 하단): <b>FMS · NAV1 · NAV2</b> 세 소스가 각각 가리키는 지점의
+            <b>명칭 · 방위 · 거리</b>를 동시에 표시합니다. 현재 선택된 소스는 밝게 강조됩니다.</li>
         <li><b>HOVER PAGE</b>(80kt 미만): 호버 속도·위치 지시. 좌측 HOVER 그룹의 <b>HOVER PAGE / HOVER POS</b> 사각 버튼으로 켜고,
             기준 속도는 트림 옆 원형 <b>GSPD</b> 버튼으로 잡습니다(실제 조종간 배치에 맞춘 위치).</li>
         <li>HOVER PAGE에는 <b>SHIP</b>(청록)과 <b>비행계획 활성 웨이포인트</b>(빨강 삼각형)가 함께 표시됩니다.
@@ -2752,7 +2754,10 @@ function drawPFD() {
   //   Bottom half (hsiH): CRHT display takes the full right-column width (tapW + vsiW)
   drawAltTape(W - tapW - vsiW, 0, tapW, aiH);
   drawVSI(W - vsiW, 0, vsiW, aiH);
-  drawCrhtDisplay(W - tapW - vsiW, aiH, tapW + vsiW, hsiH);
+  // 우측 하단: 위쪽 CRHT 테이프 + 아래쪽 NAV SOURCE 판독(FMS/NAV1/NAV2)
+  const navSrcH = Math.max(56, Math.min(84, hsiH * 0.34));
+  drawCrhtDisplay(W - tapW - vsiW, aiH, tapW + vsiW, hsiH - navSrcH);
+  drawNavSrcPanel(W - tapW - vsiW, aiH + hsiH - navSrcH, tapW + vsiW, navSrcH);
 
   // Dividers
   ctx.strokeStyle = '#1e1e1e'; ctx.lineWidth = 1;
@@ -2761,6 +2766,8 @@ function drawPFD() {
   ctx.beginPath(); ctx.moveTo(W-tapW-vsiW, 0);      ctx.lineTo(W-tapW-vsiW, aiH);       ctx.stroke();
   // Left edge of CRHT display in bottom half = same x as alt tape edge
   ctx.beginPath(); ctx.moveTo(W-tapW-vsiW, aiH);    ctx.lineTo(W-tapW-vsiW, usableH);   ctx.stroke();
+  // CRHT ↔ NAV SOURCE 구분선
+  ctx.beginPath(); ctx.moveTo(W-tapW-vsiW, aiH + hsiH - navSrcH); ctx.lineTo(W, aiH + hsiH - navSrcH); ctx.stroke();
   // Right edge of VSI (top half only)
   ctx.beginPath(); ctx.moveTo(W-vsiW, 0);           ctx.lineTo(W-vsiW, aiH);            ctx.stroke();
   // Horizontal divider between centre AI and HSI
@@ -2842,6 +2849,76 @@ function drawFMA(x, y, w) {
 // CRHT ALTITUDE DISPLAY  (bottom-right of PFD)
 // Mini altitude tape centred on selCrht, showing current S.alt on it.
 // ────────────────────────────────────────
+// ────────────────────────────────────────
+// NAV SOURCE 판독 (PFD 우측 하단)
+// FMS / NAV1 / NAV2 각 소스가 가리키는 지점의 명칭·방위·거리를 한눈에.
+// 현재 선택된 소스(navSrc)는 밝게, 나머지는 어둡게 표시한다.
+// ────────────────────────────────────────
+function drawNavSrcPanel(x, y, w, h) {
+  ctx.save();
+  ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
+  ctx.fillStyle = '#060612'; ctx.fillRect(x, y, w, h);
+
+  // 소스별 목적지(명칭·좌표) 산출
+  const rows = [];
+  {   // FMS — 활성 웨이포인트
+    const ok = S.awp >= 0 && S.awp < S.wps.length;
+    const wp = ok ? S.wps[S.awp] : null;
+    rows.push({ src:'FMS', ident: ok ? (wp.ident || 'WPT') : '----',
+                lat: ok ? wp.lat : null, lon: ok ? wp.lon : null, color:'#00cc44' });
+  }
+  ['NAV1','NAV2'].forEach(id => {
+    const r = navRadios[id] || {};
+    const ok = r.lat !== null && r.lat !== undefined && r.lon !== null && r.lon !== undefined;
+    rows.push({ src:id, ident: ok ? (r.id || '----') : '----',
+                lat: ok ? r.lat : null, lon: ok ? r.lon : null, color:'#44aaff' });
+  });
+
+  const rowH = h / 3;
+  const fsL  = Math.max(7, Math.min(9,  rowH * 0.30));   // 소스 라벨
+  const fsI  = Math.max(8, Math.min(11, rowH * 0.38));   // 식별자
+  const fsV  = Math.max(7, Math.min(10, rowH * 0.34));   // 방위·거리
+  ctx.textBaseline = 'middle';
+
+  rows.forEach((r, i) => {
+    const ry  = y + rowH * i;
+    const sel = navSrc === r.src;
+    if (sel) {   // 선택된 소스 강조
+      ctx.fillStyle = 'rgba(0,40,70,0.55)';
+      ctx.fillRect(x + 1, ry + 1, w - 2, rowH - 2);
+    }
+    if (i > 0) {
+      ctx.strokeStyle = '#1a1a1a'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(x + 3, ry); ctx.lineTo(x + w - 3, ry); ctx.stroke();
+    }
+    const has = r.lat !== null;
+    const dim = sel ? 1 : 0.55;
+    // 1행: 소스 라벨 + 식별자
+    ctx.globalAlpha = dim;
+    ctx.textAlign = 'left';
+    ctx.font = `bold ${fsL}px Helvetica Neue, Arial, sans-serif`;
+    ctx.fillStyle = r.color;
+    ctx.fillText(r.src, x + 4, ry + rowH * 0.28);
+    ctx.textAlign = 'right';
+    ctx.font = `bold ${fsI}px Helvetica Neue, Arial, sans-serif`;
+    ctx.fillStyle = has ? '#fff' : '#555';
+    ctx.fillText(r.ident, x + w - 4, ry + rowH * 0.28);
+    // 2행: 방위 · 거리
+    ctx.textAlign = 'left';
+    ctx.font = `bold ${fsV}px Helvetica Neue, Arial, sans-serif`;
+    ctx.fillStyle = has ? r.color : '#444';
+    ctx.fillText(has ? fmtA(bearing(S.lat, S.lon, r.lat, r.lon)) + '°' : '---°', x + 4, ry + rowH * 0.72);
+    ctx.textAlign = 'right';
+    ctx.fillStyle = has ? '#cccc66' : '#444';
+    ctx.fillText(has ? uDist(distance(S.lat, S.lon, r.lat, r.lon), 1) + D_LBL() : '--.-' + D_LBL(),
+                 x + w - 4, ry + rowH * 0.72);
+    ctx.globalAlpha = 1;
+  });
+
+  ctx.textBaseline = 'alphabetic';
+  ctx.restore();
+}
+
 function drawCrhtDisplay(x, y, w, h) {
   ctx.save(); ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
   ctx.fillStyle = '#060612'; ctx.fillRect(x, y, w, h);
