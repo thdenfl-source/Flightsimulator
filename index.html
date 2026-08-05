@@ -1452,7 +1452,8 @@ body.night-mode::after {
         <li>상단: GPS·WX·＋(웨이포인트)·RAIN·WIND·NOTAM·FIX·AWY·<b>공역</b>·<b>📏 측정자</b>·FULL.</li>
         <li>하단: FLY/RESET/CLR/<b>SHIP</b>/<b>T-CUT</b>/<b>INHIB</b>/N↑/1인칭/MAP(위성)/3D/<b>🔒 잠금</b>.</li>
         <li><b>📏 측정자</b>: 지도를 탭해 점을 찍으면 구간 방위·거리, 합계, 시작→끝 직선거리 표시.</li>
-        <li><b>공역</b>: 관제권·금지(P)·제한(R)·위험(D)구역, FIR·KADIZ(테두리만). 접근/진입 시 경보.</li>
+        <li><b>공역</b>: 관제권·금지(P)·제한(R)·위험(D)구역, FIR·KADIZ. <b>모두 테두리만</b> 그려 내부의 심볼을 그대로 터치할 수 있습니다.
+            테두리 선을 탭하면 공역 정보가 뜨고, 접근/진입 시 경보는 종전과 동일합니다.</li>
         <li><b>심볼 탭</b>: FIX·항로 경유점·<b>VOR</b>·<b>공항</b> 어느 것을 탭해도 좌표 확인·복사와 비행계획 추가가 가능합니다.
             VOR은 <b>NAV1/NAV2 튜닝</b>, 공항은 <b>METAR/TAF</b>·<b>공항 정보</b>가 함께 나옵니다.</li>
         <li><b>SHIP</b>: 버튼을 누르면 「배 표시 / 설정창」 선택. 선박 속도·침로를 입력해 이동시킬 수 있습니다.</li>
@@ -12783,17 +12784,17 @@ function _aspcDraw(item){
   const color=_aspcColors[item.grp];
   const tip=`${item.grp} · ${item.name}`+(item.alt?`<br>${item.alt}`:'');
   const ls=[];
-  // FIR·KADIZ는 영역이 넓어 채우면 하부 레이어 선택을 막으므로 테두리만(클릭 통과)
-  const outlineOnly = (item.grp === 'FIR' || item.grp === 'KADIZ');
-  if(item.poly){
-    const p = outlineOnly
-      ? L.polygon(item.poly,{color,weight:1.5,opacity:0.9,fill:false,interactive:false})
-      : L.polygon(item.poly,{color,weight:1.5,opacity:0.9,fillColor:color,fillOpacity:0.07});
-    if(!outlineOnly) p.bindTooltip(tip,{sticky:true});
-    p.addTo(leafMap); ls.push(p);
-  } else if(item.circle){
-    const c=L.circle(item.circle.c,{radius:item.circle.r*1852,color,weight:1.5,opacity:0.9,fillColor:color,fillOpacity:0.06});
-    c.bindTooltip(tip,{sticky:true}); c.addTo(leafMap); ls.push(c);
+  // 모든 공역은 테두리만 그린다 — 내부를 채우면 그 위의 심볼(FIX·VOR·공항)을 터치할 수 없다.
+  // 테두리 선 자체는 터치 가능하게 두어 공역 정보 툴팁을 유지한다.
+  // 단 FIR·KADIZ는 경계선이 워낙 길어 다른 요소와 겹치므로 선까지 클릭 통과시킨다.
+  const lineOnly = (item.grp === 'FIR' || item.grp === 'KADIZ');
+  const style = { color, weight:1.5, opacity:0.9, fill:false, interactive: !lineOnly };
+  let sh = null;
+  if(item.poly)        sh = L.polygon(item.poly, style);
+  else if(item.circle) sh = L.circle(item.circle.c, Object.assign({ radius:item.circle.r*1852 }, style));
+  if(sh){
+    if(!lineOnly) sh.bindTooltip(tip,{sticky:true});
+    sh.addTo(leafMap); ls.push(sh);
   }
   _aspcLayers[item.id]=ls;
 }
