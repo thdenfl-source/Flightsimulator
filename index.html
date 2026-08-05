@@ -1017,8 +1017,9 @@ body.solo-mode .solo-panel-visible {
 
 /* ── Flight Plan (Garmin CDU Style) ── */
 #fp-wrap {
-  background: #050505;
-  display: flex; flex-direction: column;
+  /* CDU와 같은 프레임을 쓰므로 배경·정렬은 #cdu-wrap과 동일하게 */
+  background: #111;
+  position: relative;
   overflow: hidden;
   font-family: 'Arial', sans-serif;
   color: white;
@@ -1948,15 +1949,22 @@ body.night-mode::after {
 
     <!-- Page 2: Flight Plan -->
     <div id="fp-wrap" class="page-content page-hidden">
-      <div class="fp-mode-title" id="fp-mode-title">ACTIVE FLIGHT PLAN</div>
-      <div class="fp-content-area" id="fp-content-area"></div>
-      <div class="fp-nav-box">
-        <div class="nav-cell"><div class="nav-lbl">BRG1</div><div class="nav-val brg1-val" id="nav-brg1">---°</div></div>
-        <div class="nav-cell"><div class="nav-lbl">BRG2</div><div class="nav-val brg2-val" id="nav-brg2">---°</div></div>
-        <div class="nav-cell"><div class="nav-lbl">CRS</div><div class="nav-val crs-val" id="nav-crs">---°</div></div>
-        <div class="nav-cell"><div class="nav-lbl">DTW</div><div class="nav-val dtw-val" id="nav-dtw">---NM</div></div>
+      <!-- CDU와 동일한 354×567 규격 안에서 시현(다른 CDU 화면과 외곽을 맞춤) -->
+      <div id="fp-scaler" style="position:absolute;top:0;left:0;width:354px;height:567px;transform-origin:top left;">
+        <div class="cdu-frame">
+          <div class="touch-display">
+            <div class="fp-mode-title" id="fp-mode-title">ACTIVE FLIGHT PLAN</div>
+            <div class="fp-content-area" id="fp-content-area"></div>
+            <div class="fp-nav-box">
+              <div class="nav-cell"><div class="nav-lbl">BRG1</div><div class="nav-val brg1-val" id="nav-brg1">---°</div></div>
+              <div class="nav-cell"><div class="nav-lbl">BRG2</div><div class="nav-val brg2-val" id="nav-brg2">---°</div></div>
+              <div class="nav-cell"><div class="nav-lbl">CRS</div><div class="nav-val crs-val" id="nav-crs">---°</div></div>
+              <div class="nav-cell"><div class="nav-lbl">DTW</div><div class="nav-val dtw-val" id="nav-dtw">---NM</div></div>
+            </div>
+            <div class="fp-footer-nav" id="fp-footer-nav"></div>
+          </div>
+        </div>
       </div>
-      <div class="fp-footer-nav" id="fp-footer-nav"></div>
     </div>
 
     <!-- Page 3: CDU -->
@@ -6535,15 +6543,20 @@ setInterval(() => {
 // ══════════════════════════════════════════════════════
 let currentPage = 0;
 let leftPage = 0;
-function scaleCdu() {
-  const wrap   = document.getElementById('cdu-wrap');
-  const scaler = document.getElementById('cdu-scaler');
+// 354×567 규격의 화면(CDU · Flight Plan)을 패널 크기에 맞춰 축소·중앙정렬
+function _scaleFrame(wrapId, scalerId) {
+  const wrap   = document.getElementById(wrapId);
+  const scaler = document.getElementById(scalerId);
   if (!wrap || !scaler) return;
   void wrap.offsetWidth;
   const w = wrap.clientWidth, h = wrap.clientHeight;
   if (!w || !h) return;
   const s = Math.min(w / 354, h / 567);
   scaler.style.transform = `translate(${(w - 354*s)/2}px,${(h - 567*s)/2}px) scale(${s})`;
+}
+function scaleCdu() {
+  _scaleFrame('cdu-wrap', 'cdu-scaler');
+  _scaleFrame('fp-wrap',  'fp-scaler');   // Flight Plan도 같은 규격
 }
 
 // ── 패널 선택 시스템: 좌/우 각각 PFD·MAP·CDU 중 하나를 표시 ──
@@ -6596,7 +6609,7 @@ function applyPanels() {
   currentPage = rightSel === 'map' ? 0 : rightSel === 'plan' ? 1 : rightSel === 'cdu' ? 2 : 0;
 
   // 크기 재계산
-  requestAnimationFrame(() => { resizePFD(); drawPFD(); });
+  requestAnimationFrame(() => { resizePFD(); drawPFD(); scaleCdu(); });
   setTimeout(() => {
     try { leafMap.invalidateSize(); } catch(e) {}
     try { if (_ml3d) _ml3d.resize(); } catch(e) {}
@@ -6908,6 +6921,7 @@ function setSolo(screen) {
     rightPanel.style.display = '';
     rightPanel.classList.add('solo-panel-visible');
     setPage(1);
+    setTimeout(() => scaleCdu(), 80);   // Flight Plan도 354×567 규격이라 재스케일 필요
   } else if (screen === 'cdu') {
     rightPanel.style.display = '';
     rightPanel.classList.add('solo-panel-visible');
