@@ -279,7 +279,8 @@ html, body {
 /* ── Hover Page / GSPD / Trim ── */
 .hover-group { display: flex; flex-direction: column; align-items: center; gap: 2px; }
 .hover-btns { display: flex; gap: 2px; }
-.hover-btn, .gspd-btn {
+/* 모드 토글 버튼 공통(HOVER·GSPD·CRHT·ALT HOLD) */
+.hover-btn, .gspd-btn, .crht-btn, .alt-hold-btn {
   background: #1a1a1a; border: 1px solid #333; color: #555;
   font-size: 10px; font-weight: bold; padding: 3px 6px; cursor: pointer; border-radius: 2px;
   touch-action: manipulation; white-space: nowrap; font-family: 'Helvetica Neue', Arial, sans-serif;
@@ -291,12 +292,6 @@ html, body {
 .hover-btn.on { background: #1a0e2e; border-color: #cc66ff; color: #cc66ff; }
 .gspd-btn.on  { background: #2e0e1a; border-color: #ff6688; color: #ff8899;
                 box-shadow: 0 0 6px rgba(255,80,120,0.4); }
-.crht-btn, .alt-hold-btn {
-  background: #1a1a1a; border: 1px solid #333; color: #555;
-  font-size: 10px; font-weight: bold; padding: 3px 6px; cursor: pointer; border-radius: 2px;
-  touch-action: manipulation; white-space: nowrap; font-family: 'Helvetica Neue', Arial, sans-serif;
-  transition: background 0.15s, border-color 0.15s, color 0.15s;
-}
 .crht-btn.on     { background: #0e2e1a; border-color: #44ff88; color: #44ff88;
                    box-shadow: 0 0 6px rgba(44,255,100,0.4); }
 .alt-hold-btn.on { background: #0e1a2e; border-color: #00cfff; color: #00cfff;
@@ -326,7 +321,8 @@ html, body {
 .trim-cell.tc-aft { grid-column: 2; grid-row: 2; }
 .trim-cell.tc-l   { grid-column: 1; grid-row: 1 / span 2; }
 .trim-cell.tc-r   { grid-column: 3; grid-row: 1 / span 2; }
-.force-trim-btn {
+/* 원형 모드 버튼 공통(FORCE TRIM·HOVER POS) */
+.force-trim-btn, .hover-pos-btn {
   width: 48px; height: 48px; border-radius: 50%;
   background: #1a1a1a; border: 2px solid #555; color: #888;
   font-size: 9px; font-weight: bold; cursor: pointer;
@@ -338,15 +334,6 @@ html, body {
 .force-trim-btn:active { background: #2a2a4a; }
 .force-trim-btn.active { border-color: #cc66ff; color: #cc66ff; }
 .force-trim-btn.disabled { opacity: 0.3; cursor: not-allowed; pointer-events: none; }
-.hover-pos-btn {
-  width: 48px; height: 48px; border-radius: 50%;
-  background: #1a1a1a; border: 2px solid #555; color: #888;
-  font-size: 9px; font-weight: bold; cursor: pointer;
-  touch-action: manipulation; user-select: none; -webkit-user-select: none;
-  display: flex; align-items: center; justify-content: center; text-align: center; line-height: 1;
-  font-family: 'Helvetica Neue', Arial, sans-serif;
-  transition: background 0.1s, border-color 0.1s, color 0.1s;
-}
 .hover-pos-btn:active { background: #2a2a1a; }
 .hover-pos-btn.active { border-color: #ffcc00; color: #ffcc00; box-shadow: 0 0 6px rgba(255,204,0,0.45); }
 
@@ -2152,20 +2139,6 @@ function updateHoverBtns() {
   });
 }
 
-function bodyFrameFromGroundVel() {
-  // Decompose current ground velocity (gsN, gsE) into body frame (fwd, right).
-  // Wind contribution is scaled by the speed-dependent effect factor.
-  const wt  = normA(windDir + 180) * D2R;
-  const wEff = effectiveWindSpd();
-  const gsN = S.spd * Math.cos(S.hdg * D2R) + wEff * Math.cos(wt);
-  const gsE = S.spd * Math.sin(S.hdg * D2R) + wEff * Math.sin(wt);
-  const ch  = Math.cos(S.hdg * D2R), sh = Math.sin(S.hdg * D2R);
-  return {
-    fwd:  gsN * ch + gsE * sh,
-    lat: -gsN * sh + gsE * ch,
-  };
-}
-
 function toggleHoverPage() {
   if (!hoverPageOn && !hoverEligible()) return;
   hoverPageOn = !hoverPageOn;
@@ -2440,24 +2413,6 @@ function navApBankTarget() {
   const desiredHdg = normA(crs - interceptAngle);
   const hdgErr = normAS(desiredHdg - S.hdg);
   return Math.max(-25, Math.min(25, hdgErr * 2));
-}
-
-// Returns true if the aircraft is laterally within ±RNP of the selected
-// course — used for the armed/active button colour only.
-// Uses the same VOR-style sin formula as the NAV AP PID.
-function navInterceptOk() {
-  if (!obsOn) return true;
-  let wpLat, wpLon, crs;
-  if (navSrc === 'FMS') {
-    if (S.awp < 0 || S.awp >= S.wps.length) return false;
-    wpLat = S.wps[S.awp].lat; wpLon = S.wps[S.awp].lon;
-    crs = activeCrs();
-  } else if (navLat !== null) {
-    wpLat = navLat; wpLon = navLon;
-    crs = vorObsCrs;
-  } else return false;
-  const xtk = Math.sin(normAS(bearing(wpLat, wpLon, S.lat, S.lon) - crs) * D2R) * S.dtw;
-  return Math.abs(xtk) <= rnp;
 }
 
 let rollApOn = true;   // false when manual bank trim overrides roll axis
@@ -3666,6 +3621,20 @@ function drawHSI(x, y, w, h) {
 }
 
 // ── Hover Page HSI: Garmin-style compass rose + GPS speed readouts ──
+// HOVER PAGE 전 반경(ft) — 위치 지시자·SHIP·WPT가 모두 이 축척을 공유한다
+const HOVER_FT = 50;
+// 어떤 좌표의 기체 기준(body frame) 상대 위치를 ft로 반환.
+// HOVER PAGE의 세 지시자(호버 위치·SHIP·WPT)가 같은 계산을 각자 갖고 있던 것을 통합.
+function bodyRelFt(lat, lon) {
+  const M_PER_DEG = 111320, FT_PER_M = 3.28084;
+  const relN = (lat - S.lat) * M_PER_DEG * FT_PER_M;
+  const relE = (lon - S.lon) * M_PER_DEG * Math.cos(S.lat * D2R) * FT_PER_M;
+  const c = Math.cos(S.hdg * D2R), sn = Math.sin(S.hdg * D2R);
+  const fwd =  relN * c + relE * sn;
+  const lt  = -relN * sn + relE * c;
+  return { fwd, lat: lt, dist: Math.hypot(fwd, lt) };
+}
+
 function drawHsiHoverPage(x, y, w, h, cx, cy, rFull) {
   const r      = rFull;                        // same radius as normal HSI
   const sideW  = (w - r * 2) / 2 - 6;
@@ -3754,18 +3723,10 @@ function drawHsiHoverPage(x, y, w, h, cx, cy, rFull) {
 
   // Hover-position marker in body frame
   if (hoverPosOn && hoverPosLat !== null) {
-    const M_PER_DEG = 111320, FT_PER_M = 3.28084;
-    const dLatDeg = hoverPosLat - S.lat;
-    const dLonDeg = hoverPosLon - S.lon;
-    const relN_ft = dLatDeg * M_PER_DEG * FT_PER_M;
-    const relE_ft = dLonDeg * M_PER_DEG * Math.cos(S.lat * D2R) * FT_PER_M;
-    const chH = Math.cos(S.hdg * D2R), shH = Math.sin(S.hdg * D2R);
-    const bodyFwd =  relN_ft * chH + relE_ft * shH;
-    const bodyLat = -relN_ft * shH + relE_ft * chH;
-    // ft → kt equivalent for same px scale (1 kt ≈ 101 ft/min; use direct ft/px)
-    const pxPerFt = r / 50;
-    const mX =  bodyLat * pxPerFt;
-    const mY = -bodyFwd * pxPerFt;
+    const b = bodyRelFt(hoverPosLat, hoverPosLon);
+    const pxPerFt = r / HOVER_FT;
+    const mX =  b.lat * pxPerFt;
+    const mY = -b.fwd * pxPerFt;
     const sqSize = Math.max(10, r * 0.16);
     ctx.fillStyle   = 'rgba(255,204,0,0.2)';
     ctx.strokeStyle = '#ffcc00';
@@ -3785,14 +3746,9 @@ function drawHsiHoverPage(x, y, w, h, cx, cy, rFull) {
     _shipBrgT   = bearing(S.lat, S.lon, shipLat, shipLon);
     _shipRel    = normA(_shipBrgT - S.hdg);
 
-    // 호버 위치 지시자와 동일한 축척(전 반경 = 50 ft)으로 기체 기준 상대위치 산출
-    const M_PER_DEG = 111320, FT_PER_M = 3.28084, HOVER_FT = 50;
-    const relN_ft = (shipLat - S.lat) * M_PER_DEG * FT_PER_M;
-    const relE_ft = (shipLon - S.lon) * M_PER_DEG * Math.cos(S.lat * D2R) * FT_PER_M;
-    const chH = Math.cos(S.hdg * D2R), shH = Math.sin(S.hdg * D2R);
-    const bodyFwd =  relN_ft * chH + relE_ft * shH;
-    const bodyLat = -relN_ft * shH + relE_ft * chH;
-    _shipDistFt = Math.hypot(bodyFwd, bodyLat);
+    // 호버 위치 지시자와 동일 축척(전 반경 = HOVER_FT)으로 기체 기준 상대위치 산출
+    const b = bodyRelFt(shipLat, shipLon);
+    _shipDistFt = b.dist;
     _shipNear   = _shipDistFt <= HOVER_FT;
 
     // 선체 심볼(원점 기준, 이물이 -Y 방향)
@@ -3811,7 +3767,7 @@ function drawHsiHoverPage(x, y, w, h, cx, cy, rFull) {
     if (_shipNear) {
       // ── 반경 내: 실제 축척 위치에 표시(호버 위치 지시자와 동일 축척) ──
       const pxPerFt = r / HOVER_FT;
-      const sx =  bodyLat * pxPerFt, sy = -bodyFwd * pxPerFt;
+      const sx =  b.lat * pxPerFt, sy = -b.fwd * pxPerFt;
       ctx.save();
       ctx.beginPath(); ctx.arc(0, 0, r * 0.94, 0, Math.PI*2); ctx.clip();
       ctx.translate(sx, sy);
@@ -3841,13 +3797,8 @@ function drawHsiHoverPage(x, y, w, h, cx, cy, rFull) {
     _wpBrgT   = bearing(S.lat, S.lon, wp.lat, wp.lon);
     _wpRel    = normA(_wpBrgT - S.hdg);
 
-    const M_PER_DEG = 111320, FT_PER_M = 3.28084, HOVER_FT = 50;
-    const relN_ft = (wp.lat - S.lat) * M_PER_DEG * FT_PER_M;
-    const relE_ft = (wp.lon - S.lon) * M_PER_DEG * Math.cos(S.lat * D2R) * FT_PER_M;
-    const chH = Math.cos(S.hdg * D2R), shH = Math.sin(S.hdg * D2R);
-    const bodyFwd =  relN_ft * chH + relE_ft * shH;
-    const bodyLat = -relN_ft * shH + relE_ft * chH;
-    _wpDistFt = Math.hypot(bodyFwd, bodyLat);
+    const b = bodyRelFt(wp.lat, wp.lon);
+    _wpDistFt = b.dist;
     _wpNear   = _wpDistFt <= HOVER_FT;
 
     const tri = sz => {   // 위(-Y)를 향한 삼각형
@@ -3865,7 +3816,7 @@ function drawHsiHoverPage(x, y, w, h, cx, cy, rFull) {
       const pxPerFt = r / HOVER_FT;
       ctx.save();
       ctx.beginPath(); ctx.arc(0, 0, r * 0.94, 0, Math.PI*2); ctx.clip();
-      ctx.translate(bodyLat * pxPerFt, -bodyFwd * pxPerFt);
+      ctx.translate(b.lat * pxPerFt, -b.fwd * pxPerFt);
       tri(Math.max(8, r * 0.12));
       ctx.restore();
     } else {
@@ -5854,7 +5805,6 @@ function fpRenderIfr(area, title, footer) {
 // 사용자 정의 SID 만들기 (AIP 절차가 없는 공항도 사용 가능)
 // ══════════════════════════════════════════════════════
 let _sidNew = { icao:'', name:'', rwy:'', wps:[] };
-function sidNewSet(k, v) { _sidNew[k] = v; }
 function sidNewAddFix() {
   const f = document.getElementById('sn-fix')?.value;
   if (!f || !IFR_FIXES[f]) return;
@@ -6837,14 +6787,6 @@ function cduFooter(backOnclick, extra) {
 let _soloActive = false;
 let _soloCurrent = null;
 
-function enterSolo() {
-  _soloActive = true;
-  document.getElementById('solo-bar').style.display = 'flex';
-  // 마지막 활성 화면으로 기본 진입
-  const target = leftPage === 1 ? 'map' : currentPage === 0 ? 'map' : currentPage === 1 ? 'plan' : 'cdu';
-  setSolo(target);
-}
-
 function setSolo(screen) {
   _soloCurrent = screen;
   const leftPanel  = document.getElementById('left-panel');
@@ -7152,43 +7094,9 @@ const IFR_FIXES = {
   'VASLI': { lat: 36.7144, lon: 127.5008 },
 };
 
-const IFR_AIRWAYS = {
-  // ── Conventional airways (black) ─────────────────────────────────────────
-  // 서울 → 부산 대각선 간선 (SE 방향)
-  'G597': ['ICN','AROSO','BOPTA','GUVEN','LAPEX','DOLGI','IGBAL','BSN'],
-  // 서울(ICN) ~ 수원 NE (B 항로)
-  'B576': ['ICN','GTC','KARPE','EMHIT'],
-  // 인천 → 서해 → 제주 (W·SW 방향)
-  'A582': ['AROSO','BEACK','TUKDO','AGAVO','CHJ'],
-  // 서쪽 FIR 경계 남북선 (~124.4E, 거의 일직선)
-  'A593': ['NOGON','GONAV','DALPO','NONOS','BIDRI','DANPA','PALSA','TOLIS'],
-  // 김포 → 중부서쪽 남북선 (~126.83E 일직선)
-  'G221': ['GTC','MONSI','BULTI','MEKIL','GONAX','BEDES','ELPOS','MAKSA','SAMUL'],
-  // 제주 → 남해 동쪽 → 일본 방면 (E 방향)
-  'G213': ['CHJ','TAMNA','MAKET','UPGOS','GOSBO','NISAV'],
-
-  // ── RNAV airways (blue) ──────────────────────────────────────────────────
-  // 인천 → 서쪽 FIR 경계 (W 방향)
-  'Y45':  ['ICN','BOGAN','BELTU','REBIT','BINIL','ANSIM','DANTI','GONAV'],
-  // 인천 → 중부 SE 방향 (한반도 SE 대각)
-  'Y55':  ['ICN','KALMA','POSAN','OSPOT','OROGA','MELES','RIMPO'],
-  // 김포 → 동해안 (NE 방향)
-  'Y63':  ['GTC','EGOBA','KARBU','TORUS','DUBUN'],
-  // 김포 ~ 원주 NE
-  'Y711': ['GTC','KARPE','EMHIT'],
-  // 원주 방면 N-S 중부 루트
-  'Y33':  ['KARPE','GUVEN','IKELA','LAPEX'],
-  // 중부 SE 루트
-  'Y57':  ['GUVEN','SAKTI','BASEM','TEBEX','IGDOK'],
-  // 부산(BSN) → 동해안 NNE → 강원도 해안
-  'Y159': ['BSN','LAPAL','LOSTO','OSVOM','NOBUT','ESNEG','UGOVI','BUSKO'],
-  // 부산 → 제주 SW
-  'Y697': ['BSN','NUDUP','LAMER','CHJ'],
-  // 동해 NE 루트 (강원 동쪽 → 일본 방면)
-  'Y77':  ['BUSKO','SELPA','MALSO'],
-  // 동해 중부 → 동해안 (독도 동쪽 방향)
-  'Y639': ['LANAT','DABIK','AGSUS','BUSKO'],
-};
+// 항로망은 AIP ENR 3.1/3.2 기반 ENR_ROUTES(53개)로 런타임에 채워진다.
+// (syncIfrDbFromAip에서 이 객체를 비우고 다시 채우므로 초기값은 비어 있어야 한다)
+const IFR_AIRWAYS = {};
 
 const IFR_DB = {
   // ── AIP AD 2 SID 코딩 테이블 기반(2025~2026 AMDT) ──
@@ -7831,11 +7739,6 @@ function initWxButtons() {
 initWxButtons();
 
 // ══════════════════════════════════════════════════════
-// IFR PLAN CONTROLS
-// ══════════════════════════════════════════════════════
-function closeFpInput() { fpGo('LIST'); }
-
-// ══════════════════════════════════════════════════════
 // SID: AIP 등록 절차 + 사용자 정의 절차
 // ══════════════════════════════════════════════════════
 function customSids() {
@@ -8447,11 +8350,6 @@ function openShipPanel() {
   document.getElementById('ship-panel').style.display = 'block';
 }
 
-function closeShipPanel() {
-  document.getElementById('ship-panel').style.display = 'none';
-  renderShipOnOff();
-}
-
 function shipSetMode(mode) {
   shipInputMode = mode; shipInput = '';
   ['SPD','CRS'].forEach(m => {
@@ -8490,12 +8388,14 @@ function shipKey(k) {
 }
 
 // Ship panel drag
-(function() {
-  const panel = document.getElementById('ship-panel');
-  const hdr   = document.getElementById('ship-panel-header');
+// 패널 헤더를 잡아 끌어 옮기는 공용 헬퍼 (SHIP·WX 패널이 같은 코드를 각자 갖고 있던 것을 통합)
+function makePanelDraggable(panelId, headerId) {
+  const panel = document.getElementById(panelId);
+  const hdr   = document.getElementById(headerId);
+  if (!panel || !hdr) return;
   let sx, sy, sl, st;
-  function onMM(e) { panel.style.left=(sl+e.clientX-sx)+'px'; panel.style.top=(st+e.clientY-sy)+'px'; }
-  function onTM(e) { panel.style.left=(sl+e.touches[0].clientX-sx)+'px'; panel.style.top=(st+e.touches[0].clientY-sy)+'px'; }
+  const onMM = e => { panel.style.left=(sl+e.clientX-sx)+'px'; panel.style.top=(st+e.clientY-sy)+'px'; };
+  const onTM = e => { panel.style.left=(sl+e.touches[0].clientX-sx)+'px'; panel.style.top=(st+e.touches[0].clientY-sy)+'px'; };
   function stopD() {
     document.removeEventListener('mousemove',onMM);
     document.removeEventListener('mouseup',stopD);
@@ -8516,7 +8416,8 @@ function shipKey(k) {
   }
   hdr.addEventListener('mousedown', e=>{e.preventDefault();startD(e.clientX,e.clientY);});
   hdr.addEventListener('touchstart', e=>startD(e.touches[0].clientX,e.touches[0].clientY),{passive:true});
-})();
+}
+makePanelDraggable('ship-panel', 'ship-panel-header');
 
 // Ship marker tap on touch (Leaflet drag handler blocks touch→click on draggable markers)
 (function() {
@@ -8599,14 +8500,6 @@ function setWxIcao(icao, btn) {
   document.getElementById('wx-icao').value = icao;
   document.querySelectorAll('.wx-ap-btn').forEach(b => b.classList.remove('wx-ap-sel'));
   if (btn) btn.classList.add('wx-ap-sel');
-}
-
-// obsTime can be Unix seconds (number) or a date string — normalize to "YYYY-MM-DD HH:MMZ"
-function _wxTime(t) {
-  if (!t) return '---';
-  const d = typeof t === 'number' ? new Date(t * 1000) : new Date(t);
-  if (isNaN(d)) return String(t).slice(0, 16) + 'Z';
-  return d.toISOString().replace('T', ' ').slice(0, 16) + 'Z';
 }
 
 // ── METAR/TAF fetcher ──
@@ -8863,33 +8756,7 @@ function renderWxTaf(text, el, icao) {
 }
 
 // WX panel drag (same pattern as ship panel)
-(function() {
-  const panel = document.getElementById('wx-panel');
-  const hdr   = document.getElementById('wx-panel-header');
-  let sx, sy, sl, st;
-  function onMM(e) { panel.style.left=(sl+e.clientX-sx)+'px'; panel.style.top=(st+e.clientY-sy)+'px'; }
-  function onTM(e) { panel.style.left=(sl+e.touches[0].clientX-sx)+'px'; panel.style.top=(st+e.touches[0].clientY-sy)+'px'; }
-  function stopD() {
-    document.removeEventListener('mousemove',onMM);
-    document.removeEventListener('mouseup',stopD);
-    document.removeEventListener('touchmove',onTM);
-    document.removeEventListener('touchend',stopD);
-    hdr.style.cursor='grab';
-  }
-  function startD(cx,cy) {
-    const r=panel.getBoundingClientRect();
-    sx=cx; sy=cy; sl=r.left; st=r.top;
-    panel.style.left=sl+'px'; panel.style.top=st+'px';
-    panel.style.right='auto'; panel.style.bottom='auto';
-    hdr.style.cursor='grabbing';
-    document.addEventListener('mousemove',onMM);
-    document.addEventListener('mouseup',stopD);
-    document.addEventListener('touchmove',onTM,{passive:true});
-    document.addEventListener('touchend',stopD);
-  }
-  hdr.addEventListener('mousedown', e=>{e.preventDefault();startD(e.clientX,e.clientY);});
-  hdr.addEventListener('touchstart', e=>startD(e.touches[0].clientX,e.touches[0].clientY),{passive:true});
-})();
+makePanelDraggable('wx-panel', 'wx-panel-header');
 
 init();
 
@@ -10916,7 +10783,6 @@ if ('serviceWorker' in navigator) {
       selectWP(S.wps.length - 1);   // 현재 위치 → 이 포인트로 Direct-To
       try { leafMap.closePopup(); } catch (e) {}
     }
-    function _curFolderObj() { const f = tpFolders(); return f[tpFolderIdx]; }
 
     // 아이콘 선택 화면 열기/적용
     function tpPickIcon(type, fi, pi) { _tpIconPick = { type, fi, pi }; switchMode('TRACKPOINT'); }
@@ -12479,7 +12345,6 @@ try {
   // 이전 버전은 VOR이 한 항목이었으므로, 저장값에 aptvor가 없으면 vor 상태를 물려받는다
   if (s) awyCat = { conv: !!s.conv, rnav: !!s.rnav, vor: !!s.vor,
                     aptvor: s.aptvor === undefined ? !!s.vor : !!s.aptvor };
-  else if (localStorage.getItem('awyLayerOn') === '1') awyCat = { conv: true, rnav: true, vor: true, aptvor: true };   // 구버전 마이그레이션
 } catch(e) {}
 
 // 경유점 → 좌표 (VOR는 id 참조, 그 외는 내장 좌표)
@@ -13855,10 +13720,6 @@ const airportSpecificCharts = {
     ],
 };
 
-function getAirportChartTypes(icao) {
-    return airportSpecificCharts[icao] || [];
-}
-
 function inferChartCat(c) {
     if (c.cat) return c.cat;
     const name = (c.chartName || '').toUpperCase();
@@ -14978,15 +14839,6 @@ function _pdfCalFinish() {
 const _PDF_IS_IOS = /iP(ad|hone|od)/.test(navigator.userAgent || '') ||
                     (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 const _PDF_PX_BUDGET = _PDF_IS_IOS ? 16000000 : 60000000;
-
-// 현재 페이지 fit 크기 기준, 픽셀 예산을 넘지 않는 최대 품질 배율 계산
-function _pdfMaxQ() {
-    const dpr = window.devicePixelRatio || 1;
-    const baseArea = (_pdfBaseW || 1) * (_pdfBaseH || 1) * dpr * dpr;
-    if (baseArea <= 0) return 1;
-    const q = Math.sqrt(_PDF_PX_BUDGET / baseArea);
-    return Math.max(1, Math.min(12, Math.floor(q * 100) / 100));
-}
 
 async function openChart(icao, chartNum, url) {
     const key = `${icao}|${chartNum}`;
