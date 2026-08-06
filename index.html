@@ -13493,8 +13493,11 @@ function _fmtNotamDt(s) {
 function _gpxLatLon(el) {
   return [parseFloat(el.getAttribute('lat')), parseFloat(el.getAttribute('lon'))];
 }
-function _xmlAll(parent, tag) { return Array.from(parent.getElementsByTagName(tag)); }
-function _xml1(parent, tag)   { return parent.getElementsByTagName(tag)[0] ?? null; }
+// XML 조회는 네임스페이스 접두사(gpx:trkpt 등)와 무관하게 로컬명으로 찾는다.
+// getElementsByTagName은 XML 문서에서 접두사까지 일치해야 하므로 기기·도구별
+// 내보내기 형식에 따라 조회가 통째로 실패한다.
+function _xmlAll(parent, tag) { return Array.from(parent.getElementsByTagNameNS('*', tag)); }
+function _xml1(parent, tag)   { return parent.getElementsByTagNameNS('*', tag)[0] ?? null; }
 
 function _parseGpx2(text) {
   const doc = new DOMParser().parseFromString(text, 'application/xml');
@@ -13626,17 +13629,25 @@ function loadFdrFile(input) {
 }
 
 function _parseFdrGpx(xmlStr) {
-  const doc   = new DOMParser().parseFromString(xmlStr, 'application/xml');
-  const pts   = _xmlAll(doc, 'trkpt');
-  if (!pts.length) throw new Error('trkpt 없음');
+  const doc = new DOMParser().parseFromString(xmlStr, 'application/xml');
+  const perr = doc.getElementsByTagName('parsererror')[0];
+  if (perr) throw new Error('GPX XML 형식 오류');
+  // 트랙(trkpt)이 우선. 앱의 '트랙 저장소 → GPX 내보내기'는 rte/rtept로,
+  // 일부 도구는 wpt만으로 내보내므로 순서대로 대체한다.
+  let pts = _xmlAll(doc, 'trkpt');
+  if (!pts.length) pts = _xmlAll(doc, 'rtept');
+  if (!pts.length) pts = _xmlAll(doc, 'wpt');
+  if (pts.length < 2) throw new Error('좌표점 없음 (trkpt·rtept·wpt 모두 2점 미만)');
   const track = [];
   let prevLat = null, prevLon = null, prevTimeMs = null;
   for (const pt of pts) {
     const [lat, lon] = _gpxLatLon(pt);
     const eleEl  = _xml1(pt, 'ele');
     const timeEl = _xml1(pt, 'time');
-    const altM   = eleEl  ? parseFloat(eleEl.textContent)  : 0;
-    const timeMs = timeEl ? new Date(timeEl.textContent).getTime() : (track.length * 1000);
+    const altM   = eleEl ? (parseFloat(eleEl.textContent) || 0) : 0;
+    // 시간이 없거나 형식이 이상하면 1초 간격으로 채운다(NaN이 들어가면 재생이 멈춘다)
+    let timeMs = timeEl ? new Date(timeEl.textContent).getTime() : NaN;
+    if (!isFinite(timeMs)) timeMs = track.length * 1000;
     // Speed: distance from previous point / time delta
     let speedKt = 0;
     if (prevLat !== null) {
@@ -13646,6 +13657,17 @@ function _parseFdrGpx(xmlStr) {
     }
     track.push({ lat, lon, altM, speedKt, timeMs });
     prevLat = lat; prevLon = lon; prevTimeMs = timeMs;
+  }
+  // 시간이 단조증가하지 않으면(모두 같거나 역행) index 기반으로 다시 부여
+  let monotonic = true;
+  for (let i = 1; i < track.length; i++) if (track[i].timeMs <= track[i-1].timeMs) { monotonic = false; break; }
+  if (!monotonic) {
+    track.forEach((t, i) => { t.timeMs = i * 1000; });
+    let prev = null;
+    for (const t of track) {
+      if (prev) t.speedKt = distance(prev.lat, prev.lon, t.lat, t.lon) / ((t.timeMs - prev.timeMs) / 3600000);
+      prev = t;
+    }
   }
   // Smooth speed with simple 3-point average
   for (let i = 1; i < track.length - 1; i++) {
