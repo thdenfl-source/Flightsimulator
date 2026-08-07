@@ -1526,8 +1526,16 @@ body.night-mode::after {
       <h3>4. PFD · HOVER PAGE</h3>
       <ul>
         <li><b>NAV SRC</b>: <b>FMS / NAV1 / NAV2</b>. NAV1·NAV2는 CDU에서 튜닝한 VOR을 따라갑니다.</li>
-        <li><b>NAV 오토파일럿</b>: 코스선을 <b>45°로 인터셉트</b>한 뒤 롤아웃해 추종합니다.
-            45°로 잡기에 표적이 너무 가까우면 <b>표적으로 직행</b>하며, 이때 FMA에 <b>NAV DIR</b>로 표시됩니다.</li>
+        <li><b>NAV 오토파일럿</b>: 코스선을 선택한 각도로 인터셉트한 뒤 롤아웃해 추종합니다.
+            NAV 옆 <b>45°</b> 버튼으로 인터셉트 각도를 <b>30 / 45 / 60°</b> 중에서 고릅니다.
+            그 각으로 잡기에 표적이 너무 가까우면 <b>표적으로 직행</b>하며, 이때 FMA에 <b>NAV DIR</b>로 표시됩니다.
+            <b>측풍에서는 편류수정각(WCA)</b>을 자동으로 넣어 기수를 바람 쪽으로 틀고 대지트랙을 코스에 맞춥니다.
+            VOR/LOC 소스일 때는 편위를 거리(NM)가 아닌 <b>각도(최대편위 10°)</b>로 보아 실제 수신기처럼 동작합니다.</li>
+        <li><b>HOLD</b>: 활성 웨이포인트(또는 튜닝된 VOR)에서 <b>표준 홀딩</b>(우선회·1분 레그)을 비행합니다.
+            픽스 통과 시 기수에 따라 <b>직진 / 평행 / 눈물방울</b> 진입을 자동 판정하고, 패턴은 지도에 노란 선으로 그려집니다.
+            FMA에는 <b>HOLD</b>로 표시되며, 홀딩 중에는 웨이포인트 시퀀싱이 멈춥니다. NAV를 끄면 함께 해제됩니다.</li>
+        <li><b>선회 선행</b>: 웨이포인트에서 다음 레그로 꺾을 때 <b>d = R·tan(θ/2)</b> 만큼 미리 선회를 시작합니다
+            (R 은 지상속도·실제 뱅크 기준). VNAV 의 TOD 도 레그 방향 거리와 지상속도로 계산합니다.</li>
         <li><b>방위 표기는 모두 자북(°M)</b>입니다 — HDG·CRS·BRG·NAV SOURCE·지도 BRG 라벨·비행계획 구간방위·바람·선박 침로.
             지도의 선과 거리는 정확도를 위해 내부적으로 진북(대권) 기하로 계산하고, 화면 숫자와 입력만 자북으로 변환합니다
             (한국 자기편차 9°W 기준). 측정자는 <b>°T / °M</b>을 함께 표시합니다.</li>
@@ -1721,6 +1729,10 @@ body.night-mode::after {
           <div style="display:flex;gap:4px;align-items:center;">
             <button class="obs-btn" id="obs-btn" onclick="toggleObs()">OBS</button>
             <button class="obs-btn" id="nav-ap-btn" onclick="toggleNavAp()">NAV</button>
+            <button class="obs-btn" id="icpt-btn" onclick="cycleIntercept()"
+                    title="인터셉트 각도 (30/45/60°)">45°</button>
+            <button class="obs-btn" id="hold-btn" onclick="toggleHold()"
+                    title="활성 웨이포인트에서 표준 홀딩(우선회·1분 레그)">HOLD</button>
           </div>
         </div>
 
@@ -2438,6 +2450,30 @@ function computeTrack() {
   return normA(Math.atan2(gsE, gsN) / D2R);
 }
 
+// 지상속도(kt) — 대기속도 벡터 + 유효 바람 벡터의 크기.
+// 선회 선행거리·VNAV TOD 등 "지면 기준" 계산은 모두 이 값을 쓴다.
+function groundSpdKt() {
+  const wEff = effectiveWindSpd();
+  if (wEff <= 0) return S.spd;
+  const wt = normA(windDir + 180) * D2R;
+  const gN = S.spd * Math.cos(S.hdg * D2R) + wEff * Math.cos(wt);
+  const gE = S.spd * Math.sin(S.hdg * D2R) + wEff * Math.sin(wt);
+  return Math.sqrt(gN * gN + gE * gE);
+}
+
+// 편류수정각(WCA) 보정 — 요망 대지트랙(desiredTrack)을 유지하기 위한 기수방위.
+//   V·sin(H−T) + W·sin(Tw−T) = 0,  Tw = windDir+180 (바람이 불어가는 방향)
+//   → H = T + asin(W/V · sin(windDir − T))
+// 바람이 대기속도보다 강해 해가 없으면(측풍 성분 초과) 최대 보정각으로 클램프한다.
+function windCorrectedHdg(desiredTrack) {
+  const wEff = effectiveWindSpd();
+  const v = Math.max(20, S.spd);
+  if (wEff <= 0.1) return desiredTrack;
+  const s = wEff * Math.sin((windDir - desiredTrack) * D2R) / v;
+  const wca = Math.asin(Math.max(-1, Math.min(1, s))) / D2R;
+  return normA(desiredTrack + wca);
+}
+
 // 현재 navSrc 에 맞는 활성 코스 반환
 function activeCrs() {
   return (navSrc !== 'FMS') ? vorObsCrs : S.crs;
@@ -2463,52 +2499,227 @@ function toggleNavAp() {
   navApOn = !navApOn;
   document.getElementById('nav-ap-btn').classList.toggle('on', navApOn);
   if (!navApOn) {
+    if (holdOn) holdExit();          // NAV 해제 시 홀딩도 해제
     bankTarget = 0;
     selHdg = ((Math.round(S.hdg) + 359) % 360) + 1;   // 현재 헤딩 유지로 복귀
     hdgSelOn = true; rollApOn = true;
   }
 }
 
-// Compute fly-by anticipation distance (NM) for a turn from current course to nextCrs
-function flyByAnticipationDist(nextCrs) {
-  const turnAngle = Math.abs(normAS(nextCrs - activeCrs()));
+// 선회 선행거리(NM) — 현재 레그 코스(curCrs)에서 다음 레그 코스(nextCrs)로
+// 꺾을 때 코스를 매끄럽게 잇기 위해 웨이포인트 전에 선회를 시작할 거리.
+//   d = R · tan(θ/2),  R = V²/(g·tanφ)
+// V 는 대기속도가 아니라 지상속도(바람 포함)를 쓴다 — 선회 반경은 지면 기준이다.
+// φ 는 AP 가 실제로 쓰는 뱅크(표준선회 뱅크, 최대 25°)를 쓴다.
+function flyByAnticipationDist(nextCrs, curCrs) {
+  const from = (curCrs === undefined || curCrs === null) ? activeCrs() : curCrs;
+  const turnAngle = Math.abs(normAS(nextCrs - from));
   if (turnAngle < 5) return 0.15;
-  const V_ms = Math.max(20, S.spd) * 0.5144;
-  const turnRadius = V_ms * V_ms / (9.81 * Math.tan(25 * D2R)) / 1852; // NM
-  return Math.max(0.15, turnRadius * Math.tan(turnAngle / 2 * D2R));
+  const gs = Math.max(20, groundSpdKt());
+  const V_ms = gs * 0.5144;
+  const bank = Math.max(5, Math.min(25, stdRateBank(gs)));
+  const turnRadius = V_ms * V_ms / (9.81 * Math.tan(bank * D2R)) / 1852; // NM
+  // 180°에 가까운 반전에서 tan(θ/2)가 발산하므로 상한을 둔다
+  const lead = turnRadius * Math.tan(Math.min(turnAngle, 160) / 2 * D2R);
+  return Math.max(0.15, Math.min(lead, 8));
 }
 
 // Compute NAV AP bank target for course tracking.
 // Returns the desired bankTarget value.
-// NAV 오토파일럿 — 코스선을 45°로 인터셉트하고, 코스에 붙으면 롤아웃해 추종한다.
-// 45°로 잡기에 표적이 너무 가까우면(인터셉트 지점이 표적을 지나가면) 표적으로 직행한다.
-const NAV_INTERCEPT_DEG = 45;
+// NAV 오토파일럿 — 코스선을 선택 각도(30/45/60°)로 인터셉트하고, 붙으면 롤아웃해 추종한다.
+// 그 각으로 잡기에 표적이 너무 가까우면(인터셉트 지점이 표적을 지나가면) 표적으로 직행한다.
+// 최종 지령은 요망 "대지트랙"에 편류수정각을 더한 기수방위다.
+const NAV_INTERCEPT_CHOICES = [30, 45, 60];
+let navInterceptDeg = 45;          // 인터셉트 각도(조종사 선택: 30/45/60)
 let _navDirectTo = false;          // 표적 직행 모드(FMA 표기에 사용)
+const VOR_FSD_DEG = 10;            // VOR CDI 최대편위 = 10°
 function navApBankTarget() {
   const L = activeCourseLine();
   if (!L) { _navDirectTo = false; return 0; }
   const crs = courseCrsHere(L);    // 현재 위치에서 본 코스 방위(대권 보정)
   const xtk = courseXtk(L);        // + = 코스 오른쪽
   const aXtk = Math.abs(xtk);
+  const IC = navInterceptDeg;
 
-  // 45° 인터셉트에 필요한 코스 방향 거리 = |xtk| / tan45 = |xtk|
-  // 표적까지 남은 거리가 그보다 짧으면 45°로 잡을 수 없다 → 표적으로 직행
-  const needRun = aXtk / Math.tan(NAV_INTERCEPT_DEG * D2R);
+  // 인터셉트에 필요한 코스 방향 거리 = |xtk| / tan(IC)
+  // 표적까지 남은 거리가 그보다 짧으면 그 각으로 잡을 수 없다 → 표적으로 직행
+  const needRun = aXtk / Math.tan(IC * D2R);
   const tgtBrg  = bearing(S.lat, S.lon, L.to[0], L.to[1]);
   const tgtDist = distance(S.lat, S.lon, L.to[0], L.to[1]);
   _navDirectTo = aXtk > 0.1 && tgtDist < needRun + navTurnRadiusNM();
 
-  let desiredHdg;
+  // 요망 대지트랙(track). 기수가 아니라 트랙을 만든 뒤 바람 보정으로 기수를 뽑는다.
+  let desiredTrk;
   if (_navDirectTo) {
-    desiredHdg = tgtBrg;                                   // 표적으로 수렴
+    desiredTrk = tgtBrg;                                   // 표적으로 수렴
+  } else if (navSrc !== 'FMS') {
+    // VOR/LOC: 편위를 거리(NM)가 아니라 각도(°)로 본다 — 실제 VOR 수신기와 동일.
+    // 국에서 멀수록 같은 NM 오차가 작은 각도가 되어 인터셉트가 완만해지고,
+    // 가까울수록 예민해진다. 최대편위(10°)에서 선택 인터셉트 각을 전부 쓴다.
+    if (tgtDist < 1.5) return 0;   // 혼동원추(cone of confusion) — 기수 유지
+    const devDeg = Math.atan2(xtk, Math.max(0.1, tgtDist)) / D2R;   // + = 코스 오른쪽
+    const ang = Math.min(IC, Math.abs(devDeg) / VOR_FSD_DEG * IC);
+    desiredTrk = normA(crs - Math.sign(xtk) * ang);
   } else {
-    // 롤아웃: 표준선회 반경으로 45°에서 코스로 눕히는 데 필요한 횡거리
-    const rollOut = Math.max(0.15, navTurnRadiusNM() * (1 - Math.cos(NAV_INTERCEPT_DEG * D2R)));
-    const ang = Math.min(NAV_INTERCEPT_DEG, aXtk / rollOut * NAV_INTERCEPT_DEG);
-    desiredHdg = normA(crs - Math.sign(xtk) * ang);
+    // 롤아웃: 표준선회 반경으로 IC 에서 코스로 눕히는 데 필요한 횡거리
+    const rollOut = Math.max(0.15, navTurnRadiusNM() * (1 - Math.cos(IC * D2R)));
+    const ang = Math.min(IC, aXtk / rollOut * IC);
+    desiredTrk = normA(crs - Math.sign(xtk) * ang);
   }
+  // 편류수정: 측풍에서 기수를 바람 쪽으로 틀어야 대지트랙이 코스에 붙는다.
+  const desiredHdg = windCorrectedHdg(desiredTrk);
   const hdgErr = normAS(desiredHdg - S.hdg);
   return Math.max(-25, Math.min(25, hdgErr * 2));
+}
+
+// 인터셉트 각도 순환(30 → 45 → 60 → 30)
+function cycleIntercept() {
+  const i = NAV_INTERCEPT_CHOICES.indexOf(navInterceptDeg);
+  navInterceptDeg = NAV_INTERCEPT_CHOICES[(i + 1) % NAV_INTERCEPT_CHOICES.length];
+  updateInterceptBtn();
+}
+function updateInterceptBtn() {
+  const el = document.getElementById('icpt-btn');
+  if (el) el.textContent = navInterceptDeg + '°';
+}
+
+// ── 홀딩 패턴 (표준: 우선회, 1분 레그) ───────────────────────────────
+// 홀딩 픽스는 FMS 활성 웨이포인트(또는 NAV1/2 로 튜닝된 VOR),
+// 인바운드 코스는 진입 시점의 활성 레그 코스를 쓴다.
+let holdOn = false;
+let holdFix = null;              // { lat, lon, ident }
+let holdCrs = 0;                 // 인바운드 코스(진북)
+let holdRight = true;            // true = 우선회(표준)
+let holdLegSec = 60;             // 아웃바운드 레그 시간(초)
+let _holdPhase = 'TOFIX';        // TOFIX | OUTBOUND | INBOUND
+let _holdEntry = '';             // DIRECT | PARALLEL | TEARDROP
+let _holdOutHdg = 0;             // 아웃바운드 목표 기수
+let _holdT = 0;                  // 아웃바운드 경과(초)
+let _holdPrevD = 1e9;            // 픽스 통과 판정용 이전 거리
+let _holdForceDir = 0;           // +1 우선회 강제 / -1 좌선회 강제 / 0 최단
+
+function toggleHold() {
+  if (holdOn) { holdExit(); return; }
+  let fx = null;
+  if (navSrc === 'FMS' && S.awp >= 0 && S.awp < S.wps.length) {
+    const w = S.wps[S.awp];
+    fx = { lat: w.lat, lon: w.lon, ident: w.ident || 'WPT' };
+  } else if (navLat !== null && navLon !== null) {
+    fx = { lat: navLat, lon: navLon, ident: navIcao || navSrc };
+  }
+  if (!fx) { alert('홀딩 픽스 없음 — 웨이포인트를 활성화하거나 VOR을 튜닝하세요.'); return; }
+  holdFix = fx;
+  const L = activeCourseLine();
+  holdCrs = L ? normA(bearing(L.to[0], L.to[1], L.from[0], L.from[1]) + 180)
+              : bearing(S.lat, S.lon, fx.lat, fx.lon);
+  holdOn = true; _holdPhase = 'TOFIX'; _holdEntry = ''; _holdT = 0;
+  _holdPrevD = distance(S.lat, S.lon, fx.lat, fx.lon); _holdForceDir = 0;
+  const b = document.getElementById('hold-btn'); if (b) b.classList.add('on');
+  updateHoldLine();
+}
+function holdExit() {
+  holdOn = false; holdFix = null; _holdPhase = 'TOFIX'; _holdEntry = ''; _holdForceDir = 0;
+  const b = document.getElementById('hold-btn'); if (b) b.classList.remove('on');
+  updateHoldLine();
+}
+
+// 헤딩 유지용 뱅크 지령. dir 이 0 이 아니면 그 방향으로 강제 선회한다.
+function _holdHdgBank(tgtHdg, dir) {
+  let err = normAS(tgtHdg - S.hdg);
+  if (dir && Math.abs(err) > 15 && Math.sign(err) !== dir) err = err - 360 * Math.sign(err);
+  const bMax = Math.max(5, Math.min(25, stdRateBank(S.spd)));
+  return Math.max(-bMax, Math.min(bMax, err * 2));
+}
+
+// 홀딩 진입 방식 판정 (우선회 기준, 좌선회는 좌우 반전)
+//   인바운드 코스 C 대비 기수 H 의 상대각 r = H − C
+//   r ≤ 180° : 직진(DIRECT) / 180~290° : 평행(PARALLEL) / 그 외 : 눈물방울(TEARDROP)
+function _holdEntryType() {
+  const r = holdRight ? normA(S.hdg - holdCrs) : normA(holdCrs - S.hdg);
+  if (r <= 180) return 'DIRECT';
+  if (r <= 290) return 'PARALLEL';
+  return 'TEARDROP';
+}
+
+// 홀딩 AP. 뱅크 지령을 반환하고, 아직 픽스로 가는 중이면 null(일반 NAV 사용).
+function holdBankTarget(dt) {
+  if (!holdOn || !holdFix) return null;
+  const d = distance(S.lat, S.lon, holdFix.lat, holdFix.lon);
+  const passed = (d < 0.3) || (d < 1.5 && d > _holdPrevD);
+  const sgn = holdRight ? 1 : -1;
+
+  if (_holdPhase === 'TOFIX') {
+    _holdPrevD = d;
+    if (!passed) return null;                       // 픽스까지는 일반 NAV 로 비행
+    _holdEntry = _holdEntryType();
+    if (_holdEntry === 'TEARDROP') {
+      _holdOutHdg = normA(holdCrs + 180 - sgn * 30);   // 홀딩측으로 30° 틀어 진입
+      _holdForceDir = sgn;
+    } else if (_holdEntry === 'PARALLEL') {
+      _holdOutHdg = normA(holdCrs + 180);
+      _holdForceDir = -sgn;                            // 비홀딩측으로 선회
+    } else {
+      _holdOutHdg = normA(holdCrs + 180);
+      _holdForceDir = sgn;
+    }
+    _holdPhase = 'OUTBOUND'; _holdT = 0;
+  }
+
+  if (_holdPhase === 'OUTBOUND') {
+    _holdPrevD = d;
+    const tgt = windCorrectedHdg(_holdOutHdg);
+    const err = Math.abs(normAS(tgt - S.hdg));
+    if (err < 15) _holdForceDir = 0;
+    if (err < 10) _holdT += dt;                     // 롤아웃 후부터 레그 시간 계수
+    if (_holdT >= holdLegSec) { _holdPhase = 'INBOUND'; _holdForceDir = sgn; }
+    return _holdHdgBank(tgt, _holdForceDir);
+  }
+
+  // INBOUND: 인바운드 코스선을 인터셉트해 픽스로
+  if (passed) {                                     // 픽스 재통과 → 다시 아웃바운드
+    _holdPhase = 'OUTBOUND'; _holdEntry = 'DIRECT'; _holdT = 0;
+    _holdOutHdg = normA(holdCrs + 180); _holdForceDir = sgn; _holdPrevD = d;
+    return _holdHdgBank(windCorrectedHdg(_holdOutHdg), _holdForceDir);
+  }
+  _holdPrevD = d;
+  const Lh = { from: destPoint(holdFix.lat, holdFix.lon, normA(holdCrs + 180), 20),
+               to: [holdFix.lat, holdFix.lon], crs: holdCrs };
+  const xtk = courseXtk(Lh);
+  const IC = navInterceptDeg;
+  const rollOut = Math.max(0.15, navTurnRadiusNM() * (1 - Math.cos(IC * D2R)));
+  const ang = Math.min(IC, Math.abs(xtk) / rollOut * IC);
+  const trk = normA(holdCrs - Math.sign(xtk) * ang);
+  const tgt = windCorrectedHdg(trk);
+  if (_holdForceDir && Math.abs(normAS(tgt - S.hdg)) < 20) _holdForceDir = 0;
+  return _holdHdgBank(tgt, _holdForceDir);
+}
+
+// 홀딩 패턴 궤적(지도 표시용) — 픽스 기준 레이스트랙
+function holdPatternLatLngs() {
+  if (!holdOn || !holdFix) return [];
+  const R = navTurnRadiusNM();
+  const legNM = Math.max(20, groundSpdKt()) / 3600 * holdLegSec;
+  const sgn = holdRight ? 1 : -1;
+  const out = normA(holdCrs + 180);
+  const pts = [];
+  const F = [holdFix.lat, holdFix.lon];
+  // 픽스에서 홀딩측으로 2R 떨어진 아웃바운드 레그 시작/끝
+  const A = destPoint(F[0], F[1], normA(holdCrs + sgn * 90), 2 * R);
+  const B = destPoint(A[0], A[1], out, legNM);
+  // 픽스 → 반원 → 아웃바운드 레그 → 반원 → 인바운드 레그
+  const arc = (cen, from) => {
+    for (let i = 0; i <= 16; i++) {
+      pts.push(destPoint(cen[0], cen[1], normA(from + sgn * 180 * i / 16), R));
+    }
+  };
+  const cen1 = destPoint(F[0], F[1], normA(holdCrs + sgn * 90), R);
+  const cen2 = destPoint(B[0], B[1], normA(holdCrs - sgn * 90), R);
+  pts.push(F);
+  arc(cen1, normA(holdCrs - sgn * 90));   // F → A
+  pts.push(B);
+  arc(cen2, normA(holdCrs + sgn * 90));   // B → C
+  pts.push(F);
+  return pts;
 }
 // 표준선회(3°/s) 반경(NM) — 45° 인터셉트 판단과 롤아웃 시작점에 쓴다
 function navTurnRadiusNM() {
@@ -2906,7 +3117,11 @@ function drawFMA(x, y, w) {
   //   Left   (collective): ALT or CRHT (or dim ALT when both holds are off)
   //   Middle (yaw/roll)  : HDG or GS when GSPD
   //   Right  (pitch)     : IAS — or GS when GSPD engaged
-  let left, leftOn, mid = navApOn ? (_navDirectTo ? 'NAV DIR' : 'NAV') : (hdgSelOn ? 'HDG SEL' : 'HDG'), midOn = rollApOn || navApOn, right, rightOn;
+  let left, leftOn,
+      mid = navApOn
+        ? (holdOn && _holdPhase !== 'TOFIX' ? 'HOLD' : (_navDirectTo ? 'NAV DIR' : 'NAV'))
+        : (hdgSelOn ? 'HDG SEL' : 'HDG'),
+      midOn = rollApOn || navApOn, right, rightOn;
 
   if (gspdOn) {
     // GSPD engaged: both yaw/roll (mid) and pitch (right) are driven by
@@ -5098,6 +5313,7 @@ let shipTrailLine = L.polyline([],{color:'#ff3333',weight:1.5,opacity:0.65}).add
 let routeLine = L.polyline([],{color:'#4488ff',weight:2,dashArray:'6 5',opacity:0.8}).addTo(leafMap);
 // CRS 라인 색은 HSI BRG 색 체계와 통일: FMS=BRG2 초록, VOR/LOC=BRG1 파랑
 let crsLine   = L.polyline([],{color:'#00cc44',weight:1.5,dashArray:'10 5',opacity:0.9}).addTo(leafMap);
+let holdLine  = L.polyline([],{color:'#ffcc44',weight:2,opacity:0.9}).addTo(leafMap);
 let vorCrsLine = L.polyline([],{color:'#44aaff',weight:1.5,dashArray:'10 5',opacity:0.9}).addTo(leafMap);
 
 // ── 속도 벡터 (헤딩 방향 붉은 화살표, 1분 예상위치 길이·최대 130kt) ──
@@ -5215,13 +5431,23 @@ function vnavCalc() {
   if (!vnavActive) return null;
   if (S.awp < 0 || S.awp >= S.wps.length) return { err: '활성 웨이포인트(타깃) 없음' };
   const wp = S.wps[S.awp];
-  const d = distance(S.lat, S.lon, wp.lat, wp.lon);           // NM
+  // 경로 거리는 직선거리가 아니라 레그 방향 거리(along-track)를 쓴다.
+  // 코스에서 벗어나 있으면 직선거리가 실제 남은 경로보다 길어 강하각이 어긋난다.
+  const dDir = distance(S.lat, S.lon, wp.lat, wp.lon);        // NM (직선)
+  let d = dDir;
+  try {
+    const _L = activeCourseLine();
+    if (_L) {
+      const _x = courseXtk(_L);
+      d = Math.sqrt(Math.max(0, dDir * dDir - _x * _x));      // 레그 방향 성분
+    }
+  } catch(e) {}
   const slope = Math.tan(Math.abs(vnavAngle) * D2R);
   const sign = vnavAngle < 0 ? 1 : -1;                        // 강하각이면 타깃보다 높은 곳이 경로
   const pathH = d * FT_PER_NM * slope * sign;                 // 타깃 대비 현재 거리에서의 경로 고도차
   const reqAlt = vnavTgtAlt + pathH;                          // 현재 위치에서 경로상 고도
   const dev = S.alt - reqAlt;                                 // +면 경로 위(높음)
-  const gs = Math.max(1, S.spd);                              // GS 근사
+  const gs = Math.max(1, groundSpdKt());                      // 실제 지상속도
   const vs = -sign * gs * FT_PER_NM / 60 * slope;             // 유지 수직속도(ft/min)
   const todFromTgt = (S.alt - vnavTgtAlt) / (FT_PER_NM * slope); // 타깃에서 강하시작점까지 거리
   const todDist = d - todFromTgt;                             // 현재→강하시작(TOD)까지 남은 거리
@@ -5239,7 +5465,7 @@ function vnavAlertCheck() {
     if (_vnavAlertState) { _vnavAlertState = ''; el.className = ''; el.textContent = ''; }
     return;
   }
-  const gs = Math.max(1, S.spd);
+  const gs = Math.max(1, groundSpdKt());
   const tToTod = vn.todDist / gs * 3600;   // TOD까지 초
   let st = '';
   if (vn.todDist <= 0.05 && vn.dev > 30) st = 'begin';        // TOD 도달·아직 경로 위 → 강하 시작
@@ -5464,7 +5690,15 @@ function updateBrgLines() {
 let vorStationMarker = null;
 let wpMarkers = [];
 
+function updateHoldLine() {
+  try {
+    if (typeof holdLine === 'undefined' || !holdLine) return;
+    holdLine.setLatLngs(holdOn ? holdPatternLatLngs() : []);
+  } catch(e) {}
+}
+
 function updateCrsLine() {
+  updateHoldLine();
   if (navSrc !== 'FMS') {
     crsLine.setLatLngs([]);
     if (navLat === null) {
@@ -6349,6 +6583,8 @@ document.addEventListener('touchcancel', stopTrimHold);
 
 // CRS button initial state (OBS off, FMS mode → disabled)
 updateCrsButtons();
+// 인터셉트 각도 버튼 초기 표기
+updateInterceptBtn();
 // Hover/GSPD/trim initial state
 updateHoverBtns();
 
@@ -6516,12 +6752,16 @@ function simStep(ts){
       updateAcOnMap();updateNav();
 
       // FMS waypoint sequencing (fly-by when NAV AP active)
-      if (S.awp >= 0 && !obsOn) {
+      if (S.awp >= 0 && !obsOn && !(holdOn && _holdPhase !== 'TOFIX')) {
         if (navApOn && navSrc === 'FMS' && S.awp + 1 < S.wps.length) {
           // Fly-by: anticipate turn toward next leg before reaching WP
           const nextLegCrs = bearing(S.wps[S.awp].lat, S.wps[S.awp].lon,
                                      S.wps[S.awp + 1].lat, S.wps[S.awp + 1].lon);
-          const anticipateDist = flyByAnticipationDist(nextLegCrs);
+          // 현재 레그 코스는 활성 코스선의 WP 도달 시점 방위(대권 보정 포함)
+          const _cl = activeCourseLine();
+          const curLegCrs = _cl ? normA(bearing(_cl.to[0], _cl.to[1], _cl.from[0], _cl.from[1]) + 180)
+                                : activeCrs();
+          const anticipateDist = flyByAnticipationDist(nextLegCrs, curLegCrs);
           if (S.dtw < anticipateDist) { selectWP(S.awp + 1); }
         } else if (S.dtw < 0.25) {
           if (S.awp + 1 < S.wps.length) {
@@ -6559,7 +6799,8 @@ function simStep(ts){
           bankTarget = 0;
           selHdg = ((Math.round(S.hdg) + 359) % 360) + 1; hdgSelOn = true;
         } else {
-          bankTarget = navApBankTarget();
+          const hb = holdBankTarget(dt);     // 홀딩 중이면 홀딩 로직이 우선
+          bankTarget = (hb === null) ? navApBankTarget() : hb;
         }
       }
 
