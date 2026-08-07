@@ -126,9 +126,9 @@ html, body {
   border-bottom: 1px solid #1e1e1e;
   flex-shrink: 0;
 }
-/* 탭 바(좌/우 공통): 5버튼(PFD/MAP/CDU/Full Screen/⟳) 동일 크기 + 흰 테두리 */
+/* 탭 바(좌·중·우 공통): 버튼 동일 크기 + 흰 테두리 */
 /* iOS 상태바(시계·배터리)와 겹치지 않도록 상단 safe-area 여백 추가 */
-#left-tabs, #page-tabs { gap: 4px; padding: 4px; padding-top: calc(4px + env(safe-area-inset-top)); }
+#left-tabs, #mid-tabs, #page-tabs { gap: 4px; padding: 4px; padding-top: calc(4px + env(safe-area-inset-top)); }
 #left-tabs { padding-left: calc(4px + env(safe-area-inset-left)); }
 #page-tabs { padding-right: calc(4px + env(safe-area-inset-right)); }
 .page-tab {
@@ -142,11 +142,16 @@ html, body {
   font-size: 11px;
   font-weight: bold;
   letter-spacing: 1px;
-  padding: 7px 2px;
   cursor: pointer;
   touch-action: manipulation;
   white-space: nowrap; overflow: hidden;
   transition: color 0.15s, background 0.15s;
+}
+/* 탭 버튼 높이 고정 — 라벨에 한글·기호가 섞이면 줄 상자 높이가 달라져
+   패널마다 탭 바 높이가 어긋나고, 3분할에서 상단선이 안 맞는다 */
+.page-tab, #reload-btn {
+  height: 28px; padding: 0 2px; line-height: 1; box-sizing: border-box;
+  display: flex; align-items: center; justify-content: center;
 }
 #reload-btn {
   flex: 1;
@@ -157,8 +162,6 @@ html, body {
   color: #5aaefd;
   font-size: 14px;
   font-weight: bold;
-  line-height: 1;
-  padding: 6px 2px;
   cursor: pointer;
   touch-action: manipulation;
   transition: color 0.15s, background 0.15s;
