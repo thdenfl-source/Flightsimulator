@@ -1526,6 +1526,8 @@ body.night-mode::after {
       <h3>4. PFD · HOVER PAGE</h3>
       <ul>
         <li><b>NAV SRC</b>: <b>FMS / NAV1 / NAV2</b>. NAV1·NAV2는 CDU에서 튜닝한 VOR을 따라갑니다.</li>
+        <li><b>NAV 오토파일럿</b>: 코스선을 <b>45°로 인터셉트</b>한 뒤 롤아웃해 추종합니다.
+            45°로 잡기에 표적이 너무 가까우면 <b>표적으로 직행</b>하며, 이때 FMA에 <b>NAV DIR</b>로 표시됩니다.</li>
         <li><b>방위 표기는 모두 자북(°M)</b>입니다 — HDG·CRS·BRG·NAV SOURCE·지도 BRG 라벨·비행계획 구간방위·바람·선박 침로.
             지도의 선과 거리는 정확도를 위해 내부적으로 진북(대권) 기하로 계산하고, 화면 숫자와 입력만 자북으로 변환합니다
             (한국 자기편차 9°W 기준). 측정자는 <b>°T / °M</b>을 함께 표시합니다.</li>
@@ -2478,30 +2480,40 @@ function flyByAnticipationDist(nextCrs) {
 
 // Compute NAV AP bank target for course tracking.
 // Returns the desired bankTarget value.
+// NAV 오토파일럿 — 코스선을 45°로 인터셉트하고, 코스에 붙으면 롤아웃해 추종한다.
+// 45°로 잡기에 표적이 너무 가까우면(인터셉트 지점이 표적을 지나가면) 표적으로 직행한다.
+const NAV_INTERCEPT_DEG = 45;
+let _navDirectTo = false;          // 표적 직행 모드(FMA 표기에 사용)
 function navApBankTarget() {
-  const crs = activeCrs();
+  const L = activeCourseLine();
+  if (!L) { _navDirectTo = false; return 0; }
+  const crs = courseCrsHere(L);    // 현재 위치에서 본 코스 방위(대권 보정)
+  const xtk = courseXtk(L);        // + = 코스 오른쪽
+  const aXtk = Math.abs(xtk);
 
-  // Compute XTK (NM, positive = right of course, negative = left)
-  let xtk = 0;
-  if (navSrc === 'FMS') {
-    xtk = S.xtk; // already computed by updateNav() — positive=right, negative=left
-  } else if (navLat !== null) {
-    // VOR/LOC: bearing from station to aircraft vs. FROM-course bearing.
-    // sin(devDeg) > 0 when aircraft is LEFT (smaller bearing than FROM course),
-    // so negate to match the FMS sign convention (positive = right of course).
-    const brgFromNav = bearing(navLat, navLon, S.lat, S.lon);
-    const devDeg = normAS(brgFromNav - normA(crs + 180));
-    xtk = -Math.sin(devDeg * D2R) * S.dtw;
+  // 45° 인터셉트에 필요한 코스 방향 거리 = |xtk| / tan45 = |xtk|
+  // 표적까지 남은 거리가 그보다 짧으면 45°로 잡을 수 없다 → 표적으로 직행
+  const needRun = aXtk / Math.tan(NAV_INTERCEPT_DEG * D2R);
+  const tgtBrg  = bearing(S.lat, S.lon, L.to[0], L.to[1]);
+  const tgtDist = distance(S.lat, S.lon, L.to[0], L.to[1]);
+  _navDirectTo = aXtk > 0.1 && tgtDist < needRun + navTurnRadiusNM();
+
+  let desiredHdg;
+  if (_navDirectTo) {
+    desiredHdg = tgtBrg;                                   // 표적으로 수렴
+  } else {
+    // 롤아웃: 표준선회 반경으로 45°에서 코스로 눕히는 데 필요한 횡거리
+    const rollOut = Math.max(0.15, navTurnRadiusNM() * (1 - Math.cos(NAV_INTERCEPT_DEG * D2R)));
+    const ang = Math.min(NAV_INTERCEPT_DEG, aXtk / rollOut * NAV_INTERCEPT_DEG);
+    desiredHdg = normA(crs - Math.sign(xtk) * ang);
   }
-
-  // Full 45° intercept when beyond CAPTURE_NM from course; taper to 0 near course.
-  // This ensures the aircraft flies straight at 45° to the course line until
-  // close, then smoothly rolls out onto the course heading.
-  const CAPTURE_NM = 1.0;
-  const interceptAngle = Math.sign(xtk) * Math.min(45, Math.abs(xtk) / CAPTURE_NM * 45);
-  const desiredHdg = normA(crs - interceptAngle);
   const hdgErr = normAS(desiredHdg - S.hdg);
   return Math.max(-25, Math.min(25, hdgErr * 2));
+}
+// 표준선회(3°/s) 반경(NM) — 45° 인터셉트 판단과 롤아웃 시작점에 쓴다
+function navTurnRadiusNM() {
+  const v = Math.max(20, S.spd);
+  return v / (2 * Math.PI * 30);   // 360°/120s 기준 원주 = v/30 NM
 }
 
 let rollApOn = true;   // false when manual bank trim overrides roll axis
@@ -2557,6 +2569,46 @@ function applyNavRadioToPfd() {
 // Direct-To 앵커: 이전 leg가 없는 활성 WP의 코스 선 기준점(선택 시점의 위치).
 // 이 앵커→WP 선을 leg처럼 고정 추적해 '포인트로 수렴'하지 않게 한다.
 let _dtoLat = null, _dtoLon = null;
+
+// ── 유효 코스선(단일 소스) ────────────────────────────────────────────
+// CDI 편차·지도 코스선·NAV 오토파일럿이 서로 다른 기준선을 쓰면
+// "ON COURSE인데 지도에서는 어긋나 보이는" 현상이 생긴다. 아래 한 곳에서만 정의한다.
+//   returns { from:[lat,lon], to:[lat,lon], crs } — from→to 대권이 코스선
+function activeCourseLine() {
+  if (navSrc !== 'FMS') {
+    if (navLat === null || navLon === null) return null;
+    // VOR/LOC: 국(局)을 지나는 OBS 코스선
+    const from = destPoint(navLat, navLon, normA(vorObsCrs + 180), 100);
+    return { from, to: [navLat, navLon], crs: vorObsCrs };
+  }
+  if (S.awp < 0 || S.awp >= S.wps.length) return null;
+  const wp = S.wps[S.awp];
+  // 이전 경유점이 있으면 그 구간(leg)이 코스선
+  if (!obsOn && S.fwp >= 0 && S.fwp < S.wps.length) {
+    const f = S.wps[S.fwp];
+    return { from: [f.lat, f.lon], to: [wp.lat, wp.lon],
+             crs: bearing(f.lat, f.lon, wp.lat, wp.lon) };
+  }
+  // 그 외(OBS·Direct-To)는 선택 코스(S.crs)가 활성 경유점을 지나는 선
+  const from = destPoint(wp.lat, wp.lon, normA(S.crs + 180), 100);
+  return { from, to: [wp.lat, wp.lon], crs: S.crs };
+}
+// 코스선 기준 횡편차(NM, + = 코스 오른쪽)
+function courseXtk(L) {
+  if (!L) return 0;
+  return crossTrack(L.from[0], L.from[1], L.to[0], L.to[1], S.lat, S.lon);
+}
+// 현재 위치에서 본 코스선의 방향(대권은 위치마다 방위가 달라진다)
+function courseCrsHere(L) {
+  if (!L) return 0;
+  const d = distance(L.from[0], L.from[1], L.to[0], L.to[1]);
+  if (d < 0.05) return L.crs;
+  // 항공기를 코스선에 정사영한 지점에서의 진행 방위
+  const alongNM = Math.max(0, Math.min(d, d - distance(S.lat, S.lon, L.to[0], L.to[1])));
+  const b0 = bearing(L.from[0], L.from[1], L.to[0], L.to[1]);
+  const proj = destPoint(L.from[0], L.from[1], b0, alongNM);
+  return bearing(proj[0], proj[1], L.to[0], L.to[1]);
+}
 let rnp     = 1.0;     // RNP value for FMS CDI scale
 
 // pitch is always derived from speed — helper
@@ -2854,7 +2906,7 @@ function drawFMA(x, y, w) {
   //   Left   (collective): ALT or CRHT (or dim ALT when both holds are off)
   //   Middle (yaw/roll)  : HDG or GS when GSPD
   //   Right  (pitch)     : IAS — or GS when GSPD engaged
-  let left, leftOn, mid = navApOn ? 'NAV' : (hdgSelOn ? 'HDG SEL' : 'HDG'), midOn = rollApOn || navApOn, right, rightOn;
+  let left, leftOn, mid = navApOn ? (_navDirectTo ? 'NAV DIR' : 'NAV') : (hdgSelOn ? 'HDG SEL' : 'HDG'), midOn = rollApOn || navApOn, right, rightOn;
 
   if (gspdOn) {
     // GSPD engaged: both yaw/roll (mid) and pitch (right) are driven by
@@ -3605,19 +3657,7 @@ function drawHSI(x, y, w, h) {
     // FMS: cross-track error from fwp→awp leg (positive = right of course)
     // CDI deflects opposite: right of course → needle left (negative cdiOff)
     cdbWp = S.wps[S.awp];
-    let xtk;
-    if (obsOn) {
-      // OBS mode: CDI relative to selected OBS course line through AWP
-      const bwdPt = destPoint(cdbWp.lat, cdbWp.lon, normA(S.crs + 180), 100);
-      xtk = crossTrack(bwdPt[0], bwdPt[1], cdbWp.lat, cdbWp.lon, S.lat, S.lon);
-    } else if (S.fwp >= 0 && S.fwp < S.wps.length) {
-      xtk = crossTrack(S.wps[S.fwp].lat, S.wps[S.fwp].lon,
-                       cdbWp.lat, cdbWp.lon, S.lat, S.lon);
-    } else {
-      // Direct-to: crossTrack on line bwdPt→awp (TO/FROM independent)
-      const bwdPt = destPoint(cdbWp.lat, cdbWp.lon, normA(S.crs + 180), 100);
-      xtk = crossTrack(bwdPt[0], bwdPt[1], cdbWp.lat, cdbWp.lon, S.lat, S.lon);
-    }
+    const xtk = courseXtk(activeCourseLine());   // updateNav·지도·AP와 동일 기준선
     cdiOff = Math.max(-1, Math.min(1, -xtk / rnp)) * 2 * dotGap;
     cdbActive = true;
   } else if ((navSrc !== 'FMS') && navLat !== null && navLon !== null) {
@@ -5431,10 +5471,8 @@ function updateCrsLine() {
       vorCrsLine.setLatLngs([]);
       if (vorStationMarker) { leafMap.removeLayer(vorStationMarker); vorStationMarker = null; }
     } else {
-      const ext = 150;
-      const fwd = destPoint(navLat, navLon, vorObsCrs, ext);
-      const bwd = destPoint(navLat, navLon, normA(vorObsCrs + 180), ext);
-      vorCrsLine.setLatLngs([bwd, [navLat, navLon], fwd]);
+      // CDI가 쓰는 대권과 같도록 다중선분으로(직선 2점이면 최대 0.2NM 어긋남)
+      vorCrsLine.setLatLngs(_gcCourseLatLngs(activeCourseLine(), 150));
       if (vorStationMarker) { leafMap.removeLayer(vorStationMarker); vorStationMarker = null; }
       const stIcon = L.divIcon({
         html: `<div style="position:relative;">
@@ -5448,13 +5486,31 @@ function updateCrsLine() {
   } else {
     vorCrsLine.setLatLngs([]);
     if (vorStationMarker) { leafMap.removeLayer(vorStationMarker); vorStationMarker = null; }
-    if (S.awp < 0 || S.awp >= S.wps.length) { crsLine.setLatLngs([]); return; }
-    const wp  = S.wps[S.awp];
-    const ext = 150;
-    const fwd = destPoint(wp.lat, wp.lon, S.crs, ext);
-    const bwd = destPoint(wp.lat, wp.lon, normA(S.crs + 180), ext);
-    crsLine.setLatLngs([bwd, [wp.lat, wp.lon], fwd]);
+    const L = activeCourseLine();
+    if (!L) { crsLine.setLatLngs([]); return; }
+    crsLine.setLatLngs(_gcCourseLatLngs(L, 150));
   }
+}
+
+// 코스선을 대권 다중선분으로 만든다.
+// Leaflet은 두 점을 머케이터 직선으로 잇기 때문에, 긴 구간을 두 점으로 그리면
+// CDI가 쓰는 대권과 지도의 선이 어긋난다(150NM에서 최대 0.6NM).
+function _gcCourseLatLngs(L, extNM) {
+  const b0 = bearing(L.from[0], L.from[1], L.to[0], L.to[1]);
+  const dTot = distance(L.from[0], L.from[1], L.to[0], L.to[1]);
+  // to 지점에서의 진행 방위(대권은 지점마다 방위가 달라진다)
+  const bAt = bearing(destPoint(L.from[0], L.from[1], b0, Math.max(0, dTot - 0.5))[0],
+                      destPoint(L.from[0], L.from[1], b0, Math.max(0, dTot - 0.5))[1],
+                      L.to[0], L.to[1]);
+  const pts = [];
+  const STEP = 10;   // 10NM 간격 — 대권 곡률을 눈에 띄지 않게 따라감
+  for (let d = -extNM; d < 0; d += STEP) {                       // to 이전(뒤쪽)
+    const back = Math.min(dTot, -d);
+    pts.push(destPoint(L.to[0], L.to[1], normA(bAt + 180), back));
+  }
+  pts.push([L.to[0], L.to[1]]);
+  for (let d = STEP; d <= extNM; d += STEP) pts.push(destPoint(L.to[0], L.to[1], bAt, d));
+  return pts;
 }
 
 function updateTrail(){
@@ -5677,19 +5733,7 @@ function updateNav(){
       const wp=S.wps[S.awp];
       S.brg = bearing(S.lat,S.lon,wp.lat,wp.lon);
       S.dtw = distance(S.lat,S.lon,wp.lat,wp.lon);
-      if (obsOn) {
-        // OBS mode: XTK relative to selected OBS course line through AWP
-        const bwdPt = destPoint(wp.lat, wp.lon, normA(S.crs + 180), 100);
-        S.xtk = crossTrack(bwdPt[0], bwdPt[1], wp.lat, wp.lon, S.lat, S.lon);
-      } else if (S.fwp>=0) {
-        S.xtk = crossTrack(S.wps[S.fwp].lat,S.wps[S.fwp].lon,wp.lat,wp.lon,S.lat,S.lon);
-      } else if (_dtoLat !== null) {
-        // Direct-To: 선택 시점 앵커→WP 선을 leg처럼 고정 추적(포인트 수렴 방지)
-        S.xtk = crossTrack(_dtoLat, _dtoLon, wp.lat, wp.lon, S.lat, S.lon);
-      } else {
-        // Approximate XTK: positive = right of course (consistent with crossTrack)
-        S.xtk = -Math.sin(normAS(S.brg - S.crs) * D2R) * S.dtw;
-      }
+      S.xtk = courseXtk(activeCourseLine());   // CDI·지도·AP와 같은 기준선
     } else { S.brg=0; S.dtw=0; S.xtk=0; }
   } else {
     // VOR / LOC — BRG1 points to the selected navaid station
