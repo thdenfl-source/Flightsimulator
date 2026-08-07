@@ -300,7 +300,9 @@ html, body {
 
 /* ── Hover Page / GSPD / Trim ── */
 .hover-group { display: flex; flex-direction: column; align-items: center; gap: 2px; }
-.hover-btns { display: flex; gap: 2px; }
+/* HOVER PAGE / HOVER POS 는 두 줄로 쌓아 폭을 줄인다 */
+.hover-btns { display: flex; flex-direction: column; gap: 2px; align-items: stretch; }
+.hover-btns > button { width: 100%; padding: 2px 6px; }
 /* 모드 토글 버튼 공통(HOVER PAGE·HOVER POS·CRHT·ALT HOLD) */
 .hover-btn, .hover-pos-btn, .crht-btn, .alt-hold-btn {
   background: #1a1a1a; border: 1px solid #333; color: #555;
