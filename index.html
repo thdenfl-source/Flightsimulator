@@ -80,12 +80,31 @@ html, body {
 /* 사용자가 분할 비율을 지정하면 좌측만 고정폭이 되고 우측은 남은 공간을 채운다.
    (PFD 호스트의 flex:0 0 55%가 함께 걸리면 합이 100%를 넘어 우측이 잘리므로 무효화) */
 #app.split-custom #right-panel { flex: 1 1 0; }
+
+/* ── 3분할(PFD·MAP·CDU) ─────────────────────────────────────────── */
+#mid-panel { display: none; flex-direction: column; overflow: hidden; }
+#divider-2 { display: none; background: #2a2a2a; z-index: 2000; flex-shrink: 0; }
+#app.triple #mid-panel { display: flex; }
+#app.triple #divider-2 { display: block; }
+/* 3분할 배분 — 사용자 분할 비율(55%/드래그)은 무효화하고,
+   PFD가 있는 패널만 FCP 조작부가 다 보이도록 조금 넓게 */
+#app.triple #left-panel,
+#app.triple #mid-panel,
+#app.triple #right-panel { flex: 1 1 0 !important; }
+#app.triple #left-panel.pfd-host,
+#app.triple #mid-panel.pfd-host,
+#app.triple #right-panel.pfd-host { flex: 1.4 1 0 !important; }
+#app.triple #divider-grip { display: none; }
+@media (orientation: landscape) { #divider-2 { width: 2px; height: 100%; } }
+@media (orientation: portrait)  { #divider-2 { height: 2px; width: 100%; } }
+/* 분할 전환 버튼 */
+.split-tab { margin-left: auto; color: #7ab8f5 !important; }
 #left-panel {
   display: flex;
   flex-direction: column;
   overflow: hidden;
 }
-#left-tabs {
+#left-tabs, #mid-tabs {
   display: flex;
   background: #080808;
   border-bottom: 1px solid #1e1e1e;
@@ -1477,6 +1496,9 @@ body.night-mode::after {
       <h3>2. 기본 비행 (시뮬레이션)</h3>
       <ul>
         <li>MAP 하단 <b>▶ FLY</b>로 시작(다시 누르면 PAUSE), <b>RESET</b> 초기화, <b>CLR</b> 비행계획 삭제.</li>
+        <li><b>⿲ 3분할</b>(좌측 상단 탭): 넓은 화면에서 <b>PFD·MAP·CDU</b>를 한 번에 봅니다.
+            <b>⿰ 2분할</b>을 누르면 되돌아갑니다. 각 패널의 탭으로 어떤 창을 둘지 바꿀 수 있고,
+            같은 창을 고르면 서로 자리를 맞바꿉니다.</li>
         <li>PFD 하단 FCP에서 <b>IAS·HDG·CRS·VS·ALT·CRHT</b>를 ▲▼/◀▶로 조절.</li>
         <li><b>HDG ◀▶</b>는 기수를 즉시 돌리지 않고 <b>선택 헤딩(HSI 청록 벅)</b>만 옮깁니다.
             AFCS가 <b>표준선회(360°/2분 = 3°/s)</b>로 선회하며, 뱅크각은 <b>속도의 16%</b>로 자동 산출됩니다
@@ -1592,6 +1614,7 @@ body.night-mode::after {
       <button class="page-tab active" data-sel="pfd" onclick="selectPanel('left','pfd')">PFD</button>
       <button class="page-tab" data-sel="map" onclick="selectPanel('left','map')">MAP</button>
       <button class="page-tab" data-sel="cdu" onclick="selectPanel('left','cdu')">CDU</button>
+      <button class="page-tab split-tab" id="split-toggle" onclick="toggleTriple()" title="2분할 ⇄ 3분할">⿲ 3분할</button>
     </div>
     <div id="pfd-wrap">
     <canvas id="pfd"></canvas>
@@ -1785,6 +1808,16 @@ body.night-mode::after {
 
   <!-- ── RIGHT PANEL (3 pages) ── -->
   <div id="panel-divider"><div id="divider-grip"></div></div>
+
+  <!-- 3분할일 때만 보이는 중앙 패널 -->
+  <div id="mid-panel">
+    <div id="mid-tabs" class="panel-tabs">
+      <button class="page-tab" data-sel="pfd" onclick="selectPanel('mid','pfd')">PFD</button>
+      <button class="page-tab active" data-sel="map" onclick="selectPanel('mid','map')">MAP</button>
+      <button class="page-tab" data-sel="cdu" onclick="selectPanel('mid','cdu')">CDU</button>
+    </div>
+  </div>
+  <div id="divider-2"></div>
 
   <div id="right-panel">
 
@@ -6564,44 +6597,64 @@ function scaleCdu() {
 // pfd-wrap/map-wrap/cdu-wrap 은 각 1개뿐 → 선택된 패널로 DOM 이동.
 // 양쪽에 같은 창은 불가(사용자 클릭은 거부 피드백, 프로그램 호출은 스왑).
 let leftSel = 'pfd', rightSel = 'map';   // 'pfd' | 'map' | 'cdu' | (우측 한정 'plan')
+let midSel  = 'map';                    // 3분할일 때만 사용하는 중앙 패널
+let tripleMode = false;                 // 3분할(PFD·MAP·CDU) 여부
+try { tripleMode = localStorage.getItem('tripleMode') === '1'; } catch(e) {}
+
+// 3분할 ⇄ 2분할 전환. 3분할 진입 시 PFD·MAP·CDU를 좌·중·우로 배치한다.
+function toggleTriple(on) {
+  tripleMode = (on === undefined) ? !tripleMode : !!on;
+  try { localStorage.setItem('tripleMode', tripleMode ? '1' : '0'); } catch(e) {}
+  if (tripleMode) { leftSel = 'pfd'; midSel = 'map'; rightSel = 'cdu'; }
+  else {
+    // 2분할 복귀: 가운데 창을 우측으로 접는다(PFD·MAP·CDU → PFD·MAP)
+    if (midSel && midSel !== leftSel) rightSel = midSel;
+    if (rightSel === leftSel) rightSel = leftSel === 'map' ? 'cdu' : 'map';
+  }
+  applyPanels();
+}
 
 function selectPanel(side, sel, force) {
-  const otherSel = side === 'left' ? rightSel : leftSel;
-  if (otherSel === sel) {
-    // 중복 선택 시 반대쪽을 자동 전환(거부 없음)
-    if (side === 'left') {
-      // 좌측 MAP ↔ 우측 MAP → 우측 CDU / 그 외에는 이쪽의 기존 창을 우측에 스왑
-      rightSel = sel === 'map' ? 'cdu' : leftSel;
-    } else {
-      // 우측이 가져가면 좌측은 PFD/MAP 중 남는 쪽으로 자동 선택
-      // (우측 PFD → 좌측 MAP, 우측 MAP → 좌측 PFD)
-      leftSel = sel === 'pfd' ? 'map' : 'pfd';
-    }
-  }
-  if (side === 'left') leftSel = sel; else rightSel = sel;
+  const get = k => k === 'left' ? leftSel : k === 'mid' ? midSel : rightSel;
+  const set = (k, v) => { if (k === 'left') leftSel = v; else if (k === 'mid') midSel = v; else rightSel = v; };
+  const sides = tripleMode ? ['left', 'mid', 'right'] : ['left', 'right'];
+  if (!sides.includes(side)) side = 'right';
+  // 같은 창을 이미 다른 패널이 갖고 있으면 서로 맞바꾼다(창이 사라지지 않게)
+  const holder = sides.find(k => k !== side && get(k) === sel);
+  if (holder) set(holder, get(side));
+  set(side, sel);
   applyPanels();
 }
 
 function applyPanels() {
   const L = document.getElementById('left-panel');
+  const M = document.getElementById('mid-panel');
   const R = document.getElementById('right-panel');
+  const app = document.getElementById('app');
+  app.classList.toggle('triple', tripleMode);
+  const btn = document.getElementById('split-toggle');
+  if (btn) btn.textContent = tripleMode ? '⿰ 2분할' : '⿲ 3분할';
+
   const wrapIds = { pfd: 'pfd-wrap', map: 'map-wrap', cdu: 'cdu-wrap' };
   ['pfd', 'map', 'cdu'].forEach(k => {
     const el = document.getElementById(wrapIds[k]);
-    const host = leftSel === k ? L : (rightSel === k ? R : null);
+    const host = leftSel === k ? L : (tripleMode && midSel === k ? M : (rightSel === k ? R : null));
     if (host && el.parentElement !== host) host.appendChild(el);
     el.classList.toggle('page-hidden', !host);
   });
   // PLAN(fp-wrap)은 우측 전용 내부 페이지(CDU FPL 버튼 등으로 진입)
   document.getElementById('fp-wrap').classList.toggle('page-hidden', rightSel !== 'plan');
 
-  // PFD 호스트 패널은 FCP 버튼이 다 보이도록 넓은 쪽(55%) 차지
+  // PFD 호스트 패널은 FCP 조작부가 다 보이도록 넓게(2분할 55% / 3분할 1.4배)
   L.classList.toggle('pfd-host', leftSel === 'pfd');
+  M.classList.toggle('pfd-host', tripleMode && midSel === 'pfd');
   R.classList.toggle('pfd-host', rightSel === 'pfd');
 
   // 탭 활성 표시
   document.querySelectorAll('#left-tabs [data-sel]').forEach(b =>
     b.classList.toggle('active', b.dataset.sel === leftSel));
+  document.querySelectorAll('#mid-tabs [data-sel]').forEach(b =>
+    b.classList.toggle('active', b.dataset.sel === midSel));
   document.querySelectorAll('#page-tabs [data-sel]').forEach(b =>
     b.classList.toggle('active', b.dataset.sel === rightSel));
 
@@ -6609,6 +6662,8 @@ function applyPanels() {
   leftPage = leftSel === 'map' ? 1 : 0;
   currentPage = rightSel === 'map' ? 0 : rightSel === 'plan' ? 1 : rightSel === 'cdu' ? 2 : 0;
 
+  // 3분할에서는 사용자가 드래그로 지정한 분할 비율을 쓰지 않는다
+  if (tripleMode) L.style.flex = '';
   // 크기 재계산
   requestAnimationFrame(() => { resizePFD(); drawPFD(); scaleCdu(); });
   setTimeout(() => {
@@ -6641,9 +6696,9 @@ function setPage(n) { selectPanel('right', ['map', 'plan', 'cdu'][n] || 'map', t
     }, 60);
   };
 
-  // 저장된 비율 복원
+  // 저장된 비율 복원 — 3분할에서는 균등 배분이므로 적용하지 않는다
   const saved = parseFloat(localStorage.getItem('splitRatio'));
-  if (!isNaN(saved) && saved >= 25 && saved <= 75) { applyRatio(saved); afterResize(); }
+  if (!tripleMode && !isNaN(saved) && saved >= 25 && saved <= 75) { applyRatio(saved); afterResize(); }
 
   let dragging = false;
   grip.addEventListener('pointerdown', e => {
@@ -8128,7 +8183,7 @@ function saveSession() {
       fcp: { selSpd, selAlt, selCrht, selVS, selHdg, hdgSelOn, altHoldOn, crhtOn, gspdOn, rollApOn, bankTarget,
              gspdActLat, gspdActFwd, gspdRefLat, gspdRefFwd, gspdCoasting },
       nav: { obsOn, navSrc, navRadios, vorObsCrs, dtoLat:_dtoLat, dtoLon:_dtoLon },
-      view: { mapHdgUp, followMode, leftSel, rightSel },
+      view: { mapHdgUp, followMode, leftSel, midSel, rightSel, tripleMode },
     };
     localStorage.setItem(SESSION_KEY, JSON.stringify(snap));
   } catch(e) {}
@@ -8159,7 +8214,8 @@ function restoreSession() {
     if (n.navRadios) { try { ['NAV1','NAV2'].forEach(k => { if (n.navRadios[k]) navRadios[k] = Object.assign({}, navRadios[k], n.navRadios[k]); }); } catch(e) {} }
     const v = snap.view || {};
     mapHdgUp=!!v.mapHdgUp; followMode=!!v.followMode;
-    if (v.leftSel) leftSel=v.leftSel; if (v.rightSel) rightSel=v.rightSel;
+    if (v.leftSel) leftSel=v.leftSel; if (v.midSel) midSel=v.midSel; if (v.rightSel) rightSel=v.rightSel;
+    if (v.tripleMode != null) tripleMode = !!v.tripleMode;
     // 재적용
     try { updateFlyBtns(); } catch(e) {}
     try { updateHoverBtns(); } catch(e) {}
