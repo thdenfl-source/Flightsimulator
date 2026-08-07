@@ -45,7 +45,7 @@ html, body {
   flex-shrink: 0;
   position: relative;
 }
-#divider-grip {
+#divider-grip, #divider-grip-2 {
   position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%);
   z-index: 2001; cursor: col-resize; touch-action: none; user-select: none;
   background: rgba(15,20,28,0.92); border: 1px solid #4a90d9; border-radius: 6px;
@@ -53,14 +53,14 @@ html, body {
   display: flex; align-items: center; justify-content: center;
   font-family: 'Helvetica Neue', Arial, sans-serif;
 }
-#divider-grip:active { background: #1a3a5a; color: #fff; }
+#divider-grip:active, #divider-grip-2:active { background: #1a3a5a; color: #fff; }
 @media (orientation: landscape) {
-  #divider-grip { width: 26px; height: 56px; }
-  #divider-grip::before { content: '◀▶'; letter-spacing: -2px; }
+  #divider-grip, #divider-grip-2 { width: 26px; height: 56px; }
+  #divider-grip::before, #divider-grip-2::before { content: '◀▶'; letter-spacing: -2px; }
 }
 @media (orientation: portrait) {
-  #divider-grip { width: 56px; height: 26px; cursor: row-resize; }
-  #divider-grip::before { content: '▲▼'; }
+  #divider-grip, #divider-grip-2 { width: 56px; height: 26px; cursor: row-resize; }
+  #divider-grip::before, #divider-grip-2::before { content: '▲▼'; }
 }
 @media (orientation: landscape) {
   #app { display: flex; flex-direction: row; }
@@ -83,18 +83,17 @@ html, body {
 
 /* ── 3분할(PFD·MAP·CDU) ─────────────────────────────────────────── */
 #mid-panel { display: none; flex-direction: column; overflow: hidden; }
-#divider-2 { display: none; background: #2a2a2a; z-index: 2000; flex-shrink: 0; }
+#divider-2 { display: none; background: #2a2a2a; z-index: 2000; flex-shrink: 0; position: relative; }
+#divider-grip-2 { display: none; }
 #app.triple #mid-panel { display: flex; }
 #app.triple #divider-2 { display: block; }
-/* 3분할 배분 — 사용자 분할 비율(55%/드래그)은 무효화하고,
-   PFD가 있는 패널만 FCP 조작부가 다 보이도록 조금 넓게 */
-#app.triple #left-panel,
-#app.triple #mid-panel,
+#app.triple #divider-grip-2 { display: flex; }
+/* 3분할 배분 — 좌·중은 --tri-l/--tri-m 로 고정하고 우측이 남은 공간을 채운다.
+   기본값은 PFD 호스트가 1.4배 넓은 배분으로 JS가 계산해 넣고,
+   그립을 드래그하면 그 값만 바뀐다(2분할의 splitRatio 와 같은 방식). */
+#app.triple #left-panel  { flex: 0 0 var(--tri-l, 33.333%) !important; }
+#app.triple #mid-panel   { flex: 0 0 var(--tri-m, 33.333%) !important; }
 #app.triple #right-panel { flex: 1 1 0 !important; }
-#app.triple #left-panel.pfd-host,
-#app.triple #mid-panel.pfd-host,
-#app.triple #right-panel.pfd-host { flex: 1.4 1 0 !important; }
-#app.triple #divider-grip { display: none; }
 @media (orientation: landscape) { #divider-2 { width: 2px; height: 100%; } }
 @media (orientation: portrait)  { #divider-2 { height: 2px; width: 100%; } }
 /* 분할 전환 버튼 */
@@ -1519,7 +1518,9 @@ body.night-mode::after {
       <ul>
         <li>좌·우 창 모두 <b>PFD / MAP / CDU</b> 탭으로 전환. 양쪽에 같은 창을 고르면 반대쪽이 자동으로 바뀝니다.</li>
         <li><b>전체화면</b>: CDU·Flight Plan 하단 <b>Full</b>, MAP 상단 <b>FULL</b> 버튼. 되돌아올 때는 같은 자리의 <b>HALF</b>.</li>
-        <li>가운데 경계선의 <b>◀▶ 그립</b>을 드래그하면 분할 비율 조절(자동 저장). <b>⟳</b>은 새로고침.</li>
+        <li>경계선의 <b>◀▶ 그립</b>을 드래그하면 분할 비율 조절(자동 저장). <b>3분할에서는 그립이 두 개</b>라
+            좌·중·우 폭을 각각 잡을 수 있고, 각 경계선은 <b>맞닿은 두 창끼리만</b> 크기를 주고받습니다.
+            그립을 <b>더블탭</b>하면 기본 배분으로 되돌아갑니다. <b>⟳</b>은 새로고침.</li>
       </ul>
 
       <h3>2. 기본 비행 (시뮬레이션)</h3>
@@ -1867,7 +1868,7 @@ body.night-mode::after {
       <button class="page-tab" data-sel="cdu" onclick="selectPanel('mid','cdu')">CDU</button>
     </div>
   </div>
-  <div id="divider-2"></div>
+  <div id="divider-2"><div id="divider-grip-2"></div></div>
 
   <div id="right-panel">
 
@@ -7087,6 +7088,31 @@ let midSel  = 'map';                    // 3분할일 때만 사용하는 중앙
 let tripleMode = false;                 // 3분할(PFD·MAP·CDU) 여부
 try { tripleMode = localStorage.getItem('tripleMode') === '1'; } catch(e) {}
 
+// 3분할 분할 비율 [좌%, 중%] — null 이면 기본 배분(PFD 호스트 1.4배)
+const TRI_MIN = 12;                     // 한 창의 최소 비율(%)
+let triRatio = null;
+try {
+  const s = JSON.parse(localStorage.getItem('triSplit') || 'null');
+  if (Array.isArray(s) && s.length === 2 && s.every(v => typeof v === 'number')) triRatio = s;
+} catch(e) {}
+
+// 기본 3분할 배분 — PFD 가 있는 창만 FCP 조작부가 다 보이도록 1.4배
+function triDefaultRatio() {
+  const w = [leftSel, midSel, rightSel].map(s => s === 'pfd' ? 1.4 : 1);
+  const t = w[0] + w[1] + w[2];
+  return [w[0] / t * 100, w[1] / t * 100];
+}
+function applyTriRatio() {
+  const app = document.getElementById('app');
+  if (!app) return;
+  const [l, m] = triRatio || triDefaultRatio();
+  app.style.setProperty('--tri-l', l.toFixed(3) + '%');
+  app.style.setProperty('--tri-m', m.toFixed(3) + '%');
+}
+function saveTriRatio() {
+  try { localStorage.setItem('triSplit', JSON.stringify(triRatio)); } catch(e) {}
+}
+
 // 3분할 ⇄ 2분할 전환. 3분할 진입 시 PFD·MAP·CDU를 좌·중·우로 배치한다.
 function toggleTriple(on) {
   tripleMode = (on === undefined) ? !tripleMode : !!on;
@@ -7148,8 +7174,8 @@ function applyPanels() {
   leftPage = leftSel === 'map' ? 1 : 0;
   currentPage = rightSel === 'map' ? 0 : rightSel === 'plan' ? 1 : rightSel === 'cdu' ? 2 : 0;
 
-  // 3분할에서는 사용자가 드래그로 지정한 분할 비율을 쓰지 않는다
-  if (tripleMode) L.style.flex = '';
+  // 3분할은 --tri-l/--tri-m 로 배분한다(2분할의 인라인 flex 는 무효화)
+  if (tripleMode) { L.style.flex = ''; applyTriRatio(); }
   // 크기 재계산
   requestAnimationFrame(() => { resizePFD(); drawPFD(); scaleCdu(); });
   setTimeout(() => {
@@ -7164,11 +7190,13 @@ function setLeftPage(n) { selectPanel('left', n === 0 ? 'pfd' : 'map', true); }
 function setPage(n) { selectPanel('right', ['map', 'plan', 'cdu'][n] || 'map', true); }
 
 // ── 분할 비율 조절: 경계선 그립을 드래그(좌우/위아래) ──
-// 사용자가 조절하면 좌측 패널에 인라인 flex-basis를 지정(pfd-host 55% 규칙보다 우선)
+// 2분할: 좌측 패널에 인라인 flex-basis를 지정(pfd-host 55% 규칙보다 우선)
+// 3분할: 두 경계선을 각각 드래그. 인접한 두 창만 서로 크기를 주고받는다.
 (function initDividerDrag() {
-  const grip = document.getElementById('divider-grip');
-  const app  = document.getElementById('app');
-  const L    = document.getElementById('left-panel');
+  const grip  = document.getElementById('divider-grip');
+  const grip2 = document.getElementById('divider-grip-2');
+  const app   = document.getElementById('app');
+  const L     = document.getElementById('left-panel');
   if (!grip || !app || !L) return;
 
   // 좌측을 고정폭으로 두고, 우측은 남은 공간을 채우도록(split-custom) 전환
@@ -7182,37 +7210,74 @@ function setPage(n) { selectPanel('right', ['map', 'plan', 'cdu'][n] || 'map', t
     }, 60);
   };
 
-  // 저장된 비율 복원 — 3분할에서는 균등 배분이므로 적용하지 않는다
+  // 저장된 비율 복원
   const saved = parseFloat(localStorage.getItem('splitRatio'));
-  if (!tripleMode && !isNaN(saved) && saved >= 25 && saved <= 75) { applyRatio(saved); afterResize(); }
+  if (!isNaN(saved) && saved >= 25 && saved <= 75) applyRatio(saved);
+  if (tripleMode) applyTriRatio();
+  afterResize();
 
-  let dragging = false;
-  grip.addEventListener('pointerdown', e => {
-    e.preventDefault();
-    dragging = true;
-    try { grip.setPointerCapture(e.pointerId); } catch(err) {}
-  });
-  grip.addEventListener('pointermove', e => {
-    if (!dragging) return;
+  // 포인터 위치를 앱 기준 0~100% 로
+  const pctOf = e => {
     const r = app.getBoundingClientRect();
-    const landscape = r.width >= r.height;
-    let pct = landscape
+    return (r.width >= r.height)
       ? (e.clientX - r.left) / r.width * 100
       : (e.clientY - r.top) / r.height * 100;
-    pct = Math.max(25, Math.min(75, pct));
-    applyRatio(pct);
-    // 드래그 중에도 지도/PFD가 따라오도록 가볍게 갱신
-    try { resizePFD(); } catch(err) {}
-  });
-  const end = e => {
-    if (!dragging) return;
-    dragging = false;
-    const m = /0 0 ([\d.]+)%/.exec(L.style.flex || '');
-    if (m) try { localStorage.setItem('splitRatio', m[1]); } catch(err) {}
-    afterResize();
   };
-  grip.addEventListener('pointerup', end);
-  grip.addEventListener('pointercancel', end);
+
+  // which: 1 = 좌|중 경계, 2 = 중|우 경계(3분할 전용)
+  function bind(el, which) {
+    if (!el) return;
+    let dragging = false;
+    el.addEventListener('pointerdown', e => {
+      if (which === 2 && !tripleMode) return;
+      e.preventDefault(); dragging = true;
+      try { el.setPointerCapture(e.pointerId); } catch(err) {}
+    });
+    el.addEventListener('pointermove', e => {
+      if (!dragging) return;
+      const pct = pctOf(e);
+      if (!tripleMode) {
+        applyRatio(Math.max(25, Math.min(75, pct)));
+      } else {
+        const cur = triRatio || triDefaultRatio();
+        let [l, m] = cur;
+        if (which === 1) {
+          // 좌|중 경계 — 좌·중이 서로 주고받고 우측 폭은 유지
+          const edge = l + m;
+          l = Math.max(TRI_MIN, Math.min(edge - TRI_MIN, pct));
+          m = edge - l;
+        } else {
+          // 중|우 경계 — 중·우가 서로 주고받고 좌측 폭은 유지
+          const edge = Math.max(l + TRI_MIN, Math.min(100 - TRI_MIN, pct));
+          m = edge - l;
+        }
+        triRatio = [l, m];
+        applyTriRatio();
+      }
+      try { resizePFD(); } catch(err) {}
+    });
+    const end = () => {
+      if (!dragging) return;
+      dragging = false;
+      if (tripleMode) saveTriRatio();
+      else {
+        const mm = /0 0 ([\d.]+)%/.exec(L.style.flex || '');
+        if (mm) try { localStorage.setItem('splitRatio', mm[1]); } catch(err) {}
+      }
+      afterResize();
+    };
+    el.addEventListener('pointerup', end);
+    el.addEventListener('pointercancel', end);
+    // 더블탭/더블클릭 → 기본 배분으로 되돌리기
+    el.addEventListener('dblclick', () => {
+      if (tripleMode) { triRatio = null; applyTriRatio(); saveTriRatio(); }
+      else { L.style.flex = ''; app.classList.remove('split-custom');
+             try { localStorage.removeItem('splitRatio'); } catch(err) {} }
+      afterResize();
+    });
+  }
+  bind(grip, 1);
+  bind(grip2, 2);
 })();
 
 // CDU 홈의 MAP 버튼 — 분할/전체화면 모두에서 MAP 창을 연다.
