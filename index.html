@@ -1355,7 +1355,6 @@ body.solo-mode .solo-panel-visible {
         .enter-btn-blue { background: #1a2a4a; border: 1px solid var(--active-blue); }
         .enter-btn-blue:active { background: #2a4a7a; }
 
-        .status-footer { height: 25px; background: #111; display: grid; grid-template-columns: 1fr 1.5fr 1fr; border-top: 0.7px solid #333; font-size: 6px; color: #ccc; align-items: center; padding: 0 7px; text-align: center; }
         
         /* Home Grid */
         .home-grid { display: flex; flex-wrap: wrap; justify-content: center; align-items: flex-start; gap: 7px 5px; padding: 4px; }
@@ -2028,12 +2027,6 @@ body.night-mode::after {
         <div class="mode-title-bar" id="modeTitle">Home</div>
         <div id="mainContentArea"></div>
         <div class="footer-nav" id="footerNav"></div>
-        
-        <div class="status-footer">
-            <div style="text-align:left;">- Range +<br>Push:Pan</div>
-            <div id="center-label">CDU HOME</div>
-            <div style="text-align:right;">COM1 FREQ<br>Hold:↕</div>
-        </div>
     </div>
 </div>
       </div>
@@ -9311,9 +9304,12 @@ function act(name, ...args) {
         if(target) inputTarget = target;
         
         if (mode === 'PERF_INPUT') {
-            currentInput = perfData[inputTarget].toString();
+            // target 없이 들어오면 inputTarget이 COM 쪽 값일 수 있으므로 방어
+            if (!(inputTarget in perfData)) inputTarget = 'alt';
+            currentInput = String(perfData[inputTarget]);
             hasStartedTyping = false; 
         } else if (mode === 'COM_INPUT') {
+            if (!freqs[inputTarget]) inputTarget = 'com1';
             currentInput = freqs[inputTarget].stb.replace(/\./g, '');
             hasStartedTyping = false; 
         } else if (mode === 'XPDR_CODE') {
@@ -9346,9 +9342,8 @@ function act(name, ...args) {
 
     // --- Modularized Render Functions ---
     
-    function renderHomeScreen(container, footer, title, centerLabel) {
+    function renderHomeScreen(container, footer, title) {
         title.innerText = "Home";
-        centerLabel.innerText = "CDU HOME";
         
         let gridHtml = `<div class="home-grid">`;
         homeButtons.forEach(btn => {
@@ -9397,10 +9392,9 @@ function act(name, ...args) {
         footer.innerHTML = cduFooter('', `<div class="nav-btn" data-act="openUbikais"><span>🛰</span>UBIKAIS</div>`);
     }
 
-    function renderPerfScreen(container, footer, title, centerLabel) {
+    function renderPerfScreen(container, footer, title) {
         calculatePerformance(); 
         title.innerText = "Performance (Hover & Climb)";
-        centerLabel.innerText = "Flight Data";
         
         let warningHtml = perfResults.outOfLimits ? 
             `<div style="background-color:#3a0000; border:1px solid #f44336; color:#f44336; font-size:9px; font-weight:bold; text-align:center; padding:3px; border-radius:3px; margin-bottom:8px; animation: blink 1.5s infinite;">⚠️ CAUTION: OUT OF CHART LIMITS (Data Capped)</div>` : '';
@@ -9509,9 +9503,8 @@ function act(name, ...args) {
         footer.innerHTML = cduFooter("switchMode('PERF')", `<div class="nav-btn enter-btn-blue" data-act="confirmPerfInput"><span>↩</span>Enter</div>`);
     }
 
-    function renderAudioScreen(container, footer, title, centerLabel) {
+    function renderAudioScreen(container, footer, title) {
         title.innerText = "Audio & Radios";
-        centerLabel.innerText = `CoPilot ${audioTab === 'Mission' ? 'VHF-FM' : (audioTab === 'Other' ? 'PA' : inputTarget.toUpperCase())} Volume`;
         
         let audioContent = '';
 
@@ -9627,9 +9620,8 @@ function act(name, ...args) {
         footer.innerHTML = cduFooter("switchMode('HOME')");
     }
 
-    function renderIntercomScreen(container, footer, title, centerLabel) {
+    function renderIntercomScreen(container, footer, title) {
         title.innerText = "Intercom";
-        centerLabel.innerText = "CoPilot ICS Volume";
         container.innerHTML = `
             <div class="sub-header" style="justify-content: space-between; padding-bottom:5px;">
                 <div class="user-3d-btn" style="width:60px;">User<br><span style="color:var(--text-cyan)">CoPilot</span></div>
@@ -9658,9 +9650,8 @@ function act(name, ...args) {
         footer.innerHTML = cduFooter("switchMode('HOME')");
     }
 
-    function renderSelcalInputScreen(container, footer, title, centerLabel) {
+    function renderSelcalInputScreen(container, footer, title) {
         title.innerText = "COM SELCAL";
-        centerLabel.innerText = "Data Entry";
         
         let displayVal = !hasStartedTyping ? selcalCode : selcalInput.padEnd(4, '_');
 
@@ -9685,9 +9676,8 @@ function act(name, ...args) {
         footer.innerHTML = cduFooter("switchMode('AUDIO'); switchAudioTab('Mission');", `<div class="nav-btn enter-btn-blue" data-act="confirmSelcal"><span>↩</span>Enter</div>`);
     }
 
-    function renderVoxModeScreen(container, footer, title, centerLabel) {
+    function renderVoxModeScreen(container, footer, title) {
         title.innerText = "Intercom";
-        centerLabel.innerText = "VOX Mode Selection";
 
         let isManual = (voxState === 'Manual');
         let sliderOpacity = isManual ? '1' : '0.3';
@@ -9717,9 +9707,8 @@ function act(name, ...args) {
         footer.innerHTML = cduFooter("switchMode('INTERCOM')");
     }
 
-    function renderHfControlScreen(container, footer, title, centerLabel) {
+    function renderHfControlScreen(container, footer, title) {
         title.innerText = "HF";
-        centerLabel.innerText = "CoPilot HF1 Volume";
         container.innerHTML = `
             <div style="display:flex; flex-direction:column; gap:12px; height:100%; padding-top:5px;">
                 <div style="border: 1px solid var(--text-cyan); border-radius: 5px; background: #050505; display: flex; flex-direction: column; margin-bottom: 5px; padding: 5px;">
@@ -9813,9 +9802,8 @@ function act(name, ...args) {
         footer.innerHTML = cduFooter(`switchMode(${backMode}, '${inputTarget}')`, `<div class="nav-btn enter-btn-blue" data-act="confirmInput"><span>↩</span>Enter</div>`);
     }
 
-    function renderXpdrModeScreen(container, footer, title, centerLabel) {
+    function renderXpdrModeScreen(container, footer, title) {
         title.innerText = "Transponder";
-        centerLabel.innerText = "Transponder Mode";
         container.innerHTML = `
             <div style="display:flex; height:100%; padding-top:5px;">
                 <div style="flex:1; display:flex; flex-direction:column; gap:6px; border-right:1px solid #333; padding-right:10px;">
@@ -9836,9 +9824,8 @@ function act(name, ...args) {
         footer.innerHTML = cduFooter("switchMode('HOME')");
     }
 
-    function renderXpdrCodeScreen(container, footer, title, centerLabel) {
+    function renderXpdrCodeScreen(container, footer, title) {
         title.innerText = "Transponder 2";
-        centerLabel.innerText = "Data Entry";
         let displayVal = !hasStartedTyping ? xpdrState.code : xpdrInput;
         container.innerHTML = `
             <div style="display:flex; flex-direction:column; align-items:center; padding-top:10px; height:100%;">
@@ -10078,8 +10065,7 @@ function act(name, ...args) {
       _UV.dmsd = sgn * dInt;  _UV.dmsm = mInt;  _UV.dmss = +sec.toFixed(2);
     }
 
-    function renderUtilScreen(container, footer, title, centerLabel) {
-      centerLabel.innerText = 'UTIL';
+    function renderUtilScreen(container, footer, title) {
 
       // ── 메뉴 목록 ──
       if (utilTab === 'MENU') {
@@ -10724,8 +10710,7 @@ function act(name, ...args) {
       }
     }
 
-    function renderChecklistScreen(container, footer, title, centerLabel) {
-      centerLabel.innerText = 'CHECK';
+    function renderChecklistScreen(container, footer, title) {
       const node = _clNode();
       const col = _clColor();
       // 브레드크럼 제목
@@ -10809,9 +10794,8 @@ function act(name, ...args) {
       else if (which === 'kbd') toggleKbdShortcuts();
       switchMode('SETTINGS');
     }
-    function renderSettingsScreen(container, footer, title, centerLabel) {
+    function renderSettingsScreen(container, footer, title) {
       title.innerText = 'Settings';
-      centerLabel.innerText = 'SETUP';
       const back = `<div data-act="switchMode" data-arg='["HOME"]' style="display:inline-flex;align-items:center;gap:4px;` +
         `padding:5px 10px;margin-bottom:8px;border:1px solid #2a4a5a;border-radius:4px;background:#0a1620;color:#00cfff;` +
         `font-size:10px;font-weight:bold;cursor:pointer;">🏠 홈</div>`;
@@ -11246,9 +11230,8 @@ function act(name, ...args) {
       });
     }
 
-    function renderTrackPointScreen(container, footer, title, centerLabel) {
+    function renderTrackPointScreen(container, footer, title) {
       title.innerText = 'Track & Point';
-      centerLabel.innerText = 'T&P';
       const tabBtn = (id, label) => {
         const on = tpTab === id;
         return `<button data-act="tpSetTab" data-arg='["${id}"]' style="flex:1;padding:6px 2px;font-size:11px;font-weight:bold;cursor:pointer;` +
@@ -11311,7 +11294,7 @@ function act(name, ...args) {
         } else {
           // 폴더 내부
           const cf = _curFolder();
-          if (!cf) { tpFolderIdx = null; return renderTrackPointScreen(container, footer, title, centerLabel); }
+          if (!cf) { tpFolderIdx = null; return renderTrackPointScreen(container, footer, title); }
           const pts = cf.folder.pts, selN = _tpSelCount();
           body += `<div data-act="tpFolderBack" style="display:inline-flex;align-items:center;gap:4px;padding:5px 10px;margin-bottom:7px;` +
             `border:1px solid #2a4a5a;border-radius:4px;background:#0a1620;color:#00cfff;font-size:10px;font-weight:bold;cursor:pointer;">☰ 폴더 목록</div>` +
@@ -11371,30 +11354,29 @@ function act(name, ...args) {
         const container = document.getElementById('mainContentArea');
         const footer = document.getElementById('footerNav');
         const title = document.getElementById('modeTitle');
-        const centerLabel = document.getElementById('center-label');
         container.innerHTML = '';
 
         switch(currentMode) {
-            case 'HOME': renderHomeScreen(container, footer, title, centerLabel); break;
-            case 'PERF': renderPerfScreen(container, footer, title, centerLabel); break;
+            case 'HOME': renderHomeScreen(container, footer, title); break;
+            case 'PERF': renderPerfScreen(container, footer, title); break;
             case 'PERF_INPUT': renderPerfInputScreen(container, footer, title); break;
-            case 'AUDIO': renderAudioScreen(container, footer, title, centerLabel); break;
-            case 'INTERCOM': renderIntercomScreen(container, footer, title, centerLabel); break;
-            case 'SELCAL_INPUT': renderSelcalInputScreen(container, footer, title, centerLabel); break;
-            case 'VOX_MODE': renderVoxModeScreen(container, footer, title, centerLabel); break;
-            case 'HF_CONTROL': renderHfControlScreen(container, footer, title, centerLabel); break;
+            case 'AUDIO': renderAudioScreen(container, footer, title); break;
+            case 'INTERCOM': renderIntercomScreen(container, footer, title); break;
+            case 'SELCAL_INPUT': renderSelcalInputScreen(container, footer, title); break;
+            case 'VOX_MODE': renderVoxModeScreen(container, footer, title); break;
+            case 'HF_CONTROL': renderHfControlScreen(container, footer, title); break;
             case 'COM_INPUT': renderComInputScreen(container, footer, title); break;
-            case 'NAV_SEL': renderNavSelectScreen(container, footer, title, centerLabel); break;
-            case 'AIRFIELD': renderAirfieldScreen(container, footer, title, centerLabel); break;
-            case 'CCTV': renderCctvScreen(container, footer, title, centerLabel); break;
-            case 'AIRFIELD_DETAIL': renderAirfieldDetailScreen(container, footer, title, centerLabel); break;
-            case 'XPDR_MODE': renderXpdrModeScreen(container, footer, title, centerLabel); break;
-            case 'XPDR_CODE': renderXpdrCodeScreen(container, footer, title, centerLabel); break;
-            case 'UTIL': renderUtilScreen(container, footer, title, centerLabel); break;
-            case 'CHECKLIST': renderChecklistScreen(container, footer, title, centerLabel); break;
-            case 'SETTINGS': renderSettingsScreen(container, footer, title, centerLabel); break;
-            case 'TRACKPOINT': renderTrackPointScreen(container, footer, title, centerLabel); break;
-            case 'CHARTS': renderChartsScreen(container, footer, title, centerLabel); break;
+            case 'NAV_SEL': renderNavSelectScreen(container, footer, title); break;
+            case 'AIRFIELD': renderAirfieldScreen(container, footer, title); break;
+            case 'CCTV': renderCctvScreen(container, footer, title); break;
+            case 'AIRFIELD_DETAIL': renderAirfieldDetailScreen(container, footer, title); break;
+            case 'XPDR_MODE': renderXpdrModeScreen(container, footer, title); break;
+            case 'XPDR_CODE': renderXpdrCodeScreen(container, footer, title); break;
+            case 'UTIL': renderUtilScreen(container, footer, title); break;
+            case 'CHECKLIST': renderChecklistScreen(container, footer, title); break;
+            case 'SETTINGS': renderSettingsScreen(container, footer, title); break;
+            case 'TRACKPOINT': renderTrackPointScreen(container, footer, title); break;
+            case 'CHARTS': renderChartsScreen(container, footer, title); break;
         }
 
         updateHeaderUI();
@@ -11441,7 +11423,7 @@ function act(name, ...args) {
     // ── NAV1/NAV2 VOR 튜닝 화면 ──
     let _navSelTarget = 'nav1';   // 현재 튜닝 대상 무선
     function openNavSel(id) { _navSelTarget = id; switchMode('NAV_SEL'); }
-    function renderNavSelectScreen(container, footer, title, centerLabel) {
+    function renderNavSelectScreen(container, footer, title) {
         title.innerText = (_navSelTarget === 'nav1' ? 'NAV1' : 'NAV2') + ' — VOR 선택';
         const cur = freqs[_navSelTarget];
         const rows = (typeof ENR_VORS !== 'undefined' ? ENR_VORS : []).filter(v => v.freq).map(v => {
@@ -11521,7 +11503,7 @@ function act(name, ...args) {
         switchMode('AIRFIELD');
     }
     // ── CCTV 선택 화면 (BADA / Park → 외부 사이트) ──
-    function renderCctvScreen(container, footer, title, centerLabel) {
+    function renderCctvScreen(container, footer, title) {
         title.innerText = 'CCTV';
         const item = (label, url, desc) => `<a href="${url}" target="_blank" style="text-decoration:none;display:block;">` +
             `<div style="display:flex;align-items:center;justify-content:space-between;padding:14px 12px;margin-bottom:9px;border:1px solid #1e3a4a;border-radius:6px;background:#0a1620;">` +
@@ -11537,7 +11519,7 @@ function act(name, ...args) {
             `</div>`;
         footer.innerHTML = cduFooter("switchMode('HOME')");
     }
-    function renderAirfieldScreen(container, footer, title, centerLabel) {
+    function renderAirfieldScreen(container, footer, title) {
         title.innerText = '비행장 정보';
         const list = (typeof AIRFIELD_INFO !== 'undefined' ? AIRFIELD_INFO : []);
         // 원래 인덱스를 유지한 채 이름 가나다순 정렬
@@ -11565,7 +11547,7 @@ function act(name, ...args) {
             ${rows}</div>`;
         footer.innerHTML = cduFooter("switchMode('HOME')");
     }
-    function renderAirfieldDetailScreen(container, footer, title, centerLabel) {
+    function renderAirfieldDetailScreen(container, footer, title) {
         const list = (typeof AIRFIELD_INFO !== 'undefined' ? AIRFIELD_INFO : []);
         const a = list[_afldIdx];
         if (!a || (!_afldUnlocked && !a.pub)) { switchMode('AIRFIELD'); return; }
@@ -11765,7 +11747,7 @@ function act(name, ...args) {
     function backspaceInput() {
         if (!hasStartedTyping) {
             hasStartedTyping = true;
-            if(currentMode === 'PERF_INPUT') currentInput = perfData[inputTarget].toString();
+            if(currentMode === 'PERF_INPUT') currentInput = String(perfData[inputTarget] ?? '0');
         }
         currentInput = currentInput.slice(0, -1);
         renderContent();
@@ -15577,9 +15559,8 @@ function getAiracInfo_charts() {
     return { id, start: fmt(startDate), end: fmt(endDate), daysLeft: Math.max(1, daysLeft), startUrl };
 }
 
-function renderChartsScreen(container, footer, title, centerLabel) {
+function renderChartsScreen(container, footer, title) {
     title.innerText = "Charts";
-    centerLabel.innerText = "CHARTS";
 
     const airac = getAiracInfo_charts();
     const saved = loadSavedCharts();
