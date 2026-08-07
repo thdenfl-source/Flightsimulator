@@ -1059,15 +1059,17 @@ body.solo-mode .solo-panel-visible {
 .fp-nav-btn {
   background: linear-gradient(to bottom, #444, #111, #000);
   border: 1px solid #444; border-radius: 5px;
-  padding: 5px 2px; flex: 1; max-width: 68px;
+  padding: 4px 2px; flex: 1; max-width: 68px;
+  height: 40px; box-sizing: border-box;
   display: flex; flex-direction: column;
-  align-items: center; gap: 2px;
+  align-items: center; justify-content: center; gap: 2px;
   cursor: pointer; font-size: 7px; color: white;
   touch-action: manipulation; transition: transform 0.05s;
-  text-align: center; line-height: 1.2; margin: 0 2px;
+  text-align: center; line-height: 9px; margin: 0 2px;
 }
 .fp-nav-btn:active { background: linear-gradient(to bottom, #555, #222, #111); transform: scale(0.95); }
-.fp-nav-btn span { font-size: 13px; pointer-events: none; }
+/* 아이콘 줄 상자 고정 — nav-btn과 같은 이유 */
+.fp-nav-btn span { font-size: 13px; line-height: 16px; height: 16px; display: block; pointer-events: none; }
 .fp-nav-btn.fp-nav-enter { background: #1a2a4a; border-color: #87ceeb; }
 .fp-nav-btn.fp-nav-active { background: linear-gradient(to bottom, #0e2a0e, #050d05); border-color: #00cc00; color: #00ff88; }
 .fp-wp-row {
@@ -1341,9 +1343,15 @@ body.solo-mode .solo-panel-visible {
 
         /* Footer */
         .footer-nav { height: 53px; display: flex; justify-content: space-around; align-items: center; background: #111; border-top: 1.5px solid #333; padding: 0 5px; }
-        .nav-btn { background: var(--btn-grad); border: var(--border-3d); border-radius: 5px; padding: 6px; min-width: 45px; display: flex; flex-direction: column; align-items: center; gap: 3px; cursor: pointer; font-size: 7px; color: white; transition: transform 0.05s, background 0.1s; }
+        .nav-btn { background: var(--btn-grad); border: var(--border-3d); border-radius: 5px; padding: 4px 4px;
+                   /* 개수와 라벨 길이에 상관없이 모두 같은 크기 — Flight Plan 푸터와 동일한 규칙 */
+                   flex: 1 1 0; min-width: 0; max-width: 68px; margin: 0 2px;
+                   height: 42px; box-sizing: border-box;
+                   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+                   cursor: pointer; font-size: 7px; line-height: 9px; color: white; transition: transform 0.05s, background 0.1s; }
         .nav-btn:active { background: linear-gradient(to bottom, #555, #222, #111); transform: scale(0.95); }
-        .nav-btn span { font-size: 14px; pointer-events: none; }
+        /* 아이콘 줄 상자를 고정 — 이모지/기호의 글리프 높이 차이로 버튼 크기가 달라지지 않게 */
+        .nav-btn span { font-size: 14px; line-height: 17px; height: 17px; display: block; pointer-events: none; }
         .enter-btn-blue { background: #1a2a4a; border: 1px solid var(--active-blue); }
         .enter-btn-blue:active { background: #2a4a7a; }
 
