@@ -1096,7 +1096,7 @@ body.solo-mode .solo-panel-visible {
 .fp-nav-btn.fp-nav-active { background: linear-gradient(to bottom, #0e2a0e, #050d05); border-color: #00cc00; color: #00ff88; }
 .fp-wp-row {
   display: grid;
-  grid-template-columns: 18px 1fr 34px 38px 26px 26px;
+  grid-template-columns: 18px 1fr 34px 38px 30px 26px 26px;
   align-items: center; gap: 2px;
   padding: 5px 4px; border-bottom: 1px solid #0e0e0e;
   cursor: pointer; touch-action: manipulation;
@@ -1115,6 +1115,30 @@ body.solo-mode .solo-panel-visible {
   display: flex; align-items: center; justify-content: center; touch-action: manipulation;
 }
 .fp-wp-b2.active { border-color: #87ceeb; color: #87ceeb; background: #0a1525; }
+.fp-wp-hold {
+  background: transparent; border: 1px solid #2a2a2a; color: #555;
+  width: 28px; height: 22px; font-size: 8px; font-weight: bold;
+  cursor: pointer; border-radius: 2px;
+  display: flex; align-items: center; justify-content: center; touch-action: manipulation;
+}
+.fp-wp-hold.active { border-color: #ffcc44; color: #ffcc44; background: #201a06; }
+/* ── 홀딩 설정 화면 ── */
+.hold-row { display: grid; grid-template-columns: 62px 1fr; align-items: center; gap: 6px; margin-bottom: 7px; }
+.hold-lbl { color: #87ceeb; font-size: 9px; font-weight: bold; letter-spacing: 0.5px; }
+.hold-seg { display: flex; gap: 4px; }
+.hold-btn {
+  flex: 1; background: #0d0d0d; border: 1px solid #2a2a2a; color: #777;
+  font-size: 10px; font-weight: bold; padding: 6px 0; border-radius: 3px;
+  cursor: pointer; touch-action: manipulation; text-align: center;
+}
+.hold-btn.on { border-color: #ffcc44; color: #ffcc44; background: #201a06; }
+.hold-spin { display: flex; align-items: center; gap: 4px; }
+.hold-spin .hold-btn { flex: 0 0 30px; }
+.hold-val {
+  flex: 1; text-align: center; color: #ffcc44; font-weight: bold; font-size: 15px;
+  background: #080808; border: 1px solid #222; border-radius: 3px; padding: 5px 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
 .fp-wp-del {
   background: transparent; border: 1px solid #442222; color: #cc4444;
   width: 24px; height: 22px; font-size: 11px; cursor: pointer; border-radius: 2px;
@@ -1531,9 +1555,12 @@ body.night-mode::after {
             그 각으로 잡기에 표적이 너무 가까우면 <b>표적으로 직행</b>하며, 이때 FMA에 <b>NAV DIR</b>로 표시됩니다.
             <b>측풍에서는 편류수정각(WCA)</b>을 자동으로 넣어 기수를 바람 쪽으로 틀고 대지트랙을 코스에 맞춥니다.
             VOR/LOC 소스일 때는 편위를 거리(NM)가 아닌 <b>각도(최대편위 10°)</b>로 보아 실제 수신기처럼 동작합니다.</li>
-        <li><b>HOLD</b>: 활성 웨이포인트(또는 튜닝된 VOR)에서 <b>표준 홀딩</b>(우선회·1분 레그)을 비행합니다.
-            픽스 통과 시 기수에 따라 <b>직진 / 평행 / 눈물방울</b> 진입을 자동 판정하고, 패턴은 지도에 노란 선으로 그려집니다.
-            FMA에는 <b>HOLD</b>로 표시되며, 홀딩 중에는 웨이포인트 시퀀싱이 멈춥니다. NAV를 끄면 함께 해제됩니다.</li>
+        <li><b>홀딩 패턴</b>: CDU <b>Flight Plan</b>의 각 웨이포인트 행에 있는 <b>HOLD</b> 버튼으로 설정합니다.
+            <b>선회방향(LEFT/RIGHT)</b>, <b>인바운드 코스(°M)</b>, <b>레그(TIME 30~180초 / DIST 1~20NM)</b>를 고르고 ENTER 하면
+            지도에 노란 레이스트랙으로 그려집니다. <b>NAV 오토파일럿</b>이 그 웨이포인트를 활성으로 잡으면 자동 무장되어,
+            픽스 통과 시 기수에 따라 <b>직진 / 평행 / 눈물방울</b> 진입을 판정해 진입 코스를 만들고 홀딩을 돕니다.
+            FMA에는 <b>HOLD D/P/T</b>(진입 방식)로 표시되고, 홀딩 중에는 웨이포인트 시퀀싱이 멈춥니다.
+            빠져나가려면 같은 화면의 <b>DEL HOLD</b>로 홀딩을 지우면 됩니다.</li>
         <li><b>선회 선행</b>: 웨이포인트에서 다음 레그로 꺾을 때 <b>d = R·tan(θ/2)</b> 만큼 미리 선회를 시작합니다
             (R 은 지상속도·실제 뱅크 기준). VNAV 의 TOD 도 레그 방향 거리와 지상속도로 계산합니다.</li>
         <li><b>방위 표기는 모두 자북(°M)</b>입니다 — HDG·CRS·BRG·NAV SOURCE·지도 BRG 라벨·비행계획 구간방위·바람·선박 침로.
@@ -1731,8 +1758,6 @@ body.night-mode::after {
             <button class="obs-btn" id="nav-ap-btn" onclick="toggleNavAp()">NAV</button>
             <button class="obs-btn" id="icpt-btn" onclick="cycleIntercept()"
                     title="인터셉트 각도 (30/45/60°)">45°</button>
-            <button class="obs-btn" id="hold-btn" onclick="toggleHold()"
-                    title="활성 웨이포인트에서 표준 홀딩(우선회·1분 레그)">HOLD</button>
           </div>
         </div>
 
@@ -2590,37 +2615,52 @@ let holdOn = false;
 let holdFix = null;              // { lat, lon, ident }
 let holdCrs = 0;                 // 인바운드 코스(진북)
 let holdRight = true;            // true = 우선회(표준)
-let holdLegSec = 60;             // 아웃바운드 레그 시간(초)
+let holdLegType = 'TIME';        // 'TIME' | 'DIST'
+let holdLegVal = 60;             // TIME 이면 초, DIST 이면 NM
 let _holdPhase = 'TOFIX';        // TOFIX | OUTBOUND | INBOUND
 let _holdEntry = '';             // DIRECT | PARALLEL | TEARDROP
 let _holdOutHdg = 0;             // 아웃바운드 목표 기수
 let _holdT = 0;                  // 아웃바운드 경과(초)
 let _holdPrevD = 1e9;            // 픽스 통과 판정용 이전 거리
 let _holdForceDir = 0;           // +1 우선회 강제 / -1 좌선회 강제 / 0 최단
+let _holdWpRef = null;           // 무장된 웨이포인트 객체(동일성 비교용)
 
-function toggleHold() {
-  if (holdOn) { holdExit(); return; }
-  let fx = null;
-  if (navSrc === 'FMS' && S.awp >= 0 && S.awp < S.wps.length) {
-    const w = S.wps[S.awp];
-    fx = { lat: w.lat, lon: w.lon, ident: w.ident || 'WPT' };
-  } else if (navLat !== null && navLon !== null) {
-    fx = { lat: navLat, lon: navLon, ident: navIcao || navSrc };
+// 웨이포인트에 정의된 홀딩을 NAV 와 연동한다.
+// FMS 소스이고 활성 웨이포인트에 hold 가 있으면 자동 무장되고,
+// 비행계획에서 홀딩을 지우면 자동 해제된다.
+function holdSyncFromWp() {
+  const wp = (navSrc === 'FMS' && !obsOn && S.awp >= 0 && S.awp < S.wps.length)
+    ? S.wps[S.awp] : null;
+  const h = wp && wp.hold;
+  if (!h) { if (holdOn) holdExit(); return; }
+  const fresh = !holdOn || _holdWpRef !== wp;
+  _holdWpRef = wp;
+  holdFix = { lat: wp.lat, lon: wp.lon, ident: wp.ident || 'WPT' };
+  holdRight = h.dir !== 'L';
+  holdCrs = h.crs;                       // 진북 기준으로 저장한다
+  holdLegType = h.legType === 'DIST' ? 'DIST' : 'TIME';
+  holdLegVal = h.legVal || (holdLegType === 'DIST' ? 5 : 60);
+  if (fresh) {
+    holdOn = true; _holdPhase = 'TOFIX'; _holdEntry = ''; _holdT = 0; _holdForceDir = 0;
+    _holdPrevD = distance(S.lat, S.lon, holdFix.lat, holdFix.lon);
+    updateHoldLine();
   }
-  if (!fx) { alert('홀딩 픽스 없음 — 웨이포인트를 활성화하거나 VOR을 튜닝하세요.'); return; }
-  holdFix = fx;
-  const L = activeCourseLine();
-  holdCrs = L ? normA(bearing(L.to[0], L.to[1], L.from[0], L.from[1]) + 180)
-              : bearing(S.lat, S.lon, fx.lat, fx.lon);
-  holdOn = true; _holdPhase = 'TOFIX'; _holdEntry = ''; _holdT = 0;
-  _holdPrevD = distance(S.lat, S.lon, fx.lat, fx.lon); _holdForceDir = 0;
-  const b = document.getElementById('hold-btn'); if (b) b.classList.add('on');
-  updateHoldLine();
 }
 function holdExit() {
-  holdOn = false; holdFix = null; _holdPhase = 'TOFIX'; _holdEntry = ''; _holdForceDir = 0;
-  const b = document.getElementById('hold-btn'); if (b) b.classList.remove('on');
+  holdOn = false; holdFix = null; _holdWpRef = null;
+  _holdPhase = 'TOFIX'; _holdEntry = ''; _holdForceDir = 0;
   updateHoldLine();
+}
+// 홀딩 인바운드 코스 기본값(자북, 표시/입력용) — 직전 웨이포인트에서의 레그 코스
+function holdDefaultCrsMag(i) {
+  if (i > 0 && i < S.wps.length) {
+    const p = S.wps[i - 1], w = S.wps[i];
+    return Math.round(toMag(normA(bearing(w.lat, w.lon, p.lat, p.lon) + 180)));
+  }
+  if (i >= 0 && i < S.wps.length) {
+    return Math.round(toMag(bearing(S.lat, S.lon, S.wps[i].lat, S.wps[i].lon)));
+  }
+  return 360;
 }
 
 // 헤딩 유지용 뱅크 지령. dir 이 0 이 아니면 그 방향으로 강제 선회한다.
@@ -2670,8 +2710,10 @@ function holdBankTarget(dt) {
     const tgt = windCorrectedHdg(_holdOutHdg);
     const err = Math.abs(normAS(tgt - S.hdg));
     if (err < 15) _holdForceDir = 0;
-    if (err < 10) _holdT += dt;                     // 롤아웃 후부터 레그 시간 계수
-    if (_holdT >= holdLegSec) { _holdPhase = 'INBOUND'; _holdForceDir = sgn; }
+    if (err < 10) _holdT += dt;                     // 롤아웃(어빔) 후부터 레그 시간 계수
+    // 레그 종료: 시간 기준이면 경과초, 거리 기준이면 픽스로부터의 거리
+    const done = (holdLegType === 'DIST') ? (d >= holdLegVal) : (_holdT >= holdLegVal);
+    if (done) { _holdPhase = 'INBOUND'; _holdForceDir = sgn; }
     return _holdHdgBank(tgt, _holdForceDir);
   }
 
@@ -2694,15 +2736,24 @@ function holdBankTarget(dt) {
   return _holdHdgBank(tgt, _holdForceDir);
 }
 
-// 홀딩 패턴 궤적(지도 표시용) — 픽스 기준 레이스트랙
-function holdPatternLatLngs() {
-  if (!holdOn || !holdFix) return [];
+// 홀딩 패턴 궤적(지도 표시용) — 픽스 기준 레이스트랙.
+// fix/cfg 를 주면 무장 여부와 무관하게 그린다(비행계획에 정의만 된 홀딩 미리보기).
+function holdPatternLatLngs(fix, cfg) {
+  const F0 = fix || holdFix;
+  if (!F0) return [];
+  const dir   = cfg ? (cfg.dir !== 'L') : holdRight;
+  const crsT  = cfg ? cfg.crs : holdCrs;
+  const lType = cfg ? (cfg.legType === 'DIST' ? 'DIST' : 'TIME') : holdLegType;
+  const lVal  = cfg ? (cfg.legVal || (lType === 'DIST' ? 5 : 60)) : holdLegVal;
   const R = navTurnRadiusNM();
-  const legNM = Math.max(20, groundSpdKt()) / 3600 * holdLegSec;
-  const sgn = holdRight ? 1 : -1;
+  const legNM = (lType === 'DIST')
+    ? Math.max(0.5, lVal)
+    : Math.max(20, groundSpdKt()) / 3600 * lVal;
+  const sgn = dir ? 1 : -1;
+  const holdCrs = crsT;                    // 아래 계산은 지역 변수를 쓴다
   const out = normA(holdCrs + 180);
   const pts = [];
-  const F = [holdFix.lat, holdFix.lon];
+  const F = [F0.lat, F0.lon];
   // 픽스에서 홀딩측으로 2R 떨어진 아웃바운드 레그 시작/끝
   const A = destPoint(F[0], F[1], normA(holdCrs + sgn * 90), 2 * R);
   const B = destPoint(A[0], A[1], out, legNM);
@@ -3119,7 +3170,9 @@ function drawFMA(x, y, w) {
   //   Right  (pitch)     : IAS — or GS when GSPD engaged
   let left, leftOn,
       mid = navApOn
-        ? (holdOn && _holdPhase !== 'TOFIX' ? 'HOLD' : (_navDirectTo ? 'NAV DIR' : 'NAV'))
+        ? (holdOn && _holdPhase !== 'TOFIX'
+             ? 'HOLD ' + (_holdEntry ? _holdEntry[0] : '')     // D=직진 P=평행 T=눈물방울
+             : (holdOn ? 'HOLD ARM' : (_navDirectTo ? 'NAV DIR' : 'NAV')))
         : (hdgSelOn ? 'HDG SEL' : 'HDG'),
       midOn = rollApOn || navApOn, right, rightOn;
 
@@ -5690,10 +5743,13 @@ function updateBrgLines() {
 let vorStationMarker = null;
 let wpMarkers = [];
 
+// 비행계획에 정의된 모든 홀딩 패턴을 지도에 그린다(무장 여부와 무관).
 function updateHoldLine() {
   try {
     if (typeof holdLine === 'undefined' || !holdLine) return;
-    holdLine.setLatLngs(holdOn ? holdPatternLatLngs() : []);
+    const segs = [];
+    S.wps.forEach(wp => { if (wp && wp.hold) segs.push(holdPatternLatLngs(wp, wp.hold)); });
+    holdLine.setLatLngs(segs);
   } catch(e) {}
 }
 
@@ -5999,7 +6055,7 @@ function renderNavBox(){
 // ══════════════════════════════════════════════════════
 // FLIGHT PLAN STATE MACHINE
 // ══════════════════════════════════════════════════════
-let fpMode = 'LIST'; // 'LIST'|'ADD'|'IDENT'|'LAT'|'LON'|'IFR'
+let fpMode = 'LIST'; // 'LIST'|'ADD'|'IDENT'|'LAT'|'LON'|'IFR'|'SIDNEW'|'HOLD'
 let fpInputBuf = '';
 let fpTempLat = null;
 let fpIfrPhase = 'dep';
@@ -6035,7 +6091,128 @@ function fpRender() {
     case 'LON':   fpRenderCoord(area, title, footer, 'LON'); break;
     case 'IFR':   fpRenderIfr(area, title, footer);  break;
     case 'SIDNEW': fpRenderSidNew(area, title, footer); break;
+    case 'HOLD':  fpRenderHold(area, title, footer);  break;
   }
+}
+
+// ══════════════════════════════════════════════════════
+// 홀딩 패턴 설정 (비행계획 웨이포인트별)
+// ══════════════════════════════════════════════════════
+let fpHoldIdx = -1;
+let fpHoldDraft = null;    // { dir, crsM, legType, legVal }
+const HOLD_TIMES = [30, 60, 90, 120, 150, 180];
+
+function fpHoldOpen(i) {
+  if (i < 0 || i >= S.wps.length) return;
+  const h = S.wps[i].hold;
+  fpHoldIdx = i;
+  fpHoldDraft = h
+    ? { dir: h.dir === 'L' ? 'L' : 'R', crsM: Math.round(toMag(h.crs)),
+        legType: h.legType === 'DIST' ? 'DIST' : 'TIME',
+        legVal: h.legVal || (h.legType === 'DIST' ? 5 : 60) }
+    : { dir: 'R', crsM: holdDefaultCrsMag(i), legType: 'TIME', legVal: 60 };
+  fpGo('HOLD');
+}
+function fpHoldSet(k, v) {
+  if (!fpHoldDraft) return;
+  if (k === 'legType') {
+    fpHoldDraft.legType = v;
+    fpHoldDraft.legVal = (v === 'DIST') ? 5 : 60;   // 기본값으로 되돌린다
+  } else fpHoldDraft[k] = v;
+  fpRender();
+}
+function fpHoldCrsAdj(d) {
+  if (!fpHoldDraft) return;
+  fpHoldDraft.crsM = ((Math.round(fpHoldDraft.crsM) + d + 359) % 360) + 1;
+  fpRender();
+}
+function fpHoldLegAdj(d) {
+  if (!fpHoldDraft) return;
+  if (fpHoldDraft.legType === 'DIST') {
+    fpHoldDraft.legVal = Math.max(1, Math.min(20, fpHoldDraft.legVal + d));
+  } else {
+    const i = HOLD_TIMES.indexOf(fpHoldDraft.legVal);
+    const j = Math.max(0, Math.min(HOLD_TIMES.length - 1, (i < 0 ? 1 : i) + Math.sign(d)));
+    fpHoldDraft.legVal = HOLD_TIMES[j];
+  }
+  fpRender();
+}
+function fpHoldApply() {
+  if (fpHoldIdx < 0 || fpHoldIdx >= S.wps.length || !fpHoldDraft) { fpGo('LIST'); return; }
+  S.wps[fpHoldIdx].hold = {
+    dir: fpHoldDraft.dir,
+    crs: toTrue(fpHoldDraft.crsM),          // 입력은 자북, 저장은 진북
+    legType: fpHoldDraft.legType,
+    legVal: fpHoldDraft.legVal,
+  };
+  holdExit();                                // 새 설정으로 다시 무장되게 초기화
+  try { updateHoldLine(); updateNav(); } catch(e) {}
+  fpGo('LIST');
+}
+function fpHoldRemove() {
+  if (fpHoldIdx >= 0 && fpHoldIdx < S.wps.length) delete S.wps[fpHoldIdx].hold;
+  holdExit();
+  try { updateHoldLine(); updateNav(); } catch(e) {}
+  fpGo('LIST');
+}
+
+function fpRenderHold(area, title, footer) {
+  const wp = S.wps[fpHoldIdx];
+  if (!wp || !fpHoldDraft) { fpGo('LIST'); return; }
+  const d = fpHoldDraft;
+  title.textContent = 'HOLDING — ' + (wp.ident || 'WPT');
+  const legTxt = d.legType === 'DIST' ? d.legVal + ' NM'
+                                      : (d.legVal >= 60 ? (d.legVal / 60) + ':' + String(d.legVal % 60).padStart(2,'0')
+                                                        : d.legVal + 's');
+  // 예상 패턴 크기 — 현재 속도 기준
+  const R = navTurnRadiusNM();
+  const legNM = d.legType === 'DIST' ? d.legVal : Math.max(20, groundSpdKt()) / 3600 * d.legVal;
+  area.innerHTML = `
+    <div class="fp-panel-border" style="padding:8px;">
+      <div class="hold-row">
+        <div class="hold-lbl">TURN</div>
+        <div class="hold-seg">
+          <div class="hold-btn${d.dir==='L'?' on':''}" onclick="fpHoldSet('dir','L')">◄ LEFT</div>
+          <div class="hold-btn${d.dir==='R'?' on':''}" onclick="fpHoldSet('dir','R')">RIGHT ►</div>
+        </div>
+      </div>
+      <div class="hold-row">
+        <div class="hold-lbl">INBD CRS</div>
+        <div class="hold-spin">
+          <div class="hold-btn" onclick="fpHoldCrsAdj(-10)">≪</div>
+          <div class="hold-btn" onclick="fpHoldCrsAdj(-1)">◄</div>
+          <div class="hold-val">${String(d.crsM).padStart(3,'0')}°M</div>
+          <div class="hold-btn" onclick="fpHoldCrsAdj(1)">►</div>
+          <div class="hold-btn" onclick="fpHoldCrsAdj(10)">≫</div>
+        </div>
+      </div>
+      <div class="hold-row">
+        <div class="hold-lbl">LEG</div>
+        <div class="hold-seg">
+          <div class="hold-btn${d.legType==='TIME'?' on':''}" onclick="fpHoldSet('legType','TIME')">TIME</div>
+          <div class="hold-btn${d.legType==='DIST'?' on':''}" onclick="fpHoldSet('legType','DIST')">DIST</div>
+        </div>
+      </div>
+      <div class="hold-row">
+        <div class="hold-lbl">${d.legType==='DIST'?'거리':'시간'}</div>
+        <div class="hold-spin">
+          <div class="hold-btn" onclick="fpHoldLegAdj(-1)">▼</div>
+          <div class="hold-val">${legTxt}</div>
+          <div class="hold-btn" onclick="fpHoldLegAdj(1)">▲</div>
+        </div>
+      </div>
+      <div style="color:#567;font-size:9px;line-height:1.6;margin-top:8px;border-top:1px solid #1a2a3a;padding-top:6px;">
+        선회반경 ${R.toFixed(2)}NM · 아웃바운드 ${legNM.toFixed(1)}NM · 패턴 폭 ${(2*R).toFixed(2)}NM
+        (현재 지상속도 ${Math.round(groundSpdKt())}kt 기준)<br>
+        ENTER 하면 지도에 패턴이 그려지고, <b>NAV 오토파일럿</b>이 이 웨이포인트를 활성으로 잡았을 때
+        <b>진입 규칙(직진 / 평행 / 눈물방울)</b>에 따라 자동으로 진입해 홀딩을 돕니다.
+        홀딩을 빠져나가려면 <b>DEL HOLD</b> 로 지우세요.
+      </div>
+    </div>`;
+  footer.innerHTML = `
+    <div class="fp-nav-btn" onclick="fpGo('LIST')"><span>↩</span>Cancel</div>
+    ${wp.hold ? `<div class="fp-nav-btn" onclick="fpHoldRemove()"><span>✕</span>Del Hold</div>` : ''}
+    <div class="fp-nav-btn fp-nav-enter" onclick="fpHoldApply()"><span>↩</span>Enter</div>`;
 }
 
 function fpRenderList(area, title, footer) {
@@ -6060,6 +6237,7 @@ function fpRenderList(area, title, footer) {
         <span class="fp-wp-ident">${badge}${wp.ident}</span>
         <span class="fp-wp-hdg">${fmtA(toMag(b))}°</span>
         <span class="fp-wp-dist">${d.toFixed(0)}NM</span>
+        <button class="fp-wp-hold${wp.hold?' active':''}" onclick="event.stopPropagation();fpHoldOpen(${i})" title="홀딩 패턴">HOLD</button>
         <button class="fp-wp-b2${isB2?' active':''}" onclick="event.stopPropagation();setBrg2(${i})">B2</button>
         <button class="fp-wp-del" onclick="event.stopPropagation();removeWP(${i})">✕</button>
       </div>`;
@@ -6799,6 +6977,7 @@ function simStep(ts){
           bankTarget = 0;
           selHdg = ((Math.round(S.hdg) + 359) % 360) + 1; hdgSelOn = true;
         } else {
+          holdSyncFromWp();                  // 활성 WP 에 홀딩이 있으면 자동 무장
           const hb = holdBankTarget(dt);     // 홀딩 중이면 홀딩 로직이 우선
           bankTarget = (hb === null) ? navApBankTarget() : hb;
         }
