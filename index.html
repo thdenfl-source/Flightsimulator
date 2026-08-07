@@ -1526,6 +1526,9 @@ body.night-mode::after {
       <h3>4. PFD · HOVER PAGE</h3>
       <ul>
         <li><b>NAV SRC</b>: <b>FMS / NAV1 / NAV2</b>. NAV1·NAV2는 CDU에서 튜닝한 VOR을 따라갑니다.</li>
+        <li><b>방위 표기는 모두 자북(°M)</b>입니다 — HDG·CRS·BRG·NAV SOURCE·지도 BRG 라벨·비행계획 구간방위·바람·선박 침로.
+            지도의 선과 거리는 정확도를 위해 내부적으로 진북(대권) 기하로 계산하고, 화면 숫자와 입력만 자북으로 변환합니다
+            (한국 자기편차 9°W 기준). 측정자는 <b>°T / °M</b>을 함께 표시합니다.</li>
         <li><b>NAV SOURCE 판독</b>(HSI 우측, 황토 바탕): <b>FMS · NAV1 · NAV2</b> 세 소스가 각각 가리키는 지점의
             <b>명칭 · 방위 · 거리</b>를 동시에 표시합니다. 현재 선택된 소스는 배경 강조로 구분되며,
             기존 우측 BRG2 판독을 대신합니다(나침반의 BRG2 니들은 그대로).</li>
@@ -2649,6 +2652,11 @@ const D2R = Math.PI / 180;
 // 울진·청주·김해 차트에 'MAG VAR 8°W → 9°W' 개정 이력이 명시되어 있다.
 // HOVER PAGE 판독(drawHsiHoverPage)에서도 참조하므로 여기서 선언해 TDZ를 피한다.
 const RULER_VAR = -9;
+// 표시는 자북(°M), 내부 계산·좌표는 진북(대권) 기준을 유지한다.
+// 지도의 선·거리는 진북 기하로 그려야 정확하므로 상태값은 바꾸지 않고,
+// 화면에 숫자로 보여줄 때와 사용자가 절대 방위를 입력할 때만 변환한다.
+const toMag  = t => normA(t - RULER_VAR);   // 진북 → 자북
+const toTrue = m => normA(m + RULER_VAR);   // 자북 → 진북
 const R_NM = 3440.065;
 
 // ══════════════════════════════════════════════════════
@@ -3371,7 +3379,7 @@ function drawHSI(x, y, w, h) {
       sublbl:    navSrc !== 'FMS' ? navSrc : 'VOR',
       color:     '#44aaff',
       ident:     navIcao || '----',
-      brg:       brg1NavActive ? fmtA(brg1NavBrg) + '°'        : '---°',
+      brg:       brg1NavActive ? fmtA(toMag(brg1NavBrg)) + '°'  : '---°',
       dist:      brg1NavActive ? (brg1NavDist*D_CV()).toFixed(1) + D_LBL()  : '--.-' + D_LBL(),
       needleSym: 'single',
       align:     'left',
@@ -3383,7 +3391,7 @@ function drawHSI(x, y, w, h) {
 
   // ── Wind display (HSI top-left) ──
   {
-    const wdirFmt = String(Math.round(windDir)).padStart(3,'0');
+    const wdirFmt = fmtA(toMag(windDir));   // 바람도 자북 기준으로 표기
     const wspdFmt = String(Math.round(windSpd)).padStart(2,'0');
     const wdX = leftX + sideW / 2;
     const wdY = y + h * 0.10;
@@ -3439,7 +3447,7 @@ function drawHSI(x, y, w, h) {
     ctx.save();
     rows.forEach((rw, i) => {
       const has = rw.lat !== null;
-      const brg = has ? fmtA(bearing(S.lat, S.lon, rw.lat, rw.lon)) + '°' : '---°';
+      const brg = has ? fmtA(toMag(bearing(S.lat, S.lon, rw.lat, rw.lon))) + '°' : '---°';
       const dst = has ? uDist(distance(S.lat, S.lon, rw.lat, rw.lon), 1) : '--.-';
       const parts = [
         [rw.src + ' ', navSrc === rw.src ? rw.color : '#888', lblFont],
@@ -3524,7 +3532,7 @@ function drawHSI(x, y, w, h) {
 
   // rotating rose
   ctx.save();
-  ctx.rotate(-S.hdg * D2R);
+  ctx.rotate(-toMag(S.hdg) * D2R);   // 카드 눈금이 자북(°M)을 가리키게
   for (let a=0;a<360;a+=5) {
     const rad=a*D2R, is30=a%30===0, is10=a%10===0;
     const rOut=r*0.97, rIn=r*(is30?0.87:is10?0.915:0.955);
@@ -3585,7 +3593,7 @@ function drawHSI(x, y, w, h) {
     ctx.fillStyle = hdgSelOn ? '#00e5ff' : '#4a6a72';
     ctx.font = `bold ${Math.max(9, r * 0.115)}px Helvetica Neue, Arial, sans-serif`;
     ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-    ctx.fillText(String(Math.round(selHdg)).padStart(3, '0') + '°', -r + 2, -r + 6);
+    ctx.fillText(fmtA(toMag(selHdg)) + '°', -r + 2, -r + 6);
     ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
   }
 
@@ -3735,7 +3743,7 @@ function drawHSI(x, y, w, h) {
   ctx.fillStyle='#00cfff'; ctx.font='bold 11px Helvetica Neue, Arial, sans-serif';
   ctx.fillText('HDG', hdgX+4, txtY);
   ctx.fillStyle='#fff'; ctx.font='bold 13px Helvetica Neue, Arial, sans-serif'; ctx.textAlign='right';
-  ctx.fillText(fmtA(S.hdg)+'°', hdgX+bw-4, txtY);
+  ctx.fillText(fmtA(toMag(S.hdg))+'°', hdgX+bw-4, txtY);
   // CRS box
   ctx.fillStyle='#000'; ctx.strokeStyle='#555';
   ctx.fillRect(crsX,boxY,bw,bh); ctx.strokeRect(crsX,boxY,bw,bh);
@@ -3743,7 +3751,7 @@ function drawHSI(x, y, w, h) {
   ctx.fillStyle='#00cfff'; ctx.font='bold 11px Helvetica Neue, Arial, sans-serif';
   ctx.fillText('CRS', crsX+4, txtY);
   ctx.fillStyle='#fff'; ctx.font='bold 13px Helvetica Neue, Arial, sans-serif'; ctx.textAlign='right';
-  ctx.fillText(fmtA(activeCrs())+'°', crsX+bw-4, txtY);
+  ctx.fillText(fmtA(toMag(activeCrs()))+'°', crsX+bw-4, txtY);
   ctx.restore();  // outer restore — matches save at function entry
 }
 
@@ -3784,7 +3792,7 @@ function drawHsiHoverPage(x, y, w, h, cx, cy, rFull) {
 
   // ── Rotating rose (heading-up) ──
   ctx.save();
-  ctx.rotate(-S.hdg * D2R);
+  ctx.rotate(-toMag(S.hdg) * D2R);   // 카드 눈금이 자북(°M)을 가리키게
   for (let a = 0; a < 360; a += 5) {
     const rad = a * D2R, is30 = a % 30 === 0, is10 = a % 10 === 0;
     const rOut = r * 0.97;
@@ -4670,7 +4678,7 @@ async function toggleWind() {
 
     _windAptLayer = L.layerGroup(
       aptWinds.map(w => L.marker([w.lat, w.lon], { icon: _makeWindIcon(w.dir, w.spd), zIndexOffset: 600 })
-        .bindTooltip(`${w.icao} ${w.name}<br>${w.dir.toString().padStart(3,'0')}° / ${w.spd}kt`, { direction:'top', offset:[0,-24] }))
+        .bindTooltip(`${w.icao} ${w.name}<br>${fmtA(toMag(w.dir))}° / ${w.spd}kt`, { direction:'top', offset:[0,-24] }))
     ).addTo(leafMap);
 
     windActive = true;
@@ -4944,7 +4952,7 @@ function applyGPS(pos) {
   // 좌표창 오른쪽에 한 줄로 표시(높이 통일)
   document.getElementById('gps-status').innerHTML =
     `● ${decToDMS(S.lat, true)} ${decToDMS(S.lon, false)} · ` +
-    `${uSpd(S.spd)} · ${uAlt(S.alt)} · ${String(Math.round(S.hdg)).padStart(3,'0')}° · ±${acc}`;
+    `${uSpd(S.spd)} · ${uAlt(S.alt)} · ${fmtA(toMag(S.hdg))}° · ±${acc}`;
 }
 
 function decToDMS(deg, isLat) {
@@ -5397,7 +5405,7 @@ function _setBrgLine(line, mkRef, show, tLat, tLon, tag, brg, dist, color) {
   const midLat = (S.lat + tLat) / 2, midLon = (S.lon + tLon) / 2;
   mkRef.mk.setLatLng([midLat, midLon]);
   const el = mkRef.mk.getElement();
-  if (el && el.firstChild) el.firstChild.textContent = `${tag} ${fmtA(brg)}° ${dist.toFixed(1)}NM`;
+  if (el && el.firstChild) el.firstChild.textContent = `${tag} ${fmtA(toMag(brg))}° ${dist.toFixed(1)}NM`;
 }
 const _brg1Ref = { mk: null }, _brg2Ref = { mk: null };
 function updateBrgLines() {
@@ -5704,9 +5712,9 @@ function updateNav(){
   renderNavBox();
 }
 function renderNavBox(){
-  document.getElementById('nav-brg1').textContent = S.awp>=0    ? fmtA(S.brg)+'°'       : '---°';
-  document.getElementById('nav-brg2').textContent = S.brg2wp>=0 ? fmtA(S.brg2)+'°'      : '---°';
-  document.getElementById('nav-crs').textContent  = fmtA(activeCrs())+'°';
+  document.getElementById('nav-brg1').textContent = S.awp>=0    ? fmtA(toMag(S.brg))+'°'  : '---°';
+  document.getElementById('nav-brg2').textContent = S.brg2wp>=0 ? fmtA(toMag(S.brg2))+'°' : '---°';
+  document.getElementById('nav-crs').textContent  = fmtA(toMag(activeCrs()))+'°';
   document.getElementById('nav-dtw').textContent  = S.awp>=0    ? (S.dtw*D_CV()).toFixed(1)+D_LBL() : '---'+D_LBL();
 }
 
@@ -5772,7 +5780,7 @@ function fpRenderList(area, title, footer) {
       html+=`<div class="${cls}" onclick="selectWP(${i})">
         <span class="fp-wp-seq">${i+1}</span>
         <span class="fp-wp-ident">${badge}${wp.ident}</span>
-        <span class="fp-wp-hdg">${fmtA(b)}°</span>
+        <span class="fp-wp-hdg">${fmtA(toMag(b))}°</span>
         <span class="fp-wp-dist">${d.toFixed(0)}NM</span>
         <button class="fp-wp-b2${isB2?' active':''}" onclick="event.stopPropagation();setBrg2(${i})">B2</button>
         <button class="fp-wp-del" onclick="event.stopPropagation();removeWP(${i})">✕</button>
@@ -6846,7 +6854,7 @@ function _rulerRender() {
     L.marker(mid, { interactive: false, icon: L.divIcon({ className:'', iconSize:[0,0],
       html:`<div style="transform:translate(-50%,-50%);background:rgba(8,10,14,0.85);border:1px solid #ffd54f88;border-radius:3px;` +
            `padding:1px 4px;color:#ffd54f;font-size:9px;font-weight:bold;white-space:nowrap;">` +
-           `${String(Math.round(brg)).padStart(3,'0')}° · ${d.toFixed(1)}NM</div>` }) }).addTo(g);
+           `${fmtA(toMag(brg))}° · ${d.toFixed(1)}NM</div>` }) }).addTo(g);
   }
   _rulerLayer = g.addTo(leafMap);
 
@@ -8405,8 +8413,8 @@ function init(){
     const fmaBtm = FMA_MARGIN + FMA_BOX_H;
     if (py >= fmaTop && py <= fmaBtm) {
       if (boxIdx === 1) {
-        const v = prompt('HDG preselect (1–360°):', selHdg);
-        if (v !== null) { const n = parseInt(v, 10); if (!isNaN(n)) { selHdg = Math.max(1, Math.min(360, n)); hdgSelOn = true; rollApOn = true; } }
+        const v = prompt('HDG preselect (1–360°M):', fmtA(toMag(selHdg)));
+        if (v !== null) { const n = parseInt(v, 10); if (!isNaN(n)) { selHdg = toTrue(Math.max(1, Math.min(360, n))) || 360; hdgSelOn = true; rollApOn = true; } }
       } else if (boxIdx === 2) {
         const v = prompt('IAS preselect (kt):', selSpd);
         if (v !== null) { const n = parseInt(v, 10); if (!isNaN(n) && n >= 0) selSpd = n; }
@@ -8526,13 +8534,13 @@ function shipSetMode(mode) {
 }
 
 function updateShipDisplay() {
-  const cur = shipInputMode === 'SPD' ? String(shipSpd) : String(shipHdg).padStart(3,'0');
+  const cur = shipInputMode === 'SPD' ? String(shipSpd) : fmtA(toMag(shipHdg));
   document.getElementById('ship-display').textContent = shipInput || cur;
 }
 
 function updateShipStatus() {
   document.getElementById('ship-stat-spd').textContent = shipSpd + 'kt';
-  document.getElementById('ship-stat-crs').textContent = String(shipHdg).padStart(3,'0') + '°';
+  document.getElementById('ship-stat-crs').textContent = fmtA(toMag(shipHdg)) + '°';
 }
 
 function shipKey(k) {
@@ -8541,7 +8549,7 @@ function shipKey(k) {
     const v = parseInt(shipInput, 10);
     if (!isNaN(v)) {
       if (shipInputMode === 'SPD')      shipSpd = Math.min(50, Math.max(0, v));
-      else if (shipInputMode === 'CRS') shipHdg = ((v % 360) + 360) % 360;
+      else if (shipInputMode === 'CRS') shipHdg = toTrue(v);   // 입력은 자북 → 내부는 진북
     }
     shipInput = '';
     updateShipDisplay();
