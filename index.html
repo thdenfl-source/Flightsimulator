@@ -363,11 +363,17 @@ html, body {
 
 /* ── COLLECTIVE TRIM (파워 조작) ── */
 /* 지금은 VS ▲▼와 같은 동작. 상위모드 해제 기능이 들어가면 파워(출력) 직접 제어로 확장한다. */
-.coll-group { display: flex; flex-direction: column; align-items: center; gap: 2px; }
-.coll-lbl {
+/* 조작부 이름표 공통(4-WAY TRIM · COLLECTIVE TRIM · ANTI-TORQUE PEDAL) */
+.coll-lbl, .pedal-lbl, .trim-lbl {
   color: #7a8a99; font-size: 8px; font-weight: bold; letter-spacing: 0.3px;
   text-align: center; line-height: 1.1; white-space: nowrap;
   font-family: 'Helvetica Neue', Arial, sans-serif;
+}
+/* 이름표가 붙는 조작부 3종은 같은 높이로 두고 이름표는 위, 본체는 아래에 붙인다.
+   → 이름 줄과 조작부 아랫변이 각각 한 줄로 맞는다 */
+.trim-padgroup, .coll-group, .pedal-group {
+  display: flex; flex-direction: column; align-items: center;
+  height: 74px; justify-content: space-between;
 }
 .coll-btns { display: flex; flex-direction: column; gap: 2px; }
 .coll-btn {
@@ -381,12 +387,6 @@ html, body {
 .coll-btn:active { background: #1e3040; border-color: #4dd0e1; color: #4dd0e1; }
 
 /* ── ANTI-TORQUE PEDAL (요 조작) ── */
-.pedal-group { display: flex; flex-direction: column; align-items: center; gap: 2px; }
-.pedal-lbl {
-  color: #7a8a99; font-size: 8px; font-weight: bold; letter-spacing: 0.3px;
-  text-align: center; line-height: 1.1; white-space: nowrap;
-  font-family: 'Helvetica Neue', Arial, sans-serif;
-}
 .pedal-btns { display: flex; gap: 3px; }
 .pedal-btn {
   width: 34px; height: 34px; border-radius: 6px;
@@ -1786,11 +1786,14 @@ body.night-mode::after {
               <button class="coll-btn" id="coll-dn" title="컬렉티브 다운(강하)">▼</button>
             </div>
           </div>
-          <div class="trim-pad" id="trim-pad">
-            <button class="trim-cell tc-l"   id="trim-l"   data-trim-dir="L">◄</button>
-            <button class="trim-cell tc-fwd" id="trim-fwd" data-trim-dir="F">▲</button>
-            <button class="trim-cell tc-aft" id="trim-aft" data-trim-dir="A">▼</button>
-            <button class="trim-cell tc-r"   id="trim-r"   data-trim-dir="R">►</button>
+          <div class="trim-padgroup">
+            <div class="trim-lbl">4-WAY<br>TRIM</div>
+            <div class="trim-pad" id="trim-pad">
+              <button class="trim-cell tc-l"   id="trim-l"   data-trim-dir="L">◄</button>
+              <button class="trim-cell tc-fwd" id="trim-fwd" data-trim-dir="F">▲</button>
+              <button class="trim-cell tc-aft" id="trim-aft" data-trim-dir="A">▼</button>
+              <button class="trim-cell tc-r"   id="trim-r"   data-trim-dir="R">►</button>
+            </div>
           </div>
           <button class="force-trim-btn" id="force-trim-btn" onclick="forceTrim()" title="Force Trim">FORCE<br>TRIM</button>
           <button class="gspd-btn" id="gspd-btn" onclick="toggleGspd()" title="Ground Speed Hold">GSPD</button>
