@@ -2675,12 +2675,18 @@ function _holdHdgBank(tgtHdg, dir) {
 
 // 홀딩 진입 방식 판정 (우선회 기준, 좌선회는 좌우 반전)
 //   인바운드 코스 C 대비 기수 H 의 상대각 r = H − C
-//   r ≤ 180° : 직진(DIRECT) / 180~290° : 평행(PARALLEL) / 그 외 : 눈물방울(TEARDROP)
+//   r 0~180° : 직진(DIRECT, 180° 섹터)
+//   r 180~290° : 평행(PARALLEL, 110° 섹터)
+//   r 290~360° : 눈물방울(TEARDROP, 70° 섹터)
+// 0~360 으로 정규화하면 정대 진입(r=0)이 부동소수점 오차로 359.99…° 가 되어
+// 눈물방울 구간에 떨어진다. 레그를 따라 픽스로 들어가면 기수 ≈ 인바운드 코스라
+// 가장 흔한 경우가 여기 걸리므로, −180~+180 부호각으로 판정한다.
+const HOLD_ENTRY_TOL = 2;    // 인바운드 코스와 ±2° 이내면 정대 진입 → 직진
 function _holdEntryType() {
-  const r = holdRight ? normA(S.hdg - holdCrs) : normA(holdCrs - S.hdg);
-  if (r <= 180) return 'DIRECT';
-  if (r <= 290) return 'PARALLEL';
-  return 'TEARDROP';
+  const rs = normAS(holdRight ? S.hdg - holdCrs : holdCrs - S.hdg);
+  if (rs >= -HOLD_ENTRY_TOL) return 'DIRECT';     // r 0 ~ 180°
+  if (rs <= -70)             return 'PARALLEL';   // r 180 ~ 290°
+  return 'TEARDROP';                              // r 290 ~ 360°
 }
 
 // 홀딩 AP. 뱅크 지령을 반환하고, 아직 픽스로 가는 중이면 null(일반 NAV 사용).
