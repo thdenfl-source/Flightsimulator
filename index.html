@@ -1560,10 +1560,31 @@ body.night-mode::after {
             VOR/LOC 소스일 때는 편위를 거리(NM)가 아닌 <b>각도(최대편위 10°)</b>로 보아 실제 수신기처럼 동작합니다.</li>
         <li><b>홀딩 패턴</b>: CDU <b>Flight Plan</b>의 각 웨이포인트 행에 있는 <b>HOLD</b> 버튼으로 설정합니다.
             <b>선회방향(LEFT/RIGHT)</b>, <b>인바운드 코스(°M)</b>, <b>레그(TIME 30~180초 / DIST 1~20NM)</b>를 고르고 ENTER 하면
-            지도에 노란 레이스트랙으로 그려집니다. <b>NAV 오토파일럿</b>이 그 웨이포인트를 활성으로 잡으면 자동 무장되어,
-            픽스 통과 시 기수에 따라 <b>직진 / 평행 / 눈물방울</b> 진입을 판정해 진입 코스를 만들고 홀딩을 돕니다.
-            FMA에는 <b>HOLD D/P/T</b>(진입 방식)로 표시되고, 홀딩 중에는 웨이포인트 시퀀싱이 멈춥니다.
-            빠져나가려면 같은 화면의 <b>DEL HOLD</b>로 홀딩을 지우면 됩니다.</li>
+            지도에 노란 레이스트랙으로 그려집니다. <b>NAV 오토파일럿</b>이 그 웨이포인트를 활성으로 잡으면 자동 무장되고,
+            FMA에는 <b>HOLD ARM</b> → 진입 후 <b>HOLD D/P/T</b>(진입 방식)로 표시됩니다.
+            홀딩 중에는 웨이포인트 시퀀싱이 멈추며, 빠져나가려면 <b>DEL HOLD</b>로 홀딩을 지웁니다.</li>
+        <li><b>진입 절차(Entry)</b> — 판정 기준은 <b>픽스 도달 시점의 기수</b>와 인바운드 코스의 각도 차이입니다.
+            표준(우선회) 기준 상대각 <b>r = 기수 − 인바운드 코스</b>(좌선회는 좌우 대칭):
+            <table style="margin:4px 0;border-collapse:collapse;font-size:11px;">
+              <tr><th style="text-align:left;padding:2px 8px 2px 0;">구역</th>
+                  <th style="text-align:left;padding:2px 8px 2px 0;">범위</th>
+                  <th style="text-align:left;padding:2px 0;">절차</th></tr>
+              <tr><td style="padding:2px 8px 2px 0;"><b>직진</b><br>Direct</td>
+                  <td style="padding:2px 8px 2px 0;">r 0~180°<br>(180°)</td>
+                  <td style="padding:2px 0;">픽스 통과 즉시 <b>대기 방향으로 선회</b>해 아웃바운드 기수로 비행</td></tr>
+              <tr><td style="padding:2px 8px 2px 0;"><b>평행</b><br>Parallel</td>
+                  <td style="padding:2px 8px 2px 0;">r 180~290°<br>(110°)</td>
+                  <td style="padding:2px 0;"><b>비대기측</b>으로 선회해 인바운드 코스와 평행하게 아웃바운드 비행 →
+                      <b>대기 반대방향으로 180° 넘게 선회</b>해 코스를 가로질러 합류</td></tr>
+              <tr><td style="padding:2px 8px 2px 0;"><b>눈물방울</b><br>Teardrop</td>
+                  <td style="padding:2px 8px 2px 0;">r 290~360°<br>(70°)</td>
+                  <td style="padding:2px 0;">아웃바운드 코스에서 <b>대기구역 쪽으로 30° 비껴</b> 비행 →
+                      <b>대기 방향으로 선회</b>해 합류</td></tr>
+            </table>
+            아웃바운드 레그 시간은 <b>픽스 어빔</b>과 <b>롤아웃</b> 중 늦은 쪽부터 계수하고, 합류 시
+            <b>CDI·코스선이 대기 인바운드 코스로 전환(Twist)</b>됩니다.
+            바람이 있으면 아웃바운드에서 <b>편류수정각을 3배(triple drift)</b> 적용해, 인바운드 선회를 마쳤을 때
+            코스 위에 놓이도록 합니다(측풍 35kt에서 픽스 0.6NM 전 코스 정렬 완료).</li>
         <li><b>선회 선행</b>: 웨이포인트에서 다음 레그로 꺾을 때 <b>d = R·tan(θ/2)</b> 만큼 미리 선회를 시작합니다
             (R 은 지상속도·실제 뱅크 기준). VNAV 의 TOD 도 레그 방향 거리와 지상속도로 계산합니다.</li>
         <li><b>방위 표기는 모두 자북(°M)</b>입니다 — HDG·CRS·BRG·NAV SOURCE·지도 BRG 라벨·비행계획 구간방위·바람·선박 침로.
@@ -2493,12 +2514,15 @@ function groundSpdKt() {
 //   V·sin(H−T) + W·sin(Tw−T) = 0,  Tw = windDir+180 (바람이 불어가는 방향)
 //   → H = T + asin(W/V · sin(windDir − T))
 // 바람이 대기속도보다 강해 해가 없으면(측풍 성분 초과) 최대 보정각으로 클램프한다.
-function windCorrectedHdg(desiredTrack) {
+// mult 는 편류수정각 배수 — 홀딩 아웃바운드 레그에서 3배(triple drift)를 써서
+// 인바운드 선회를 마쳤을 때 코스 위에 놓이도록 바람 쪽으로 더 치우쳐 난다.
+function windCorrectedHdg(desiredTrack, mult) {
   const wEff = effectiveWindSpd();
   const v = Math.max(20, S.spd);
   if (wEff <= 0.1) return desiredTrack;
   const s = wEff * Math.sin((windDir - desiredTrack) * D2R) / v;
-  const wca = Math.asin(Math.max(-1, Math.min(1, s))) / D2R;
+  let wca = Math.asin(Math.max(-1, Math.min(1, s))) / D2R;
+  if (mult && mult !== 1) wca = Math.max(-45, Math.min(45, wca * mult));
   return normA(desiredTrack + wca);
 }
 
@@ -2702,27 +2726,41 @@ function holdBankTarget(dt) {
     if (!passed) return null;                       // 픽스까지는 일반 NAV 로 비행
     _holdEntry = _holdEntryType();
     if (_holdEntry === 'TEARDROP') {
-      _holdOutHdg = normA(holdCrs + 180 - sgn * 30);   // 홀딩측으로 30° 틀어 진입
-      _holdForceDir = sgn;
+      // 아웃바운드 코스에서 대기구역 쪽으로 30° 비껴서 진입
+      _holdOutHdg = normA(holdCrs + 180 - sgn * 30);
+      _holdForceDir = sgn;                             // 대기 방향으로 선회
     } else if (_holdEntry === 'PARALLEL') {
+      // 인바운드 코스와 평행하게(아웃바운드 방향) 비대기측으로 선회해 진입
       _holdOutHdg = normA(holdCrs + 180);
-      _holdForceDir = -sgn;                            // 비홀딩측으로 선회
+      _holdForceDir = -sgn;
     } else {
+      // 직진 — 대기 방향으로 선회해 바로 아웃바운드 기수로
       _holdOutHdg = normA(holdCrs + 180);
       _holdForceDir = sgn;
     }
+    S.crs = normA(holdCrs);      // Twist — CDI/코스선을 대기 인바운드 코스로
     _holdPhase = 'OUTBOUND'; _holdT = 0;
   }
 
   if (_holdPhase === 'OUTBOUND') {
     _holdPrevD = d;
-    const tgt = windCorrectedHdg(_holdOutHdg);
+    // 아웃바운드는 편류수정각을 3배(triple drift) 적용해 인바운드 롤아웃이
+    // 코스 위에 놓이도록 한다.
+    const tgt = windCorrectedHdg(_holdOutHdg, 3);
     const err = Math.abs(normAS(tgt - S.hdg));
     if (err < 15) _holdForceDir = 0;
-    if (err < 10) _holdT += dt;                     // 롤아웃(어빔) 후부터 레그 시간 계수
+    // 레그 시간 계수는 "픽스 어빔"과 "아웃바운드 롤아웃" 중 늦은 쪽부터.
+    // 어빔 = 픽스가 기수 기준 정횡(상대방위 90°) 뒤로 넘어간 시점.
+    const relFix = Math.abs(normAS(bearing(S.lat, S.lon, holdFix.lat, holdFix.lon) - S.hdg));
+    if (err < 10 && relFix >= 90) _holdT += dt;
     // 레그 종료: 시간 기준이면 경과초, 거리 기준이면 픽스로부터의 거리
     const done = (holdLegType === 'DIST') ? (d >= holdLegVal) : (_holdT >= holdLegVal);
-    if (done) { _holdPhase = 'INBOUND'; _holdForceDir = sgn; }
+    if (done) {
+      _holdPhase = 'INBOUND';
+      // 합류 선회 방향: 평행 진입만 비대기측(반대 방향)으로 180° 넘게 돌아
+      // 인바운드 코스를 가로질러 합류한다. 직진·눈물방울은 대기 방향.
+      _holdForceDir = (_holdEntry === 'PARALLEL') ? -sgn : sgn;
+    }
     return _holdHdgBank(tgt, _holdForceDir);
   }
 
@@ -2733,8 +2771,7 @@ function holdBankTarget(dt) {
     return _holdHdgBank(windCorrectedHdg(_holdOutHdg), _holdForceDir);
   }
   _holdPrevD = d;
-  const Lh = { from: destPoint(holdFix.lat, holdFix.lon, normA(holdCrs + 180), 20),
-               to: [holdFix.lat, holdFix.lon], crs: holdCrs };
+  const Lh = activeCourseLine();          // 홀딩 중에는 대기 인바운드 코스선
   const xtk = courseXtk(Lh);
   const IC = navInterceptDeg;
   const rollOut = Math.max(0.15, navTurnRadiusNM() * (1 - Math.cos(IC * D2R)));
@@ -2853,6 +2890,12 @@ function activeCourseLine() {
     return { from, to: [navLat, navLon], crs: vorObsCrs };
   }
   if (S.awp < 0 || S.awp >= S.wps.length) return null;
+  // 홀딩 진입·선회 중에는 대기 인바운드 코스가 활성 코스선이 된다(Twist).
+  // 조종사가 픽스 통과와 함께 OBS 코스를 인바운드 코스로 돌리는 절차와 같다.
+  if (holdOn && holdFix && _holdPhase !== 'TOFIX') {
+    return { from: destPoint(holdFix.lat, holdFix.lon, normA(holdCrs + 180), 20),
+             to: [holdFix.lat, holdFix.lon], crs: holdCrs };
+  }
   const wp = S.wps[S.awp];
   // 이전 경유점이 있으면 그 구간(leg)이 코스선
   if (!obsOn && S.fwp >= 0 && S.fwp < S.wps.length) {
