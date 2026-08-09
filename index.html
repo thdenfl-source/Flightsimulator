@@ -1584,7 +1584,9 @@ body.night-mode::after {
             아웃바운드 레그 시간은 <b>픽스 어빔</b>과 <b>롤아웃</b> 중 늦은 쪽부터 계수하고, 합류 시
             <b>CDI·코스선이 대기 인바운드 코스로 전환(Twist)</b>됩니다.
             바람이 있으면 아웃바운드에서 <b>편류수정각을 3배(triple drift)</b> 적용해, 인바운드 선회를 마쳤을 때
-            코스 위에 놓이도록 합니다(측풍 35kt에서 픽스 0.6NM 전 코스 정렬 완료).</li>
+            코스 위에 놓이도록 합니다(측풍 35kt에서 픽스 0.6NM 전 코스 정렬 완료).
+            단 <b>평행 진입의 아웃바운드</b>는 <b>지상항적이 인바운드 역방위각</b>이 되도록 편류수정을 1배로 적용합니다.
+            홀딩이 걸린 웨이포인트에서는 <b>NAV 오토파일럿이 해제되지 않습니다</b>(픽스를 지나도 계속 홀딩).</li>
         <li><b>선회 선행</b>: 웨이포인트에서 다음 레그로 꺾을 때 <b>d = R·tan(θ/2)</b> 만큼 미리 선회를 시작합니다
             (R 은 지상속도·실제 뱅크 기준). VNAV 의 TOD 도 레그 방향 거리와 지상속도로 계산합니다.</li>
         <li><b>방위 표기는 모두 자북(°M)</b>입니다 — HDG·CRS·BRG·NAV SOURCE·지도 BRG 라벨·비행계획 구간방위·바람·선박 침로.
@@ -2749,7 +2751,9 @@ function holdBankTarget(dt) {
     // 롤아웃하므로 이 값이 곧 도달 방위다(3NM 전 위치로 역산하면 오히려
     // 코스에 붙기 전의 비스듬한 방향이 잡혀 틀린 구역으로 판정된다).
     _holdEntry = _holdEntryType(S.hdg);
-    // 아웃바운드 기수: 눈물방울만 대기구역 쪽으로 30° 비껴서, 나머지는 정반대
+    // 아웃바운드 방위 — 인바운드 코스의 역방위각(C+180) 기준
+    //   눈물방울: 우선회 홀딩이면 −30°, 좌선회 홀딩이면 +30° (대기구역 쪽)
+    //   직진·평행: 역방위각 그대로
     _holdOutHdg = (_holdEntry === 'TEARDROP')
       ? normA(holdCrs + 180 - sgn * 30)
       : normA(holdCrs + 180);
@@ -2764,9 +2768,11 @@ function holdBankTarget(dt) {
 
   if (_holdPhase === 'OUTBOUND') {
     _holdPrevD = d;
-    // 아웃바운드는 편류수정각을 3배(triple drift) 적용해 인바운드 롤아웃이
-    // 코스 위에 놓이도록 한다.
-    const tgt = windCorrectedHdg(_holdOutHdg, 3);
+    // 평행 진입의 아웃바운드는 "지상항적이 인바운드 역방위각" 이 되어야 하므로
+    // 편류수정을 1배(정확한 트랙 유지)로 적용한다.
+    // 그 외(직진·눈물방울·정상 패턴)는 3배(triple drift)로, 인바운드 선회를
+    // 마쳤을 때 코스 위에 놓이도록 바람 쪽으로 더 치우쳐 난다.
+    const tgt = windCorrectedHdg(_holdOutHdg, _holdEntry === 'PARALLEL' ? 1 : 3);
     const err = Math.abs(normAS(tgt - S.hdg));
     if (err < 15) _holdForceDir = 0;
     // 레그 시간 계수는 "픽스 어빔"과 "아웃바운드 롤아웃" 중 늦은 쪽부터.
@@ -2777,8 +2783,10 @@ function holdBankTarget(dt) {
     const done = (holdLegType === 'DIST') ? (d >= holdLegVal) : (_holdT >= holdLegVal);
     if (done) {
       _holdPhase = 'INBOUND';
-      // 합류 선회 방향: 평행 진입만 비대기측(반대 방향)으로 180° 넘게 돌아
-      // 인바운드 코스를 가로질러 합류한다. 직진·눈물방울은 대기 방향.
+      // 합류 선회 방향
+      //   평행     : 홀딩과 반대 방향 (우선회 홀딩 → 좌선회, 좌선회 홀딩 → 우선회)
+      //              으로 180° 넘게 돌아 인바운드 코스를 가로질러 합류
+      //   직진·눈물방울 : 홀딩 방향
       _holdForceDir = (_holdEntry === 'PARALLEL') ? -sgn : sgn;
     }
     return _holdHdgBank(tgt, _holdForceDir);
@@ -7230,7 +7238,10 @@ function simStep(ts){
       updateAcOnMap();updateNav();
 
       // FMS waypoint sequencing (fly-by when NAV AP active)
-      if (S.awp >= 0 && !obsOn && !(holdOn && _holdPhase !== 'TOFIX')) {
+      // 활성 웨이포인트에 홀딩이 걸려 있으면(아직 진입 전이라도) 시퀀싱하지 않는다.
+      // TOFIX 상태만 제외하면, 픽스 통과 프레임에서 진입 판정보다 시퀀싱이 먼저
+      // 돌아 "마지막 WP 통과" 로 NAV 가 해제되고 HDG 모드로 떨어진다.
+      if (S.awp >= 0 && !obsOn && !holdOn) {
         if (navApOn && navSrc === 'FMS' && S.awp + 1 < S.wps.length) {
           // Fly-by: anticipate turn toward next leg before reaching WP
           const nextLegCrs = bearing(S.wps[S.awp].lat, S.wps[S.awp].lon,
