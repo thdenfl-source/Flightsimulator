@@ -2677,6 +2677,7 @@ function holdSyncFromWp() {
   holdLegVal = h.legVal || (holdLegType === 'DIST' ? 5 : 60);
   if (fresh) {
     holdOn = true; _holdPhase = 'TOFIX'; _holdEntry = ''; _holdT = 0; _holdForceDir = 0;
+
     _holdPrevD = distance(S.lat, S.lon, holdFix.lat, holdFix.lon);
     updateHoldLine();
   }
@@ -2699,9 +2700,14 @@ function holdDefaultCrsMag(i) {
 }
 
 // 헤딩 유지용 뱅크 지령. dir 이 0 이 아니면 그 방향으로 강제 선회한다.
+// 단 목표가 반대쪽으로 90° 이내면 강제하지 않는다 — 강제하면 270° 를 넘는
+// 선회를 명령하게 되어 픽스 옆에서 제자리로 한 바퀴 도는 현상이 생긴다.
+// (평행 진입의 "180° 넘는 합류 선회" 는 이 시점 오차가 90° 를 크게 넘으므로
+//  그대로 유지된다.)
+const HOLD_FORCE_MIN = 90;
 function _holdHdgBank(tgtHdg, dir) {
   let err = normAS(tgtHdg - S.hdg);
-  if (dir && Math.abs(err) > 15 && Math.sign(err) !== dir) err = err - 360 * Math.sign(err);
+  if (dir && Math.abs(err) > HOLD_FORCE_MIN && Math.sign(err) !== dir) err = err - 360 * Math.sign(err);
   const bMax = Math.max(5, Math.min(25, stdRateBank(S.spd)));
   return Math.max(-bMax, Math.min(bMax, err * 2));
 }
@@ -2715,9 +2721,13 @@ function _holdHdgBank(tgtHdg, dir) {
 // 눈물방울 구간에 떨어진다. 레그를 따라 픽스로 들어가면 기수 ≈ 인바운드 코스라
 // 가장 흔한 경우가 여기 걸리므로, −180~+180 부호각으로 판정한다.
 const HOLD_ENTRY_TOL = 2;    // 인바운드 코스와 ±2° 이내면 정대 진입 → 직진
-function _holdEntryType() {
-  const rs = normAS(holdRight ? S.hdg - holdCrs : holdCrs - S.hdg);
-  if (rs >= -HOLD_ENTRY_TOL) return 'DIRECT';     // r 0 ~ 180°
+function _holdEntryType(hdg) {
+  const H = (hdg === undefined || hdg === null) ? S.hdg : hdg;
+  const rs = normAS(holdRight ? H - holdCrs : holdCrs - H);
+  // r = 180°(코스 정반대)는 직진 구역의 끝. 부호각으로 보면 +180 과 −180 이
+  // 같은 각인데 부동소수점에 따라 어느 쪽으로 접힐지 갈려서, 좌·우선회가
+  // 서로 다른 진입으로 판정되던 문제가 있었다. 양쪽 끝 모두 직진으로 본다.
+  if (rs >= -HOLD_ENTRY_TOL || rs <= -180 + HOLD_ENTRY_TOL) return 'DIRECT';  // r 0 ~ 180°
   if (rs <= -70)             return 'PARALLEL';   // r 180 ~ 290°
   return 'TEARDROP';                              // r 290 ~ 360°
 }
@@ -2726,26 +2736,28 @@ function _holdEntryType() {
 function holdBankTarget(dt) {
   if (!holdOn || !holdFix) return null;
   const d = distance(S.lat, S.lon, holdFix.lat, holdFix.lon);
-  const passed = (d < 0.3) || (d < 1.5 && d > _holdPrevD);
+  // 픽스 통과 판정 — 아주 가깝거나(0.25NM), 픽스가 기수 기준 정횡 뒤로 넘어갔을 때.
+  // "1.5NM 안에서 거리가 늘었다"만 보면 픽스 부근 선회 중에도 통과로 오인한다.
+  const relFixDeg = Math.abs(normAS(bearing(S.lat, S.lon, holdFix.lat, holdFix.lon) - S.hdg));
+  const passed = (d < 0.25) || (d < 2 && relFixDeg > 100 && d > _holdPrevD);
   const sgn = holdRight ? 1 : -1;
 
   if (_holdPhase === 'TOFIX') {
     _holdPrevD = d;
     if (!passed) return null;                       // 픽스까지는 일반 NAV 로 비행
-    _holdEntry = _holdEntryType();
-    if (_holdEntry === 'TEARDROP') {
-      // 아웃바운드 코스에서 대기구역 쪽으로 30° 비껴서 진입
-      _holdOutHdg = normA(holdCrs + 180 - sgn * 30);
-      _holdForceDir = sgn;                             // 대기 방향으로 선회
-    } else if (_holdEntry === 'PARALLEL') {
-      // 인바운드 코스와 평행하게(아웃바운드 방향) 비대기측으로 선회해 진입
-      _holdOutHdg = normA(holdCrs + 180);
-      _holdForceDir = -sgn;
-    } else {
-      // 직진 — 대기 방향으로 선회해 바로 아웃바운드 기수로
-      _holdOutHdg = normA(holdCrs + 180);
-      _holdForceDir = sgn;
-    }
+    // 판정 기준은 픽스 통과 시점의 기수. NAV AP 는 픽스 전에 인바운드 코스로
+    // 롤아웃하므로 이 값이 곧 도달 방위다(3NM 전 위치로 역산하면 오히려
+    // 코스에 붙기 전의 비스듬한 방향이 잡혀 틀린 구역으로 판정된다).
+    _holdEntry = _holdEntryType(S.hdg);
+    // 아웃바운드 기수: 눈물방울만 대기구역 쪽으로 30° 비껴서, 나머지는 정반대
+    _holdOutHdg = (_holdEntry === 'TEARDROP')
+      ? normA(holdCrs + 180 - sgn * 30)
+      : normA(holdCrs + 180);
+    // 초기 선회 방향은 반드시 지정해야 한다. "최단 선회"에 맡기면 180° 부근에서
+    // 비대기측으로 휘돌아, 그려진 패턴과 반대쪽에 항적이 생긴다.
+    //   직진·눈물방울 : 대기 방향(패턴 안쪽으로 감기게)
+    //   평행         : 비대기측(코스와 평행하게 나가야 하므로)
+    _holdForceDir = (_holdEntry === 'PARALLEL') ? -sgn : sgn;
     S.crs = normA(holdCrs);      // Twist — CDI/코스선을 대기 인바운드 코스로
     _holdPhase = 'OUTBOUND'; _holdT = 0;
   }
