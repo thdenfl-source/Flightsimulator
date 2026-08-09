@@ -13476,8 +13476,9 @@ const APP_FIX_DB = [
   { grp:'태안 RNP 34', name:'GOSUM', lat:36.589333, lon:126.299833, note:'RWY 34 시단' },
   { grp:'태안 IFR',    name:'KODOK', lat:36.782806, lon:126.695472, note:'SOT 229R 24.7D' },
   { grp:'태안 IFR',    name:'NAMPO', lat:36.386111, lon:126.759722, note:'SAN 154R 23.4D' },
-  { grp:'태안 IFR',    name:'NOROO', lat:37.296111, lon:127.319167, note:'KSM 141R 13.5D' },
   { grp:'태안 IFR',    name:'SAN',   lat:36.710000, lon:126.482333, note:'서산 TACAN · ILS I-SAN 111.50' },
+  // NOROO(N37°17'46" E127°19'09", KSM 141R 13.5D)는 문서 표에 취소선이 그어져 있어 제외.
+  // PDF 벡터 검사에서 그 행의 모든 셀에만 가로 취소선이 걸린 것을 확인했다.
 ];
 let _appFixMarkers = [];
 let appFixOn = {};
