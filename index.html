@@ -15988,35 +15988,59 @@ function _pdfScanCoordTokens(T, isLon) {
         if (hemi === 'S' || hemi === 'W') v = -v;
         found.push({ v, start, end });
     };
-    let m;
-    // 접미형의 반구 문자는 뒤에 숫자가 바로 붙으면 안 됨
-    // (E127…의 E처럼 '다음 좌표의 접두문자'를 훔쳐가는 오매치 방지)
-    const HS = '(' + H + ')(?!\\d)';
-    // ① 컴팩트 접미형: DDMMSS(.s)H
-    let re = new RegExp('(\\d{' + dmsLen + '}(?:\\.\\d+)?)\\s*' + HS, 'g');
+    let m, re;
+    // ── 반구문자를 어느 좌표의 것으로 볼지가 이 함수의 핵심 ──
+    // 접미형에서 반구문자 뒤에 숫자가 바로 오면 그건 "다음 좌표의 접두문자"일 수
+    // 있다. 단 `375944N1284412E` 처럼 붙여 쓴 좌표쌍이면 진짜 접미문자다.
+    // → 뒤가 숫자가 아니거나, 반대쪽 좌표 모양이 이어질 때만 접미로 인정한다.
+    const OPP = isLon ? '\\d{6}(?:\\.\\d+)?[NS]' : '\\d{7}(?:\\.\\d+)?[EW]';
+    const SUF = '(' + H + ')(?=$|[^\\d]|' + OPP + ')';
+    // 공백을 사이에 둔 접미형용 — 반구문자 뒤 공백까지 건너뛰고 같은 판단을 한다
+    const OPPS = isLon ? '\\d{6}(?:\\.\\d+)?\\s*[NS]' : '\\d{7}(?:\\.\\d+)?\\s*[EW]';
+    const SUFSP = '(' + H + ')(?=\\s*$|\\s*[^\\d]|\\s*' + OPPS + ')';
+    // 접두형에서는 반대로, 반구문자가 "앞 좌표의 꼬리"이면 안 된다.
+    // 예) `128°44'12"E 38°03'48"N` 에서 경도를 찾을 때 앞 경도의 끝 E 를 집어
+    //     뒤 위도 숫자와 짝지으면 38°E 라는 엉뚱한 경도가 만들어진다.
+    const PRE = '(^|[^\\d"″\'′.])';
+
+    // ① 컴팩트 접미형: DDMMSS(.s)H — 붙여쓴 경우
+    re = new RegExp('(\\d{' + dmsLen + '}(?:\\.\\d+)?)' + SUF, 'g');
     while ((m = re.exec(T)) !== null)
         push(m.index, re.lastIndex, m[2], +m[1].slice(0, degLen), +m[1].slice(degLen, degLen + 2), +m[1].slice(degLen + 2));
-    // ② 컴팩트 접두형: HDDMMSS(.s)
-    re = new RegExp('(' + H + ')\\s*(\\d{' + dmsLen + '}(?:\\.\\d+)?)(?!\\d)', 'g');
+    // ①b 컴팩트 접미형(공백 있음) — 뒤에 숫자가 오면 접두문자이므로 제외
+    re = new RegExp('(\\d{' + dmsLen + '}(?:\\.\\d+)?)\\s+' + SUFSP, 'g');
     while ((m = re.exec(T)) !== null)
-        push(m.index, re.lastIndex, m[1], +m[2].slice(0, degLen), +m[2].slice(degLen, degLen + 2), +m[2].slice(degLen + 2));
-    // ③ 구분자 접미형: DD°MM'SS(.s)"H  (구분자: °'" 공백 하이픈)
-    re = new RegExp('(\\d{1,' + degLen + '})[°\\s-]+(\\d{2})[\'′\\s-]+(\\d{2}(?:\\.\\d+)?)["″\\s]*' + HS, 'g');
+        push(m.index, re.lastIndex, m[2], +m[1].slice(0, degLen), +m[1].slice(degLen, degLen + 2), +m[1].slice(degLen + 2));
+
+    // ② 컴팩트 접두형: HDDMMSS(.s)
+    re = new RegExp(PRE + '(' + H + ')\\s*(\\d{' + dmsLen + '}(?:\\.\\d+)?)(?!\\d)', 'g');
+    while ((m = re.exec(T)) !== null)
+        push(m.index + m[1].length, re.lastIndex, m[2], +m[3].slice(0, degLen), +m[3].slice(degLen, degLen + 2), +m[3].slice(degLen + 2));
+
+    // ③ 구분자 접미형: DD°MM'SS(.s)"H (반구문자가 바로 붙은 경우)
+    re = new RegExp('(\\d{1,' + degLen + '})[°\\s-]+(\\d{2})[\'′\\s-]+(\\d{2}(?:\\.\\d+)?)["″]*' + SUF, 'g');
     while ((m = re.exec(T)) !== null)
         push(m.index, re.lastIndex, m[4], +m[1], +m[2], +m[3]);
-    // ④ 구분자 접두형: H DD°MM'SS(.s)"
-    re = new RegExp('(' + H + ')\\s*(\\d{1,' + degLen + '})[°\\s-]+(\\d{2})[\'′\\s-]+(\\d{2}(?:\\.\\d+)?)["″]?', 'g');
+    // ③b 구분자 접미형(공백으로 떨어진 경우) — 뒤에 숫자가 오면 접두문자이므로 제외
+    re = new RegExp('(\\d{1,' + degLen + '})[°\\s-]+(\\d{2})[\'′\\s-]+(\\d{2}(?:\\.\\d+)?)["″]?\\s+' + SUFSP, 'g');
     while ((m = re.exec(T)) !== null)
-        push(m.index, re.lastIndex, m[1], +m[2], +m[3], +m[4]);
+        push(m.index, re.lastIndex, m[4], +m[1], +m[2], +m[3]);
+
+    // ④ 구분자 접두형: H DD°MM'SS(.s)"
+    re = new RegExp(PRE + '(' + H + ')\\s*(\\d{1,' + degLen + '})[°\\s-]+(\\d{2})[\'′\\s-]+(\\d{2}(?:\\.\\d+)?)["″]?', 'g');
+    while ((m = re.exec(T)) !== null)
+        push(m.index + m[1].length, re.lastIndex, m[2], +m[3], +m[4], +m[5]);
+
     // ⑤ 도분형: DDMM.mH / HDDMM.m
-    re = new RegExp('(\\d{' + dmLen + '}\\.\\d+)\\s*' + HS, 'g');
+    re = new RegExp('(\\d{' + dmLen + '}\\.\\d+)\\s*' + SUF, 'g');
     while ((m = re.exec(T)) !== null)
         push(m.index, re.lastIndex, m[2], Math.floor(+m[1] / 100), (+m[1]) % 100, 0);
-    re = new RegExp('(' + H + ')\\s*(\\d{' + dmLen + '}\\.\\d+)(?!\\d)', 'g');
+    re = new RegExp(PRE + '(' + H + ')\\s*(\\d{' + dmLen + '}\\.\\d+)(?!\\d)', 'g');
     while ((m = re.exec(T)) !== null)
-        push(m.index, re.lastIndex, m[1], Math.floor(+m[2] / 100), (+m[2]) % 100, 0);
+        push(m.index + m[1].length, re.lastIndex, m[2], Math.floor(+m[3] / 100), (+m[3]) % 100, 0);
+
     // 위치순 정렬 + 겹치는 매치 제거(같은 숫자를 여러 패턴이 잡는 경우)
-    found.sort((a, b) => a.start - b.start);
+    found.sort((a, b) => (a.start - b.start) || (a.end - b.end));
     const out = [];
     for (const f of found) {
         if (out.length && f.start < out[out.length - 1].end) continue;
@@ -16024,9 +16048,6 @@ function _pdfScanCoordTokens(T, isLon) {
     }
     return out;
 }
-
-// 한 행 텍스트에서 좌표(위도+경도) 검출 → [{lat,lon,start}]
-// 위도·경도 토큰을 각각 찾아 순서대로 짝짓는다(표 셀 분리·형식 혼용 대응)
 function _pdfRowCoords(T) {
     const lats = _pdfScanCoordTokens(T, false);
     const lons = _pdfScanCoordTokens(T, true);
@@ -16114,9 +16135,38 @@ async function _pdfExtractFixes() {
     }
     // 텍스트가 거의 없으면 스캔 이미지 PDF로 판단(자동 추출 불가 안내용)
     if (totalChars < 40) _pdfNoTextLayer = true;
+    _pdfPruneFixes();
     // IAF/FAF → 항법시설/WPT표 → 명명픽스 → 무명 순 정렬(매칭 편의)
     _pdfFixList.sort((a, b) => (b.priority - a.priority) || ((b.named ? 1 : 0) - (a.named ? 1 : 0)) || a.name.localeCompare(b.name));
 }
+
+// 추출 결과 정제 — 차트 한 장에 실린 픽스들은 서로 가까이 모여 있다.
+// 표를 세로로 읽거나 정규식이 엉뚱한 숫자를 물면 경도가 위도값으로 잘못
+// 읽히는 등의 좌표가 섞이는데(예: 38°03'48"N 38°03'48"E), 그런 점 하나가
+// 보정 목록에 남아 선택되면 전체 매핑이 망가진다. 여기서 미리 걸러낸다.
+const _PDF_FIX_MAX_NM = 300;   // 기준점에서 이만큼 넘게 떨어지면 오인식으로 본다
+function _pdfPruneFixes() {
+    if (_pdfFixList.length < 2) return;
+    // 기준점: 차트 ICAO 의 공항 위치를 우선 사용, 없으면 좌표 중앙값
+    let cLat = null, cLon = null;
+    try {
+        const icao = (_pdfChartKey || '').split('|')[0];
+        const ap = (typeof APT_LATLNG !== 'undefined') ? APT_LATLNG[icao] : null;
+        if (ap) { cLat = ap[0]; cLon = ap[1]; }
+    } catch(e) {}
+    if (cLat === null) {
+        const med = arr => { const v = arr.slice().sort((a, b) => a - b); return v[Math.floor(v.length / 2)]; };
+        cLat = med(_pdfFixList.map(f => f.lat));
+        cLon = med(_pdfFixList.map(f => f.lon));
+    }
+    const keep = _pdfFixList.filter(f => distance(f.lat, f.lon, cLat, cLon) <= _PDF_FIX_MAX_NM);
+    // 전부 걸러지면(기준점이 잘못된 경우) 원본을 유지한다
+    if (keep.length >= 2 && keep.length < _pdfFixList.length) {
+        _pdfFixDropped = _pdfFixList.length - keep.length;
+        _pdfFixList = keep;
+    } else _pdfFixDropped = 0;
+}
+let _pdfFixDropped = 0;
 function _pdfAddFix(info, lat, lon, seen) {
     if (lat < -90 || lat > 90 || lon < -180 || lon > 180) return;
     const nm = (info.name && /^[A-Z]{2,5}$/.test(info.name)) ? info.name : '';
@@ -16174,7 +16224,9 @@ function _pdfStartCalibration() {
     _pdfCalPts = [];
     _pdfShowCalOverlay();
     const hint = _pdfFixList.length
-        ? `픽스 좌표 ${_pdfFixList.length}개 자동 인식됨.\n차트에서 픽스를 탭한 뒤 이름을 고르세요.`
+        ? `픽스 좌표 ${_pdfFixList.length}개 자동 인식됨.` +
+          (_pdfFixDropped ? ` (오인식 ${_pdfFixDropped}개 제외)` : '') +
+          `\n차트에서 픽스를 탭한 뒤 이름을 고르세요.`
         : (_pdfNoTextLayer
             ? `이 PDF는 스캔 이미지라 텍스트가 없어\n좌표 자동 추출이 불가합니다. [직접 입력]을 사용하세요.`
             : `좌표를 아는 지점을 탭한 뒤 좌표를 입력하세요.\n(이 차트에서 픽스 좌표를 못 찾았습니다)`);
