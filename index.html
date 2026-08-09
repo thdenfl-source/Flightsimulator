@@ -1622,6 +1622,14 @@ body.night-mode::after {
         <li><b>Utilities</b>: 길이·속도·온도·중량·압력·연료 환산, Time/Speed/Distance, <b>Fuel Endurance</b>, <b>Wind Component</b>, <b>Sunrise/Sunset</b>, <b>True↔Magnetic</b>, 밀도고도, 좌표 변환.</li>
         <li><b>Track &amp; Point</b>: 포인트·항적을 기기에 저장, 폴더·아이콘 관리, GPX/KML 내보내기·가져오기. 지도 포인트를 탭하면 <b>숨기기·플랜 추가·Direct</b> 선택.</li>
         <li><b>Checklist</b>: KUH-1CG 정상·특수·비상 절차(계통별), 이전/다음 이동.</li>
+        <li><b>웨이포인트 좌표 산출</b>(Flight Plan → <b>Add WPT</b>):
+            <b>BRG / DIST</b>는 참조점에서 지정한 <b>자북 방위(라디얼)</b>로 지정 거리만큼 나아간 지점을,
+            <b>BRG / BRG</b>는 두 참조점의 방위선이 <b>만나는 지점</b>을 대권 기하로 계산해 웨이포인트로 만듭니다.
+            참조점은 <b>VOR · AIP 픽스 · 공항 · 현재 비행계획 WP</b> 중에서 고르며(카테고리 필터 + 이름 검색,
+            현 위치에서 가까운 순), 산출 좌표는 확정 전에 <b>DMS·십진수·현 위치 기준 방위/거리</b>로 미리 보여줍니다.
+            이름은 <b>SEL270/20</b>, <b>SEL/TGU</b> 처럼 자동으로 붙습니다.
+            BRG/BRG 는 교차각이 10° 미만이면 거부하고 30° 미만이면 경고합니다
+            (얕은 각도에서는 방위 1°가 좌표를 크게 흔듭니다).</li>
       </ul>
 
       <h3>7. GPS 모드 (실비행)</h3>
@@ -6144,7 +6152,227 @@ function fpRender() {
     case 'IFR':   fpRenderIfr(area, title, footer);  break;
     case 'SIDNEW': fpRenderSidNew(area, title, footer); break;
     case 'HOLD':  fpRenderHold(area, title, footer);  break;
+    case 'RB':    fpRenderRadial(area, title, footer); break;
+    case 'RR':    fpRenderRadial(area, title, footer); break;
+    case 'REFPICK': fpRenderRefPick(area, title, footer); break;
   }
+}
+
+// ══════════════════════════════════════════════════════
+// 참조점 기준 좌표 산출 (BRG/DIST · BRG/BRG)
+// ══════════════════════════════════════════════════════
+// 두 대권(참조점 + 방위)의 교점. 방위는 모두 진북 기준.
+// (movable-type.co.uk/scripts/latlong.html 의 intersection 공식)
+function radialIntersect(la1, lo1, brg13, la2, lo2, brg23) {
+  const f1 = la1 * D2R, l1 = lo1 * D2R, f2 = la2 * D2R, l2 = lo2 * D2R;
+  const t13 = brg13 * D2R, t23 = brg23 * D2R;
+  const df = f2 - f1, dl = l2 - l1;
+  const d12 = 2 * Math.asin(Math.sqrt(Math.sin(df/2)**2 +
+              Math.cos(f1) * Math.cos(f2) * Math.sin(dl/2)**2));
+  if (Math.abs(d12) < 1e-12) return null;                 // 같은 지점
+  let ca = (Math.sin(f2) - Math.sin(f1) * Math.cos(d12)) / (Math.sin(d12) * Math.cos(f1));
+  let cb = (Math.sin(f1) - Math.sin(f2) * Math.cos(d12)) / (Math.sin(d12) * Math.cos(f2));
+  const ta = Math.acos(Math.min(1, Math.max(-1, ca)));
+  const tb = Math.acos(Math.min(1, Math.max(-1, cb)));
+  const t12 = Math.sin(dl) > 0 ? ta : 2 * Math.PI - ta;
+  const t21 = Math.sin(dl) > 0 ? 2 * Math.PI - tb : tb;
+  const a1 = t13 - t12, a2 = t21 - t23;
+  if (Math.sin(a1) === 0 && Math.sin(a2) === 0) return null;   // 무수히 많음
+  if (Math.sin(a1) * Math.sin(a2) < 0) return null;            // 교점이 대척점 쪽
+  const a3 = Math.acos(Math.min(1, Math.max(-1,
+             -Math.cos(a1) * Math.cos(a2) + Math.sin(a1) * Math.sin(a2) * Math.cos(d12))));
+  const d13 = Math.atan2(Math.sin(d12) * Math.sin(a1) * Math.sin(a2),
+                         Math.cos(a2) + Math.cos(a1) * Math.cos(a3));
+  const f3 = Math.asin(Math.min(1, Math.max(-1,
+             Math.sin(f1) * Math.cos(d13) + Math.cos(f1) * Math.sin(d13) * Math.cos(t13))));
+  const dl13 = Math.atan2(Math.sin(t13) * Math.sin(d13) * Math.cos(f1),
+                          Math.cos(d13) - Math.sin(f1) * Math.sin(f3));
+  const l3 = l1 + dl13;
+  return [f3 / D2R, normA((l3 / D2R) + 540) - 180];
+}
+
+let fpRefMode = 'RB';            // 'RB' = 참조점+방위+거리, 'RR' = 두 방위 교점
+let fpRefSlot = 1;               // 참조점 선택 중인 슬롯(1·2)
+let fpRefQ = '';                 // 참조점 검색어
+let fpRefCat = 'ALL';            // ALL | VOR | FIX | APT | FPL
+let fpRef = { r1: null, b1: 360, d1: 10, r2: null, b2: 360 };
+
+function fpRefOpen(mode) {
+  fpRefMode = mode;
+  if (!fpRef.r1) fpRefQ = '';
+  fpGo(mode);
+}
+// 참조점 후보 — 비행계획 WP · VOR · 공항 · AIP 픽스
+function fpRefCandidates() {
+  const out = [], seen = new Set();
+  const vorIds = new Set(ENR_VORS.map(v => v.id));
+  const add = (ident, lat, lon, cat, name) => {
+    if (!ident || lat == null || lon == null) return;
+    const k = cat + ':' + ident;
+    if (seen.has(k)) return;
+    seen.add(k);
+    out.push({ ident, lat, lon, cat, name: name || '' });
+  };
+  S.wps.forEach(w => add(w.ident, w.lat, w.lon, 'FPL'));
+  ENR_VORS.forEach(v => add(v.id, v.lat, v.lon, 'VOR', v.name + ' · ' + v.freq));
+  AIRPORTS.forEach(a => add(a.ident, a.lat, a.lon, 'APT', a.name));
+  Object.entries(IFR_FIXES).forEach(([k, v]) => {
+    if (!vorIds.has(k)) add(k, v.lat, v.lon, 'FIX');
+  });
+  return out;
+}
+function fpRefPick(slot) { fpRefSlot = slot; fpRefQ = ''; fpGo('REFPICK'); }
+function fpRefChoose(cat, ident) {
+  const c = fpRefCandidates().find(x => x.cat === cat && x.ident === ident);
+  if (c) fpRef[fpRefSlot === 2 ? 'r2' : 'r1'] = { ident: c.ident, lat: c.lat, lon: c.lon, cat: c.cat };
+  fpGo(fpRefMode);
+}
+function fpRefType(ch) { if (fpRefQ.length < 6) { fpRefQ += ch; fpRender(); } }
+function fpRefBksp()   { fpRefQ = fpRefQ.slice(0, -1); fpRender(); }
+function fpRefSetCat(c) { fpRefCat = c; fpRender(); }
+function fpRefAdj(k, d) {
+  if (k === 'b1' || k === 'b2') fpRef[k] = ((Math.round(fpRef[k]) + d + 359) % 360) + 1;
+  else fpRef[k] = Math.max(0.1, Math.min(400, Math.round((fpRef[k] + d) * 10) / 10));
+  fpRender();
+}
+// 현재 입력으로 산출되는 좌표 — { lat, lon, ident } 또는 { err }
+function fpRefSolve() {
+  const r1 = fpRef.r1;
+  if (!r1) return { err: '참조점 #1 을 고르세요' };
+  if (fpRefMode === 'RB') {
+    if (!(fpRef.d1 > 0)) return { err: '거리를 입력하세요' };
+    const p = destPoint(r1.lat, r1.lon, toTrue(fpRef.b1), fpRef.d1);
+    return { lat: p[0], lon: p[1],
+             ident: `${r1.ident}${String(fpRef.b1).padStart(3,'0')}/${fpRef.d1}` };
+  }
+  const r2 = fpRef.r2;
+  if (!r2) return { err: '참조점 #2 를 고르세요' };
+  if (distance(r1.lat, r1.lon, r2.lat, r2.lon) < 0.05) return { err: '두 참조점이 같습니다' };
+  const t1 = toTrue(fpRef.b1), t2 = toTrue(fpRef.b2);
+  const p = radialIntersect(r1.lat, r1.lon, t1, r2.lat, r2.lon, t2);
+  if (!p) return { err: '두 방위선이 만나지 않습니다 (평행하거나 같은 대권)' };
+  // 대권은 지구 반대편에서도 만난다. 입력한 방위 쪽(전방)에 있고 실용 범위 안인
+  // 교점만 받아들인다.
+  const d1 = distance(r1.lat, r1.lon, p[0], p[1]);
+  const d2 = distance(r2.lat, r2.lon, p[0], p[1]);
+  const f1 = Math.abs(normAS(bearing(r1.lat, r1.lon, p[0], p[1]) - t1));
+  const f2 = Math.abs(normAS(bearing(r2.lat, r2.lon, p[0], p[1]) - t2));
+  if (f1 > 1 || f2 > 1)
+    return { err: '두 방위선이 입력한 방향 앞쪽에서 만나지 않습니다 (반대편 교점)' };
+  if (d1 > 600 || d2 > 600)
+    return { err: `교점이 너무 멉니다 (${Math.round(Math.max(d1,d2))}NM) — 방위를 확인하세요` };
+  // 교차각(cut angle) — 얕으면 좌표 오차가 크게 튄다
+  const cut = Math.abs(normAS(bearing(p[0], p[1], r1.lat, r1.lon) -
+                              bearing(p[0], p[1], r2.lat, r2.lon)));
+  const cutA = Math.min(cut, 180 - cut);
+  if (cutA < 10)
+    return { err: `두 방위선의 교차각이 ${cutA.toFixed(0)}° 로 너무 얕습니다 (10° 이상 필요)` };
+  return { lat: p[0], lon: p[1], ident: `${r1.ident}/${r2.ident}`,
+           cut: cutA,
+           warn: cutA < 30 ? `교차각 ${cutA.toFixed(0)}° — 얕은 각도라 좌표 오차가 커질 수 있습니다` : '' };
+}
+function fpRefApply() {
+  const s = fpRefSolve();
+  if (s.err) { alert(s.err); return; }
+  fpMode = 'LIST';
+  pushWP({ ident: s.ident, lat: +s.lat.toFixed(6), lon: +s.lon.toFixed(6) });
+  fpRender();
+}
+
+function _refBtnHtml(slot) {
+  const r = slot === 2 ? fpRef.r2 : fpRef.r1;
+  return `<div class="hold-btn${r ? ' on' : ''}" style="text-align:left;padding-left:8px;"
+            onclick="fpRefPick(${slot})">${r ? r.cat + ' · ' + r.ident : '▸ 참조점 선택'}</div>`;
+}
+function _spinHtml(key, big, small, unit) {
+  const v = fpRef[key];
+  const txt = unit === '°' ? String(v).padStart(3,'0') + '°M'
+                           : (Math.round(v*10)/10).toFixed(1) + ' NM';
+  return `<div class="hold-spin">
+      <div class="hold-btn" onclick="fpRefAdj('${key}',${-big})">≪</div>
+      <div class="hold-btn" onclick="fpRefAdj('${key}',${-small})">◄</div>
+      <div class="hold-val">${txt}</div>
+      <div class="hold-btn" onclick="fpRefAdj('${key}',${small})">►</div>
+      <div class="hold-btn" onclick="fpRefAdj('${key}',${big})">≫</div>
+    </div>`;
+}
+
+function fpRenderRadial(area, title, footer) {
+  const rb = fpRefMode === 'RB';
+  title.textContent = rb ? 'WPT — 방위/거리' : 'WPT — 방위/방위 교점';
+  const s = fpRefSolve();
+  const okHtml = s.err
+    ? `<div style="color:#e8a;font-size:11px;padding:6px 2px;">⚠ ${s.err}</div>`
+    : `<div style="color:#0f8;font-size:11px;padding:6px 2px;line-height:1.7;">
+         <b style="color:#ffcc44;font-size:13px;">${s.ident}</b><br>
+         ${decToDMS(s.lat, true)} ${decToDMS(s.lon, false)}<br>
+         <span style="color:#678;">${s.lat.toFixed(5)}, ${s.lon.toFixed(5)}</span><br>
+         <span style="color:#678;">현 위치에서 ${fmtA(toMag(bearing(S.lat,S.lon,s.lat,s.lon)))}°M ·
+         ${distance(S.lat,S.lon,s.lat,s.lon).toFixed(1)}NM${s.cut ? ' · 교차각 ' + s.cut.toFixed(0) + '°' : ''}</span>
+         ${s.warn ? `<br><span style="color:#e8a;">⚠ ${s.warn}</span>` : ''}
+       </div>`;
+  area.innerHTML = `
+    <div class="fp-panel-border" style="padding:8px;">
+      <div class="hold-row"><div class="hold-lbl">REF ${rb ? '' : '#1'}</div>${_refBtnHtml(1)}</div>
+      <div class="hold-row"><div class="hold-lbl">BRG ${rb ? '' : '#1'}</div>${_spinHtml('b1',10,1,'°')}</div>
+      ${rb ? `<div class="hold-row"><div class="hold-lbl">DIST</div>${_spinHtml('d1',10,1,'NM')}</div>
+              <div class="hold-row"><div class="hold-lbl"></div>
+                <div class="hold-spin">
+                  <div class="hold-btn" onclick="fpRefAdj('d1',-0.1)">−0.1</div>
+                  <div class="hold-btn" onclick="fpRefAdj('d1',0.1)">+0.1</div>
+                </div></div>`
+          : `<div class="hold-row"><div class="hold-lbl">REF #2</div>${_refBtnHtml(2)}</div>
+             <div class="hold-row"><div class="hold-lbl">BRG #2</div>${_spinHtml('b2',10,1,'°')}</div>`}
+      <div style="border-top:1px solid #1a2a3a;margin-top:6px;">${okHtml}</div>
+      <div style="color:#567;font-size:9px;line-height:1.6;">
+        방위는 <b>참조점에서 바깥으로 향하는 자북 방위</b>(라디얼)입니다.
+        ${rb ? '참조점에서 그 방위로 지정 거리만큼 나아간 지점을 만듭니다.'
+             : '두 참조점의 방위선이 만나는 지점을 대권 기하로 계산합니다.'}
+      </div>
+    </div>`;
+  footer.innerHTML = `
+    <div class="fp-nav-btn" onclick="fpGo('ADD')"><span>↩</span>Back</div>
+    <div class="fp-nav-btn" onclick="fpGo('LIST')"><span>📋</span>FP</div>
+    <div class="fp-nav-btn fp-nav-enter" onclick="fpRefApply()"><span>↩</span>Enter</div>`;
+}
+
+function fpRenderRefPick(area, title, footer) {
+  title.textContent = `참조점 선택 ${fpRefMode === 'RR' ? '#' + fpRefSlot : ''}`;
+  const q = fpRefQ.toUpperCase();
+  let list = fpRefCandidates()
+    .filter(c => (fpRefCat === 'ALL' || c.cat === fpRefCat) && (!q || c.ident.indexOf(q) === 0));
+  list.forEach(c => c._d = distance(S.lat, S.lon, c.lat, c.lon));
+  list.sort((a, b) => a._d - b._d);
+  const shown = list.slice(0, 40);
+  const cats = ['ALL','VOR','FIX','APT','FPL'];
+  const rows = shown.map(c => `
+    <div class="fp-wp-row" style="grid-template-columns:34px 1fr 60px;"
+         onclick="fpRefChoose('${c.cat}','${c.ident}')">
+      <span style="font-size:8px;color:#87ceeb;">${c.cat}</span>
+      <span class="fp-wp-ident">${c.ident}<span style="color:#567;font-size:9px;font-weight:normal;">
+        ${c.name ? ' · ' + c.name : ''}</span></span>
+      <span class="fp-wp-dist">${c._d.toFixed(0)}NM</span>
+    </div>`).join('') ||
+    `<div style="color:#678;font-size:10px;padding:10px 4px;">일치하는 참조점이 없습니다.</div>`;
+  area.innerHTML = `
+    <div style="display:flex;gap:4px;margin-bottom:5px;">
+      ${cats.map(c => `<div class="hold-btn${fpRefCat===c?' on':''}"
+         onclick="fpRefSetCat('${c}')">${c}</div>`).join('')}
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;">
+      <div class="fp-disp-box" style="flex:1;">${fpRefQ || '<span style="color:#222">검색</span>'}</div>
+      <div class="fp-bksp-btn" onclick="fpRefBksp()">⬅</div>
+    </div>
+    <div class="fp-key-grid" style="grid-template-columns:repeat(9,1fr);gap:3px;">
+      ${'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'.split('').map(k =>
+        `<div class="fp-key" style="height:26px;font-size:11px;" onclick="fpRefType('${k}')">${k}</div>`).join('')}
+    </div>
+    <div class="fp-panel-border" style="padding:0;margin-top:5px;max-height:230px;overflow-y:auto;">
+      ${rows}
+    </div>
+    <div style="color:#567;font-size:9px;padding:3px 2px;">${list.length}개 중 가까운 순 ${shown.length}개</div>`;
+  footer.innerHTML = `
+    <div class="fp-nav-btn" onclick="fpGo('${fpRefMode}')"><span>↩</span>Back</div>`;
 }
 
 // ══════════════════════════════════════════════════════
@@ -6322,6 +6550,14 @@ function fpRenderAdd(area, title, footer) {
       </div>
       <div class="fp-input-type-btn fp-cyan" onclick="fpGo('LAT')">
         <span style="font-size:20px;">📍</span><span>COORDS</span>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px;">
+      <div class="fp-input-type-btn fp-cyan" onclick="fpRefOpen('RB')">
+        <span style="font-size:17px;">⌖</span><span>BRG / DIST</span>
+      </div>
+      <div class="fp-input-type-btn fp-cyan" onclick="fpRefOpen('RR')">
+        <span style="font-size:17px;">✛</span><span>BRG / BRG</span>
       </div>
     </div>
     <div class="fp-input-type-btn" style="margin-top:6px;" onclick="fpGo('IFR')">
