@@ -2661,6 +2661,7 @@ let _holdT = 0;                  // 아웃바운드 경과(초)
 let _holdPrevD = 1e9;            // 픽스 통과 판정용 이전 거리
 let _holdForceDir = 0;           // +1 우선회 강제 / -1 좌선회 강제 / 0 최단
 let _holdWpRef = null;           // 무장된 웨이포인트 객체(동일성 비교용)
+let _holdClosing = false;        // 픽스로 접근 중(거리 감소) 여부 — 통과 판정 빗장
 
 // 웨이포인트에 정의된 홀딩을 NAV 와 연동한다.
 // FMS 소스이고 활성 웨이포인트에 hold 가 있으면 자동 무장되고,
@@ -2679,6 +2680,7 @@ function holdSyncFromWp() {
   holdLegVal = h.legVal || (holdLegType === 'DIST' ? 5 : 60);
   if (fresh) {
     holdOn = true; _holdPhase = 'TOFIX'; _holdEntry = ''; _holdT = 0; _holdForceDir = 0;
+    _holdClosing = false;
 
     _holdPrevD = distance(S.lat, S.lon, holdFix.lat, holdFix.lon);
     updateHoldLine();
@@ -2686,7 +2688,7 @@ function holdSyncFromWp() {
 }
 function holdExit() {
   holdOn = false; holdFix = null; _holdWpRef = null;
-  _holdPhase = 'TOFIX'; _holdEntry = ''; _holdForceDir = 0;
+  _holdPhase = 'TOFIX'; _holdEntry = ''; _holdForceDir = 0; _holdClosing = false;
   updateHoldLine();
 }
 // 홀딩 인바운드 코스 기본값(자북, 표시/입력용) — 직전 웨이포인트에서의 레그 코스
@@ -2738,10 +2740,18 @@ function _holdEntryType(hdg) {
 function holdBankTarget(dt) {
   if (!holdOn || !holdFix) return null;
   const d = distance(S.lat, S.lon, holdFix.lat, holdFix.lon);
-  // 픽스 통과 판정 — 아주 가깝거나(0.25NM), 픽스가 기수 기준 정횡 뒤로 넘어갔을 때.
-  // "1.5NM 안에서 거리가 늘었다"만 보면 픽스 부근 선회 중에도 통과로 오인한다.
+  // 픽스로 접근 중이었는지 기록. 아웃바운드로 멀어지는 중에는 통과 판정을 하지 않는다.
+  // (이 빗장이 없으면 아웃바운드 레그가 끝나 인바운드로 넘어간 직후, 아직 2NM 안이고
+  //  픽스가 뒤에 있다는 이유로 "통과"로 오인해 아웃바운드를 한 번 더 돈다 → 패턴 2배)
+  if (d < _holdPrevD - 1e-9) _holdClosing = true;
+  // 픽스 통과 판정
+  //  ① 상공 통과(0.35NM 이내)
+  //  ② 살짝 빗겨 지나간 경우 — 단, 코스를 추종 중(선회 중이 아닐 때)이어야 한다.
+  //     선회 중에는 호가 픽스 쪽으로 휘며 거리가 줄었다 늘기를 반복해, 1.7NM 밖에서도
+  //     "가까워졌다가 멀어짐" 조건이 성립해 통과로 오인된다(→ 아웃바운드 2회 실행).
   const relFixDeg = Math.abs(normAS(bearing(S.lat, S.lon, holdFix.lat, holdFix.lon) - S.hdg));
-  const passed = (d < 0.25) || (d < 2 && relFixDeg > 100 && d > _holdPrevD);
+  const passed = (d < 0.35) ||
+    (_holdForceDir === 0 && _holdClosing && d < 1.2 && relFixDeg > 120 && d > _holdPrevD);
   const sgn = holdRight ? 1 : -1;
 
   if (_holdPhase === 'TOFIX') {
@@ -2750,6 +2760,7 @@ function holdBankTarget(dt) {
     // 판정 기준은 픽스 통과 시점의 기수. NAV AP 는 픽스 전에 인바운드 코스로
     // 롤아웃하므로 이 값이 곧 도달 방위다(3NM 전 위치로 역산하면 오히려
     // 코스에 붙기 전의 비스듬한 방향이 잡혀 틀린 구역으로 판정된다).
+    _holdClosing = false;                 // 통과 소비
     _holdEntry = _holdEntryType(S.hdg);
     // 아웃바운드 방위 — 인바운드 코스의 역방위각(C+180) 기준
     //   눈물방울: 우선회 홀딩이면 −30°, 좌선회 홀딩이면 +30° (대기구역 쪽)
@@ -2794,20 +2805,28 @@ function holdBankTarget(dt) {
 
   // INBOUND: 인바운드 코스선을 인터셉트해 픽스로
   if (passed) {                                     // 픽스 재통과 → 다시 아웃바운드
-    _holdPhase = 'OUTBOUND'; _holdEntry = 'DIRECT'; _holdT = 0;
+    _holdPhase = 'OUTBOUND'; _holdEntry = 'DIRECT'; _holdT = 0; _holdClosing = false;
     _holdOutHdg = normA(holdCrs + 180); _holdForceDir = sgn; _holdPrevD = d;
     return _holdHdgBank(windCorrectedHdg(_holdOutHdg), _holdForceDir);
   }
   _holdPrevD = d;
+  // 합류는 두 단계다.
+  // ① 선회: 지정 방향으로 "인바운드 코스 방위까지" 곧장 돌아 반원을 그린다.
+  //    코스에서 45° 모자란 인터셉트 기수로 돌면, 롤아웃 후 코스에 닿을 때까지
+  //    픽스에서 계속 멀어져 실제 패턴이 그려진 레이스트랙의 두 배가 된다.
+  // ② 추종: 코스 방위에 들어온 뒤부터 횡편차를 잡는다.
+  if (_holdForceDir) {
+    const inbTgt = windCorrectedHdg(holdCrs);
+    if (Math.abs(normAS(inbTgt - S.hdg)) > 15) return _holdHdgBank(inbTgt, _holdForceDir);
+    _holdForceDir = 0;
+  }
   const Lh = activeCourseLine();          // 홀딩 중에는 대기 인바운드 코스선
   const xtk = courseXtk(Lh);
   const IC = navInterceptDeg;
   const rollOut = Math.max(0.15, navTurnRadiusNM() * (1 - Math.cos(IC * D2R)));
   const ang = Math.min(IC, Math.abs(xtk) / rollOut * IC);
   const trk = normA(holdCrs - Math.sign(xtk) * ang);
-  const tgt = windCorrectedHdg(trk);
-  if (_holdForceDir && Math.abs(normAS(tgt - S.hdg)) < 20) _holdForceDir = 0;
-  return _holdHdgBank(tgt, _holdForceDir);
+  return _holdHdgBank(windCorrectedHdg(trk), 0);
 }
 
 // 홀딩 패턴 궤적(지도 표시용) — 픽스 기준 레이스트랙.
