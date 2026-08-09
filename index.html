@@ -807,6 +807,20 @@ body.solo-mode .solo-panel-visible {
   padding: 8px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; -webkit-overflow-scrolling: touch;
 }
 #aspc-panel.open { display: block; }
+#fix-panel {
+  display: none;
+  position: absolute; top: 44px; right: 8px; z-index: 1100;
+  width: 240px; max-height: 62%; overflow-y: auto;
+  background: rgba(6,14,16,0.94); border: 1px solid #26c6da; border-radius: 8px;
+  padding: 8px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  -webkit-overflow-scrolling: touch;
+}
+#fix-panel.open { display: block; }
+#fix-panel label {
+  display: flex; align-items: center; gap: 6px; color: #cfe8ec; font-size: 10px;
+  padding: 5px 3px; border-bottom: 1px solid #14343a; cursor: pointer;
+}
+#fix-panel .fixp-hdr { color:#4dd0e1; font-size:9px; font-weight:bold; letter-spacing:0.5px; padding:2px 3px 5px; }
 #awy-panel {
   display: none;
   position: absolute; top: 44px; right: 8px; z-index: 1100;
@@ -1539,6 +1553,10 @@ body.night-mode::after {
       <h3>3. MAP 창</h3>
       <ul>
         <li>상단: GPS·WX·＋(웨이포인트)·RAIN·WIND·NOTAM·FIX·AWY·<b>공역</b>·<b>📏 측정자</b>·FULL.</li>
+        <li><b>FIX</b>: 누르면 패널이 열려 <b>ENR 항로 픽스</b>(149개)와 <b>접근절차 픽스</b>를 따로 켜고 끕니다.
+            접근절차 픽스(주황 ◇)는 태안 RNP 16 / RNP 34 / 태안 IFR 로 나뉘며, 탭하면 기준점 라디얼·거리가 함께 뜹니다.</li>
+        <li><b>공역 → 서산 반경권</b>: 서산비행장 기준 <b>5 / 10 / 15 / 18NM</b> 거리권.
+            태안 절차상 해미 APPROACH 허가 없이는 서산 <b>10NM</b> 안에서 비행이 금지되므로 그 확인용입니다.</li>
         <li>하단: FLY/RESET/CLR/<b>SHIP</b>/<b>T-CUT</b>/<b>INHIB</b>/N↑/1인칭/MAP(위성)/3D/<b>🔒 잠금</b>.</li>
         <li><b>📏 측정자</b>: 지도를 탭해 점을 찍으면 구간 방위·거리, 합계, 시작→끝 직선거리 표시.</li>
         <li><b>공역</b>: 관제권·금지(P)·제한(R)·위험(D)구역, FIR·KADIZ. <b>모두 테두리만</b> 그려 내부의 심볼을 그대로 터치할 수 있습니다.
@@ -1929,13 +1947,14 @@ body.night-mode::after {
         <button id="rain-btn" onclick="toggleRain()">RAIN</button>
         <button id="wind-btn" onclick="toggleWind()">WIND</button>
         <button id="notam-btn" onclick="toggleNotamLayer()">NOTAM</button>
-        <button id="fix-btn" onclick="toggleFixLayer()">FIX</button>
+        <button id="fix-btn" onclick="toggleFixPanel()">FIX</button>
         <button id="awy-btn" onclick="toggleAwyLayer()">AWY</button>
         <button id="aspc-btn" onclick="toggleAspcPanel()">공역</button>
         <button id="map-ruler-btn" onclick="toggleRuler()" title="거리·방위 측정">📏</button>
         <button id="map-full-btn" onclick="toggleMapFull()" title="전체화면/분할 전환">FULL</button>
       </div>
       <div id="aspc-panel"></div>
+      <div id="fix-panel"></div>
       <div id="awy-panel"></div>
       <input type="file" id="notamFileInput" accept=".kml,.gpx" style="display:none" onchange="loadNotamFile(this)">
       <!-- Visitor counter widget (above scale bar, bottom-left) -->
@@ -13439,16 +13458,102 @@ function _clearFixLayer() {
   _fixMarkers.forEach(m => { try { leafMap.removeLayer(m); } catch(e){} });
   _fixMarkers = [];
 }
+// ── 접근절차 픽스 ─────────────────────────────────────────────
+// 한서대학교 태안비행장 비행절차(2025-09-01) 별첨 7 "주요 Point 좌표" 기재값.
+// 문서에 함께 적힌 기준점 라디얼/거리와 대조해 검증했다(거리 오차 0.01NM 이내,
+// 방위차 +0.7°는 앱의 자편차 -9° 와 현지 실제 편차의 차이).
+//   MAGUM = RWY16 시단, GOSUM = RWY34 시단 (제2장 제1절 6항과 일치)
+// ※ RNP 접근절차 자체는 문서상 "훈련 목적용이며 공식 인가 절차가 아님" 이라
+//   IFR_DB(절차)에는 넣지 않고, 지도 표시용 좌표로만 둔다.
+const APP_FIX_DB = [
+  { grp:'태안 RNP 16', name:'BACKA', lat:36.784667, lon:126.286167, note:'SOWON 070R 5NM' },
+  { grp:'태안 RNP 16', name:'SOWON', lat:36.745167, lon:126.194500, note:'MAGUM 340R 10NM' },
+  { grp:'태안 RNP 16', name:'MOSAN', lat:36.671833, lon:126.244000, note:'MAGUM 340R 5NM · FAF 1500ft' },
+  { grp:'태안 RNP 16', name:'MAGUM', lat:36.598500, lon:126.293167, note:'RWY 16 시단' },
+  { grp:'태안 RNP 34', name:'KWANG', lat:36.482000, lon:126.489333, note:'YUMOK 070R 5NM' },
+  { grp:'태안 RNP 34', name:'YUMOK', lat:36.442500, lon:126.398000, note:'GOSUM 160R 10NM' },
+  { grp:'태안 RNP 34', name:'CASLE', lat:36.516000, lon:126.349000, note:'GOSUM 160R 5NM · FAF 1500ft' },
+  { grp:'태안 RNP 34', name:'GOSUM', lat:36.589333, lon:126.299833, note:'RWY 34 시단' },
+  { grp:'태안 IFR',    name:'KODOK', lat:36.782806, lon:126.695472, note:'SOT 229R 24.7D' },
+  { grp:'태안 IFR',    name:'NAMPO', lat:36.386111, lon:126.759722, note:'SAN 154R 23.4D' },
+  { grp:'태안 IFR',    name:'NOROO', lat:37.296111, lon:127.319167, note:'KSM 141R 13.5D' },
+  { grp:'태안 IFR',    name:'SAN',   lat:36.710000, lon:126.482333, note:'서산 TACAN · ILS I-SAN 111.50' },
+];
+let _appFixMarkers = [];
+let appFixOn = {};
+try { appFixOn = JSON.parse(localStorage.getItem('appFixOn') || '{}') || {}; } catch(e) { appFixOn = {}; }
+const _appFixGrps = () => { const g = []; APP_FIX_DB.forEach(f => { if (!g.includes(f.grp)) g.push(f.grp); }); return g; };
+const _appFixAnyOn = () => _appFixGrps().some(g => appFixOn[g]);
+
+function _drawAppFixLayer() {
+  _clearAppFixLayer();
+  APP_FIX_DB.filter(f => appFixOn[f.grp]).forEach(f => {
+    const icon = L.divIcon({
+      html: `<div style="position:relative;">
+        <div style="position:absolute;left:-10px;top:-11px;width:30px;height:30px;"></div>
+        <div style="width:9px;height:9px;border:1.6px solid #ffb74d;transform:rotate(45deg);filter:drop-shadow(0 0 1.5px #000);"></div>
+        <div style="position:absolute;left:13px;top:-3px;color:#ffb74d;font-size:8px;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica Neue,Arial,sans-serif;font-weight:bold;white-space:nowrap;text-shadow:1px 1px 2px #000;">${f.name}</div>
+      </div>`,
+      iconSize: [12, 12], iconAnchor: [6, 6], className: ''
+    });
+    const mk = L.marker([f.lat, f.lon], { icon, interactive: true });
+    mk.bindPopup(_mapSymPopup({ title: `◇ ${f.name}`, color: '#b26a00', name: f.name,
+      lat: f.lat, lon: f.lon, sub: f.grp, note: f.note }), { maxWidth: 260 });
+    mk.addTo(leafMap);
+    _appFixMarkers.push(mk);
+  });
+}
+function _clearAppFixLayer() {
+  _appFixMarkers.forEach(m => { try { leafMap.removeLayer(m); } catch(e){} });
+  _appFixMarkers = [];
+}
+
+// ── FIX 패널 (ENR 항로 픽스 / 접근절차 픽스) ──
+function toggleFixPanel() {
+  const p = document.getElementById('fix-panel');
+  const open = !p.classList.contains('open');
+  p.classList.toggle('open', open);
+  if (open) _fixRenderPanel();
+  _fixUpdateBtn();
+}
+function _fixUpdateBtn() {
+  const p = document.getElementById('fix-panel');
+  document.getElementById('fix-btn')
+    .classList.toggle('active', fixLayerOn || _appFixAnyOn() || (p && p.classList.contains('open')));
+}
 function toggleFixLayer() {
   fixLayerOn = !fixLayerOn;
   if (fixLayerOn) _drawFixLayer(); else _clearFixLayer();
-  document.getElementById('fix-btn').classList.toggle('active', fixLayerOn);
   try { localStorage.setItem('fixLayerOn', fixLayerOn ? '1' : '0'); } catch(e) {}
+  _fixRenderPanel(); _fixUpdateBtn();
+}
+function toggleAppFixGrp(grp) {
+  appFixOn[grp] = !appFixOn[grp];
+  _drawAppFixLayer();
+  try { localStorage.setItem('appFixOn', JSON.stringify(appFixOn)); } catch(e) {}
+  _fixRenderPanel(); _fixUpdateBtn();
+}
+function _fixRenderPanel() {
+  const p = document.getElementById('fix-panel');
+  if (!p || !p.classList.contains('open')) return;
+  let html = `<div class="fixp-hdr">항로 픽스</div>
+    <label><input type="checkbox" ${fixLayerOn ? 'checked' : ''} onchange="toggleFixLayer()">
+      <span style="color:#26c6da;">▲</span> ENR 항로 픽스 <span style="color:#678;">(${_enrFixList().length})</span></label>
+    <div class="fixp-hdr" style="margin-top:6px;">접근절차 픽스</div>`;
+  _appFixGrps().forEach(g => {
+    const n = APP_FIX_DB.filter(f => f.grp === g).length;
+    html += `<label><input type="checkbox" ${appFixOn[g] ? 'checked' : ''} onchange="toggleAppFixGrp('${g}')">
+      <span style="color:#ffb74d;">◇</span> ${g} <span style="color:#678;">(${n})</span></label>`;
+  });
+  html += `<div style="color:#5a7a80;font-size:8px;line-height:1.5;padding:6px 3px 0;">
+    태안 접근절차 픽스는 한서대 태안비행장 비행절차(2025-09-01) 별첨 7 기재 좌표입니다.
+    RNP 절차는 문서상 훈련 목적용이라 IFR 절차 DB에는 넣지 않았습니다.</div>`;
+  p.innerHTML = html;
 }
 // 저장된 상태 복원
-if (fixLayerOn) {
-  try { _drawFixLayer(); document.getElementById('fix-btn').classList.add('active'); } catch(e) {}
-}
+if (fixLayerOn) { try { _drawFixLayer(); } catch(e) {} }
+try { if (_appFixAnyOn()) _drawAppFixLayer(); } catch(e) {}
+try { _fixUpdateBtn(); } catch(e) {}
 
 // ── VOR 표지소 + 항로(AWY) 오버레이 (AIP ENR 4.1 / 3.x) ──
 // ── 국내 비행장 주파수/VOR/ILS/ATIS/RWY/표고 (2022.1 자료) ──
@@ -13977,6 +14082,14 @@ const AIRSPACE_DB = [
   {id:'CZ_울진_N',grp:'관제권',name:'울진 북측 확장',alt:'1,000~2,500ft AGL · D',poly:[[36.84006,129.39382],[36.8443,129.40051],[36.84808,129.4076],[36.85139,129.41506],[36.85419,129.42283],[36.85648,129.43086],[36.85823,129.43911],[36.85944,129.4475],[36.86009,129.45599],[36.86019,129.46451],[36.85972,129.47302],[36.89833,129.45833],[36.87861,129.37889]]},
   {id:'CZ_울진_S',grp:'관제권',name:'울진 남측 확장',alt:'1,000~2,500ft AGL · D',poly:[[36.71395,129.52965],[36.7097,129.52298],[36.7059,129.5159],[36.70258,129.50845],[36.69976,129.50069],[36.69745,129.49267],[36.69569,129.48444],[36.69446,129.47606],[36.6938,129.46758],[36.69369,129.45906],[36.69414,129.45056],[36.65556,129.46528],[36.67528,129.54444]]},
   // APP 운용 공항 20NM — VFR도 통과 시 해당 APP 교신 권장 범위
+  // 서산 반경권 — 한서대 태안비행장 비행절차 제3장 제4절: 해미 APPROACH 허가 없이는
+  // 서산비행장(RKTP)으로부터 10NM 안에서 비행 금지(단서 조항 있음). 상황 파악용 거리권.
+  // 중심은 지도상 RKTP 마커 위치. RKTP ARP 는 AIP AD 2 로 미검증이며, 같은 문서의
+  // 서산 TACAN(SAN, N36°42'36.0" E126°28'56.4")과는 약 0.4NM 떨어져 있다.
+  {id:'SS_R05',grp:'서산 반경권',name:'서산 5NM',alt:'RKTP 기준',circle:{c:[36.7039,126.4861],r:5}},
+  {id:'SS_R10',grp:'서산 반경권',name:'서산 10NM',alt:'해미APP 허가 없이 진입 금지',circle:{c:[36.7039,126.4861],r:10}},
+  {id:'SS_R15',grp:'서산 반경권',name:'서산 15NM',alt:'RKTP 기준',circle:{c:[36.7039,126.4861],r:15}},
+  {id:'SS_R18',grp:'서산 반경권',name:'서산 18NM',alt:'RKTP 기준',circle:{c:[36.7039,126.4861],r:18}},
   {id:'AP20_오산',grp:'APP 교신권 20NM',name:'오산 APP (RKSO)',alt:'VFR 통과 시 교신',circle:{c:[37.09056,127.02972],r:20}},
   {id:'AP20_중원',grp:'APP 교신권 20NM',name:'중원 APP (RKTI)',alt:'VFR 통과 시 교신',circle:{c:[37.0295,127.8862],r:20}},
   {id:'AP20_청주',grp:'APP 교신권 20NM',name:'청주 APP (RKTU)',alt:'VFR 통과 시 교신',circle:{c:[36.71639,127.49917],r:20}},
