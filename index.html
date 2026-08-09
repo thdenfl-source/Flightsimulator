@@ -2661,6 +2661,8 @@ let _holdPrevD = 1e9;            // 픽스 통과 판정용 이전 거리
 let _holdForceDir = 0;           // +1 우선회 강제 / -1 좌선회 강제 / 0 최단
 let _holdWpRef = null;           // 무장된 웨이포인트 객체(동일성 비교용)
 let _holdClosing = false;        // 픽스로 접근 중(거리 감소) 여부 — 통과 판정 빗장
+let _holdMinD = Infinity;        // 픽스로 접근하며 도달한 최근접거리(NM)
+const HOLD_PASS_NEAR = 0.8;      // 이 거리 안까지 접근했어야 '통과' 로 인정
 
 // 웨이포인트에 정의된 홀딩을 NAV 와 연동한다.
 // FMS 소스이고 활성 웨이포인트에 hold 가 있으면 자동 무장되고,
@@ -2679,8 +2681,7 @@ function holdSyncFromWp() {
   holdLegVal = h.legVal || (holdLegType === 'DIST' ? 5 : 60);
   if (fresh) {
     holdOn = true; _holdPhase = 'TOFIX'; _holdEntry = ''; _holdT = 0; _holdForceDir = 0;
-    _holdClosing = false;
-
+    _holdClosing = false; _holdMinD = Infinity;
     _holdPrevD = distance(S.lat, S.lon, holdFix.lat, holdFix.lon);
     updateHoldLine();
   }
@@ -2688,6 +2689,7 @@ function holdSyncFromWp() {
 function holdExit() {
   holdOn = false; holdFix = null; _holdWpRef = null;
   _holdPhase = 'TOFIX'; _holdEntry = ''; _holdForceDir = 0; _holdClosing = false;
+  _holdMinD = Infinity; _holdPrevD = 1e9;
   updateHoldLine();
 }
 // 홀딩 인바운드 코스 기본값(자북, 표시/입력용) — 직전 웨이포인트에서의 레그 코스
@@ -2805,14 +2807,19 @@ function holdBankTarget(dt) {
   const sgn = holdRight ? 1 : -1;
 
   if (_holdPhase === 'TOFIX') {
-    // 픽스로 접근 중이었는지 기록(멀어지는 중에는 통과로 보지 않는다)
-    if (d < _holdPrevD - 1e-9) _holdClosing = true;
+    // 홀딩 로직은 "픽스를 실제로 통과한 뒤" 에만 시작한다.
+    //  ① 상공 통과: 0.35NM 이내
+    //  ② 살짝 빗겨 지나감: 0.8NM 이내까지 접근했던 적이 있고(HOLD_PASS_NEAR),
+    //     지금은 픽스가 정횡 뒤(120° 초과)이며 멀어지는 중
+    // 접근 최근접거리(_holdMinD)를 요구하지 않으면, 픽스에서 1NM 넘게 떨어진 곳에서
+    // 순간적으로 방위·거리 조건이 맞아 진입이 미리 시작될 수 있다.
+    _holdMinD = Math.min(_holdMinD, d);
     const relFixDeg = Math.abs(normAS(bearing(S.lat, S.lon, holdFix.lat, holdFix.lon) - S.hdg));
     const passed = (d < 0.35) ||
-      (_holdClosing && d < 1.2 && relFixDeg > 120 && d > _holdPrevD);
+      (_holdMinD < HOLD_PASS_NEAR && relFixDeg > 120 && d > _holdPrevD);
     _holdPrevD = d;
     if (!passed) return null;                     // 픽스까지는 일반 NAV 로 비행
-    _holdClosing = false;
+    _holdClosing = false; _holdMinD = Infinity;
     _holdEntry = _holdEntryType(S.hdg);
     S.crs = normA(holdCrs);                       // Twist — CDI 를 인바운드 코스로
     _holdT = 0;
