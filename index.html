@@ -15707,29 +15707,65 @@ function _solve3(M, b) {
     return [a[0][3] / a[0][0], a[1][3] / a[1][1], a[2][3] / a[2][2]];
 }
 
+// 차트 보정용 작업 좌표 — 메르카토르(등각 투영).
+// 종전에는 x = lon·cos(lat0), y = lat 의 정거원통(equirectangular)을 썼는데,
+// 이 좌표계는 위도에 따라 동서 축척이 달라진다(cos(lat) 변화). 차트 범위가
+// 위도로 0.5°만 되어도 동서 축척이 약 0.6% 어긋나, 40NM 차트에서 400m대의
+// 계통 오차가 생긴다. 그 왜곡을 아핀의 비대칭 축척·전단이 억지로 흡수하면서
+// 점이 적을 때 오차가 크게 튀었다.
+// 메르카토르는 등각이라 국소적으로 축척이 등방(等方)이므로, 항공차트(LCC·
+// 메르카토르 계열)를 회전+균일축척+평행이동(닮음변환)으로 정확히 모델링할 수 있다.
 function _pdfGeoXY(lat, lon, lat0) {
-    return { x: lon * Math.cos(lat0 * Math.PI / 180), y: lat };
+    const φ = Math.max(-85, Math.min(85, lat)) * Math.PI / 180;
+    return { x: lon, y: Math.log(Math.tan(Math.PI / 4 + φ / 2)) * 180 / Math.PI };
 }
 
-// 보정점들로부터 좌표→페이지비율 변환식 계산
-//  점 3개 이상: 최소자승 아핀(회전·축척·비대칭·평행이동)
-//  점 2개:      닮음변환(회전·축척·평행이동)
-function _pdfFit(points) {
-    const lat0 = points.reduce((s, p) => s + p.lat, 0) / points.length;
+// 닮음변환(회전·균일축척·평행이동, 4파라미터) 최소자승 — Helmert 변환.
+// 점 3개면 방정식 6개 / 미지수 4개라 여유도가 2 → 클릭 오차가 평균되어 걸러진다.
+//
+// ★ 반전(mirror)을 반드시 함께 본다.
+//   PDF 페이지 좌표는 fy 가 아래로 증가하는데 위도는 위로 증가하므로,
+//   지리→페이지 변환에는 사실상 항상 거울반전이 들어간다(행렬식 < 0).
+//   회전만 모델링하면 보정점 자체는 맞아도 그 밖의 영역이 좌우로 뒤집혀
+//   차트 반대편에서 수십 km씩 어긋난다.
+//   그래서 정회전/반전 두 가지를 모두 맞춰 보고 잔차가 작은 쪽을 쓴다.
+function _pdfFitSimilarity(points, lat0) {
+    const n = points.length;
     const toXY = p => _pdfGeoXY(p.lat, p.lon, lat0);
-    if (points.length < 3) {
-        const P1 = toXY(points[0]), P2 = toXY(points[1]);
-        const ppx = P2.x - P1.x, ppy = P2.y - P1.y;
-        const qx = points[1].fx - points[0].fx, qy = points[1].fy - points[0].fy;
-        const denom = ppx * ppx + ppy * ppy || 1e-12;
-        const ra = (qx * ppx + qy * ppy) / denom;
-        const rb = (qy * ppx - qx * ppy) / denom;
-        return { lat0, kind: 'similarity', P1: { x: P1.x, y: P1.y, fx: points[0].fx, fy: points[0].fy }, ra, rb, rms: 0, n: 2 };
-    }
+    let mx = 0, my = 0, mfx = 0, mfy = 0;
+    points.forEach(p => { const q = toXY(p); mx += q.x; my += q.y; mfx += p.fx; mfy += p.fy; });
+    mx /= n; my /= n; mfx /= n; mfy /= n;
+    let sxx = 0, n1 = 0, n2 = 0, m1 = 0, m2 = 0;
+    points.forEach(p => {
+        const q = toXY(p);
+        const dx = q.x - mx, dy = q.y - my, dfx = p.fx - mfx, dfy = p.fy - mfy;
+        sxx += dx * dx + dy * dy;
+        n1 += dx * dfx + dy * dfy;      // 정회전 ra
+        n2 += dx * dfy - dy * dfx;      // 정회전 rb
+        m1 += dx * dfx - dy * dfy;      // 반전 ra
+        m2 += dy * dfx + dx * dfy;      // 반전 rb
+    });
+    if (sxx < 1e-18) return null;
+    const base = { lat0, kind: 'similarity', P1: { x: mx, y: my, fx: mfx, fy: mfy }, n };
+    const cand = [
+        Object.assign({}, base, { mir: 0, ra: n1 / sxx, rb: n2 / sxx }),
+        Object.assign({}, base, { mir: 1, ra: m1 / sxx, rb: m2 / sxx }),
+    ];
+    cand.forEach(f => { f.rms = _pdfResidRms(f, points); });
+    // 보정점이 일직선에 가까우면 두 해의 잔차가 거의 같아져 반전 판정이 흔들린다.
+    // 페이지 fy 는 아래로, 위도는 위로 증가하므로 반전이 물리적으로 정상 —
+    // 정회전은 "확실히 더 잘 맞을 때"(잔차 절반 이하)만 채택한다.
+    return (cand[0].rms < cand[1].rms * 0.5) ? cand[0] : cand[1];
+}
+
+// 아핀 최소자승(6파라미터) — 점이 4개 이상일 때만 쓴다.
+// 3점이면 방정식이 정확히 6개라 항상 잔차 0으로 "완벽히" 맞지만, 그건 클릭
+// 오차까지 그대로 재현한 것일 뿐이라 차트 다른 곳에서 크게 어긋난다.
+function _pdfFitAffine(points, lat0) {
     let Sxx = 0, Sxy = 0, Sx = 0, Syy = 0, Sy = 0, Sn = 0;
     let bxFx = 0, byFx = 0, bnFx = 0, bxFy = 0, byFy = 0, bnFy = 0;
     points.forEach(p => {
-        const { x, y } = toXY(p);
+        const { x, y } = _pdfGeoXY(p.lat, p.lon, lat0);
         Sxx += x * x; Sxy += x * y; Sx += x; Syy += y * y; Sy += y; Sn += 1;
         bxFx += x * p.fx; byFx += y * p.fx; bnFx += p.fx;
         bxFy += x * p.fy; byFy += y * p.fy; bnFy += p.fy;
@@ -15737,28 +15773,121 @@ function _pdfFit(points) {
     const M = [[Sxx, Sxy, Sx], [Sxy, Syy, Sy], [Sx, Sy, Sn]];
     const abc = _solve3(M, [bxFx, byFx, bnFx]);
     const def = _solve3(M, [bxFy, byFy, bnFy]);
-    if (!abc || !def) {   // 특이(모든 점 일직선 등) → 닮음변환으로 대체
-        return _pdfFit(points.slice(0, 2));
+    if (!abc || !def) return null;
+    return { lat0, kind: 'affine', abc, def, n: points.length };
+}
+
+// 변환식으로 한 점을 페이지비율로 투영
+function _pdfApply(f, lat, lon) {
+    const { x, y } = _pdfGeoXY(lat, lon, f.lat0);
+    if (f.kind === 'affine') {
+        return { fx: f.abc[0] * x + f.abc[1] * y + f.abc[2],
+                 fy: f.def[0] * x + f.def[1] * y + f.def[2] };
     }
+    const dx = x - f.P1.x, dy = y - f.P1.y;
+    return f.mir
+        ? { fx: f.P1.fx + f.ra * dx + f.rb * dy, fy: f.P1.fy + f.rb * dx - f.ra * dy }
+        : { fx: f.P1.fx + f.ra * dx - f.rb * dy, fy: f.P1.fy + f.rb * dx + f.ra * dy };
+}
+function _pdfResidRms(f, points) {
     let se = 0;
     points.forEach(p => {
-        const { x, y } = toXY(p);
-        const efx = abc[0] * x + abc[1] * y + abc[2];
-        const efy = def[0] * x + def[1] * y + def[2];
-        se += (efx - p.fx) ** 2 + (efy - p.fy) ** 2;
+        const e = _pdfApply(f, p.lat, p.lon);
+        se += (e.fx - p.fx) ** 2 + (e.fy - p.fy) ** 2;
     });
-    return { lat0, kind: 'affine', abc, def, rms: Math.sqrt(se / points.length), n: points.length };
+    return Math.sqrt(se / points.length);
+}
+// leave-one-out 교차검증 — 한 점씩 빼고 맞춘 뒤 뺀 점을 얼마나 맞히는지.
+// 3점 아핀처럼 "잔차 0"이 나오는 모델의 실제 정확도를 정직하게 재는 지표.
+function _pdfLooRms(points, builder, lat0) {
+    // 4점 미만이면 한 점을 빼는 순간 남은 점이 미지수와 같거나 적어져
+    // (닮음 4파라미터 ↔ 2점 4방정식) 교차검증 값이 발산한다. 의미 없으므로 생략.
+    if (points.length < 4) return null;
+    let se = 0, cnt = 0;
+    for (let i = 0; i < points.length; i++) {
+        const sub = points.filter((_, j) => j !== i);
+        const f = builder(sub, lat0);
+        if (!f) return null;
+        const e = _pdfApply(f, points[i].lat, points[i].lon);
+        se += (e.fx - points[i].fx) ** 2 + (e.fy - points[i].fy) ** 2;
+        cnt++;
+    }
+    return cnt ? Math.sqrt(se / cnt) : null;
+}
+
+// 보정점들로부터 좌표→페이지비율 변환식 계산
+//  2~3점 : 닮음변환(회전·균일축척·평행이동) — 자유도가 낮아 클릭 오차에 강하다
+//  4점 이상: 닮음/아핀 중 leave-one-out 교차검증 오차가 작은 쪽을 고른다
+//            (차트에 실제 비대칭 축척이 있으면 아핀이, 아니면 닮음이 이긴다)
+// 보정점 배치의 '펼침 정도' — 0에 가까울수록 일직선(변환이 불안정).
+// 점들의 2차 모멘트 고윳값 비(작은쪽/큰쪽)의 제곱근.
+function _pdfSpread(points, lat0) {
+    const n = points.length; if (n < 3) return 0;
+    let mx = 0, my = 0;
+    const q = points.map(p => _pdfGeoXY(p.lat, p.lon, lat0));
+    q.forEach(v => { mx += v.x; my += v.y; }); mx /= n; my /= n;
+    let a = 0, b = 0, c = 0;
+    q.forEach(v => { const dx = v.x - mx, dy = v.y - my; a += dx * dx; b += dx * dy; c += dy * dy; });
+    const tr = a + c, det = a * c - b * b;
+    const disc = Math.max(0, tr * tr / 4 - det);
+    const l1 = tr / 2 + Math.sqrt(disc), l2 = tr / 2 - Math.sqrt(disc);
+    return l1 > 1e-18 ? Math.sqrt(Math.max(0, l2) / l1) : 0;
+}
+
+function _pdfFit(points) {
+    const lat0 = points.reduce((s, p) => s + p.lat, 0) / points.length;
+    if (points.length < 2) return null;
+    const sim = _pdfFitSimilarity(points, lat0);
+    if (points.length < 4) {
+        if (!sim) return null;
+        sim.rms = _pdfResidRms(sim, points);
+        sim.loo = _pdfLooRms(points, _pdfFitSimilarity, lat0);
+        sim.spread = _pdfSpread(points, lat0);
+        return sim;
+    }
+    const aff = _pdfFitAffine(points, lat0);
+    const simLoo = _pdfLooRms(points, _pdfFitSimilarity, lat0);
+    const affLoo = _pdfLooRms(points, _pdfFitAffine, lat0);
+    let pick = aff || sim;
+    if (aff && sim && simLoo != null && affLoo != null && simLoo <= affLoo) pick = sim;
+    if (!pick) return null;
+    pick.rms = _pdfResidRms(pick, points);
+    pick.loo = (pick.kind === 'affine') ? affLoo : simLoo;
+    pick.spread = _pdfSpread(points, lat0);
+    return pick;
 }
 
 function _pdfLatLonToFrac(lat, lon) {
     const cal = _pdfCalibration; if (!cal || !cal.fit) return null;
-    const f = cal.fit;
-    const x = lon * Math.cos(f.lat0 * Math.PI / 180), y = lat;
-    if (f.kind === 'affine') {
-        return { fx: f.abc[0] * x + f.abc[1] * y + f.abc[2], fy: f.def[0] * x + f.def[1] * y + f.def[2] };
+    return _pdfApply(cal.fit, lat, lon);
+}
+
+// 보정점 중 유난히 어긋난 점 찾기(4점 이상). 한 점을 잘못 찍으면 전체가 끌려간다.
+// 잔차가 중앙값의 3배를 넘고 절대값도 의미 있게 클 때만 지목한다.
+// 잘못 찍은 점 찾기(4점 이상).
+// 단순 잔차로는 못 잡는다 — 최소자승이 오차를 모든 점에 고르게 나눠 실어서
+// 한 점이 크게 틀려도 개별 잔차는 비슷해진다.
+// 진짜 신호는 "그 점을 빼면 나머지가 갑자기 잘 맞는가" 다.
+// 점 i 를 뺀 부분집합의 잔차가 다른 경우들보다 뚜렷이 작고, 동시에 뺀 점 i 의
+// 예측 오차가 크면 그 점을 잘못 찍은 것으로 본다.
+function _pdfWorstPoint(fit, points) {
+    if (!points || points.length < 4) return null;
+    const lat0 = points.reduce((a, p) => a + p.lat, 0) / points.length;
+    const st = [];
+    for (let i = 0; i < points.length; i++) {
+        const sub = points.filter((_, j) => j !== i);
+        const f = _pdfFitSimilarity(sub, lat0);
+        if (!f) return null;
+        const e = _pdfApply(f, points[i].lat, points[i].lon);
+        st.push({ i, sub: f.rms, loo: Math.hypot(e.fx - points[i].fx, e.fy - points[i].fy),
+                  name: points[i].name });
     }
-    const dx = x - f.P1.x, dy = y - f.P1.y;
-    return { fx: f.P1.fx + f.ra * dx - f.rb * dy, fy: f.P1.fy + f.rb * dx + f.ra * dy };
+    const med = st.map(r => r.sub).slice().sort((a, b) => a - b)[Math.floor(st.length / 2)] || 0;
+    const best = st.reduce((a, b) => (b.sub < a.sub ? b : a));
+    if (med <= 1e-9) return null;                  // 전부 잘 맞음
+    if (best.sub > med * 0.34) return null;        // 특별히 튀는 점 없음
+    if (best.loo < 0.01) return null;              // 페이지 1% 미만이면 무시
+    return { label: best.name || `${best.i + 1}번`, d: best.loo };
 }
 
 // 보정 RMS 잔차를 미터로 근사 (가장 멀리 떨어진 두 점의 지리거리/비율거리 사용)
@@ -16112,11 +16241,17 @@ function _pdfCalUpdateBanner() {
     let msg = `위치 보정 · ${_pdfCalPts.length}점 등록`;
     if (_pdfCalPts.length >= 2) {
         const fit = _pdfFit(_pdfCalPts);
-        const rm = _pdfCalibRmsMeters(_pdfCalPts, fit.rms);
-        msg += fit.kind === 'affine'
-            ? ` · 아핀(오차 ≈ ${rm != null ? Math.round(rm) + 'm' : '--'})`
-            : ` · 2점(닮음)`;
-        msg += `\n점을 더 찍을수록 정확 · [✔ 완료]로 종료`;
+        // 4점 이상이면 교차검증(loo), 그 미만이면 보정점 잔차를 보여준다.
+        const rm = _pdfCalibRmsMeters(_pdfCalPts, fit.loo != null ? fit.loo : fit.rms);
+        msg += ` · ${fit.kind === 'affine' ? '아핀' : '닮음'}`;
+        if (rm != null) msg += `(${fit.loo != null ? '예상오차' : '잔차'} ≈ ${Math.round(rm)}m)`;
+        // 보정점이 일직선에 가까우면 변환이 불안정해진다 — 삼각형이 되게 유도
+        const bad = _pdfWorstPoint(fit, _pdfCalPts);
+        if (fit.spread != null && fit.spread < 0.12 && _pdfCalPts.length >= 3)
+            msg += `\n⚠ 점들이 일직선에 가깝습니다 — 삼각형이 되도록 찍으세요`;
+        else if (bad)
+            msg += `\n⚠ ${bad.label} 점이 많이 어긋납니다 — 지우고 다시 찍어 보세요`;
+        else msg += `\n점을 더 찍을수록 정확 · [✔ 완료]로 종료`;
     } else {
         msg += `\n픽스를 탭하고 이름을 선택하세요(3점 이상 권장)`;
     }
@@ -16211,10 +16346,15 @@ function _pdfCalFinish() {
     _saveChartCalib(_pdfChartKey, _pdfCalibration);
     _pdfCancelCalibration();
     _pdfUpdateAcMarker();
-    const rm = _pdfCalibRmsMeters(pts, fit.rms);
-    const kindTxt = fit.kind === 'affine' ? `아핀 변환(${fit.n}점)` : '닮음 변환(2점)';
+    const rmLoo = _pdfCalibRmsMeters(pts, fit.loo);
+    const rmRes = _pdfCalibRmsMeters(pts, fit.rms);
+    const kindTxt = (fit.kind === 'affine' ? '아핀 변환' : '닮음 변환') + `(${fit.n}점)`;
     alert(`위치 보정 완료!\n방식: ${kindTxt}` +
-          (rm != null ? `\n추정 오차(RMS): 약 ${Math.round(rm)}m` : '') +
+          (rmLoo != null ? `\n예상 오차(교차검증): 약 ${Math.round(rmLoo)}m` : '') +
+          (rmRes != null ? `\n보정점 잔차: 약 ${Math.round(rmRes)}m` : '') +
+          (fit.spread != null && fit.spread < 0.12
+             ? `\n\n⚠ 보정점이 일직선에 가까워 정확도가 떨어질 수 있습니다.\n삼각형이 되도록 다시 찍으면 좋아집니다.` : '') +
+          (pts.length === 3 ? `\n\n※ 3점은 회전·축척·이동만 맞춥니다.\n한 점 더 찍으면 차트 왜곡까지 보정합니다.` : '') +
           `\n\n현재 위치(▲)가 차트에 표시됩니다.\n⚠ 참고용입니다. 실제 항법에 사용하지 마세요.`);
 }
 
