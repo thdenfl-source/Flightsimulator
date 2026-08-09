@@ -1571,21 +1571,20 @@ body.night-mode::after {
                   <th style="text-align:left;padding:2px 0;">절차</th></tr>
               <tr><td style="padding:2px 8px 2px 0;"><b>직진</b><br>Direct</td>
                   <td style="padding:2px 8px 2px 0;">r 0~180°<br>(180°)</td>
-                  <td style="padding:2px 0;">픽스 통과 즉시 <b>대기 방향으로 선회</b>해 아웃바운드 기수로 비행</td></tr>
+                  <td style="padding:2px 0;">픽스 통과 즉시 <b>그려진 홀딩 트랙을 그대로 따라</b> 선회·비행</td></tr>
               <tr><td style="padding:2px 8px 2px 0;"><b>평행</b><br>Parallel</td>
                   <td style="padding:2px 8px 2px 0;">r 180~290°<br>(110°)</td>
-                  <td style="padding:2px 0;"><b>비대기측</b>으로 선회해 인바운드 코스와 평행하게 아웃바운드 비행 →
-                      <b>대기 반대방향으로 180° 넘게 선회</b>해 코스를 가로질러 합류</td></tr>
+                  <td style="padding:2px 0;">픽스 통과 후 <b>지상항적이 인바운드 역방위각</b>이 되게 기수를 잡고 레그 시간(기본 1분) 비행 →
+                      <b>좌장주면 우선회 · 우장주면 좌선회</b> 후 인바운드 트래킹</td></tr>
               <tr><td style="padding:2px 8px 2px 0;"><b>눈물방울</b><br>Teardrop</td>
                   <td style="padding:2px 8px 2px 0;">r 290~360°<br>(70°)</td>
-                  <td style="padding:2px 0;">아웃바운드 코스에서 <b>대기구역 쪽으로 30° 비껴</b> 비행 →
-                      <b>대기 방향으로 선회</b>해 합류</td></tr>
+                  <td style="padding:2px 0;">픽스 통과 후 홀딩 패턴의 <b>3선회지점</b>(아웃바운드 레그 끝)으로 직행 →
+                      그 지점부터 홀딩 트랙 추종</td></tr>
             </table>
-            아웃바운드 레그 시간은 <b>픽스 어빔</b>과 <b>롤아웃</b> 중 늦은 쪽부터 계수하고, 합류 시
-            <b>CDI·코스선이 대기 인바운드 코스로 전환(Twist)</b>됩니다.
-            바람이 있으면 아웃바운드에서 <b>편류수정각을 3배(triple drift)</b> 적용해, 인바운드 선회를 마쳤을 때
-            코스 위에 놓이도록 합니다(측풍 35kt에서 픽스 0.6NM 전 코스 정렬 완료).
-            단 <b>평행 진입의 아웃바운드</b>는 <b>지상항적이 인바운드 역방위각</b>이 되도록 편류수정을 1배로 적용합니다.
+            진입이 끝나면 <b>지도에 그려진 레이스트랙 자체를 목표 경로로 추종</b>합니다(경로 추종 방식).
+            패턴은 현재 대기속도의 <b>표준선회 반경</b>과 레그(시간·거리)로 그려지고, 항공기는 그 선을 따라 돕니다 —
+            무풍에서 <b>패턴 이탈 평균 0.05NM</b>. 바람이 있으면 편류수정으로 대지항적을 패턴에 맞춥니다.
+            합류 시 <b>CDI·코스선이 대기 인바운드 코스로 전환(Twist)</b>되고,
             홀딩이 걸린 웨이포인트에서는 <b>NAV 오토파일럿이 해제되지 않습니다</b>(픽스를 지나도 계속 홀딩).</li>
         <li><b>선회 선행</b>: 웨이포인트에서 다음 레그로 꺾을 때 <b>d = R·tan(θ/2)</b> 만큼 미리 선회를 시작합니다
             (R 은 지상속도·실제 뱅크 기준). VNAV 의 TOD 도 레그 방향 거리와 지상속도로 계산합니다.</li>
@@ -2736,97 +2735,132 @@ function _holdEntryType(hdg) {
   return 'TEARDROP';                              // r 290 ~ 360°
 }
 
+// ── 홀딩 경로 추종 ──────────────────────────────────────────────
+// 지도에 그려지는 레이스트랙 자체를 목표 경로로 삼아 그대로 따라 난다.
+// (기수·타이머로 짜맞추면 그림과 항적이 어긋나므로, 그림을 유일한 기준으로 둔다)
+
+// 위경도 → 픽스 기준 평면 좌표(NM). 홀딩 패턴 크기에서는 평면 근사로 충분하다.
+function _holdXY(lat, lon) {
+  return [ (lon - holdFix.lon) * Math.cos(holdFix.lat * D2R) * 60,
+           (lat - holdFix.lat) * 60 ];
+}
+// 패턴의 주요 지점 — 1선회(픽스) → 2선회 끝(A) → 3선회 시작(B) → 4선회 끝(Cp)
+function holdKeyPoints() {
+  const R = navTurnRadiusNM();
+  const legNM = (holdLegType === 'DIST')
+    ? Math.max(0.5, holdLegVal)
+    : Math.max(20, S.spd) / 3600 * holdLegVal;
+  const sgn = holdRight ? 1 : -1;
+  const out = normA(holdCrs + 180);
+  const F = [holdFix.lat, holdFix.lon];
+  const A = destPoint(F[0], F[1], normA(holdCrs + sgn * 90), 2 * R);   // 2선회 끝
+  const B = destPoint(A[0], A[1], out, legNM);                          // 3선회 시작
+  const Cp = destPoint(F[0], F[1], out, legNM);                         // 4선회 끝
+  return { R, legNM, sgn, out, F, A, B, Cp };
+}
+
+// 경로 추종(pure pursuit): 패턴 폴리라인에서 최근접점을 찾고, 그보다
+// lookahead 만큼 앞선 점을 향하는 대지 트랙을 만든 뒤 편류수정해 기수를 뽑는다.
+function holdTrackBank() {
+  const pts = holdPatternLatLngs();
+  if (!pts || pts.length < 4) return 0;
+  const XY = pts.map(p => _holdXY(p[0], p[1]));
+  const me = _holdXY(S.lat, S.lon);
+  let bi = 0, bt = 0, bd = Infinity;
+  for (let i = 0; i < XY.length - 1; i++) {
+    const ax = XY[i][0], ay = XY[i][1];
+    const dx = XY[i+1][0] - ax, dy = XY[i+1][1] - ay;
+    const L2 = dx * dx + dy * dy;
+    let t = L2 > 1e-12 ? ((me[0]-ax)*dx + (me[1]-ay)*dy) / L2 : 0;
+    t = Math.max(0, Math.min(1, t));
+    const ex = me[0] - (ax + t*dx), ey = me[1] - (ay + t*dy);
+    const d2 = ex*ex + ey*ey;
+    if (d2 < bd) { bd = d2; bi = i; bt = t; }
+  }
+  // lookahead — 선회반경에 비례. 짧으면 진동, 길면 모서리를 자른다.
+  const look = Math.max(0.2, navTurnRadiusNM() * 0.9);
+  let need = look, i = bi, t = bt, tx = XY[bi][0], ty = XY[bi][1], guard = 0;
+  while (guard++ < 200) {
+    const ax = XY[i][0] + t * (XY[i+1][0] - XY[i][0]);
+    const ay = XY[i][1] + t * (XY[i+1][1] - XY[i][1]);
+    const bx = XY[i+1][0], by = XY[i+1][1];
+    const seg = Math.hypot(bx - ax, by - ay);
+    if (seg >= need) {
+      const f = seg > 1e-9 ? need / seg : 0;
+      tx = ax + f * (bx - ax); ty = ay + f * (by - ay);
+      break;
+    }
+    need -= seg; t = 0; i++;
+    if (i >= XY.length - 1) i = 0;            // 닫힌 경로 — 처음으로 순환
+    tx = XY[i][0]; ty = XY[i][1];
+  }
+  const trk = normA(Math.atan2(tx - me[0], ty - me[1]) / D2R);
+  return _holdHdgBank(windCorrectedHdg(trk), 0);
+}
+
 // 홀딩 AP. 뱅크 지령을 반환하고, 아직 픽스로 가는 중이면 null(일반 NAV 사용).
 function holdBankTarget(dt) {
   if (!holdOn || !holdFix) return null;
   const d = distance(S.lat, S.lon, holdFix.lat, holdFix.lon);
-  // 픽스로 접근 중이었는지 기록. 아웃바운드로 멀어지는 중에는 통과 판정을 하지 않는다.
-  // (이 빗장이 없으면 아웃바운드 레그가 끝나 인바운드로 넘어간 직후, 아직 2NM 안이고
-  //  픽스가 뒤에 있다는 이유로 "통과"로 오인해 아웃바운드를 한 번 더 돈다 → 패턴 2배)
-  if (d < _holdPrevD - 1e-9) _holdClosing = true;
-  // 픽스 통과 판정
-  //  ① 상공 통과(0.35NM 이내)
-  //  ② 살짝 빗겨 지나간 경우 — 단, 코스를 추종 중(선회 중이 아닐 때)이어야 한다.
-  //     선회 중에는 호가 픽스 쪽으로 휘며 거리가 줄었다 늘기를 반복해, 1.7NM 밖에서도
-  //     "가까워졌다가 멀어짐" 조건이 성립해 통과로 오인된다(→ 아웃바운드 2회 실행).
-  const relFixDeg = Math.abs(normAS(bearing(S.lat, S.lon, holdFix.lat, holdFix.lon) - S.hdg));
-  const passed = (d < 0.35) ||
-    (_holdForceDir === 0 && _holdClosing && d < 1.2 && relFixDeg > 120 && d > _holdPrevD);
   const sgn = holdRight ? 1 : -1;
 
   if (_holdPhase === 'TOFIX') {
+    // 픽스로 접근 중이었는지 기록(멀어지는 중에는 통과로 보지 않는다)
+    if (d < _holdPrevD - 1e-9) _holdClosing = true;
+    const relFixDeg = Math.abs(normAS(bearing(S.lat, S.lon, holdFix.lat, holdFix.lon) - S.hdg));
+    const passed = (d < 0.35) ||
+      (_holdClosing && d < 1.2 && relFixDeg > 120 && d > _holdPrevD);
     _holdPrevD = d;
-    if (!passed) return null;                       // 픽스까지는 일반 NAV 로 비행
-    // 판정 기준은 픽스 통과 시점의 기수. NAV AP 는 픽스 전에 인바운드 코스로
-    // 롤아웃하므로 이 값이 곧 도달 방위다(3NM 전 위치로 역산하면 오히려
-    // 코스에 붙기 전의 비스듬한 방향이 잡혀 틀린 구역으로 판정된다).
-    _holdClosing = false;                 // 통과 소비
+    if (!passed) return null;                     // 픽스까지는 일반 NAV 로 비행
+    _holdClosing = false;
     _holdEntry = _holdEntryType(S.hdg);
-    // 아웃바운드 방위 — 인바운드 코스의 역방위각(C+180) 기준
-    //   눈물방울: 우선회 홀딩이면 −30°, 좌선회 홀딩이면 +30° (대기구역 쪽)
-    //   직진·평행: 역방위각 그대로
-    _holdOutHdg = (_holdEntry === 'TEARDROP')
-      ? normA(holdCrs + 180 - sgn * 30)
-      : normA(holdCrs + 180);
-    // 초기 선회 방향은 반드시 지정해야 한다. "최단 선회"에 맡기면 180° 부근에서
-    // 비대기측으로 휘돌아, 그려진 패턴과 반대쪽에 항적이 생긴다.
-    //   직진·눈물방울 : 대기 방향(패턴 안쪽으로 감기게)
-    //   평행         : 비대기측(코스와 평행하게 나가야 하므로)
-    _holdForceDir = (_holdEntry === 'PARALLEL') ? -sgn : sgn;
-    S.crs = normA(holdCrs);      // Twist — CDI/코스선을 대기 인바운드 코스로
-    _holdPhase = 'OUTBOUND'; _holdT = 0;
-  }
-
-  if (_holdPhase === 'OUTBOUND') {
-    _holdPrevD = d;
-    // 평행 진입의 아웃바운드는 "지상항적이 인바운드 역방위각" 이 되어야 하므로
-    // 편류수정을 1배(정확한 트랙 유지)로 적용한다.
-    // 그 외(직진·눈물방울·정상 패턴)는 3배(triple drift)로, 인바운드 선회를
-    // 마쳤을 때 코스 위에 놓이도록 바람 쪽으로 더 치우쳐 난다.
-    const tgt = windCorrectedHdg(_holdOutHdg, _holdEntry === 'PARALLEL' ? 1 : 3);
-    const err = Math.abs(normAS(tgt - S.hdg));
-    if (err < 15) _holdForceDir = 0;
-    // 레그 시간 계수는 "픽스 어빔"과 "아웃바운드 롤아웃" 중 늦은 쪽부터.
-    // 어빔 = 픽스가 기수 기준 정횡(상대방위 90°) 뒤로 넘어간 시점.
-    const relFix = Math.abs(normAS(bearing(S.lat, S.lon, holdFix.lat, holdFix.lon) - S.hdg));
-    if (err < 10 && relFix >= 90) _holdT += dt;
-    // 레그 종료: 시간 기준이면 경과초, 거리 기준이면 픽스로부터의 거리
-    const done = (holdLegType === 'DIST') ? (d >= holdLegVal) : (_holdT >= holdLegVal);
-    if (done) {
-      _holdPhase = 'INBOUND';
-      // 합류 선회 방향
-      //   평행     : 홀딩과 반대 방향 (우선회 홀딩 → 좌선회, 좌선회 홀딩 → 우선회)
-      //              으로 180° 넘게 돌아 인바운드 코스를 가로질러 합류
-      //   직진·눈물방울 : 홀딩 방향
-      _holdForceDir = (_holdEntry === 'PARALLEL') ? -sgn : sgn;
+    S.crs = normA(holdCrs);                       // Twist — CDI 를 인바운드 코스로
+    _holdT = 0;
+    if (_holdEntry === 'TEARDROP') {
+      // 3선회지점(아웃바운드 레그 끝, B)으로 곧장 향한다
+      _holdPhase = 'TEARDROP'; _holdForceDir = sgn;
+    } else if (_holdEntry === 'PARALLEL') {
+      // 아웃바운드 방향으로 1분(레그 시간) — 지상항적이 역방위각이 되게
+      _holdPhase = 'PAR_OUT'; _holdForceDir = -sgn;
+    } else {
+      _holdPhase = 'TRACK'; _holdForceDir = sgn;  // 직진 — 곧바로 패턴 추종
     }
-    return _holdHdgBank(tgt, _holdForceDir);
   }
 
-  // INBOUND: 인바운드 코스선을 인터셉트해 픽스로
-  if (passed) {                                     // 픽스 재통과 → 다시 아웃바운드
-    _holdPhase = 'OUTBOUND'; _holdEntry = 'DIRECT'; _holdT = 0; _holdClosing = false;
-    _holdOutHdg = normA(holdCrs + 180); _holdForceDir = sgn; _holdPrevD = d;
-    return _holdHdgBank(windCorrectedHdg(_holdOutHdg), _holdForceDir);
+  // 눈물방울: 3선회지점까지 직행 → 도달하면 패턴 추종
+  if (_holdPhase === 'TEARDROP') {
+    const K = holdKeyPoints();
+    const dB = distance(S.lat, S.lon, K.B[0], K.B[1]);
+    if (dB < Math.max(0.2, K.R * 0.6)) { _holdPhase = 'TRACK'; _holdForceDir = 0; }
+    else {
+      const trk = bearing(S.lat, S.lon, K.B[0], K.B[1]);
+      const tgt = windCorrectedHdg(trk);
+      if (_holdForceDir && Math.abs(normAS(tgt - S.hdg)) < 20) _holdForceDir = 0;
+      return _holdHdgBank(tgt, _holdForceDir);
+    }
   }
+
+  // 평행: 아웃바운드 방향으로 레그 시간만큼(픽스 통과 시점부터) 비행
+  if (_holdPhase === 'PAR_OUT') {
+    _holdT += dt;
+    const outTrk = normA(holdCrs + 180);
+    const tgt = windCorrectedHdg(outTrk);          // 지상항적 = 역방위각
+    if (_holdForceDir && Math.abs(normAS(tgt - S.hdg)) < 15) _holdForceDir = 0;
+    const done = (holdLegType === 'DIST') ? (d >= holdLegVal) : (_holdT >= holdLegVal);
+    if (done) { _holdPhase = 'PAR_TURN'; _holdForceDir = -sgn; }
+    else return _holdHdgBank(tgt, _holdForceDir);
+  }
+
+  // 평행 합류 선회: 좌장주면 우선회, 우장주면 좌선회 → 인바운드 코스로
+  if (_holdPhase === 'PAR_TURN') {
+    const tgt = windCorrectedHdg(holdCrs);
+    if (Math.abs(normAS(tgt - S.hdg)) > 15) return _holdHdgBank(tgt, _holdForceDir);
+    _holdPhase = 'TRACK'; _holdForceDir = 0;
+  }
+
+  // 패턴 추종
   _holdPrevD = d;
-  // 합류는 두 단계다.
-  // ① 선회: 지정 방향으로 "인바운드 코스 방위까지" 곧장 돌아 반원을 그린다.
-  //    코스에서 45° 모자란 인터셉트 기수로 돌면, 롤아웃 후 코스에 닿을 때까지
-  //    픽스에서 계속 멀어져 실제 패턴이 그려진 레이스트랙의 두 배가 된다.
-  // ② 추종: 코스 방위에 들어온 뒤부터 횡편차를 잡는다.
-  if (_holdForceDir) {
-    const inbTgt = windCorrectedHdg(holdCrs);
-    if (Math.abs(normAS(inbTgt - S.hdg)) > 15) return _holdHdgBank(inbTgt, _holdForceDir);
-    _holdForceDir = 0;
-  }
-  const Lh = activeCourseLine();          // 홀딩 중에는 대기 인바운드 코스선
-  const xtk = courseXtk(Lh);
-  const IC = navInterceptDeg;
-  const rollOut = Math.max(0.15, navTurnRadiusNM() * (1 - Math.cos(IC * D2R)));
-  const ang = Math.min(IC, Math.abs(xtk) / rollOut * IC);
-  const trk = normA(holdCrs - Math.sign(xtk) * ang);
-  return _holdHdgBank(windCorrectedHdg(trk), 0);
+  return holdTrackBank();
 }
 
 // 홀딩 패턴 궤적(지도 표시용) — 픽스 기준 레이스트랙.
@@ -2839,16 +2873,19 @@ function holdPatternLatLngs(fix, cfg) {
   const lType = cfg ? (cfg.legType === 'DIST' ? 'DIST' : 'TIME') : holdLegType;
   const lVal  = cfg ? (cfg.legVal || (lType === 'DIST' ? 5 : 60)) : holdLegVal;
   const R = navTurnRadiusNM();
+  // 레그 길이는 대기속도 기준으로 잡는다. 지상속도를 쓰면 바람 속에서 기수에 따라
+  // 패턴 크기가 매 프레임 흔들려, 그 패턴을 추종하는 항적도 같이 요동친다.
   const legNM = (lType === 'DIST')
     ? Math.max(0.5, lVal)
-    : Math.max(20, groundSpdKt()) / 3600 * lVal;
+    : Math.max(20, S.spd) / 3600 * lVal;
   const sgn = dir ? 1 : -1;
-  const holdCrs = crsT;                    // 아래 계산은 지역 변수를 쓴다
-  const out = normA(holdCrs + 180);
+  // 주의: 지역명을 holdCrs 로 두면 위의 `cfg ? cfg.crs : holdCrs` 가 TDZ 에 걸린다
+  const crsL = crsT;
+  const out = normA(crsL + 180);
   const pts = [];
   const F = [F0.lat, F0.lon];
   // 픽스에서 홀딩측으로 2R 떨어진 아웃바운드 레그 시작/끝
-  const A = destPoint(F[0], F[1], normA(holdCrs + sgn * 90), 2 * R);
+  const A = destPoint(F[0], F[1], normA(crsL + sgn * 90), 2 * R);
   const B = destPoint(A[0], A[1], out, legNM);
   // 픽스 → 반원 → 아웃바운드 레그 → 반원 → 인바운드 레그
   const arc = (cen, from) => {
@@ -2856,12 +2893,12 @@ function holdPatternLatLngs(fix, cfg) {
       pts.push(destPoint(cen[0], cen[1], normA(from + sgn * 180 * i / 16), R));
     }
   };
-  const cen1 = destPoint(F[0], F[1], normA(holdCrs + sgn * 90), R);
-  const cen2 = destPoint(B[0], B[1], normA(holdCrs - sgn * 90), R);
+  const cen1 = destPoint(F[0], F[1], normA(crsL + sgn * 90), R);
+  const cen2 = destPoint(B[0], B[1], normA(crsL - sgn * 90), R);
   pts.push(F);
-  arc(cen1, normA(holdCrs - sgn * 90));   // F → A
+  arc(cen1, normA(crsL - sgn * 90));   // F → A
   pts.push(B);
-  arc(cen2, normA(holdCrs + sgn * 90));   // B → C
+  arc(cen2, normA(crsL + sgn * 90));   // B → C
   pts.push(F);
   return pts;
 }
