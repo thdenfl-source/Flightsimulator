@@ -1,6 +1,6 @@
 // VFR Flight Sim — Service Worker
 // 버전을 올리면 캐시가 갱신됩니다
-const CACHE = 'vfr-flight-v311';
+const CACHE = 'vfr-flight-v312';
 const CORE  = [
   './index.html',
   './manifest.json',
