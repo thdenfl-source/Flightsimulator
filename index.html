@@ -16633,9 +16633,33 @@ async function verifyOneChart(icao, chartNum) {
 }
 
 let expandedAirport = null;
+// 공항을 펼칠 때 목록 전체가 다시 그려지면서 스크롤이 맨 위(ENROUTE/GENERAL)로
+// 튀던 문제를 막는다. 보던 위치를 그대로 되돌린 뒤, 펼쳐진 하부 목록이 화면에
+// 걸치면 필요한 만큼만 스크롤해 자연스럽게 이어지게 한다.
 function toggleExpand(icao) {
-    expandedAirport = expandedAirport === icao ? null : icao;
+    const box = document.getElementById('charts-scroll');
+    const prevTop = box ? box.scrollTop : 0;
+    const opening = expandedAirport !== icao;
+    expandedAirport = opening ? icao : null;
     renderCduContent();
+    requestAnimationFrame(() => {
+        const b2 = document.getElementById('charts-scroll');
+        if (!b2) return;
+        b2.scrollTop = prevTop;                       // 보던 위치 복원
+        if (!opening) return;
+        const grp = document.getElementById('chart-grp-' + icao);
+        const hdr = document.getElementById('chart-hdr-' + icao);
+        if (!grp || !hdr) return;
+        const bb = b2.getBoundingClientRect();
+        const gb = grp.getBoundingClientRect();
+        const hb = hdr.getBoundingClientRect();
+        if (hb.top < bb.top) {                        // 헤더가 위로 잘렸으면 헤더부터 보이게
+            b2.scrollTop += hb.top - bb.top;
+        } else if (gb.bottom > bb.bottom) {           // 하부 목록이 아래로 넘치면 최소한만 내림
+            // 단, 헤더는 화면에 남도록 상한을 둔다
+            b2.scrollTop += Math.min(gb.bottom - bb.bottom, hb.top - bb.top);
+        }
+    });
 }
 
 // (개별 다운로드 기능 제거 — ZIP 가져오기 방식으로 통일)
@@ -16712,8 +16736,8 @@ function renderChartsScreen(container, footer, title) {
         </div>`;
     }
 
-    // 저장된 차트 목록
-    html += `<div style="flex:1;overflow-y:auto;">`;
+    // 저장된 차트 목록 — 펼침 시 스크롤 위치를 유지하려고 id를 둔다
+    html += `<div id="charts-scroll" style="flex:1;overflow-y:auto;">`;
     if (saved.length === 0) {
         html += `<div style="text-align:center;color:#444;font-size:10px;margin-top:30px;line-height:2.2;">차트 없음<br><span style="font-size:8px;color:#4caf50;">🌐 AIM eAIP — AIM Korea 사이트에서 AIRAC ZIP 다운</span><br><span style="font-size:8px;color:#29b6f6;">📂 ZIP 가져오기 — 받은 ZIP 파일 선택 후 자동 분류</span></div>`;
     } else {
@@ -16739,8 +16763,8 @@ function renderChartsScreen(container, footer, title) {
                 ? `<span style="color:${section.color};">${section.label}</span> <span style="color:#aaa;font-size:9px;font-weight:normal;">${section.sub}</span>`
                 : `${icao} <span style="color:#aaa;font-size:9px;font-weight:normal;">${grp.name}</span>`;
             html += `
-            <div style="margin-bottom:4px;border:1px solid ${section ? section.color : '#333'};border-radius:4px;overflow:hidden;">
-                <div onclick="toggleExpand('${icao}')" style="display:flex;align-items:center;padding:6px 6px;background:#151515;cursor:pointer;gap:4px;">
+            <div id="chart-grp-${icao}" style="margin-bottom:4px;border:1px solid ${section ? section.color : '#333'};border-radius:4px;overflow:hidden;">
+                <div id="chart-hdr-${icao}" onclick="toggleExpand('${icao}')" style="display:flex;align-items:center;padding:6px 6px;background:#151515;cursor:pointer;gap:4px;">
                     <div style="color:#0ff;font-size:11px;font-weight:bold;">${isOpen ? '▼' : '▶'}</div>
                     <div style="flex:1;min-width:0;">
                         <div style="color:#fff;font-size:11px;font-weight:bold;">${headTitle}</div>
