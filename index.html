@@ -7867,13 +7867,23 @@ function fpBackToCdu() {
 }
 // 표준 CDU 푸터: HOME · FULL/HALF · PLAN · BACK (+ 필요 시 Enter 등 extra)
 // backOnclick이 비어있으면 BACK 버튼은 생략(예: HOME 화면)
-function cduFooter(backOnclick, extra) {
+// back 인자는 두 가지를 받는다.
+//   · 문자열 : 인라인 onclick 으로 그대로 넣는다(전역 함수만 가능).
+//   · 함수   : data-act 위임으로 실행한다. CDU 캡슐화 IIFE 안의 함수(clBack 등)는
+//             전역에 없어 인라인 onclick 으로는 "not defined" 가 나므로 이쪽을 써야 한다.
+let _cduBackFn = null;
+function cduFooter(back, extra) {
   let h = `<div class="nav-btn" onclick="switchMode('HOME')"><span>🏠</span>Home</div>`
         + cduFullNavBtn()
         + `<div class="nav-btn" onclick="switchMode('SETTINGS')"><span>⚙</span>Setting</div>`;
   if (extra) h += extra;
   // BACK은 항상 제일 우측
-  if (backOnclick) h += `<div class="nav-btn" onclick="${backOnclick}"><span>↩</span>Back</div>`;
+  if (typeof back === 'function') {
+    _cduBackFn = back;
+    h += `<div class="nav-btn" data-act="cduBack"><span>↩</span>Back</div>`;
+  } else if (back) {
+    h += `<div class="nav-btn" onclick="${back}"><span>↩</span>Back</div>`;
+  }
   return h;
 }
 
@@ -9879,6 +9889,8 @@ if ('serviceWorker' in navigator) {
 // 위임은 #cdu-wrap 안에서만 동작하므로, CDU 밖의 인라인 핸들러는 종전 그대로 둔다.
 const CDU_ACT = {};
 function cduRegister(map) { Object.assign(CDU_ACT, map); }
+// cduFooter(함수) 로 지정한 Back 실행기
+CDU_ACT.cduBack = () => { if (typeof _cduBackFn === 'function') _cduBackFn(); };
 function act(name, ...args) {
   if (!args.length) return `data-act="${name}"`;
   return `data-act="${name}" data-arg='${JSON.stringify(args).replace(/'/g, "&#39;")}'`;
@@ -10671,7 +10683,7 @@ function act(name, ...args) {
                 </div>
             </div>
         `;
-        footer.innerHTML = cduFooter("switchMode('AUDIO'); switchAudioTab('Mission');", `<div class="nav-btn enter-btn-blue" data-act="confirmSelcal"><span>↩</span>Enter</div>`);
+        footer.innerHTML = cduFooter(() => { switchMode('AUDIO'); switchAudioTab('Mission'); }, `<div class="nav-btn enter-btn-blue" data-act="confirmSelcal"><span>↩</span>Enter</div>`);
     }
 
     function renderVoxModeScreen(container, footer, title) {
@@ -11778,7 +11790,7 @@ function act(name, ...args) {
         container.innerHTML = crumbBar + sibBar + resetBtn + rows;
       }
 
-      footer.innerHTML = cduFooter("clBack()");
+      footer.innerHTML = cduFooter(clBack);
     }
 
 
@@ -12256,7 +12268,7 @@ function act(name, ...args) {
               `<span style="color:#00e5ff;font-size:10px;font-weight:bold;">가져오기 ›</span></div>`
           ).join('');
         container.innerHTML = body;
-        footer.innerHTML = cduFooter("tpRepoBack()");
+        footer.innerHTML = cduFooter(tpRepoBack);
         return;
       }
 
@@ -12270,7 +12282,7 @@ function act(name, ...args) {
           `</div>` +
           `<div data-act="tpIconCancel" style="text-align:center;padding:8px;border:1px solid #5a2a2a;border-radius:4px;color:#ff8877;font-size:11px;font-weight:bold;cursor:pointer;">취소</div>`;
         container.innerHTML = body;
-        footer.innerHTML = cduFooter("tpIconCancel()");
+        footer.innerHTML = cduFooter(tpIconCancel);
         return;
       }
 
