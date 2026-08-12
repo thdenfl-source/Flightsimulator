@@ -65,6 +65,7 @@ export async function run(page, t) {
   await runSwScope(page, t);
   await runDiscover(page, t);
   await runRelay(page, t);
+  await runFetchFromEaip(page, t);
 }
 
 export async function runExternal(page, t) {
@@ -434,6 +435,84 @@ export async function runRelay(page, t) {
   await page.locator('.ui-dlg-ok').click();
   await page.waitForTimeout(200);
 
+  await page.evaluate(() => {
+    if (window.__origFetch) window.fetch = window.__origFetch;
+    localStorage.removeItem('chartRelayUrl');
+  });
+}
+
+// 공식 사이트에서 받기 — 목록 탐색으로 알아낸 구조를 실제로 쓴다.
+// 디렉터리 목록(/pdf/AD/RKSI/)은 403 이고, 공항별 AD 2 문서에 차트 PDF 링크가
+// 다 들어 있다. 그 문서가 곧 목록이므로 앱 내장 목록(22개 공항 28장)의 한계가
+// 사라진다 — AIRAC 이 바뀌면 그때의 목록을 그대로 따라간다.
+export async function runFetchFromEaip(page, t) {
+  const AD2 = (icao, names) => '<html>' + names.map(n =>
+    `<a href="../../pdf/AD/${icao}/${encodeURIComponent(n)}.pdf">${n}</a>`).join('')
+    + '<a href="../../pdf/GEN/notes.pdf">GEN</a></html>';   // 차트 아닌 첨부 — 걸러져야 한다
+
+  await page.evaluate((pdfB64) => {
+    const bin = Uint8Array.from(atob(pdfB64), c => c.charCodeAt(0));
+    window.__origFetch = window.__origFetch || window.fetch;
+    window.__reqs = [];
+    window.fetch = (u, o) => {
+      const s = String(u);
+      if (!s.includes('aim.koca.go.kr')) return window.__origFetch(u, o);
+      window.__reqs.push(s);
+      // 중계를 거치면 실제 주소가 ?u= 안에 들어간다 — 그걸 풀어서 봐야 한다
+      let real = s;
+      try { const q = new URL(s).searchParams.get('u'); if (q) real = q; } catch (e) {}
+      const doc = real.match(/KR-AD-2\.([A-Z]{4})-en-GB\.html/);
+      if (doc) {
+        const map = { RKSI: ['(2-1) AD CHART', '(2-51) INSTR APCH CHART'], RKSS: ['(2-5) AD CHART'] };
+        const names = map[doc[1]];
+        return Promise.resolve(names
+          ? new Response(window.__AD2(doc[1], names), { status: 200, headers: { 'content-type': 'text/html' } })
+          : new Response('', { status: 404 }));
+      }
+      if (/\.pdf$/i.test(real.split('?')[0])) {
+        return Promise.resolve(new Response(bin, { status: 200, headers: { 'content-type': 'application/pdf' } }));
+      }
+      return Promise.resolve(new Response('', { status: 403 }));
+    };
+  }, fs.readFileSync(path.join(ROOT, 'tests', 'fixtures', 'charts', 'AD', 'RKSI', '(1) TEST CHART.pdf')).toString('base64'));
+  await page.evaluate(`window.__AD2 = ${AD2.toString()}`);
+
+  // ① AD 2 문서에서 링크를 뽑는다 — 차트만, 중복 없이
+  const links = await page.evaluate(() => _eaipChartLinks('RKSI', '2026-08-05')
+    .then(l => l.map(x => x.num + '|' + x.chartName)));
+  t.eq(JSON.stringify(links), JSON.stringify(['2-1|AD CHART', '2-51|INSTR APCH CHART']),
+    `AD 2 문서에서 차트 링크를 뽑는다 (${links.join(', ')})`);
+
+  // ② 실제로 받아 저장한다
+  await page.evaluate(() => {
+    localStorage.setItem('savedCharts', '[]');
+    localStorage.setItem('chartRelayUrl', 'https://relay.example/');
+    window.__reqs = [];   // 중계를 켠 뒤의 요청만 센다
+  });
+  page.evaluate(() => chartFetchFromEaip(['RKSI', 'RKSS', 'RKPC'])).catch(() => {});
+  await page.waitForSelector('.ui-dlg', { timeout: 15000 });
+  const ask = await page.locator('.ui-dlg-msg').textContent();
+  t.ok(ask.includes('공항 3곳'), '받기 전에 몇 곳을 받을지 알린다');
+  await page.locator('.ui-dlg-ok').click();
+
+  await page.waitForFunction(() => [...localPdfKeys].length >= 3, null, { timeout: 30000 })
+    .catch(() => {});
+  // 앞선 검사들이 넣어 둔 것이 있으므로 "새로 들어왔는가" 로 본다
+  const keys = await page.evaluate(() => [...localPdfKeys].sort());
+  const want = ['RKSI|2-1', 'RKSI|2-51', 'RKSS|2-5'];
+  const missing = want.filter(k => !keys.includes(k));
+  t.eq(missing.length, 0,
+    `공항별로 받아 이 기기에 저장한다${missing.length ? ' (빠짐: ' + missing.join(',') + ')' : ' (' + want.join(', ') + ')'}`);
+  t.ok(!keys.some(k => k.startsWith('GEN')), '차트가 아닌 첨부(GEN)는 걸러진다');
+  // 목록이 없는 공항(RKPC → 404)이 섞여도 나머지는 받는다
+  t.ok(!keys.some(k => k.startsWith('RKPC')), '목록이 없는 공항은 건너뛰고 나머지는 받는다');
+
+  // 모든 요청이 중계를 거쳤는가
+  const viaRelay = await page.evaluate(() => window.__reqs.every(u => u.startsWith('https://relay.example/')));
+  t.ok(viaRelay, '모든 요청이 중계를 거친다');
+
+  await page.locator('.ui-dlg-ok').click().catch(() => {});
+  await page.waitForTimeout(300);
   await page.evaluate(() => {
     if (window.__origFetch) window.fetch = window.__origFetch;
     localStorage.removeItem('chartRelayUrl');
