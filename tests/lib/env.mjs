@@ -37,11 +37,7 @@ export function buildEnv() {
   // 앱 코드가 js/*.js 로 분리돼 있으므로 함께 복사한다
   const jsDir = path.join(ROOT, 'js');
   if (fs.existsSync(jsDir)) {
-    fs.mkdirSync(path.join(dir, 'js'), { recursive: true });
-    for (const f of fs.readdirSync(jsDir)) {
-      const src = path.join(jsDir, f);
-      if (fs.statSync(src).isFile()) fs.copyFileSync(src, path.join(dir, 'js', f));
-    }
+    fs.cpSync(jsDir, path.join(dir, 'js'), { recursive: true });
   }
 
   let html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');

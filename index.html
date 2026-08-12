@@ -2180,6 +2180,15 @@ body.night-mode::after {
 
 <!-- 앱 코드 — 클래식 스크립트(모듈 아님)라 전역 스코프를 공유한다.
      순서가 곧 실행 순서이므로 임의로 바꾸지 말 것. -->
+  <!-- AIP 데이터 — 코드보다 먼저 로드한다 -->
+  <script src="js/data/terminal-fixes.js"></script>
+  <script src="js/data/ifr-fixes.js"></script>
+  <script src="js/data/ifr-procedures.js"></script>
+  <script src="js/data/airfield-info.js"></script>
+  <script src="js/data/enr-vors.js"></script>
+  <script src="js/data/enr-routes.js"></script>
+  <script src="js/data/airspace.js"></script>
+  <!-- 앱 코드 -->
   <script src="js/01-state.js"></script>
   <script src="js/02-math.js"></script>
   <script src="js/03-pfd.js"></script>
