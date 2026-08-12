@@ -1,11 +1,21 @@
 // VFR Flight Sim — Service Worker
 // 버전을 올리면 캐시가 갱신됩니다
-const CACHE = 'vfr-flight-v330';
+const CACHE = 'vfr-flight-v331';
 const CORE  = [
   './index.html',
   './manifest.json',
   './icon.png',
   './icon-512.png',
+  // 외부 라이브러리 사본 — CDN 이 안 받아지면 앱이 통째로 죽으므로 직접 들고 있다
+  './vendor/leaflet.js',
+  './vendor/leaflet.css',
+  './vendor/leaflet-velocity.min.js',
+  './vendor/leaflet-velocity.min.css',
+  './vendor/maplibre-gl.js',
+  './vendor/maplibre-gl.css',
+  './vendor/jszip.min.js',
+  './vendor/pdf.min.js',
+  './vendor/pdf.worker.min.js',
   // AIP 데이터 — 코드보다 먼저 로드된다
   './js/data/terminal-fixes.js',
   './js/data/ifr-fixes.js',
@@ -94,19 +104,6 @@ self.addEventListener('fetch', e => {
           });
           return cached || fresh;
         })
-      )
-    );
-    return;
-  }
-
-  // Leaflet / Maplibre JS·CSS CDN: 캐시 우선 (정상 응답만 캐시)
-  if (url.includes('unpkg.com') || url.includes('cdn.jsdelivr.net')) {
-    e.respondWith(
-      caches.open(CACHE).then(c =>
-        c.match(e.request).then(cached => cached || fetch(e.request).then(res => {
-          if (res && res.ok) c.put(e.request, res.clone());
-          return res;
-        }))
       )
     );
     return;

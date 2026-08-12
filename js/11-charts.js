@@ -1572,7 +1572,7 @@ async function openChart(icao, chartNum, url) {
         _pdfResizeObs.observe(viewArea);
     }
     try {
-        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'vendor/pdf.worker.min.js';
         _pdfDoc = await pdfjsLib.getDocument({ data: await blob.arrayBuffer() }).promise;
         _pdfCurPage = 1;
         await _pdfRender();
