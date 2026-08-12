@@ -622,7 +622,6 @@ let _pdfRenderQ = 1;          // 현재 비트맵 품질 배율(선명도)
 let _pdfRenderToken = 0;      // 렌더 경쟁 방지 토큰
 let _pdfReqTimer = null;      // 품질 재렌더 디바운스
 let _pdfResizeObs = null;     // CDU 창 크기 변화 감시(Full Screen 전환 대응)
-let _pdfHostResizeObs = null; // 패널(#cdu-wrap) 크기 변화 감시 — 오버레이 사각형 재계산
 let _pdfResizeT = null;       // 리사이즈 재렌더 디바운스
 
 // ── 차트 위치 보정(다점 최소자승 아핀) + 항공기 위치 오버레이 ──
@@ -1527,8 +1526,11 @@ async function openChart(icao, chartNum, url) {
     if (!host) { uiToast('CDU 창을 찾지 못해 차트를 열 수 없습니다.', 'err'); return; }
     // CDU 안에 얹을 때는 inset:0(패널 전체)이 아니라 CDU 화면과 같은 사각형에 맞춘다.
     // 그래야 넓은 창(삼성 덱스 등)에서 차트가 패널을 통째로 덮지 않는다.
+    // 차트는 CDU 화면들 중 유일하게 패널 영역을 다 쓴다. 다른 화면은 354×567
+    // 계기 테두리 안에 그리지만, 차트는 글씨가 작아 넓게 볼수록 쓸모가 있다.
+    // 그래도 패널 밖(상단 탭 줄·옆 창)으로는 절대 넘어가지 않는다.
     ov.dataset.host = 'cdu';
-    ov.style.cssText = 'position:absolute;left:0;top:0;width:100%;height:100%;z-index:60;'
+    ov.style.cssText = 'position:absolute;inset:0;z-index:60;'
         + 'background:#1a1a1a;display:flex;flex-direction:column;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica Neue,Arial,sans-serif;';
     ov.innerHTML = `
         <div style="display:flex;align-items:center;gap:6px;padding:6px 10px;background:#000;border-bottom:1px solid #333;flex-shrink:0;">
@@ -1552,7 +1554,6 @@ async function openChart(icao, chartNum, url) {
             <div data-act="_pdfNext" style="flex:1;padding:11px 0;text-align:center;background:#0a0a0a;color:#0ff;font-size:16px;cursor:pointer;border-left:1px solid #222;">▶</div>
         </div>`;
     host.appendChild(ov);
-    try { fitPdfOverlayToCdu(); } catch(e) { _swallow(e); }
     // 제스처 핸들러는 오버레이당 1회 등록(영역은 재렌더돼도 동일 element 유지)
     const viewArea = document.getElementById('pdfViewArea');
     _pdfAttachTouch(viewArea);
@@ -1569,13 +1570,6 @@ async function openChart(icao, chartNum, url) {
             _pdfResizeT = setTimeout(() => { if (_pdfDoc) _pdfRender(); }, 200);
         });
         _pdfResizeObs.observe(viewArea);
-        // 패널 자체가 커지거나 줄면(분할선 드래그·전체화면 전환·덱스 창 크기 변경)
-        // 오버레이를 CDU 화면 사각형에 다시 맞춘다. 그 결과 viewArea 크기가
-        // 바뀌면 위 관찰자가 재렌더를 이어받는다.
-        _pdfHostResizeObs = new ResizeObserver(() => {
-            try { fitPdfOverlayToCdu(); } catch(e) { _swallow(e); }
-        });
-        _pdfHostResizeObs.observe(host);
     }
     try {
         pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
@@ -1880,7 +1874,6 @@ function closePdfViewer() {
     if (_pdfReqTimer) { clearTimeout(_pdfReqTimer); _pdfReqTimer = null; }
     if (_pdfAcTimer) { clearInterval(_pdfAcTimer); _pdfAcTimer = null; }
     if (_pdfResizeObs) { try { _pdfResizeObs.disconnect(); } catch(e){ _swallow(e); } _pdfResizeObs = null; }
-    if (_pdfHostResizeObs) { try { _pdfHostResizeObs.disconnect(); } catch(e){ _swallow(e); } _pdfHostResizeObs = null; }
     if (_pdfResizeT) { clearTimeout(_pdfResizeT); _pdfResizeT = null; }
     _pdfCalActive = false; _pdfCalPts = []; _pdfFixList = [];
     _pdfRenderToken++;   // 진행 중 렌더 무효화

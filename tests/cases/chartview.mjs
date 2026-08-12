@@ -1,29 +1,25 @@
-// 차트 뷰어 배치 — 차트를 열어도 앱 화면을 빼앗지 않아야 한다.
-// (1) 앱 안 뷰어는 CDU 화면(354×567 규격) 안에 머문다.
-// (2) 이 기기에 없는 차트는 말없이 새 탭으로 나가지 않는다 — 앱 UI 가 통째로
-//     사라져 "차트를 열었더니 전체화면이 됐다"로 보이던 원인이다.
-// 종전에는 #cdu-wrap 에 inset:0 으로 얹어 패널 전체를 덮었다. 폰에서는 CDU 가
-// 패널을 거의 채워 티가 안 났지만, 삼성 덱스처럼 창이 넓으면 좌우 레터박스가
-// 커서 차트를 열자마자 화면을 통째로 차지한 것처럼 보였다.
+// 차트 뷰어 배치 — 차트는 CDU 패널 영역을 다 쓰되, 밖으로는 넘지 않아야 한다.
+// 다른 CDU 화면은 354×567 계기 테두리 안에 그리지만 차트만 예외다(글씨가 작아
+// 넓게 볼수록 쓸모가 있다). 다만 상단 탭 줄이나 옆 창까지 덮으면 "차트를
+// 열었더니 앱이 사라졌다"가 되므로, 패널 경계는 반드시 지켜야 한다.
+// 또 이 기기에 없는 차트는 말없이 새 탭으로 나가지 않는다 — 앱 UI 가 통째로
+// 사라져 전체화면으로 바뀐 것처럼 보이던 원인이었다.
 export const name = '차트 뷰어 배치';
 
-// pdf.js 없이 배치만 검증한다 — 실제 오버레이와 같은 표식(data-host="cdu")을 단다.
+// pdf.js 없이 배치만 검증한다 — 실제 오버레이와 같은 스타일로 얹는다.
 const mkOverlay = () => {
   const ov = document.createElement('div');
   ov.id = 'pdfViewerOverlay';
   ov.dataset.host = 'cdu';
-  ov.style.cssText = 'position:absolute;left:0;top:0;width:100%;height:100%;z-index:60;background:#1a1a1a;';
+  ov.style.cssText = 'position:absolute;inset:0;z-index:60;background:#1a1a1a;';
   document.getElementById('cdu-wrap').appendChild(ov);
-  fitPdfOverlayToCdu();
   const o = ov.getBoundingClientRect();
-  const s = document.getElementById('cdu-scaler').getBoundingClientRect();
   const w = document.getElementById('cdu-wrap').getBoundingClientRect();
+  const app = document.getElementById('app').getBoundingClientRect();
+  const tabs = document.querySelector('.page-tab').getBoundingClientRect();
   ov.remove();
-  return {
-    ov: [o.x, o.y, o.width, o.height].map(Math.round),
-    scaler: [s.x, s.y, s.width, s.height].map(Math.round),
-    wrap: [w.x, w.y, w.width, w.height].map(Math.round),
-  };
+  const box = r => [r.x, r.y, r.width, r.height].map(Math.round);
+  return { ov: box(o), wrap: box(w), app: box(app), tabs: box(tabs) };
 };
 
 export async function run(page, t) {
@@ -31,29 +27,32 @@ export async function run(page, t) {
   await page.evaluate(() => { try { selectPanel('left', 'cdu'); } catch (e) { setPage(2); } });
   await page.waitForTimeout(300);
 
-  // 넓은 창(덱스) · 좁은 창(폰) 양쪽에서 확인
-  for (const [W, H, label] of [[1920, 1080, '넓은 창(덱스)'], [820, 1180, '좁은 창(폰)']]) {
+  // 넓은 창(태블릿·덱스) · 좁은 창(폰) 양쪽에서 확인
+  for (const [W, H, label] of [[1920, 1080, '넓은 창(태블릿)'], [820, 1180, '좁은 창(폰)']]) {
     await page.setViewportSize({ width: W, height: H });
     await page.waitForTimeout(350);
     const r = await page.evaluate(mkOverlay);
     const near = (a, b) => Math.abs(a - b) <= 2;
 
-    t.ok(r.ov.every((v, i) => near(v, r.scaler[i])),
-      `${label} — 오버레이가 CDU 화면과 같은 자리 (${r.ov.join(',')} vs ${r.scaler.join(',')})`);
-    t.ok(r.ov[2] <= r.wrap[2] + 2 && r.ov[3] <= r.wrap[3] + 2,
-      `${label} — 패널을 넘지 않음 (오버레이 ${r.ov[2]}×${r.ov[3]} ≤ 패널 ${r.wrap[2]}×${r.wrap[3]})`);
-    // 354:567 비율 유지 — 넓은 창에서 가로로 늘어나면 안 된다
-    const ratio = r.ov[2] / r.ov[3];
-    t.ok(Math.abs(ratio - 354 / 567) < 0.02,
-      `${label} — CDU 규격 비율 유지 (${ratio.toFixed(3)} ≈ ${(354 / 567).toFixed(3)})`);
+    // 차트는 패널을 꽉 쓴다(계기 테두리에 갇히지 않는다)
+    t.ok(r.ov.every((v, i) => near(v, r.wrap[i])),
+      `${label} — 차트가 CDU 패널을 꽉 씀 (${r.ov.join(',')} = 패널 ${r.wrap.join(',')})`);
+
+    // 그러나 패널 밖으로는 못 나간다 — 상단 탭 줄과 겹치지 않아야 한다
+    t.ok(r.ov[1] >= r.tabs[1] + r.tabs[3] - 2,
+      `${label} — 상단 탭 줄을 덮지 않음 (차트 위끝 ${r.ov[1]} ≥ 탭 아래끝 ${r.tabs[1] + r.tabs[3]})`);
+    // 좁은 창에서는 패널이 곧 화면 폭이라 폭은 같을 수 있다. 지켜야 할 것은
+    // "패널 밖으로 안 나간다" — 세로로 앱 전체를 덮지 않는지 본다.
+    t.ok(r.ov[3] < r.app[3] - 2,
+      `${label} — 앱 세로 전체를 덮지 않음 (차트 ${r.ov[3]}px < 앱 ${r.app[3]}px)`);
   }
 
-  // 창이 바뀌면 따라 움직이는가(분할선 드래그·전체화면 전환·덱스 창 크기 변경)
+  // 창이 바뀌면 따라 움직이는가(분할선 드래그·전체화면 전환·창 크기 변경)
   await page.setViewportSize({ width: 1600, height: 900 });
   await page.waitForTimeout(350);
   const moved = await page.evaluate(mkOverlay);
-  t.ok(moved.ov.every((v, i) => Math.abs(v - moved.scaler[i]) <= 2),
-    `창 크기가 바뀌어도 CDU 화면을 따라감 (${moved.ov.join(',')})`);
+  t.ok(moved.ov.every((v, i) => Math.abs(v - moved.wrap[i]) <= 2),
+    `창 크기가 바뀌어도 패널에 딱 맞음 (${moved.ov.join(',')})`);
 
   await runExternal(page, t);
 }

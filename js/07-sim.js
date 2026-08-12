@@ -514,8 +514,8 @@ let currentPage = 0;
 let leftPage = 0;
 // 354×567 규격의 화면(CDU · Flight Plan)을 패널 크기에 맞춰 축소·중앙정렬
 // CDU 화면(354×567 규격)이 패널 안에서 실제로 차지하는 사각형.
-// 패널이 넓으면 좌우가, 높으면 위아래가 남는다(레터박스). 그 남는 자리는
-// 계기 바깥이므로 CDU 내용물이 넘어가면 안 된다.
+// 패널이 넓으면 좌우가, 높으면 위아래가 남는다(레터박스).
+// CDU 화면들은 이 사각형 안에 그린다 — 차트 뷰어만 예외로 패널 전체를 쓴다.
 function cduFrameRect(wrapId) {
   const wrap = document.getElementById(wrapId);
   if (!wrap) return null;
@@ -531,24 +531,9 @@ function _scaleFrame(wrapId, scalerId) {
   if (!scaler || !r) return;
   scaler.style.transform = `translate(${r.left}px,${r.top}px) scale(${r.scale})`;
 }
-// PDF 차트 뷰어는 #cdu-wrap 에 절대배치로 얹히는데, 그대로 두면 패널 전체를
-// 덮어 버린다. 폰에서는 CDU 화면이 패널을 거의 채워 티가 안 났지만, 덱스처럼
-// 창이 넓으면 레터박스가 커서 차트가 화면을 통째로 차지한 것처럼 보였다.
-// CDU 화면과 같은 사각형에 맞춰 계기 안에 머무르게 한다.
-function fitPdfOverlayToCdu() {
-  const ov = document.getElementById('pdfViewerOverlay');
-  if (!ov || ov.dataset.host !== 'cdu') return;
-  const r = cduFrameRect('cdu-wrap');
-  if (!r) return;
-  ov.style.left = r.left + 'px';
-  ov.style.top = r.top + 'px';
-  ov.style.width = r.w + 'px';
-  ov.style.height = r.h + 'px';
-}
 function scaleCdu() {
   _scaleFrame('cdu-wrap', 'cdu-scaler');
   _scaleFrame('fp-wrap',  'fp-scaler');   // Flight Plan도 같은 규격
-  fitPdfOverlayToCdu();                   // 차트 뷰어도 같은 사각형을 따른다
 }
 
 // ── 패널 선택 시스템: 좌/우 각각 PFD·MAP·CDU 중 하나를 표시 ──
