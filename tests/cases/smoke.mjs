@@ -18,8 +18,9 @@ export async function run(page, t) {
     const out = [];
     document.querySelectorAll('[onclick]').forEach(el => {
       const code = el.getAttribute('onclick') || '';
-      (code.match(/([A-Za-z_$][\w$]*)\s*\(/g) || []).forEach(m => {
-        const fn = m.slice(0, -1).trim();
+      // 점 앞에 오는 것은 메서드 호출이므로 제외한다(event.stopPropagation 등)
+      [...code.matchAll(/(^|[^.\w$])([A-Za-z_$][\w$]*)\s*\(/g)].forEach(mm => {
+        const fn = mm[2];
         if (['if', 'for', 'while', 'switch', 'catch', 'return', 'function', 'typeof'].includes(fn)) return;
         // 인라인 핸들러는 전역 렉시컬 스코프(let/const 포함)에서 이름을 찾는다.
         // window[fn] 로만 보면 let 선언 함수를 죽은 것으로 오판한다.
@@ -80,4 +81,25 @@ export async function run(page, t) {
   const mode = await page.evaluate(() => window.currentMode);
   t.eq(mode, 'CHECKLIST', 'Back 1회 — 체크리스트 상위로 복귀');
   t.eq(page.errors.length, 0, `Back 클릭 오류 없음${page.errors.length ? ': ' + page.errors.join(' | ') : ''}`);
+
+  await runDegenerate(page, t);
+}
+
+// 계기 캔버스가 접힌 상태(폭·높이 0)에서도 예외 없이 넘어가는가
+// — 분할 전환·전체화면 직후 W·H 가 0 이 되며 ctx.arc 반지름이 음수가 되던 이력
+export async function runDegenerate(page, t) {
+  page.errors.length = 0;
+  const thrown = await page.evaluate(() => {
+    const w = cvs.width, h = cvs.height;
+    const errs = [];
+    for (const [W, H] of [[0, 0], [10, 10], [79, 79], [200, 40], [40, 200]]) {
+      cvs.width = W; cvs.height = H;
+      try { drawPFD(); } catch (e) { errs.push(`${W}x${H}: ${e.message}`); }
+    }
+    cvs.width = w; cvs.height = h;
+    try { drawPFD(); } catch (e) { errs.push('restore: ' + e.message); }
+    return errs;
+  });
+  t.eq(thrown.length, 0, `접힌 캔버스 5종에서 drawPFD 예외 없음${thrown.length ? ': ' + thrown.join(' | ') : ''}`);
+  t.eq(page.errors.length, 0, '접힌 캔버스 렌더 중 페이지 오류 없음');
 }

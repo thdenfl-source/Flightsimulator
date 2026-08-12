@@ -10,8 +10,9 @@ import * as coords from './cases/coords.mjs';
 import * as chartcal from './cases/chartcal.mjs';
 import * as hold from './cases/hold.mjs';
 import * as nav from './cases/nav.mjs';
+import * as actions from './cases/actions.mjs';
 
-const SUITES = [smoke, coords, chartcal, hold, nav];
+const SUITES = [smoke, actions, coords, chartcal, hold, nav];
 const filter = process.argv.slice(2);
 
 function makeT() {

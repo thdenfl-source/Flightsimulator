@@ -1525,7 +1525,7 @@ body.night-mode::after {
   <div id="help-panel">
     <div id="help-head">
       <span>✈ VFR Flight Simulator 사용 안내</span>
-      <button onclick="closeHelp()" title="닫기">✕</button>
+      <button data-act="closeHelp" title="닫기">✕</button>
     </div>
     <div id="help-body">
       <h3>1. 화면 구성</h3>
@@ -1678,7 +1678,7 @@ body.night-mode::after {
     </div>
     <div id="help-foot">
       <label><input type="checkbox" id="help-dontshow"> 다시 보지 않기</label>
-      <button onclick="closeHelp()">시작하기</button>
+      <button data-act="closeHelp">시작하기</button>
     </div>
   </div>
 </div>
@@ -1692,23 +1692,23 @@ body.night-mode::after {
   </div>
 </div>
 <div id="solo-bar" style="display:none;">
-  <button onclick="setSolo('pfd')">PFD</button>
-  <button onclick="setSolo('map')">MAP</button>
-  <button onclick="setSolo('plan')">PLAN</button>
-  <button onclick="setSolo('cdu')">CDU</button>
-  <button class="solo-exit" onclick="exitSolo()" title="분할화면으로 돌아가기">✕</button>
+  <button data-act="setSolo" data-arg='["pfd"]'>PFD</button>
+  <button data-act="setSolo" data-arg='["map"]'>MAP</button>
+  <button data-act="setSolo" data-arg='["plan"]'>PLAN</button>
+  <button data-act="setSolo" data-arg='["cdu"]'>CDU</button>
+  <button class="solo-exit" data-act="exitSolo" title="분할화면으로 돌아가기">✕</button>
 </div>
 <!-- 전체화면(solo)에서 하단 푸터가 없는 화면(MAP/PFD)용 분할복귀 버튼 -->
-<button id="solo-half-btn" onclick="exitSolo()" title="분할화면으로 돌아가기">✥ HALF</button>
+<button id="solo-half-btn" data-act="exitSolo" title="분할화면으로 돌아가기">✥ HALF</button>
 <div id="app">
 
   <!-- ── LEFT PANEL (PFD / MAP) ── -->
   <div id="left-panel">
     <div id="left-tabs">
-      <button class="page-tab active" data-sel="pfd" onclick="selectPanel('left','pfd')">PFD</button>
-      <button class="page-tab" data-sel="map" onclick="selectPanel('left','map')">MAP</button>
-      <button class="page-tab" data-sel="cdu" onclick="selectPanel('left','cdu')">CDU</button>
-      <button class="page-tab split-tab" id="split-toggle" onclick="toggleTriple()" title="2분할 ⇄ 3분할">⿲ 3분할</button>
+      <button class="page-tab active" data-sel="pfd" data-act="selectPanel" data-arg='["left", "pfd"]'>PFD</button>
+      <button class="page-tab" data-sel="map" data-act="selectPanel" data-arg='["left", "map"]'>MAP</button>
+      <button class="page-tab" data-sel="cdu" data-act="selectPanel" data-arg='["left", "cdu"]'>CDU</button>
+      <button class="page-tab split-tab" id="split-toggle" data-act="toggleTriple" title="2분할 ⇄ 3분할">⿲ 3분할</button>
     </div>
     <div id="pfd-wrap">
     <canvas id="pfd"></canvas>
@@ -1718,7 +1718,7 @@ body.night-mode::after {
       <div class="ctrl-sub-row">
 
         <div class="ctrl-group">
-          <div class="ctrl-lbl ctrl-lbl-btn" id="ias-lbl-btn" onclick="fcpSync('ias')">IAS</div>
+          <div class="ctrl-lbl ctrl-lbl-btn" id="ias-lbl-btn" data-act="fcpSync" data-arg='["ias"]'>IAS</div>
           <div class="ctrl-row">
             <button class="cbtn" id="spd-dn">▼</button>
             <button class="cbtn" id="spd-up">▲</button>
@@ -1726,7 +1726,7 @@ body.night-mode::after {
         </div>
 
         <div class="ctrl-group">
-          <div class="ctrl-lbl ctrl-lbl-btn" id="hdg-lbl-btn" onclick="fcpSync('hdg')">HDG</div>
+          <div class="ctrl-lbl ctrl-lbl-btn" id="hdg-lbl-btn" data-act="fcpSync" data-arg='["hdg"]'>HDG</div>
           <div class="ctrl-row">
             <button class="cbtn" id="hdg-dn">◄</button>
             <button class="cbtn" id="hdg-up">►</button>
@@ -1734,7 +1734,7 @@ body.night-mode::after {
         </div>
 
         <div class="ctrl-group">
-          <div class="ctrl-lbl ctrl-lbl-btn" id="crs-lbl-btn" onclick="fcpSync('crs')">CRS</div>
+          <div class="ctrl-lbl ctrl-lbl-btn" id="crs-lbl-btn" data-act="fcpSync" data-arg='["crs"]'>CRS</div>
           <div class="ctrl-row">
             <button class="cbtn" id="crs-dn">◄</button>
             <button class="cbtn" id="crs-up">►</button>
@@ -1770,12 +1770,12 @@ body.night-mode::after {
         <div class="sw-group">
           <div class="sw-display clock-mode" id="sw-display">--:--:--</div>
           <div class="sw-btns" id="sw-btns-sw" style="display:none;">
-            <button class="sw-btn" id="sw-toggle" onclick="swToggle()">GO</button>
-            <button class="sw-btn" onclick="swReset()">RESET</button>
-            <button class="sw-btn sw-btn-time" onclick="swSetMode('clock')">TIME</button>
+            <button class="sw-btn" id="sw-toggle" data-act="swToggle">GO</button>
+            <button class="sw-btn" data-act="swReset">RESET</button>
+            <button class="sw-btn sw-btn-time" data-act="swSetMode" data-arg='["clock"]'>TIME</button>
           </div>
           <div class="sw-btns" id="sw-btns-clock">
-            <button class="sw-btn sw-btn-time" onclick="swSetMode('sw')">STOP WATCH</button>
+            <button class="sw-btn sw-btn-time" data-act="swSetMode" data-arg='["sw"]'>STOP WATCH</button>
           </div>
         </div>
 
@@ -1805,9 +1805,9 @@ body.night-mode::after {
         <div class="ctrl-group">
           <div class="ctrl-lbl">AP</div>
           <div style="display:flex;gap:4px;align-items:center;">
-            <button class="obs-btn" id="obs-btn" onclick="toggleObs()">OBS</button>
-            <button class="obs-btn" id="nav-ap-btn" onclick="toggleNavAp()">NAV</button>
-            <button class="obs-btn" id="icpt-btn" onclick="cycleIntercept()"
+            <button class="obs-btn" id="obs-btn" data-act="toggleObs">OBS</button>
+            <button class="obs-btn" id="nav-ap-btn" data-act="toggleNavAp">NAV</button>
+            <button class="obs-btn" id="icpt-btn" data-act="cycleIntercept"
                     title="인터셉트 각도 (30/45/60°)">45°</button>
           </div>
         </div>
@@ -1817,8 +1817,8 @@ body.night-mode::after {
         <div class="brg-tog-group">
           <div class="ctrl-lbl">BRG</div>
           <div class="brg-tog-btns">
-            <button class="brg-tog-btn brg1-on" id="brg1-tog" onclick="toggleBrg1()">BRG1</button>
-            <button class="brg-tog-btn brg2-on" id="brg2-tog" onclick="toggleBrg2()">BRG2</button>
+            <button class="brg-tog-btn brg1-on" id="brg1-tog" data-act="toggleBrg1">BRG1</button>
+            <button class="brg-tog-btn brg2-on" id="brg2-tog" data-act="toggleBrg2">BRG2</button>
           </div>
         </div>
 
@@ -1827,8 +1827,8 @@ body.night-mode::after {
         <div class="alt-hold-group">
           <div class="ctrl-lbl">ALT</div>
           <div class="alt-hold-btns">
-            <button class="alt-hold-btn" id="alt-hold-btn" onclick="toggleAltHold()">ALT</button>
-            <button class="crht-btn"     id="crht-btn"     onclick="toggleCrht()">CRHT</button>
+            <button class="alt-hold-btn" id="alt-hold-btn" data-act="toggleAltHold">ALT</button>
+            <button class="crht-btn"     id="crht-btn"     data-act="toggleCrht">CRHT</button>
           </div>
         </div>
 
@@ -1837,8 +1837,8 @@ body.night-mode::after {
         <div class="hover-group">
           <div class="ctrl-lbl">HOVER</div>
           <div class="hover-btns">
-            <button class="hover-btn"     id="hover-btn"     onclick="toggleHoverPage()" disabled>HOVER PAGE</button>
-            <button class="hover-pos-btn" id="hover-pos-btn" onclick="toggleHoverPosition()" title="Hover Position">HOVER POS</button>
+            <button class="hover-btn"     id="hover-btn"     data-act="toggleHoverPage" disabled>HOVER PAGE</button>
+            <button class="hover-pos-btn" id="hover-pos-btn" data-act="toggleHoverPosition" title="Hover Position">HOVER POS</button>
           </div>
         </div>
 
@@ -1850,9 +1850,9 @@ body.night-mode::after {
         <div class="nav-src-group">
           <div class="ctrl-lbl">NAV SRC</div>
           <div class="nav-src-btns">
-            <button class="nav-src-btn active" id="nav-fms" onclick="setNavSrc('FMS')">FMS</button>
-            <button class="nav-src-btn" id="nav-nav1" onclick="setNavSrc('NAV1')">NAV1</button>
-            <button class="nav-src-btn" id="nav-nav2" onclick="setNavSrc('NAV2')">NAV2</button>
+            <button class="nav-src-btn active" id="nav-fms" data-act="setNavSrc" data-arg='["FMS"]'>FMS</button>
+            <button class="nav-src-btn" id="nav-nav1" data-act="setNavSrc" data-arg='["NAV1"]'>NAV1</button>
+            <button class="nav-src-btn" id="nav-nav2" data-act="setNavSrc" data-arg='["NAV2"]'>NAV2</button>
           </div>
           <div class="nav-icao-lbl" id="nav-icao-lbl" style="visibility:hidden">----</div>
         </div>
@@ -1862,10 +1862,10 @@ body.night-mode::after {
         <div class="rnp-group">
           <div class="ctrl-lbl">RNP</div>
           <div class="rnp-btns">
-            <button class="rnp-btn" id="rnp-4" onclick="setRnp(4)">4</button>
-            <button class="rnp-btn" id="rnp-2" onclick="setRnp(2)">2</button>
-            <button class="rnp-btn active" id="rnp-1" onclick="setRnp(1)">1</button>
-            <button class="rnp-btn" id="rnp-03" onclick="setRnp(0.3)">0.3</button>
+            <button class="rnp-btn" id="rnp-4" data-act="setRnp" data-arg='[4]'>4</button>
+            <button class="rnp-btn" id="rnp-2" data-act="setRnp" data-arg='[2]'>2</button>
+            <button class="rnp-btn active" id="rnp-1" data-act="setRnp" data-arg='[1]'>1</button>
+            <button class="rnp-btn" id="rnp-03" data-act="setRnp" data-arg='[0.3]'>0.3</button>
           </div>
         </div>
 
@@ -1888,8 +1888,8 @@ body.night-mode::after {
               <button class="trim-cell tc-r"   id="trim-r"   data-trim-dir="R">►</button>
             </div>
           </div>
-          <button class="force-trim-btn" id="force-trim-btn" onclick="forceTrim()" title="Force Trim">FORCE<br>TRIM</button>
-          <button class="gspd-btn" id="gspd-btn" onclick="toggleGspd()" title="Ground Speed Hold">GSPD</button>
+          <button class="force-trim-btn" id="force-trim-btn" data-act="forceTrim" title="Force Trim">FORCE<br>TRIM</button>
+          <button class="gspd-btn" id="gspd-btn" data-act="toggleGspd" title="Ground Speed Hold">GSPD</button>
           <div class="pedal-group">
             <div class="pedal-lbl">ANTI-TORQUE<br>PEDAL</div>
             <div class="pedal-btns">
@@ -1911,9 +1911,9 @@ body.night-mode::after {
   <!-- 3분할일 때만 보이는 중앙 패널 -->
   <div id="mid-panel">
     <div id="mid-tabs" class="panel-tabs">
-      <button class="page-tab" data-sel="pfd" onclick="selectPanel('mid','pfd')">PFD</button>
-      <button class="page-tab active" data-sel="map" onclick="selectPanel('mid','map')">MAP</button>
-      <button class="page-tab" data-sel="cdu" onclick="selectPanel('mid','cdu')">CDU</button>
+      <button class="page-tab" data-sel="pfd" data-act="selectPanel" data-arg='["mid", "pfd"]'>PFD</button>
+      <button class="page-tab active" data-sel="map" data-act="selectPanel" data-arg='["mid", "map"]'>MAP</button>
+      <button class="page-tab" data-sel="cdu" data-act="selectPanel" data-arg='["mid", "cdu"]'>CDU</button>
     </div>
   </div>
   <div id="divider-2"><div id="divider-grip-2"></div></div>
@@ -1921,10 +1921,10 @@ body.night-mode::after {
   <div id="right-panel">
 
     <div id="page-tabs">
-      <button class="page-tab" data-sel="pfd" onclick="selectPanel('right','pfd')">PFD</button>
-      <button class="page-tab active" data-sel="map" onclick="selectPanel('right','map')">MAP</button>
-      <button class="page-tab" data-sel="cdu" onclick="selectPanel('right','cdu')">CDU</button>
-      <button id="reload-btn" onclick="hardReload()" title="새로고침(상태 초기화)">⟳</button>
+      <button class="page-tab" data-sel="pfd" data-act="selectPanel" data-arg='["right", "pfd"]'>PFD</button>
+      <button class="page-tab active" data-sel="map" data-act="selectPanel" data-arg='["right", "map"]'>MAP</button>
+      <button class="page-tab" data-sel="cdu" data-act="selectPanel" data-arg='["right", "cdu"]'>CDU</button>
+      <button id="reload-btn" data-act="hardReload" title="새로고침(상태 초기화)">⟳</button>
     </div>
 
     <!-- Page 1: Map -->
@@ -1932,26 +1932,26 @@ body.night-mode::after {
       <div id="map"></div>
       <div id="map3d">
         <div id="tilt-ctrl">
-          <button onclick="tiltAdj(-5)" title="Tilt up">▲</button>
-          <button onclick="tiltAdj(5)"  title="Tilt down">▼</button>
+          <button data-act="tiltAdj" data-arg='[-5]' title="Tilt up">▲</button>
+          <button data-act="tiltAdj" data-arg='[5]'  title="Tilt down">▼</button>
         </div>
       </div>
       <div id="map-top-bar">
-        <button id="gps-btn" onclick="toggleGPS()">GPS</button>
-        <button id="wx-btn" onclick="toggleWxPanel()">WX</button>
-        <button id="pp-btn" onclick="togglePpMenu()">＋</button>
+        <button id="gps-btn" data-act="toggleGPS">GPS</button>
+        <button id="wx-btn" data-act="toggleWxPanel">WX</button>
+        <button id="pp-btn" data-act="togglePpMenu">＋</button>
         <div id="pp-menu">
           <button onclick="ppAddWaypoint();togglePpMenu(false)">PP 현재위치</button>
           <button onclick="chAddWaypoint();togglePpMenu(false)">＋ 십자위치</button>
         </div>
-        <button id="rain-btn" onclick="toggleRain()">RAIN</button>
-        <button id="wind-btn" onclick="toggleWind()">WIND</button>
-        <button id="notam-btn" onclick="toggleNotamLayer()">NOTAM</button>
-        <button id="fix-btn" onclick="toggleFixPanel()">FIX</button>
-        <button id="awy-btn" onclick="toggleAwyLayer()">AWY</button>
-        <button id="aspc-btn" onclick="toggleAspcPanel()">공역</button>
-        <button id="map-ruler-btn" onclick="toggleRuler()" title="거리·방위 측정">📏</button>
-        <button id="map-full-btn" onclick="toggleMapFull()" title="전체화면/분할 전환">FULL</button>
+        <button id="rain-btn" data-act="toggleRain">RAIN</button>
+        <button id="wind-btn" data-act="toggleWind">WIND</button>
+        <button id="notam-btn" data-act="toggleNotamLayer">NOTAM</button>
+        <button id="fix-btn" data-act="toggleFixPanel">FIX</button>
+        <button id="awy-btn" data-act="toggleAwyLayer">AWY</button>
+        <button id="aspc-btn" data-act="toggleAspcPanel">공역</button>
+        <button id="map-ruler-btn" data-act="toggleRuler" title="거리·방위 측정">📏</button>
+        <button id="map-full-btn" data-act="toggleMapFull" title="전체화면/분할 전환">FULL</button>
       </div>
       <div id="aspc-panel"></div>
       <div id="fix-panel"></div>
@@ -1967,13 +1967,13 @@ body.night-mode::after {
       <div id="center-coord"></div>
       <!-- FDR upload button + panel (above Leaflet zoom) -->
       <div id="fdr-btn-wrap">
-        <button id="rec-btn" onclick="toggleTrackRec()">REC</button>
-        <button id="fdr-btn" onclick="toggleFdrPanel()">FDR</button>
+        <button id="rec-btn" data-act="toggleTrackRec">REC</button>
+        <button id="fdr-btn" data-act="toggleFdrPanel">FDR</button>
       </div>
       <div id="fdr-panel">
         <div id="fdr-panel-title">
           <span>⏺ FDR REPLAY</span>
-          <span onclick="toggleFdrPanel()" style="cursor:pointer;color:#555;font-size:13px;">✕</span>
+          <span data-act="toggleFdrPanel" style="cursor:pointer;color:#555;font-size:13px;">✕</span>
         </div>
         <div id="fdr-file-row">
           <label for="fdr-file-input">📂 GPX / KML 파일 열기</label>
@@ -1982,9 +1982,9 @@ body.night-mode::after {
         <div id="fdr-status">파일을 선택하세요</div>
         <div id="fdr-track-info"></div>
         <div id="fdr-controls" style="display:none;gap:4px;display:none;">
-          <button id="fdr-play-btn"  onclick="fdrPlay()">▶</button>
-          <button id="fdr-pause-btn" onclick="fdrPause()">⏸</button>
-          <button id="fdr-stop-btn"  onclick="fdrStop()">⏹</button>
+          <button id="fdr-play-btn"  data-act="fdrPlay">▶</button>
+          <button id="fdr-pause-btn" data-act="fdrPause">⏸</button>
+          <button id="fdr-stop-btn"  data-act="fdrStop">⏹</button>
         </div>
         <div id="fdr-speed" style="display:none;">
           <label>배속</label>
@@ -2008,44 +2008,44 @@ body.night-mode::after {
       <div id="gps-status"></div>
       <div id="inhib-menu">
         <div style="color:#889;font-size:9px;font-weight:bold;letter-spacing:1px;padding:2px 4px;">경보 INHIBIT</div>
-        <button id="inhib-aspc-btn" onclick="toggleInhib('aspc')">공역경보 <span>ON</span></button>
-        <button id="inhib-taws-btn" onclick="toggleInhib('taws')">HTAWS <span>ON</span></button>
+        <button id="inhib-aspc-btn" data-act="toggleInhib" data-arg='["aspc"]'>공역경보 <span>ON</span></button>
+        <button id="inhib-taws-btn" data-act="toggleInhib" data-arg='["taws"]'>HTAWS <span>ON</span></button>
       </div>
       <div id="ruler-readout"></div>
       <div id="ship-menu">
         <div style="color:#889;font-size:9px;font-weight:bold;letter-spacing:1px;padding:2px 4px;">⛵ SHIP</div>
-        <button id="ship-menu-show" onclick="shipToggleOn()">배 표시 <span>OFF</span></button>
-        <button id="ship-menu-panel" onclick="shipTogglePanel()">설정창 <span>OFF</span></button>
+        <button id="ship-menu-show" data-act="shipToggleOn">배 표시 <span>OFF</span></button>
+        <button id="ship-menu-panel" data-act="shipTogglePanel">설정창 <span>OFF</span></button>
       </div>
       <div id="aspc-alert"></div>
       <div id="terrain-alert">⚠ TERRAIN</div>
       <div id="vnav-alert"></div>
       <div id="terrain-cut"><canvas id="tcut-canvas"></canvas><div id="tcut-title">TERRAIN — 전방 20NM</div></div>
       <div id="map-sim-bar">
-        <button class="sim-btn" id="map-fly-btn" onclick="toggleSim()">▶ FLY</button>
-        <button class="sim-btn" onclick="resetSim()">⟳ RESET</button>
-        <button class="sim-btn clr" onclick="clearFP()">✕ CLR</button>
-        <button class="sim-btn" id="map-ship-btn" onclick="toggleShip()">⛵ SHIP</button>
-        <button class="sim-btn" id="map-tcut-btn" onclick="toggleTcut()">⛰ T-CUT</button>
-        <button class="sim-btn" id="inhib-btn" onclick="toggleInhibMenu()">INHIB</button>
-        <button class="sim-btn" id="orient-btn" onclick="toggleMapOrient()">N↑</button>
-        <button class="sim-btn" id="follow-btn" onclick="toggleFollow()">1인칭</button>
-        <button class="sim-btn sat" id="layer-btn" onclick="toggleLayer()">MAP</button>
-        <button class="sim-btn" id="layer-btn-3d" onclick="toggle3dMap()">3D</button>
-        <button class="sim-btn" id="lock-btn" onclick="lockScreen()" title="화면 터치 잠금">🔒</button>
+        <button class="sim-btn" id="map-fly-btn" data-act="toggleSim">▶ FLY</button>
+        <button class="sim-btn" data-act="resetSim">⟳ RESET</button>
+        <button class="sim-btn clr" data-act="clearFP">✕ CLR</button>
+        <button class="sim-btn" id="map-ship-btn" data-act="toggleShip">⛵ SHIP</button>
+        <button class="sim-btn" id="map-tcut-btn" data-act="toggleTcut">⛰ T-CUT</button>
+        <button class="sim-btn" id="inhib-btn" data-act="toggleInhibMenu">INHIB</button>
+        <button class="sim-btn" id="orient-btn" data-act="toggleMapOrient">N↑</button>
+        <button class="sim-btn" id="follow-btn" data-act="toggleFollow">1인칭</button>
+        <button class="sim-btn sat" id="layer-btn" data-act="toggleLayer">MAP</button>
+        <button class="sim-btn" id="layer-btn-3d" data-act="toggle3dMap">3D</button>
+        <button class="sim-btn" id="lock-btn" data-act="lockScreen" title="화면 터치 잠금">🔒</button>
       </div>
 
       <!-- Weather Overlay Panel -->
       <div id="wx-panel">
         <div id="wx-panel-header">✈ WEATHER — METAR / TAF
-          <button onclick="closeWxPanel()" style="position:absolute;top:50%;right:8px;transform:translateY(-50%);background:none;border:none;color:#666;font-size:14px;line-height:1;cursor:pointer;padding:0;">✕</button>
+          <button data-act="closeWxPanel" style="position:absolute;top:50%;right:8px;transform:translateY(-50%);background:none;border:none;color:#666;font-size:14px;line-height:1;cursor:pointer;padding:0;">✕</button>
         </div>
         <div id="wx-panel-body">
           <div id="wx-ap-grid" style="display:grid;grid-template-columns:repeat(5,1fr);gap:3px;"></div>
           <div id="wx-fetch-row">
             <input id="wx-icao" type="text" maxlength="4" placeholder="ICAO" autocomplete="off" autocorrect="off" spellcheck="false">
-            <button class="wx-fetch-btn" onclick="fetchWx('METAR')">METAR</button>
-            <button class="wx-fetch-btn" onclick="fetchWx('TAF')">TAF</button>
+            <button class="wx-fetch-btn" data-act="fetchWx" data-arg='["METAR"]'>METAR</button>
+            <button class="wx-fetch-btn" data-act="fetchWx" data-arg='["TAF"]'>TAF</button>
           </div>
           <div id="wx-result" style="display:none;"></div>
         </div>
@@ -2055,24 +2055,24 @@ body.night-mode::after {
       <div id="ship-panel">
         <div id="ship-panel-header" style="color:#7ab8f5;font-size:9px;font-weight:bold;text-align:center;letter-spacing:1px;border-bottom:1px solid #222;padding-bottom:6px;margin-bottom:8px;position:relative;cursor:grab;user-select:none;">⛵ SHIP CONTROL</div>
         <div style="display:flex;gap:4px;margin-bottom:8px;">
-          <button id="ship-tab-spd" class="ship-tab ship-tab-active" onclick="shipSetMode('SPD')">SPD</button>
-          <button id="ship-tab-crs" class="ship-tab" onclick="shipSetMode('CRS')">CRS</button>
+          <button id="ship-tab-spd" class="ship-tab ship-tab-active" data-act="shipSetMode" data-arg='["SPD"]'>SPD</button>
+          <button id="ship-tab-crs" class="ship-tab" data-act="shipSetMode" data-arg='["CRS"]'>CRS</button>
         </div>
         <div id="ship-display" style="background:#000;border:1.5px solid #333;border-radius:4px;color:#c8ff00;font-size:24px;text-align:right;padding:4px 10px;margin-bottom:3px;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica Neue,Arial,sans-serif;min-height:36px;display:flex;align-items:center;justify-content:flex-end;letter-spacing:2px;">0</div>
         <div id="ship-unit" style="color:#555;font-size:7px;text-align:right;margin-bottom:8px;">kt · max 50</div>
         <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin-bottom:8px;">
-          <button class="ship-num" onclick="shipKey('7')">7</button>
-          <button class="ship-num" onclick="shipKey('8')">8</button>
-          <button class="ship-num" onclick="shipKey('9')">9</button>
-          <button class="ship-num" onclick="shipKey('4')">4</button>
-          <button class="ship-num" onclick="shipKey('5')">5</button>
-          <button class="ship-num" onclick="shipKey('6')">6</button>
-          <button class="ship-num" onclick="shipKey('1')">1</button>
-          <button class="ship-num" onclick="shipKey('2')">2</button>
-          <button class="ship-num" onclick="shipKey('3')">3</button>
-          <button class="ship-num ship-clr" onclick="shipKey('CLR')">CLR</button>
-          <button class="ship-num" onclick="shipKey('0')">0</button>
-          <button class="ship-num ship-ent" onclick="shipKey('ENT')">ENT</button>
+          <button class="ship-num" data-act="shipKey" data-arg='["7"]'>7</button>
+          <button class="ship-num" data-act="shipKey" data-arg='["8"]'>8</button>
+          <button class="ship-num" data-act="shipKey" data-arg='["9"]'>9</button>
+          <button class="ship-num" data-act="shipKey" data-arg='["4"]'>4</button>
+          <button class="ship-num" data-act="shipKey" data-arg='["5"]'>5</button>
+          <button class="ship-num" data-act="shipKey" data-arg='["6"]'>6</button>
+          <button class="ship-num" data-act="shipKey" data-arg='["1"]'>1</button>
+          <button class="ship-num" data-act="shipKey" data-arg='["2"]'>2</button>
+          <button class="ship-num" data-act="shipKey" data-arg='["3"]'>3</button>
+          <button class="ship-num ship-clr" data-act="shipKey" data-arg='["CLR"]'>CLR</button>
+          <button class="ship-num" data-act="shipKey" data-arg='["0"]'>0</button>
+          <button class="ship-num ship-ent" data-act="shipKey" data-arg='["ENT"]'>ENT</button>
         </div>
         <div style="display:grid;grid-template-columns:repeat(2,1fr);border-top:1px solid #1e1e1e;padding-top:7px;gap:4px;">
           <div style="text-align:center;">
@@ -3299,6 +3299,11 @@ function resizePFD() {
 
 function drawPFD() {
   const W = cvs.width, H = cvs.height;
+  // 패널이 접혀 있거나(전체화면 MAP·분할 전환 직후) 아직 레이아웃 전이면 W·H 가
+  // 0 이 되고, usableH = H - 조작부높이 가 음수가 되어 계기 반지름까지 음수로
+  // 내려간다. 그러면 ctx.arc 가 예외를 던지며 그 프레임의 계기 그리기가 통째로
+  // 중단된다. 그릴 수 없는 크기면 조용히 건너뛴다.
+  if (!(W >= 80) || !(H >= 80)) return;
   const ctrlEl = document.querySelector('.ctrl-bar');
   const CTRL_H = ctrlEl ? ctrlEl.offsetHeight : 80;
   const usableH = H - CTRL_H;
@@ -3860,6 +3865,7 @@ function drawVSI(x, y, w, h) {
 // HSI
 // ────────────────────────────────────────
 function drawHSI(x, y, w, h) {
+  if (!(w >= 40) || !(h >= 40)) return;   // 반지름이 음수가 되는 것을 원천 차단
   ctx.save();  // outer save — ensure lineWidth/strokeStyle don't bleed into drawPFD
   ctx.fillStyle='#654321';
   ctx.fillRect(x,y,w,h);
@@ -6461,8 +6467,8 @@ function fpRenderRadial(area, title, footer) {
       ${rb ? `<div class="hold-row"><div class="hold-lbl">DIST</div>${_spinHtml('d1',10,1,'NM')}</div>
               <div class="hold-row"><div class="hold-lbl"></div>
                 <div class="hold-spin">
-                  <div class="hold-btn" onclick="fpRefAdj('d1',-0.1)">−0.1</div>
-                  <div class="hold-btn" onclick="fpRefAdj('d1',0.1)">+0.1</div>
+                  <div class="hold-btn" data-act="fpRefAdj" data-arg='["d1", -0.1]'>−0.1</div>
+                  <div class="hold-btn" data-act="fpRefAdj" data-arg='["d1", 0.1]'>+0.1</div>
                 </div></div>`
           : `<div class="hold-row"><div class="hold-lbl">REF #2</div>${_refBtnHtml(2)}</div>
              <div class="hold-row"><div class="hold-lbl">BRG #2</div>${_spinHtml('b2',10,1,'°')}</div>`}
@@ -6474,9 +6480,9 @@ function fpRenderRadial(area, title, footer) {
       </div>
     </div>`;
   footer.innerHTML = `
-    <div class="fp-nav-btn" onclick="fpGo('ADD')"><span>↩</span>Back</div>
-    <div class="fp-nav-btn" onclick="fpGo('LIST')"><span>📋</span>FP</div>
-    <div class="fp-nav-btn fp-nav-enter" onclick="fpRefApply()"><span>↩</span>Enter</div>`;
+    <div class="fp-nav-btn" data-act="fpGo" data-arg='["ADD"]'><span>↩</span>Back</div>
+    <div class="fp-nav-btn" data-act="fpGo" data-arg='["LIST"]'><span>📋</span>FP</div>
+    <div class="fp-nav-btn fp-nav-enter" data-act="fpRefApply"><span>↩</span>Enter</div>`;
 }
 
 function fpRenderRefPick(area, title, footer) {
@@ -6504,7 +6510,7 @@ function fpRenderRefPick(area, title, footer) {
     </div>
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;">
       <div class="fp-disp-box" style="flex:1;">${fpRefQ || '<span style="color:#222">검색</span>'}</div>
-      <div class="fp-bksp-btn" onclick="fpRefBksp()">⬅</div>
+      <div class="fp-bksp-btn" data-act="fpRefBksp">⬅</div>
     </div>
     <div class="fp-key-grid" style="grid-template-columns:repeat(9,1fr);gap:3px;">
       ${'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'.split('').map(k =>
@@ -6595,33 +6601,33 @@ function fpRenderHold(area, title, footer) {
       <div class="hold-row">
         <div class="hold-lbl">TURN</div>
         <div class="hold-seg">
-          <div class="hold-btn${d.dir==='L'?' on':''}" onclick="fpHoldSet('dir','L')">◄ LEFT</div>
-          <div class="hold-btn${d.dir==='R'?' on':''}" onclick="fpHoldSet('dir','R')">RIGHT ►</div>
+          <div class="hold-btn${d.dir==='L'?' on':''}" data-act="fpHoldSet" data-arg='["dir", "L"]'>◄ LEFT</div>
+          <div class="hold-btn${d.dir==='R'?' on':''}" data-act="fpHoldSet" data-arg='["dir", "R"]'>RIGHT ►</div>
         </div>
       </div>
       <div class="hold-row">
         <div class="hold-lbl">INBD CRS</div>
         <div class="hold-spin">
-          <div class="hold-btn" onclick="fpHoldCrsAdj(-10)">≪</div>
-          <div class="hold-btn" onclick="fpHoldCrsAdj(-1)">◄</div>
+          <div class="hold-btn" data-act="fpHoldCrsAdj" data-arg='[-10]'>≪</div>
+          <div class="hold-btn" data-act="fpHoldCrsAdj" data-arg='[-1]'>◄</div>
           <div class="hold-val">${String(d.crsM).padStart(3,'0')}°M</div>
-          <div class="hold-btn" onclick="fpHoldCrsAdj(1)">►</div>
-          <div class="hold-btn" onclick="fpHoldCrsAdj(10)">≫</div>
+          <div class="hold-btn" data-act="fpHoldCrsAdj" data-arg='[1]'>►</div>
+          <div class="hold-btn" data-act="fpHoldCrsAdj" data-arg='[10]'>≫</div>
         </div>
       </div>
       <div class="hold-row">
         <div class="hold-lbl">LEG</div>
         <div class="hold-seg">
-          <div class="hold-btn${d.legType==='TIME'?' on':''}" onclick="fpHoldSet('legType','TIME')">TIME</div>
-          <div class="hold-btn${d.legType==='DIST'?' on':''}" onclick="fpHoldSet('legType','DIST')">DIST</div>
+          <div class="hold-btn${d.legType==='TIME'?' on':''}" data-act="fpHoldSet" data-arg='["legType", "TIME"]'>TIME</div>
+          <div class="hold-btn${d.legType==='DIST'?' on':''}" data-act="fpHoldSet" data-arg='["legType", "DIST"]'>DIST</div>
         </div>
       </div>
       <div class="hold-row">
         <div class="hold-lbl">${d.legType==='DIST'?'거리':'시간'}</div>
         <div class="hold-spin">
-          <div class="hold-btn" onclick="fpHoldLegAdj(-1)">▼</div>
+          <div class="hold-btn" data-act="fpHoldLegAdj" data-arg='[-1]'>▼</div>
           <div class="hold-val">${legTxt}</div>
-          <div class="hold-btn" onclick="fpHoldLegAdj(1)">▲</div>
+          <div class="hold-btn" data-act="fpHoldLegAdj" data-arg='[1]'>▲</div>
         </div>
       </div>
       <div style="color:#567;font-size:9px;line-height:1.6;margin-top:8px;border-top:1px solid #1a2a3a;padding-top:6px;">
@@ -6633,9 +6639,9 @@ function fpRenderHold(area, title, footer) {
       </div>
     </div>`;
   footer.innerHTML = `
-    <div class="fp-nav-btn" onclick="fpGo('LIST')"><span>↩</span>Cancel</div>
-    ${wp.hold ? `<div class="fp-nav-btn" onclick="fpHoldRemove()"><span>✕</span>Del Hold</div>` : ''}
-    <div class="fp-nav-btn fp-nav-enter" onclick="fpHoldApply()"><span>↩</span>Enter</div>`;
+    <div class="fp-nav-btn" data-act="fpGo" data-arg='["LIST"]'><span>↩</span>Cancel</div>
+    ${wp.hold ? `<div class="fp-nav-btn" data-act="fpHoldRemove"><span>✕</span>Del Hold</div>` : ''}
+    <div class="fp-nav-btn fp-nav-enter" data-act="fpHoldApply"><span>↩</span>Enter</div>`;
 }
 
 function fpRenderList(area, title, footer) {
@@ -6643,9 +6649,9 @@ function fpRenderList(area, title, footer) {
   if (S.wps.length === 0) {
     area.innerHTML = `<div class="fp-empty-state">
       <div class="fp-empty-label">FLIGHT PLAN EMPTY</div>
-      <button class="fp-empty-btn" onclick="fpGo('ADD')">＋ Add Origin</button>
-      <button class="fp-empty-btn" onclick="fpGo('ADD')">＋ Add Enroute Waypoint</button>
-      <button class="fp-empty-btn" onclick="fpGo('ADD')">＋ Add Destination</button>
+      <button class="fp-empty-btn" data-act="fpGo" data-arg='["ADD"]'>＋ Add Origin</button>
+      <button class="fp-empty-btn" data-act="fpGo" data-arg='["ADD"]'>＋ Add Enroute Waypoint</button>
+      <button class="fp-empty-btn" data-act="fpGo" data-arg='["ADD"]'>＋ Add Destination</button>
     </div>`;
   } else {
     let html = `<div class="fp-panel-border" style="padding:0;overflow-y:auto;">`;
@@ -6670,15 +6676,15 @@ function fpRenderList(area, title, footer) {
     area.innerHTML = html;
   }
   const fullBtn = _soloActive
-    ? `<div class="fp-nav-btn" onclick="exitSolo()"><span>✥</span>Half</div>`
-    : `<div class="fp-nav-btn" onclick="planFullScreen()"><span>✥</span>Full</div>`;
+    ? `<div class="fp-nav-btn" data-act="exitSolo"><span>✥</span>Half</div>`
+    : `<div class="fp-nav-btn" data-act="planFullScreen"><span>✥</span>Full</div>`;
   footer.innerHTML = `
-    <div class="fp-nav-btn" onclick="fpGoCduHome()"><span>🏠</span>Home</div>
+    <div class="fp-nav-btn" data-act="fpGoCduHome"><span>🏠</span>Home</div>
     ${fullBtn}
-    <div class="fp-nav-btn" onclick="fpGo('ADD')"><span>＋</span>Add WPT</div>
-    <div class="fp-nav-btn" onclick="clearFP()"><span>✕</span>Clr</div>
-    <div class="fp-nav-btn" onclick="resetSim()"><span>⟳</span>Rst</div>
-    <div class="fp-nav-btn" onclick="fpBackToCdu()"><span>↩</span>Back</div>`;
+    <div class="fp-nav-btn" data-act="fpGo" data-arg='["ADD"]'><span>＋</span>Add WPT</div>
+    <div class="fp-nav-btn" data-act="clearFP"><span>✕</span>Clr</div>
+    <div class="fp-nav-btn" data-act="resetSim"><span>⟳</span>Rst</div>
+    <div class="fp-nav-btn" data-act="fpBackToCdu"><span>↩</span>Back</div>`;
 }
 
 function fpRenderAdd(area, title, footer) {
@@ -6688,27 +6694,27 @@ function fpRenderAdd(area, title, footer) {
     <div style="color:#87ceeb;font-size:8px;font-weight:bold;letter-spacing:0.5px;">KOREAN AIRPORTS</div>
     <div class="fp-ap-grid">${apBtns}</div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px;">
-      <div class="fp-input-type-btn fp-cyan" onclick="fpGo('IDENT')">
+      <div class="fp-input-type-btn fp-cyan" data-act="fpGo" data-arg='["IDENT"]'>
         <span style="font-size:20px;">⌨</span><span>IDENT</span>
       </div>
-      <div class="fp-input-type-btn fp-cyan" onclick="fpGo('LAT')">
+      <div class="fp-input-type-btn fp-cyan" data-act="fpGo" data-arg='["LAT"]'>
         <span style="font-size:20px;">📍</span><span>COORDS</span>
       </div>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px;">
-      <div class="fp-input-type-btn fp-cyan" onclick="fpRefOpen('RB')">
+      <div class="fp-input-type-btn fp-cyan" data-act="fpRefOpen" data-arg='["RB"]'>
         <span style="font-size:17px;">⌖</span><span>BRG / DIST</span>
       </div>
-      <div class="fp-input-type-btn fp-cyan" onclick="fpRefOpen('RR')">
+      <div class="fp-input-type-btn fp-cyan" data-act="fpRefOpen" data-arg='["RR"]'>
         <span style="font-size:17px;">✛</span><span>BRG / BRG</span>
       </div>
     </div>
-    <div class="fp-input-type-btn" style="margin-top:6px;" onclick="fpGo('IFR')">
+    <div class="fp-input-type-btn" style="margin-top:6px;" data-act="fpGo" data-arg='["IFR"]'>
       <span style="font-size:18px;">✈</span><span>IFR PROCEDURES</span>
     </div>`;
   footer.innerHTML = `
-    <div class="fp-nav-btn" onclick="fpGo('LIST')"><span>📋</span>FP List</div>
-    <div class="fp-nav-btn" onclick="fpGo('LIST')"><span>↩</span>Back</div>`;
+    <div class="fp-nav-btn" data-act="fpGo" data-arg='["LIST"]'><span>📋</span>FP List</div>
+    <div class="fp-nav-btn" data-act="fpGo" data-arg='["LIST"]'><span>↩</span>Back</div>`;
 }
 
 function fpAddPreset(ident) {
@@ -6722,15 +6728,15 @@ function fpRenderIdent(area, title, footer) {
   area.innerHTML = `
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
       <div class="fp-disp-box">${disp||'<span style="color:#222">——</span>'}<span class="fp-disp-cursor">|</span></div>
-      <div class="fp-bksp-btn" onclick="fpBksp()">⬅<br><span style="font-size:8px;">BKSP</span></div>
+      <div class="fp-bksp-btn" data-act="fpBksp">⬅<br><span style="font-size:8px;">BKSP</span></div>
     </div>
     <div class="fp-key-grid">
       ${'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'.split('').map(k=>`<div class="fp-key" onclick="fpType('${k}')">${k}</div>`).join('')}
     </div>`;
   footer.innerHTML = `
-    <div class="fp-nav-btn" onclick="fpGo('ADD')"><span>↩</span>Cancel</div>
-    <div class="fp-nav-btn" onclick="fpGo('LIST')"><span>📋</span>FP</div>
-    <div class="fp-nav-btn fp-nav-enter" onclick="fpConfirmIdent()"><span>↩</span>Enter</div>`;
+    <div class="fp-nav-btn" data-act="fpGo" data-arg='["ADD"]'><span>↩</span>Cancel</div>
+    <div class="fp-nav-btn" data-act="fpGo" data-arg='["LIST"]'><span>📋</span>FP</div>
+    <div class="fp-nav-btn fp-nav-enter" data-act="fpConfirmIdent"><span>↩</span>Enter</div>`;
 }
 
 function fpRenderCoord(area, title, footer, field) {
@@ -6742,17 +6748,17 @@ function fpRenderCoord(area, title, footer, field) {
       <div style="font-size:8px;color:#87ceeb;">${hint}</div>
       <div style="display:flex;align-items:center;gap:8px;">
         <div class="fp-disp-box">${disp||'<span style="color:#222">——</span>'}<span class="fp-disp-cursor">|</span></div>
-        <div class="fp-bksp-btn" onclick="fpBksp()">⬅<br><span style="font-size:8px;">BKSP</span></div>
+        <div class="fp-bksp-btn" data-act="fpBksp">⬅<br><span style="font-size:8px;">BKSP</span></div>
       </div>
       <div class="fp-numpad-grid">
         ${[1,2,3,4,5,6,7,8,9].map(n=>`<div class="fp-num-circ" onclick="fpType('${n}')">${n}</div>`).join('')}
-        <div class="fp-num-circ" onclick="fpType('.')">.</div>
-        <div class="fp-num-circ" onclick="fpType('0')">0</div>
-        <div class="fp-num-circ" onclick="fpType('-')">−</div>
+        <div class="fp-num-circ" data-act="fpType" data-arg='["."]'>.</div>
+        <div class="fp-num-circ" data-act="fpType" data-arg='["0"]'>0</div>
+        <div class="fp-num-circ" data-act="fpType" data-arg='["-"]'>−</div>
       </div>
     </div>`;
   footer.innerHTML = `
-    <div class="fp-nav-btn" onclick="fpGo('ADD')"><span>↩</span>Cancel</div>
+    <div class="fp-nav-btn" data-act="fpGo" data-arg='["ADD"]'><span>↩</span>Cancel</div>
     <div class="fp-nav-btn fp-nav-enter" onclick="fpConfirmCoord('${field}')"><span>↩</span>Enter</div>`;
 }
 
@@ -6773,25 +6779,25 @@ function fpRenderIfr(area, title, footer) {
       `<div class="fp-ifr-lbl">SID Procedure</div>` +
       `<select class="fp-ifr-sel" id="dep-sid" onchange="onSidSelect()"></select>` +
       `<div id="sid-detail"></div>` +
-      `<button class="fp-ifr-add" onclick="addSidWps()">＋ ADD SID TO PLAN</button>` +
+      `<button class="fp-ifr-add" data-act="addSidWps">＋ ADD SID TO PLAN</button>` +
       `<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;margin-top:4px;">` +
-        `<div class="fp-ifr-add" style="margin:0;font-size:9px;" onclick="sidShowOnMap()">🗺 지도</div>` +
-        `<div class="fp-ifr-add" style="margin:0;font-size:9px;" onclick="fpGo('SIDNEW')">＋ 사용자 SID</div>` +
-        `<div class="fp-ifr-add" style="margin:0;font-size:9px;" onclick="deleteUserSid()">🗑 삭제</div>` +
+        `<div class="fp-ifr-add" style="margin:0;font-size:9px;" data-act="sidShowOnMap">🗺 지도</div>` +
+        `<div class="fp-ifr-add" style="margin:0;font-size:9px;" data-act="fpGo" data-arg='["SIDNEW"]'>＋ 사용자 SID</div>` +
+        `<div class="fp-ifr-add" style="margin:0;font-size:9px;" data-act="deleteUserSid">🗑 삭제</div>` +
       `</div>`;
   } else if(fpIfrPhase==='enr'){
-    panelHtml=`<div class="fp-ifr-lbl">Airway</div><select class="fp-ifr-sel" id="enr-airway" onchange="loadAirwayFixes()"></select><div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;"><div><div class="fp-ifr-lbl">Entry Fix</div><select class="fp-ifr-sel" id="enr-entry"></select></div><div><div class="fp-ifr-lbl">Exit Fix</div><select class="fp-ifr-sel" id="enr-exit"></select></div></div><button class="fp-ifr-add" onclick="addAirwaySegment()">＋ ADD AIRWAY SEG</button><div class="fp-ifr-lbl" style="border-top:1px solid #152515;padding-top:5px;margin-top:5px;">Single Fix</div><select class="fp-ifr-sel" id="enr-fix"></select><button class="fp-ifr-add" onclick="addSingleFix()">＋ ADD FIX</button>`;
+    panelHtml=`<div class="fp-ifr-lbl">Airway</div><select class="fp-ifr-sel" id="enr-airway" onchange="loadAirwayFixes()"></select><div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;"><div><div class="fp-ifr-lbl">Entry Fix</div><select class="fp-ifr-sel" id="enr-entry"></select></div><div><div class="fp-ifr-lbl">Exit Fix</div><select class="fp-ifr-sel" id="enr-exit"></select></div></div><button class="fp-ifr-add" data-act="addAirwaySegment">＋ ADD AIRWAY SEG</button><div class="fp-ifr-lbl" style="border-top:1px solid #152515;padding-top:5px;margin-top:5px;">Single Fix</div><select class="fp-ifr-sel" id="enr-fix"></select><button class="fp-ifr-add" data-act="addSingleFix">＋ ADD FIX</button>`;
   } else {
     panelHtml=`
       <div class="fp-ifr-lbl">Arrival Airport</div>
       <select class="fp-ifr-sel" id="app-icao" onchange="loadStars();loadApproaches()"></select>
       <div class="fp-ifr-lbl">STAR Procedure</div>
       <select class="fp-ifr-sel" id="app-star"></select>
-      <button class="fp-ifr-add" onclick="addStarWps()">＋ ADD STAR</button>
+      <button class="fp-ifr-add" data-act="addStarWps">＋ ADD STAR</button>
       <div style="border-top:1px solid #152515;margin:5px 0;"></div>
       <div class="fp-ifr-lbl">Approach Procedure</div>
       <select class="fp-ifr-sel" id="app-proc"></select>
-      <button class="fp-ifr-add" onclick="addAppWps()">＋ ADD APPROACH</button>`;
+      <button class="fp-ifr-add" data-act="addAppWps">＋ ADD APPROACH</button>`;
   }
   area.innerHTML = `<div class="fp-ifr-tab-row">${tabsHtml}</div><div class="fp-panel-border" style="overflow-y:auto;">${panelHtml}</div>`;
   // Populate selects dynamically
@@ -6820,10 +6826,10 @@ function fpRenderIfr(area, title, footer) {
     if(s&&s.options.length===0){Object.keys(IFR_DB).forEach(k=>{const o=document.createElement('option');o.value=k;o.textContent=k+' – '+IFR_DB[k].name;s.appendChild(o);});loadStars();loadApproaches();}
   }
   footer.innerHTML = `
-    <div class="fp-nav-btn" onclick="fpGoCduHome()"><span>🏠</span>Home</div>
+    <div class="fp-nav-btn" data-act="fpGoCduHome"><span>🏠</span>Home</div>
     ${fpFullBtn()}
-    <div class="fp-nav-btn" onclick="fpGo('LIST')"><span>📋</span>FP</div>
-    <div class="fp-nav-btn" onclick="fpGo('ADD')"><span>↩</span>Back</div>`;
+    <div class="fp-nav-btn" data-act="fpGo" data-arg='["LIST"]'><span>📋</span>FP</div>
+    <div class="fp-nav-btn" data-act="fpGo" data-arg='["ADD"]'><span>↩</span>Back</div>`;
 }
 
 // ══════════════════════════════════════════════════════
@@ -6881,18 +6887,18 @@ function fpRenderSidNew(area, title, footer) {
       chain +
       `<div style="display:grid;grid-template-columns:1fr auto;gap:4px;margin-top:4px;">` +
         `<select class="fp-ifr-sel" id="sn-fix" style="margin:0;">${fixOpts}</select>` +
-        `<div class="fp-ifr-add" style="margin:0;padding:6px 12px;" onclick="sidNewAddFix()">＋</div>` +
+        `<div class="fp-ifr-add" style="margin:0;padding:6px 12px;" data-act="sidNewAddFix">＋</div>` +
       `</div>` +
-      `<button class="fp-ifr-add" style="margin-top:8px;" onclick="sidNewSave()">💾 절차 저장</button>` +
+      `<button class="fp-ifr-add" style="margin-top:8px;" data-act="sidNewSave">💾 절차 저장</button>` +
       `<div style="color:#4a6274;font-size:9px;margin-top:5px;line-height:1.4;">` +
         `저장한 절차는 SID 목록에 <b>★</b> 표시로 나타나며 기기에 보관됩니다.<br>` +
         `좌표는 픽스 이름으로 자동 해석되므로 따로 입력할 필요가 없습니다.</div>` +
     `</div>`;
   footer.innerHTML =
-    `<div class="fp-nav-btn" onclick="fpGoCduHome()"><span>🏠</span>Home</div>` +
+    `<div class="fp-nav-btn" data-act="fpGoCduHome"><span>🏠</span>Home</div>` +
     fpFullBtn() +
-    `<div class="fp-nav-btn" onclick="fpGo('LIST')"><span>📋</span>FP</div>` +
-    `<div class="fp-nav-btn" onclick="fpGo('IFR')"><span>↩</span>Back</div>`;
+    `<div class="fp-nav-btn" data-act="fpGo" data-arg='["LIST"]'><span>📋</span>FP</div>` +
+    `<div class="fp-nav-btn" data-act="fpGo" data-arg='["IFR"]'><span>↩</span>Back</div>`;
 }
 
 function fpSetIfrPhase(phase) {
@@ -7841,9 +7847,9 @@ function _rulerRender() {
       html += R('직선(시작→끝)', `${dd.toFixed(2)} NM`);
     }
   }
-  html += `<div class="rr-btns"><button onclick="_rulerUndo()">⟲ 취소</button>` +
-          `<button onclick="_rulerReset()">↺ 초기화</button>` +
-          `<button onclick="toggleRuler()">✕ 닫기</button></div>`;
+  html += `<div class="rr-btns"><button data-act="_rulerUndo">⟲ 취소</button>` +
+          `<button data-act="_rulerReset">↺ 초기화</button>` +
+          `<button data-act="toggleRuler">✕ 닫기</button></div>`;
   el.innerHTML = html;
   el.style.display = 'block';
 }
@@ -7874,8 +7880,8 @@ function cduFullScreen() {
 // 전체화면(solo)일 땐 FULL → HALF(우측 상단 ✕와 동일: exitSolo)
 function cduFullNavBtn() {
   return _soloActive
-    ? `<div class="nav-btn" onclick="exitSolo()"><span>✥</span>Half</div>`
-    : `<div class="nav-btn" onclick="cduFullScreen()"><span>✥</span>Full</div>`;
+    ? `<div class="nav-btn" data-act="exitSolo"><span>✥</span>Half</div>`
+    : `<div class="nav-btn" data-act="cduFullScreen"><span>✥</span>Full</div>`;
 }
 // PLAN 버튼 — Flight Plan 화면 열기(분할/전체화면 모두 대응)
 function openFlightPlan() {
@@ -7892,8 +7898,8 @@ function planFullScreen() {
 // Flight Plan 푸터용 FULL/HALF 버튼(solo 상태 반영)
 function fpFullBtn() {
   return _soloActive
-    ? `<div class="fp-nav-btn" onclick="exitSolo()"><span>✥</span>Half</div>`
-    : `<div class="fp-nav-btn" onclick="planFullScreen()"><span>✥</span>Full</div>`;
+    ? `<div class="fp-nav-btn" data-act="exitSolo"><span>✥</span>Half</div>`
+    : `<div class="fp-nav-btn" data-act="planFullScreen"><span>✥</span>Full</div>`;
 }
 // Flight Plan 화면의 BACK — CDU(직전 화면)로 복귀
 function fpBackToCdu() {
@@ -7907,9 +7913,9 @@ function fpBackToCdu() {
 //             전역에 없어 인라인 onclick 으로는 "not defined" 가 나므로 이쪽을 써야 한다.
 let _cduBackFn = null;
 function cduFooter(back, extra) {
-  let h = `<div class="nav-btn" onclick="switchMode('HOME')"><span>🏠</span>Home</div>`
+  let h = `<div class="nav-btn" data-act="switchMode" data-arg='["HOME"]'><span>🏠</span>Home</div>`
         + cduFullNavBtn()
-        + `<div class="nav-btn" onclick="switchMode('SETTINGS')"><span>⚙</span>Setting</div>`;
+        + `<div class="nav-btn" data-act="switchMode" data-arg='["SETTINGS"]'><span>⚙</span>Setting</div>`;
   if (extra) h += extra;
   // BACK은 항상 제일 우측
   if (typeof back === 'function') {
@@ -9415,7 +9421,7 @@ let shipInputMode = 'SPD', shipInput = '';
 
 function shipIcon() {
   return L.divIcon({
-    html: `<div onclick="openShipPanel()" style="transform:rotate(${shipHdg}deg);transform-origin:12px 20px;line-height:0;cursor:pointer;"><svg width="24" height="40" viewBox="0 0 24 40" xmlns="http://www.w3.org/2000/svg"><path d="M12 1 Q20 7 21 17 L21 33 Q21 39 12 39 Q3 39 3 33 L3 17 Q4 7 12 1Z" fill="#1a5fa8" stroke="#7ab8f5" stroke-width="1.5"/><rect x="8" y="16" width="8" height="10" rx="2" fill="#2277bb" stroke="#7ab8f5" stroke-width="0.7"/><circle cx="12" cy="5" r="2.5" fill="#7ab8f5" opacity="0.9"/><line x1="12" y1="1" x2="12" y2="39" stroke="#88ccff" stroke-width="0.5" stroke-dasharray="2,3" opacity="0.4"/></svg></div>`,
+    html: `<div data-act="openShipPanel" style="transform:rotate(${shipHdg}deg);transform-origin:12px 20px;line-height:0;cursor:pointer;"><svg width="24" height="40" viewBox="0 0 24 40" xmlns="http://www.w3.org/2000/svg"><path d="M12 1 Q20 7 21 17 L21 33 Q21 39 12 39 Q3 39 3 33 L3 17 Q4 7 12 1Z" fill="#1a5fa8" stroke="#7ab8f5" stroke-width="1.5"/><rect x="8" y="16" width="8" height="10" rx="2" fill="#2277bb" stroke="#7ab8f5" stroke-width="0.7"/><circle cx="12" cy="5" r="2.5" fill="#7ab8f5" opacity="0.9"/><line x1="12" y1="1" x2="12" y2="39" stroke="#88ccff" stroke-width="0.5" stroke-dasharray="2,3" opacity="0.4"/></svg></div>`,
     iconSize: [24, 40], iconAnchor: [12, 20], className: ''
   });
 }
@@ -9921,6 +9927,38 @@ if ('serviceWorker' in navigator) {
 //   · data-act : 액션 이름(레지스트리 키)
 //   · data-arg : 인자 JSON 배열. 문자열 "$event"는 실제 이벤트 객체로 치환된다.
 // 위임은 #cdu-wrap 안에서만 동작하므로, CDU 밖의 인라인 핸들러는 종전 그대로 둔다.
+// ── 앱 전역 액션 위임 ────────────────────────────────────────────
+// 인라인 onclick 은 전역 스코프에서만 이름을 찾기 때문에, 함수를 모듈/IIFE 안으로
+// 옮기는 순간 "버튼이 조용히 죽는다"(clBack 사례). 위임을 쓰면 등록된 이름만
+// 부르므로 그런 사고가 나지 않고, 미등록이면 콘솔에 경고가 남는다.
+// CDU 안(#cdu-wrap)은 기존 CDU_ACT 위임이 처리하므로 여기서는 건드리지 않는다.
+const APP_ACT = {};
+function appRegister(map) { Object.assign(APP_ACT, map); }
+function aact(name, ...args) {
+  if (!args.length) return `data-act="${name}"`;
+  return `data-act="${name}" data-arg='${JSON.stringify(args).replace(/'/g, "&#39;")}'`;
+}
+(function initAppDelegation() {
+  const run = (e, kind) => {
+    const el = e.target.closest('[data-act]');
+    if (!el) return;
+    const cdu = document.getElementById('cdu-wrap');
+    if (cdu && cdu.contains(el)) return;          // CDU 는 CDU_ACT 위임 담당
+    if ((el.dataset.on || 'click') !== kind) return;
+    const fn = APP_ACT[el.dataset.act];
+    if (typeof fn !== 'function') { console.warn('[APP] 미등록 액션:', el.dataset.act); return; }
+    let args = [];
+    if (el.dataset.arg) {
+      try { args = JSON.parse(el.dataset.arg); }
+      catch (err) { console.warn('[APP] 인자 파싱 실패:', el.dataset.arg); return; }
+    }
+    args = args.map(a => a === '$event' ? e : (a === '$el' ? el : a));
+    fn(...args);
+  };
+  document.addEventListener('click', e => run(e, 'click'));
+  document.addEventListener('pointerdown', e => run(e, 'pointerdown'));
+})();
+
 const CDU_ACT = {};
 function cduRegister(map) { Object.assign(CDU_ACT, map); }
 // cduFooter(함수) 로 지정한 Back 실행기
@@ -16540,14 +16578,14 @@ async function openChart(icao, chartNum, url) {
         + 'background:#1a1a1a;display:flex;flex-direction:column;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica Neue,Arial,sans-serif;';
     ov.innerHTML = `
         <div style="display:flex;align-items:center;gap:6px;padding:6px 10px;background:#000;border-bottom:1px solid #333;flex-shrink:0;">
-            <div onclick="closePdfViewer()" style="color:#0ff;font-size:11px;font-weight:bold;cursor:pointer;padding:4px 10px;border:1px solid #0ff;border-radius:4px;white-space:nowrap;">← 목록</div>
+            <div data-act="closePdfViewer" style="color:#0ff;font-size:11px;font-weight:bold;cursor:pointer;padding:4px 10px;border:1px solid #0ff;border-radius:4px;white-space:nowrap;">← 목록</div>
             <span style="color:#aaa;font-size:9px;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${icao} · (${chartNum})</span>
             <div style="display:flex;align-items:center;gap:2px;flex-shrink:0;">
-                <div onclick="_pdfZoomOut()" title="축소" style="color:#fff;font-size:16px;font-weight:bold;cursor:pointer;padding:2px 9px;background:#1a1a1a;border:1px solid #444;border-radius:3px;line-height:1;user-select:none;">−</div>
+                <div data-act="_pdfZoomOut" title="축소" style="color:#fff;font-size:16px;font-weight:bold;cursor:pointer;padding:2px 9px;background:#1a1a1a;border:1px solid #444;border-radius:3px;line-height:1;user-select:none;">−</div>
                 <div id="pdfZoomLabel" style="color:#aaa;font-size:9px;min-width:36px;text-align:center;padding:3px 2px;"></div>
-                <div onclick="_pdfZoomIn()"  title="확대" style="color:#fff;font-size:16px;font-weight:bold;cursor:pointer;padding:2px 9px;background:#1a1a1a;border:1px solid #444;border-radius:3px;line-height:1;user-select:none;">+</div>
-                <div onclick="_pdfZoomReset()" title="배율 초기화" style="color:#888;font-size:9px;cursor:pointer;padding:3px 6px;background:#111;border:1px solid #333;border-radius:3px;margin-left:2px;white-space:nowrap;">1:1</div>
-                <div onclick="_pdfToggleCalibration()" id="pdfCalBtn" title="현재 위치 보정/표시" style="color:#ff5252;font-size:13px;cursor:pointer;padding:2px 8px;background:#1a1010;border:1px solid #ff5252;border-radius:3px;margin-left:2px;line-height:1;user-select:none;">📍</div>
+                <div data-act="_pdfZoomIn"  title="확대" style="color:#fff;font-size:16px;font-weight:bold;cursor:pointer;padding:2px 9px;background:#1a1a1a;border:1px solid #444;border-radius:3px;line-height:1;user-select:none;">+</div>
+                <div data-act="_pdfZoomReset" title="배율 초기화" style="color:#888;font-size:9px;cursor:pointer;padding:3px 6px;background:#111;border:1px solid #333;border-radius:3px;margin-left:2px;white-space:nowrap;">1:1</div>
+                <div data-act="_pdfToggleCalibration" id="pdfCalBtn" title="현재 위치 보정/표시" style="color:#ff5252;font-size:13px;cursor:pointer;padding:2px 8px;background:#1a1010;border:1px solid #ff5252;border-radius:3px;margin-left:2px;line-height:1;user-select:none;">📍</div>
             </div>
             <span id="pdfPageNum" style="color:#888;font-size:9px;white-space:nowrap;"></span>
         </div>
@@ -16555,9 +16593,9 @@ async function openChart(icao, chartNum, url) {
             <div style="color:#ccc;padding:50px;text-align:center;font-size:13px;">PDF 로딩 중...</div>
         </div>
         <div id="pdfNavBar" style="display:flex;border-top:1px solid #333;flex-shrink:0;">
-            <div onclick="_pdfPrev()" style="flex:1;padding:11px 0;text-align:center;background:#0a0a0a;color:#0ff;font-size:16px;cursor:pointer;border-right:1px solid #222;">◀</div>
+            <div data-act="_pdfPrev" style="flex:1;padding:11px 0;text-align:center;background:#0a0a0a;color:#0ff;font-size:16px;cursor:pointer;border-right:1px solid #222;">◀</div>
             <div id="pdfPageLabel" style="flex:2;padding:11px 0;text-align:center;background:#0a0a0a;color:#555;font-size:10px;"></div>
-            <div onclick="_pdfNext()" style="flex:1;padding:11px 0;text-align:center;background:#0a0a0a;color:#0ff;font-size:16px;cursor:pointer;border-left:1px solid #222;">▶</div>
+            <div data-act="_pdfNext" style="flex:1;padding:11px 0;text-align:center;background:#0a0a0a;color:#0ff;font-size:16px;cursor:pointer;border-left:1px solid #222;">▶</div>
         </div>`;
     host.appendChild(ov);
     // 제스처 핸들러는 오버레이당 1회 등록(영역은 재렌더돼도 동일 element 유지)
@@ -17001,7 +17039,7 @@ function renderChartsScreen(container, footer, title) {
             <div style="color:${daysColor};font-size:18px;font-weight:bold;line-height:1;">${airac.daysLeft}</div>
             <div style="color:#666;font-size:7px;">days left</div>
         </div>
-        <div onclick="openAimPackage()" style="background:#0a2a0a;color:#4caf50;border:1px solid #4caf50;border-radius:5px;padding:8px 10px;font-size:10px;font-weight:bold;cursor:pointer;white-space:nowrap;text-align:center;min-width:52px;">
+        <div data-act="openAimPackage" style="background:#0a2a0a;color:#4caf50;border:1px solid #4caf50;border-radius:5px;padding:8px 10px;font-size:10px;font-weight:bold;cursor:pointer;white-space:nowrap;text-align:center;min-width:52px;">
             🌐<br><span style="font-size:8px;">AIM eAIP</span>
         </div>
         <div onclick="${importProgress ? '' : 'triggerZipImport()'}" style="background:${importProgress ? '#1a1a1a' : '#0a1a2a'};color:${importProgress ? '#444' : '#29b6f6'};border:1px solid ${importProgress ? '#333' : '#29b6f6'};border-radius:5px;padding:8px 10px;font-size:10px;font-weight:bold;cursor:${importProgress ? 'default' : 'pointer'};white-space:nowrap;text-align:center;min-width:52px;">
@@ -17115,6 +17153,108 @@ function renderCduContent() {
     } catch(e) { console.warn('renderCduContent error:', e); }
 }
 
+
+// ── 위임 액션 등록 (인라인 onclick 에서 옮겨온 것들) ──
+// 여기 없는 이름을 data-act 로 쓰면 콘솔에 경고가 남으므로,
+// 예전처럼 버튼이 조용히 죽지 않는다.
+appRegister({
+  _pdfNext,
+  _pdfPrev,
+  _pdfToggleCalibration,
+  _pdfZoomIn,
+  _pdfZoomOut,
+  _pdfZoomReset,
+  _rulerReset,
+  _rulerUndo,
+  addAirwaySegment,
+  addAppWps,
+  addSidWps,
+  addSingleFix,
+  addStarWps,
+  cduFullScreen,
+  clearFP,
+  closeHelp,
+  closePdfViewer,
+  closeWxPanel,
+  cycleIntercept,
+  deleteUserSid,
+  exitSolo,
+  fcpSync,
+  fdrPause,
+  fdrPlay,
+  fdrStop,
+  fetchWx,
+  forceTrim,
+  fpBackToCdu,
+  fpBksp,
+  fpConfirmIdent,
+  fpGo,
+  fpGoCduHome,
+  fpHoldApply,
+  fpHoldCrsAdj,
+  fpHoldLegAdj,
+  fpHoldRemove,
+  fpHoldSet,
+  fpRefAdj,
+  fpRefApply,
+  fpRefBksp,
+  fpRefOpen,
+  fpType,
+  hardReload,
+  lockScreen,
+  openAimPackage,
+  openShipPanel,
+  planFullScreen,
+  resetSim,
+  selectPanel,
+  setNavSrc,
+  setRnp,
+  setSolo,
+  shipKey,
+  shipSetMode,
+  shipToggleOn,
+  shipTogglePanel,
+  sidNewAddFix,
+  sidNewSave,
+  sidShowOnMap,
+  swReset,
+  swSetMode,
+  swToggle,
+  switchMode,
+  tiltAdj,
+  toggle3dMap,
+  toggleAltHold,
+  toggleAspcPanel,
+  toggleAwyLayer,
+  toggleBrg1,
+  toggleBrg2,
+  toggleCrht,
+  toggleFdrPanel,
+  toggleFixPanel,
+  toggleFollow,
+  toggleGPS,
+  toggleGspd,
+  toggleHoverPage,
+  toggleHoverPosition,
+  toggleInhib,
+  toggleInhibMenu,
+  toggleLayer,
+  toggleMapFull,
+  toggleMapOrient,
+  toggleNavAp,
+  toggleNotamLayer,
+  toggleObs,
+  togglePpMenu,
+  toggleRain,
+  toggleRuler,
+  toggleShip,
+  toggleSim,
+  toggleTcut,
+  toggleTrackRec,
+  toggleTriple,
+  toggleWind,
+  toggleWxPanel,
+});
 </script>
 <input type="file" id="zipFileInput" accept=".zip,application/zip,application/x-zip-compressed,application/octet-stream" style="display:none" onchange="handleZipFile(this.files[0]); this.value='';"></body>
 </html>
