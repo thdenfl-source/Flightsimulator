@@ -13,8 +13,9 @@ import * as nav from './cases/nav.mjs';
 import * as actions from './cases/actions.mjs';
 import * as gspd from './cases/gspd.mjs';
 import * as dialog from './cases/dialog.mjs';
+import * as chartview from './cases/chartview.mjs';
 
-const SUITES = [smoke, actions, coords, chartcal, hold, nav, gspd, dialog];
+const SUITES = [smoke, actions, coords, chartcal, hold, nav, gspd, dialog, chartview];
 const filter = process.argv.slice(2);
 
 function makeT() {
