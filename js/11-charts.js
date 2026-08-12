@@ -156,6 +156,47 @@ function buildChartPdfUrl(airacStart, icao, num, name) {
     return `https://aim.koca.go.kr/eaipPub/Package/${airacStart}-AIRAC/pdf/AD/${icao}/(${num})%20${name.replace(/ /g, '%20')}.pdf`;
 }
 
+// ── 차트 중계 주소 ────────────────────────────────────────────────
+// eAIP(aim.koca.go.kr)는 CORS 를 허용하지 않는다. 연결 점검으로 확인했다.
+// 브라우저 주소창으로 직접 열면 보이지만, 앱이 fetch 로 받아오는 것은 막힌다.
+// 남의 서버라 우리가 어쩔 수 없다.
+//
+// 중계 주소를 하나 두면 그 벽이 사라진다. 사용자가 직접 띄운 작은 중계가
+// eAIP 에서 받아 CORS 헤더를 붙여 돌려주면, 앱은 그것을 여느 파일처럼 받는다.
+// 그러면 저장소에 차트를 올릴 필요도, AIRAC 주기마다 다시 넣을 필요도 없다.
+//
+// 비워 두면 아무 일도 하지 않는다 — 종전과 똑같이 동작한다.
+const CHART_RELAY_KEY = 'chartRelayUrl';
+function chartRelayUrl() {
+    try { return (localStorage.getItem(CHART_RELAY_KEY) || '').trim(); } catch (e) { return ''; }
+}
+// 중계가 있으면 그것을 거치는 주소로, 없으면 원래 주소 그대로.
+function _viaRelay(url) {
+    const relay = chartRelayUrl();
+    if (!relay || !/^https?:/i.test(url)) return url;
+    return relay + (relay.includes('?') ? '&' : '?') + 'u=' + encodeURIComponent(url);
+}
+async function chartRelaySet() {
+    const cur = chartRelayUrl();
+    const v = await uiPrompt(
+        '차트 중계 주소\n\n' +
+        'eAIP 는 앱이 파일을 직접 받는 것을 막습니다(CORS).\n' +
+        '중계를 하나 두면 모든 공항 차트를 공식 사이트에서 바로 받아옵니다.\n' +
+        '만드는 방법은 charts/README.md 에 적어 두었습니다.\n\n' +
+        '비우고 확인하면 중계를 쓰지 않습니다.',
+        cur);
+    if (v === null) return;
+    const url = v.trim();
+    if (url && !/^https:\/\//i.test(url)) {
+        uiAlert('중계 주소는 https:// 로 시작해야 합니다.\n입력한 값: ' + url);
+        return;
+    }
+    try { localStorage.setItem(CHART_RELAY_KEY, url); } catch (e) { _swallow(e); }
+    renderCduContent();
+    uiToast(url ? '중계 주소를 저장했습니다. [연결 점검]으로 확인해 보세요.'
+                : '중계 주소를 지웠습니다.', null, 3500);
+}
+
 // ── eAIP 차트 목록 탐색 ────────────────────────────────────────────
 // 연결 점검으로 CORS 가 허용된 것은 확인했다(차트 PDF 가 HTTP 200 으로 온다).
 // 남은 문제는 "무엇을 받을지" 다. 앱 내장 목록은 22개 공항에 28장뿐인데,
@@ -197,7 +238,7 @@ async function chartDiscover() {
         const ac = typeof AbortController === 'function' ? new AbortController() : null;
         const timer = ac ? setTimeout(() => ac.abort(), 8000) : null;
         try {
-            const r = await fetch(c.url, { credentials: 'omit', signal: ac ? ac.signal : undefined });
+            const r = await fetch(_viaRelay(c.url), { credentials: 'omit', signal: ac ? ac.signal : undefined });
             const type = (r.headers.get('content-type') || '').split(';')[0];
             if (!r.ok) return { ...c, line: `HTTP ${r.status}` };
             const text = await r.text();
@@ -254,9 +295,12 @@ async function chartConnCheck() {
         const ac = typeof AbortController === 'function' ? new AbortController() : null;
         const timer = ac ? setTimeout(() => ac.abort(), 8000) : null;
         try {
-            const r = await fetch(url, { mode, credentials: 'omit', signal: ac ? ac.signal : undefined });
+            const r = await fetch(_viaRelay(url), { mode, credentials: 'omit', signal: ac ? ac.signal : undefined });
             const out = { ok: r.ok, status: r.status, type: (r.headers.get('content-type') || '').split(';')[0] };
-            if (mode === 'no-cors') return out;
+            // no-cors 로 받은 응답(opaque)은 ok=false, status=0 이다 — 내용을 못 볼
+            // 뿐 요청 자체는 닿았다는 뜻이므로 성공으로 친다. 이걸 실패로 읽으면
+            // "차단"과 "사이트 불통"을 거꾸로 판정한다.
+            if (mode === 'no-cors') { out.ok = true; out.opaque = r.type === 'opaque'; return out; }
             // HTTP 200 을 그대로 믿지 않는다. 종전 서비스워커는 교차 출처 요청이
             // 실패하면 우리 index.html 을 200 으로 돌려줬고, 점검이 그걸 "성공"
             // 으로 읽어 CORS 가 허용된 줄 알았다. 진짜 PDF 인지 앞머리를 본다.
@@ -280,18 +324,22 @@ async function chartConnCheck() {
     const cors  = await probe(pkg, 'cors');
     const corsPdf = await probe(pdf, 'cors', true);
 
+    const relay = chartRelayUrl();
     let verdict, detail;
-    if (!reach.ok && !reach.status) {
-        verdict = '판정 불가 — 사이트에 닿지 못했습니다.';
-        detail = '네트워크를 확인하고 다시 눌러 주세요.\n(기내·음영지역이면 정상입니다)';
+    if (!reach.ok) {
+        verdict = '판정 불가 — 닿지 못했습니다.';
+        detail = relay ? '중계 주소가 살아 있는지 확인하고 다시 눌러 주세요.'
+                       : '네트워크를 확인하고 다시 눌러 주세요.\n(기내·음영지역이면 정상입니다)';
     } else if (corsPdf.ok && corsPdf.isPdf) {
-        verdict = '✅ 직접 받아올 수 있습니다.';
+        verdict = relay ? '✅ 중계를 통해 받아올 수 있습니다.' : '✅ 직접 받아올 수 있습니다.';
         detail = '차트를 누르면 새 탭이 아니라 앱 안에서 열립니다.\n' +
                  '저장소에 차트 파일을 올릴 필요가 없습니다.';
     } else {
-        verdict = '❌ 차단되어 있습니다 (CORS).';
-        detail = '사이트에는 닿지만 앱이 파일을 직접 받을 수 없습니다.\n' +
-                 '차트를 저장소·ZIP 으로 넣거나, 중계 주소를 두어야 합니다.';
+        verdict = '❌ 받아올 수 없습니다 (CORS).';
+        detail = relay
+            ? '중계를 거쳤는데도 막힙니다. 중계가 CORS 헤더를 붙여 주는지,\n주소가 맞는지 확인해 주세요.'
+            : '사이트에는 닿지만 앱이 파일을 직접 받을 수 없습니다.\n' +
+              '중계 주소를 두거나, 차트를 저장소·ZIP 으로 넣어야 합니다.';
     }
 
     const line = (k, r) => {
@@ -307,6 +355,7 @@ async function chartConnCheck() {
         line('사이트 연결', reach) + '\n' +
         line('패키지 페이지', cors) + '\n' +
         line(`차트 PDF (AIRAC ${airac.id})`, corsPdf) + '\n\n' +
+        `중계: ${relay || '쓰지 않음'}\n` +
         `시험한 주소:\n${pdf}`);
 }
 
@@ -1700,7 +1749,7 @@ async function _fetchChartPdf(key, url) {
     const ac = typeof AbortController === 'function' ? new AbortController() : null;
     const timer = ac ? setTimeout(() => ac.abort(), 6000) : null;
     try {
-        const res = await fetch(url, { mode: 'cors', credentials: 'omit', signal: ac ? ac.signal : undefined });
+        const res = await fetch(_viaRelay(url), { mode: 'cors', credentials: 'omit', signal: ac ? ac.signal : undefined });
         if (!res || !res.ok) return null;
         const type = (res.headers.get('content-type') || '').toLowerCase();
         const blob = await res.blob();
@@ -2227,6 +2276,8 @@ function renderChartsScreen(container, footer, title) {
             <span data-act="chartConnCheck" style="cursor:pointer;padding:2px;">🔌 eAIP 연결 점검</span>
             <span style="opacity:0.4;">·</span>
             <span data-act="chartDiscover" style="cursor:pointer;padding:2px;">🔎 차트 목록 탐색</span>
+            <span style="opacity:0.4;">·</span>
+            <span data-act="chartRelaySet" style="cursor:pointer;padding:2px;color:${chartRelayUrl() ? '#66d9a5' : '#7a8a7a'};">📡 중계 ${chartRelayUrl() ? '켬' : '끔'}</span>
         </div>
     </div>`;
 
@@ -2355,6 +2406,7 @@ appRegister({
   chartRepoImport,
   chartConnCheck,
   chartDiscover,
+  chartRelaySet,
   clearFP,
   closeHelp,
   closePdfViewer,
