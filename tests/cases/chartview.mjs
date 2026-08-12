@@ -63,6 +63,7 @@ export async function run(page, t) {
   await runChartRepo(page, t);
   await runConnCheck(page, t);
   await runSwScope(page, t);
+  await runDiscover(page, t);
 }
 
 export async function runExternal(page, t) {
@@ -319,4 +320,51 @@ export async function runSwScope(page, t) {
   // 타일·위성처럼 일부러 캐시하는 교차 출처는 가드보다 위에 있어야 계속 동작한다
   const iTile = sw.indexOf('tile.openstreetmap.org');
   t.ok(iTile > 0 && iTile < iGuard, `지도 타일 캐시는 가드보다 위라 그대로 동작 (${iTile} < ${iGuard})`);
+}
+
+// 차트 목록 탐색 — eAIP 어디에 공항별 전체 차트 목록이 있는지 찾아낸다.
+// CORS 는 뚫렸지만(연결 점검 결과 HTTP 200) 앱 내장 목록은 22개 공항에 28장뿐이라
+// "무엇을 받을지" 를 모른다. 후보 주소를 두드려 PDF 링크를 담은 곳을 골라낸다.
+export async function runDiscover(page, t) {
+  await page.evaluate(() => { switchMode('CHARTS'); });
+  await page.waitForTimeout(250);
+  t.eq(await page.locator('[data-act="chartDiscover"]').count(), 1, 'CHART 화면에 목록 탐색 줄이 있다');
+
+  const AD2 = '<html><a href="../../pdf/AD/RKSI/(2-1)%20AD%20CHART.pdf">a</a>'
+            + '<a href="../../pdf/AD/RKSI/(2-18)%20OBSTACLE.pdf">b</a>'
+            + '<a href="../../pdf/AD/RKSI/(2-51)%20INSTR%20APCH.pdf">c</a></html>';
+
+  const stub = (hitUrlPart) => page.evaluate(({ part, body }) => {
+    window.__origFetch = window.__origFetch || window.fetch;
+    window.fetch = (u, o) => {
+      const s = String(u);
+      if (!s.includes('aim.koca.go.kr')) return window.__origFetch(u, o);
+      return Promise.resolve(part && s.includes(part)
+        ? new Response(body, { status: 200, headers: { 'content-type': 'text/html' } })
+        : new Response('not found', { status: 404 }));
+    };
+  }, { part: hitUrlPart, body: AD2 });
+
+  // ── 목록을 찾은 경우 ──
+  await stub('KR-AD-2.RKSI-en-GB.html');
+  page.evaluate(() => chartDiscover()).catch(() => {});
+  await page.waitForSelector('.ui-dlg', { timeout: 25000 });
+  let msg = await page.locator('.ui-dlg-msg').textContent();
+  t.ok(msg.includes('✅ 차트 목록을 찾았습니다'), '차트 PDF 링크를 담은 곳을 찾아낸다');
+  t.ok(msg.includes('PDF 3개가 실려 있습니다'), `찾은 PDF 수를 센다 (${(msg.match(/PDF \d+개가/) || [''])[0]})`);
+  t.ok(msg.includes('AD CHART.pdf'), '파일명을 예시로 보여준다(주소 디코딩 포함)');
+  t.ok(msg.includes('HTTP 404'), '응답 없는 후보도 함께 적어 다음 후보를 잡게 한다');
+  await page.locator('.ui-dlg-ok').click();
+  await page.waitForTimeout(200);
+
+  // ── 아무 데서도 못 찾은 경우 ──
+  await stub(null);
+  page.evaluate(() => chartDiscover()).catch(() => {});
+  await page.waitForSelector('.ui-dlg', { timeout: 25000 });
+  msg = await page.locator('.ui-dlg-msg').textContent();
+  t.ok(msg.includes('❌ 차트 목록을 담은 곳을 찾지 못했습니다'), '못 찾으면 못 찾았다고 한다');
+  await page.locator('.ui-dlg-ok').click();
+  await page.waitForTimeout(200);
+
+  await page.evaluate(() => { if (window.__origFetch) window.fetch = window.__origFetch; });
 }
