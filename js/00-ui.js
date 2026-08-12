@@ -13,6 +13,7 @@
 //   await uiConfirm('물음')            → true / false
 //   await uiPrompt('라벨', '기본값')   → 문자열 또는 null(취소)
 //   await uiPrompt('라벨', 0, {numeric:true})  → 모바일에서 숫자 키패드
+//   await uiConfirm('물음', {linkHref:'https://…'})  → 확인 버튼이 새 탭 링크
 // 호출부는 async 함수로 바꾸고 await 를 붙여야 한다.
 //
 // uiToast 는 대기 없이 잠깐 떴다 사라지는 알림이다. 결과를 알리기만 하고
@@ -36,8 +37,10 @@
   .ui-dlg-btns{display:flex;gap:8px;justify-content:flex-end;padding:0 14px 14px}
   .ui-dlg-btns button{min-width:76px;padding:9px 14px;border-radius:6px;cursor:pointer;
     font-size:14px;font-family:inherit;border:1px solid #4a5464;background:#2a313b;color:#e8eaed}
-  .ui-dlg-btns button.ui-dlg-ok{background:#2f6fd0;border-color:#2f6fd0;color:#fff}
-  .ui-dlg-btns button:active{filter:brightness(1.25)}
+  .ui-dlg-btns .ui-dlg-ok{background:#2f6fd0;border-color:#2f6fd0;color:#fff}
+  .ui-dlg-btns a.ui-dlg-ok{min-width:76px;padding:9px 14px;border-radius:6px;cursor:pointer;
+    font-size:14px;font-family:inherit;border:1px solid #2f6fd0;text-align:center}
+  .ui-dlg-btns button:active,.ui-dlg-btns a:active{filter:brightness(1.25)}
   .ui-toast-wrap{position:fixed;left:50%;bottom:38px;transform:translateX(-50%);
     z-index:100001;display:flex;flex-direction:column;gap:8px;align-items:center;
     pointer-events:none;max-width:92vw}
@@ -102,8 +105,19 @@ function _uiDialog(opts) {
       cancel.onclick = () => close(opts.kind === 'confirm' ? false : null);
       btns.appendChild(cancel);
     }
-    const ok = document.createElement('button');
-    ok.type = 'button';
+    // linkHref 가 있으면 확인 버튼을 <a target="_blank"> 로 만든다.
+    // await 뒤에 window.open() 을 부르면 사용자 제스처와 끊겨 팝업 차단에 걸리는데,
+    // 사용자가 직접 누르는 링크는 차단되지 않는다.
+    const ok = document.createElement(opts.linkHref ? 'a' : 'button');
+    if (opts.linkHref) {
+      ok.href = opts.linkHref;
+      ok.target = '_blank';
+      ok.rel = 'noopener noreferrer';
+      ok.style.textDecoration = 'none';
+      ok.style.display = 'inline-block';
+    } else {
+      ok.type = 'button';
+    }
     ok.className = 'ui-dlg-ok';
     ok.textContent = opts.okText || '확인';
     ok.onclick = () => close(opts.kind === 'confirm' ? true

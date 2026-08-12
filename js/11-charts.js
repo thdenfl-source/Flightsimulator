@@ -1456,13 +1456,60 @@ const _PDF_IS_IOS = /iP(ad|hone|od)/.test(navigator.userAgent || '') ||
                     (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 const _PDF_PX_BUDGET = _PDF_IS_IOS ? 16000000 : 60000000;
 
+// 저장되지 않은 차트를 앱 안에서 열어 보려는 시도.
+// 받아지면 IndexedDB 에 넣어 다음부터는 곧바로 앱 내 뷰어로 열린다.
+// eAIP 는 대개 CORS 를 막으므로 실패가 정상이다 — 그때는 null 을 돌려준다.
+async function _fetchChartPdf(key, url) {
+    if (!url || !/^https?:/i.test(url)) return null;
+    // 응답이 없는 망(기내·음영지역)에서 탭이 먹통이 되지 않게 시간을 끊는다.
+    const ac = typeof AbortController === 'function' ? new AbortController() : null;
+    const timer = ac ? setTimeout(() => ac.abort(), 6000) : null;
+    try {
+        const res = await fetch(url, { mode: 'cors', credentials: 'omit', signal: ac ? ac.signal : undefined });
+        if (!res || !res.ok) return null;
+        const type = (res.headers.get('content-type') || '').toLowerCase();
+        const blob = await res.blob();
+        // PDF 인지 확인 — HTML 오류 페이지를 PDF 로 넘기면 뷰어가 깨진다
+        const head = new Uint8Array(await blob.slice(0, 5).arrayBuffer());
+        const isPdf = type.includes('pdf') ||
+            (head[0] === 0x25 && head[1] === 0x50 && head[2] === 0x44 && head[3] === 0x46);
+        if (!isPdf || blob.size < 1000) return null;
+        try { await idbPut(key, blob); await refreshLocalPdfKeys(); } catch(e) { _swallow(e); }
+        return blob;
+    } catch(e) { _swallow(e); return null; }
+    finally { if (timer) clearTimeout(timer); }
+}
+
+// 앱 안에서 못 여는 차트 — 새 탭으로 나가기 전에 알리고 고르게 한다.
+// 확인 버튼은 <a target="_blank"> 라 팝업 차단에 걸리지 않는다.
+async function _offerExternalChart(icao, chartNum, url) {
+    if (!url) {
+        uiToast(`${icao} (${chartNum}) 차트를 열 수 없습니다 — 이 기기에 저장돼 있지 않습니다.`, 'warn');
+        return;
+    }
+    await uiConfirm(
+        `${icao} · (${chartNum}) 차트가 이 기기에 저장돼 있지 않습니다.\n\n` +
+        `앱을 벗어나 eAIP 공식 페이지가 새 탭에서 열립니다.\n` +
+        `앱 안에서 보려면 CHART 화면의 [가져오기]로 AIRAC 파일을 한 번 넣어 주세요.\n` +
+        `(차트 가져오기는 기기·브라우저마다 따로 저장됩니다)`,
+        { okText: '새 탭에서 열기', cancelText: '취소', linkHref: url });
+}
+
 async function openChart(icao, chartNum, url) {
     const key = `${icao}|${chartNum}`;
     // 로컬 저장된 PDF가 있으면 항상 앱 내장 '한 페이지' 뷰어로 연다.
     // (localPdfKeys 캐시가 갱신 안 됐을 수 있으므로 IndexedDB를 직접 확인)
     let blob = null;
     try { blob = await idbGet(key); } catch(e) { _swallow(e); }
-    if (!blob) { if (url) window.open(url, '_blank'); return; }
+    // 이 기기에 가져온 PDF 가 없으면 종전에는 곧장 window.open 으로 외부 eAIP
+    // 페이지를 새 탭에 띄웠다. 그러면 앱 화면이 통째로 사라져 "차트를 열었더니
+    // 전체화면으로 바뀐다"로 보인다. 차트 가져오기는 기기·브라우저마다 따로라
+    // (폰에서 가져와도 태블릿 브라우저에는 없다) 흔히 겪는다.
+    // 먼저 앱 안에서 열 수 있는지 시도하고, 안 되면 무슨 일이 벌어질지 알린다.
+    if (!blob) {
+        blob = await _fetchChartPdf(key, url);
+        if (!blob) { await _offerExternalChart(icao, chartNum, url); return; }
+    }
 
     _pdfChartKey = key;
     _pdfCalibration = _loadChartCalib(key);
@@ -1473,13 +1520,15 @@ async function openChart(icao, chartNum, url) {
     const ov = document.createElement('div');
     ov.id = 'pdfViewerOverlay';
     // CDU 창(#cdu-wrap) 내부에 표시 — 전체 화면이 필요하면 Full Screen 탭 사용
-    const host = document.getElementById('cdu-wrap') || document.body;
+    // 호스트는 언제나 CDU 창이다. 종전에는 없을 때 document.body 로 떨어져
+    // position:fixed;inset:0 으로 뷰포트 전체를 덮었는데, 그 경로는 화면을
+    // 통째로 가리는 사고밖에 만들지 않아 없앴다.
+    const host = document.getElementById('cdu-wrap');
+    if (!host) { uiToast('CDU 창을 찾지 못해 차트를 열 수 없습니다.', 'err'); return; }
     // CDU 안에 얹을 때는 inset:0(패널 전체)이 아니라 CDU 화면과 같은 사각형에 맞춘다.
     // 그래야 넓은 창(삼성 덱스 등)에서 차트가 패널을 통째로 덮지 않는다.
-    ov.dataset.host = host === document.body ? 'body' : 'cdu';
-    ov.style.cssText = (host === document.body
-        ? 'position:fixed;inset:0;z-index:9999;'
-        : 'position:absolute;left:0;top:0;width:100%;height:100%;z-index:60;')
+    ov.dataset.host = 'cdu';
+    ov.style.cssText = 'position:absolute;left:0;top:0;width:100%;height:100%;z-index:60;'
         + 'background:#1a1a1a;display:flex;flex-direction:column;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica Neue,Arial,sans-serif;';
     ov.innerHTML = `
         <div style="display:flex;align-items:center;gap:6px;padding:6px 10px;background:#000;border-bottom:1px solid #333;flex-shrink:0;">
@@ -1523,12 +1572,10 @@ async function openChart(icao, chartNum, url) {
         // 패널 자체가 커지거나 줄면(분할선 드래그·전체화면 전환·덱스 창 크기 변경)
         // 오버레이를 CDU 화면 사각형에 다시 맞춘다. 그 결과 viewArea 크기가
         // 바뀌면 위 관찰자가 재렌더를 이어받는다.
-        if (host !== document.body) {
-            _pdfHostResizeObs = new ResizeObserver(() => {
-                try { fitPdfOverlayToCdu(); } catch(e) { _swallow(e); }
-            });
-            _pdfHostResizeObs.observe(host);
-        }
+        _pdfHostResizeObs = new ResizeObserver(() => {
+            try { fitPdfOverlayToCdu(); } catch(e) { _swallow(e); }
+        });
+        _pdfHostResizeObs.observe(host);
     }
     try {
         pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
