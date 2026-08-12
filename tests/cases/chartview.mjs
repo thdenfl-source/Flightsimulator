@@ -61,6 +61,7 @@ export async function run(page, t) {
   await runExternal(page, t);
   await runRealPdf(page, t);
   await runChartRepo(page, t);
+  await runConnCheck(page, t);
 }
 
 export async function runExternal(page, t) {
@@ -250,5 +251,44 @@ export async function runChartRepo(page, t) {
   await page.locator('[data-act="closePdfViewer"]').click();
   await page.waitForTimeout(200);
 
+  await page.evaluate(() => { if (window.__origFetch) window.fetch = window.__origFetch; });
+}
+
+// eAIP 직접 연결 점검 — 판정표가 맞는가.
+// fetch 실패만으로는 "망이 안 됨"과 "CORS 차단"을 가릴 수 없어 두 번 물어본다.
+// 실제 브라우저에서 확인한 전제: CORS 차단이면 mode:'no-cors' 는 opaque 로 성공하고
+// mode:'cors' 만 던진다. 사이트가 아예 안 닿으면 둘 다 던진다.
+// 여기서는 그 전제(브라우저 몫)가 아니라 우리 판정(앱 몫)을 검사한다.
+export async function runConnCheck(page, t) {
+  await page.evaluate(() => { switchMode('CHARTS'); });
+  await page.waitForTimeout(250);
+  t.eq(await page.locator('[data-act="chartConnCheck"]').count(), 1, 'CHART 화면에 연결 점검 줄이 있다');
+
+  const cases = [
+    ['허용',      { noCors: true,  cors: true  }, '✅ 직접 받아올 수 있습니다'],
+    ['CORS 차단', { noCors: true,  cors: false }, '❌ 차단되어 있습니다'],
+    ['사이트 불통', { noCors: false, cors: false }, '판정 불가'],
+  ];
+  for (const [label, sim, expect] of cases) {
+    await page.evaluate((s) => {
+      window.__origFetch = window.__origFetch || window.fetch;
+      window.fetch = (u, o) => {
+        if (!String(u).includes('aim.koca.go.kr')) return window.__origFetch(u, o);
+        const noCors = o && o.mode === 'no-cors';
+        const ok = noCors ? s.noCors : s.cors;
+        // 실제 opaque 응답(status 0)은 만들 수 없어 200 으로 대신한다.
+        // 판정이 보는 것은 성공/실패뿐이라 결과는 같다.
+        return ok ? Promise.resolve(new Response('', { status: 200 }))
+                  : Promise.reject(new TypeError('Failed to fetch'));
+      };
+    }, sim);
+
+    page.evaluate(() => chartConnCheck()).catch(() => {});
+    await page.waitForSelector('.ui-dlg', { timeout: 15000 });
+    const msg = await page.locator('.ui-dlg-msg').textContent();
+    t.ok(msg.includes(expect), `${label} → "${expect}" 로 판정 (${msg.split('\n')[2] || ''})`);
+    await page.locator('.ui-dlg-ok').click();
+    await page.waitForTimeout(200);
+  }
   await page.evaluate(() => { if (window.__origFetch) window.fetch = window.__origFetch; });
 }

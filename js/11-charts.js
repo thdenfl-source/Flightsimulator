@@ -156,6 +156,61 @@ function buildChartPdfUrl(airacStart, icao, num, name) {
     return `https://aim.koca.go.kr/eaipPub/Package/${airacStart}-AIRAC/pdf/AD/${icao}/(${num})%20${name.replace(/ /g, '%20')}.pdf`;
 }
 
+// ── eAIP 직접 연결 점검 ────────────────────────────────────────────
+// 앱은 차트마다의 공식 주소를 이미 계산할 줄 안다(buildChartPdfUrl). 남은 관문은
+// CORS 하나 — aim.koca.go.kr 이 우리 주소에서 오는 요청을 허용해야 앱 안에서 열린다.
+// 허용되면 저장소에 파일을 올릴 필요가 없고, 막히면 중계가 필요하다.
+// PC 개발자도구 없이 기기에서 바로 확인하라고 넣었다.
+//
+// 판정을 두 갈래로 나눈다. fetch 실패만으로는 "망이 안 됨"과 "CORS 차단"을
+//가릴 수 없어서, mode:'no-cors' 로 닿기는 하는지 먼저 본다.
+//   no-cors 성공 + cors 실패 → CORS 차단(중계 필요)
+//   no-cors 실패            → 네트워크·사이트 문제(다시 시도)
+async function chartConnCheck() {
+    const airac = getSafeAiracInfo();
+    const pkg = 'https://aim.koca.go.kr/eaipPub/Package/history-en-GB.html';
+    const pdf = buildChartPdfUrl(airac.startUrl, 'RKSI', '2-1', 'AD CHART');
+
+    const probe = async (url, mode) => {
+        const ac = typeof AbortController === 'function' ? new AbortController() : null;
+        const timer = ac ? setTimeout(() => ac.abort(), 8000) : null;
+        try {
+            const r = await fetch(url, { mode, credentials: 'omit', signal: ac ? ac.signal : undefined });
+            return { ok: true, status: r.status };
+        } catch (e) {
+            return { ok: false, msg: e.name === 'AbortError' ? '응답 없음(8초)' : e.message };
+        } finally { if (timer) clearTimeout(timer); }
+    };
+
+    uiToast('eAIP 연결을 확인하는 중…', null, 8000);
+    const reach = await probe(pkg, 'no-cors');
+    const cors  = await probe(pkg, 'cors');
+    const corsPdf = await probe(pdf, 'cors');
+
+    let verdict, detail;
+    if (!reach.ok) {
+        verdict = '판정 불가 — 사이트에 닿지 못했습니다.';
+        detail = '네트워크를 확인하고 다시 눌러 주세요.\n(기내·음영지역이면 정상입니다)';
+    } else if (corsPdf.ok || cors.ok) {
+        verdict = '✅ 직접 받아올 수 있습니다.';
+        detail = '차트를 누르면 새 탭이 아니라 앱 안에서 열립니다.\n' +
+                 '저장소에 차트 파일을 올릴 필요가 없습니다.';
+    } else {
+        verdict = '❌ 차단되어 있습니다 (CORS).';
+        detail = '사이트에는 닿지만 앱이 파일을 직접 받을 수 없습니다.\n' +
+                 '중계 주소를 두거나, 차트를 저장소·ZIP 으로 넣어야 합니다.';
+    }
+
+    const line = (k, r) => `  ${k}: ` + (r.ok ? '성공' + (r.status ? ' (HTTP ' + r.status + ')' : '') : '실패 — ' + r.msg);
+    await uiAlert(
+        `eAIP 직접 연결 점검\n\n${verdict}\n${detail}\n\n` +
+        `— 자세히 —\n` +
+        line('사이트 연결', reach) + '\n' +
+        line('패키지 페이지', cors) + '\n' +
+        line(`차트 PDF (AIRAC ${airac.id})`, corsPdf) + '\n\n' +
+        `시험한 주소:\n${pdf}`);
+}
+
 // --- IndexedDB PDF Storage ---
 let _idb = null;
 function openIDB() {
@@ -2069,6 +2124,9 @@ function renderChartsScreen(container, footer, title) {
             ${impBtn('onclick="triggerFolderImport()"', '📁', '폴더', '메모리 부족시', '#ffb74d', '#1a140a')}
             ${impBtn('data-act="chartRepoImport"', '☁', '저장소', '기기 바꿨을 때', '#66d9a5', '#0a1a14')}
         </div>
+        <div data-act="chartConnCheck" style="margin-top:4px;text-align:center;color:#7a8a7a;font-size:7px;cursor:pointer;padding:2px;">
+            🔌 eAIP 직접 연결 점검 — 차트를 안 올리고 바로 받을 수 있는지 확인
+        </div>
     </div>`;
 
     // ZIP 가져오기 진행 바
@@ -2194,6 +2252,7 @@ appRegister({
   addStarWps,
   cduFullScreen,
   chartRepoImport,
+  chartConnCheck,
   clearFP,
   closeHelp,
   closePdfViewer,
