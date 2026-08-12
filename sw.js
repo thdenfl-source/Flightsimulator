@@ -1,9 +1,10 @@
 // VFR Flight Sim — Service Worker
 // 버전을 올리면 캐시가 갱신됩니다
-const CACHE = 'vfr-flight-v331';
+const CACHE = 'vfr-flight-v332';
 const CORE  = [
   './index.html',
   './manifest.json',
+  './charts/index.json',
   './icon.png',
   './icon-512.png',
   // 외부 라이브러리 사본 — CDN 이 안 받아지면 앱이 통째로 죽으므로 직접 들고 있다
