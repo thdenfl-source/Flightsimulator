@@ -412,6 +412,12 @@ html, body {
   background: #001a00; border-color: #00cc44; color: #00ee66;
   box-shadow: 0 0 6px rgba(0,200,68,0.45);
 }
+/* GSPD 작동 중 — 조향 지령이 먹지 않는 상태. 켜짐 색은 유지하되 빗금으로 표시 */
+.obs-btn.ap-inh {
+  opacity: 0.45; border-style: dashed; box-shadow: none;
+  background-image: repeating-linear-gradient(135deg,
+    rgba(255,255,255,0.12) 0 3px, transparent 3px 6px);
+}
 
 /* ── Map area ── */
 #map-wrap {
@@ -1571,6 +1577,10 @@ body.night-mode::after {
       <h3>4. PFD · HOVER PAGE</h3>
       <ul>
         <li><b>NAV SRC</b>: <b>FMS / NAV1 / NAV2</b>. NAV1·NAV2는 CDU에서 튜닝한 VOR을 따라갑니다.</li>
+        <li><b>GSPD 작동 중에는 NAV·OBS 가 조향하지 못합니다.</b> GSPD 는 요/롤 축을 가져가
+            (요 조작은 <b>ANTI-TORQUE PEDAL</b> 전용) 오토파일럿이 뱅크를 지령해도 기수가 돌지 않습니다.
+            이때 NAV·OBS 버튼은 <b>빗금으로 흐리게</b> 표시되고 FMA 는 <b>GS·NAV대기</b>로 바뀝니다.
+            GSPD 를 끄면 그대로 이어서 조향합니다(설정은 유지).</li>
         <li><b>NAV 오토파일럿</b>: 코스선을 선택한 각도로 인터셉트한 뒤 롤아웃해 추종합니다.
             NAV 옆 <b>45°</b> 버튼으로 인터셉트 각도를 <b>30 / 45 / 60°</b> 중에서 고릅니다.
             그 각으로 잡기에 표적이 너무 가까우면 <b>표적으로 직행</b>하며, 이때 FMA에 <b>NAV DIR</b>로 표시됩니다.
@@ -2316,6 +2326,19 @@ const clampFwd = v => Math.max(REF_FWD_MIN, Math.min(REF_FWD_MAX, v));
 
 function hoverEligible() { return S.spd < 80; }
 
+// GSPD 가 켜지면 뱅크가 기수를 바꾸지 않으므로(요는 ANTI-TORQUE PEDAL 전용)
+// NAV·OBS 오토파일럿은 지령을 내려도 기체를 돌리지 못한다. 버튼은 켜진 채
+// 두되(GSPD 를 끄면 그대로 이어서 동작) 조향 불가 상태임을 눈에 보이게 한다.
+function updateApInhibit() {
+  const inh = !!(typeof gspdOn !== 'undefined' && (gspdOn || gspdCoasting));
+  [['nav-ap-btn', 'NAV'], ['obs-btn', 'OBS'], ['icpt-btn', '인터셉트 각도']].forEach(([id, nm]) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.classList.toggle('ap-inh', inh);
+    el.title = inh ? `${nm} — GSPD 작동 중에는 조향되지 않습니다 (요 조작은 ANTI-TORQUE PEDAL)` : '';
+  });
+}
+
 function updateHoverBtns() {
   const hb  = document.getElementById('hover-btn');
   const gb  = document.getElementById('gspd-btn');
@@ -2330,6 +2353,7 @@ function updateHoverBtns() {
   // GSPD: always enabled (mode-independent of HOVER PAGE)
   gb.disabled = false;
   gb.classList.toggle('on', gspdOn);
+  updateApInhibit();
   // CRHT: always enabled
   if (cb) cb.classList.toggle('on', crhtOn);
   // Trim cells: always active — F/A adjusts speed in normal flight, L/R applies bank roll
@@ -2403,6 +2427,7 @@ function toggleGspd() {
     gspdRefFwd = null;
   }
   updateHoverBtns();
+  try { updateApInhibit(); } catch(e) { _swallow(e); }
 }
 
 function toggleAltHold() {
@@ -2603,6 +2628,7 @@ function toggleObs() {
   obsOn = !obsOn;
   document.getElementById('obs-btn').classList.toggle('on', obsOn);
   updateCrsButtons();
+  try { updateApInhibit(); } catch(e) { _swallow(e); }
 }
 
 function toggleNavAp() {
@@ -2614,6 +2640,7 @@ function toggleNavAp() {
     selHdg = ((Math.round(S.hdg) + 359) % 360) + 1;   // 현재 헤딩 유지로 복귀
     hdgSelOn = true; rollApOn = true;
   }
+  try { updateApInhibit(); } catch(e) { _swallow(e); }
 }
 
 // 선회 선행거리(NM) — 현재 레그 코스(curCrs)에서 다음 레그 코스(nextCrs)로
@@ -3377,7 +3404,11 @@ function drawFMA(x, y, w) {
     // GSPD engaged: both yaw/roll (mid) and pitch (right) are driven by
     // body-frame ground speed; capture GS on both axes.
     left   = crhtOn ? 'CRHT' : 'ALT'; leftOn = true;
-    mid    = 'GS'; midOn  = true;
+    // GSPD 는 요/롤 축을 가져간다. NAV·HDG SEL 이 켜져 있어도 조향하지 못하므로
+    // 켜진 채 방치하지 말고 "대기"임을 분명히 적는다.
+    // (버튼은 초록인데 기체가 안 도는 상황을 화면만 보고 알 수 있어야 한다)
+    mid    = navApOn ? 'GS/NAV' : (hdgSelOn ? 'GS/HDG' : 'GS');
+    midOn  = true;
     right  = 'GS'; rightOn = true;
   } else {
     left   = crhtOn ? 'CRHT' : 'ALT';
@@ -3391,6 +3422,9 @@ function drawFMA(x, y, w) {
 
   const modeColor = (lbl, on) => {
     if (!on) return '#3a3a3a';
+    // GS/NAV · GS/HDG = GSPD 가 축을 잡고 있어 NAV·HDG 가 조향하지 못하는 대기 상태.
+    // 초록(정상 작동)과 구분되게 호박색으로 표시한다.
+    if (lbl.indexOf('/') >= 0) return '#ffb74d';
     return '#00ff88';  // all active AFCS modes in green
   };
 
