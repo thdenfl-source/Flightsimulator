@@ -166,6 +166,9 @@ function buildChartPdfUrl(airacStart, icao, num, name) {
 // 그러면 저장소에 차트를 올릴 필요도, AIRAC 주기마다 다시 넣을 필요도 없다.
 //
 // 비워 두면 아무 일도 하지 않는다 — 종전과 똑같이 동작한다.
+// 차트 한 장을 받는 데 허용하는 시간. 중계를 거치면 왕복이 한 번 늘고,
+// 접근절차도는 수 MB 짜리도 있다. 8초로는 모자라 "응답 없음" 으로 끊겼다.
+const CHART_FETCH_TIMEOUT = 25000;
 const CHART_RELAY_KEY = 'chartRelayUrl';
 function chartRelayUrl() {
     try { return (localStorage.getItem(CHART_RELAY_KEY) || '').trim(); } catch (e) { return ''; }
@@ -195,6 +198,110 @@ async function chartRelaySet() {
     renderCduContent();
     uiToast(url ? '중계 주소를 저장했습니다. [연결 점검]으로 확인해 보세요.'
                 : '중계 주소를 지웠습니다.', null, 3500);
+}
+
+// ── 공식 사이트에서 차트 받기 ──────────────────────────────────────
+// 목록 탐색으로 알아낸 것: 디렉터리 목록(/pdf/AD/RKSI/)은 403 으로 막혀 있고,
+// 공항별 AD 2 문서(html/eAIP/KR-AD-2.<ICAO>-en-GB.html)에 그 공항 차트 PDF
+// 링크가 다 들어 있다. 그 문서를 읽어 링크를 뽑으면 무엇을 받을지 알 수 있다.
+//
+// 앱 내장 목록은 22개 공항에 28장뿐이라 실제의 일부만 담고 있었다. 이제는
+// 공식 문서가 곧 목록이므로, AIRAC 이 바뀌어도 그때의 목록을 그대로 따라간다.
+function _eaipAd2Url(icao, airacStart) {
+    return `https://aim.koca.go.kr/eaipPub/Package/${airacStart}-AIRAC/html/eAIP/KR-AD-2.${icao}-en-GB.html`;
+}
+
+// AD 2 문서에서 그 공항의 차트 PDF 링크를 뽑는다.
+async function _eaipChartLinks(icao, airacStart) {
+    const doc = _eaipAd2Url(icao, airacStart);
+    const ac = typeof AbortController === 'function' ? new AbortController() : null;
+    const timer = ac ? setTimeout(() => ac.abort(), 20000) : null;
+    try {
+        const r = await fetch(_viaRelay(doc), { credentials: 'omit', signal: ac ? ac.signal : undefined });
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const html = await r.text();
+        const out = new Map();
+        for (const m of html.matchAll(/href\s*=\s*["']([^"']+\.pdf)["']/gi)) {
+            let abs;
+            try { abs = new URL(m[1], doc).href; } catch (e) { continue; }
+            if (!/\/pdf\/AD\//i.test(abs)) continue;          // 차트가 아닌 첨부는 거른다
+            let meta = null;
+            try { meta = _parseChartPath(decodeURIComponent(new URL(abs).pathname), icao); }
+            catch (e) { _swallow(e); }
+            if (!meta || meta.icao !== icao) continue;
+            out.set(`${meta.icao}|${meta.num}`, { url: abs, ...meta });   // 중복 제거
+        }
+        return [...out.values()];
+    } finally { if (timer) clearTimeout(timer); }
+}
+
+// 공식 사이트에서 차트를 받아 이 기기에 저장한다.
+// icaos 가 비면 앱이 아는 공항 전부.
+async function chartFetchFromEaip(icaos) {
+    if (importProgress) return;
+    if (!chartRelayUrl()) {
+        const go = await uiConfirm(
+            '공식 사이트(eAIP)는 앱이 파일을 직접 받는 것을 막습니다(CORS).\n\n' +
+            '[📡 중계] 에 주소를 넣으면 받아올 수 있습니다.\n' +
+            '만드는 법은 저장소의 charts/README.md 에 적어 두었습니다.\n\n' +
+            '중계 없이 그대로 시도해 볼까요? (대개 실패합니다)',
+            { okText: '그래도 시도', cancelText: '취소' });
+        if (!go) return;
+    }
+    const airac = getSafeAiracInfo();
+    const list = (icaos && icaos.length) ? icaos : chartAirportList.map(a => a.icao);
+
+    if (!await uiConfirm(
+        `공식 사이트에서 차트를 받습니다.\n\n` +
+        `공항 ${list.length}곳 · AIRAC ${airac.id}\n` +
+        `${list.join(' ')}\n\n` +
+        `공항마다 목록을 읽고 차트를 한 장씩 내려받습니다.\n` +
+        `수백 장이면 몇 분 걸리고 데이터도 그만큼 씁니다.\n` +
+        `받은 차트는 이 기기에 저장되어 다음부터는 바로 열립니다.`,
+        { okText: '받기', cancelText: '취소' })) return;
+
+    // ① 공항별 목록 읽기
+    importProgress = { phase: 'reading', done: 0, total: list.length, found: 0, skipped: 0, error: null };
+    renderCduContent();
+    const entries = [];
+    const failed = [];
+    for (const icao of list) {
+        try {
+            const links = await _eaipChartLinks(icao, airac.startUrl);
+            if (!links.length) failed.push(`${icao} — 목록에 차트가 없습니다`);
+            links.forEach(l => entries.push({
+                getBuffer: async () => {
+                    const r = await fetch(_viaRelay(l.url), { credentials: 'omit' });
+                    if (!r.ok) throw new Error('HTTP ' + r.status);
+                    return r.arrayBuffer();
+                },
+                icao: l.icao, num: l.num, chartName: l.chartName, cat: l.cat,
+            }));
+        } catch (e) {
+            failed.push(`${icao} — ${e.name === 'AbortError' ? '응답 없음' : e.message}`);
+        }
+        importProgress.done++;
+        renderCduContent();
+    }
+
+    if (!entries.length) {
+        importProgress = null;
+        renderCduContent();
+        await uiAlert('받을 차트를 찾지 못했습니다.\n\n' +
+            (failed.length ? failed.slice(0, 8).join('\n') : '[🔎 차트 목록 탐색] 으로 주소를 다시 확인해 주세요.'));
+        return;
+    }
+
+    // ② 실제 내려받기 — 저장·목록 등록은 기존 경로를 그대로 쓴다
+    await _saveChartEntries(entries);
+    if (failed.length) uiToast(`건너뛴 공항 ${failed.length}곳: ${failed[0]}`, 'warn', 5000);
+    await refreshLocalPdfKeys();
+    renderCduContent();
+}
+
+// 한 공항만 받기 — 목록에서 공항 줄의 ⤓ 버튼
+async function chartFetchAirport(icao) {
+    await chartFetchFromEaip([icao]);
 }
 
 // ── eAIP 차트 목록 탐색 ────────────────────────────────────────────
@@ -236,7 +343,7 @@ async function chartDiscover() {
 
     const one = async (c) => {
         const ac = typeof AbortController === 'function' ? new AbortController() : null;
-        const timer = ac ? setTimeout(() => ac.abort(), 8000) : null;
+        const timer = ac ? setTimeout(() => ac.abort(), 15000) : null;
         try {
             const r = await fetch(_viaRelay(c.url), { credentials: 'omit', signal: ac ? ac.signal : undefined });
             const type = (r.headers.get('content-type') || '').split(';')[0];
@@ -293,7 +400,8 @@ async function chartConnCheck() {
 
     const probe = async (url, mode, wantPdf) => {
         const ac = typeof AbortController === 'function' ? new AbortController() : null;
-        const timer = ac ? setTimeout(() => ac.abort(), 8000) : null;
+        // PDF 는 수 MB 라 HTML 보다 오래 걸린다 — 8초로는 중계를 거칠 때 모자랐다
+        const timer = ac ? setTimeout(() => ac.abort(), wantPdf ? CHART_FETCH_TIMEOUT : 10000) : null;
         try {
             const r = await fetch(_viaRelay(url), { mode, credentials: 'omit', signal: ac ? ac.signal : undefined });
             const out = { ok: r.ok, status: r.status, type: (r.headers.get('content-type') || '').split(';')[0] };
@@ -1746,8 +1854,9 @@ const _PDF_PX_BUDGET = _PDF_IS_IOS ? 16000000 : 60000000;
 async function _fetchChartPdf(key, url) {
     if (!url || !/^https?:/i.test(url)) return null;
     // 응답이 없는 망(기내·음영지역)에서 탭이 먹통이 되지 않게 시간을 끊는다.
+    // 중계를 거치면 한 번 더 왕복하고 차트 PDF 는 수 MB 라 넉넉히 준다.
     const ac = typeof AbortController === 'function' ? new AbortController() : null;
-    const timer = ac ? setTimeout(() => ac.abort(), 6000) : null;
+    const timer = ac ? setTimeout(() => ac.abort(), CHART_FETCH_TIMEOUT) : null;
     try {
         const res = await fetch(_viaRelay(url), { mode: 'cors', credentials: 'omit', signal: ac ? ac.signal : undefined });
         if (!res || !res.ok) return null;
@@ -2270,14 +2379,16 @@ function renderChartsScreen(container, footer, title) {
             ${impBtn('data-act="openAimPackage"', '🌐', 'AIM eAIP', '공식 배포처', '#4caf50', '#0a2a0a')}
             ${impBtn('onclick="triggerZipImport()"', '📂', 'ZIP', 'AIRAC 묶음', '#29b6f6', '#0a1a2a')}
             ${impBtn('onclick="triggerFolderImport()"', '📁', '폴더', '메모리 부족시', '#ffb74d', '#1a140a')}
-            ${impBtn('data-act="chartRepoImport"', '☁', '저장소', '기기 바꿨을 때', '#66d9a5', '#0a1a14')}
+            ${impBtn('data-act="chartFetchFromEaip"', '⤓', '전체 받기', '공식 사이트에서', '#66d9a5', '#0a1a14')}
         </div>
-        <div style="margin-top:4px;display:flex;gap:6px;justify-content:center;color:#7a8a7a;font-size:7px;">
-            <span data-act="chartConnCheck" style="cursor:pointer;padding:2px;">🔌 eAIP 연결 점검</span>
-            <span style="opacity:0.4;">·</span>
-            <span data-act="chartDiscover" style="cursor:pointer;padding:2px;">🔎 차트 목록 탐색</span>
-            <span style="opacity:0.4;">·</span>
+        <div style="margin-top:4px;display:flex;flex-wrap:wrap;gap:2px 6px;justify-content:center;color:#7a8a7a;font-size:7px;">
             <span data-act="chartRelaySet" style="cursor:pointer;padding:2px;color:${chartRelayUrl() ? '#66d9a5' : '#7a8a7a'};">📡 중계 ${chartRelayUrl() ? '켬' : '끔'}</span>
+            <span style="opacity:0.4;">·</span>
+            <span data-act="chartConnCheck" style="cursor:pointer;padding:2px;">🔌 연결 점검</span>
+            <span style="opacity:0.4;">·</span>
+            <span data-act="chartDiscover" style="cursor:pointer;padding:2px;">🔎 목록 탐색</span>
+            <span style="opacity:0.4;">·</span>
+            <span data-act="chartRepoImport" style="cursor:pointer;padding:2px;">☁ 저장소에서</span>
         </div>
     </div>`;
 
@@ -2331,6 +2442,7 @@ function renderChartsScreen(container, footer, title) {
                         <div style="color:#fff;font-size:11px;font-weight:bold;">${headTitle}</div>
                         <div style="color:#666;font-size:8px;">${grp.charts.length}개</div>
                     </div>
+                    ${SECTION_GROUPS[icao] ? '' : `<div onclick="event.stopPropagation(); chartFetchAirport('${icao}')" title="이 공항 차트를 공식 사이트에서 받습니다" style="color:#66d9a5;font-size:9px;cursor:pointer;padding:2px 5px;border:1px solid #66d9a5;border-radius:3px;white-space:nowrap;">⤓ 받기</div>`}
                     <div onclick="event.stopPropagation(); deleteAirportCharts('${icao}')" style="color:#f44336;font-size:9px;cursor:pointer;padding:2px 5px;border:1px solid #f44336;border-radius:3px;white-space:nowrap;">삭제</div>
                 </div>`;
             if (isOpen) {
@@ -2407,6 +2519,8 @@ appRegister({
   chartConnCheck,
   chartDiscover,
   chartRelaySet,
+  chartFetchFromEaip,
+  chartFetchAirport,
   clearFP,
   closeHelp,
   closePdfViewer,
