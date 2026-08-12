@@ -2040,29 +2040,34 @@ function renderChartsScreen(container, footer, title) {
 
     let html = `<div style="padding:0 2px;height:100%;display:flex;flex-direction:column;overflow:hidden;">`;
 
-    // AIRAC 헤더 + AIM eAIP / ZIP 버튼
+    // AIRAC 헤더 + 가져오기 버튼
+    // 버튼을 한 줄에 다 넣으면 CDU 폭(354px)에서 좌측 정보 칸이 눌려
+    // "패키지 목록 ↗" 이 한 글자씩 세로로 쪼개지고, 그 탓에 상자가 길어져
+    // 초록 여백만 커졌다. 정보 줄과 버튼 줄을 갈라 각자 제 폭을 쓰게 한다.
+    const impBtn = (act, icon, label, hint, color, bg) => `
+        <div ${importProgress ? '' : act} title="${hint}" style="background:${importProgress ? '#1a1a1a' : bg};color:${importProgress ? '#444' : color};border:1px solid ${importProgress ? '#333' : color};border-radius:4px;padding:4px 2px;cursor:${importProgress ? 'default' : 'pointer'};text-align:center;line-height:1.2;overflow:hidden;">
+            <div style="font-size:13px;">${importProgress ? '⏳' : icon}</div>
+            <div style="font-size:8px;font-weight:bold;white-space:nowrap;">${label}</div>
+            <div style="font-size:6px;opacity:0.65;white-space:nowrap;">${hint}</div>
+        </div>`;
     html += `
-    <div style="display:flex;align-items:center;gap:6px;background:#1a2a1a;border:1px solid #4caf50;border-radius:5px;padding:6px 8px;margin-bottom:5px;">
-        <div style="flex:1;min-width:0;">
-            <div style="color:#4caf50;font-size:7px;font-weight:bold;letter-spacing:1px;">AIRAC ${airac.id}</div>
-            <div style="color:#aaa;font-size:8px;">${airac.start} ~ ${airac.end}</div>
-            <a href="https://aim.koca.go.kr/eaipPub/Package/history-en-GB.html?language=ko_KR" target="_blank" style="color:#4caf50;font-size:7px;text-decoration:none;">패키지 목록 ↗</a>
+    <div style="background:#1a2a1a;border:1px solid #4caf50;border-radius:5px;padding:5px 6px;margin-bottom:5px;">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px;">
+            <div style="flex:1;min-width:0;">
+                <div style="color:#4caf50;font-size:8px;font-weight:bold;letter-spacing:1px;white-space:nowrap;">AIRAC ${airac.id}</div>
+                <div style="color:#aaa;font-size:8px;white-space:nowrap;">${airac.start} ~ ${airac.end}</div>
+            </div>
+            <a href="https://aim.koca.go.kr/eaipPub/Package/history-en-GB.html?language=ko_KR" target="_blank" style="color:#4caf50;font-size:7px;text-decoration:none;white-space:nowrap;">패키지 목록 ↗</a>
+            <div style="text-align:center;flex-shrink:0;">
+                <div style="color:${daysColor};font-size:17px;font-weight:bold;line-height:1;">${airac.daysLeft}</div>
+                <div style="color:#666;font-size:6px;">days left</div>
+            </div>
         </div>
-        <div style="text-align:center;">
-            <div style="color:${daysColor};font-size:18px;font-weight:bold;line-height:1;">${airac.daysLeft}</div>
-            <div style="color:#666;font-size:7px;">days left</div>
-        </div>
-        <div data-act="openAimPackage" style="background:#0a2a0a;color:#4caf50;border:1px solid #4caf50;border-radius:5px;padding:8px 10px;font-size:10px;font-weight:bold;cursor:pointer;white-space:nowrap;text-align:center;min-width:52px;">
-            🌐<br><span style="font-size:8px;">AIM eAIP</span>
-        </div>
-        <div onclick="${importProgress ? '' : 'triggerZipImport()'}" style="background:${importProgress ? '#1a1a1a' : '#0a1a2a'};color:${importProgress ? '#444' : '#29b6f6'};border:1px solid ${importProgress ? '#333' : '#29b6f6'};border-radius:5px;padding:8px 10px;font-size:10px;font-weight:bold;cursor:${importProgress ? 'default' : 'pointer'};white-space:nowrap;text-align:center;min-width:52px;">
-            ${importProgress ? '⏳' : '📂'}<br><span style="font-size:8px;">ZIP 가져오기</span>
-        </div>
-        <div onclick="${importProgress ? '' : 'triggerFolderImport()'}" style="background:${importProgress ? '#1a1a1a' : '#1a140a'};color:${importProgress ? '#444' : '#ffb74d'};border:1px solid ${importProgress ? '#333' : '#ffb74d'};border-radius:5px;padding:3px 10px;font-size:10px;font-weight:bold;cursor:${importProgress ? 'default' : 'pointer'};white-space:nowrap;text-align:center;min-width:52px;line-height:1.25;">
-            ${importProgress ? '⏳' : '📁'}<br><span style="font-size:8px;">폴더 가져오기</span><br><span style="font-size:7px;opacity:0.7;">메모리 부족 오류시</span>
-        </div>
-        <div ${importProgress ? '' : 'data-act="chartRepoImport"'} style="background:${importProgress ? '#1a1a1a' : '#0a1a14'};color:${importProgress ? '#444' : '#66d9a5'};border:1px solid ${importProgress ? '#333' : '#66d9a5'};border-radius:5px;padding:3px 10px;font-size:10px;font-weight:bold;cursor:${importProgress ? 'default' : 'pointer'};white-space:nowrap;text-align:center;min-width:52px;line-height:1.25;" title="저장소(charts/index.json)에 올려 둔 차트를 이 기기로 가져옵니다">
-            ${importProgress ? '⏳' : '☁'}<br><span style="font-size:8px;">저장소</span><br><span style="font-size:7px;opacity:0.7;">기기 바꿨을 때</span>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:4px;">
+            ${impBtn('data-act="openAimPackage"', '🌐', 'AIM eAIP', '공식 배포처', '#4caf50', '#0a2a0a')}
+            ${impBtn('onclick="triggerZipImport()"', '📂', 'ZIP', 'AIRAC 묶음', '#29b6f6', '#0a1a2a')}
+            ${impBtn('onclick="triggerFolderImport()"', '📁', '폴더', '메모리 부족시', '#ffb74d', '#1a140a')}
+            ${impBtn('data-act="chartRepoImport"', '☁', '저장소', '기기 바꿨을 때', '#66d9a5', '#0a1a14')}
         </div>
     </div>`;
 
