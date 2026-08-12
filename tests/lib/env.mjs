@@ -34,6 +34,12 @@ export function buildEnv() {
   fs.copyFileSync(path.join(leaflet, 'leaflet.js'), path.join(dir, 'leaflet.js'));
   fs.copyFileSync(path.join(leaflet, 'leaflet.css'), path.join(dir, 'leaflet.css'));
 
+  // 앱 코드가 js/*.js 로 분리돼 있으므로 함께 복사한다
+  const jsDir = path.join(ROOT, 'js');
+  if (fs.existsSync(jsDir)) {
+    fs.cpSync(jsDir, path.join(dir, 'js'), { recursive: true });
+  }
+
   let html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
   html = html.replace(/<link[^>]*https:\/\/[^>]*>/g, '');
   html = html.replace(/<script[^>]*src="https:\/\/[^"]*"[^>]*>\s*<\/script>/g, '');
