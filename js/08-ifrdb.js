@@ -326,12 +326,13 @@ function addSidWps() {
 }
 
 // 사용자 SID 삭제
-function deleteUserSid() {
+async function deleteUserSid() {
   const icao = document.getElementById('dep-icao').value;
   const sel  = document.getElementById('dep-sid');
   const sid  = (sel && sel.value !== '') ? allSids(icao)[parseInt(sel.value)] : null;
-  if (!sid || sid._src !== 'USER') { alert('사용자가 만든 절차만 삭제할 수 있습니다.'); return; }
-  if (!confirm(`사용자 절차 "${sid.name}" 을(를) 삭제할까요?`)) return;
+  if (!sid || sid._src !== 'USER') { uiAlert('사용자가 만든 절차만 삭제할 수 있습니다.'); return; }
+  if (!await uiConfirm(`사용자 절차 "${sid.name}" 을(를) 삭제할까요?`,
+        { okText: '삭제', cancelText: '취소' })) return;
   const all = customSids();
   (all[icao] || []).splice(sid._ui, 1);
   saveCustomSids(all);

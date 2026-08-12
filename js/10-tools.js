@@ -48,22 +48,23 @@ window.addEventListener('pagehide', () => { if (_trkRec) _trkSaveBackup(); });
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden' && _trkRec) _trkSaveBackup();
 });
-function _trkStop() {
+async function _trkStop() {
   _trkRec = false;
   if (_trkTimer) { clearInterval(_trkTimer); _trkTimer = null; }
   const btn = document.getElementById('rec-btn');
   btn.classList.remove('active'); btn.textContent = 'REC';
   _trkClearBackup();   // 정상 종료 → 백업 불필요
-  if (_trkPts.length < 2) { alert('기록된 항적이 없습니다 (2점 미만).'); return; }
+  if (_trkPts.length < 2) { uiAlert('기록된 항적이 없습니다 (2점 미만).'); return; }
   // 로그북(IndexedDB)에 자동 저장 → 나중에 FDR 패널에서 내보내기/삭제 가능
   const rec = {
     id: Date.now(), t0: _trkPts[0].t, t1: _trkPts[_trkPts.length-1].t,
     n: _trkPts.length, distNM: _logTrackDist(_trkPts), pts: _trkPts
   };
   _logPut(rec).catch(e => console.warn('로그북 저장 실패:', e.message));
-  const asGpx = confirm(
+  const asGpx = await uiConfirm(
     `항적 ${_trkPts.length}점 · 로그북 저장 완료.\n\n` +
-    `확인 = 지금 GPX로 내보내기\n취소 = 나중에 (FDR 패널 → 로그북에서 GPX/KML 내보내기)`);
+    `나중에 FDR 패널 → 로그북에서 GPX/KML로 다시 내보낼 수 있습니다.`,
+    { okText: '지금 GPX 저장', cancelText: '나중에' });
   if (asGpx) {
     const d = new Date(_trkPts[0].t);
     const p2 = n => String(n).padStart(2, '0');
@@ -84,16 +85,16 @@ function _trkToKml(trkPts = _trkPts) {
   return `<?xml version="1.0" encoding="UTF-8"?>\n<kml xmlns="http://www.opengis.net/kml/2.2" xmlns:gx="http://www.google.com/kml/ext/2.2">\n<Document><Placemark><name>Flight Track</name>\n<gx:Track>\n${whens}\n${coords}\n</gx:Track>\n</Placemark></Document>\n</kml>`;
 }
 // 시작 시 미종료 백업이 있으면 복구 제안(새로고침·크래시로 끊긴 녹화)
-setTimeout(() => {
+setTimeout(async () => {
   let bak = null;
   try { bak = JSON.parse(localStorage.getItem(TRK_BAK_KEY) || 'null'); } catch(e) { _swallow(e); }
   if (!Array.isArray(bak) || bak.length < 2) return;
   const pts = bak.map(a => ({ lat: a[0], lon: a[1], altM: a[2], t: a[3] }));
   const from = new Date(pts[0].t), p2 = n => String(n).padStart(2, '0');
-  const resume = confirm(
+  const resume = await uiConfirm(
     `이전 세션에서 녹화 중이던 항적 ${pts.length}점이 복구되었습니다.\n` +
-    `(시작: ${p2(from.getHours())}:${p2(from.getMinutes())})\n\n` +
-    `확인 = 이어서 녹화 계속\n취소 = 지금 파일로 저장하고 종료`
+    `(시작: ${p2(from.getHours())}:${p2(from.getMinutes())})`,
+    { okText: '이어서 녹화', cancelText: '저장하고 종료' }
   );
   _trkPts = pts;
   if (resume) {
@@ -311,7 +312,8 @@ async function logExport(id, fmt) {
   else               _trkDownload(fname + '.kml', _trkToKml(r.pts), 'application/vnd.google-earth.kml+xml');
 }
 async function logDelete(id) {
-  if (!confirm('이 항적을 로그북에서 삭제할까요?')) return;
+  if (!await uiConfirm('이 항적을 로그북에서 삭제할까요?',
+        { okText: '삭제', cancelText: '취소' })) return;
   await _logDel(id);
   renderLogbook();
 }
@@ -933,11 +935,11 @@ function loadNotamFile(input) {
         const hasPm = isKml ? _xmlAll(new DOMParser().parseFromString(text, 'application/xml'), 'Placemark').length : 0;
         const hasWpt = !isKml ? _xmlAll(new DOMParser().parseFromString(text, 'application/xml'), 'wpt').length + _xmlAll(new DOMParser().parseFromString(text, 'application/xml'), 'trkpt').length : 0;
         if (isKml && hasPm === 0)
-          alert('표시할 지형지물이 없습니다.\n\n이 KML 파일에 Placemark(위치/도형) 데이터가 없습니다.\nNOTAM 좌표 정보가 포함된 KML 파일을 사용해 주세요.');
+          uiAlert('표시할 지형지물이 없습니다.\n\n이 KML 파일에 Placemark(위치/도형) 데이터가 없습니다.\nNOTAM 좌표 정보가 포함된 KML 파일을 사용해 주세요.');
         else if (!isKml && hasWpt === 0)
-          alert('표시할 지형지물이 없습니다.\n\n이 GPX 파일에 wpt/trkpt 데이터가 없습니다.');
+          uiAlert('표시할 지형지물이 없습니다.\n\n이 GPX 파일에 wpt/trkpt 데이터가 없습니다.');
         else
-          alert('표시할 지형지물이 없습니다.\n(좌표가 누락되었거나 지원하지 않는 형식입니다)');
+          uiAlert('표시할 지형지물이 없습니다.\n(좌표가 누락되었거나 지원하지 않는 형식입니다)');
         return;
       }
       _notamActive = true;
@@ -945,7 +947,7 @@ function loadNotamFile(input) {
       const group = L.featureGroup(_notamLayers);
       leafMap.fitBounds(group.getBounds().pad(0.1));
     } catch(err) {
-      alert('파일 파싱 오류: ' + err.message);
+      uiAlert('파일 파싱 오류: ' + err.message);
     }
   };
   reader.readAsText(file);

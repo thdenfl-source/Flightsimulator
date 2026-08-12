@@ -445,7 +445,7 @@ async function toggleRain() {
     }, 5 * 60 * 1000);
   } catch (e) {
     btn.textContent = 'RAIN';
-    alert('강수 레이더 로드 실패. 네트워크를 확인하세요.');
+    uiAlert('강수 레이더 로드 실패. 네트워크를 확인하세요.');
   }
 }
 
@@ -585,7 +585,7 @@ async function toggleWind() {
   } catch (e) {
     console.error('Wind layer error:', e);
     btn.textContent = 'WIND';
-    alert('바람 데이터 로드 실패. 네트워크를 확인하세요.');
+    uiAlert('바람 데이터 로드 실패. 네트워크를 확인하세요.');
   }
 }
 

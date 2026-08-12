@@ -203,7 +203,7 @@ function fpRefSolve() {
 }
 function fpRefApply() {
   const s = fpRefSolve();
-  if (s.err) { alert(s.err); return; }
+  if (s.err) { uiAlert(s.err); return; }
   fpMode = 'LIST';
   pushWP({ ident: s.ident, lat: +s.lat.toFixed(6), lon: +s.lon.toFixed(6) });
   fpRender();
@@ -628,9 +628,9 @@ function sidNewSave() {
   const icao = document.getElementById('sn-icao')?.value || '';
   const name = (document.getElementById('sn-name')?.value || '').trim().toUpperCase();
   const rwy  = (document.getElementById('sn-rwy')?.value || '').trim().toUpperCase();
-  if (!icao)            { alert('공항을 선택하세요.'); return; }
-  if (!name)            { alert('절차 이름을 입력하세요.'); return; }
-  if (!_sidNew.wps.length) { alert('경유점을 1개 이상 추가하세요.'); return; }
+  if (!icao)            { uiAlert('공항을 선택하세요.'); return; }
+  if (!name)            { uiAlert('절차 이름을 입력하세요.'); return; }
+  if (!_sidNew.wps.length) { uiAlert('경유점을 1개 이상 추가하세요.'); return; }
   const all = customSids();
   if (!all[icao]) all[icao] = [];
   all[icao].push({ name, rwy: rwy || '-', wps: _sidNew.wps.map(id => ({ ident:id })) });
@@ -696,17 +696,17 @@ function fpConfirmIdent() {
   if(!v) return;
   const f = AIRPORTS.find(a=>a.ident===v);
   if(f){ fpMode='LIST'; fpInputBuf=''; pushWP({ident:f.ident,lat:f.lat,lon:f.lon}); }
-  else alert(`"${v}" not found.\nAvailable: ${AIRPORTS.map(a=>a.ident).join(', ')}`);
+  else uiAlert(`"${v}" not found.\nAvailable: ${AIRPORTS.map(a=>a.ident).join(', ')}`);
 }
 
 function fpConfirmCoord(field) {
   const val = parseDegrees(fpInputBuf);
-  if(isNaN(val)){ alert('유효한 값을 입력하세요'); return; }
+  if(isNaN(val)){ uiAlert('유효한 값을 입력하세요'); return; }
   if(field==='LAT'){
-    if(val<-90||val>90){ alert('위도 범위: -90 ~ 90'); return; }
+    if(val<-90||val>90){ uiAlert('위도 범위: -90 ~ 90'); return; }
     fpTempLat=val; fpInputBuf=''; fpGo('LON');
   } else {
-    if(val<-180||val>180){ alert('경도 범위: -180 ~ 180'); return; }
+    if(val<-180||val>180){ uiAlert('경도 범위: -180 ~ 180'); return; }
     const lat=fpTempLat, lon=val;
     const name='WP'+(S.wps.length+1);
     fpMode='LIST'; fpTempLat=null; fpInputBuf='';
@@ -751,7 +751,6 @@ function selectWP(i){
   S.fwp=S.awp;S.awp=i;
   if (!obsOn) {
     S.crs=bearing(S.lat,S.lon,S.wps[i].lat,S.wps[i].lon);
-    _dtoLat = S.lat; _dtoLon = S.lon;   // Direct-To 라인 고정(선택 시점 위치)
   }
   updateWpMarkers();fpRender();updateNav();
 }

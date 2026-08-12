@@ -246,9 +246,9 @@ function triggerFolderImport() {
         inp.multiple = true;
         inp.accept = 'application/pdf,.pdf';
         if (isIOS) {
-            alert('아이패드/아이폰에서는 폴더 자체를 선택할 수 없습니다.\n\n파일 앱에서 압축을 푼 폴더로 들어간 뒤,\n그 안의 PDF들을 모두 선택해 주세요.\n(전체 선택: 우측 상단 ⋯ → 선택 → 모두 선택)');
+            uiAlert('아이패드/아이폰에서는 폴더 자체를 선택할 수 없습니다.\n\n파일 앱에서 압축을 푼 폴더로 들어간 뒤,\n그 안의 PDF들을 모두 선택해 주세요.\n(전체 선택: 우측 상단 ⋯ → 선택 → 모두 선택)');
         } else {
-            alert('이 브라우저는 폴더 선택을 지원하지 않습니다.\n압축을 푼 폴더 안의 PDF 파일들을 직접 여러 개 선택해 주세요.');
+            uiAlert('이 브라우저는 폴더 선택을 지원하지 않습니다.\n압축을 푼 폴더 안의 PDF 파일들을 직접 여러 개 선택해 주세요.');
         }
     }
 
@@ -406,14 +406,14 @@ async function handleZipFile(file) {
             console.warn('스트리밍 ZIP 실패, JSZip 폴백:', streamErr.message);
             if (typeof JSZip === 'undefined') {
                 importProgress = null; renderCduContent();
-                alert('ZIP 파일을 읽을 수 없습니다.\n(' + streamErr.message + ')\n네트워크 연결 후 새로고침하거나 폴더 가져오기를 사용해 주세요.');
+                uiAlert('ZIP 파일을 읽을 수 없습니다.\n(' + streamErr.message + ')\n네트워크 연결 후 새로고침하거나 폴더 가져오기를 사용해 주세요.');
                 return;
             }
             let zip;
             try { zip = await JSZip.loadAsync(file); }
             catch(e) {
                 importProgress = null; renderCduContent();
-                alert('ZIP 파일을 읽을 수 없습니다.\n파일이 손상되었거나 올바른 ZIP 형식이 아닙니다.\n(' + e.message + ')');
+                uiAlert('ZIP 파일을 읽을 수 없습니다.\n파일이 손상되었거나 올바른 ZIP 형식이 아닙니다.\n(' + e.message + ')');
                 return;
             }
             rawEntries = [];
@@ -430,7 +430,7 @@ async function handleZipFile(file) {
         if (entries.length === 0) {
             importProgress = null;
             renderCduContent();
-            alert('ZIP 파일 안에서 차트 PDF를 찾지 못했습니다.\nAIM Korea에서 받은 AIRAC ZIP 파일인지 확인해 주세요.\n(경로: .../AD/ICAO4/(번호) 차트명.pdf)');
+            uiAlert('ZIP 파일 안에서 차트 PDF를 찾지 못했습니다.\nAIM Korea에서 받은 AIRAC ZIP 파일인지 확인해 주세요.\n(경로: .../AD/ICAO4/(번호) 차트명.pdf)');
             return;
         }
 
@@ -438,7 +438,7 @@ async function handleZipFile(file) {
 
     } catch(e) {
         console.error('ZIP import error:', e);
-        alert('ZIP 가져오기 중 오류가 발생했습니다:\n' + e.message);
+        uiAlert('ZIP 가져오기 중 오류가 발생했습니다:\n' + e.message);
         importProgress = null;
     }
     await refreshLocalPdfKeys();
@@ -496,7 +496,7 @@ async function handleFolderImport(input) {
 
         // 그래도 ICAO를 못 찾았으면 공항코드 입력 요청
         if (entries.length === 0 && pdfFiles.length > 0) {
-            const hint = (prompt(
+            const hint = (await uiPrompt(
                 'PDF 파일의 공항(ICAO 4코드)을 자동으로 찾지 못했습니다.\n' +
                 '선택한 PDF들이 속한 공항코드를 입력해 주세요. (예: RKSI)\n' +
                 '※ 한 번에 한 공항 폴더의 파일만 선택해 주세요.', ''
@@ -513,7 +513,7 @@ async function handleFolderImport(input) {
         if (entries.length === 0) {
             importProgress = null;
             renderCduContent();
-            alert('선택한 항목에서 차트 PDF를 인식하지 못했습니다.\n\nPC: ZIP을 푼 상위 폴더를 선택\n아이패드/아이폰: 공항 폴더로 들어가 PDF들을 선택 후 공항코드 입력');
+            uiAlert('선택한 항목에서 차트 PDF를 인식하지 못했습니다.\n\nPC: ZIP을 푼 상위 폴더를 선택\n아이패드/아이폰: 공항 폴더로 들어가 PDF들을 선택 후 공항코드 입력');
             return;
         }
 
@@ -521,7 +521,7 @@ async function handleFolderImport(input) {
 
     } catch(e) {
         console.error('Folder import error:', e);
-        alert('폴더 가져오기 중 오류가 발생했습니다:\n' + e.message);
+        uiAlert('폴더 가져오기 중 오류가 발생했습니다:\n' + e.message);
         importProgress = null;
     }
     await refreshLocalPdfKeys();
@@ -608,7 +608,7 @@ async function _saveChartEntries(entries) {
     if (importProgress.found > 0) msgs.push(`✅ PDF 저장: ${importProgress.found}개`);
     if (idbFailed) msgs.push('⚠️ 일부 PDF는 저장 공간 부족으로 메타데이터만 저장됨\n(차트 목록에서 ↗ 외부 열기 가능)');
     if (importProgress.skipped > 0) msgs.push(`⏭ 크기 초과 또는 오류로 건너뜀: ${importProgress.skipped}개`);
-    if (msgs.length) alert(msgs.join('\n'));
+    if (msgs.length) uiAlert(msgs.join('\n'));
 
     importProgress = null;
 }
@@ -1198,10 +1198,11 @@ function _pdfUpdateAcMarker() {
 }
 
 // 보정 시작/재보정/삭제 토글
-function _pdfToggleCalibration() {
+async function _pdfToggleCalibration() {
     if (_pdfCalActive) { _pdfCancelCalibration(); return; }
     if (_pdfCalibration) {
-        if (confirm('이 차트는 이미 위치 보정되어 있습니다.\n\n확인 = 다시 보정\n취소 = 보정 삭제')) _pdfStartCalibration();
+        if (await uiConfirm('이 차트는 이미 위치 보정되어 있습니다.',
+              { okText: '다시 보정', cancelText: '보정 삭제' })) _pdfStartCalibration();
         else _pdfClearCalib();
     } else {
         _pdfStartCalibration();
@@ -1379,32 +1380,32 @@ function _pdfPickCoord(cb) {
         row.addEventListener('pointerup', e => { e.stopPropagation(); pick(row); });
     });
     box.querySelector('#pdfFixCancel').addEventListener('pointerup', e => { e.stopPropagation(); box.remove(); cb(null); });
-    box.querySelector('#pdfFixManual').addEventListener('pointerup', e => {
+    box.querySelector('#pdfFixManual').addEventListener('pointerup', async e => {
         e.stopPropagation();
         box.remove();
-        const latS = prompt('위도(Latitude)\n십진수(예: 37.4631) 또는 DMS(예: 37 27 47 N)');
+        const latS = await uiPrompt('위도(Latitude)\n십진수(예: 37.4631) 또는 DMS(예: 37 27 47 N)', '');
         if (latS === null) { cb(null); return; }
         const lat = _parseLatLonInput(latS);
-        if (lat === null || lat < -90 || lat > 90) { alert('위도 형식 오류'); cb(null); return; }
-        const lonS = prompt('경도(Longitude)\n십진수(예: 126.4407) 또는 DMS(예: 126 26 27 E)');
+        if (lat === null || lat < -90 || lat > 90) { uiAlert('위도 형식 오류'); cb(null); return; }
+        const lonS = await uiPrompt('경도(Longitude)\n십진수(예: 126.4407) 또는 DMS(예: 126 26 27 E)', '');
         if (lonS === null) { cb(null); return; }
         const lon = _parseLatLonInput(lonS);
-        if (lon === null || lon < -180 || lon > 180) { alert('경도 형식 오류'); cb(null); return; }
+        if (lon === null || lon < -180 || lon > 180) { uiAlert('경도 형식 오류'); cb(null); return; }
         cb({ lat, lon, name: '' });
     });
 }
 
-function _pdfCalFinish() {
-    if (_pdfCalPts.length < 2) { alert('점을 2개 이상 찍어야 합니다. (3개 이상 권장)'); return; }
+async function _pdfCalFinish() {
+    if (_pdfCalPts.length < 2) { uiAlert('점을 2개 이상 찍어야 합니다. (3개 이상 권장)'); return; }
     // 점들이 모두 너무 가까우면 거부
     let far = 0;
     for (let i = 0; i < _pdfCalPts.length; i++) for (let j = i + 1; j < _pdfCalPts.length; j++)
         far = Math.max(far, Math.hypot(_pdfCalPts[i].fx - _pdfCalPts[j].fx, _pdfCalPts[i].fy - _pdfCalPts[j].fy));
-    if (far < 0.02) { alert('점들이 너무 가깝습니다. 더 멀리 떨어진 지점을 포함하세요.'); return; }
+    if (far < 0.02) { uiAlert('점들이 너무 가깝습니다. 더 멀리 떨어진 지점을 포함하세요.'); return; }
 
     const pts = _pdfCalPts.slice();
     const fit = _pdfFit(pts);
-    if (!fit) { alert('보정식을 계산하지 못했습니다. 점을 다시 찍어 주세요.'); return; }
+    if (!fit) { uiAlert('보정식을 계산하지 못했습니다. 점을 다시 찍어 주세요.'); return; }
 
     // ── 품질 게이트 ──
     // 보정점끼리 모순되면(좌표를 잘못 고른 점이 있으면) 그대로 저장하지 않는다.
@@ -1428,8 +1429,7 @@ function _pdfCalFinish() {
             else m += `▸ 좌표를 잘못 고른 점이 있습니다.\n  한 점 더 찍으면 어느 점인지 짚어 드립니다.\n\n`;
             m += `찍은 점:\n` + pts.map((p, i) =>
                 `  ${i + 1}. ${p.name || '(이름없음)'} ${decToDMS(p.lat, true)} ${decToDMS(p.lon, false)}`).join('\n');
-            m += `\n\n이대로 저장하시겠습니까?\n(취소하면 계속 점을 수정할 수 있습니다)`;
-            if (!confirm(m)) return;
+            if (!await uiConfirm(m, { okText: '이대로 저장', cancelText: '계속 수정' })) return;
         }
     }
 
@@ -1440,7 +1440,7 @@ function _pdfCalFinish() {
     const rmLoo = _pdfCalibRmsMeters(pts, fit.loo);
     const rmRes = _pdfCalibRmsMeters(pts, fit.rms);
     const kindTxt = (fit.kind === 'affine' ? '아핀 변환' : '닮음 변환') + `(${fit.n}점)`;
-    alert(`위치 보정 완료!\n방식: ${kindTxt}` +
+    uiAlert(`위치 보정 완료!\n방식: ${kindTxt}` +
           (rmLoo != null ? `\n예상 오차(교차검증): 약 ${Math.round(rmLoo)}m` : '') +
           (rmRes != null ? `\n보정점 잔차: 약 ${Math.round(rmRes)}m` : '') +
           (fit.spread != null && fit.spread < 0.12
@@ -1836,31 +1836,6 @@ async function deleteAirportCharts(icao) {
     localStorage.setItem('savedCharts', JSON.stringify(saved));
     await idbDeleteByPrefix(`${icao}|`);
     await refreshLocalPdfKeys();
-}
-
-function updateChartStatus(icao, chartNum, status) {
-    let saved = loadSavedCharts();
-    const entry = saved.find(s => s.icao === icao && s.chartNum === chartNum);
-    if (entry) {
-        entry.status = status;
-        entry.verifiedAt = new Date().toISOString().slice(0, 16).replace('T', ' ');
-        localStorage.setItem('savedCharts', JSON.stringify(saved));
-    }
-}
-
-async function verifyOneChart(icao, chartNum) {
-    const saved = loadSavedCharts();
-    const c = saved.find(s => s.icao === icao && s.chartNum === chartNum);
-    if (!c || isSectionLink(c)) return;
-    updateChartStatus(icao, chartNum, 'checking');
-    renderCduContent();
-    try {
-        const resp = await fetch(c.url, { mode: 'cors' });
-        updateChartStatus(icao, chartNum, resp.ok ? 'verified' : 'failed');
-    } catch (e) {
-        updateChartStatus(icao, chartNum, 'unverified');
-    }
-    renderCduContent();
 }
 
 let expandedAirport = null;

@@ -21,7 +21,7 @@ function saveSession() {
       gps: gpsMode,
       fcp: { selSpd, selAlt, selCrht, selVS, selHdg, hdgSelOn, altHoldOn, crhtOn, gspdOn, rollApOn, bankTarget,
              gspdActLat, gspdActFwd, gspdRefLat, gspdRefFwd, gspdCoasting },
-      nav: { obsOn, navSrc, navRadios, vorObsCrs, dtoLat:_dtoLat, dtoLon:_dtoLon },
+      nav: { obsOn, navSrc, navRadios, vorObsCrs },
       view: { mapHdgUp, followMode, leftSel, midSel, rightSel, tripleMode },
     };
     localStorage.setItem(SESSION_KEY, JSON.stringify(snap));
@@ -49,7 +49,6 @@ function restoreSession() {
     gspdCoasting=!!f.gspdCoasting;
     const n = snap.nav || {};
     obsOn=!!n.obsOn; navSrc=n.navSrc||'FMS'; vorObsCrs=n.vorObsCrs??360;
-    _dtoLat=(n.dtoLat===undefined?null:n.dtoLat); _dtoLon=(n.dtoLon===undefined?null:n.dtoLon);
     if (n.navRadios) { try { ['NAV1','NAV2'].forEach(k => { if (n.navRadios[k]) navRadios[k] = Object.assign({}, navRadios[k], n.navRadios[k]); }); } catch(e) { _swallow(e); } }
     const v = snap.view || {};
     mapHdgUp=!!v.mapHdgUp; followMode=!!v.followMode;
@@ -113,7 +112,7 @@ let _deferredPrompt = null;
 window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); _deferredPrompt = e; });
 function pwaInstall() {
   if (_deferredPrompt) { _deferredPrompt.prompt(); _deferredPrompt = null; }
-  else alert('홈 화면에 추가:\n\niOS Safari — 공유 버튼 → "홈 화면에 추가"\nAndroid Chrome — 메뉴(⋮) → "앱 설치"');
+  else uiAlert('홈 화면에 추가:\n\niOS Safari — 공유 버튼 → "홈 화면에 추가"\nAndroid Chrome — 메뉴(⋮) → "앱 설치"');
 }
 
 // ── 지도 타일 프리캐시(현재 화면 주변) — 음영지역 대비 ──
@@ -140,7 +139,7 @@ async function prefetchTiles() {
       try { await fetch(urlFor(z, x, y), { mode: 'no-cors' }); count++; } catch(e) { _swallow(e); }
     }
   }
-  alert(`주변 지도 타일 ${count}개를 캐시했습니다.\n(오프라인/음영지역에서 이 영역이 표시됩니다)`);
+  uiAlert(`주변 지도 타일 ${count}개를 캐시했습니다.\n(오프라인/음영지역에서 이 영역이 표시됩니다)`);
 }
 
 // ⟳ 새로고침: 세션을 지우고 초기 상태로 리로드(백그라운드 복원 종료)
@@ -182,7 +181,7 @@ function init(){
   // FMA row (top of AI)  : middle cell → HDG preselect, right cell → IAS preselect
   // ALT header box (top of ALT tape, right column top half) → selAlt
   // CRHT header box (top of CRHT display, right column bottom half) → selCrht
-  function onPfdTap(clientX, clientY) {
+  async function onPfdTap(clientX, clientY) {
     const rect = cvs.getBoundingClientRect();
     const scX  = cvs.width  / rect.width;
     const scY  = cvs.height / rect.height;
@@ -211,10 +210,10 @@ function init(){
     // Header is sub-divided: top half ≈ selAlt, bottom half ≈ selVS
     if (py >= 0 && py <= HEAD_H && px >= altX && px <= altRight) {
       if (py < HEAD_H * 0.5) {
-        const v = prompt('ALT preselect (ft):', selAlt);
+        const v = await uiPrompt('ALT preselect (ft):', selAlt, { numeric: true });
         if (v !== null) { const n = parseInt(v, 10); if (!isNaN(n) && n >= 0) selAlt = n; }
       } else {
-        const v = prompt('VS preselect (fpm, magnitude — direction is auto):', Math.abs(selVS));
+        const v = await uiPrompt('VS preselect (fpm, magnitude — direction is auto):', Math.abs(selVS), { numeric: true });
         if (v !== null) { const n = parseInt(v, 10); if (!isNaN(n) && n >= 0) selVS = Math.max(50, Math.min(3000, n)); }
       }
       return;
@@ -223,7 +222,7 @@ function init(){
     // Tap for a free-form CRHT target entry (alternative to the
     // 10 ft step CRHT +/- buttons in the ctrl-bar's first row).
     if (py >= aiH && py <= aiH + HEAD_H && px >= altX && px <= crhtRight) {
-      const v = prompt('CRHT preselect (ft):', selCrht);
+      const v = await uiPrompt('CRHT preselect (ft):', selCrht, { numeric: true });
       if (v !== null) { const n = parseInt(v, 10); if (!isNaN(n) && n >= 0) selCrht = n; }
       return;
     }
@@ -238,10 +237,10 @@ function init(){
     const fmaBtm = FMA_MARGIN + FMA_BOX_H;
     if (py >= fmaTop && py <= fmaBtm) {
       if (boxIdx === 1) {
-        const v = prompt('HDG preselect (1–360°M):', fmtA(toMag(selHdg)));
+        const v = await uiPrompt('HDG preselect (1–360°M):', fmtA(toMag(selHdg)), { numeric: true });
         if (v !== null) { const n = parseInt(v, 10); if (!isNaN(n)) { selHdg = toTrue(Math.max(1, Math.min(360, n))) || 360; hdgSelOn = true; rollApOn = true; } }
       } else if (boxIdx === 2) {
-        const v = prompt('IAS preselect (kt):', selSpd);
+        const v = await uiPrompt('IAS preselect (kt):', selSpd, { numeric: true });
         if (v !== null) { const n = parseInt(v, 10); if (!isNaN(n) && n >= 0) selSpd = n; }
       }
     }
@@ -506,8 +505,6 @@ function setWxIcao(icao, btn) {
 // aviationweather.gov blocks some proxies → wider net + JSON wrapper
 // (allorigins /get) lets us verify upstream HTTP status to filter HTML errors.
 
-// PFD OAT용 지면 온도(°C) — METAR 조회 시 갱신, 기본은 ISA 해면온도 15°C
-window._oatSurfaceC = window._oatSurfaceC ?? 15;
 const _wxCache = new Map();
 const WX_CACHE_TTL = 10 * 60 * 1000;
 
@@ -781,10 +778,6 @@ if ('serviceWorker' in navigator) {
 // CDU 안(#cdu-wrap)은 기존 CDU_ACT 위임이 처리하므로 여기서는 건드리지 않는다.
 const APP_ACT = {};
 function appRegister(map) { Object.assign(APP_ACT, map); }
-function aact(name, ...args) {
-  if (!args.length) return `data-act="${name}"`;
-  return `data-act="${name}" data-arg='${JSON.stringify(args).replace(/'/g, "&#39;")}'`;
-}
 (function initAppDelegation() {
   const run = (e, kind) => {
     const el = e.target.closest('[data-act]');
@@ -2880,39 +2873,40 @@ function act(name, ...args) {
     }
 
     // ── 폴더 CRUD ──
-    function tpFolderAdd() {
+    async function tpFolderAdd() {
       const f = tpFolders();
-      const name = (prompt('새 폴더 이름', '폴더' + (f.length + 1)) || '').trim();
+      const name = (await uiPrompt('새 폴더 이름', '폴더' + (f.length + 1)) || '').trim();
       if (!name) return;
       f.push({ name, pts: [] }); _tpSave('tpFolders', f); switchMode('TRACKPOINT');
     }
     function tpFolderOpen(i) { tpFolderIdx = i; _tpIconPick = null; switchMode('TRACKPOINT'); }
     function tpFolderBack() { tpFolderIdx = null; _tpIconPick = null; switchMode('TRACKPOINT'); }
-    function tpFolderRename(i) {
-      const f = tpFolders(); const name = (prompt('폴더 이름', f[i].name) || '').trim();
+    async function tpFolderRename(i) {
+      const f = tpFolders(); const name = (await uiPrompt('폴더 이름', f[i].name) || '').trim();
       if (name) { f[i].name = name; _tpSave('tpFolders', f); switchMode('TRACKPOINT'); }
     }
-    function tpFolderDel(i) {
+    async function tpFolderDel(i) {
       const f = tpFolders();
-      if (!confirm(`폴더 "${f[i].name}"(포인트 ${f[i].pts.length}개)를 삭제할까요?`)) return;
+      if (!await uiConfirm(`폴더 "${f[i].name}"(포인트 ${f[i].pts.length}개)를 삭제할까요?`,
+            { okText: '삭제', cancelText: '취소' })) return;
       f.splice(i, 1); _tpSave('tpFolders', f); _tpRenderMapPoints(); switchMode('TRACKPOINT');
     }
     function _curFolder() { const f = tpFolders(); return f[tpFolderIdx] ? { f, folder: f[tpFolderIdx] } : null; }
 
     // ── 폴더 내 포인트 ──
-    function tpAddPoint(src) {
+    async function tpAddPoint(src) {
       const cf = _curFolder(); if (!cf) return;
       let lat, lon;
       if (src === 'pos') { lat = S.lat; lon = S.lon; }
       else if (src === 'cross') { const c = leafMap.getCenter(); lat = c.lat; lon = c.lng; }
       else {
-        const v = prompt('좌표 입력 (위도,경도) 십진수\n예: 37.3895, 126.6550', '');
+        const v = await uiPrompt('좌표 입력 (위도,경도) 십진수\n예: 37.3895, 126.6550', '');
         if (!v) return;
         const m = v.split(',').map(x => parseFloat(x.trim()));
-        if (m.length < 2 || isNaN(m[0]) || isNaN(m[1])) { alert('좌표 형식이 올바르지 않습니다.'); return; }
+        if (m.length < 2 || isNaN(m[0]) || isNaN(m[1])) { uiAlert('좌표 형식이 올바르지 않습니다.'); return; }
         lat = m[0]; lon = m[1];
       }
-      const name = (prompt('포인트 이름', 'PT' + (cf.folder.pts.length + 1)) || '').trim() || ('PT' + (cf.folder.pts.length + 1));
+      const name = (await uiPrompt('포인트 이름', 'PT' + (cf.folder.pts.length + 1)) || '').trim() || ('PT' + (cf.folder.pts.length + 1));
       cf.folder.pts.push({ name, lat: +lat.toFixed(6), lon: +lon.toFixed(6) });
       _tpSave('tpFolders', cf.f); switchMode('TRACKPOINT');
     }
@@ -2952,7 +2946,7 @@ function act(name, ...args) {
       const cf = _curFolder(); if (!cf) return;
       const shown = cf.folder.pts.filter(p => p.show);
       const pts = shown.length ? shown : cf.folder.pts;
-      if (!pts.length) { alert('내보낼 포인트가 없습니다.'); return; }
+      if (!pts.length) { uiAlert('내보낼 포인트가 없습니다.'); return; }
       const base = cf.folder.name.replace(/[^\w가-힣]+/g, '_');
       if (fmt === 'gpx') _trkDownload(base + '.gpx', _gpxPts(pts), 'application/gpx+xml');
       else _trkDownload(base + '.kml', _kmlPts(pts, cf.folder.name), 'application/vnd.google-earth.kml+xml');
@@ -3044,9 +3038,9 @@ function act(name, ...args) {
       const cf = _curFolder(); if (!cf) return;
       _tpPickFile((text) => {
         let pts = []; try { pts = _parsePointsFile(text); } catch(e) { _swallow(e); }
-        if (!pts.length) { alert('파일에서 포인트를 찾지 못했습니다.\n(GPX wpt / KML Placemark Point 지원)'); return; }
+        if (!pts.length) { uiAlert('파일에서 포인트를 찾지 못했습니다.\n(GPX wpt / KML Placemark Point 지원)'); return; }
         cf.folder.pts.push(...pts); _tpSave('tpFolders', cf.f);
-        alert(`${pts.length}개 포인트를 "${cf.folder.name}" 폴더에 가져왔습니다.`);
+        uiAlert(`${pts.length}개 포인트를 "${cf.folder.name}" 폴더에 가져왔습니다.`);
         switchMode('TRACKPOINT');
       });
     }
@@ -3058,9 +3052,9 @@ function act(name, ...args) {
         const r = await fetch('points/index.json?_=' + Date.now());
         if (!r.ok) throw new Error('HTTP ' + r.status);
         const list = await r.json();
-        if (!Array.isArray(list) || !list.length) { alert('저장소에 등록된 포인트가 없습니다.\n(points/index.json 에 목록 추가)'); return; }
+        if (!Array.isArray(list) || !list.length) { uiAlert('저장소에 등록된 포인트가 없습니다.\n(points/index.json 에 목록 추가)'); return; }
         _tpRepoList = list; _tpRepoView = true; switchMode('TRACKPOINT');
-      } catch(e) { alert('저장소 목록을 불러오지 못했습니다.\n' + e.message + '\n(points/index.json 확인)'); }
+      } catch(e) { uiAlert('저장소 목록을 불러오지 못했습니다.\n' + e.message + '\n(points/index.json 확인)'); }
     }
     function tpRepoBack() { _tpRepoView = false; switchMode('TRACKPOINT'); }
     async function tpRepoImport(i) {
@@ -3070,29 +3064,30 @@ function act(name, ...args) {
         if (!r.ok) throw new Error('HTTP ' + r.status);
         const text = await r.text();
         const pts = _parsePointsFile(text);
-        if (!pts.length) { alert('파일에서 포인트를 찾지 못했습니다: ' + e.file); return; }
+        if (!pts.length) { uiAlert('파일에서 포인트를 찾지 못했습니다: ' + e.file); return; }
         const fname = String(e.folder || e.name || e.file);
         const f = tpFolders();
         let fd = f.find(x => x.name === fname);
         if (!fd) { fd = { name: fname, pts: [] }; if (e.icon) fd.icon = e.icon; f.push(fd); }
         fd.pts.push(...pts); _tpSave('tpFolders', f); _tpRenderMapPoints();
-        alert(`${pts.length}개 포인트를 "${fname}" 폴더로 가져왔습니다.`);
+        uiAlert(`${pts.length}개 포인트를 "${fname}" 폴더로 가져왔습니다.`);
         _tpRepoView = false; tpFolderIdx = null; switchMode('TRACKPOINT');
-      } catch(err) { alert('가져오기 실패: ' + err.message); }
+      } catch(err) { uiAlert('가져오기 실패: ' + err.message); }
     }
 
     // ── 트랙 ──
-    function tpSaveTrackFromFP() {
-      if (!S.wps.length) { alert('저장할 비행계획(웨이포인트)이 없습니다.\nFlight Plan에서 웨이포인트를 먼저 입력하세요.'); return; }
+    async function tpSaveTrackFromFP() {
+      if (!S.wps.length) { uiAlert('저장할 비행계획(웨이포인트)이 없습니다.\nFlight Plan에서 웨이포인트를 먼저 입력하세요.'); return; }
       const arr = tpTracks();
-      const name = (prompt('트랙 이름', 'TRK' + (arr.length + 1)) || '').trim() || ('TRK' + (arr.length + 1));
+      const name = (await uiPrompt('트랙 이름', 'TRK' + (arr.length + 1)) || '').trim() || ('TRK' + (arr.length + 1));
       arr.push({ name, pts: S.wps.map(w => ({ ident: w.ident, lat: w.lat, lon: w.lon })) });
       _tpSave('tpTracks', arr); switchMode('TRACKPOINT');
     }
     function tpDelTrack(i) { if (_tpTrackShownIdx === i) tpHideTrack(); const a = tpTracks(); a.splice(i, 1); _tpSave('tpTracks', a); switchMode('TRACKPOINT'); }
-    function tpLoadTrack(i) {
+    async function tpLoadTrack(i) {
       const t = tpTracks()[i]; if (!t || !t.pts.length) return;
-      if (S.wps.length && !confirm('현재 비행계획을 이 트랙으로 대체할까요?')) return;
+      if (S.wps.length && !await uiConfirm('현재 비행계획을 이 트랙으로 대체할까요?',
+            { okText: '대체', cancelText: '취소' })) return;
       S.wps = t.pts.map((p, k) => ({ ident: p.ident || ('WP' + (k + 1)), lat: p.lat, lon: p.lon }));
       S.awp = -1; S.fwp = -1; S.brg2wp = -1;
       selectWP(0);
@@ -3147,14 +3142,14 @@ function act(name, ...args) {
       else _trkDownload(base + '.kml', _kmlTrack(t), 'application/vnd.google-earth.kml+xml');
     }
     function tpImportTrack() {
-      _tpPickFile((text) => {
+      _tpPickFile(async (text) => {
         let pts = []; try { pts = _parseTrackFile(text); } catch(e) { _swallow(e); }
-        if (pts.length < 2) { alert('파일에서 트랙(경로)을 찾지 못했습니다.\n(GPX rte/trk / KML LineString 지원)'); return; }
+        if (pts.length < 2) { uiAlert('파일에서 트랙(경로)을 찾지 못했습니다.\n(GPX rte/trk / KML LineString 지원)'); return; }
         const arr = tpTracks();
-        const name = (prompt('트랙 이름', 'TRK' + (arr.length + 1)) || '').trim() || ('TRK' + (arr.length + 1));
+        const name = (await uiPrompt('트랙 이름', 'TRK' + (arr.length + 1)) || '').trim() || ('TRK' + (arr.length + 1));
         arr.push({ name, pts: pts.map((p, k) => ({ ident: p.ident || ('WP' + (k + 1)), lat: p.lat, lon: p.lon })) });
         _tpSave('tpTracks', arr);
-        alert(`트랙 "${name}"(${pts.length}개 지점)을 가져왔습니다.`);
+        uiAlert(`트랙 "${name}"(${pts.length}개 지점)을 가져왔습니다.`);
         switchMode('TRACKPOINT');
       });
     }
@@ -3424,11 +3419,11 @@ function act(name, ...args) {
         switchMode('AIRFIELD_DETAIL');
     }
     // 상단 ALL 버튼 — 코드 입력 시 전체(군공항 포함) 공개, 실패 시 AIP 공개 공항만
-    function afldToggleAll() {
+    async function afldToggleAll() {
         if (_afldUnlocked) { _afldUnlocked = false; switchMode('AIRFIELD'); return; }
-        const p = prompt('전체 비행장 보기\n접근 코드를 입력하세요:');
+        const p = await uiPrompt('전체 비행장 보기\n접근 코드를 입력하세요:', '', { password: true });
         if (p === 'thdenfl') { _afldUnlocked = true; }
-        else { _afldUnlocked = false; if (p !== null) alert('코드가 올바르지 않습니다.\nAIP 공개 공항만 표시됩니다.'); }
+        else { _afldUnlocked = false; if (p !== null) uiAlert('코드가 올바르지 않습니다.\nAIP 공개 공항만 표시됩니다.'); }
         switchMode('AIRFIELD');
     }
     // ── CCTV 선택 화면 (BADA / Park → 외부 사이트) ──
