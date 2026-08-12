@@ -78,8 +78,7 @@ function fcpSync(which) {
       updateNav();
     } else if (navSrc === 'FMS' && S.awp >= 0) {
       S.crs = normA(Math.round(bearing(S.lat, S.lon, S.wps[S.awp].lat, S.wps[S.awp].lon)));
-      _dtoLat = S.lat; _dtoLon = S.lon;   // 새 Direct-To 라인 고정
-      S.fwp = -1;                          // 이전 leg 대신 이 라인을 추적
+      S.fwp = -1;   // 이전 leg 대신 활성 WP 를 지나는 S.crs 선을 추적
       updateNav();
     } else {
       return;   // 세팅할 NAV 소스 없음 → 피드백 없이 무시
@@ -191,7 +190,6 @@ Object.entries(btnMap).forEach(([id,[f,d]])=>{
     timer=setTimeout(()=>{interval=setInterval(()=>applyDelta(f,d),80);},350);
   }
   function stop(){
-    const wasActive = !!(timer || interval);
     clearTimeout(timer); timer=null;
     clearInterval(interval); interval=null;
     clearTimeout(guard); guard=null;

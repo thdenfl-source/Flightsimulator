@@ -671,7 +671,6 @@ setTimeout(() => { try { leafMap.invalidateSize(); } catch(e) { _swallow(e); } t
 //  BRG2(초록): 항공기 → FMS 활성 웨이포인트
 let brg1Line = L.polyline([],{color:'#44aaff',weight:2,opacity:0.85}).addTo(leafMap);
 let brg2Line = L.polyline([],{color:'#00cc44',weight:2,opacity:0.85}).addTo(leafMap);
-let _brg1LblMk = null, _brg2LblMk = null;
 
 function _brgLabelMarker(color) {
   const icon = L.divIcon({

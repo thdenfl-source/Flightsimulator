@@ -13,7 +13,6 @@ export async function run(page, t) {
   const used = new Set();
   for (const m of src.matchAll(/data-act="([A-Za-z_$][\w$]*)"/g)) used.add(m[1]);
   for (const m of src.matchAll(/\bact\('([A-Za-z_$][\w$]*)'/g)) used.add(m[1]);
-  for (const m of src.matchAll(/\baact\('([A-Za-z_$][\w$]*)'/g)) used.add(m[1]);
   used.delete('foo');   // 주석의 설명용 예시
 
   const registered = await page.evaluate(() =>

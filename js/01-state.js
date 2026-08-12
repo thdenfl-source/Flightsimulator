@@ -556,7 +556,6 @@ let holdLegType = 'TIME';        // 'TIME' | 'DIST'
 let holdLegVal = 60;             // TIME 이면 초, DIST 이면 NM
 let _holdPhase = 'TOFIX';        // TOFIX | OUTBOUND | INBOUND
 let _holdEntry = '';             // DIRECT | PARALLEL | TEARDROP
-let _holdOutHdg = 0;             // 아웃바운드 목표 기수
 let _holdT = 0;                  // 아웃바운드 경과(초)
 let _holdPrevD = 1e9;            // 픽스 통과 판정용 이전 거리
 let _holdForceDir = 0;           // +1 우선회 강제 / -1 좌선회 강제 / 0 최단
@@ -866,9 +865,10 @@ function applyNavRadioToPfd() {
   const lbl = document.getElementById('nav-icao-lbl');
   if (lbl) { lbl.style.visibility = 'visible'; lbl.textContent = (r.id || '----') + (r.freq ? ' ' + r.freq : ''); }
 }
-// Direct-To 앵커: 이전 leg가 없는 활성 WP의 코스 선 기준점(선택 시점의 위치).
-// 이 앵커→WP 선을 leg처럼 고정 추적해 '포인트로 수렴'하지 않게 한다.
-let _dtoLat = null, _dtoLon = null;
+// PFD OAT용 지면 온도(°C) — METAR 조회 시 갱신, 기본은 ISA 해면온도 15°C.
+// 09-cdu.js 에 있던 것을 여기로 옮겼다. 거기서 정의하면 첫 drawPFD 가 그보다
+// 먼저 돌아 "_oatSurfaceC is not defined" 예외가 한 번 나고 OAT 가 빈 채로 그려졌다.
+window._oatSurfaceC = window._oatSurfaceC ?? 15;
 
 // ── 유효 코스선(단일 소스) ────────────────────────────────────────────
 // CDI 편차·지도 코스선·NAV 오토파일럿이 서로 다른 기준선을 쓰면
