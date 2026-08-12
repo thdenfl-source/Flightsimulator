@@ -2169,6 +2169,36 @@ body.night-mode::after {
 </div><!-- end #app -->
 
 <script>
+
+// ── 무시되는 예외 집계 ───────────────────────────────────────────
+// 종전에는 곳곳에서 `catch(e) {}` 로 예외를 통째로 삼켰다. 그 탓에 clBack 처럼
+// 버튼이 조용히 죽어도 흔적이 남지 않아, 사용자가 화면을 보고 신고해야만 알 수 있었다.
+// 이제 모든 무시 예외는 여기를 지난다. 평소 동작은 종전과 같고(아무것도 안 함),
+// 디버그 모드에서만 콘솔에 남긴다. 최근 200건은 항상 메모리에 보관한다.
+//   디버그 켜기: URL 에 ?debug=1 · localhost · localStorage.setItem('debug','1')
+//   확인:        _swallowed()          최근 무시 예외 목록
+//                _swallowSummary()     메시지별 발생 횟수(반복되는 것이 진짜 문제)
+const _SWALLOW_LOG = [];
+let _DEBUG = false;
+function _swallow(e) {
+  try {
+    const at = (((e && e.stack) || '').split('\n')[1] || '').trim();
+    _SWALLOW_LOG.push({ t: Date.now(), msg: (e && e.message) || String(e), at });
+    if (_SWALLOW_LOG.length > 200) _SWALLOW_LOG.shift();
+    if (_DEBUG) console.debug('[무시된 예외]', (e && e.message) || e, at);
+  } catch (_) { /* 집계 자체가 실패해도 앱 동작에는 영향을 주지 않는다 */ }
+}
+function _swallowed() { return _SWALLOW_LOG.slice(); }
+function _swallowSummary() {
+  const c = {};
+  _SWALLOW_LOG.forEach(r => { c[r.msg] = (c[r.msg] || 0) + 1; });
+  return Object.entries(c).sort((a, b) => b[1] - a[1]);
+}
+try {
+  _DEBUG = /[?&]debug=1/.test(location.search)
+        || location.hostname === 'localhost' || location.hostname === '127.0.0.1'
+        || localStorage.getItem('debug') === '1';
+} catch (e) { _swallow(e); }
 // ══════════════════════════════════════════════════════
 // DATABASE
 // ══════════════════════════════════════════════════════
@@ -3144,7 +3174,7 @@ try {
   unitDist = localStorage.getItem('unitDist') || 'NM';
   unitSpd  = localStorage.getItem('unitSpd')  || 'kt';
   unitTemp = localStorage.getItem('unitTemp') || 'C';
-} catch(e) {}
+} catch(e) { _swallow(e); }
 // ── 계기(PFD)용 원시 변환·라벨 헬퍼 (숫자만 반환) ──
 const A_CV = () => unitAlt  === 'm'   ? 0.3048  : 1;        // ft → 표시
 const S_CV = () => unitSpd  === 'kmh' ? 1.852   : 1;        // kt → 표시
@@ -3174,14 +3204,14 @@ function uSpd(kt, dec) {
   return unitSpd === 'kmh' ? Math.round(kt * 1.852) + ' km/h' : Math.round(kt) + ' kt';
 }
 function setUnit(kind, val) {
-  if (kind === 'alt')  { unitAlt  = val; try { localStorage.setItem('unitAlt',  val); } catch(e) {} }
-  if (kind === 'dist') { unitDist = val; try { localStorage.setItem('unitDist', val); } catch(e) {} }
-  if (kind === 'spd')  { unitSpd  = val; try { localStorage.setItem('unitSpd',  val); } catch(e) {} }
-  if (kind === 'temp') { unitTemp = val; try { localStorage.setItem('unitTemp', val); } catch(e) {} }
-  try { drawPFD(); } catch(e) {}
-  try { updateNav(); } catch(e) {}
-  try { updateTerrainCut(); } catch(e) {}
-  try { if (rangeRingsOn) _updateRangeRings(); } catch(e) {}
+  if (kind === 'alt')  { unitAlt  = val; try { localStorage.setItem('unitAlt',  val); } catch(e) { _swallow(e); } }
+  if (kind === 'dist') { unitDist = val; try { localStorage.setItem('unitDist', val); } catch(e) { _swallow(e); } }
+  if (kind === 'spd')  { unitSpd  = val; try { localStorage.setItem('unitSpd',  val); } catch(e) { _swallow(e); } }
+  if (kind === 'temp') { unitTemp = val; try { localStorage.setItem('unitTemp', val); } catch(e) { _swallow(e); } }
+  try { drawPFD(); } catch(e) { _swallow(e); }
+  try { updateNav(); } catch(e) { _swallow(e); }
+  try { updateTerrainCut(); } catch(e) { _swallow(e); }
+  try { if (rangeRingsOn) _updateRangeRings(); } catch(e) { _swallow(e); }
 }
 function normA(a)  { return ((a % 360) + 360) % 360; }
 function normAS(a) { a = normA(a); return a > 180 ? a - 360 : a; }
@@ -4752,7 +4782,7 @@ function toggle3dMap() {
     if (tiltCtrl) tiltCtrl.classList.remove('active');
     // Returning to 2D — Leaflet needs to recompute its size; apply follow immediately
     setTimeout(() => {
-      try { leafMap.invalidateSize(); } catch (e) {}
+      try { leafMap.invalidateSize(); } catch (e) { _swallow(e); }
       _applyFollow();
     }, 50);
   }
@@ -4816,7 +4846,7 @@ function _init3dMap() {
 
   _ml3d.on('error', (e) => console.warn('[3D] map error:', e && e.error ? e.error.message : e));
   // 사용자가 3D 지도를 수동 회전할 때도 마커가 실제 기수를 가리키도록 갱신
-  _ml3d.on('rotate', () => { try { _update3dMarker(); } catch(e) {} });
+  _ml3d.on('rotate', () => { try { _update3dMarker(); } catch(e) { _swallow(e); } });
 
   _ml3d.on('load', () => {
     // Terrain is best-effort — a DEM failure must not blank the satellite view
@@ -5260,7 +5290,7 @@ function startGPS() {
     return;
   }
   // 이전 watch가 남아있으면 정리(중복 방지)
-  if (gpsWatchId !== null) { try { navigator.geolocation.clearWatch(gpsWatchId); } catch(e){} gpsWatchId = null; }
+  if (gpsWatchId !== null) { try { navigator.geolocation.clearWatch(gpsWatchId); } catch(e){ _swallow(e); } gpsWatchId = null; }
 
   // 즉시 GPS 모드로 전환(시뮬레이션 물리와 충돌 방지) + '위치 확인 중' 표시
   gpsMode = true;
@@ -5351,7 +5381,7 @@ function startDevOrientation() {
     } else {
       bind();
     }
-  } catch(e) {}
+  } catch(e) { _swallow(e); }
 }
 function stopDevOrientation() {
   if (_devHdgBound) { window.removeEventListener('deviceorientation', _onDevOrientation); _devHdgBound = false; }
@@ -5543,11 +5573,15 @@ let vorCrsLine = L.polyline([],{color:'#44aaff',weight:1.5,dashArray:'10 5',opac
 let spdVecLine = L.polyline([], {color:'#ff1744', weight:2.5, opacity:0.95}).addTo(leafMap);
 let spdVecHead = L.polygon([],  {color:'#ff1744', weight:1, fillColor:'#ff1744', fillOpacity:1, opacity:1}).addTo(leafMap);
 
+// FDR 재생 여부 — 선언이 FDR 블록(아래쪽)에 있었는데 여기서 먼저 읽어
+// 기동 중 TDZ 예외("Cannot access '_fdrPlaying' before initialization")가
+// 조용히 삼켜지고 있었다. 첫 사용처보다 앞으로 옮겨 근본 원인을 없앤다.
+let _fdrPlaying = false;
+
 function updateSpeedVector() {
   // 1분 예상궤적: 선회 중(뱅크)에는 선회율+바람을 적분한 곡선,
   // 직진 시에는 기존처럼 직선. GPS/FDR 모드는 지상속도·트랙 그대로 직선.
-  let fdrOn = false; try { fdrOn = !!_fdrPlaying; } catch(e) {}
-  const simMode = !gpsMode && !fdrOn;
+  const simMode = !gpsMode && !_fdrPlaying;
   const airSpd = Math.min(Math.max(S.spd || 0, 0), 130);   // 130kt 상한
   const wEff = (simMode && typeof effectiveWindSpd === 'function') ? effectiveWindSpd() : 0;
   const wt = normA(windDir + 180) * D2R;
@@ -5663,7 +5697,7 @@ function vnavCalc() {
       const _x = courseXtk(_L);
       d = Math.sqrt(Math.max(0, dDir * dDir - _x * _x));      // 레그 방향 성분
     }
-  } catch(e) {}
+  } catch(e) { _swallow(e); }
   const slope = Math.tan(Math.abs(vnavAngle) * D2R);
   const sign = vnavAngle < 0 ? 1 : -1;                        // 강하각이면 타깃보다 높은 곳이 경로
   const pathH = d * FT_PER_NM * slope * sign;                 // 타깃 대비 현재 거리에서의 경로 고도차
@@ -5694,16 +5728,16 @@ function vnavAlertCheck() {
   else if (tToTod > 0 && tToTod <= 10 && vn.dev > 30) st = 'pre';   // 10초 전 예고
   if (st !== _vnavAlertState) {
     _vnavAlertState = st;
-    if (st === 'pre')  { el.className = 'pre';   el.textContent = '▼ VNAV: 강하 시작 10초 전'; try { navigator.vibrate && navigator.vibrate(150); } catch(e) {} }
-    else if (st === 'begin') { el.className = 'begin'; el.textContent = '▼ BEGIN DESCENT — ' + Math.round(vn.vs) + ' fpm'; try { navigator.vibrate && navigator.vibrate([250,100,250]); } catch(e) {} }
+    if (st === 'pre')  { el.className = 'pre';   el.textContent = '▼ VNAV: 강하 시작 10초 전'; try { navigator.vibrate && navigator.vibrate(150); } catch(e) { _swallow(e); } }
+    else if (st === 'begin') { el.className = 'begin'; el.textContent = '▼ BEGIN DESCENT — ' + Math.round(vn.vs) + ' fpm'; try { navigator.vibrate && navigator.vibrate([250,100,250]); } catch(e) { _swallow(e); } }
     else { el.className = ''; el.textContent = ''; }
   }
 }
-setInterval(() => { try { vnavAlertCheck(); } catch(e) {} }, 1000);
+setInterval(() => { try { vnavAlertCheck(); } catch(e) { _swallow(e); } }, 1000);
 
 // VNAV 리드아웃 HTML(실시간 갱신용) — UTIL VNAV 화면에서 재사용
 function _vnavReadoutHtml() {
-  let vn = null; try { vn = vnavCalc(); } catch(e) {}
+  let vn = null; try { vn = vnavCalc(); } catch(e) { _swallow(e); }
   if (!vnavActive) {
     return `<div style="color:#567;font-size:10px;padding:8px 4px;">타깃 고도와 각도(강하 −, 상승 +)를 입력하고 ENT 하세요. 활성 웨이포인트가 타깃입니다.</div>`;
   }
@@ -5731,7 +5765,7 @@ setInterval(() => {
       const el = document.getElementById('vnav-readout');
       if (el) el.innerHTML = _vnavReadoutHtml();
     }
-  } catch(e) {}
+  } catch(e) { _swallow(e); }
 }, 1000);
 
 function updateTerrainCut() {
@@ -5751,7 +5785,7 @@ function updateTerrainCut() {
   }
   const acFt = S.alt || 0;
   // ── 항공기 고도 중심 표시: 현재고도를 화면 중앙(H/2)에 고정, 반경 VR(ft) 내 상대 표시 ──
-  let _vn = null; try { _vn = vnavCalc(); } catch(e) {}
+  let _vn = null; try { _vn = vnavCalc(); } catch(e) { _swallow(e); }
   let maxDelta = 1000;
   for (let i = 0; i <= N; i++) { const dd = Math.abs(elevs[i] - acFt); if (dd > maxDelta) maxDelta = dd; }
   if (_vn && !_vn.err) maxDelta = Math.max(maxDelta, Math.min(Math.abs(_vn.tgtAlt - acFt), 6000));
@@ -5821,12 +5855,12 @@ function updateTerrainCut() {
       const devTxt = (vn.dev >= 0 ? '+' : '') + Math.round(vn.dev);
       g.fillText(`VNAV ${vn.ang.toFixed(1)}°  Δ${devTxt}ft`, 4, H / 2 + 16);
     }
-  } catch(e) {}
+  } catch(e) { _swallow(e); }
   // 간이 TAWS: 전방 10NM 이내(샘플 절반)에 여유고도 100ft 미만 지형이 있으면 경고
   {
     let danger = false;
     // INHIBIT 시 경고 억제 (inhibTaws는 뒤에서 선언되므로 방어적 접근)
-    let _inh = false; try { _inh = inhibTaws; } catch(e) {}
+    let _inh = false; try { _inh = inhibTaws; } catch(e) { _swallow(e); }
     if (_inh) {
       const ta0 = document.getElementById('terrain-alert');
       if (ta0) ta0.classList.remove('on');
@@ -5838,7 +5872,7 @@ function updateTerrainCut() {
     if (ta) {
       const was = ta.classList.contains('on');
       ta.classList.toggle('on', danger);
-      if (danger && !was) { try { navigator.vibrate && navigator.vibrate([300,100,300]); } catch(e) {} }
+      if (danger && !was) { try { navigator.vibrate && navigator.vibrate([300,100,300]); } catch(e) { _swallow(e); } }
     }
     }
   }
@@ -5848,7 +5882,7 @@ let _tcTick = 0;
 setInterval(() => {
   _tcTick++;
   if (gpsMode && _tcTick % 4 !== 0) return;
-  try { updateTerrainCut(); } catch(e) {}
+  try { updateTerrainCut(); } catch(e) { _swallow(e); }
 }, 1000);
 
 // T-CUT 버튼: vertical situation(지형 단면) 패널 표시/숨김 토글.
@@ -5859,14 +5893,14 @@ function toggleTcut() {
   const hidden = wrap.classList.toggle('tcut-off');
   document.getElementById('map-tcut-btn').classList.toggle('active', !hidden);
   setTimeout(() => {
-    try { leafMap.invalidateSize(); } catch(e) {}
-    try { if (_ml3d) _ml3d.resize(); } catch(e) {}
-    try { updateCenterCoord(); } catch(e) {}
-    if (!hidden) { try { updateTerrainCut(); } catch(e) {} }
+    try { leafMap.invalidateSize(); } catch(e) { _swallow(e); }
+    try { if (_ml3d) _ml3d.resize(); } catch(e) { _swallow(e); }
+    try { updateCenterCoord(); } catch(e) { _swallow(e); }
+    if (!hidden) { try { updateTerrainCut(); } catch(e) { _swallow(e); } }
   }, 60);
 }
 // 지도 영역이 80%로 바뀌었으므로 Leaflet 리사이즈 강제(초기 렌더 보정)
-setTimeout(() => { try { leafMap.invalidateSize(); } catch(e) {} try { updateTerrainCut(); } catch(e) {} }, 300);
+setTimeout(() => { try { leafMap.invalidateSize(); } catch(e) { _swallow(e); } try { updateTerrainCut(); } catch(e) { _swallow(e); } }, 300);
 
 // ── BRG1/BRG2 베어링 라인 (HSI 사이드패널과 동일 소스·색) ──
 //  BRG1(파랑): 항공기 → 선택 항법시설(VOR/ILS)
@@ -5919,7 +5953,7 @@ function updateHoldLine() {
     const segs = [];
     S.wps.forEach(wp => { if (wp && wp.hold) segs.push(holdPatternLatLngs(wp, wp.hold)); });
     holdLine.setLatLngs(segs);
-  } catch(e) {}
+  } catch(e) { _swallow(e); }
 }
 
 function updateCrsLine() {
@@ -6006,7 +6040,7 @@ function toggleFollow() {
   followMode = !followMode;
   const btn = document.getElementById('follow-btn');
   btn.classList.toggle('active', followMode);
-  try { updateCenterCoord(); } catch(e) {}   // 좌표 기준(중앙↔항공기) 즉시 전환
+  try { updateCenterCoord(); } catch(e) { _swallow(e); }   // 좌표 기준(중앙↔항공기) 즉시 전환
   // 1인칭 모드에서는 중앙 십자마크 숨김(항공기 기준 좌표 표시 중)
   const ch = document.getElementById('map-crosshair');
   if (ch) ch.style.display = followMode ? 'none' : '';
@@ -6018,7 +6052,7 @@ function toggleFollow() {
     // Re-enable Leaflet dragging unless HDG-UP also needs it disabled
     if (!mapHdgUp) leafMap.dragging.enable();
     // Clear any 3D camera padding so manual exploration recentres normally
-    if (_ml3d) { try { _ml3d.setPadding({ top: 0, bottom: 0, left: 0, right: 0 }); } catch (e) {} }
+    if (_ml3d) { try { _ml3d.setPadding({ top: 0, bottom: 0, left: 0, right: 0 }); } catch (e) { _swallow(e); } }
   }
 }
 
@@ -6032,7 +6066,7 @@ function updateCenterCoord() {
   el.textContent = `${tag} ${decToDMS(lat, true)} ${decToDMS(lon, false)}`;   // 북위·동경 1줄 표시
 }
 leafMap.on('move', updateCenterCoord);
-try { updateCenterCoord(); } catch(e) {}
+try { updateCenterCoord(); } catch(e) { _swallow(e); }
 
 // In 1인칭, place the aircraft a quarter of the way up from the bottom of the
 // screen (vertical position ≈ 0.75 H from top) so the forward view is larger.
@@ -6098,7 +6132,7 @@ function toggleMapOrient() {
 }
 // ── 레인지 링(거리·방위 링) ──
 let rangeRingsOn = false, ringRadii = [5, 10];   // NM
-try { rangeRingsOn = localStorage.getItem('rangeRingsOn') === '1'; } catch(e) {}
+try { rangeRingsOn = localStorage.getItem('rangeRingsOn') === '1'; } catch(e) { _swallow(e); }
 let _ringLayer = null;
 function _updateRangeRings() {
   if (_ringLayer) { leafMap.removeLayer(_ringLayer); _ringLayer = null; }
@@ -6119,7 +6153,7 @@ function _updateRangeRings() {
 }
 function toggleRangeRings() {
   rangeRingsOn = !rangeRingsOn;
-  try { localStorage.setItem('rangeRingsOn', rangeRingsOn ? '1' : '0'); } catch(e) {}
+  try { localStorage.setItem('rangeRingsOn', rangeRingsOn ? '1' : '0'); } catch(e) { _swallow(e); }
   _ringLastLat = null;   // 즉시 갱신 강제
   _updateRangeRings();
 }
@@ -6233,7 +6267,7 @@ function fpGo(mode) { fpMode = mode; if(mode==='IDENT'||mode==='LAT'||mode==='LO
 
 // FPL 자동 저장 — 새로고침해도 비행계획 유지
 function _fplPersist() {
-  try { localStorage.setItem('fplSave', JSON.stringify({ wps: S.wps, awp: S.awp })); } catch(e) {}
+  try { localStorage.setItem('fplSave', JSON.stringify({ wps: S.wps, awp: S.awp })); } catch(e) { _swallow(e); }
 }
 function _fplRestore() {
   try {
@@ -6243,7 +6277,7 @@ function _fplRestore() {
       S.awp = (typeof s.awp === 'number' && s.awp < s.wps.length) ? s.awp : -1;
       updateWpMarkers(); updateNav();
     }
-  } catch(e) {}
+  } catch(e) { _swallow(e); }
 }
 
 function fpRender() {
@@ -6535,13 +6569,13 @@ function fpHoldApply() {
     legVal: fpHoldDraft.legVal,
   };
   holdExit();                                // 새 설정으로 다시 무장되게 초기화
-  try { updateHoldLine(); updateNav(); } catch(e) {}
+  try { updateHoldLine(); updateNav(); } catch(e) { _swallow(e); }
   fpGo('LIST');
 }
 function fpHoldRemove() {
   if (fpHoldIdx >= 0 && fpHoldIdx < S.wps.length) delete S.wps[fpHoldIdx].hold;
   holdExit();
-  try { updateHoldLine(); updateNav(); } catch(e) {}
+  try { updateHoldLine(); updateNav(); } catch(e) { _swallow(e); }
   fpGo('LIST');
 }
 
@@ -7045,10 +7079,10 @@ const _keyMap = {
 };
 // 물리 키보드 단축키(DeX·데스크톱에서 오작동 시 설정에서 끌 수 있음)
 let kbdShortcuts = true;
-try { kbdShortcuts = localStorage.getItem('kbdShortcuts') !== '0'; } catch(e) {}
+try { kbdShortcuts = localStorage.getItem('kbdShortcuts') !== '0'; } catch(e) { _swallow(e); }
 function toggleKbdShortcuts() {
   kbdShortcuts = !kbdShortcuts;
-  try { localStorage.setItem('kbdShortcuts', kbdShortcuts ? '1' : '0'); } catch(e) {}
+  try { localStorage.setItem('kbdShortcuts', kbdShortcuts ? '1' : '0'); } catch(e) { _swallow(e); }
   stopAllHolds();
 }
 document.addEventListener('keydown', e => {
@@ -7112,8 +7146,8 @@ const btnMap={
 const _holdStops = new Set();
 const HOLD_MAX_MS = 20000;      // 어떤 홀드도 20초를 넘기지 않음(런어웨이 방지)
 function stopAllHolds() {
-  Array.from(_holdStops).forEach(fn => { try { fn(); } catch(e) {} });
-  try { stopTrimHold(); } catch(e) {}
+  Array.from(_holdStops).forEach(fn => { try { fn(); } catch(e) { _swallow(e); } });
+  try { stopTrimHold(); } catch(e) { _swallow(e); }
 }
 window.addEventListener('blur', stopAllHolds);
 document.addEventListener('visibilitychange', () => { if (document.hidden) stopAllHolds(); });
@@ -7418,7 +7452,7 @@ function simStep(ts){
   // 발열 저감: GPS 모드(데이터 3초 주기)에서는 PFD를 10fps로 제한.
   // 시뮬 비행·FDR 리플레이는 기존 60fps 유지.
   let _lowFps = false;
-  if (gpsMode) { try { _lowFps = !_fdrPlaying; } catch(e) { _lowFps = true; } }
+  if (gpsMode) _lowFps = !_fdrPlaying;
   if (!_lowFps || performance.now() - _pfdDrawLast >= 100) {
     _pfdDrawLast = performance.now();
     // 자가치유: PFD가 보이는데 캔버스 크기가 표시영역과 어긋나면 재조정.
@@ -7477,7 +7511,7 @@ function scaleCdu() {
 let leftSel = 'pfd', rightSel = 'map';   // 'pfd' | 'map' | 'cdu' | (우측 한정 'plan')
 let midSel  = 'map';                    // 3분할일 때만 사용하는 중앙 패널
 let tripleMode = false;                 // 3분할(PFD·MAP·CDU) 여부
-try { tripleMode = localStorage.getItem('tripleMode') === '1'; } catch(e) {}
+try { tripleMode = localStorage.getItem('tripleMode') === '1'; } catch(e) { _swallow(e); }
 
 // 3분할 분할 비율 [좌%, 중%] — null 이면 기본 배분(PFD 호스트 1.4배)
 const TRI_MIN = 12;                     // 한 창의 최소 비율(%)
@@ -7485,7 +7519,7 @@ let triRatio = null;
 try {
   const s = JSON.parse(localStorage.getItem('triSplit') || 'null');
   if (Array.isArray(s) && s.length === 2 && s.every(v => typeof v === 'number')) triRatio = s;
-} catch(e) {}
+} catch(e) { _swallow(e); }
 
 // 기본 3분할 배분 — PFD 가 있는 창만 FCP 조작부가 다 보이도록 1.4배
 function triDefaultRatio() {
@@ -7501,13 +7535,13 @@ function applyTriRatio() {
   app.style.setProperty('--tri-m', m.toFixed(3) + '%');
 }
 function saveTriRatio() {
-  try { localStorage.setItem('triSplit', JSON.stringify(triRatio)); } catch(e) {}
+  try { localStorage.setItem('triSplit', JSON.stringify(triRatio)); } catch(e) { _swallow(e); }
 }
 
 // 3분할 ⇄ 2분할 전환. 3분할 진입 시 PFD·MAP·CDU를 좌·중·우로 배치한다.
 function toggleTriple(on) {
   tripleMode = (on === undefined) ? !tripleMode : !!on;
-  try { localStorage.setItem('tripleMode', tripleMode ? '1' : '0'); } catch(e) {}
+  try { localStorage.setItem('tripleMode', tripleMode ? '1' : '0'); } catch(e) { _swallow(e); }
   if (tripleMode) { leftSel = 'pfd'; midSel = 'map'; rightSel = 'cdu'; }
   else {
     // 2분할 복귀: 가운데 창을 우측으로 접는다(PFD·MAP·CDU → PFD·MAP)
@@ -7570,8 +7604,8 @@ function applyPanels() {
   // 크기 재계산
   requestAnimationFrame(() => { resizePFD(); drawPFD(); scaleCdu(); });
   setTimeout(() => {
-    try { leafMap.invalidateSize(); } catch(e) {}
-    try { if (_ml3d) _ml3d.resize(); } catch(e) {}
+    try { leafMap.invalidateSize(); } catch(e) { _swallow(e); }
+    try { if (_ml3d) _ml3d.resize(); } catch(e) { _swallow(e); }
     scaleCdu();
   }, 60);
 }
@@ -7593,11 +7627,11 @@ function setPage(n) { selectPanel('right', ['map', 'plan', 'cdu'][n] || 'map', t
   // 좌측을 고정폭으로 두고, 우측은 남은 공간을 채우도록(split-custom) 전환
   const applyRatio = pct => { L.style.flex = `0 0 ${pct}%`; app.classList.add('split-custom'); };
   const afterResize = () => {
-    requestAnimationFrame(() => { try { resizePFD(); drawPFD(); } catch(e) {} });
+    requestAnimationFrame(() => { try { resizePFD(); drawPFD(); } catch(e) { _swallow(e); } });
     setTimeout(() => {
-      try { leafMap.invalidateSize(); } catch(e) {}
-      try { if (_ml3d) _ml3d.resize(); } catch(e) {}
-      try { scaleCdu(); } catch(e) {}
+      try { leafMap.invalidateSize(); } catch(e) { _swallow(e); }
+      try { if (_ml3d) _ml3d.resize(); } catch(e) { _swallow(e); }
+      try { scaleCdu(); } catch(e) { _swallow(e); }
     }, 60);
   };
 
@@ -7622,7 +7656,7 @@ function setPage(n) { selectPanel('right', ['map', 'plan', 'cdu'][n] || 'map', t
     el.addEventListener('pointerdown', e => {
       if (which === 2 && !tripleMode) return;
       e.preventDefault(); dragging = true;
-      try { el.setPointerCapture(e.pointerId); } catch(err) {}
+      try { el.setPointerCapture(e.pointerId); } catch(err) { _swallow(err); }
     });
     el.addEventListener('pointermove', e => {
       if (!dragging) return;
@@ -7645,7 +7679,7 @@ function setPage(n) { selectPanel('right', ['map', 'plan', 'cdu'][n] || 'map', t
         triRatio = [l, m];
         applyTriRatio();
       }
-      try { resizePFD(); } catch(err) {}
+      try { resizePFD(); } catch(err) { _swallow(err); }
     });
     const end = () => {
       if (!dragging) return;
@@ -7653,7 +7687,7 @@ function setPage(n) { selectPanel('right', ['map', 'plan', 'cdu'][n] || 'map', t
       if (tripleMode) saveTriRatio();
       else {
         const mm = /0 0 ([\d.]+)%/.exec(L.style.flex || '');
-        if (mm) try { localStorage.setItem('splitRatio', mm[1]); } catch(err) {}
+        if (mm) try { localStorage.setItem('splitRatio', mm[1]); } catch(err) { _swallow(err); }
       }
       afterResize();
     };
@@ -7663,7 +7697,7 @@ function setPage(n) { selectPanel('right', ['map', 'plan', 'cdu'][n] || 'map', t
     el.addEventListener('dblclick', () => {
       if (tripleMode) { triRatio = null; applyTriRatio(); saveTriRatio(); }
       else { L.style.flex = ''; app.classList.remove('split-custom');
-             try { localStorage.removeItem('splitRatio'); } catch(err) {} }
+             try { localStorage.removeItem('splitRatio'); } catch(err) { _swallow(err); } }
       afterResize();
     });
   }
@@ -7688,7 +7722,7 @@ function lockScreen() {
   _screenLocked = true;
   document.getElementById('lock-overlay').classList.add('on');
   const b = document.getElementById('lock-btn'); if (b) b.classList.add('locked');
-  try { navigator.vibrate && navigator.vibrate(40); } catch(e) {}
+  try { navigator.vibrate && navigator.vibrate(40); } catch(e) { _swallow(e); }
 }
 function unlockScreen() {
   _screenLocked = false;
@@ -7696,7 +7730,7 @@ function unlockScreen() {
   const b = document.getElementById('lock-btn'); if (b) b.classList.remove('locked');
   const f = document.getElementById('lock-unlock-fill'); if (f) f.style.width = '0%';
   const t = document.getElementById('lock-unlock-txt'); if (t) t.textContent = '길게 눌러 해제';
-  try { navigator.vibrate && navigator.vibrate([40, 60, 40]); } catch(e) {}
+  try { navigator.vibrate && navigator.vibrate([40, 60, 40]); } catch(e) { _swallow(e); }
 }
 (function initScreenLock() {
   const btn  = document.getElementById('lock-unlock');
@@ -7720,7 +7754,7 @@ function unlockScreen() {
   };
   btn.addEventListener('pointerdown', e => {
     e.preventDefault(); e.stopPropagation();
-    try { btn.setPointerCapture(e.pointerId); } catch(err) {}
+    try { btn.setPointerCapture(e.pointerId); } catch(err) { _swallow(err); }
     t0 = performance.now(); tick();
   });
   ['pointerup','pointercancel','pointerleave'].forEach(ev =>
@@ -7743,11 +7777,11 @@ function toggleRuler() {
   if (b) b.classList.toggle('ruler-active', _rulerOn);
   if (_rulerOn) {
     leafMap.on('click', _rulerClick);
-    try { leafMap.getContainer().style.cursor = 'crosshair'; } catch(e) {}
+    try { leafMap.getContainer().style.cursor = 'crosshair'; } catch(e) { _swallow(e); }
     _rulerRender();
   } else {
     leafMap.off('click', _rulerClick);
-    try { leafMap.getContainer().style.cursor = ''; } catch(e) {}
+    try { leafMap.getContainer().style.cursor = ''; } catch(e) { _swallow(e); }
     _rulerClearAll();
   }
 }
@@ -7756,12 +7790,12 @@ function _rulerUndo() { _rulerPts.pop(); _rulerRender(); }
 function _rulerReset() { _rulerPts = []; _rulerRender(); }
 function _rulerClearAll() {
   _rulerPts = [];
-  if (_rulerLayer) { try { leafMap.removeLayer(_rulerLayer); } catch(e) {} _rulerLayer = null; }
+  if (_rulerLayer) { try { leafMap.removeLayer(_rulerLayer); } catch(e) { _swallow(e); } _rulerLayer = null; }
   const el = document.getElementById('ruler-readout');
   if (el) el.style.display = 'none';
 }
 function _rulerRender() {
-  if (_rulerLayer) { try { leafMap.removeLayer(_rulerLayer); } catch(e) {} _rulerLayer = null; }
+  if (_rulerLayer) { try { leafMap.removeLayer(_rulerLayer); } catch(e) { _swallow(e); } _rulerLayer = null; }
   const g = L.layerGroup();
   const P = _rulerPts;
   // 점 표시
@@ -7826,7 +7860,7 @@ function toggleMapFull() {
 function fpGoCduHome() {
   if (_soloActive) setSolo('cdu');
   else setPage(2);
-  try { switchMode('HOME'); } catch(e) {}
+  try { switchMode('HOME'); } catch(e) { _swallow(e); }
 }
 
 // CDU 하단 Full 버튼 — 상단 Full Screen 탭과 동일하게 CDU 전체화면 진입
@@ -7846,7 +7880,7 @@ function cduFullNavBtn() {
 // PLAN 버튼 — Flight Plan 화면 열기(분할/전체화면 모두 대응)
 function openFlightPlan() {
   // 직전에 PROC(IFR) 등을 열어 fpMode가 남아있으면 플랜 목록으로 되돌림
-  try { fpMode = 'LIST'; fpRender(); } catch(e) {}
+  try { fpMode = 'LIST'; fpRender(); } catch(e) { _swallow(e); }
   if (_soloActive) setSolo('plan'); else setPage(1);
 }
 // Flight Plan 화면의 FULL — 플랜을 전체화면으로
@@ -7948,8 +7982,8 @@ function setSolo(screen) {
 
 // solo 상태 변화 시 CDU/Flight Plan 푸터를 다시 그려 FULL⇄HALF 반영
 function _refreshCduFooters() {
-  try { renderCduContent(); } catch (e) {}
-  try { if (typeof fpRender === 'function') fpRender(); } catch (e) {}
+  try { renderCduContent(); } catch (e) { _swallow(e); }
+  try { if (typeof fpRender === 'function') fpRender(); } catch (e) { _swallow(e); }
 }
 
 function exitSolo() {
@@ -8738,7 +8772,7 @@ async function _getAptInfo(icao) {
     }
     if (info.elevM == null && !info.arp && !info.rwys.length && !Object.keys(info.freqs).length) return null;
     cache[icao] = info;
-    try { localStorage.setItem('aptInfoDB2', JSON.stringify(cache)); } catch(e) {}
+    try { localStorage.setItem('aptInfoDB2', JSON.stringify(cache)); } catch(e) { _swallow(e); }
     return info;
   } catch(e) { return null; }
 }
@@ -8852,7 +8886,7 @@ function customSids() {
   try { return JSON.parse(localStorage.getItem('customSids') || '{}'); } catch(e) { return {}; }
 }
 function saveCustomSids(o) {
-  try { localStorage.setItem('customSids', JSON.stringify(o)); } catch(e) {}
+  try { localStorage.setItem('customSids', JSON.stringify(o)); } catch(e) { _swallow(e); }
 }
 // 해당 공항의 SID 목록(AIP + 사용자). 표시 순서 = 인덱스
 function allSids(icao) {
@@ -8869,7 +8903,7 @@ function aipAirportList() {
       if (!a.pub || !a.code || a.code.length !== 2) return;
       out.push({ icao: 'RK' + a.code, name: a.name });
     });
-  } catch(e) {}
+  } catch(e) { _swallow(e); }
   Object.keys(IFR_DB).forEach(k => {
     if (!out.some(o => o.icao === k)) out.push({ icao: k, name: IFR_DB[k].name || '' });
   });
@@ -8950,7 +8984,7 @@ function onSidSelect() {
 // ── 절차 지도 미리보기 ──
 let _procPreviewLayer = null;
 function clearProcPreview() {
-  if (_procPreviewLayer) { try { leafMap.removeLayer(_procPreviewLayer); } catch(e) {} _procPreviewLayer = null; }
+  if (_procPreviewLayer) { try { leafMap.removeLayer(_procPreviewLayer); } catch(e) { _swallow(e); } _procPreviewLayer = null; }
 }
 function procPreview(wps) {
   clearProcPreview();
@@ -8974,8 +9008,8 @@ function sidShowOnMap() {
     const b = L.latLngBounds([]);
     _procPreviewLayer.eachLayer(l => { if (l.getLatLng) b.extend(l.getLatLng()); });
     cduOpenMap();
-    setTimeout(() => { try { leafMap.invalidateSize(); if (b.isValid()) leafMap.fitBounds(b, { padding:[45,45] }); } catch(e) {} }, 120);
-  } catch(e) {}
+    setTimeout(() => { try { leafMap.invalidateSize(); if (b.isValid()) leafMap.fitBounds(b, { padding:[45,45] }); } catch(e) { _swallow(e); } }, 120);
+  } catch(e) { _swallow(e); }
 }
 
 function addSidWps() {
@@ -9106,13 +9140,13 @@ function addAppWps() {
 const HELP_VERSION = '2';
 function closeHelp() {
   if (document.getElementById('help-dontshow')?.checked) {
-    try { localStorage.setItem('helpDismissed', HELP_VERSION); } catch(e) {}
+    try { localStorage.setItem('helpDismissed', HELP_VERSION); } catch(e) { _swallow(e); }
   }
   document.getElementById('help-overlay').style.display = 'none';
 }
 function showHelpOnLaunch() {
   let dismissed = null;
-  try { dismissed = localStorage.getItem('helpDismissed'); } catch(e) {}
+  try { dismissed = localStorage.getItem('helpDismissed'); } catch(e) { _swallow(e); }
   if (dismissed !== HELP_VERSION) document.getElementById('help-overlay').style.display = 'flex';
 }
 
@@ -9138,12 +9172,12 @@ function saveSession() {
       view: { mapHdgUp, followMode, leftSel, midSel, rightSel, tripleMode },
     };
     localStorage.setItem(SESSION_KEY, JSON.stringify(snap));
-  } catch(e) {}
+  } catch(e) { _swallow(e); }
 }
 
 function restoreSession() {
   let snap = null;
-  try { snap = JSON.parse(localStorage.getItem(SESSION_KEY) || 'null'); } catch(e) {}
+  try { snap = JSON.parse(localStorage.getItem(SESSION_KEY) || 'null'); } catch(e) { _swallow(e); }
   if (!snap || snap.v !== 1 || (Date.now() - snap.ts) > SESSION_TTL) return false;
   try {
     const s = snap.s || {};
@@ -9163,37 +9197,37 @@ function restoreSession() {
     const n = snap.nav || {};
     obsOn=!!n.obsOn; navSrc=n.navSrc||'FMS'; vorObsCrs=n.vorObsCrs??360;
     _dtoLat=(n.dtoLat===undefined?null:n.dtoLat); _dtoLon=(n.dtoLon===undefined?null:n.dtoLon);
-    if (n.navRadios) { try { ['NAV1','NAV2'].forEach(k => { if (n.navRadios[k]) navRadios[k] = Object.assign({}, navRadios[k], n.navRadios[k]); }); } catch(e) {} }
+    if (n.navRadios) { try { ['NAV1','NAV2'].forEach(k => { if (n.navRadios[k]) navRadios[k] = Object.assign({}, navRadios[k], n.navRadios[k]); }); } catch(e) { _swallow(e); } }
     const v = snap.view || {};
     mapHdgUp=!!v.mapHdgUp; followMode=!!v.followMode;
     if (v.leftSel) leftSel=v.leftSel; if (v.midSel) midSel=v.midSel; if (v.rightSel) rightSel=v.rightSel;
     if (v.tripleMode != null) tripleMode = !!v.tripleMode;
     // 재적용
-    try { updateFlyBtns(); } catch(e) {}
-    try { updateHoverBtns(); } catch(e) {}
-    try { updateCrsButtons(); } catch(e) {}
-    try { setNavSrc(navSrc); } catch(e) {}
-    try { applyPanels(); } catch(e) {}
-    try { updateWpMarkers(); fpRender(); updateNav(); } catch(e) {}
-    try { updateAcOnMap(); leafMap.setView([S.lat, S.lon]); } catch(e) {}
-    if (snap.gps) { try { startGPS(); } catch(e) {} }   // GPS 켜져 있었으면 재개
+    try { updateFlyBtns(); } catch(e) { _swallow(e); }
+    try { updateHoverBtns(); } catch(e) { _swallow(e); }
+    try { updateCrsButtons(); } catch(e) { _swallow(e); }
+    try { setNavSrc(navSrc); } catch(e) { _swallow(e); }
+    try { applyPanels(); } catch(e) { _swallow(e); }
+    try { updateWpMarkers(); fpRender(); updateNav(); } catch(e) { _swallow(e); }
+    try { updateAcOnMap(); leafMap.setView([S.lat, S.lon]); } catch(e) { _swallow(e); }
+    if (snap.gps) { try { startGPS(); } catch(e) { _swallow(e); } }   // GPS 켜져 있었으면 재개
     return true;
   } catch(e) { return false; }
 }
 
 // ── 야간 모드 ──
 let nightMode = false;
-try { nightMode = localStorage.getItem('nightMode') === '1'; } catch(e) {}
+try { nightMode = localStorage.getItem('nightMode') === '1'; } catch(e) { _swallow(e); }
 function applyNightMode() { document.body.classList.toggle('night-mode', nightMode); }
 function toggleNightMode() {
   nightMode = !nightMode;
-  try { localStorage.setItem('nightMode', nightMode ? '1' : '0'); } catch(e) {}
+  try { localStorage.setItem('nightMode', nightMode ? '1' : '0'); } catch(e) { _swallow(e); }
   applyNightMode();
 }
 
 // ── 근처 공항 자동 METAR → OAT/QNH 자동 반영 ──
 let autoMetarOn = true, _autoMetarLast = 0, _autoMetarIcao = '';
-try { autoMetarOn = localStorage.getItem('autoMetarOn') !== '0'; } catch(e) {}
+try { autoMetarOn = localStorage.getItem('autoMetarOn') !== '0'; } catch(e) { _swallow(e); }
 function _nearestAirport() {
   let best = null, bd = Infinity;
   (WX_AIRPORTS || []).forEach(a => {
@@ -9215,11 +9249,11 @@ async function _autoMetarTick() {
     setTimeout(() => ctl.abort(), 6000);
     let raw = null;
     try { raw = await _ivaoMetar(near.a.icao, ctl.signal); }
-    catch(e) { try { raw = await _vatsimMetar(near.a.icao, ctl.signal); } catch(e2) {} }
+    catch(e) { try { raw = await _vatsimMetar(near.a.icao, ctl.signal); } catch(e2) { _swallow(e2); } }
     if (raw) _parseMetar(raw.split('\n')[0]);       // _oatSurfaceC 자동 갱신
-  } catch(e) {}
+  } catch(e) { _swallow(e); }
 }
-setInterval(() => { try { _autoMetarTick(); } catch(e) {} }, 30000);
+setInterval(() => { try { _autoMetarTick(); } catch(e) { _swallow(e); } }, 30000);
 
 // ── PWA 설치 프롬프트 ──
 let _deferredPrompt = null;
@@ -9250,7 +9284,7 @@ async function prefetchTiles() {
     for (let dx = -3; dx <= 3; dx++) for (let dy = -3; dy <= 3; dy++) {
       const x = t.x + dx, y = t.y + dy;
       if (x < 0 || y < 0 || x >= t.n || y >= t.n) continue;
-      try { await fetch(urlFor(z, x, y), { mode: 'no-cors' }); count++; } catch(e) {}
+      try { await fetch(urlFor(z, x, y), { mode: 'no-cors' }); count++; } catch(e) { _swallow(e); }
     }
   }
   alert(`주변 지도 타일 ${count}개를 캐시했습니다.\n(오프라인/음영지역에서 이 영역이 표시됩니다)`);
@@ -9258,7 +9292,7 @@ async function prefetchTiles() {
 
 // ⟳ 새로고침: 세션을 지우고 초기 상태로 리로드(백그라운드 복원 종료)
 function hardReload() {
-  try { localStorage.removeItem(SESSION_KEY); } catch(e) {}
+  try { localStorage.removeItem(SESSION_KEY); } catch(e) { _swallow(e); }
   location.reload();
 }
 
@@ -9279,16 +9313,16 @@ function init(){
   S.pit = pitchFromSpd(S.spd);
   // NAV1/NAV2 무선의 튜닝 VOR 좌표 해석(ENR_VORS 정의 이후에 실행되도록 지연)
   setTimeout(() => {
-    try { ['NAV1','NAV2'].forEach(k => setNavRadio(k, navRadios[k].freq, navRadios[k].id)); } catch(e) {}
-    try { setNavSrc(navSrc); } catch(e) {}   // 현재 소스 라벨/CDI 반영
+    try { ['NAV1','NAV2'].forEach(k => setNavRadio(k, navRadios[k].freq, navRadios[k].id)); } catch(e) { _swallow(e); }
+    try { setNavSrc(navSrc); } catch(e) { _swallow(e); }   // 현재 소스 라벨/CDI 반영
   }, 0);
   if (!_restored) setPage(0);   // 복원 시엔 restoreSession의 applyPanels로 배치 유지
-  window.addEventListener('resize', () => { resizePFD(); try { leafMap.invalidateSize(); } catch(e) {} scaleCdu(); });
+  window.addEventListener('resize', () => { resizePFD(); try { leafMap.invalidateSize(); } catch(e) { _swallow(e); } scaleCdu(); });
   setTimeout(() => leafMap.invalidateSize(), 100);
   // 저장된 표시 포인트를 지도에 복원.
   // init()은 CDU 캡슐화 IIFE보다 먼저 실행되므로, 그 시점엔 _tpRenderMapPoints가
   // 아직 공개되지 않았다. 스크립트 전체가 끝난 뒤로 미룬다.
-  setTimeout(() => { try { _tpRenderMapPoints(); } catch(e) {} }, 0);
+  setTimeout(() => { try { _tpRenderMapPoints(); } catch(e) { _swallow(e); } }, 0);
   if (!_simLoopRunning) { _simLoopRunning = true; requestAnimationFrame(simStep); }
 
   // ── PFD canvas tap-to-edit ──
@@ -9442,10 +9476,10 @@ function createShipMarker() {
   let _shipLastTap = 0;
   shipMarker.on('click', e => {
     const t = Date.now();
-    if (t - _shipLastTap < 450) { try { L.DomEvent.stop(e); } catch(_) {} openShipPanel(); _shipLastTap = 0; }
+    if (t - _shipLastTap < 450) { try { L.DomEvent.stop(e); } catch(_) { _swallow(_); } openShipPanel(); _shipLastTap = 0; }
     else { _shipLastTap = t; }
   });
-  shipMarker.on('dblclick', e => { try { L.DomEvent.stop(e); } catch(_) {} openShipPanel(); });
+  shipMarker.on('dblclick', e => { try { L.DomEvent.stop(e); } catch(_) { _swallow(_); } openShipPanel(); });
 }
 
 function updateShipMarker() {
@@ -10911,13 +10945,13 @@ function act(name, ...args) {
 
     // ── Sunrise/Sunset: 현재 위치 채우기 + 결과 렌더 ──
     function utilSunHere() {
-      try { _UV.sunLat = +S.lat.toFixed(4); _UV.sunLon = +S.lon.toFixed(4); } catch(e) {}
+      try { _UV.sunLat = +S.lat.toFixed(4); _UV.sunLon = +S.lon.toFixed(4); } catch(e) { _swallow(e); }
       utilInput = '';
       switchMode('UTIL');
     }
     function _sunReadoutHtml() {
       let t = null;
-      try { t = _sunTimes(_UV.sunLat, _UV.sunLon, new Date()); } catch(e) {}
+      try { t = _sunTimes(_UV.sunLat, _UV.sunLon, new Date()); } catch(e) { _swallow(e); }
       if (!t) return `<div style="color:#e8a;font-size:11px;padding:8px 4px;">계산할 수 없습니다.</div>`;
       const hm = d => d ? String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0') : '--:--';
       const R = (l, v, c) => `<div style="display:flex;justify-content:space-between;padding:4px 6px;border-bottom:1px solid #12212c;">` +
@@ -11055,8 +11089,8 @@ function act(name, ...args) {
       else if (src === 'sunLat' || src === 'sunLon') { /* no-op */ }
       // ── VNAV (타깃 고도·각도 입력 → 전역 상태 동기화, T-CUT 연동) ──
       else if (src === 'vnavAlt' || src === 'vnavAng') {
-        try { vnavTgtAlt = _UV.vnavAlt; vnavAngle = _UV.vnavAng; vnavActive = true; } catch(e) {}
-        try { updateTerrainCut(); } catch(e) {}
+        try { vnavTgtAlt = _UV.vnavAlt; vnavAngle = _UV.vnavAng; vnavActive = true; } catch(e) { _swallow(e); }
+        try { updateTerrainCut(); } catch(e) { _swallow(e); }
       }
       else {
         const sgn = _UV.dmsd < 0 ? -1 : 1;
@@ -11798,7 +11832,7 @@ function act(name, ...args) {
     function _setToggle(which) {
       if (which === 'night') toggleNightMode();
       else if (which === 'rings') toggleRangeRings();
-      else if (which === 'metar') { autoMetarOn = !autoMetarOn; try { localStorage.setItem('autoMetarOn', autoMetarOn ? '1' : '0'); } catch(e) {} }
+      else if (which === 'metar') { autoMetarOn = !autoMetarOn; try { localStorage.setItem('autoMetarOn', autoMetarOn ? '1' : '0'); } catch(e) { _swallow(e); } }
       else if (which === 'aspc') toggleInhib('aspc');
       else if (which === 'taws') toggleInhib('taws');
       else if (which === 'kbd') toggleKbdShortcuts();
@@ -11868,7 +11902,7 @@ function act(name, ...args) {
     // 지도 표시용 아이콘 세트(이모지)
     const TP_ICONS = ['📍','🔴','🔺','⭐','🚩','🏁','❌','⚓','🚁','🏥','⚠️','⛵','🔷','🟢','🟡','🟣'];
     function _tpLoad(key) { try { return JSON.parse(localStorage.getItem(key) || '[]'); } catch(e) { return []; } }
-    function _tpSave(key, arr) { try { localStorage.setItem(key, JSON.stringify(arr)); } catch(e) {} }
+    function _tpSave(key, arr) { try { localStorage.setItem(key, JSON.stringify(arr)); } catch(e) { _swallow(e); } }
     // 폴더 구조: [{name, pts:[{name,lat,lon}]}]. 구버전 평면 tpPoints는 '기본' 폴더로 이전.
     function tpFolders() {
       let f = _tpLoad('tpFolders');
@@ -11926,13 +11960,13 @@ function act(name, ...args) {
     function tpMapAddFpl(fi, pi) {
       const r = _tpMapPt(fi, pi); if (!r || !r.p) return;
       pushWP({ ident: _tpFplIdent(r.p.name), lat: r.p.lat, lon: r.p.lon });
-      try { leafMap.closePopup(); } catch (e) {}
+      try { leafMap.closePopup(); } catch (e) { _swallow(e); }
     }
     function tpMapDirect(fi, pi) {
       const r = _tpMapPt(fi, pi); if (!r || !r.p) return;
       pushWP({ ident: _tpFplIdent(r.p.name), lat: r.p.lat, lon: r.p.lon });
       selectWP(S.wps.length - 1);   // 현재 위치 → 이 포인트로 Direct-To
-      try { leafMap.closePopup(); } catch (e) {}
+      try { leafMap.closePopup(); } catch (e) { _swallow(e); }
     }
 
     // 아이콘 선택 화면 열기/적용
@@ -12002,7 +12036,7 @@ function act(name, ...args) {
       const cf = _curFolder(); if (!cf) return; const p = cf.folder.pts[i]; if (!p) return;
       pushWP({ ident: p.name, lat: p.lat, lon: p.lon });
       selectWP(S.wps.length - 1);
-      try { cduOpenMap(); } catch(e) {}
+      try { cduOpenMap(); } catch(e) { _swallow(e); }
     }
     // 선택 = 지도 표시(show). 체크 시 지도에 마커, 내보내기 대상도 됨.
     function tpSelToggle(i) { const cf = _curFolder(); if (!cf) return; const p = cf.folder.pts[i]; p.show = !p.show; _tpSave('tpFolders', cf.f); _tpRenderMapPoints(); switchMode('TRACKPOINT'); }
@@ -12124,7 +12158,7 @@ function act(name, ...args) {
     function tpImportPoints() {
       const cf = _curFolder(); if (!cf) return;
       _tpPickFile((text) => {
-        let pts = []; try { pts = _parsePointsFile(text); } catch(e) {}
+        let pts = []; try { pts = _parsePointsFile(text); } catch(e) { _swallow(e); }
         if (!pts.length) { alert('파일에서 포인트를 찾지 못했습니다.\n(GPX wpt / KML Placemark Point 지원)'); return; }
         cf.folder.pts.push(...pts); _tpSave('tpFolders', cf.f);
         alert(`${pts.length}개 포인트를 "${cf.folder.name}" 폴더에 가져왔습니다.`);
@@ -12177,14 +12211,14 @@ function act(name, ...args) {
       S.wps = t.pts.map((p, k) => ({ ident: p.ident || ('WP' + (k + 1)), lat: p.lat, lon: p.lon }));
       S.awp = -1; S.fwp = -1; S.brg2wp = -1;
       selectWP(0);
-      try { cduOpenMap(); } catch(e) {}
+      try { cduOpenMap(); } catch(e) { _swallow(e); }
     }
     // 트랙 선 색상(선택 가능, 저장)
     const TRK_COLORS = ['#00e5ff', '#ff5252', '#ffd54f', '#00e07a', '#e040fb', '#ffffff', '#ff9800'];
     let trkColor = '#00e5ff';
-    try { const c = localStorage.getItem('trkColor'); if (c && TRK_COLORS.includes(c)) trkColor = c; } catch(e) {}
+    try { const c = localStorage.getItem('trkColor'); if (c && TRK_COLORS.includes(c)) trkColor = c; } catch(e) { _swallow(e); }
     function tpSetColor(c) {
-      trkColor = c; try { localStorage.setItem('trkColor', c); } catch(e) {}
+      trkColor = c; try { localStorage.setItem('trkColor', c); } catch(e) { _swallow(e); }
       if (_tpTrackShownIdx !== null) { const i = _tpTrackShownIdx; tpShowTrack(i); }   // 표시 중이면 즉시 반영
       switchMode('TRACKPOINT');
     }
@@ -12218,8 +12252,8 @@ function act(name, ...args) {
       }
       _tpTrackLayer = g.addTo(leafMap);
       _tpTrackShownIdx = i;
-      try { if (latlngs.length > 1) leafMap.fitBounds(latlngs, { padding: [40, 40], maxZoom: 13 }); else leafMap.setView(latlngs[0], 13); } catch(e) {}
-      try { cduOpenMap(); } catch(e) {}
+      try { if (latlngs.length > 1) leafMap.fitBounds(latlngs, { padding: [40, 40], maxZoom: 13 }); else leafMap.setView(latlngs[0], 13); } catch(e) { _swallow(e); }
+      try { cduOpenMap(); } catch(e) { _swallow(e); }
     }
     function tpExportTrack(i, fmt) {
       const t = tpTracks()[i]; if (!t) return;
@@ -12229,7 +12263,7 @@ function act(name, ...args) {
     }
     function tpImportTrack() {
       _tpPickFile((text) => {
-        let pts = []; try { pts = _parseTrackFile(text); } catch(e) {}
+        let pts = []; try { pts = _parseTrackFile(text); } catch(e) { _swallow(e); }
         if (pts.length < 2) { alert('파일에서 트랙(경로)을 찾지 못했습니다.\n(GPX rte/trk / KML LineString 지원)'); return; }
         const arr = tpTracks();
         const name = (prompt('트랙 이름', 'TRK' + (arr.length + 1)) || '').trim() || ('TRK' + (arr.length + 1));
@@ -12460,7 +12494,7 @@ function act(name, ...args) {
         if (!v) return;
         freqs[_navSelTarget].act = v.freq;
         freqs[_navSelTarget].id  = v.id;
-        try { setNavRadio(_navSelTarget === 'nav1' ? 'NAV1' : 'NAV2', v.freq, v.id); } catch(e) {}
+        try { setNavRadio(_navSelTarget === 'nav1' ? 'NAV1' : 'NAV2', v.freq, v.id); } catch(e) { _swallow(e); }
         switchMode('AUDIO');
     }
 
@@ -12499,7 +12533,7 @@ function act(name, ...args) {
         freqs[id].act = freq;
         const m = (typeof ENR_VORS !== 'undefined' ? ENR_VORS : []).find(x => x.freq && Math.abs(parseFloat(x.freq) - parseFloat(freq)) < 0.001);
         freqs[id].id = m ? m.id : '';
-        try { setNavRadio(id === 'nav1' ? 'NAV1' : 'NAV2', freq, m ? m.id : null); } catch(e) {}
+        try { setNavRadio(id === 'nav1' ? 'NAV1' : 'NAV2', freq, m ? m.id : null); } catch(e) { _swallow(e); }
         _afldMsg = `${id.toUpperCase()} ← ${freq}${m ? ' (' + m.id + ')' : ''}`;
         _afldPending = null;
         switchMode('AIRFIELD_DETAIL');
@@ -12816,7 +12850,7 @@ function act(name, ...args) {
                 freqs[inputTarget].act = v;
                 let match = (typeof ENR_VORS !== 'undefined' ? ENR_VORS : []).find(x => x.freq && Math.abs(parseFloat(x.freq) - parseFloat(v)) < 0.001);
                 freqs[inputTarget].id = match ? match.id : '';
-                try { setNavRadio(inputTarget === 'nav1' ? 'NAV1' : 'NAV2', v, match ? match.id : null); } catch(e) {}
+                try { setNavRadio(inputTarget === 'nav1' ? 'NAV1' : 'NAV2', v, match ? match.id : null); } catch(e) { _swallow(e); }
             } else {
                 freqs[inputTarget].stb = v;
             }
@@ -12981,9 +13015,9 @@ function _trkSaveBackup() {
     localStorage.setItem(TRK_BAK_KEY, JSON.stringify(
       _trkPts.map(p => [ +p.lat.toFixed(6), +p.lon.toFixed(6), Math.round(p.altM), p.t ])
     ));
-  } catch(e) {}
+  } catch(e) { _swallow(e); }
 }
-function _trkClearBackup() { try { localStorage.removeItem(TRK_BAK_KEY); } catch(e) {} }
+function _trkClearBackup() { try { localStorage.removeItem(TRK_BAK_KEY); } catch(e) { _swallow(e); } }
 function _trkStartTimer() {
   if (_trkTimer) { clearInterval(_trkTimer); _trkTimer = null; }   // 이중 기동 방지
   document.getElementById('rec-btn').classList.add('active');
@@ -13050,7 +13084,7 @@ function _trkToKml(trkPts = _trkPts) {
 // 시작 시 미종료 백업이 있으면 복구 제안(새로고침·크래시로 끊긴 녹화)
 setTimeout(() => {
   let bak = null;
-  try { bak = JSON.parse(localStorage.getItem(TRK_BAK_KEY) || 'null'); } catch(e) {}
+  try { bak = JSON.parse(localStorage.getItem(TRK_BAK_KEY) || 'null'); } catch(e) { _swallow(e); }
   if (!Array.isArray(bak) || bak.length < 2) return;
   const pts = bak.map(a => ({ lat: a[0], lon: a[1], altM: a[2], t: a[3] }));
   const from = new Date(pts[0].t), p2 = n => String(n).padStart(2, '0');
@@ -13089,10 +13123,10 @@ async function _wakeAcquire() {
       _wakeLock = await navigator.wakeLock.request('screen');
       _wakeLock.addEventListener('release', () => { _wakeLock = null; });
     }
-  } catch(e) {}
+  } catch(e) { _swallow(e); }
 }
 function _wakeRelease() {
-  try { if (_wakeLock) { _wakeLock.release(); _wakeLock = null; } } catch(e) {}
+  try { if (_wakeLock) { _wakeLock.release(); _wakeLock = null; } } catch(e) { _swallow(e); }
 }
 function _wakeWanted() { return gpsMode || S.running || _trkRec; }
 setInterval(() => { _wakeWanted() ? _wakeAcquire() : _wakeRelease(); }, 5000);
@@ -13112,7 +13146,7 @@ let inhibAspc = false, inhibTaws = false;
 try {
   inhibAspc = localStorage.getItem('inhibAspc') === '1';
   inhibTaws = localStorage.getItem('inhibTaws') === '1';
-} catch(e) {}
+} catch(e) { _swallow(e); }
 function toggleInhibMenu(force) {
   const m = document.getElementById('inhib-menu');
   if (force === false) m.classList.remove('open');
@@ -13122,11 +13156,11 @@ function toggleInhibMenu(force) {
 function toggleInhib(which) {
   if (which === 'aspc') {
     inhibAspc = !inhibAspc;
-    try { localStorage.setItem('inhibAspc', inhibAspc ? '1' : '0'); } catch(e) {}
+    try { localStorage.setItem('inhibAspc', inhibAspc ? '1' : '0'); } catch(e) { _swallow(e); }
     if (inhibAspc) { const el = document.getElementById('aspc-alert'); if (el) el.className = ''; _aspcAlertState = {}; }
   } else {
     inhibTaws = !inhibTaws;
-    try { localStorage.setItem('inhibTaws', inhibTaws ? '1' : '0'); } catch(e) {}
+    try { localStorage.setItem('inhibTaws', inhibTaws ? '1' : '0'); } catch(e) { _swallow(e); }
     if (inhibTaws) { const ta = document.getElementById('terrain-alert'); if (ta) ta.classList.remove('on'); }
   }
   _inhibRender();
@@ -13187,14 +13221,14 @@ function _aspcAlertCheck() {
   if (insideA) {
     if (_aspcAlertState[insideA.id] !== 'in') {
       _aspcAlertState = { [insideA.id]: 'in' };
-      try { navigator.vibrate && navigator.vibrate([200, 100, 200]); } catch(e) {}
+      try { navigator.vibrate && navigator.vibrate([200, 100, 200]); } catch(e) { _swallow(e); }
     }
     el.textContent = `⚠ ${insideA.name} 진입`;
     el.className = 'inside';
   } else if (nearA) {
     if (_aspcAlertState[nearA.id] !== 'near') {
       _aspcAlertState = { [nearA.id]: 'near' };
-      try { navigator.vibrate && navigator.vibrate(150); } catch(e) {}
+      try { navigator.vibrate && navigator.vibrate(150); } catch(e) { _swallow(e); }
     }
     el.textContent = `${nearA.name} 접근 ${uDist(nearD)}`;
     el.className = 'near';
@@ -13203,7 +13237,7 @@ function _aspcAlertCheck() {
     el.className = '';
   }
 }
-setInterval(() => { try { _aspcAlertCheck(); } catch(e) {} }, 5000);
+setInterval(() => { try { _aspcAlertCheck(); } catch(e) { _swallow(e); } }, 5000);
 
 // ═══════════════════════════════════════════════════════════════
 //  항적 로그북 — REC 종료 시 IndexedDB 자동 저장, FDR 패널에서 관리
@@ -13249,7 +13283,7 @@ async function renderLogbook() {
   const box = document.getElementById('logbook-list');
   if (!box) return;
   let recs = [];
-  try { recs = await _logAll(); } catch(e) {}
+  try { recs = await _logAll(); } catch(e) { _swallow(e); }
   recs.sort((a, b) => b.id - a.id);
   if (!recs.length) { box.innerHTML = '<div style="color:#556;font-size:9px;padding:3px 0;">저장된 항적 없음</div>'; return; }
   const p2 = n => String(n).padStart(2, '0');
@@ -13287,7 +13321,6 @@ let _fdrTrack      = [];     // interpolated track for playback
 let _fdrRawTrack   = [];     // original GPX points — used for route preview line only
 let _fdrIdx        = 0;      // current playback index
 let _fdrSpeed      = 1;      // playback speed multiplier
-let _fdrPlaying    = false;
 let _fdrRafId      = null;   // requestAnimationFrame handle
 let _fdrWallStart  = 0;      // wall-clock ms when play/resume began
 let _fdrTrackStart = 0;      // track timeMs at start of current play segment
@@ -13300,7 +13333,7 @@ function toggleFdrPanel() {
   const btn   = document.getElementById('fdr-btn');
   const open  = panel.classList.toggle('open');
   btn.classList.toggle('active', open);
-  if (open) { try { renderLogbook(); } catch(e) {} }
+  if (open) { try { renderLogbook(); } catch(e) { _swallow(e); } }
 }
 
 // ── NOTAM / KML / GPX overlay ──────────────────────────
@@ -13348,7 +13381,7 @@ const ENR_FIX_RAW =
 
 let _fixMarkers = [];
 let fixLayerOn = false;
-try { fixLayerOn = localStorage.getItem('fixLayerOn') === '1'; } catch(e) {}
+try { fixLayerOn = localStorage.getItem('fixLayerOn') === '1'; } catch(e) { _swallow(e); }
 
 function _enrFixList() {
   const dms = (d, degLen) => (+d.slice(0, degLen)) + (+d.slice(degLen, degLen + 2)) / 60 + (+d.slice(degLen + 2)) / 3600;
@@ -13394,11 +13427,11 @@ function _afldIndexOf(icao) {
   } catch(e) { return -1; }
 }
 function _mapOpenAirfield(icao) {
-  try { leafMap.closePopup(); } catch(e) {}
+  try { leafMap.closePopup(); } catch(e) { _swallow(e); }
   const i = _afldIndexOf(icao);
   if (i < 0) return;
   if (leftSel !== 'cdu' && rightSel !== 'cdu') selectPanel(leftSel === 'map' ? 'right' : 'left', 'cdu');
-  try { openAirfield(i); } catch(e) {}
+  try { openAirfield(i); } catch(e) { _swallow(e); }
 }
 // INFO 목록에 있고, 공개 비행장이거나 잠금 해제된 경우에만 '공항 정보' 버튼을 준다(보안)
 function _aptInfoAvailable(icao) {
@@ -13411,13 +13444,13 @@ function _aptInfoAvailable(icao) {
 }
 // 지도 팝업 → 기존 METAR/TAF 팝업으로 전환
 function mapAptWx(icao, lat, lon) {
-  try { leafMap.closePopup(); } catch(e) {}
-  try { showAptWx(icao, APT_NAME[icao] || '', [lat, lon]); } catch(e) {}
+  try { leafMap.closePopup(); } catch(e) { _swallow(e); }
+  try { showAptWx(icao, APT_NAME[icao] || '', [lat, lon]); } catch(e) { _swallow(e); }
 }
 // 지도 VOR 팝업 → NAV1/NAV2 튜닝
 function mapTuneNav(navId, freq, id) {
-  try { setNavRadio(navId, freq, id); } catch(e) {}
-  try { leafMap.closePopup(); } catch(e) {}
+  try { setNavRadio(navId, freq, id); } catch(e) { _swallow(e); }
+  try { leafMap.closePopup(); } catch(e) { _swallow(e); }
 }
 // 클립보드 복사(비보안·구형 환경 폴백 포함) + 버튼 피드백
 function fixCopyCoord(el, name, lat, lon) {
@@ -13426,14 +13459,14 @@ function fixCopyCoord(el, name, lat, lon) {
     if (!el) return;
     const orig = el.textContent;
     el.textContent = ok ? '✓ 복사됨' : '복사 실패';
-    setTimeout(() => { try { el.textContent = orig; } catch(e) {} }, 1200);
+    setTimeout(() => { try { el.textContent = orig; } catch(e) { _swallow(e); } }, 1200);
   };
   try {
     if (navigator.clipboard && window.isSecureContext) {
       navigator.clipboard.writeText(txt).then(() => done(true), () => done(false));
       return;
     }
-  } catch(e) {}
+  } catch(e) { _swallow(e); }
   try {   // 폴백: 임시 textarea + execCommand
     const ta = document.createElement('textarea');
     ta.value = txt; ta.style.position = 'fixed'; ta.style.opacity = '0';
@@ -13446,7 +13479,7 @@ function fixCopyCoord(el, name, lat, lon) {
 // 픽스를 비행계획 웨이포인트로 추가
 function fixAddToPlan(name, lat, lon) {
   pushWP({ ident: name, lat, lon });
-  try { leafMap.closePopup(); } catch(e) {}
+  try { leafMap.closePopup(); } catch(e) { _swallow(e); }
 }
 
 function _drawFixLayer() {
@@ -13467,7 +13500,7 @@ function _drawFixLayer() {
   });
 }
 function _clearFixLayer() {
-  _fixMarkers.forEach(m => { try { leafMap.removeLayer(m); } catch(e){} });
+  _fixMarkers.forEach(m => { try { leafMap.removeLayer(m); } catch(e){ _swallow(e); } });
   _fixMarkers = [];
 }
 // ── 접근절차 픽스 ─────────────────────────────────────────────
@@ -13517,7 +13550,7 @@ function _drawAppFixLayer() {
   });
 }
 function _clearAppFixLayer() {
-  _appFixMarkers.forEach(m => { try { leafMap.removeLayer(m); } catch(e){} });
+  _appFixMarkers.forEach(m => { try { leafMap.removeLayer(m); } catch(e){ _swallow(e); } });
   _appFixMarkers = [];
 }
 
@@ -13537,13 +13570,13 @@ function _fixUpdateBtn() {
 function toggleFixLayer() {
   fixLayerOn = !fixLayerOn;
   if (fixLayerOn) _drawFixLayer(); else _clearFixLayer();
-  try { localStorage.setItem('fixLayerOn', fixLayerOn ? '1' : '0'); } catch(e) {}
+  try { localStorage.setItem('fixLayerOn', fixLayerOn ? '1' : '0'); } catch(e) { _swallow(e); }
   _fixRenderPanel(); _fixUpdateBtn();
 }
 function toggleAppFixGrp(grp) {
   appFixOn[grp] = !appFixOn[grp];
   _drawAppFixLayer();
-  try { localStorage.setItem('appFixOn', JSON.stringify(appFixOn)); } catch(e) {}
+  try { localStorage.setItem('appFixOn', JSON.stringify(appFixOn)); } catch(e) { _swallow(e); }
   _fixRenderPanel(); _fixUpdateBtn();
 }
 function _fixRenderPanel() {
@@ -13564,9 +13597,9 @@ function _fixRenderPanel() {
   p.innerHTML = html;
 }
 // 저장된 상태 복원
-if (fixLayerOn) { try { _drawFixLayer(); } catch(e) {} }
-try { if (_appFixAnyOn()) _drawAppFixLayer(); } catch(e) {}
-try { _fixUpdateBtn(); } catch(e) {}
+if (fixLayerOn) { try { _drawFixLayer(); } catch(e) { _swallow(e); } }
+try { if (_appFixAnyOn()) _drawAppFixLayer(); } catch(e) { _swallow(e); }
+try { _fixUpdateBtn(); } catch(e) { _swallow(e); }
 
 // ── VOR 표지소 + 항로(AWY) 오버레이 (AIP ENR 4.1 / 3.x) ──
 // ── 국내 비행장 주파수/VOR/ILS/ATIS/RWY/표고 (2022.1 자료) ──
@@ -13710,7 +13743,7 @@ try {
   // 이전 버전은 VOR이 한 항목이었으므로, 저장값에 aptvor가 없으면 vor 상태를 물려받는다
   if (s) awyCat = { conv: !!s.conv, rnav: !!s.rnav, vor: !!s.vor,
                     aptvor: s.aptvor === undefined ? !!s.vor : !!s.aptvor };
-} catch(e) {}
+} catch(e) { _swallow(e); }
 
 // 경유점 → 좌표 (VOR는 id 참조, 그 외는 내장 좌표)
 function _awyWpCoord(w) {
@@ -13805,10 +13838,10 @@ function _drawVorGroup(list, col, lblCol) {
   });
 }
 function _clearAwyLayer() {
-  _awyLayers.forEach(l => { try { leafMap.removeLayer(l); } catch(e){} });
+  _awyLayers.forEach(l => { try { leafMap.removeLayer(l); } catch(e){ _swallow(e); } });
   _awyLayers = [];
 }
-function _awySave() { try { localStorage.setItem('awyCat', JSON.stringify(awyCat)); } catch(e) {} }
+function _awySave() { try { localStorage.setItem('awyCat', JSON.stringify(awyCat)); } catch(e) { _swallow(e); } }
 function _awyUpdateBtn() {
   const any = awyCat.conv || awyCat.rnav || awyCat.vor || awyCat.aptvor;
   const p = document.getElementById('awy-panel');
@@ -13844,7 +13877,7 @@ function toggleAwyLayer() {   // AWY 버튼 → 카테고리 패널 열기/닫�
   _awyUpdateBtn();
 }
 // 저장된 상태 복원
-try { _drawAwyLayer(); _awyUpdateBtn(); } catch(e) {}
+try { _drawAwyLayer(); _awyUpdateBtn(); } catch(e) { _swallow(e); }
 
 // AIP ENR 2.1/2.2에서 추출한 공역 데이터 (TMA/CTA/제주 Class B/ATZ/관제권/소음방지)
 const AIRSPACE_DB = [
@@ -14215,8 +14248,8 @@ function _aspcDraw(item){
   }
   _aspcLayers[item.id]=ls;
 }
-function _aspcClear(id){ (_aspcLayers[id]||[]).forEach(l=>{try{leafMap.removeLayer(l);}catch(e){}}); _aspcLayers[id]=[]; }
-function _aspcSave(){ try{ localStorage.setItem('aspcOn',JSON.stringify(aspcOn)); }catch(e){} }
+function _aspcClear(id){ (_aspcLayers[id]||[]).forEach(l=>{try{leafMap.removeLayer(l);}catch(e){ _swallow(e); }}); _aspcLayers[id]=[]; }
+function _aspcSave(){ try{ localStorage.setItem('aspcOn',JSON.stringify(aspcOn)); }catch(e){ _swallow(e); } }
 function toggleAspcItem(id){
   aspcOn[id]=!aspcOn[id];
   const item=AIRSPACE_DB.find(a=>a.id===id);
@@ -14269,7 +14302,7 @@ function toggleAspcPanel(){
   _aspcUpdateBtn();
 }
 // 저장된 표시 상태 복원
-try { AIRSPACE_DB.forEach(a=>{ if(aspcOn[a.id]) _aspcDraw(a); }); _aspcUpdateBtn(); } catch(e){}
+try { AIRSPACE_DB.forEach(a=>{ if(aspcOn[a.id]) _aspcDraw(a); }); _aspcUpdateBtn(); } catch(e){ _swallow(e); }
 
 // ── Flight Plan IFR DB를 AIP ENR 데이터로 동기화 (항로·픽스 단일 소스) ──
 (function syncIfrDbFromAip() {
@@ -14299,7 +14332,7 @@ let _notamActive = false;
 
 function toggleNotamLayer() {
   if (_notamActive) {
-    _notamLayers.forEach(l => { try { leafMap.removeLayer(l); } catch(e){} });
+    _notamLayers.forEach(l => { try { leafMap.removeLayer(l); } catch(e){ _swallow(e); } });
     _notamLayers = [];
     _notamActive = false;
     document.getElementById('notam-btn').classList.remove('active');
@@ -14318,7 +14351,7 @@ function loadNotamFile(input) {
     const isKml = file.name.toLowerCase().endsWith('.kml');
     try {
       const features = isKml ? _parseKml(text) : _parseGpx2(text);
-      _notamLayers.forEach(l => { try { leafMap.removeLayer(l); } catch(e){} });
+      _notamLayers.forEach(l => { try { leafMap.removeLayer(l); } catch(e){ _swallow(e); } });
       _notamLayers = [];
       features.forEach(f => {
         const popup = _notamPopupHtml(f.name, f.desc);
@@ -14889,8 +14922,8 @@ function _fdrDraw3dTrackRoute() {
   }
   // Remove old layer/source if present
   if (_fdrLayer3d) {
-    try { _ml3d.removeLayer('fdr-track'); } catch(e) {}
-    try { _ml3d.removeSource('fdr-track'); } catch(e) {}
+    try { _ml3d.removeLayer('fdr-track'); } catch(e) { _swallow(e); }
+    try { _ml3d.removeSource('fdr-track'); } catch(e) { _swallow(e); }
     _fdrLayer3d = false;
   }
   const src = _fdrRawTrack.length ? _fdrRawTrack : _fdrTrack;
@@ -15206,7 +15239,7 @@ async function idbPut(key, blob) {
 // 연결을 닫아 iOS WebKit이 버퍼링한 blob 쓰기를 디스크로 flush하고 메모리를
 // 회수하도록 유도한다(대량 저장 중 60% 부근 리셋 방지 핵심).
 function idbClose() {
-    if (_idb) { try { _idb.close(); } catch(e) {} _idb = null; }
+    if (_idb) { try { _idb.close(); } catch(e) { _swallow(e); } _idb = null; }
 }
 async function idbGet(key) {
     const db = await openIDB();
@@ -15266,7 +15299,7 @@ function triggerFolderImport() {
             inp.webkitdirectory = true;
             inp.directory = true;
             folderSupported = ('webkitdirectory' in inp);
-        } catch(e) {}
+        } catch(e) { _swallow(e); }
     }
 
     if (!folderSupported) {
@@ -15494,7 +15527,7 @@ async function _detectGroupIcao(files) {
             const txt = (await slice.text()).toUpperCase();
             const m = txt.match(/\b([RZ][A-Z]{3})\b/);
             if (m) return m[1];
-        } catch(e) {}
+        } catch(e) { _swallow(e); }
     }
     return null;
 }
@@ -15571,7 +15604,7 @@ async function _saveChartEntries(entries) {
             localStorage.setItem('savedCharts', JSON.stringify(saved));
         } catch(storageErr) {
             console.warn('localStorage 용량 초과, 최근 50개만 보존');
-            try { localStorage.setItem('savedCharts', JSON.stringify(saved.slice(-50))); } catch(e2) {}
+            try { localStorage.setItem('savedCharts', JSON.stringify(saved.slice(-50))); } catch(e2) { _swallow(e2); }
         }
     };
 
@@ -15676,13 +15709,13 @@ function _saveChartCalib(key, cal) {
         const m = JSON.parse(localStorage.getItem('chartCalib') || '{}');
         m[key] = { pts: cal.pts };   // 원자료(점들)만 저장 — fit은 로드 시 재계산
         localStorage.setItem('chartCalib', JSON.stringify(m));
-    } catch(e) {}
+    } catch(e) { _swallow(e); }
 }
 function _pdfClearCalib() {
     try {
         const m = JSON.parse(localStorage.getItem('chartCalib') || '{}');
         delete m[_pdfChartKey]; localStorage.setItem('chartCalib', JSON.stringify(m));
-    } catch(e) {}
+    } catch(e) { _swallow(e); }
     _pdfCalibration = null; _pdfUpdateAcMarker();
 }
 
@@ -16170,7 +16203,7 @@ function _pdfPruneFixes() {
         const icao = (_pdfChartKey || '').split('|')[0];
         const ap = (typeof APT_LATLNG !== 'undefined') ? APT_LATLNG[icao] : null;
         if (ap) { cLat = ap[0]; cLon = ap[1]; }
-    } catch(e) {}
+    } catch(e) { _swallow(e); }
     if (cLat === null) {
         const med = arr => { const v = arr.slice().sort((a, b) => a - b); return v[Math.floor(v.length / 2)]; };
         cLat = med(_pdfFixList.map(f => f.lat));
@@ -16488,7 +16521,7 @@ async function openChart(icao, chartNum, url) {
     // 로컬 저장된 PDF가 있으면 항상 앱 내장 '한 페이지' 뷰어로 연다.
     // (localPdfKeys 캐시가 갱신 안 됐을 수 있으므로 IndexedDB를 직접 확인)
     let blob = null;
-    try { blob = await idbGet(key); } catch(e) {}
+    try { blob = await idbGet(key); } catch(e) { _swallow(e); }
     if (!blob) { if (url) window.open(url, '_blank'); return; }
 
     _pdfChartKey = key;
@@ -16846,7 +16879,7 @@ function closePdfViewer() {
     _pdfDoc = null; _pdfMD = null;
     if (_pdfReqTimer) { clearTimeout(_pdfReqTimer); _pdfReqTimer = null; }
     if (_pdfAcTimer) { clearInterval(_pdfAcTimer); _pdfAcTimer = null; }
-    if (_pdfResizeObs) { try { _pdfResizeObs.disconnect(); } catch(e){} _pdfResizeObs = null; }
+    if (_pdfResizeObs) { try { _pdfResizeObs.disconnect(); } catch(e){ _swallow(e); } _pdfResizeObs = null; }
     if (_pdfResizeT) { clearTimeout(_pdfResizeT); _pdfResizeT = null; }
     _pdfCalActive = false; _pdfCalPts = []; _pdfFixList = [];
     _pdfRenderToken++;   // 진행 중 렌더 무효화

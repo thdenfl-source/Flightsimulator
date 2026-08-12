@@ -42,6 +42,19 @@ export async function run(page, t) {
   });
   t.eq(unreg.length, 0, `data-act 전부 등록됨${unreg.length ? ' (미등록: ' + unreg.join(',') + ')' : ''}`);
 
+  // 무시된 예외 집계기가 동작하는가 + 같은 예외가 반복되지 않는가
+  // (반복되면 매 프레임 던지는 실동작 문제일 가능성이 높다)
+  const sw = await page.evaluate(() => {
+    if (typeof _swallowSummary !== 'function') return null;
+    return { top: _swallowSummary().slice(0, 3), total: _swallowed().length };
+  });
+  t.ok(sw !== null, '무시 예외 집계기(_swallowSummary) 존재');
+  if (sw) {
+    const worst = sw.top[0] ? sw.top[0][1] : 0;
+    t.ok(worst < 20,
+      `기동 중 같은 예외 반복 ${worst}회 (총 ${sw.total})${worst >= 20 ? ' — ' + sw.top[0][0] : ''}`);
+  }
+
   // CDU 주요 화면이 오류 없이 렌더되는가
   await page.evaluate(() => selectPanel('right', 'cdu'));
   await page.waitForTimeout(250);
