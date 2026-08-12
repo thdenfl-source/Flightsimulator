@@ -62,6 +62,7 @@ export async function run(page, t) {
   await runRealPdf(page, t);
   await runChartRepo(page, t);
   await runConnCheck(page, t);
+  await runSwScope(page, t);
 }
 
 export async function runExternal(page, t) {
@@ -291,4 +292,31 @@ export async function runConnCheck(page, t) {
     await page.waitForTimeout(200);
   }
   await page.evaluate(() => { if (window.__origFetch) window.fetch = window.__origFetch; });
+}
+
+// 서비스워커는 남의 출처를 건드리면 안 된다.
+// 종전에는 모든 GET 을 가로챘고, 그 탓에 eAIP 차트 요청이 두 가지로 망가졌다.
+//   · 교차 출처 응답이 앱 캐시에 들어가, no-cors 로 받은 opaque 응답이 뒤이은
+//     cors 요청에 그대로 나갔다 ("Response served by service worker is opaque")
+//   · 실패하면 index.html 을 돌려줘, 차트 PDF 자리에 앱 HTML 이 들어갔다
+// 테스트는 file:// 에서 돌아 서비스워커가 없다. 실제 검증은 출처 두 곳(앱 :8801,
+// CORS 를 허용하는 eAIP 대역 :8802)을 띄워 따로 했고 — 가드가 없으면 앱 캐시에
+// 남의 URL 이 쌓이는 것을 확인했다 — 여기서는 그 가드가 사라지지 않게 지킨다.
+export async function runSwScope(page, t) {
+  const fs = await import('node:fs');
+  const path = await import('node:path');
+  const sw = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
+
+  const guard = /new URL\(url\)\.origin\s*!==\s*self\.location\.origin\)\s*return/.test(sw);
+  t.ok(guard, '서비스워커가 교차 출처 요청에서 손을 뗀다');
+
+  // 가드는 앱 파일 처리(respondWith)보다 먼저 와야 의미가 있다
+  const iGuard = sw.search(/new URL\(url\)\.origin/);
+  const iResp = sw.indexOf('e.respondWith(\n    fetch(e.request)');
+  const iApp = iResp >= 0 ? iResp : sw.lastIndexOf('e.respondWith(');
+  t.ok(iGuard > 0 && iGuard < iApp, `가드가 앱 파일 처리보다 앞에 있다 (${iGuard} < ${iApp})`);
+
+  // 타일·위성처럼 일부러 캐시하는 교차 출처는 가드보다 위에 있어야 계속 동작한다
+  const iTile = sw.indexOf('tile.openstreetmap.org');
+  t.ok(iTile > 0 && iTile < iGuard, `지도 타일 캐시는 가드보다 위라 그대로 동작 (${iTile} < ${iGuard})`);
 }

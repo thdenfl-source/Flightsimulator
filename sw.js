@@ -1,6 +1,6 @@
 // VFR Flight Sim — Service Worker
 // 버전을 올리면 캐시가 갱신됩니다
-const CACHE = 'vfr-flight-v334';
+const CACHE = 'vfr-flight-v335';
 const CORE  = [
   './index.html',
   './manifest.json',
@@ -109,6 +109,13 @@ self.addEventListener('fetch', e => {
     );
     return;
   }
+
+  // 여기부터는 우리 앱 파일 이야기다. 남의 출처(eAIP 차트 등)는 손대지 않는다.
+  // 종전에는 모든 GET 을 가로챘는데 그 탓에 두 가지가 망가졌다.
+  //   · 교차 출처 응답을 앱 캐시에 넣어, no-cors 로 받은 opaque 응답이 뒤이은
+  //     cors 요청에 그대로 나갔다 ("Response served by service worker is opaque")
+  //   · 실패하면 index.html 을 돌려줘, 차트 PDF 자리에 앱 HTML 이 들어갔다
+  if (new URL(url).origin !== self.location.origin) return;
 
   // 앱 파일: 네트워크 우선 → 실패 시 캐시 (index.html 업데이트가 즉시 반영됨)
   e.respondWith(
