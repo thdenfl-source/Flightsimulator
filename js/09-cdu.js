@@ -770,22 +770,36 @@ if ('serviceWorker' in navigator) {
 // 조용히 죽는다. data-act/data-arg로 바꾸고 여기서 이름→함수를 명시적으로 잇는다.
 //   · data-act : 액션 이름(레지스트리 키)
 //   · data-arg : 인자 JSON 배열. 문자열 "$event"는 실제 이벤트 객체로 치환된다.
-// 위임은 #cdu-wrap 안에서만 동작하므로, CDU 밖의 인라인 핸들러는 종전 그대로 둔다.
 // ── 앱 전역 액션 위임 ────────────────────────────────────────────
 // 인라인 onclick 은 전역 스코프에서만 이름을 찾기 때문에, 함수를 모듈/IIFE 안으로
 // 옮기는 순간 "버튼이 조용히 죽는다"(clBack 사례). 위임을 쓰면 등록된 이름만
 // 부르므로 그런 사고가 나지 않고, 미등록이면 콘솔에 경고가 남는다.
-// CDU 안(#cdu-wrap)은 기존 CDU_ACT 위임이 처리하므로 여기서는 건드리지 않는다.
+//
+// 레지스트리는 APP_ACT · CDU_ACT 둘이지만 "이름 → 함수" 는 한 곳에서만 푼다.
+// 종전에는 듣는 자리로 갈랐다 — CDU 안(#cdu-wrap)은 CDU_ACT, 밖은 APP_ACT.
+// 그런데 PDF 뷰어·Flight Plan 처럼 APP_ACT 에 등록된 화면이 CDU 안에 그려지면
+// 어느 쪽도 처리하지 않아 버튼이 통째로 죽었다(◀/▶ 페이지 넘김, 📍 위치 보정 등).
+// 이제 듣는 자리는 그대로 두되(중복 발화 방지) 조회는 양쪽을 다 본다.
 const APP_ACT = {};
 function appRegister(map) { Object.assign(APP_ACT, map); }
+// 이름을 두 레지스트리에서 찾는다. 자기 쪽을 먼저 보고 없으면 반대쪽.
+function _actLookup(name, mine, other) {
+  const fn = mine[name];
+  return typeof fn === 'function' ? fn : other[name];
+}
 (function initAppDelegation() {
   const run = (e, kind) => {
     const el = e.target.closest('[data-act]');
     if (!el) return;
+    // CDU 리스너(#cdu-wrap)가 먼저 잡았으면 여기서 또 부르지 않는다.
+    // contains() 만으로는 부족하다 — 핸들러가 화면을 다시 그리면 el 이 DOM 에서
+    // 떨어져 나가 contains() 가 false 가 되고, 같은 클릭이 두 번 실행된다
+    // (체크리스트 Back 을 한 번 눌렀는데 두 단계 올라가 HOME 으로 튀던 증상).
+    if (e.__actDone) return;
     const cdu = document.getElementById('cdu-wrap');
-    if (cdu && cdu.contains(el)) return;          // CDU 는 CDU_ACT 위임 담당
+    if (cdu && cdu.contains(el)) return;
     if ((el.dataset.on || 'click') !== kind) return;
-    const fn = APP_ACT[el.dataset.act];
+    const fn = _actLookup(el.dataset.act, APP_ACT, CDU_ACT);
     if (typeof fn !== 'function') { console.warn('[APP] 미등록 액션:', el.dataset.act); return; }
     let args = [];
     if (el.dataset.arg) {
@@ -815,7 +829,8 @@ function act(name, ...args) {
     const el = e.target.closest('[data-act]');
     if (!el || !root.contains(el)) return;
     if ((el.dataset.on || 'click') !== kind) return;
-    const fn = CDU_ACT[el.dataset.act];
+    e.__actDone = true;    // 문서 리스너가 같은 클릭을 다시 처리하지 않게
+    const fn = _actLookup(el.dataset.act, CDU_ACT, APP_ACT);
     if (typeof fn !== 'function') { console.warn('[CDU] 미등록 액션:', el.dataset.act); return; }
     let args = [];
     if (el.dataset.arg) {
