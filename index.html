@@ -412,6 +412,12 @@ html, body {
   background: #001a00; border-color: #00cc44; color: #00ee66;
   box-shadow: 0 0 6px rgba(0,200,68,0.45);
 }
+/* GSPD 작동 중 — 조향 지령이 먹지 않는 상태. 켜짐 색은 유지하되 빗금으로 표시 */
+.obs-btn.ap-inh {
+  opacity: 0.45; border-style: dashed; box-shadow: none;
+  background-image: repeating-linear-gradient(135deg,
+    rgba(255,255,255,0.12) 0 3px, transparent 3px 6px);
+}
 
 /* ── Map area ── */
 #map-wrap {
@@ -1525,7 +1531,7 @@ body.night-mode::after {
   <div id="help-panel">
     <div id="help-head">
       <span>✈ VFR Flight Simulator 사용 안내</span>
-      <button onclick="closeHelp()" title="닫기">✕</button>
+      <button data-act="closeHelp" title="닫기">✕</button>
     </div>
     <div id="help-body">
       <h3>1. 화면 구성</h3>
@@ -1571,6 +1577,10 @@ body.night-mode::after {
       <h3>4. PFD · HOVER PAGE</h3>
       <ul>
         <li><b>NAV SRC</b>: <b>FMS / NAV1 / NAV2</b>. NAV1·NAV2는 CDU에서 튜닝한 VOR을 따라갑니다.</li>
+        <li><b>GSPD 작동 중에는 NAV·OBS 가 조향하지 못합니다.</b> GSPD 는 요/롤 축을 가져가
+            (요 조작은 <b>ANTI-TORQUE PEDAL</b> 전용) 오토파일럿이 뱅크를 지령해도 기수가 돌지 않습니다.
+            이때 NAV·OBS 버튼은 <b>빗금으로 흐리게</b> 표시되고 FMA 는 <b>GS·NAV대기</b>로 바뀝니다.
+            GSPD 를 끄면 그대로 이어서 조향합니다(설정은 유지).</li>
         <li><b>NAV 오토파일럿</b>: 코스선을 선택한 각도로 인터셉트한 뒤 롤아웃해 추종합니다.
             NAV 옆 <b>45°</b> 버튼으로 인터셉트 각도를 <b>30 / 45 / 60°</b> 중에서 고릅니다.
             그 각으로 잡기에 표적이 너무 가까우면 <b>표적으로 직행</b>하며, 이때 FMA에 <b>NAV DIR</b>로 표시됩니다.
@@ -1678,7 +1688,7 @@ body.night-mode::after {
     </div>
     <div id="help-foot">
       <label><input type="checkbox" id="help-dontshow"> 다시 보지 않기</label>
-      <button onclick="closeHelp()">시작하기</button>
+      <button data-act="closeHelp">시작하기</button>
     </div>
   </div>
 </div>
@@ -1692,23 +1702,23 @@ body.night-mode::after {
   </div>
 </div>
 <div id="solo-bar" style="display:none;">
-  <button onclick="setSolo('pfd')">PFD</button>
-  <button onclick="setSolo('map')">MAP</button>
-  <button onclick="setSolo('plan')">PLAN</button>
-  <button onclick="setSolo('cdu')">CDU</button>
-  <button class="solo-exit" onclick="exitSolo()" title="분할화면으로 돌아가기">✕</button>
+  <button data-act="setSolo" data-arg='["pfd"]'>PFD</button>
+  <button data-act="setSolo" data-arg='["map"]'>MAP</button>
+  <button data-act="setSolo" data-arg='["plan"]'>PLAN</button>
+  <button data-act="setSolo" data-arg='["cdu"]'>CDU</button>
+  <button class="solo-exit" data-act="exitSolo" title="분할화면으로 돌아가기">✕</button>
 </div>
 <!-- 전체화면(solo)에서 하단 푸터가 없는 화면(MAP/PFD)용 분할복귀 버튼 -->
-<button id="solo-half-btn" onclick="exitSolo()" title="분할화면으로 돌아가기">✥ HALF</button>
+<button id="solo-half-btn" data-act="exitSolo" title="분할화면으로 돌아가기">✥ HALF</button>
 <div id="app">
 
   <!-- ── LEFT PANEL (PFD / MAP) ── -->
   <div id="left-panel">
     <div id="left-tabs">
-      <button class="page-tab active" data-sel="pfd" onclick="selectPanel('left','pfd')">PFD</button>
-      <button class="page-tab" data-sel="map" onclick="selectPanel('left','map')">MAP</button>
-      <button class="page-tab" data-sel="cdu" onclick="selectPanel('left','cdu')">CDU</button>
-      <button class="page-tab split-tab" id="split-toggle" onclick="toggleTriple()" title="2분할 ⇄ 3분할">⿲ 3분할</button>
+      <button class="page-tab active" data-sel="pfd" data-act="selectPanel" data-arg='["left", "pfd"]'>PFD</button>
+      <button class="page-tab" data-sel="map" data-act="selectPanel" data-arg='["left", "map"]'>MAP</button>
+      <button class="page-tab" data-sel="cdu" data-act="selectPanel" data-arg='["left", "cdu"]'>CDU</button>
+      <button class="page-tab split-tab" id="split-toggle" data-act="toggleTriple" title="2분할 ⇄ 3분할">⿲ 3분할</button>
     </div>
     <div id="pfd-wrap">
     <canvas id="pfd"></canvas>
@@ -1718,7 +1728,7 @@ body.night-mode::after {
       <div class="ctrl-sub-row">
 
         <div class="ctrl-group">
-          <div class="ctrl-lbl ctrl-lbl-btn" id="ias-lbl-btn" onclick="fcpSync('ias')">IAS</div>
+          <div class="ctrl-lbl ctrl-lbl-btn" id="ias-lbl-btn" data-act="fcpSync" data-arg='["ias"]'>IAS</div>
           <div class="ctrl-row">
             <button class="cbtn" id="spd-dn">▼</button>
             <button class="cbtn" id="spd-up">▲</button>
@@ -1726,7 +1736,7 @@ body.night-mode::after {
         </div>
 
         <div class="ctrl-group">
-          <div class="ctrl-lbl ctrl-lbl-btn" id="hdg-lbl-btn" onclick="fcpSync('hdg')">HDG</div>
+          <div class="ctrl-lbl ctrl-lbl-btn" id="hdg-lbl-btn" data-act="fcpSync" data-arg='["hdg"]'>HDG</div>
           <div class="ctrl-row">
             <button class="cbtn" id="hdg-dn">◄</button>
             <button class="cbtn" id="hdg-up">►</button>
@@ -1734,7 +1744,7 @@ body.night-mode::after {
         </div>
 
         <div class="ctrl-group">
-          <div class="ctrl-lbl ctrl-lbl-btn" id="crs-lbl-btn" onclick="fcpSync('crs')">CRS</div>
+          <div class="ctrl-lbl ctrl-lbl-btn" id="crs-lbl-btn" data-act="fcpSync" data-arg='["crs"]'>CRS</div>
           <div class="ctrl-row">
             <button class="cbtn" id="crs-dn">◄</button>
             <button class="cbtn" id="crs-up">►</button>
@@ -1770,12 +1780,12 @@ body.night-mode::after {
         <div class="sw-group">
           <div class="sw-display clock-mode" id="sw-display">--:--:--</div>
           <div class="sw-btns" id="sw-btns-sw" style="display:none;">
-            <button class="sw-btn" id="sw-toggle" onclick="swToggle()">GO</button>
-            <button class="sw-btn" onclick="swReset()">RESET</button>
-            <button class="sw-btn sw-btn-time" onclick="swSetMode('clock')">TIME</button>
+            <button class="sw-btn" id="sw-toggle" data-act="swToggle">GO</button>
+            <button class="sw-btn" data-act="swReset">RESET</button>
+            <button class="sw-btn sw-btn-time" data-act="swSetMode" data-arg='["clock"]'>TIME</button>
           </div>
           <div class="sw-btns" id="sw-btns-clock">
-            <button class="sw-btn sw-btn-time" onclick="swSetMode('sw')">STOP WATCH</button>
+            <button class="sw-btn sw-btn-time" data-act="swSetMode" data-arg='["sw"]'>STOP WATCH</button>
           </div>
         </div>
 
@@ -1805,9 +1815,9 @@ body.night-mode::after {
         <div class="ctrl-group">
           <div class="ctrl-lbl">AP</div>
           <div style="display:flex;gap:4px;align-items:center;">
-            <button class="obs-btn" id="obs-btn" onclick="toggleObs()">OBS</button>
-            <button class="obs-btn" id="nav-ap-btn" onclick="toggleNavAp()">NAV</button>
-            <button class="obs-btn" id="icpt-btn" onclick="cycleIntercept()"
+            <button class="obs-btn" id="obs-btn" data-act="toggleObs">OBS</button>
+            <button class="obs-btn" id="nav-ap-btn" data-act="toggleNavAp">NAV</button>
+            <button class="obs-btn" id="icpt-btn" data-act="cycleIntercept"
                     title="인터셉트 각도 (30/45/60°)">45°</button>
           </div>
         </div>
@@ -1817,8 +1827,8 @@ body.night-mode::after {
         <div class="brg-tog-group">
           <div class="ctrl-lbl">BRG</div>
           <div class="brg-tog-btns">
-            <button class="brg-tog-btn brg1-on" id="brg1-tog" onclick="toggleBrg1()">BRG1</button>
-            <button class="brg-tog-btn brg2-on" id="brg2-tog" onclick="toggleBrg2()">BRG2</button>
+            <button class="brg-tog-btn brg1-on" id="brg1-tog" data-act="toggleBrg1">BRG1</button>
+            <button class="brg-tog-btn brg2-on" id="brg2-tog" data-act="toggleBrg2">BRG2</button>
           </div>
         </div>
 
@@ -1827,8 +1837,8 @@ body.night-mode::after {
         <div class="alt-hold-group">
           <div class="ctrl-lbl">ALT</div>
           <div class="alt-hold-btns">
-            <button class="alt-hold-btn" id="alt-hold-btn" onclick="toggleAltHold()">ALT</button>
-            <button class="crht-btn"     id="crht-btn"     onclick="toggleCrht()">CRHT</button>
+            <button class="alt-hold-btn" id="alt-hold-btn" data-act="toggleAltHold">ALT</button>
+            <button class="crht-btn"     id="crht-btn"     data-act="toggleCrht">CRHT</button>
           </div>
         </div>
 
@@ -1837,8 +1847,8 @@ body.night-mode::after {
         <div class="hover-group">
           <div class="ctrl-lbl">HOVER</div>
           <div class="hover-btns">
-            <button class="hover-btn"     id="hover-btn"     onclick="toggleHoverPage()" disabled>HOVER PAGE</button>
-            <button class="hover-pos-btn" id="hover-pos-btn" onclick="toggleHoverPosition()" title="Hover Position">HOVER POS</button>
+            <button class="hover-btn"     id="hover-btn"     data-act="toggleHoverPage" disabled>HOVER PAGE</button>
+            <button class="hover-pos-btn" id="hover-pos-btn" data-act="toggleHoverPosition" title="Hover Position">HOVER POS</button>
           </div>
         </div>
 
@@ -1850,9 +1860,9 @@ body.night-mode::after {
         <div class="nav-src-group">
           <div class="ctrl-lbl">NAV SRC</div>
           <div class="nav-src-btns">
-            <button class="nav-src-btn active" id="nav-fms" onclick="setNavSrc('FMS')">FMS</button>
-            <button class="nav-src-btn" id="nav-nav1" onclick="setNavSrc('NAV1')">NAV1</button>
-            <button class="nav-src-btn" id="nav-nav2" onclick="setNavSrc('NAV2')">NAV2</button>
+            <button class="nav-src-btn active" id="nav-fms" data-act="setNavSrc" data-arg='["FMS"]'>FMS</button>
+            <button class="nav-src-btn" id="nav-nav1" data-act="setNavSrc" data-arg='["NAV1"]'>NAV1</button>
+            <button class="nav-src-btn" id="nav-nav2" data-act="setNavSrc" data-arg='["NAV2"]'>NAV2</button>
           </div>
           <div class="nav-icao-lbl" id="nav-icao-lbl" style="visibility:hidden">----</div>
         </div>
@@ -1862,10 +1872,10 @@ body.night-mode::after {
         <div class="rnp-group">
           <div class="ctrl-lbl">RNP</div>
           <div class="rnp-btns">
-            <button class="rnp-btn" id="rnp-4" onclick="setRnp(4)">4</button>
-            <button class="rnp-btn" id="rnp-2" onclick="setRnp(2)">2</button>
-            <button class="rnp-btn active" id="rnp-1" onclick="setRnp(1)">1</button>
-            <button class="rnp-btn" id="rnp-03" onclick="setRnp(0.3)">0.3</button>
+            <button class="rnp-btn" id="rnp-4" data-act="setRnp" data-arg='[4]'>4</button>
+            <button class="rnp-btn" id="rnp-2" data-act="setRnp" data-arg='[2]'>2</button>
+            <button class="rnp-btn active" id="rnp-1" data-act="setRnp" data-arg='[1]'>1</button>
+            <button class="rnp-btn" id="rnp-03" data-act="setRnp" data-arg='[0.3]'>0.3</button>
           </div>
         </div>
 
@@ -1888,8 +1898,8 @@ body.night-mode::after {
               <button class="trim-cell tc-r"   id="trim-r"   data-trim-dir="R">►</button>
             </div>
           </div>
-          <button class="force-trim-btn" id="force-trim-btn" onclick="forceTrim()" title="Force Trim">FORCE<br>TRIM</button>
-          <button class="gspd-btn" id="gspd-btn" onclick="toggleGspd()" title="Ground Speed Hold">GSPD</button>
+          <button class="force-trim-btn" id="force-trim-btn" data-act="forceTrim" title="Force Trim">FORCE<br>TRIM</button>
+          <button class="gspd-btn" id="gspd-btn" data-act="toggleGspd" title="Ground Speed Hold">GSPD</button>
           <div class="pedal-group">
             <div class="pedal-lbl">ANTI-TORQUE<br>PEDAL</div>
             <div class="pedal-btns">
@@ -1911,9 +1921,9 @@ body.night-mode::after {
   <!-- 3분할일 때만 보이는 중앙 패널 -->
   <div id="mid-panel">
     <div id="mid-tabs" class="panel-tabs">
-      <button class="page-tab" data-sel="pfd" onclick="selectPanel('mid','pfd')">PFD</button>
-      <button class="page-tab active" data-sel="map" onclick="selectPanel('mid','map')">MAP</button>
-      <button class="page-tab" data-sel="cdu" onclick="selectPanel('mid','cdu')">CDU</button>
+      <button class="page-tab" data-sel="pfd" data-act="selectPanel" data-arg='["mid", "pfd"]'>PFD</button>
+      <button class="page-tab active" data-sel="map" data-act="selectPanel" data-arg='["mid", "map"]'>MAP</button>
+      <button class="page-tab" data-sel="cdu" data-act="selectPanel" data-arg='["mid", "cdu"]'>CDU</button>
     </div>
   </div>
   <div id="divider-2"><div id="divider-grip-2"></div></div>
@@ -1921,10 +1931,10 @@ body.night-mode::after {
   <div id="right-panel">
 
     <div id="page-tabs">
-      <button class="page-tab" data-sel="pfd" onclick="selectPanel('right','pfd')">PFD</button>
-      <button class="page-tab active" data-sel="map" onclick="selectPanel('right','map')">MAP</button>
-      <button class="page-tab" data-sel="cdu" onclick="selectPanel('right','cdu')">CDU</button>
-      <button id="reload-btn" onclick="hardReload()" title="새로고침(상태 초기화)">⟳</button>
+      <button class="page-tab" data-sel="pfd" data-act="selectPanel" data-arg='["right", "pfd"]'>PFD</button>
+      <button class="page-tab active" data-sel="map" data-act="selectPanel" data-arg='["right", "map"]'>MAP</button>
+      <button class="page-tab" data-sel="cdu" data-act="selectPanel" data-arg='["right", "cdu"]'>CDU</button>
+      <button id="reload-btn" data-act="hardReload" title="새로고침(상태 초기화)">⟳</button>
     </div>
 
     <!-- Page 1: Map -->
@@ -1932,26 +1942,26 @@ body.night-mode::after {
       <div id="map"></div>
       <div id="map3d">
         <div id="tilt-ctrl">
-          <button onclick="tiltAdj(-5)" title="Tilt up">▲</button>
-          <button onclick="tiltAdj(5)"  title="Tilt down">▼</button>
+          <button data-act="tiltAdj" data-arg='[-5]' title="Tilt up">▲</button>
+          <button data-act="tiltAdj" data-arg='[5]'  title="Tilt down">▼</button>
         </div>
       </div>
       <div id="map-top-bar">
-        <button id="gps-btn" onclick="toggleGPS()">GPS</button>
-        <button id="wx-btn" onclick="toggleWxPanel()">WX</button>
-        <button id="pp-btn" onclick="togglePpMenu()">＋</button>
+        <button id="gps-btn" data-act="toggleGPS">GPS</button>
+        <button id="wx-btn" data-act="toggleWxPanel">WX</button>
+        <button id="pp-btn" data-act="togglePpMenu">＋</button>
         <div id="pp-menu">
           <button onclick="ppAddWaypoint();togglePpMenu(false)">PP 현재위치</button>
           <button onclick="chAddWaypoint();togglePpMenu(false)">＋ 십자위치</button>
         </div>
-        <button id="rain-btn" onclick="toggleRain()">RAIN</button>
-        <button id="wind-btn" onclick="toggleWind()">WIND</button>
-        <button id="notam-btn" onclick="toggleNotamLayer()">NOTAM</button>
-        <button id="fix-btn" onclick="toggleFixPanel()">FIX</button>
-        <button id="awy-btn" onclick="toggleAwyLayer()">AWY</button>
-        <button id="aspc-btn" onclick="toggleAspcPanel()">공역</button>
-        <button id="map-ruler-btn" onclick="toggleRuler()" title="거리·방위 측정">📏</button>
-        <button id="map-full-btn" onclick="toggleMapFull()" title="전체화면/분할 전환">FULL</button>
+        <button id="rain-btn" data-act="toggleRain">RAIN</button>
+        <button id="wind-btn" data-act="toggleWind">WIND</button>
+        <button id="notam-btn" data-act="toggleNotamLayer">NOTAM</button>
+        <button id="fix-btn" data-act="toggleFixPanel">FIX</button>
+        <button id="awy-btn" data-act="toggleAwyLayer">AWY</button>
+        <button id="aspc-btn" data-act="toggleAspcPanel">공역</button>
+        <button id="map-ruler-btn" data-act="toggleRuler" title="거리·방위 측정">📏</button>
+        <button id="map-full-btn" data-act="toggleMapFull" title="전체화면/분할 전환">FULL</button>
       </div>
       <div id="aspc-panel"></div>
       <div id="fix-panel"></div>
@@ -1967,13 +1977,13 @@ body.night-mode::after {
       <div id="center-coord"></div>
       <!-- FDR upload button + panel (above Leaflet zoom) -->
       <div id="fdr-btn-wrap">
-        <button id="rec-btn" onclick="toggleTrackRec()">REC</button>
-        <button id="fdr-btn" onclick="toggleFdrPanel()">FDR</button>
+        <button id="rec-btn" data-act="toggleTrackRec">REC</button>
+        <button id="fdr-btn" data-act="toggleFdrPanel">FDR</button>
       </div>
       <div id="fdr-panel">
         <div id="fdr-panel-title">
           <span>⏺ FDR REPLAY</span>
-          <span onclick="toggleFdrPanel()" style="cursor:pointer;color:#555;font-size:13px;">✕</span>
+          <span data-act="toggleFdrPanel" style="cursor:pointer;color:#555;font-size:13px;">✕</span>
         </div>
         <div id="fdr-file-row">
           <label for="fdr-file-input">📂 GPX / KML 파일 열기</label>
@@ -1982,9 +1992,9 @@ body.night-mode::after {
         <div id="fdr-status">파일을 선택하세요</div>
         <div id="fdr-track-info"></div>
         <div id="fdr-controls" style="display:none;gap:4px;display:none;">
-          <button id="fdr-play-btn"  onclick="fdrPlay()">▶</button>
-          <button id="fdr-pause-btn" onclick="fdrPause()">⏸</button>
-          <button id="fdr-stop-btn"  onclick="fdrStop()">⏹</button>
+          <button id="fdr-play-btn"  data-act="fdrPlay">▶</button>
+          <button id="fdr-pause-btn" data-act="fdrPause">⏸</button>
+          <button id="fdr-stop-btn"  data-act="fdrStop">⏹</button>
         </div>
         <div id="fdr-speed" style="display:none;">
           <label>배속</label>
@@ -2008,44 +2018,44 @@ body.night-mode::after {
       <div id="gps-status"></div>
       <div id="inhib-menu">
         <div style="color:#889;font-size:9px;font-weight:bold;letter-spacing:1px;padding:2px 4px;">경보 INHIBIT</div>
-        <button id="inhib-aspc-btn" onclick="toggleInhib('aspc')">공역경보 <span>ON</span></button>
-        <button id="inhib-taws-btn" onclick="toggleInhib('taws')">HTAWS <span>ON</span></button>
+        <button id="inhib-aspc-btn" data-act="toggleInhib" data-arg='["aspc"]'>공역경보 <span>ON</span></button>
+        <button id="inhib-taws-btn" data-act="toggleInhib" data-arg='["taws"]'>HTAWS <span>ON</span></button>
       </div>
       <div id="ruler-readout"></div>
       <div id="ship-menu">
         <div style="color:#889;font-size:9px;font-weight:bold;letter-spacing:1px;padding:2px 4px;">⛵ SHIP</div>
-        <button id="ship-menu-show" onclick="shipToggleOn()">배 표시 <span>OFF</span></button>
-        <button id="ship-menu-panel" onclick="shipTogglePanel()">설정창 <span>OFF</span></button>
+        <button id="ship-menu-show" data-act="shipToggleOn">배 표시 <span>OFF</span></button>
+        <button id="ship-menu-panel" data-act="shipTogglePanel">설정창 <span>OFF</span></button>
       </div>
       <div id="aspc-alert"></div>
       <div id="terrain-alert">⚠ TERRAIN</div>
       <div id="vnav-alert"></div>
       <div id="terrain-cut"><canvas id="tcut-canvas"></canvas><div id="tcut-title">TERRAIN — 전방 20NM</div></div>
       <div id="map-sim-bar">
-        <button class="sim-btn" id="map-fly-btn" onclick="toggleSim()">▶ FLY</button>
-        <button class="sim-btn" onclick="resetSim()">⟳ RESET</button>
-        <button class="sim-btn clr" onclick="clearFP()">✕ CLR</button>
-        <button class="sim-btn" id="map-ship-btn" onclick="toggleShip()">⛵ SHIP</button>
-        <button class="sim-btn" id="map-tcut-btn" onclick="toggleTcut()">⛰ T-CUT</button>
-        <button class="sim-btn" id="inhib-btn" onclick="toggleInhibMenu()">INHIB</button>
-        <button class="sim-btn" id="orient-btn" onclick="toggleMapOrient()">N↑</button>
-        <button class="sim-btn" id="follow-btn" onclick="toggleFollow()">1인칭</button>
-        <button class="sim-btn sat" id="layer-btn" onclick="toggleLayer()">MAP</button>
-        <button class="sim-btn" id="layer-btn-3d" onclick="toggle3dMap()">3D</button>
-        <button class="sim-btn" id="lock-btn" onclick="lockScreen()" title="화면 터치 잠금">🔒</button>
+        <button class="sim-btn" id="map-fly-btn" data-act="toggleSim">▶ FLY</button>
+        <button class="sim-btn" data-act="resetSim">⟳ RESET</button>
+        <button class="sim-btn clr" data-act="clearFP">✕ CLR</button>
+        <button class="sim-btn" id="map-ship-btn" data-act="toggleShip">⛵ SHIP</button>
+        <button class="sim-btn" id="map-tcut-btn" data-act="toggleTcut">⛰ T-CUT</button>
+        <button class="sim-btn" id="inhib-btn" data-act="toggleInhibMenu">INHIB</button>
+        <button class="sim-btn" id="orient-btn" data-act="toggleMapOrient">N↑</button>
+        <button class="sim-btn" id="follow-btn" data-act="toggleFollow">1인칭</button>
+        <button class="sim-btn sat" id="layer-btn" data-act="toggleLayer">MAP</button>
+        <button class="sim-btn" id="layer-btn-3d" data-act="toggle3dMap">3D</button>
+        <button class="sim-btn" id="lock-btn" data-act="lockScreen" title="화면 터치 잠금">🔒</button>
       </div>
 
       <!-- Weather Overlay Panel -->
       <div id="wx-panel">
         <div id="wx-panel-header">✈ WEATHER — METAR / TAF
-          <button onclick="closeWxPanel()" style="position:absolute;top:50%;right:8px;transform:translateY(-50%);background:none;border:none;color:#666;font-size:14px;line-height:1;cursor:pointer;padding:0;">✕</button>
+          <button data-act="closeWxPanel" style="position:absolute;top:50%;right:8px;transform:translateY(-50%);background:none;border:none;color:#666;font-size:14px;line-height:1;cursor:pointer;padding:0;">✕</button>
         </div>
         <div id="wx-panel-body">
           <div id="wx-ap-grid" style="display:grid;grid-template-columns:repeat(5,1fr);gap:3px;"></div>
           <div id="wx-fetch-row">
             <input id="wx-icao" type="text" maxlength="4" placeholder="ICAO" autocomplete="off" autocorrect="off" spellcheck="false">
-            <button class="wx-fetch-btn" onclick="fetchWx('METAR')">METAR</button>
-            <button class="wx-fetch-btn" onclick="fetchWx('TAF')">TAF</button>
+            <button class="wx-fetch-btn" data-act="fetchWx" data-arg='["METAR"]'>METAR</button>
+            <button class="wx-fetch-btn" data-act="fetchWx" data-arg='["TAF"]'>TAF</button>
           </div>
           <div id="wx-result" style="display:none;"></div>
         </div>
@@ -2055,24 +2065,24 @@ body.night-mode::after {
       <div id="ship-panel">
         <div id="ship-panel-header" style="color:#7ab8f5;font-size:9px;font-weight:bold;text-align:center;letter-spacing:1px;border-bottom:1px solid #222;padding-bottom:6px;margin-bottom:8px;position:relative;cursor:grab;user-select:none;">⛵ SHIP CONTROL</div>
         <div style="display:flex;gap:4px;margin-bottom:8px;">
-          <button id="ship-tab-spd" class="ship-tab ship-tab-active" onclick="shipSetMode('SPD')">SPD</button>
-          <button id="ship-tab-crs" class="ship-tab" onclick="shipSetMode('CRS')">CRS</button>
+          <button id="ship-tab-spd" class="ship-tab ship-tab-active" data-act="shipSetMode" data-arg='["SPD"]'>SPD</button>
+          <button id="ship-tab-crs" class="ship-tab" data-act="shipSetMode" data-arg='["CRS"]'>CRS</button>
         </div>
         <div id="ship-display" style="background:#000;border:1.5px solid #333;border-radius:4px;color:#c8ff00;font-size:24px;text-align:right;padding:4px 10px;margin-bottom:3px;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica Neue,Arial,sans-serif;min-height:36px;display:flex;align-items:center;justify-content:flex-end;letter-spacing:2px;">0</div>
         <div id="ship-unit" style="color:#555;font-size:7px;text-align:right;margin-bottom:8px;">kt · max 50</div>
         <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin-bottom:8px;">
-          <button class="ship-num" onclick="shipKey('7')">7</button>
-          <button class="ship-num" onclick="shipKey('8')">8</button>
-          <button class="ship-num" onclick="shipKey('9')">9</button>
-          <button class="ship-num" onclick="shipKey('4')">4</button>
-          <button class="ship-num" onclick="shipKey('5')">5</button>
-          <button class="ship-num" onclick="shipKey('6')">6</button>
-          <button class="ship-num" onclick="shipKey('1')">1</button>
-          <button class="ship-num" onclick="shipKey('2')">2</button>
-          <button class="ship-num" onclick="shipKey('3')">3</button>
-          <button class="ship-num ship-clr" onclick="shipKey('CLR')">CLR</button>
-          <button class="ship-num" onclick="shipKey('0')">0</button>
-          <button class="ship-num ship-ent" onclick="shipKey('ENT')">ENT</button>
+          <button class="ship-num" data-act="shipKey" data-arg='["7"]'>7</button>
+          <button class="ship-num" data-act="shipKey" data-arg='["8"]'>8</button>
+          <button class="ship-num" data-act="shipKey" data-arg='["9"]'>9</button>
+          <button class="ship-num" data-act="shipKey" data-arg='["4"]'>4</button>
+          <button class="ship-num" data-act="shipKey" data-arg='["5"]'>5</button>
+          <button class="ship-num" data-act="shipKey" data-arg='["6"]'>6</button>
+          <button class="ship-num" data-act="shipKey" data-arg='["1"]'>1</button>
+          <button class="ship-num" data-act="shipKey" data-arg='["2"]'>2</button>
+          <button class="ship-num" data-act="shipKey" data-arg='["3"]'>3</button>
+          <button class="ship-num ship-clr" data-act="shipKey" data-arg='["CLR"]'>CLR</button>
+          <button class="ship-num" data-act="shipKey" data-arg='["0"]'>0</button>
+          <button class="ship-num ship-ent" data-act="shipKey" data-arg='["ENT"]'>ENT</button>
         </div>
         <div style="display:grid;grid-template-columns:repeat(2,1fr);border-top:1px solid #1e1e1e;padding-top:7px;gap:4px;">
           <div style="text-align:center;">
@@ -2169,6 +2179,36 @@ body.night-mode::after {
 </div><!-- end #app -->
 
 <script>
+
+// ── 무시되는 예외 집계 ───────────────────────────────────────────
+// 종전에는 곳곳에서 `catch(e) {}` 로 예외를 통째로 삼켰다. 그 탓에 clBack 처럼
+// 버튼이 조용히 죽어도 흔적이 남지 않아, 사용자가 화면을 보고 신고해야만 알 수 있었다.
+// 이제 모든 무시 예외는 여기를 지난다. 평소 동작은 종전과 같고(아무것도 안 함),
+// 디버그 모드에서만 콘솔에 남긴다. 최근 200건은 항상 메모리에 보관한다.
+//   디버그 켜기: URL 에 ?debug=1 · localhost · localStorage.setItem('debug','1')
+//   확인:        _swallowed()          최근 무시 예외 목록
+//                _swallowSummary()     메시지별 발생 횟수(반복되는 것이 진짜 문제)
+const _SWALLOW_LOG = [];
+let _DEBUG = false;
+function _swallow(e) {
+  try {
+    const at = (((e && e.stack) || '').split('\n')[1] || '').trim();
+    _SWALLOW_LOG.push({ t: Date.now(), msg: (e && e.message) || String(e), at });
+    if (_SWALLOW_LOG.length > 200) _SWALLOW_LOG.shift();
+    if (_DEBUG) console.debug('[무시된 예외]', (e && e.message) || e, at);
+  } catch (_) { /* 집계 자체가 실패해도 앱 동작에는 영향을 주지 않는다 */ }
+}
+function _swallowed() { return _SWALLOW_LOG.slice(); }
+function _swallowSummary() {
+  const c = {};
+  _SWALLOW_LOG.forEach(r => { c[r.msg] = (c[r.msg] || 0) + 1; });
+  return Object.entries(c).sort((a, b) => b[1] - a[1]);
+}
+try {
+  _DEBUG = /[?&]debug=1/.test(location.search)
+        || location.hostname === 'localhost' || location.hostname === '127.0.0.1'
+        || localStorage.getItem('debug') === '1';
+} catch (e) { _swallow(e); }
 // ══════════════════════════════════════════════════════
 // DATABASE
 // ══════════════════════════════════════════════════════
@@ -2286,6 +2326,19 @@ const clampFwd = v => Math.max(REF_FWD_MIN, Math.min(REF_FWD_MAX, v));
 
 function hoverEligible() { return S.spd < 80; }
 
+// GSPD 가 켜지면 뱅크가 기수를 바꾸지 않으므로(요는 ANTI-TORQUE PEDAL 전용)
+// NAV·OBS 오토파일럿은 지령을 내려도 기체를 돌리지 못한다. 버튼은 켜진 채
+// 두되(GSPD 를 끄면 그대로 이어서 동작) 조향 불가 상태임을 눈에 보이게 한다.
+function updateApInhibit() {
+  const inh = !!(typeof gspdOn !== 'undefined' && (gspdOn || gspdCoasting));
+  [['nav-ap-btn', 'NAV'], ['obs-btn', 'OBS'], ['icpt-btn', '인터셉트 각도']].forEach(([id, nm]) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.classList.toggle('ap-inh', inh);
+    el.title = inh ? `${nm} — GSPD 작동 중에는 조향되지 않습니다 (요 조작은 ANTI-TORQUE PEDAL)` : '';
+  });
+}
+
 function updateHoverBtns() {
   const hb  = document.getElementById('hover-btn');
   const gb  = document.getElementById('gspd-btn');
@@ -2300,6 +2353,7 @@ function updateHoverBtns() {
   // GSPD: always enabled (mode-independent of HOVER PAGE)
   gb.disabled = false;
   gb.classList.toggle('on', gspdOn);
+  updateApInhibit();
   // CRHT: always enabled
   if (cb) cb.classList.toggle('on', crhtOn);
   // Trim cells: always active — F/A adjusts speed in normal flight, L/R applies bank roll
@@ -2373,6 +2427,7 @@ function toggleGspd() {
     gspdRefFwd = null;
   }
   updateHoverBtns();
+  try { updateApInhibit(); } catch(e) { _swallow(e); }
 }
 
 function toggleAltHold() {
@@ -2573,6 +2628,7 @@ function toggleObs() {
   obsOn = !obsOn;
   document.getElementById('obs-btn').classList.toggle('on', obsOn);
   updateCrsButtons();
+  try { updateApInhibit(); } catch(e) { _swallow(e); }
 }
 
 function toggleNavAp() {
@@ -2584,6 +2640,7 @@ function toggleNavAp() {
     selHdg = ((Math.round(S.hdg) + 359) % 360) + 1;   // 현재 헤딩 유지로 복귀
     hdgSelOn = true; rollApOn = true;
   }
+  try { updateApInhibit(); } catch(e) { _swallow(e); }
 }
 
 // 선회 선행거리(NM) — 현재 레그 코스(curCrs)에서 다음 레그 코스(nextCrs)로
@@ -3144,7 +3201,7 @@ try {
   unitDist = localStorage.getItem('unitDist') || 'NM';
   unitSpd  = localStorage.getItem('unitSpd')  || 'kt';
   unitTemp = localStorage.getItem('unitTemp') || 'C';
-} catch(e) {}
+} catch(e) { _swallow(e); }
 // ── 계기(PFD)용 원시 변환·라벨 헬퍼 (숫자만 반환) ──
 const A_CV = () => unitAlt  === 'm'   ? 0.3048  : 1;        // ft → 표시
 const S_CV = () => unitSpd  === 'kmh' ? 1.852   : 1;        // kt → 표시
@@ -3174,14 +3231,14 @@ function uSpd(kt, dec) {
   return unitSpd === 'kmh' ? Math.round(kt * 1.852) + ' km/h' : Math.round(kt) + ' kt';
 }
 function setUnit(kind, val) {
-  if (kind === 'alt')  { unitAlt  = val; try { localStorage.setItem('unitAlt',  val); } catch(e) {} }
-  if (kind === 'dist') { unitDist = val; try { localStorage.setItem('unitDist', val); } catch(e) {} }
-  if (kind === 'spd')  { unitSpd  = val; try { localStorage.setItem('unitSpd',  val); } catch(e) {} }
-  if (kind === 'temp') { unitTemp = val; try { localStorage.setItem('unitTemp', val); } catch(e) {} }
-  try { drawPFD(); } catch(e) {}
-  try { updateNav(); } catch(e) {}
-  try { updateTerrainCut(); } catch(e) {}
-  try { if (rangeRingsOn) _updateRangeRings(); } catch(e) {}
+  if (kind === 'alt')  { unitAlt  = val; try { localStorage.setItem('unitAlt',  val); } catch(e) { _swallow(e); } }
+  if (kind === 'dist') { unitDist = val; try { localStorage.setItem('unitDist', val); } catch(e) { _swallow(e); } }
+  if (kind === 'spd')  { unitSpd  = val; try { localStorage.setItem('unitSpd',  val); } catch(e) { _swallow(e); } }
+  if (kind === 'temp') { unitTemp = val; try { localStorage.setItem('unitTemp', val); } catch(e) { _swallow(e); } }
+  try { drawPFD(); } catch(e) { _swallow(e); }
+  try { updateNav(); } catch(e) { _swallow(e); }
+  try { updateTerrainCut(); } catch(e) { _swallow(e); }
+  try { if (rangeRingsOn) _updateRangeRings(); } catch(e) { _swallow(e); }
 }
 function normA(a)  { return ((a % 360) + 360) % 360; }
 function normAS(a) { a = normA(a); return a > 180 ? a - 360 : a; }
@@ -3269,6 +3326,11 @@ function resizePFD() {
 
 function drawPFD() {
   const W = cvs.width, H = cvs.height;
+  // 패널이 접혀 있거나(전체화면 MAP·분할 전환 직후) 아직 레이아웃 전이면 W·H 가
+  // 0 이 되고, usableH = H - 조작부높이 가 음수가 되어 계기 반지름까지 음수로
+  // 내려간다. 그러면 ctx.arc 가 예외를 던지며 그 프레임의 계기 그리기가 통째로
+  // 중단된다. 그릴 수 없는 크기면 조용히 건너뛴다.
+  if (!(W >= 80) || !(H >= 80)) return;
   const ctrlEl = document.querySelector('.ctrl-bar');
   const CTRL_H = ctrlEl ? ctrlEl.offsetHeight : 80;
   const usableH = H - CTRL_H;
@@ -3342,7 +3404,11 @@ function drawFMA(x, y, w) {
     // GSPD engaged: both yaw/roll (mid) and pitch (right) are driven by
     // body-frame ground speed; capture GS on both axes.
     left   = crhtOn ? 'CRHT' : 'ALT'; leftOn = true;
-    mid    = 'GS'; midOn  = true;
+    // GSPD 는 요/롤 축을 가져간다. NAV·HDG SEL 이 켜져 있어도 조향하지 못하므로
+    // 켜진 채 방치하지 말고 "대기"임을 분명히 적는다.
+    // (버튼은 초록인데 기체가 안 도는 상황을 화면만 보고 알 수 있어야 한다)
+    mid    = navApOn ? 'GS/NAV' : (hdgSelOn ? 'GS/HDG' : 'GS');
+    midOn  = true;
     right  = 'GS'; rightOn = true;
   } else {
     left   = crhtOn ? 'CRHT' : 'ALT';
@@ -3356,6 +3422,9 @@ function drawFMA(x, y, w) {
 
   const modeColor = (lbl, on) => {
     if (!on) return '#3a3a3a';
+    // GS/NAV · GS/HDG = GSPD 가 축을 잡고 있어 NAV·HDG 가 조향하지 못하는 대기 상태.
+    // 초록(정상 작동)과 구분되게 호박색으로 표시한다.
+    if (lbl.indexOf('/') >= 0) return '#ffb74d';
     return '#00ff88';  // all active AFCS modes in green
   };
 
@@ -3830,6 +3899,7 @@ function drawVSI(x, y, w, h) {
 // HSI
 // ────────────────────────────────────────
 function drawHSI(x, y, w, h) {
+  if (!(w >= 40) || !(h >= 40)) return;   // 반지름이 음수가 되는 것을 원천 차단
   ctx.save();  // outer save — ensure lineWidth/strokeStyle don't bleed into drawPFD
   ctx.fillStyle='#654321';
   ctx.fillRect(x,y,w,h);
@@ -4752,7 +4822,7 @@ function toggle3dMap() {
     if (tiltCtrl) tiltCtrl.classList.remove('active');
     // Returning to 2D — Leaflet needs to recompute its size; apply follow immediately
     setTimeout(() => {
-      try { leafMap.invalidateSize(); } catch (e) {}
+      try { leafMap.invalidateSize(); } catch (e) { _swallow(e); }
       _applyFollow();
     }, 50);
   }
@@ -4816,7 +4886,7 @@ function _init3dMap() {
 
   _ml3d.on('error', (e) => console.warn('[3D] map error:', e && e.error ? e.error.message : e));
   // 사용자가 3D 지도를 수동 회전할 때도 마커가 실제 기수를 가리키도록 갱신
-  _ml3d.on('rotate', () => { try { _update3dMarker(); } catch(e) {} });
+  _ml3d.on('rotate', () => { try { _update3dMarker(); } catch(e) { _swallow(e); } });
 
   _ml3d.on('load', () => {
     // Terrain is best-effort — a DEM failure must not blank the satellite view
@@ -5260,7 +5330,7 @@ function startGPS() {
     return;
   }
   // 이전 watch가 남아있으면 정리(중복 방지)
-  if (gpsWatchId !== null) { try { navigator.geolocation.clearWatch(gpsWatchId); } catch(e){} gpsWatchId = null; }
+  if (gpsWatchId !== null) { try { navigator.geolocation.clearWatch(gpsWatchId); } catch(e){ _swallow(e); } gpsWatchId = null; }
 
   // 즉시 GPS 모드로 전환(시뮬레이션 물리와 충돌 방지) + '위치 확인 중' 표시
   gpsMode = true;
@@ -5351,7 +5421,7 @@ function startDevOrientation() {
     } else {
       bind();
     }
-  } catch(e) {}
+  } catch(e) { _swallow(e); }
 }
 function stopDevOrientation() {
   if (_devHdgBound) { window.removeEventListener('deviceorientation', _onDevOrientation); _devHdgBound = false; }
@@ -5543,11 +5613,15 @@ let vorCrsLine = L.polyline([],{color:'#44aaff',weight:1.5,dashArray:'10 5',opac
 let spdVecLine = L.polyline([], {color:'#ff1744', weight:2.5, opacity:0.95}).addTo(leafMap);
 let spdVecHead = L.polygon([],  {color:'#ff1744', weight:1, fillColor:'#ff1744', fillOpacity:1, opacity:1}).addTo(leafMap);
 
+// FDR 재생 여부 — 선언이 FDR 블록(아래쪽)에 있었는데 여기서 먼저 읽어
+// 기동 중 TDZ 예외("Cannot access '_fdrPlaying' before initialization")가
+// 조용히 삼켜지고 있었다. 첫 사용처보다 앞으로 옮겨 근본 원인을 없앤다.
+let _fdrPlaying = false;
+
 function updateSpeedVector() {
   // 1분 예상궤적: 선회 중(뱅크)에는 선회율+바람을 적분한 곡선,
   // 직진 시에는 기존처럼 직선. GPS/FDR 모드는 지상속도·트랙 그대로 직선.
-  let fdrOn = false; try { fdrOn = !!_fdrPlaying; } catch(e) {}
-  const simMode = !gpsMode && !fdrOn;
+  const simMode = !gpsMode && !_fdrPlaying;
   const airSpd = Math.min(Math.max(S.spd || 0, 0), 130);   // 130kt 상한
   const wEff = (simMode && typeof effectiveWindSpd === 'function') ? effectiveWindSpd() : 0;
   const wt = normA(windDir + 180) * D2R;
@@ -5663,7 +5737,7 @@ function vnavCalc() {
       const _x = courseXtk(_L);
       d = Math.sqrt(Math.max(0, dDir * dDir - _x * _x));      // 레그 방향 성분
     }
-  } catch(e) {}
+  } catch(e) { _swallow(e); }
   const slope = Math.tan(Math.abs(vnavAngle) * D2R);
   const sign = vnavAngle < 0 ? 1 : -1;                        // 강하각이면 타깃보다 높은 곳이 경로
   const pathH = d * FT_PER_NM * slope * sign;                 // 타깃 대비 현재 거리에서의 경로 고도차
@@ -5694,16 +5768,16 @@ function vnavAlertCheck() {
   else if (tToTod > 0 && tToTod <= 10 && vn.dev > 30) st = 'pre';   // 10초 전 예고
   if (st !== _vnavAlertState) {
     _vnavAlertState = st;
-    if (st === 'pre')  { el.className = 'pre';   el.textContent = '▼ VNAV: 강하 시작 10초 전'; try { navigator.vibrate && navigator.vibrate(150); } catch(e) {} }
-    else if (st === 'begin') { el.className = 'begin'; el.textContent = '▼ BEGIN DESCENT — ' + Math.round(vn.vs) + ' fpm'; try { navigator.vibrate && navigator.vibrate([250,100,250]); } catch(e) {} }
+    if (st === 'pre')  { el.className = 'pre';   el.textContent = '▼ VNAV: 강하 시작 10초 전'; try { navigator.vibrate && navigator.vibrate(150); } catch(e) { _swallow(e); } }
+    else if (st === 'begin') { el.className = 'begin'; el.textContent = '▼ BEGIN DESCENT — ' + Math.round(vn.vs) + ' fpm'; try { navigator.vibrate && navigator.vibrate([250,100,250]); } catch(e) { _swallow(e); } }
     else { el.className = ''; el.textContent = ''; }
   }
 }
-setInterval(() => { try { vnavAlertCheck(); } catch(e) {} }, 1000);
+setInterval(() => { try { vnavAlertCheck(); } catch(e) { _swallow(e); } }, 1000);
 
 // VNAV 리드아웃 HTML(실시간 갱신용) — UTIL VNAV 화면에서 재사용
 function _vnavReadoutHtml() {
-  let vn = null; try { vn = vnavCalc(); } catch(e) {}
+  let vn = null; try { vn = vnavCalc(); } catch(e) { _swallow(e); }
   if (!vnavActive) {
     return `<div style="color:#567;font-size:10px;padding:8px 4px;">타깃 고도와 각도(강하 −, 상승 +)를 입력하고 ENT 하세요. 활성 웨이포인트가 타깃입니다.</div>`;
   }
@@ -5731,7 +5805,7 @@ setInterval(() => {
       const el = document.getElementById('vnav-readout');
       if (el) el.innerHTML = _vnavReadoutHtml();
     }
-  } catch(e) {}
+  } catch(e) { _swallow(e); }
 }, 1000);
 
 function updateTerrainCut() {
@@ -5751,7 +5825,7 @@ function updateTerrainCut() {
   }
   const acFt = S.alt || 0;
   // ── 항공기 고도 중심 표시: 현재고도를 화면 중앙(H/2)에 고정, 반경 VR(ft) 내 상대 표시 ──
-  let _vn = null; try { _vn = vnavCalc(); } catch(e) {}
+  let _vn = null; try { _vn = vnavCalc(); } catch(e) { _swallow(e); }
   let maxDelta = 1000;
   for (let i = 0; i <= N; i++) { const dd = Math.abs(elevs[i] - acFt); if (dd > maxDelta) maxDelta = dd; }
   if (_vn && !_vn.err) maxDelta = Math.max(maxDelta, Math.min(Math.abs(_vn.tgtAlt - acFt), 6000));
@@ -5821,12 +5895,12 @@ function updateTerrainCut() {
       const devTxt = (vn.dev >= 0 ? '+' : '') + Math.round(vn.dev);
       g.fillText(`VNAV ${vn.ang.toFixed(1)}°  Δ${devTxt}ft`, 4, H / 2 + 16);
     }
-  } catch(e) {}
+  } catch(e) { _swallow(e); }
   // 간이 TAWS: 전방 10NM 이내(샘플 절반)에 여유고도 100ft 미만 지형이 있으면 경고
   {
     let danger = false;
     // INHIBIT 시 경고 억제 (inhibTaws는 뒤에서 선언되므로 방어적 접근)
-    let _inh = false; try { _inh = inhibTaws; } catch(e) {}
+    let _inh = false; try { _inh = inhibTaws; } catch(e) { _swallow(e); }
     if (_inh) {
       const ta0 = document.getElementById('terrain-alert');
       if (ta0) ta0.classList.remove('on');
@@ -5838,7 +5912,7 @@ function updateTerrainCut() {
     if (ta) {
       const was = ta.classList.contains('on');
       ta.classList.toggle('on', danger);
-      if (danger && !was) { try { navigator.vibrate && navigator.vibrate([300,100,300]); } catch(e) {} }
+      if (danger && !was) { try { navigator.vibrate && navigator.vibrate([300,100,300]); } catch(e) { _swallow(e); } }
     }
     }
   }
@@ -5848,7 +5922,7 @@ let _tcTick = 0;
 setInterval(() => {
   _tcTick++;
   if (gpsMode && _tcTick % 4 !== 0) return;
-  try { updateTerrainCut(); } catch(e) {}
+  try { updateTerrainCut(); } catch(e) { _swallow(e); }
 }, 1000);
 
 // T-CUT 버튼: vertical situation(지형 단면) 패널 표시/숨김 토글.
@@ -5859,14 +5933,14 @@ function toggleTcut() {
   const hidden = wrap.classList.toggle('tcut-off');
   document.getElementById('map-tcut-btn').classList.toggle('active', !hidden);
   setTimeout(() => {
-    try { leafMap.invalidateSize(); } catch(e) {}
-    try { if (_ml3d) _ml3d.resize(); } catch(e) {}
-    try { updateCenterCoord(); } catch(e) {}
-    if (!hidden) { try { updateTerrainCut(); } catch(e) {} }
+    try { leafMap.invalidateSize(); } catch(e) { _swallow(e); }
+    try { if (_ml3d) _ml3d.resize(); } catch(e) { _swallow(e); }
+    try { updateCenterCoord(); } catch(e) { _swallow(e); }
+    if (!hidden) { try { updateTerrainCut(); } catch(e) { _swallow(e); } }
   }, 60);
 }
 // 지도 영역이 80%로 바뀌었으므로 Leaflet 리사이즈 강제(초기 렌더 보정)
-setTimeout(() => { try { leafMap.invalidateSize(); } catch(e) {} try { updateTerrainCut(); } catch(e) {} }, 300);
+setTimeout(() => { try { leafMap.invalidateSize(); } catch(e) { _swallow(e); } try { updateTerrainCut(); } catch(e) { _swallow(e); } }, 300);
 
 // ── BRG1/BRG2 베어링 라인 (HSI 사이드패널과 동일 소스·색) ──
 //  BRG1(파랑): 항공기 → 선택 항법시설(VOR/ILS)
@@ -5919,7 +5993,7 @@ function updateHoldLine() {
     const segs = [];
     S.wps.forEach(wp => { if (wp && wp.hold) segs.push(holdPatternLatLngs(wp, wp.hold)); });
     holdLine.setLatLngs(segs);
-  } catch(e) {}
+  } catch(e) { _swallow(e); }
 }
 
 function updateCrsLine() {
@@ -6006,7 +6080,7 @@ function toggleFollow() {
   followMode = !followMode;
   const btn = document.getElementById('follow-btn');
   btn.classList.toggle('active', followMode);
-  try { updateCenterCoord(); } catch(e) {}   // 좌표 기준(중앙↔항공기) 즉시 전환
+  try { updateCenterCoord(); } catch(e) { _swallow(e); }   // 좌표 기준(중앙↔항공기) 즉시 전환
   // 1인칭 모드에서는 중앙 십자마크 숨김(항공기 기준 좌표 표시 중)
   const ch = document.getElementById('map-crosshair');
   if (ch) ch.style.display = followMode ? 'none' : '';
@@ -6018,7 +6092,7 @@ function toggleFollow() {
     // Re-enable Leaflet dragging unless HDG-UP also needs it disabled
     if (!mapHdgUp) leafMap.dragging.enable();
     // Clear any 3D camera padding so manual exploration recentres normally
-    if (_ml3d) { try { _ml3d.setPadding({ top: 0, bottom: 0, left: 0, right: 0 }); } catch (e) {} }
+    if (_ml3d) { try { _ml3d.setPadding({ top: 0, bottom: 0, left: 0, right: 0 }); } catch (e) { _swallow(e); } }
   }
 }
 
@@ -6032,7 +6106,7 @@ function updateCenterCoord() {
   el.textContent = `${tag} ${decToDMS(lat, true)} ${decToDMS(lon, false)}`;   // 북위·동경 1줄 표시
 }
 leafMap.on('move', updateCenterCoord);
-try { updateCenterCoord(); } catch(e) {}
+try { updateCenterCoord(); } catch(e) { _swallow(e); }
 
 // In 1인칭, place the aircraft a quarter of the way up from the bottom of the
 // screen (vertical position ≈ 0.75 H from top) so the forward view is larger.
@@ -6098,7 +6172,7 @@ function toggleMapOrient() {
 }
 // ── 레인지 링(거리·방위 링) ──
 let rangeRingsOn = false, ringRadii = [5, 10];   // NM
-try { rangeRingsOn = localStorage.getItem('rangeRingsOn') === '1'; } catch(e) {}
+try { rangeRingsOn = localStorage.getItem('rangeRingsOn') === '1'; } catch(e) { _swallow(e); }
 let _ringLayer = null;
 function _updateRangeRings() {
   if (_ringLayer) { leafMap.removeLayer(_ringLayer); _ringLayer = null; }
@@ -6119,7 +6193,7 @@ function _updateRangeRings() {
 }
 function toggleRangeRings() {
   rangeRingsOn = !rangeRingsOn;
-  try { localStorage.setItem('rangeRingsOn', rangeRingsOn ? '1' : '0'); } catch(e) {}
+  try { localStorage.setItem('rangeRingsOn', rangeRingsOn ? '1' : '0'); } catch(e) { _swallow(e); }
   _ringLastLat = null;   // 즉시 갱신 강제
   _updateRangeRings();
 }
@@ -6233,7 +6307,7 @@ function fpGo(mode) { fpMode = mode; if(mode==='IDENT'||mode==='LAT'||mode==='LO
 
 // FPL 자동 저장 — 새로고침해도 비행계획 유지
 function _fplPersist() {
-  try { localStorage.setItem('fplSave', JSON.stringify({ wps: S.wps, awp: S.awp })); } catch(e) {}
+  try { localStorage.setItem('fplSave', JSON.stringify({ wps: S.wps, awp: S.awp })); } catch(e) { _swallow(e); }
 }
 function _fplRestore() {
   try {
@@ -6243,7 +6317,7 @@ function _fplRestore() {
       S.awp = (typeof s.awp === 'number' && s.awp < s.wps.length) ? s.awp : -1;
       updateWpMarkers(); updateNav();
     }
-  } catch(e) {}
+  } catch(e) { _swallow(e); }
 }
 
 function fpRender() {
@@ -6427,8 +6501,8 @@ function fpRenderRadial(area, title, footer) {
       ${rb ? `<div class="hold-row"><div class="hold-lbl">DIST</div>${_spinHtml('d1',10,1,'NM')}</div>
               <div class="hold-row"><div class="hold-lbl"></div>
                 <div class="hold-spin">
-                  <div class="hold-btn" onclick="fpRefAdj('d1',-0.1)">−0.1</div>
-                  <div class="hold-btn" onclick="fpRefAdj('d1',0.1)">+0.1</div>
+                  <div class="hold-btn" data-act="fpRefAdj" data-arg='["d1", -0.1]'>−0.1</div>
+                  <div class="hold-btn" data-act="fpRefAdj" data-arg='["d1", 0.1]'>+0.1</div>
                 </div></div>`
           : `<div class="hold-row"><div class="hold-lbl">REF #2</div>${_refBtnHtml(2)}</div>
              <div class="hold-row"><div class="hold-lbl">BRG #2</div>${_spinHtml('b2',10,1,'°')}</div>`}
@@ -6440,9 +6514,9 @@ function fpRenderRadial(area, title, footer) {
       </div>
     </div>`;
   footer.innerHTML = `
-    <div class="fp-nav-btn" onclick="fpGo('ADD')"><span>↩</span>Back</div>
-    <div class="fp-nav-btn" onclick="fpGo('LIST')"><span>📋</span>FP</div>
-    <div class="fp-nav-btn fp-nav-enter" onclick="fpRefApply()"><span>↩</span>Enter</div>`;
+    <div class="fp-nav-btn" data-act="fpGo" data-arg='["ADD"]'><span>↩</span>Back</div>
+    <div class="fp-nav-btn" data-act="fpGo" data-arg='["LIST"]'><span>📋</span>FP</div>
+    <div class="fp-nav-btn fp-nav-enter" data-act="fpRefApply"><span>↩</span>Enter</div>`;
 }
 
 function fpRenderRefPick(area, title, footer) {
@@ -6470,7 +6544,7 @@ function fpRenderRefPick(area, title, footer) {
     </div>
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;">
       <div class="fp-disp-box" style="flex:1;">${fpRefQ || '<span style="color:#222">검색</span>'}</div>
-      <div class="fp-bksp-btn" onclick="fpRefBksp()">⬅</div>
+      <div class="fp-bksp-btn" data-act="fpRefBksp">⬅</div>
     </div>
     <div class="fp-key-grid" style="grid-template-columns:repeat(9,1fr);gap:3px;">
       ${'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'.split('').map(k =>
@@ -6535,13 +6609,13 @@ function fpHoldApply() {
     legVal: fpHoldDraft.legVal,
   };
   holdExit();                                // 새 설정으로 다시 무장되게 초기화
-  try { updateHoldLine(); updateNav(); } catch(e) {}
+  try { updateHoldLine(); updateNav(); } catch(e) { _swallow(e); }
   fpGo('LIST');
 }
 function fpHoldRemove() {
   if (fpHoldIdx >= 0 && fpHoldIdx < S.wps.length) delete S.wps[fpHoldIdx].hold;
   holdExit();
-  try { updateHoldLine(); updateNav(); } catch(e) {}
+  try { updateHoldLine(); updateNav(); } catch(e) { _swallow(e); }
   fpGo('LIST');
 }
 
@@ -6561,33 +6635,33 @@ function fpRenderHold(area, title, footer) {
       <div class="hold-row">
         <div class="hold-lbl">TURN</div>
         <div class="hold-seg">
-          <div class="hold-btn${d.dir==='L'?' on':''}" onclick="fpHoldSet('dir','L')">◄ LEFT</div>
-          <div class="hold-btn${d.dir==='R'?' on':''}" onclick="fpHoldSet('dir','R')">RIGHT ►</div>
+          <div class="hold-btn${d.dir==='L'?' on':''}" data-act="fpHoldSet" data-arg='["dir", "L"]'>◄ LEFT</div>
+          <div class="hold-btn${d.dir==='R'?' on':''}" data-act="fpHoldSet" data-arg='["dir", "R"]'>RIGHT ►</div>
         </div>
       </div>
       <div class="hold-row">
         <div class="hold-lbl">INBD CRS</div>
         <div class="hold-spin">
-          <div class="hold-btn" onclick="fpHoldCrsAdj(-10)">≪</div>
-          <div class="hold-btn" onclick="fpHoldCrsAdj(-1)">◄</div>
+          <div class="hold-btn" data-act="fpHoldCrsAdj" data-arg='[-10]'>≪</div>
+          <div class="hold-btn" data-act="fpHoldCrsAdj" data-arg='[-1]'>◄</div>
           <div class="hold-val">${String(d.crsM).padStart(3,'0')}°M</div>
-          <div class="hold-btn" onclick="fpHoldCrsAdj(1)">►</div>
-          <div class="hold-btn" onclick="fpHoldCrsAdj(10)">≫</div>
+          <div class="hold-btn" data-act="fpHoldCrsAdj" data-arg='[1]'>►</div>
+          <div class="hold-btn" data-act="fpHoldCrsAdj" data-arg='[10]'>≫</div>
         </div>
       </div>
       <div class="hold-row">
         <div class="hold-lbl">LEG</div>
         <div class="hold-seg">
-          <div class="hold-btn${d.legType==='TIME'?' on':''}" onclick="fpHoldSet('legType','TIME')">TIME</div>
-          <div class="hold-btn${d.legType==='DIST'?' on':''}" onclick="fpHoldSet('legType','DIST')">DIST</div>
+          <div class="hold-btn${d.legType==='TIME'?' on':''}" data-act="fpHoldSet" data-arg='["legType", "TIME"]'>TIME</div>
+          <div class="hold-btn${d.legType==='DIST'?' on':''}" data-act="fpHoldSet" data-arg='["legType", "DIST"]'>DIST</div>
         </div>
       </div>
       <div class="hold-row">
         <div class="hold-lbl">${d.legType==='DIST'?'거리':'시간'}</div>
         <div class="hold-spin">
-          <div class="hold-btn" onclick="fpHoldLegAdj(-1)">▼</div>
+          <div class="hold-btn" data-act="fpHoldLegAdj" data-arg='[-1]'>▼</div>
           <div class="hold-val">${legTxt}</div>
-          <div class="hold-btn" onclick="fpHoldLegAdj(1)">▲</div>
+          <div class="hold-btn" data-act="fpHoldLegAdj" data-arg='[1]'>▲</div>
         </div>
       </div>
       <div style="color:#567;font-size:9px;line-height:1.6;margin-top:8px;border-top:1px solid #1a2a3a;padding-top:6px;">
@@ -6599,9 +6673,9 @@ function fpRenderHold(area, title, footer) {
       </div>
     </div>`;
   footer.innerHTML = `
-    <div class="fp-nav-btn" onclick="fpGo('LIST')"><span>↩</span>Cancel</div>
-    ${wp.hold ? `<div class="fp-nav-btn" onclick="fpHoldRemove()"><span>✕</span>Del Hold</div>` : ''}
-    <div class="fp-nav-btn fp-nav-enter" onclick="fpHoldApply()"><span>↩</span>Enter</div>`;
+    <div class="fp-nav-btn" data-act="fpGo" data-arg='["LIST"]'><span>↩</span>Cancel</div>
+    ${wp.hold ? `<div class="fp-nav-btn" data-act="fpHoldRemove"><span>✕</span>Del Hold</div>` : ''}
+    <div class="fp-nav-btn fp-nav-enter" data-act="fpHoldApply"><span>↩</span>Enter</div>`;
 }
 
 function fpRenderList(area, title, footer) {
@@ -6609,9 +6683,9 @@ function fpRenderList(area, title, footer) {
   if (S.wps.length === 0) {
     area.innerHTML = `<div class="fp-empty-state">
       <div class="fp-empty-label">FLIGHT PLAN EMPTY</div>
-      <button class="fp-empty-btn" onclick="fpGo('ADD')">＋ Add Origin</button>
-      <button class="fp-empty-btn" onclick="fpGo('ADD')">＋ Add Enroute Waypoint</button>
-      <button class="fp-empty-btn" onclick="fpGo('ADD')">＋ Add Destination</button>
+      <button class="fp-empty-btn" data-act="fpGo" data-arg='["ADD"]'>＋ Add Origin</button>
+      <button class="fp-empty-btn" data-act="fpGo" data-arg='["ADD"]'>＋ Add Enroute Waypoint</button>
+      <button class="fp-empty-btn" data-act="fpGo" data-arg='["ADD"]'>＋ Add Destination</button>
     </div>`;
   } else {
     let html = `<div class="fp-panel-border" style="padding:0;overflow-y:auto;">`;
@@ -6636,15 +6710,15 @@ function fpRenderList(area, title, footer) {
     area.innerHTML = html;
   }
   const fullBtn = _soloActive
-    ? `<div class="fp-nav-btn" onclick="exitSolo()"><span>✥</span>Half</div>`
-    : `<div class="fp-nav-btn" onclick="planFullScreen()"><span>✥</span>Full</div>`;
+    ? `<div class="fp-nav-btn" data-act="exitSolo"><span>✥</span>Half</div>`
+    : `<div class="fp-nav-btn" data-act="planFullScreen"><span>✥</span>Full</div>`;
   footer.innerHTML = `
-    <div class="fp-nav-btn" onclick="fpGoCduHome()"><span>🏠</span>Home</div>
+    <div class="fp-nav-btn" data-act="fpGoCduHome"><span>🏠</span>Home</div>
     ${fullBtn}
-    <div class="fp-nav-btn" onclick="fpGo('ADD')"><span>＋</span>Add WPT</div>
-    <div class="fp-nav-btn" onclick="clearFP()"><span>✕</span>Clr</div>
-    <div class="fp-nav-btn" onclick="resetSim()"><span>⟳</span>Rst</div>
-    <div class="fp-nav-btn" onclick="fpBackToCdu()"><span>↩</span>Back</div>`;
+    <div class="fp-nav-btn" data-act="fpGo" data-arg='["ADD"]'><span>＋</span>Add WPT</div>
+    <div class="fp-nav-btn" data-act="clearFP"><span>✕</span>Clr</div>
+    <div class="fp-nav-btn" data-act="resetSim"><span>⟳</span>Rst</div>
+    <div class="fp-nav-btn" data-act="fpBackToCdu"><span>↩</span>Back</div>`;
 }
 
 function fpRenderAdd(area, title, footer) {
@@ -6654,27 +6728,27 @@ function fpRenderAdd(area, title, footer) {
     <div style="color:#87ceeb;font-size:8px;font-weight:bold;letter-spacing:0.5px;">KOREAN AIRPORTS</div>
     <div class="fp-ap-grid">${apBtns}</div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px;">
-      <div class="fp-input-type-btn fp-cyan" onclick="fpGo('IDENT')">
+      <div class="fp-input-type-btn fp-cyan" data-act="fpGo" data-arg='["IDENT"]'>
         <span style="font-size:20px;">⌨</span><span>IDENT</span>
       </div>
-      <div class="fp-input-type-btn fp-cyan" onclick="fpGo('LAT')">
+      <div class="fp-input-type-btn fp-cyan" data-act="fpGo" data-arg='["LAT"]'>
         <span style="font-size:20px;">📍</span><span>COORDS</span>
       </div>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px;">
-      <div class="fp-input-type-btn fp-cyan" onclick="fpRefOpen('RB')">
+      <div class="fp-input-type-btn fp-cyan" data-act="fpRefOpen" data-arg='["RB"]'>
         <span style="font-size:17px;">⌖</span><span>BRG / DIST</span>
       </div>
-      <div class="fp-input-type-btn fp-cyan" onclick="fpRefOpen('RR')">
+      <div class="fp-input-type-btn fp-cyan" data-act="fpRefOpen" data-arg='["RR"]'>
         <span style="font-size:17px;">✛</span><span>BRG / BRG</span>
       </div>
     </div>
-    <div class="fp-input-type-btn" style="margin-top:6px;" onclick="fpGo('IFR')">
+    <div class="fp-input-type-btn" style="margin-top:6px;" data-act="fpGo" data-arg='["IFR"]'>
       <span style="font-size:18px;">✈</span><span>IFR PROCEDURES</span>
     </div>`;
   footer.innerHTML = `
-    <div class="fp-nav-btn" onclick="fpGo('LIST')"><span>📋</span>FP List</div>
-    <div class="fp-nav-btn" onclick="fpGo('LIST')"><span>↩</span>Back</div>`;
+    <div class="fp-nav-btn" data-act="fpGo" data-arg='["LIST"]'><span>📋</span>FP List</div>
+    <div class="fp-nav-btn" data-act="fpGo" data-arg='["LIST"]'><span>↩</span>Back</div>`;
 }
 
 function fpAddPreset(ident) {
@@ -6688,15 +6762,15 @@ function fpRenderIdent(area, title, footer) {
   area.innerHTML = `
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
       <div class="fp-disp-box">${disp||'<span style="color:#222">——</span>'}<span class="fp-disp-cursor">|</span></div>
-      <div class="fp-bksp-btn" onclick="fpBksp()">⬅<br><span style="font-size:8px;">BKSP</span></div>
+      <div class="fp-bksp-btn" data-act="fpBksp">⬅<br><span style="font-size:8px;">BKSP</span></div>
     </div>
     <div class="fp-key-grid">
       ${'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'.split('').map(k=>`<div class="fp-key" onclick="fpType('${k}')">${k}</div>`).join('')}
     </div>`;
   footer.innerHTML = `
-    <div class="fp-nav-btn" onclick="fpGo('ADD')"><span>↩</span>Cancel</div>
-    <div class="fp-nav-btn" onclick="fpGo('LIST')"><span>📋</span>FP</div>
-    <div class="fp-nav-btn fp-nav-enter" onclick="fpConfirmIdent()"><span>↩</span>Enter</div>`;
+    <div class="fp-nav-btn" data-act="fpGo" data-arg='["ADD"]'><span>↩</span>Cancel</div>
+    <div class="fp-nav-btn" data-act="fpGo" data-arg='["LIST"]'><span>📋</span>FP</div>
+    <div class="fp-nav-btn fp-nav-enter" data-act="fpConfirmIdent"><span>↩</span>Enter</div>`;
 }
 
 function fpRenderCoord(area, title, footer, field) {
@@ -6708,17 +6782,17 @@ function fpRenderCoord(area, title, footer, field) {
       <div style="font-size:8px;color:#87ceeb;">${hint}</div>
       <div style="display:flex;align-items:center;gap:8px;">
         <div class="fp-disp-box">${disp||'<span style="color:#222">——</span>'}<span class="fp-disp-cursor">|</span></div>
-        <div class="fp-bksp-btn" onclick="fpBksp()">⬅<br><span style="font-size:8px;">BKSP</span></div>
+        <div class="fp-bksp-btn" data-act="fpBksp">⬅<br><span style="font-size:8px;">BKSP</span></div>
       </div>
       <div class="fp-numpad-grid">
         ${[1,2,3,4,5,6,7,8,9].map(n=>`<div class="fp-num-circ" onclick="fpType('${n}')">${n}</div>`).join('')}
-        <div class="fp-num-circ" onclick="fpType('.')">.</div>
-        <div class="fp-num-circ" onclick="fpType('0')">0</div>
-        <div class="fp-num-circ" onclick="fpType('-')">−</div>
+        <div class="fp-num-circ" data-act="fpType" data-arg='["."]'>.</div>
+        <div class="fp-num-circ" data-act="fpType" data-arg='["0"]'>0</div>
+        <div class="fp-num-circ" data-act="fpType" data-arg='["-"]'>−</div>
       </div>
     </div>`;
   footer.innerHTML = `
-    <div class="fp-nav-btn" onclick="fpGo('ADD')"><span>↩</span>Cancel</div>
+    <div class="fp-nav-btn" data-act="fpGo" data-arg='["ADD"]'><span>↩</span>Cancel</div>
     <div class="fp-nav-btn fp-nav-enter" onclick="fpConfirmCoord('${field}')"><span>↩</span>Enter</div>`;
 }
 
@@ -6739,25 +6813,25 @@ function fpRenderIfr(area, title, footer) {
       `<div class="fp-ifr-lbl">SID Procedure</div>` +
       `<select class="fp-ifr-sel" id="dep-sid" onchange="onSidSelect()"></select>` +
       `<div id="sid-detail"></div>` +
-      `<button class="fp-ifr-add" onclick="addSidWps()">＋ ADD SID TO PLAN</button>` +
+      `<button class="fp-ifr-add" data-act="addSidWps">＋ ADD SID TO PLAN</button>` +
       `<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;margin-top:4px;">` +
-        `<div class="fp-ifr-add" style="margin:0;font-size:9px;" onclick="sidShowOnMap()">🗺 지도</div>` +
-        `<div class="fp-ifr-add" style="margin:0;font-size:9px;" onclick="fpGo('SIDNEW')">＋ 사용자 SID</div>` +
-        `<div class="fp-ifr-add" style="margin:0;font-size:9px;" onclick="deleteUserSid()">🗑 삭제</div>` +
+        `<div class="fp-ifr-add" style="margin:0;font-size:9px;" data-act="sidShowOnMap">🗺 지도</div>` +
+        `<div class="fp-ifr-add" style="margin:0;font-size:9px;" data-act="fpGo" data-arg='["SIDNEW"]'>＋ 사용자 SID</div>` +
+        `<div class="fp-ifr-add" style="margin:0;font-size:9px;" data-act="deleteUserSid">🗑 삭제</div>` +
       `</div>`;
   } else if(fpIfrPhase==='enr'){
-    panelHtml=`<div class="fp-ifr-lbl">Airway</div><select class="fp-ifr-sel" id="enr-airway" onchange="loadAirwayFixes()"></select><div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;"><div><div class="fp-ifr-lbl">Entry Fix</div><select class="fp-ifr-sel" id="enr-entry"></select></div><div><div class="fp-ifr-lbl">Exit Fix</div><select class="fp-ifr-sel" id="enr-exit"></select></div></div><button class="fp-ifr-add" onclick="addAirwaySegment()">＋ ADD AIRWAY SEG</button><div class="fp-ifr-lbl" style="border-top:1px solid #152515;padding-top:5px;margin-top:5px;">Single Fix</div><select class="fp-ifr-sel" id="enr-fix"></select><button class="fp-ifr-add" onclick="addSingleFix()">＋ ADD FIX</button>`;
+    panelHtml=`<div class="fp-ifr-lbl">Airway</div><select class="fp-ifr-sel" id="enr-airway" onchange="loadAirwayFixes()"></select><div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;"><div><div class="fp-ifr-lbl">Entry Fix</div><select class="fp-ifr-sel" id="enr-entry"></select></div><div><div class="fp-ifr-lbl">Exit Fix</div><select class="fp-ifr-sel" id="enr-exit"></select></div></div><button class="fp-ifr-add" data-act="addAirwaySegment">＋ ADD AIRWAY SEG</button><div class="fp-ifr-lbl" style="border-top:1px solid #152515;padding-top:5px;margin-top:5px;">Single Fix</div><select class="fp-ifr-sel" id="enr-fix"></select><button class="fp-ifr-add" data-act="addSingleFix">＋ ADD FIX</button>`;
   } else {
     panelHtml=`
       <div class="fp-ifr-lbl">Arrival Airport</div>
       <select class="fp-ifr-sel" id="app-icao" onchange="loadStars();loadApproaches()"></select>
       <div class="fp-ifr-lbl">STAR Procedure</div>
       <select class="fp-ifr-sel" id="app-star"></select>
-      <button class="fp-ifr-add" onclick="addStarWps()">＋ ADD STAR</button>
+      <button class="fp-ifr-add" data-act="addStarWps">＋ ADD STAR</button>
       <div style="border-top:1px solid #152515;margin:5px 0;"></div>
       <div class="fp-ifr-lbl">Approach Procedure</div>
       <select class="fp-ifr-sel" id="app-proc"></select>
-      <button class="fp-ifr-add" onclick="addAppWps()">＋ ADD APPROACH</button>`;
+      <button class="fp-ifr-add" data-act="addAppWps">＋ ADD APPROACH</button>`;
   }
   area.innerHTML = `<div class="fp-ifr-tab-row">${tabsHtml}</div><div class="fp-panel-border" style="overflow-y:auto;">${panelHtml}</div>`;
   // Populate selects dynamically
@@ -6786,10 +6860,10 @@ function fpRenderIfr(area, title, footer) {
     if(s&&s.options.length===0){Object.keys(IFR_DB).forEach(k=>{const o=document.createElement('option');o.value=k;o.textContent=k+' – '+IFR_DB[k].name;s.appendChild(o);});loadStars();loadApproaches();}
   }
   footer.innerHTML = `
-    <div class="fp-nav-btn" onclick="fpGoCduHome()"><span>🏠</span>Home</div>
+    <div class="fp-nav-btn" data-act="fpGoCduHome"><span>🏠</span>Home</div>
     ${fpFullBtn()}
-    <div class="fp-nav-btn" onclick="fpGo('LIST')"><span>📋</span>FP</div>
-    <div class="fp-nav-btn" onclick="fpGo('ADD')"><span>↩</span>Back</div>`;
+    <div class="fp-nav-btn" data-act="fpGo" data-arg='["LIST"]'><span>📋</span>FP</div>
+    <div class="fp-nav-btn" data-act="fpGo" data-arg='["ADD"]'><span>↩</span>Back</div>`;
 }
 
 // ══════════════════════════════════════════════════════
@@ -6847,18 +6921,18 @@ function fpRenderSidNew(area, title, footer) {
       chain +
       `<div style="display:grid;grid-template-columns:1fr auto;gap:4px;margin-top:4px;">` +
         `<select class="fp-ifr-sel" id="sn-fix" style="margin:0;">${fixOpts}</select>` +
-        `<div class="fp-ifr-add" style="margin:0;padding:6px 12px;" onclick="sidNewAddFix()">＋</div>` +
+        `<div class="fp-ifr-add" style="margin:0;padding:6px 12px;" data-act="sidNewAddFix">＋</div>` +
       `</div>` +
-      `<button class="fp-ifr-add" style="margin-top:8px;" onclick="sidNewSave()">💾 절차 저장</button>` +
+      `<button class="fp-ifr-add" style="margin-top:8px;" data-act="sidNewSave">💾 절차 저장</button>` +
       `<div style="color:#4a6274;font-size:9px;margin-top:5px;line-height:1.4;">` +
         `저장한 절차는 SID 목록에 <b>★</b> 표시로 나타나며 기기에 보관됩니다.<br>` +
         `좌표는 픽스 이름으로 자동 해석되므로 따로 입력할 필요가 없습니다.</div>` +
     `</div>`;
   footer.innerHTML =
-    `<div class="fp-nav-btn" onclick="fpGoCduHome()"><span>🏠</span>Home</div>` +
+    `<div class="fp-nav-btn" data-act="fpGoCduHome"><span>🏠</span>Home</div>` +
     fpFullBtn() +
-    `<div class="fp-nav-btn" onclick="fpGo('LIST')"><span>📋</span>FP</div>` +
-    `<div class="fp-nav-btn" onclick="fpGo('IFR')"><span>↩</span>Back</div>`;
+    `<div class="fp-nav-btn" data-act="fpGo" data-arg='["LIST"]'><span>📋</span>FP</div>` +
+    `<div class="fp-nav-btn" data-act="fpGo" data-arg='["IFR"]'><span>↩</span>Back</div>`;
 }
 
 function fpSetIfrPhase(phase) {
@@ -7045,10 +7119,10 @@ const _keyMap = {
 };
 // 물리 키보드 단축키(DeX·데스크톱에서 오작동 시 설정에서 끌 수 있음)
 let kbdShortcuts = true;
-try { kbdShortcuts = localStorage.getItem('kbdShortcuts') !== '0'; } catch(e) {}
+try { kbdShortcuts = localStorage.getItem('kbdShortcuts') !== '0'; } catch(e) { _swallow(e); }
 function toggleKbdShortcuts() {
   kbdShortcuts = !kbdShortcuts;
-  try { localStorage.setItem('kbdShortcuts', kbdShortcuts ? '1' : '0'); } catch(e) {}
+  try { localStorage.setItem('kbdShortcuts', kbdShortcuts ? '1' : '0'); } catch(e) { _swallow(e); }
   stopAllHolds();
 }
 document.addEventListener('keydown', e => {
@@ -7112,8 +7186,8 @@ const btnMap={
 const _holdStops = new Set();
 const HOLD_MAX_MS = 20000;      // 어떤 홀드도 20초를 넘기지 않음(런어웨이 방지)
 function stopAllHolds() {
-  Array.from(_holdStops).forEach(fn => { try { fn(); } catch(e) {} });
-  try { stopTrimHold(); } catch(e) {}
+  Array.from(_holdStops).forEach(fn => { try { fn(); } catch(e) { _swallow(e); } });
+  try { stopTrimHold(); } catch(e) { _swallow(e); }
 }
 window.addEventListener('blur', stopAllHolds);
 document.addEventListener('visibilitychange', () => { if (document.hidden) stopAllHolds(); });
@@ -7418,7 +7492,7 @@ function simStep(ts){
   // 발열 저감: GPS 모드(데이터 3초 주기)에서는 PFD를 10fps로 제한.
   // 시뮬 비행·FDR 리플레이는 기존 60fps 유지.
   let _lowFps = false;
-  if (gpsMode) { try { _lowFps = !_fdrPlaying; } catch(e) { _lowFps = true; } }
+  if (gpsMode) _lowFps = !_fdrPlaying;
   if (!_lowFps || performance.now() - _pfdDrawLast >= 100) {
     _pfdDrawLast = performance.now();
     // 자가치유: PFD가 보이는데 캔버스 크기가 표시영역과 어긋나면 재조정.
@@ -7477,7 +7551,7 @@ function scaleCdu() {
 let leftSel = 'pfd', rightSel = 'map';   // 'pfd' | 'map' | 'cdu' | (우측 한정 'plan')
 let midSel  = 'map';                    // 3분할일 때만 사용하는 중앙 패널
 let tripleMode = false;                 // 3분할(PFD·MAP·CDU) 여부
-try { tripleMode = localStorage.getItem('tripleMode') === '1'; } catch(e) {}
+try { tripleMode = localStorage.getItem('tripleMode') === '1'; } catch(e) { _swallow(e); }
 
 // 3분할 분할 비율 [좌%, 중%] — null 이면 기본 배분(PFD 호스트 1.4배)
 const TRI_MIN = 12;                     // 한 창의 최소 비율(%)
@@ -7485,7 +7559,7 @@ let triRatio = null;
 try {
   const s = JSON.parse(localStorage.getItem('triSplit') || 'null');
   if (Array.isArray(s) && s.length === 2 && s.every(v => typeof v === 'number')) triRatio = s;
-} catch(e) {}
+} catch(e) { _swallow(e); }
 
 // 기본 3분할 배분 — PFD 가 있는 창만 FCP 조작부가 다 보이도록 1.4배
 function triDefaultRatio() {
@@ -7501,13 +7575,13 @@ function applyTriRatio() {
   app.style.setProperty('--tri-m', m.toFixed(3) + '%');
 }
 function saveTriRatio() {
-  try { localStorage.setItem('triSplit', JSON.stringify(triRatio)); } catch(e) {}
+  try { localStorage.setItem('triSplit', JSON.stringify(triRatio)); } catch(e) { _swallow(e); }
 }
 
 // 3분할 ⇄ 2분할 전환. 3분할 진입 시 PFD·MAP·CDU를 좌·중·우로 배치한다.
 function toggleTriple(on) {
   tripleMode = (on === undefined) ? !tripleMode : !!on;
-  try { localStorage.setItem('tripleMode', tripleMode ? '1' : '0'); } catch(e) {}
+  try { localStorage.setItem('tripleMode', tripleMode ? '1' : '0'); } catch(e) { _swallow(e); }
   if (tripleMode) { leftSel = 'pfd'; midSel = 'map'; rightSel = 'cdu'; }
   else {
     // 2분할 복귀: 가운데 창을 우측으로 접는다(PFD·MAP·CDU → PFD·MAP)
@@ -7570,8 +7644,8 @@ function applyPanels() {
   // 크기 재계산
   requestAnimationFrame(() => { resizePFD(); drawPFD(); scaleCdu(); });
   setTimeout(() => {
-    try { leafMap.invalidateSize(); } catch(e) {}
-    try { if (_ml3d) _ml3d.resize(); } catch(e) {}
+    try { leafMap.invalidateSize(); } catch(e) { _swallow(e); }
+    try { if (_ml3d) _ml3d.resize(); } catch(e) { _swallow(e); }
     scaleCdu();
   }, 60);
 }
@@ -7593,11 +7667,11 @@ function setPage(n) { selectPanel('right', ['map', 'plan', 'cdu'][n] || 'map', t
   // 좌측을 고정폭으로 두고, 우측은 남은 공간을 채우도록(split-custom) 전환
   const applyRatio = pct => { L.style.flex = `0 0 ${pct}%`; app.classList.add('split-custom'); };
   const afterResize = () => {
-    requestAnimationFrame(() => { try { resizePFD(); drawPFD(); } catch(e) {} });
+    requestAnimationFrame(() => { try { resizePFD(); drawPFD(); } catch(e) { _swallow(e); } });
     setTimeout(() => {
-      try { leafMap.invalidateSize(); } catch(e) {}
-      try { if (_ml3d) _ml3d.resize(); } catch(e) {}
-      try { scaleCdu(); } catch(e) {}
+      try { leafMap.invalidateSize(); } catch(e) { _swallow(e); }
+      try { if (_ml3d) _ml3d.resize(); } catch(e) { _swallow(e); }
+      try { scaleCdu(); } catch(e) { _swallow(e); }
     }, 60);
   };
 
@@ -7622,7 +7696,7 @@ function setPage(n) { selectPanel('right', ['map', 'plan', 'cdu'][n] || 'map', t
     el.addEventListener('pointerdown', e => {
       if (which === 2 && !tripleMode) return;
       e.preventDefault(); dragging = true;
-      try { el.setPointerCapture(e.pointerId); } catch(err) {}
+      try { el.setPointerCapture(e.pointerId); } catch(err) { _swallow(err); }
     });
     el.addEventListener('pointermove', e => {
       if (!dragging) return;
@@ -7645,7 +7719,7 @@ function setPage(n) { selectPanel('right', ['map', 'plan', 'cdu'][n] || 'map', t
         triRatio = [l, m];
         applyTriRatio();
       }
-      try { resizePFD(); } catch(err) {}
+      try { resizePFD(); } catch(err) { _swallow(err); }
     });
     const end = () => {
       if (!dragging) return;
@@ -7653,7 +7727,7 @@ function setPage(n) { selectPanel('right', ['map', 'plan', 'cdu'][n] || 'map', t
       if (tripleMode) saveTriRatio();
       else {
         const mm = /0 0 ([\d.]+)%/.exec(L.style.flex || '');
-        if (mm) try { localStorage.setItem('splitRatio', mm[1]); } catch(err) {}
+        if (mm) try { localStorage.setItem('splitRatio', mm[1]); } catch(err) { _swallow(err); }
       }
       afterResize();
     };
@@ -7663,7 +7737,7 @@ function setPage(n) { selectPanel('right', ['map', 'plan', 'cdu'][n] || 'map', t
     el.addEventListener('dblclick', () => {
       if (tripleMode) { triRatio = null; applyTriRatio(); saveTriRatio(); }
       else { L.style.flex = ''; app.classList.remove('split-custom');
-             try { localStorage.removeItem('splitRatio'); } catch(err) {} }
+             try { localStorage.removeItem('splitRatio'); } catch(err) { _swallow(err); } }
       afterResize();
     });
   }
@@ -7688,7 +7762,7 @@ function lockScreen() {
   _screenLocked = true;
   document.getElementById('lock-overlay').classList.add('on');
   const b = document.getElementById('lock-btn'); if (b) b.classList.add('locked');
-  try { navigator.vibrate && navigator.vibrate(40); } catch(e) {}
+  try { navigator.vibrate && navigator.vibrate(40); } catch(e) { _swallow(e); }
 }
 function unlockScreen() {
   _screenLocked = false;
@@ -7696,7 +7770,7 @@ function unlockScreen() {
   const b = document.getElementById('lock-btn'); if (b) b.classList.remove('locked');
   const f = document.getElementById('lock-unlock-fill'); if (f) f.style.width = '0%';
   const t = document.getElementById('lock-unlock-txt'); if (t) t.textContent = '길게 눌러 해제';
-  try { navigator.vibrate && navigator.vibrate([40, 60, 40]); } catch(e) {}
+  try { navigator.vibrate && navigator.vibrate([40, 60, 40]); } catch(e) { _swallow(e); }
 }
 (function initScreenLock() {
   const btn  = document.getElementById('lock-unlock');
@@ -7720,7 +7794,7 @@ function unlockScreen() {
   };
   btn.addEventListener('pointerdown', e => {
     e.preventDefault(); e.stopPropagation();
-    try { btn.setPointerCapture(e.pointerId); } catch(err) {}
+    try { btn.setPointerCapture(e.pointerId); } catch(err) { _swallow(err); }
     t0 = performance.now(); tick();
   });
   ['pointerup','pointercancel','pointerleave'].forEach(ev =>
@@ -7743,11 +7817,11 @@ function toggleRuler() {
   if (b) b.classList.toggle('ruler-active', _rulerOn);
   if (_rulerOn) {
     leafMap.on('click', _rulerClick);
-    try { leafMap.getContainer().style.cursor = 'crosshair'; } catch(e) {}
+    try { leafMap.getContainer().style.cursor = 'crosshair'; } catch(e) { _swallow(e); }
     _rulerRender();
   } else {
     leafMap.off('click', _rulerClick);
-    try { leafMap.getContainer().style.cursor = ''; } catch(e) {}
+    try { leafMap.getContainer().style.cursor = ''; } catch(e) { _swallow(e); }
     _rulerClearAll();
   }
 }
@@ -7756,12 +7830,12 @@ function _rulerUndo() { _rulerPts.pop(); _rulerRender(); }
 function _rulerReset() { _rulerPts = []; _rulerRender(); }
 function _rulerClearAll() {
   _rulerPts = [];
-  if (_rulerLayer) { try { leafMap.removeLayer(_rulerLayer); } catch(e) {} _rulerLayer = null; }
+  if (_rulerLayer) { try { leafMap.removeLayer(_rulerLayer); } catch(e) { _swallow(e); } _rulerLayer = null; }
   const el = document.getElementById('ruler-readout');
   if (el) el.style.display = 'none';
 }
 function _rulerRender() {
-  if (_rulerLayer) { try { leafMap.removeLayer(_rulerLayer); } catch(e) {} _rulerLayer = null; }
+  if (_rulerLayer) { try { leafMap.removeLayer(_rulerLayer); } catch(e) { _swallow(e); } _rulerLayer = null; }
   const g = L.layerGroup();
   const P = _rulerPts;
   // 점 표시
@@ -7807,9 +7881,9 @@ function _rulerRender() {
       html += R('직선(시작→끝)', `${dd.toFixed(2)} NM`);
     }
   }
-  html += `<div class="rr-btns"><button onclick="_rulerUndo()">⟲ 취소</button>` +
-          `<button onclick="_rulerReset()">↺ 초기화</button>` +
-          `<button onclick="toggleRuler()">✕ 닫기</button></div>`;
+  html += `<div class="rr-btns"><button data-act="_rulerUndo">⟲ 취소</button>` +
+          `<button data-act="_rulerReset">↺ 초기화</button>` +
+          `<button data-act="toggleRuler">✕ 닫기</button></div>`;
   el.innerHTML = html;
   el.style.display = 'block';
 }
@@ -7826,7 +7900,7 @@ function toggleMapFull() {
 function fpGoCduHome() {
   if (_soloActive) setSolo('cdu');
   else setPage(2);
-  try { switchMode('HOME'); } catch(e) {}
+  try { switchMode('HOME'); } catch(e) { _swallow(e); }
 }
 
 // CDU 하단 Full 버튼 — 상단 Full Screen 탭과 동일하게 CDU 전체화면 진입
@@ -7840,13 +7914,13 @@ function cduFullScreen() {
 // 전체화면(solo)일 땐 FULL → HALF(우측 상단 ✕와 동일: exitSolo)
 function cduFullNavBtn() {
   return _soloActive
-    ? `<div class="nav-btn" onclick="exitSolo()"><span>✥</span>Half</div>`
-    : `<div class="nav-btn" onclick="cduFullScreen()"><span>✥</span>Full</div>`;
+    ? `<div class="nav-btn" data-act="exitSolo"><span>✥</span>Half</div>`
+    : `<div class="nav-btn" data-act="cduFullScreen"><span>✥</span>Full</div>`;
 }
 // PLAN 버튼 — Flight Plan 화면 열기(분할/전체화면 모두 대응)
 function openFlightPlan() {
   // 직전에 PROC(IFR) 등을 열어 fpMode가 남아있으면 플랜 목록으로 되돌림
-  try { fpMode = 'LIST'; fpRender(); } catch(e) {}
+  try { fpMode = 'LIST'; fpRender(); } catch(e) { _swallow(e); }
   if (_soloActive) setSolo('plan'); else setPage(1);
 }
 // Flight Plan 화면의 FULL — 플랜을 전체화면으로
@@ -7858,8 +7932,8 @@ function planFullScreen() {
 // Flight Plan 푸터용 FULL/HALF 버튼(solo 상태 반영)
 function fpFullBtn() {
   return _soloActive
-    ? `<div class="fp-nav-btn" onclick="exitSolo()"><span>✥</span>Half</div>`
-    : `<div class="fp-nav-btn" onclick="planFullScreen()"><span>✥</span>Full</div>`;
+    ? `<div class="fp-nav-btn" data-act="exitSolo"><span>✥</span>Half</div>`
+    : `<div class="fp-nav-btn" data-act="planFullScreen"><span>✥</span>Full</div>`;
 }
 // Flight Plan 화면의 BACK — CDU(직전 화면)로 복귀
 function fpBackToCdu() {
@@ -7873,9 +7947,9 @@ function fpBackToCdu() {
 //             전역에 없어 인라인 onclick 으로는 "not defined" 가 나므로 이쪽을 써야 한다.
 let _cduBackFn = null;
 function cduFooter(back, extra) {
-  let h = `<div class="nav-btn" onclick="switchMode('HOME')"><span>🏠</span>Home</div>`
+  let h = `<div class="nav-btn" data-act="switchMode" data-arg='["HOME"]'><span>🏠</span>Home</div>`
         + cduFullNavBtn()
-        + `<div class="nav-btn" onclick="switchMode('SETTINGS')"><span>⚙</span>Setting</div>`;
+        + `<div class="nav-btn" data-act="switchMode" data-arg='["SETTINGS"]'><span>⚙</span>Setting</div>`;
   if (extra) h += extra;
   // BACK은 항상 제일 우측
   if (typeof back === 'function') {
@@ -7948,8 +8022,8 @@ function setSolo(screen) {
 
 // solo 상태 변화 시 CDU/Flight Plan 푸터를 다시 그려 FULL⇄HALF 반영
 function _refreshCduFooters() {
-  try { renderCduContent(); } catch (e) {}
-  try { if (typeof fpRender === 'function') fpRender(); } catch (e) {}
+  try { renderCduContent(); } catch (e) { _swallow(e); }
+  try { if (typeof fpRender === 'function') fpRender(); } catch (e) { _swallow(e); }
 }
 
 function exitSolo() {
@@ -8738,7 +8812,7 @@ async function _getAptInfo(icao) {
     }
     if (info.elevM == null && !info.arp && !info.rwys.length && !Object.keys(info.freqs).length) return null;
     cache[icao] = info;
-    try { localStorage.setItem('aptInfoDB2', JSON.stringify(cache)); } catch(e) {}
+    try { localStorage.setItem('aptInfoDB2', JSON.stringify(cache)); } catch(e) { _swallow(e); }
     return info;
   } catch(e) { return null; }
 }
@@ -8852,7 +8926,7 @@ function customSids() {
   try { return JSON.parse(localStorage.getItem('customSids') || '{}'); } catch(e) { return {}; }
 }
 function saveCustomSids(o) {
-  try { localStorage.setItem('customSids', JSON.stringify(o)); } catch(e) {}
+  try { localStorage.setItem('customSids', JSON.stringify(o)); } catch(e) { _swallow(e); }
 }
 // 해당 공항의 SID 목록(AIP + 사용자). 표시 순서 = 인덱스
 function allSids(icao) {
@@ -8869,7 +8943,7 @@ function aipAirportList() {
       if (!a.pub || !a.code || a.code.length !== 2) return;
       out.push({ icao: 'RK' + a.code, name: a.name });
     });
-  } catch(e) {}
+  } catch(e) { _swallow(e); }
   Object.keys(IFR_DB).forEach(k => {
     if (!out.some(o => o.icao === k)) out.push({ icao: k, name: IFR_DB[k].name || '' });
   });
@@ -8950,7 +9024,7 @@ function onSidSelect() {
 // ── 절차 지도 미리보기 ──
 let _procPreviewLayer = null;
 function clearProcPreview() {
-  if (_procPreviewLayer) { try { leafMap.removeLayer(_procPreviewLayer); } catch(e) {} _procPreviewLayer = null; }
+  if (_procPreviewLayer) { try { leafMap.removeLayer(_procPreviewLayer); } catch(e) { _swallow(e); } _procPreviewLayer = null; }
 }
 function procPreview(wps) {
   clearProcPreview();
@@ -8974,8 +9048,8 @@ function sidShowOnMap() {
     const b = L.latLngBounds([]);
     _procPreviewLayer.eachLayer(l => { if (l.getLatLng) b.extend(l.getLatLng()); });
     cduOpenMap();
-    setTimeout(() => { try { leafMap.invalidateSize(); if (b.isValid()) leafMap.fitBounds(b, { padding:[45,45] }); } catch(e) {} }, 120);
-  } catch(e) {}
+    setTimeout(() => { try { leafMap.invalidateSize(); if (b.isValid()) leafMap.fitBounds(b, { padding:[45,45] }); } catch(e) { _swallow(e); } }, 120);
+  } catch(e) { _swallow(e); }
 }
 
 function addSidWps() {
@@ -9106,13 +9180,13 @@ function addAppWps() {
 const HELP_VERSION = '2';
 function closeHelp() {
   if (document.getElementById('help-dontshow')?.checked) {
-    try { localStorage.setItem('helpDismissed', HELP_VERSION); } catch(e) {}
+    try { localStorage.setItem('helpDismissed', HELP_VERSION); } catch(e) { _swallow(e); }
   }
   document.getElementById('help-overlay').style.display = 'none';
 }
 function showHelpOnLaunch() {
   let dismissed = null;
-  try { dismissed = localStorage.getItem('helpDismissed'); } catch(e) {}
+  try { dismissed = localStorage.getItem('helpDismissed'); } catch(e) { _swallow(e); }
   if (dismissed !== HELP_VERSION) document.getElementById('help-overlay').style.display = 'flex';
 }
 
@@ -9138,12 +9212,12 @@ function saveSession() {
       view: { mapHdgUp, followMode, leftSel, midSel, rightSel, tripleMode },
     };
     localStorage.setItem(SESSION_KEY, JSON.stringify(snap));
-  } catch(e) {}
+  } catch(e) { _swallow(e); }
 }
 
 function restoreSession() {
   let snap = null;
-  try { snap = JSON.parse(localStorage.getItem(SESSION_KEY) || 'null'); } catch(e) {}
+  try { snap = JSON.parse(localStorage.getItem(SESSION_KEY) || 'null'); } catch(e) { _swallow(e); }
   if (!snap || snap.v !== 1 || (Date.now() - snap.ts) > SESSION_TTL) return false;
   try {
     const s = snap.s || {};
@@ -9163,37 +9237,37 @@ function restoreSession() {
     const n = snap.nav || {};
     obsOn=!!n.obsOn; navSrc=n.navSrc||'FMS'; vorObsCrs=n.vorObsCrs??360;
     _dtoLat=(n.dtoLat===undefined?null:n.dtoLat); _dtoLon=(n.dtoLon===undefined?null:n.dtoLon);
-    if (n.navRadios) { try { ['NAV1','NAV2'].forEach(k => { if (n.navRadios[k]) navRadios[k] = Object.assign({}, navRadios[k], n.navRadios[k]); }); } catch(e) {} }
+    if (n.navRadios) { try { ['NAV1','NAV2'].forEach(k => { if (n.navRadios[k]) navRadios[k] = Object.assign({}, navRadios[k], n.navRadios[k]); }); } catch(e) { _swallow(e); } }
     const v = snap.view || {};
     mapHdgUp=!!v.mapHdgUp; followMode=!!v.followMode;
     if (v.leftSel) leftSel=v.leftSel; if (v.midSel) midSel=v.midSel; if (v.rightSel) rightSel=v.rightSel;
     if (v.tripleMode != null) tripleMode = !!v.tripleMode;
     // 재적용
-    try { updateFlyBtns(); } catch(e) {}
-    try { updateHoverBtns(); } catch(e) {}
-    try { updateCrsButtons(); } catch(e) {}
-    try { setNavSrc(navSrc); } catch(e) {}
-    try { applyPanels(); } catch(e) {}
-    try { updateWpMarkers(); fpRender(); updateNav(); } catch(e) {}
-    try { updateAcOnMap(); leafMap.setView([S.lat, S.lon]); } catch(e) {}
-    if (snap.gps) { try { startGPS(); } catch(e) {} }   // GPS 켜져 있었으면 재개
+    try { updateFlyBtns(); } catch(e) { _swallow(e); }
+    try { updateHoverBtns(); } catch(e) { _swallow(e); }
+    try { updateCrsButtons(); } catch(e) { _swallow(e); }
+    try { setNavSrc(navSrc); } catch(e) { _swallow(e); }
+    try { applyPanels(); } catch(e) { _swallow(e); }
+    try { updateWpMarkers(); fpRender(); updateNav(); } catch(e) { _swallow(e); }
+    try { updateAcOnMap(); leafMap.setView([S.lat, S.lon]); } catch(e) { _swallow(e); }
+    if (snap.gps) { try { startGPS(); } catch(e) { _swallow(e); } }   // GPS 켜져 있었으면 재개
     return true;
   } catch(e) { return false; }
 }
 
 // ── 야간 모드 ──
 let nightMode = false;
-try { nightMode = localStorage.getItem('nightMode') === '1'; } catch(e) {}
+try { nightMode = localStorage.getItem('nightMode') === '1'; } catch(e) { _swallow(e); }
 function applyNightMode() { document.body.classList.toggle('night-mode', nightMode); }
 function toggleNightMode() {
   nightMode = !nightMode;
-  try { localStorage.setItem('nightMode', nightMode ? '1' : '0'); } catch(e) {}
+  try { localStorage.setItem('nightMode', nightMode ? '1' : '0'); } catch(e) { _swallow(e); }
   applyNightMode();
 }
 
 // ── 근처 공항 자동 METAR → OAT/QNH 자동 반영 ──
 let autoMetarOn = true, _autoMetarLast = 0, _autoMetarIcao = '';
-try { autoMetarOn = localStorage.getItem('autoMetarOn') !== '0'; } catch(e) {}
+try { autoMetarOn = localStorage.getItem('autoMetarOn') !== '0'; } catch(e) { _swallow(e); }
 function _nearestAirport() {
   let best = null, bd = Infinity;
   (WX_AIRPORTS || []).forEach(a => {
@@ -9215,11 +9289,11 @@ async function _autoMetarTick() {
     setTimeout(() => ctl.abort(), 6000);
     let raw = null;
     try { raw = await _ivaoMetar(near.a.icao, ctl.signal); }
-    catch(e) { try { raw = await _vatsimMetar(near.a.icao, ctl.signal); } catch(e2) {} }
+    catch(e) { try { raw = await _vatsimMetar(near.a.icao, ctl.signal); } catch(e2) { _swallow(e2); } }
     if (raw) _parseMetar(raw.split('\n')[0]);       // _oatSurfaceC 자동 갱신
-  } catch(e) {}
+  } catch(e) { _swallow(e); }
 }
-setInterval(() => { try { _autoMetarTick(); } catch(e) {} }, 30000);
+setInterval(() => { try { _autoMetarTick(); } catch(e) { _swallow(e); } }, 30000);
 
 // ── PWA 설치 프롬프트 ──
 let _deferredPrompt = null;
@@ -9250,7 +9324,7 @@ async function prefetchTiles() {
     for (let dx = -3; dx <= 3; dx++) for (let dy = -3; dy <= 3; dy++) {
       const x = t.x + dx, y = t.y + dy;
       if (x < 0 || y < 0 || x >= t.n || y >= t.n) continue;
-      try { await fetch(urlFor(z, x, y), { mode: 'no-cors' }); count++; } catch(e) {}
+      try { await fetch(urlFor(z, x, y), { mode: 'no-cors' }); count++; } catch(e) { _swallow(e); }
     }
   }
   alert(`주변 지도 타일 ${count}개를 캐시했습니다.\n(오프라인/음영지역에서 이 영역이 표시됩니다)`);
@@ -9258,7 +9332,7 @@ async function prefetchTiles() {
 
 // ⟳ 새로고침: 세션을 지우고 초기 상태로 리로드(백그라운드 복원 종료)
 function hardReload() {
-  try { localStorage.removeItem(SESSION_KEY); } catch(e) {}
+  try { localStorage.removeItem(SESSION_KEY); } catch(e) { _swallow(e); }
   location.reload();
 }
 
@@ -9279,16 +9353,16 @@ function init(){
   S.pit = pitchFromSpd(S.spd);
   // NAV1/NAV2 무선의 튜닝 VOR 좌표 해석(ENR_VORS 정의 이후에 실행되도록 지연)
   setTimeout(() => {
-    try { ['NAV1','NAV2'].forEach(k => setNavRadio(k, navRadios[k].freq, navRadios[k].id)); } catch(e) {}
-    try { setNavSrc(navSrc); } catch(e) {}   // 현재 소스 라벨/CDI 반영
+    try { ['NAV1','NAV2'].forEach(k => setNavRadio(k, navRadios[k].freq, navRadios[k].id)); } catch(e) { _swallow(e); }
+    try { setNavSrc(navSrc); } catch(e) { _swallow(e); }   // 현재 소스 라벨/CDI 반영
   }, 0);
   if (!_restored) setPage(0);   // 복원 시엔 restoreSession의 applyPanels로 배치 유지
-  window.addEventListener('resize', () => { resizePFD(); try { leafMap.invalidateSize(); } catch(e) {} scaleCdu(); });
+  window.addEventListener('resize', () => { resizePFD(); try { leafMap.invalidateSize(); } catch(e) { _swallow(e); } scaleCdu(); });
   setTimeout(() => leafMap.invalidateSize(), 100);
   // 저장된 표시 포인트를 지도에 복원.
   // init()은 CDU 캡슐화 IIFE보다 먼저 실행되므로, 그 시점엔 _tpRenderMapPoints가
   // 아직 공개되지 않았다. 스크립트 전체가 끝난 뒤로 미룬다.
-  setTimeout(() => { try { _tpRenderMapPoints(); } catch(e) {} }, 0);
+  setTimeout(() => { try { _tpRenderMapPoints(); } catch(e) { _swallow(e); } }, 0);
   if (!_simLoopRunning) { _simLoopRunning = true; requestAnimationFrame(simStep); }
 
   // ── PFD canvas tap-to-edit ──
@@ -9381,7 +9455,7 @@ let shipInputMode = 'SPD', shipInput = '';
 
 function shipIcon() {
   return L.divIcon({
-    html: `<div onclick="openShipPanel()" style="transform:rotate(${shipHdg}deg);transform-origin:12px 20px;line-height:0;cursor:pointer;"><svg width="24" height="40" viewBox="0 0 24 40" xmlns="http://www.w3.org/2000/svg"><path d="M12 1 Q20 7 21 17 L21 33 Q21 39 12 39 Q3 39 3 33 L3 17 Q4 7 12 1Z" fill="#1a5fa8" stroke="#7ab8f5" stroke-width="1.5"/><rect x="8" y="16" width="8" height="10" rx="2" fill="#2277bb" stroke="#7ab8f5" stroke-width="0.7"/><circle cx="12" cy="5" r="2.5" fill="#7ab8f5" opacity="0.9"/><line x1="12" y1="1" x2="12" y2="39" stroke="#88ccff" stroke-width="0.5" stroke-dasharray="2,3" opacity="0.4"/></svg></div>`,
+    html: `<div data-act="openShipPanel" style="transform:rotate(${shipHdg}deg);transform-origin:12px 20px;line-height:0;cursor:pointer;"><svg width="24" height="40" viewBox="0 0 24 40" xmlns="http://www.w3.org/2000/svg"><path d="M12 1 Q20 7 21 17 L21 33 Q21 39 12 39 Q3 39 3 33 L3 17 Q4 7 12 1Z" fill="#1a5fa8" stroke="#7ab8f5" stroke-width="1.5"/><rect x="8" y="16" width="8" height="10" rx="2" fill="#2277bb" stroke="#7ab8f5" stroke-width="0.7"/><circle cx="12" cy="5" r="2.5" fill="#7ab8f5" opacity="0.9"/><line x1="12" y1="1" x2="12" y2="39" stroke="#88ccff" stroke-width="0.5" stroke-dasharray="2,3" opacity="0.4"/></svg></div>`,
     iconSize: [24, 40], iconAnchor: [12, 20], className: ''
   });
 }
@@ -9442,10 +9516,10 @@ function createShipMarker() {
   let _shipLastTap = 0;
   shipMarker.on('click', e => {
     const t = Date.now();
-    if (t - _shipLastTap < 450) { try { L.DomEvent.stop(e); } catch(_) {} openShipPanel(); _shipLastTap = 0; }
+    if (t - _shipLastTap < 450) { try { L.DomEvent.stop(e); } catch(_) { _swallow(_); } openShipPanel(); _shipLastTap = 0; }
     else { _shipLastTap = t; }
   });
-  shipMarker.on('dblclick', e => { try { L.DomEvent.stop(e); } catch(_) {} openShipPanel(); });
+  shipMarker.on('dblclick', e => { try { L.DomEvent.stop(e); } catch(_) { _swallow(_); } openShipPanel(); });
 }
 
 function updateShipMarker() {
@@ -9887,6 +9961,38 @@ if ('serviceWorker' in navigator) {
 //   · data-act : 액션 이름(레지스트리 키)
 //   · data-arg : 인자 JSON 배열. 문자열 "$event"는 실제 이벤트 객체로 치환된다.
 // 위임은 #cdu-wrap 안에서만 동작하므로, CDU 밖의 인라인 핸들러는 종전 그대로 둔다.
+// ── 앱 전역 액션 위임 ────────────────────────────────────────────
+// 인라인 onclick 은 전역 스코프에서만 이름을 찾기 때문에, 함수를 모듈/IIFE 안으로
+// 옮기는 순간 "버튼이 조용히 죽는다"(clBack 사례). 위임을 쓰면 등록된 이름만
+// 부르므로 그런 사고가 나지 않고, 미등록이면 콘솔에 경고가 남는다.
+// CDU 안(#cdu-wrap)은 기존 CDU_ACT 위임이 처리하므로 여기서는 건드리지 않는다.
+const APP_ACT = {};
+function appRegister(map) { Object.assign(APP_ACT, map); }
+function aact(name, ...args) {
+  if (!args.length) return `data-act="${name}"`;
+  return `data-act="${name}" data-arg='${JSON.stringify(args).replace(/'/g, "&#39;")}'`;
+}
+(function initAppDelegation() {
+  const run = (e, kind) => {
+    const el = e.target.closest('[data-act]');
+    if (!el) return;
+    const cdu = document.getElementById('cdu-wrap');
+    if (cdu && cdu.contains(el)) return;          // CDU 는 CDU_ACT 위임 담당
+    if ((el.dataset.on || 'click') !== kind) return;
+    const fn = APP_ACT[el.dataset.act];
+    if (typeof fn !== 'function') { console.warn('[APP] 미등록 액션:', el.dataset.act); return; }
+    let args = [];
+    if (el.dataset.arg) {
+      try { args = JSON.parse(el.dataset.arg); }
+      catch (err) { console.warn('[APP] 인자 파싱 실패:', el.dataset.arg); return; }
+    }
+    args = args.map(a => a === '$event' ? e : (a === '$el' ? el : a));
+    fn(...args);
+  };
+  document.addEventListener('click', e => run(e, 'click'));
+  document.addEventListener('pointerdown', e => run(e, 'pointerdown'));
+})();
+
 const CDU_ACT = {};
 function cduRegister(map) { Object.assign(CDU_ACT, map); }
 // cduFooter(함수) 로 지정한 Back 실행기
@@ -10911,13 +11017,13 @@ function act(name, ...args) {
 
     // ── Sunrise/Sunset: 현재 위치 채우기 + 결과 렌더 ──
     function utilSunHere() {
-      try { _UV.sunLat = +S.lat.toFixed(4); _UV.sunLon = +S.lon.toFixed(4); } catch(e) {}
+      try { _UV.sunLat = +S.lat.toFixed(4); _UV.sunLon = +S.lon.toFixed(4); } catch(e) { _swallow(e); }
       utilInput = '';
       switchMode('UTIL');
     }
     function _sunReadoutHtml() {
       let t = null;
-      try { t = _sunTimes(_UV.sunLat, _UV.sunLon, new Date()); } catch(e) {}
+      try { t = _sunTimes(_UV.sunLat, _UV.sunLon, new Date()); } catch(e) { _swallow(e); }
       if (!t) return `<div style="color:#e8a;font-size:11px;padding:8px 4px;">계산할 수 없습니다.</div>`;
       const hm = d => d ? String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0') : '--:--';
       const R = (l, v, c) => `<div style="display:flex;justify-content:space-between;padding:4px 6px;border-bottom:1px solid #12212c;">` +
@@ -11055,8 +11161,8 @@ function act(name, ...args) {
       else if (src === 'sunLat' || src === 'sunLon') { /* no-op */ }
       // ── VNAV (타깃 고도·각도 입력 → 전역 상태 동기화, T-CUT 연동) ──
       else if (src === 'vnavAlt' || src === 'vnavAng') {
-        try { vnavTgtAlt = _UV.vnavAlt; vnavAngle = _UV.vnavAng; vnavActive = true; } catch(e) {}
-        try { updateTerrainCut(); } catch(e) {}
+        try { vnavTgtAlt = _UV.vnavAlt; vnavAngle = _UV.vnavAng; vnavActive = true; } catch(e) { _swallow(e); }
+        try { updateTerrainCut(); } catch(e) { _swallow(e); }
       }
       else {
         const sgn = _UV.dmsd < 0 ? -1 : 1;
@@ -11798,7 +11904,7 @@ function act(name, ...args) {
     function _setToggle(which) {
       if (which === 'night') toggleNightMode();
       else if (which === 'rings') toggleRangeRings();
-      else if (which === 'metar') { autoMetarOn = !autoMetarOn; try { localStorage.setItem('autoMetarOn', autoMetarOn ? '1' : '0'); } catch(e) {} }
+      else if (which === 'metar') { autoMetarOn = !autoMetarOn; try { localStorage.setItem('autoMetarOn', autoMetarOn ? '1' : '0'); } catch(e) { _swallow(e); } }
       else if (which === 'aspc') toggleInhib('aspc');
       else if (which === 'taws') toggleInhib('taws');
       else if (which === 'kbd') toggleKbdShortcuts();
@@ -11868,7 +11974,7 @@ function act(name, ...args) {
     // 지도 표시용 아이콘 세트(이모지)
     const TP_ICONS = ['📍','🔴','🔺','⭐','🚩','🏁','❌','⚓','🚁','🏥','⚠️','⛵','🔷','🟢','🟡','🟣'];
     function _tpLoad(key) { try { return JSON.parse(localStorage.getItem(key) || '[]'); } catch(e) { return []; } }
-    function _tpSave(key, arr) { try { localStorage.setItem(key, JSON.stringify(arr)); } catch(e) {} }
+    function _tpSave(key, arr) { try { localStorage.setItem(key, JSON.stringify(arr)); } catch(e) { _swallow(e); } }
     // 폴더 구조: [{name, pts:[{name,lat,lon}]}]. 구버전 평면 tpPoints는 '기본' 폴더로 이전.
     function tpFolders() {
       let f = _tpLoad('tpFolders');
@@ -11926,13 +12032,13 @@ function act(name, ...args) {
     function tpMapAddFpl(fi, pi) {
       const r = _tpMapPt(fi, pi); if (!r || !r.p) return;
       pushWP({ ident: _tpFplIdent(r.p.name), lat: r.p.lat, lon: r.p.lon });
-      try { leafMap.closePopup(); } catch (e) {}
+      try { leafMap.closePopup(); } catch (e) { _swallow(e); }
     }
     function tpMapDirect(fi, pi) {
       const r = _tpMapPt(fi, pi); if (!r || !r.p) return;
       pushWP({ ident: _tpFplIdent(r.p.name), lat: r.p.lat, lon: r.p.lon });
       selectWP(S.wps.length - 1);   // 현재 위치 → 이 포인트로 Direct-To
-      try { leafMap.closePopup(); } catch (e) {}
+      try { leafMap.closePopup(); } catch (e) { _swallow(e); }
     }
 
     // 아이콘 선택 화면 열기/적용
@@ -12002,7 +12108,7 @@ function act(name, ...args) {
       const cf = _curFolder(); if (!cf) return; const p = cf.folder.pts[i]; if (!p) return;
       pushWP({ ident: p.name, lat: p.lat, lon: p.lon });
       selectWP(S.wps.length - 1);
-      try { cduOpenMap(); } catch(e) {}
+      try { cduOpenMap(); } catch(e) { _swallow(e); }
     }
     // 선택 = 지도 표시(show). 체크 시 지도에 마커, 내보내기 대상도 됨.
     function tpSelToggle(i) { const cf = _curFolder(); if (!cf) return; const p = cf.folder.pts[i]; p.show = !p.show; _tpSave('tpFolders', cf.f); _tpRenderMapPoints(); switchMode('TRACKPOINT'); }
@@ -12124,7 +12230,7 @@ function act(name, ...args) {
     function tpImportPoints() {
       const cf = _curFolder(); if (!cf) return;
       _tpPickFile((text) => {
-        let pts = []; try { pts = _parsePointsFile(text); } catch(e) {}
+        let pts = []; try { pts = _parsePointsFile(text); } catch(e) { _swallow(e); }
         if (!pts.length) { alert('파일에서 포인트를 찾지 못했습니다.\n(GPX wpt / KML Placemark Point 지원)'); return; }
         cf.folder.pts.push(...pts); _tpSave('tpFolders', cf.f);
         alert(`${pts.length}개 포인트를 "${cf.folder.name}" 폴더에 가져왔습니다.`);
@@ -12177,14 +12283,14 @@ function act(name, ...args) {
       S.wps = t.pts.map((p, k) => ({ ident: p.ident || ('WP' + (k + 1)), lat: p.lat, lon: p.lon }));
       S.awp = -1; S.fwp = -1; S.brg2wp = -1;
       selectWP(0);
-      try { cduOpenMap(); } catch(e) {}
+      try { cduOpenMap(); } catch(e) { _swallow(e); }
     }
     // 트랙 선 색상(선택 가능, 저장)
     const TRK_COLORS = ['#00e5ff', '#ff5252', '#ffd54f', '#00e07a', '#e040fb', '#ffffff', '#ff9800'];
     let trkColor = '#00e5ff';
-    try { const c = localStorage.getItem('trkColor'); if (c && TRK_COLORS.includes(c)) trkColor = c; } catch(e) {}
+    try { const c = localStorage.getItem('trkColor'); if (c && TRK_COLORS.includes(c)) trkColor = c; } catch(e) { _swallow(e); }
     function tpSetColor(c) {
-      trkColor = c; try { localStorage.setItem('trkColor', c); } catch(e) {}
+      trkColor = c; try { localStorage.setItem('trkColor', c); } catch(e) { _swallow(e); }
       if (_tpTrackShownIdx !== null) { const i = _tpTrackShownIdx; tpShowTrack(i); }   // 표시 중이면 즉시 반영
       switchMode('TRACKPOINT');
     }
@@ -12218,8 +12324,8 @@ function act(name, ...args) {
       }
       _tpTrackLayer = g.addTo(leafMap);
       _tpTrackShownIdx = i;
-      try { if (latlngs.length > 1) leafMap.fitBounds(latlngs, { padding: [40, 40], maxZoom: 13 }); else leafMap.setView(latlngs[0], 13); } catch(e) {}
-      try { cduOpenMap(); } catch(e) {}
+      try { if (latlngs.length > 1) leafMap.fitBounds(latlngs, { padding: [40, 40], maxZoom: 13 }); else leafMap.setView(latlngs[0], 13); } catch(e) { _swallow(e); }
+      try { cduOpenMap(); } catch(e) { _swallow(e); }
     }
     function tpExportTrack(i, fmt) {
       const t = tpTracks()[i]; if (!t) return;
@@ -12229,7 +12335,7 @@ function act(name, ...args) {
     }
     function tpImportTrack() {
       _tpPickFile((text) => {
-        let pts = []; try { pts = _parseTrackFile(text); } catch(e) {}
+        let pts = []; try { pts = _parseTrackFile(text); } catch(e) { _swallow(e); }
         if (pts.length < 2) { alert('파일에서 트랙(경로)을 찾지 못했습니다.\n(GPX rte/trk / KML LineString 지원)'); return; }
         const arr = tpTracks();
         const name = (prompt('트랙 이름', 'TRK' + (arr.length + 1)) || '').trim() || ('TRK' + (arr.length + 1));
@@ -12460,7 +12566,7 @@ function act(name, ...args) {
         if (!v) return;
         freqs[_navSelTarget].act = v.freq;
         freqs[_navSelTarget].id  = v.id;
-        try { setNavRadio(_navSelTarget === 'nav1' ? 'NAV1' : 'NAV2', v.freq, v.id); } catch(e) {}
+        try { setNavRadio(_navSelTarget === 'nav1' ? 'NAV1' : 'NAV2', v.freq, v.id); } catch(e) { _swallow(e); }
         switchMode('AUDIO');
     }
 
@@ -12499,7 +12605,7 @@ function act(name, ...args) {
         freqs[id].act = freq;
         const m = (typeof ENR_VORS !== 'undefined' ? ENR_VORS : []).find(x => x.freq && Math.abs(parseFloat(x.freq) - parseFloat(freq)) < 0.001);
         freqs[id].id = m ? m.id : '';
-        try { setNavRadio(id === 'nav1' ? 'NAV1' : 'NAV2', freq, m ? m.id : null); } catch(e) {}
+        try { setNavRadio(id === 'nav1' ? 'NAV1' : 'NAV2', freq, m ? m.id : null); } catch(e) { _swallow(e); }
         _afldMsg = `${id.toUpperCase()} ← ${freq}${m ? ' (' + m.id + ')' : ''}`;
         _afldPending = null;
         switchMode('AIRFIELD_DETAIL');
@@ -12816,7 +12922,7 @@ function act(name, ...args) {
                 freqs[inputTarget].act = v;
                 let match = (typeof ENR_VORS !== 'undefined' ? ENR_VORS : []).find(x => x.freq && Math.abs(parseFloat(x.freq) - parseFloat(v)) < 0.001);
                 freqs[inputTarget].id = match ? match.id : '';
-                try { setNavRadio(inputTarget === 'nav1' ? 'NAV1' : 'NAV2', v, match ? match.id : null); } catch(e) {}
+                try { setNavRadio(inputTarget === 'nav1' ? 'NAV1' : 'NAV2', v, match ? match.id : null); } catch(e) { _swallow(e); }
             } else {
                 freqs[inputTarget].stb = v;
             }
@@ -12981,9 +13087,9 @@ function _trkSaveBackup() {
     localStorage.setItem(TRK_BAK_KEY, JSON.stringify(
       _trkPts.map(p => [ +p.lat.toFixed(6), +p.lon.toFixed(6), Math.round(p.altM), p.t ])
     ));
-  } catch(e) {}
+  } catch(e) { _swallow(e); }
 }
-function _trkClearBackup() { try { localStorage.removeItem(TRK_BAK_KEY); } catch(e) {} }
+function _trkClearBackup() { try { localStorage.removeItem(TRK_BAK_KEY); } catch(e) { _swallow(e); } }
 function _trkStartTimer() {
   if (_trkTimer) { clearInterval(_trkTimer); _trkTimer = null; }   // 이중 기동 방지
   document.getElementById('rec-btn').classList.add('active');
@@ -13050,7 +13156,7 @@ function _trkToKml(trkPts = _trkPts) {
 // 시작 시 미종료 백업이 있으면 복구 제안(새로고침·크래시로 끊긴 녹화)
 setTimeout(() => {
   let bak = null;
-  try { bak = JSON.parse(localStorage.getItem(TRK_BAK_KEY) || 'null'); } catch(e) {}
+  try { bak = JSON.parse(localStorage.getItem(TRK_BAK_KEY) || 'null'); } catch(e) { _swallow(e); }
   if (!Array.isArray(bak) || bak.length < 2) return;
   const pts = bak.map(a => ({ lat: a[0], lon: a[1], altM: a[2], t: a[3] }));
   const from = new Date(pts[0].t), p2 = n => String(n).padStart(2, '0');
@@ -13089,10 +13195,10 @@ async function _wakeAcquire() {
       _wakeLock = await navigator.wakeLock.request('screen');
       _wakeLock.addEventListener('release', () => { _wakeLock = null; });
     }
-  } catch(e) {}
+  } catch(e) { _swallow(e); }
 }
 function _wakeRelease() {
-  try { if (_wakeLock) { _wakeLock.release(); _wakeLock = null; } } catch(e) {}
+  try { if (_wakeLock) { _wakeLock.release(); _wakeLock = null; } } catch(e) { _swallow(e); }
 }
 function _wakeWanted() { return gpsMode || S.running || _trkRec; }
 setInterval(() => { _wakeWanted() ? _wakeAcquire() : _wakeRelease(); }, 5000);
@@ -13112,7 +13218,7 @@ let inhibAspc = false, inhibTaws = false;
 try {
   inhibAspc = localStorage.getItem('inhibAspc') === '1';
   inhibTaws = localStorage.getItem('inhibTaws') === '1';
-} catch(e) {}
+} catch(e) { _swallow(e); }
 function toggleInhibMenu(force) {
   const m = document.getElementById('inhib-menu');
   if (force === false) m.classList.remove('open');
@@ -13122,11 +13228,11 @@ function toggleInhibMenu(force) {
 function toggleInhib(which) {
   if (which === 'aspc') {
     inhibAspc = !inhibAspc;
-    try { localStorage.setItem('inhibAspc', inhibAspc ? '1' : '0'); } catch(e) {}
+    try { localStorage.setItem('inhibAspc', inhibAspc ? '1' : '0'); } catch(e) { _swallow(e); }
     if (inhibAspc) { const el = document.getElementById('aspc-alert'); if (el) el.className = ''; _aspcAlertState = {}; }
   } else {
     inhibTaws = !inhibTaws;
-    try { localStorage.setItem('inhibTaws', inhibTaws ? '1' : '0'); } catch(e) {}
+    try { localStorage.setItem('inhibTaws', inhibTaws ? '1' : '0'); } catch(e) { _swallow(e); }
     if (inhibTaws) { const ta = document.getElementById('terrain-alert'); if (ta) ta.classList.remove('on'); }
   }
   _inhibRender();
@@ -13187,14 +13293,14 @@ function _aspcAlertCheck() {
   if (insideA) {
     if (_aspcAlertState[insideA.id] !== 'in') {
       _aspcAlertState = { [insideA.id]: 'in' };
-      try { navigator.vibrate && navigator.vibrate([200, 100, 200]); } catch(e) {}
+      try { navigator.vibrate && navigator.vibrate([200, 100, 200]); } catch(e) { _swallow(e); }
     }
     el.textContent = `⚠ ${insideA.name} 진입`;
     el.className = 'inside';
   } else if (nearA) {
     if (_aspcAlertState[nearA.id] !== 'near') {
       _aspcAlertState = { [nearA.id]: 'near' };
-      try { navigator.vibrate && navigator.vibrate(150); } catch(e) {}
+      try { navigator.vibrate && navigator.vibrate(150); } catch(e) { _swallow(e); }
     }
     el.textContent = `${nearA.name} 접근 ${uDist(nearD)}`;
     el.className = 'near';
@@ -13203,7 +13309,7 @@ function _aspcAlertCheck() {
     el.className = '';
   }
 }
-setInterval(() => { try { _aspcAlertCheck(); } catch(e) {} }, 5000);
+setInterval(() => { try { _aspcAlertCheck(); } catch(e) { _swallow(e); } }, 5000);
 
 // ═══════════════════════════════════════════════════════════════
 //  항적 로그북 — REC 종료 시 IndexedDB 자동 저장, FDR 패널에서 관리
@@ -13249,7 +13355,7 @@ async function renderLogbook() {
   const box = document.getElementById('logbook-list');
   if (!box) return;
   let recs = [];
-  try { recs = await _logAll(); } catch(e) {}
+  try { recs = await _logAll(); } catch(e) { _swallow(e); }
   recs.sort((a, b) => b.id - a.id);
   if (!recs.length) { box.innerHTML = '<div style="color:#556;font-size:9px;padding:3px 0;">저장된 항적 없음</div>'; return; }
   const p2 = n => String(n).padStart(2, '0');
@@ -13287,7 +13393,6 @@ let _fdrTrack      = [];     // interpolated track for playback
 let _fdrRawTrack   = [];     // original GPX points — used for route preview line only
 let _fdrIdx        = 0;      // current playback index
 let _fdrSpeed      = 1;      // playback speed multiplier
-let _fdrPlaying    = false;
 let _fdrRafId      = null;   // requestAnimationFrame handle
 let _fdrWallStart  = 0;      // wall-clock ms when play/resume began
 let _fdrTrackStart = 0;      // track timeMs at start of current play segment
@@ -13300,7 +13405,7 @@ function toggleFdrPanel() {
   const btn   = document.getElementById('fdr-btn');
   const open  = panel.classList.toggle('open');
   btn.classList.toggle('active', open);
-  if (open) { try { renderLogbook(); } catch(e) {} }
+  if (open) { try { renderLogbook(); } catch(e) { _swallow(e); } }
 }
 
 // ── NOTAM / KML / GPX overlay ──────────────────────────
@@ -13348,7 +13453,7 @@ const ENR_FIX_RAW =
 
 let _fixMarkers = [];
 let fixLayerOn = false;
-try { fixLayerOn = localStorage.getItem('fixLayerOn') === '1'; } catch(e) {}
+try { fixLayerOn = localStorage.getItem('fixLayerOn') === '1'; } catch(e) { _swallow(e); }
 
 function _enrFixList() {
   const dms = (d, degLen) => (+d.slice(0, degLen)) + (+d.slice(degLen, degLen + 2)) / 60 + (+d.slice(degLen + 2)) / 3600;
@@ -13394,11 +13499,11 @@ function _afldIndexOf(icao) {
   } catch(e) { return -1; }
 }
 function _mapOpenAirfield(icao) {
-  try { leafMap.closePopup(); } catch(e) {}
+  try { leafMap.closePopup(); } catch(e) { _swallow(e); }
   const i = _afldIndexOf(icao);
   if (i < 0) return;
   if (leftSel !== 'cdu' && rightSel !== 'cdu') selectPanel(leftSel === 'map' ? 'right' : 'left', 'cdu');
-  try { openAirfield(i); } catch(e) {}
+  try { openAirfield(i); } catch(e) { _swallow(e); }
 }
 // INFO 목록에 있고, 공개 비행장이거나 잠금 해제된 경우에만 '공항 정보' 버튼을 준다(보안)
 function _aptInfoAvailable(icao) {
@@ -13411,13 +13516,13 @@ function _aptInfoAvailable(icao) {
 }
 // 지도 팝업 → 기존 METAR/TAF 팝업으로 전환
 function mapAptWx(icao, lat, lon) {
-  try { leafMap.closePopup(); } catch(e) {}
-  try { showAptWx(icao, APT_NAME[icao] || '', [lat, lon]); } catch(e) {}
+  try { leafMap.closePopup(); } catch(e) { _swallow(e); }
+  try { showAptWx(icao, APT_NAME[icao] || '', [lat, lon]); } catch(e) { _swallow(e); }
 }
 // 지도 VOR 팝업 → NAV1/NAV2 튜닝
 function mapTuneNav(navId, freq, id) {
-  try { setNavRadio(navId, freq, id); } catch(e) {}
-  try { leafMap.closePopup(); } catch(e) {}
+  try { setNavRadio(navId, freq, id); } catch(e) { _swallow(e); }
+  try { leafMap.closePopup(); } catch(e) { _swallow(e); }
 }
 // 클립보드 복사(비보안·구형 환경 폴백 포함) + 버튼 피드백
 function fixCopyCoord(el, name, lat, lon) {
@@ -13426,14 +13531,14 @@ function fixCopyCoord(el, name, lat, lon) {
     if (!el) return;
     const orig = el.textContent;
     el.textContent = ok ? '✓ 복사됨' : '복사 실패';
-    setTimeout(() => { try { el.textContent = orig; } catch(e) {} }, 1200);
+    setTimeout(() => { try { el.textContent = orig; } catch(e) { _swallow(e); } }, 1200);
   };
   try {
     if (navigator.clipboard && window.isSecureContext) {
       navigator.clipboard.writeText(txt).then(() => done(true), () => done(false));
       return;
     }
-  } catch(e) {}
+  } catch(e) { _swallow(e); }
   try {   // 폴백: 임시 textarea + execCommand
     const ta = document.createElement('textarea');
     ta.value = txt; ta.style.position = 'fixed'; ta.style.opacity = '0';
@@ -13446,7 +13551,7 @@ function fixCopyCoord(el, name, lat, lon) {
 // 픽스를 비행계획 웨이포인트로 추가
 function fixAddToPlan(name, lat, lon) {
   pushWP({ ident: name, lat, lon });
-  try { leafMap.closePopup(); } catch(e) {}
+  try { leafMap.closePopup(); } catch(e) { _swallow(e); }
 }
 
 function _drawFixLayer() {
@@ -13467,7 +13572,7 @@ function _drawFixLayer() {
   });
 }
 function _clearFixLayer() {
-  _fixMarkers.forEach(m => { try { leafMap.removeLayer(m); } catch(e){} });
+  _fixMarkers.forEach(m => { try { leafMap.removeLayer(m); } catch(e){ _swallow(e); } });
   _fixMarkers = [];
 }
 // ── 접근절차 픽스 ─────────────────────────────────────────────
@@ -13517,7 +13622,7 @@ function _drawAppFixLayer() {
   });
 }
 function _clearAppFixLayer() {
-  _appFixMarkers.forEach(m => { try { leafMap.removeLayer(m); } catch(e){} });
+  _appFixMarkers.forEach(m => { try { leafMap.removeLayer(m); } catch(e){ _swallow(e); } });
   _appFixMarkers = [];
 }
 
@@ -13537,13 +13642,13 @@ function _fixUpdateBtn() {
 function toggleFixLayer() {
   fixLayerOn = !fixLayerOn;
   if (fixLayerOn) _drawFixLayer(); else _clearFixLayer();
-  try { localStorage.setItem('fixLayerOn', fixLayerOn ? '1' : '0'); } catch(e) {}
+  try { localStorage.setItem('fixLayerOn', fixLayerOn ? '1' : '0'); } catch(e) { _swallow(e); }
   _fixRenderPanel(); _fixUpdateBtn();
 }
 function toggleAppFixGrp(grp) {
   appFixOn[grp] = !appFixOn[grp];
   _drawAppFixLayer();
-  try { localStorage.setItem('appFixOn', JSON.stringify(appFixOn)); } catch(e) {}
+  try { localStorage.setItem('appFixOn', JSON.stringify(appFixOn)); } catch(e) { _swallow(e); }
   _fixRenderPanel(); _fixUpdateBtn();
 }
 function _fixRenderPanel() {
@@ -13564,9 +13669,9 @@ function _fixRenderPanel() {
   p.innerHTML = html;
 }
 // 저장된 상태 복원
-if (fixLayerOn) { try { _drawFixLayer(); } catch(e) {} }
-try { if (_appFixAnyOn()) _drawAppFixLayer(); } catch(e) {}
-try { _fixUpdateBtn(); } catch(e) {}
+if (fixLayerOn) { try { _drawFixLayer(); } catch(e) { _swallow(e); } }
+try { if (_appFixAnyOn()) _drawAppFixLayer(); } catch(e) { _swallow(e); }
+try { _fixUpdateBtn(); } catch(e) { _swallow(e); }
 
 // ── VOR 표지소 + 항로(AWY) 오버레이 (AIP ENR 4.1 / 3.x) ──
 // ── 국내 비행장 주파수/VOR/ILS/ATIS/RWY/표고 (2022.1 자료) ──
@@ -13710,7 +13815,7 @@ try {
   // 이전 버전은 VOR이 한 항목이었으므로, 저장값에 aptvor가 없으면 vor 상태를 물려받는다
   if (s) awyCat = { conv: !!s.conv, rnav: !!s.rnav, vor: !!s.vor,
                     aptvor: s.aptvor === undefined ? !!s.vor : !!s.aptvor };
-} catch(e) {}
+} catch(e) { _swallow(e); }
 
 // 경유점 → 좌표 (VOR는 id 참조, 그 외는 내장 좌표)
 function _awyWpCoord(w) {
@@ -13805,10 +13910,10 @@ function _drawVorGroup(list, col, lblCol) {
   });
 }
 function _clearAwyLayer() {
-  _awyLayers.forEach(l => { try { leafMap.removeLayer(l); } catch(e){} });
+  _awyLayers.forEach(l => { try { leafMap.removeLayer(l); } catch(e){ _swallow(e); } });
   _awyLayers = [];
 }
-function _awySave() { try { localStorage.setItem('awyCat', JSON.stringify(awyCat)); } catch(e) {} }
+function _awySave() { try { localStorage.setItem('awyCat', JSON.stringify(awyCat)); } catch(e) { _swallow(e); } }
 function _awyUpdateBtn() {
   const any = awyCat.conv || awyCat.rnav || awyCat.vor || awyCat.aptvor;
   const p = document.getElementById('awy-panel');
@@ -13844,7 +13949,7 @@ function toggleAwyLayer() {   // AWY 버튼 → 카테고리 패널 열기/닫�
   _awyUpdateBtn();
 }
 // 저장된 상태 복원
-try { _drawAwyLayer(); _awyUpdateBtn(); } catch(e) {}
+try { _drawAwyLayer(); _awyUpdateBtn(); } catch(e) { _swallow(e); }
 
 // AIP ENR 2.1/2.2에서 추출한 공역 데이터 (TMA/CTA/제주 Class B/ATZ/관제권/소음방지)
 const AIRSPACE_DB = [
@@ -14215,8 +14320,8 @@ function _aspcDraw(item){
   }
   _aspcLayers[item.id]=ls;
 }
-function _aspcClear(id){ (_aspcLayers[id]||[]).forEach(l=>{try{leafMap.removeLayer(l);}catch(e){}}); _aspcLayers[id]=[]; }
-function _aspcSave(){ try{ localStorage.setItem('aspcOn',JSON.stringify(aspcOn)); }catch(e){} }
+function _aspcClear(id){ (_aspcLayers[id]||[]).forEach(l=>{try{leafMap.removeLayer(l);}catch(e){ _swallow(e); }}); _aspcLayers[id]=[]; }
+function _aspcSave(){ try{ localStorage.setItem('aspcOn',JSON.stringify(aspcOn)); }catch(e){ _swallow(e); } }
 function toggleAspcItem(id){
   aspcOn[id]=!aspcOn[id];
   const item=AIRSPACE_DB.find(a=>a.id===id);
@@ -14269,7 +14374,7 @@ function toggleAspcPanel(){
   _aspcUpdateBtn();
 }
 // 저장된 표시 상태 복원
-try { AIRSPACE_DB.forEach(a=>{ if(aspcOn[a.id]) _aspcDraw(a); }); _aspcUpdateBtn(); } catch(e){}
+try { AIRSPACE_DB.forEach(a=>{ if(aspcOn[a.id]) _aspcDraw(a); }); _aspcUpdateBtn(); } catch(e){ _swallow(e); }
 
 // ── Flight Plan IFR DB를 AIP ENR 데이터로 동기화 (항로·픽스 단일 소스) ──
 (function syncIfrDbFromAip() {
@@ -14299,7 +14404,7 @@ let _notamActive = false;
 
 function toggleNotamLayer() {
   if (_notamActive) {
-    _notamLayers.forEach(l => { try { leafMap.removeLayer(l); } catch(e){} });
+    _notamLayers.forEach(l => { try { leafMap.removeLayer(l); } catch(e){ _swallow(e); } });
     _notamLayers = [];
     _notamActive = false;
     document.getElementById('notam-btn').classList.remove('active');
@@ -14318,7 +14423,7 @@ function loadNotamFile(input) {
     const isKml = file.name.toLowerCase().endsWith('.kml');
     try {
       const features = isKml ? _parseKml(text) : _parseGpx2(text);
-      _notamLayers.forEach(l => { try { leafMap.removeLayer(l); } catch(e){} });
+      _notamLayers.forEach(l => { try { leafMap.removeLayer(l); } catch(e){ _swallow(e); } });
       _notamLayers = [];
       features.forEach(f => {
         const popup = _notamPopupHtml(f.name, f.desc);
@@ -14889,8 +14994,8 @@ function _fdrDraw3dTrackRoute() {
   }
   // Remove old layer/source if present
   if (_fdrLayer3d) {
-    try { _ml3d.removeLayer('fdr-track'); } catch(e) {}
-    try { _ml3d.removeSource('fdr-track'); } catch(e) {}
+    try { _ml3d.removeLayer('fdr-track'); } catch(e) { _swallow(e); }
+    try { _ml3d.removeSource('fdr-track'); } catch(e) { _swallow(e); }
     _fdrLayer3d = false;
   }
   const src = _fdrRawTrack.length ? _fdrRawTrack : _fdrTrack;
@@ -15206,7 +15311,7 @@ async function idbPut(key, blob) {
 // 연결을 닫아 iOS WebKit이 버퍼링한 blob 쓰기를 디스크로 flush하고 메모리를
 // 회수하도록 유도한다(대량 저장 중 60% 부근 리셋 방지 핵심).
 function idbClose() {
-    if (_idb) { try { _idb.close(); } catch(e) {} _idb = null; }
+    if (_idb) { try { _idb.close(); } catch(e) { _swallow(e); } _idb = null; }
 }
 async function idbGet(key) {
     const db = await openIDB();
@@ -15266,7 +15371,7 @@ function triggerFolderImport() {
             inp.webkitdirectory = true;
             inp.directory = true;
             folderSupported = ('webkitdirectory' in inp);
-        } catch(e) {}
+        } catch(e) { _swallow(e); }
     }
 
     if (!folderSupported) {
@@ -15494,7 +15599,7 @@ async function _detectGroupIcao(files) {
             const txt = (await slice.text()).toUpperCase();
             const m = txt.match(/\b([RZ][A-Z]{3})\b/);
             if (m) return m[1];
-        } catch(e) {}
+        } catch(e) { _swallow(e); }
     }
     return null;
 }
@@ -15571,7 +15676,7 @@ async function _saveChartEntries(entries) {
             localStorage.setItem('savedCharts', JSON.stringify(saved));
         } catch(storageErr) {
             console.warn('localStorage 용량 초과, 최근 50개만 보존');
-            try { localStorage.setItem('savedCharts', JSON.stringify(saved.slice(-50))); } catch(e2) {}
+            try { localStorage.setItem('savedCharts', JSON.stringify(saved.slice(-50))); } catch(e2) { _swallow(e2); }
         }
     };
 
@@ -15676,13 +15781,13 @@ function _saveChartCalib(key, cal) {
         const m = JSON.parse(localStorage.getItem('chartCalib') || '{}');
         m[key] = { pts: cal.pts };   // 원자료(점들)만 저장 — fit은 로드 시 재계산
         localStorage.setItem('chartCalib', JSON.stringify(m));
-    } catch(e) {}
+    } catch(e) { _swallow(e); }
 }
 function _pdfClearCalib() {
     try {
         const m = JSON.parse(localStorage.getItem('chartCalib') || '{}');
         delete m[_pdfChartKey]; localStorage.setItem('chartCalib', JSON.stringify(m));
-    } catch(e) {}
+    } catch(e) { _swallow(e); }
     _pdfCalibration = null; _pdfUpdateAcMarker();
 }
 
@@ -15764,9 +15869,11 @@ function _pdfFitSimilarity(points, lat0) {
         Object.assign({}, base, { mir: 1, ra: m1 / sxx, rb: m2 / sxx }),
     ];
     cand.forEach(f => { f.rms = _pdfResidRms(f, points); });
-    // 보정점이 일직선에 가까우면 두 해의 잔차가 거의 같아져 반전 판정이 흔들린다.
+    // 보정점이 일직선에 가깝거나 2점뿐이면 두 해의 잔차가 사실상 같아져
+    // 반전 판정이 부동소수점 잡음으로 갈린다(2점은 자유도가 같아 둘 다 정확히 맞는다).
     // 페이지 fy 는 아래로, 위도는 위로 증가하므로 반전이 물리적으로 정상 —
-    // 정회전은 "확실히 더 잘 맞을 때"(잔차 절반 이하)만 채택한다.
+    // 반전이 충분히 잘 맞으면 그대로 쓰고, 정회전은 "확실히 더 잘 맞을 때"만 채택한다.
+    if (cand[1].rms <= 1e-9) return cand[1];
     return (cand[0].rms < cand[1].rms * 0.5) ? cand[0] : cand[1];
 }
 
@@ -16009,7 +16116,10 @@ function _pdfScanCoordTokens(T, isLon) {
     const SUF = '(' + H + ')(?=$|[^\\d]|' + OPP + ')';
     // 공백을 사이에 둔 접미형용 — 반구문자 뒤 공백까지 건너뛰고 같은 판단을 한다
     const OPPS = isLon ? '\\d{6}(?:\\.\\d+)?\\s*[NS]' : '\\d{7}(?:\\.\\d+)?\\s*[EW]';
-    const SUFSP = '(' + H + ')(?=\\s*$|\\s*[^\\d]|\\s*' + OPPS + ')';
+    // 주의: [^\\d] 만 쓰면 \\s* 가 0개 매칭될 때 공백 자체가 '비숫자'로 인정되어
+    // `37°59'44" E 128°44'12"` 의 E 를 앞 숫자의 접미문자로 잘못 붙인다.
+    // 공백을 모두 건너뛴 다음 글자가 공백도 숫자도 아닐 때만 접미로 본다.
+    const SUFSP = '(' + H + ')(?=\\s*$|\\s*[^\\s\\d]|\\s*' + OPPS + ')';
     // 접두형에서는 반대로, 반구문자가 "앞 좌표의 꼬리"이면 안 된다.
     // 예) `128°44'12"E 38°03'48"N` 에서 경도를 찾을 때 앞 경도의 끝 E 를 집어
     //     뒤 위도 숫자와 짝지으면 38°E 라는 엉뚱한 경도가 만들어진다.
@@ -16165,7 +16275,7 @@ function _pdfPruneFixes() {
         const icao = (_pdfChartKey || '').split('|')[0];
         const ap = (typeof APT_LATLNG !== 'undefined') ? APT_LATLNG[icao] : null;
         if (ap) { cLat = ap[0]; cLon = ap[1]; }
-    } catch(e) {}
+    } catch(e) { _swallow(e); }
     if (cLat === null) {
         const med = arr => { const v = arr.slice().sort((a, b) => a - b); return v[Math.floor(v.length / 2)]; };
         cLat = med(_pdfFixList.map(f => f.lat));
@@ -16483,7 +16593,7 @@ async function openChart(icao, chartNum, url) {
     // 로컬 저장된 PDF가 있으면 항상 앱 내장 '한 페이지' 뷰어로 연다.
     // (localPdfKeys 캐시가 갱신 안 됐을 수 있으므로 IndexedDB를 직접 확인)
     let blob = null;
-    try { blob = await idbGet(key); } catch(e) {}
+    try { blob = await idbGet(key); } catch(e) { _swallow(e); }
     if (!blob) { if (url) window.open(url, '_blank'); return; }
 
     _pdfChartKey = key;
@@ -16502,14 +16612,14 @@ async function openChart(icao, chartNum, url) {
         + 'background:#1a1a1a;display:flex;flex-direction:column;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica Neue,Arial,sans-serif;';
     ov.innerHTML = `
         <div style="display:flex;align-items:center;gap:6px;padding:6px 10px;background:#000;border-bottom:1px solid #333;flex-shrink:0;">
-            <div onclick="closePdfViewer()" style="color:#0ff;font-size:11px;font-weight:bold;cursor:pointer;padding:4px 10px;border:1px solid #0ff;border-radius:4px;white-space:nowrap;">← 목록</div>
+            <div data-act="closePdfViewer" style="color:#0ff;font-size:11px;font-weight:bold;cursor:pointer;padding:4px 10px;border:1px solid #0ff;border-radius:4px;white-space:nowrap;">← 목록</div>
             <span style="color:#aaa;font-size:9px;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${icao} · (${chartNum})</span>
             <div style="display:flex;align-items:center;gap:2px;flex-shrink:0;">
-                <div onclick="_pdfZoomOut()" title="축소" style="color:#fff;font-size:16px;font-weight:bold;cursor:pointer;padding:2px 9px;background:#1a1a1a;border:1px solid #444;border-radius:3px;line-height:1;user-select:none;">−</div>
+                <div data-act="_pdfZoomOut" title="축소" style="color:#fff;font-size:16px;font-weight:bold;cursor:pointer;padding:2px 9px;background:#1a1a1a;border:1px solid #444;border-radius:3px;line-height:1;user-select:none;">−</div>
                 <div id="pdfZoomLabel" style="color:#aaa;font-size:9px;min-width:36px;text-align:center;padding:3px 2px;"></div>
-                <div onclick="_pdfZoomIn()"  title="확대" style="color:#fff;font-size:16px;font-weight:bold;cursor:pointer;padding:2px 9px;background:#1a1a1a;border:1px solid #444;border-radius:3px;line-height:1;user-select:none;">+</div>
-                <div onclick="_pdfZoomReset()" title="배율 초기화" style="color:#888;font-size:9px;cursor:pointer;padding:3px 6px;background:#111;border:1px solid #333;border-radius:3px;margin-left:2px;white-space:nowrap;">1:1</div>
-                <div onclick="_pdfToggleCalibration()" id="pdfCalBtn" title="현재 위치 보정/표시" style="color:#ff5252;font-size:13px;cursor:pointer;padding:2px 8px;background:#1a1010;border:1px solid #ff5252;border-radius:3px;margin-left:2px;line-height:1;user-select:none;">📍</div>
+                <div data-act="_pdfZoomIn"  title="확대" style="color:#fff;font-size:16px;font-weight:bold;cursor:pointer;padding:2px 9px;background:#1a1a1a;border:1px solid #444;border-radius:3px;line-height:1;user-select:none;">+</div>
+                <div data-act="_pdfZoomReset" title="배율 초기화" style="color:#888;font-size:9px;cursor:pointer;padding:3px 6px;background:#111;border:1px solid #333;border-radius:3px;margin-left:2px;white-space:nowrap;">1:1</div>
+                <div data-act="_pdfToggleCalibration" id="pdfCalBtn" title="현재 위치 보정/표시" style="color:#ff5252;font-size:13px;cursor:pointer;padding:2px 8px;background:#1a1010;border:1px solid #ff5252;border-radius:3px;margin-left:2px;line-height:1;user-select:none;">📍</div>
             </div>
             <span id="pdfPageNum" style="color:#888;font-size:9px;white-space:nowrap;"></span>
         </div>
@@ -16517,9 +16627,9 @@ async function openChart(icao, chartNum, url) {
             <div style="color:#ccc;padding:50px;text-align:center;font-size:13px;">PDF 로딩 중...</div>
         </div>
         <div id="pdfNavBar" style="display:flex;border-top:1px solid #333;flex-shrink:0;">
-            <div onclick="_pdfPrev()" style="flex:1;padding:11px 0;text-align:center;background:#0a0a0a;color:#0ff;font-size:16px;cursor:pointer;border-right:1px solid #222;">◀</div>
+            <div data-act="_pdfPrev" style="flex:1;padding:11px 0;text-align:center;background:#0a0a0a;color:#0ff;font-size:16px;cursor:pointer;border-right:1px solid #222;">◀</div>
             <div id="pdfPageLabel" style="flex:2;padding:11px 0;text-align:center;background:#0a0a0a;color:#555;font-size:10px;"></div>
-            <div onclick="_pdfNext()" style="flex:1;padding:11px 0;text-align:center;background:#0a0a0a;color:#0ff;font-size:16px;cursor:pointer;border-left:1px solid #222;">▶</div>
+            <div data-act="_pdfNext" style="flex:1;padding:11px 0;text-align:center;background:#0a0a0a;color:#0ff;font-size:16px;cursor:pointer;border-left:1px solid #222;">▶</div>
         </div>`;
     host.appendChild(ov);
     // 제스처 핸들러는 오버레이당 1회 등록(영역은 재렌더돼도 동일 element 유지)
@@ -16841,7 +16951,7 @@ function closePdfViewer() {
     _pdfDoc = null; _pdfMD = null;
     if (_pdfReqTimer) { clearTimeout(_pdfReqTimer); _pdfReqTimer = null; }
     if (_pdfAcTimer) { clearInterval(_pdfAcTimer); _pdfAcTimer = null; }
-    if (_pdfResizeObs) { try { _pdfResizeObs.disconnect(); } catch(e){} _pdfResizeObs = null; }
+    if (_pdfResizeObs) { try { _pdfResizeObs.disconnect(); } catch(e){ _swallow(e); } _pdfResizeObs = null; }
     if (_pdfResizeT) { clearTimeout(_pdfResizeT); _pdfResizeT = null; }
     _pdfCalActive = false; _pdfCalPts = []; _pdfFixList = [];
     _pdfRenderToken++;   // 진행 중 렌더 무효화
@@ -16963,7 +17073,7 @@ function renderChartsScreen(container, footer, title) {
             <div style="color:${daysColor};font-size:18px;font-weight:bold;line-height:1;">${airac.daysLeft}</div>
             <div style="color:#666;font-size:7px;">days left</div>
         </div>
-        <div onclick="openAimPackage()" style="background:#0a2a0a;color:#4caf50;border:1px solid #4caf50;border-radius:5px;padding:8px 10px;font-size:10px;font-weight:bold;cursor:pointer;white-space:nowrap;text-align:center;min-width:52px;">
+        <div data-act="openAimPackage" style="background:#0a2a0a;color:#4caf50;border:1px solid #4caf50;border-radius:5px;padding:8px 10px;font-size:10px;font-weight:bold;cursor:pointer;white-space:nowrap;text-align:center;min-width:52px;">
             🌐<br><span style="font-size:8px;">AIM eAIP</span>
         </div>
         <div onclick="${importProgress ? '' : 'triggerZipImport()'}" style="background:${importProgress ? '#1a1a1a' : '#0a1a2a'};color:${importProgress ? '#444' : '#29b6f6'};border:1px solid ${importProgress ? '#333' : '#29b6f6'};border-radius:5px;padding:8px 10px;font-size:10px;font-weight:bold;cursor:${importProgress ? 'default' : 'pointer'};white-space:nowrap;text-align:center;min-width:52px;">
@@ -17077,6 +17187,108 @@ function renderCduContent() {
     } catch(e) { console.warn('renderCduContent error:', e); }
 }
 
+
+// ── 위임 액션 등록 (인라인 onclick 에서 옮겨온 것들) ──
+// 여기 없는 이름을 data-act 로 쓰면 콘솔에 경고가 남으므로,
+// 예전처럼 버튼이 조용히 죽지 않는다.
+appRegister({
+  _pdfNext,
+  _pdfPrev,
+  _pdfToggleCalibration,
+  _pdfZoomIn,
+  _pdfZoomOut,
+  _pdfZoomReset,
+  _rulerReset,
+  _rulerUndo,
+  addAirwaySegment,
+  addAppWps,
+  addSidWps,
+  addSingleFix,
+  addStarWps,
+  cduFullScreen,
+  clearFP,
+  closeHelp,
+  closePdfViewer,
+  closeWxPanel,
+  cycleIntercept,
+  deleteUserSid,
+  exitSolo,
+  fcpSync,
+  fdrPause,
+  fdrPlay,
+  fdrStop,
+  fetchWx,
+  forceTrim,
+  fpBackToCdu,
+  fpBksp,
+  fpConfirmIdent,
+  fpGo,
+  fpGoCduHome,
+  fpHoldApply,
+  fpHoldCrsAdj,
+  fpHoldLegAdj,
+  fpHoldRemove,
+  fpHoldSet,
+  fpRefAdj,
+  fpRefApply,
+  fpRefBksp,
+  fpRefOpen,
+  fpType,
+  hardReload,
+  lockScreen,
+  openAimPackage,
+  openShipPanel,
+  planFullScreen,
+  resetSim,
+  selectPanel,
+  setNavSrc,
+  setRnp,
+  setSolo,
+  shipKey,
+  shipSetMode,
+  shipToggleOn,
+  shipTogglePanel,
+  sidNewAddFix,
+  sidNewSave,
+  sidShowOnMap,
+  swReset,
+  swSetMode,
+  swToggle,
+  switchMode,
+  tiltAdj,
+  toggle3dMap,
+  toggleAltHold,
+  toggleAspcPanel,
+  toggleAwyLayer,
+  toggleBrg1,
+  toggleBrg2,
+  toggleCrht,
+  toggleFdrPanel,
+  toggleFixPanel,
+  toggleFollow,
+  toggleGPS,
+  toggleGspd,
+  toggleHoverPage,
+  toggleHoverPosition,
+  toggleInhib,
+  toggleInhibMenu,
+  toggleLayer,
+  toggleMapFull,
+  toggleMapOrient,
+  toggleNavAp,
+  toggleNotamLayer,
+  toggleObs,
+  togglePpMenu,
+  toggleRain,
+  toggleRuler,
+  toggleShip,
+  toggleSim,
+  toggleTcut,
+  toggleTrackRec,
+  toggleTriple,
+  toggleWind,
+  toggleWxPanel,
+});
 </script>
 <input type="file" id="zipFileInput" accept=".zip,application/zip,application/x-zip-compressed,application/octet-stream" style="display:none" onchange="handleZipFile(this.files[0]); this.value='';"></body>
 </html>
