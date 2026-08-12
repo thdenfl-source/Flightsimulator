@@ -1,11 +1,23 @@
 // VFR Flight Sim — Service Worker
 // 버전을 올리면 캐시가 갱신됩니다
-const CACHE = 'vfr-flight-v323';
+const CACHE = 'vfr-flight-v324';
 const CORE  = [
   './index.html',
   './manifest.json',
   './icon.png',
   './icon-512.png',
+  // 앱 코드 — index.html 에서 분리한 조각들(로드 순서 = 실행 순서)
+  './js/01-state.js',
+  './js/02-math.js',
+  './js/03-pfd.js',
+  './js/04-map.js',
+  './js/05-gps.js',
+  './js/06-nav.js',
+  './js/07-sim.js',
+  './js/08-ifrdb.js',
+  './js/09-cdu.js',
+  './js/10-tools.js',
+  './js/11-charts.js',
 ];
 
 // 설치 시 핵심 파일 캐시 (HTTP 캐시 우회로 항상 최신본 저장)

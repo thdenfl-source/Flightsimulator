@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
 const blocks = [...html.matchAll(/<script(?![^>]*\ssrc=)[^>]*>([\s\S]*?)<\/script>/g)].map(m => m[1]);
-if (!blocks.length) { console.error('인라인 스크립트를 찾지 못했습니다.'); process.exit(1); }
+// 코드를 js/*.js 로 분리한 뒤에는 인라인 블록이 없을 수 있다. 둘 다 0 이면 이상.
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'vfrsim-syntax-'));
 let failed = 0;
@@ -30,6 +30,10 @@ srcs.forEach(rel => {
   catch (e) { failed++; console.error(`✗ ${rel} 문법 오류\n${e.stderr?.toString() || e.message}`); }
 });
 
+if (!blocks.length && !srcs.length) {
+  console.error('검사할 스크립트를 찾지 못했습니다 — index.html 을 확인하세요.');
+  process.exit(1);
+}
 console.log(failed ? `문법 검사 실패 ${failed}건` :
   `문법 검사 통과 — 인라인 ${blocks.length}블록, 외부 ${srcs.length}파일`);
 process.exit(failed ? 1 : 0);
