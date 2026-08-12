@@ -156,6 +156,85 @@ function buildChartPdfUrl(airacStart, icao, num, name) {
     return `https://aim.koca.go.kr/eaipPub/Package/${airacStart}-AIRAC/pdf/AD/${icao}/(${num})%20${name.replace(/ /g, '%20')}.pdf`;
 }
 
+// ── eAIP 차트 목록 탐색 ────────────────────────────────────────────
+// 연결 점검으로 CORS 가 허용된 것은 확인했다(차트 PDF 가 HTTP 200 으로 온다).
+// 남은 문제는 "무엇을 받을지" 다. 앱 내장 목록은 22개 공항에 28장뿐인데,
+// 실제로는 공항 하나에만 12~13장이 있다. 공항별 전체 목록을 앱이 모른다.
+//
+// eAIP 패키지 어딘가에 그 목록(색인 페이지)이 있을 텐데 주소 규칙을 모른다.
+// 그래서 그럴듯한 후보를 한꺼번에 두드려 보고, 응답한 것 중 무엇이 차트 PDF
+// 링크를 담고 있는지 세어 화면에 보여준다. 그 결과를 보고 "전체 받기" 를 짠다.
+//
+// 한 번 쓰고 버릴 코드가 아니다 — AIRAC 주기가 바뀌거나 사이트 구조가 바뀌면
+// 다시 눌러 확인하면 된다.
+function _chartDiscoverCandidates(airac, icao) {
+    const pkg = `https://aim.koca.go.kr/eaipPub/Package/${airac.startUrl}-AIRAC`;
+    const eaip = `${pkg}/html/eAIP`;
+    return [
+        // ① 디렉터리 목록(열려 있으면 가장 간단하다)
+        { label: '공항 폴더 목록', url: `${pkg}/pdf/AD/${icao}/` },
+        { label: 'AD 폴더 목록', url: `${pkg}/pdf/AD/` },
+        // ② eAIP 표준 문서 — 공항별 AD 2 절(차트 표가 여기 들어간다)
+        { label: 'AD 2 문서(en)', url: `${eaip}/KR-AD-2.${icao}-en-GB.html` },
+        { label: 'AD 2 문서(ko)', url: `${eaip}/KR-AD-2.${icao}-ko-KR.html` },
+        // ③ 차트 목록 절(AD 2.24 = CHARTS RELATED TO AN AERODROME)
+        { label: 'AD 2.24 차트목록', url: `${eaip}/KR-AD-2.${icao}-2-24-en-GB.html` },
+        // ④ 메뉴·목차
+        { label: '메뉴(en)', url: `${eaip}/KR-menu-en-GB.html` },
+        { label: '패키지 첫 화면', url: `${pkg}/index.html` },
+        { label: '패키지 루트', url: `${pkg}/` },
+    ];
+}
+
+async function chartDiscover() {
+    const airac = getSafeAiracInfo();
+    const icao = 'RKSI';
+    const cands = _chartDiscoverCandidates(airac, icao);
+
+    uiToast(`차트 목록 후보 ${cands.length}곳을 확인하는 중…`, null, 12000);
+
+    const one = async (c) => {
+        const ac = typeof AbortController === 'function' ? new AbortController() : null;
+        const timer = ac ? setTimeout(() => ac.abort(), 8000) : null;
+        try {
+            const r = await fetch(c.url, { credentials: 'omit', signal: ac ? ac.signal : undefined });
+            const type = (r.headers.get('content-type') || '').split(';')[0];
+            if (!r.ok) return { ...c, line: `HTTP ${r.status}` };
+            const text = await r.text();
+            // 이 문서가 차트 PDF 를 가리키고 있는가 — href 든 본문이든 훑는다
+            const pdfs = [...new Set((text.match(/[^"'<>\s]+\.pdf/gi) || [])
+                .map(u => decodeURIComponent(u.split('/').pop())))];
+            return { ...c, line: `HTTP ${r.status} · ${type} · ${(text.length / 1024).toFixed(0)}KB`,
+                     pdfs, ok: true };
+        } catch (e) {
+            return { ...c, line: e.name === 'AbortError' ? '응답 없음(8초)' : e.message };
+        } finally { if (timer) clearTimeout(timer); }
+    };
+
+    const res = await Promise.all(cands.map(one));
+    const hit = res.filter(r => r.ok && r.pdfs && r.pdfs.length);
+    hit.sort((a, b) => b.pdfs.length - a.pdfs.length);
+
+    let out = `eAIP 차트 목록 탐색 (${icao} · AIRAC ${airac.id})\n\n`;
+    if (hit.length) {
+        const best = hit[0];
+        out += `✅ 차트 목록을 찾았습니다.\n` +
+               `"${best.label}" 에 PDF ${best.pdfs.length}개가 실려 있습니다.\n` +
+               `이 주소로 공항별 전체 받기를 만들 수 있습니다.\n\n`;
+    } else {
+        out += `❌ 차트 목록을 담은 곳을 찾지 못했습니다.\n` +
+               `아래 응답을 보고 후보를 다시 잡아야 합니다.\n\n`;
+    }
+    out += `— 후보별 응답 —\n`;
+    res.forEach(r => {
+        out += `\n▸ ${r.label}\n  ${r.line}`;
+        if (r.pdfs) out += `\n  PDF 링크 ${r.pdfs.length}개`;
+        if (r.pdfs && r.pdfs.length) out += `\n  예: ${r.pdfs.slice(0, 3).join(' / ')}`;
+        out += `\n  ${r.url}`;
+    });
+    await uiAlert(out);
+}
+
 // ── eAIP 직접 연결 점검 ────────────────────────────────────────────
 // 앱은 차트마다의 공식 주소를 이미 계산할 줄 안다(buildChartPdfUrl). 남은 관문은
 // CORS 하나 — aim.koca.go.kr 이 우리 주소에서 오는 요청을 허용해야 앱 안에서 열린다.
@@ -2124,8 +2203,10 @@ function renderChartsScreen(container, footer, title) {
             ${impBtn('onclick="triggerFolderImport()"', '📁', '폴더', '메모리 부족시', '#ffb74d', '#1a140a')}
             ${impBtn('data-act="chartRepoImport"', '☁', '저장소', '기기 바꿨을 때', '#66d9a5', '#0a1a14')}
         </div>
-        <div data-act="chartConnCheck" style="margin-top:4px;text-align:center;color:#7a8a7a;font-size:7px;cursor:pointer;padding:2px;">
-            🔌 eAIP 직접 연결 점검 — 차트를 안 올리고 바로 받을 수 있는지 확인
+        <div style="margin-top:4px;display:flex;gap:6px;justify-content:center;color:#7a8a7a;font-size:7px;">
+            <span data-act="chartConnCheck" style="cursor:pointer;padding:2px;">🔌 eAIP 연결 점검</span>
+            <span style="opacity:0.4;">·</span>
+            <span data-act="chartDiscover" style="cursor:pointer;padding:2px;">🔎 차트 목록 탐색</span>
         </div>
     </div>`;
 
@@ -2253,6 +2334,7 @@ appRegister({
   cduFullScreen,
   chartRepoImport,
   chartConnCheck,
+  chartDiscover,
   clearFP,
   closeHelp,
   closePdfViewer,
