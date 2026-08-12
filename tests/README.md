@@ -14,7 +14,7 @@ npx playwright install chromium
 이미 설치된 크로미움을 쓰려면:
 
 ```bash
-CHROMIUM_PATH=/path/to/chrome LEAFLET_DIR=/path/to/leaflet/dist node tests/run.mjs
+CHROMIUM_PATH=/path/to/chrome node tests/run.mjs
 ```
 
 ## 실행

@@ -391,6 +391,108 @@ async function _streamZipEntries(file) {
     }));
 }
 
+// ── 저장소(GitHub Pages)의 공용 차트 불러오기 (charts/index.json) ──
+// 차트 가져오기는 IndexedDB 에 들어가고 그것은 기기·브라우저마다 따로다.
+// 폰에서 AIRAC 을 넣었어도 태블릿 브라우저에는 하나도 없어, 기기를 바꿀 때마다
+// 원본 ZIP 을 찾아 다시 넣어야 했다. 저장소에 올려 두면 어느 기기에서든 한 번에
+// 받아온다. 같은 출처라 CORS 문제도 없다(외부 eAIP 는 CORS 로 막힌다).
+//   charts/index.json  예:
+//   [ { "file": "RKSI-2601.zip", "name": "인천 AIRAC 2601" },
+//     { "file": "RKTU/(1) AD CHART.pdf", "icao": "RKTU", "num": "1", "name": "AD CHART" } ]
+async function chartRepoImport() {
+    if (importProgress) return;   // 이미 가져오는 중
+    let list = null;
+    try {
+        const r = await fetch('charts/index.json?_=' + Date.now());
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        list = await r.json();
+    } catch(e) {
+        uiAlert('저장소 차트 목록을 불러오지 못했습니다.\n' + e.message +
+                '\n(charts/index.json 확인 — 저장소 README 참고)');
+        return;
+    }
+    if (!Array.isArray(list) || !list.length) {
+        uiAlert('저장소에 등록된 차트가 없습니다.\n' +
+                'charts/ 폴더에 파일을 올리고 charts/index.json 에 목록을 추가하세요.');
+        return;
+    }
+    const names = list.map(e => '  · ' + (e.name || e.file)).join('\n');
+    if (!await uiConfirm(
+        `저장소에 등록된 차트 ${list.length}건을 가져옵니다.\n\n${names}\n\n` +
+        `이 기기에 저장되어 앞으로는 앱 안에서 바로 열립니다.`,
+        { okText: '가져오기', cancelText: '취소' })) return;
+
+    importProgress = { phase: 'reading', done: 0, total: list.length, found: 0, skipped: 0, error: null };
+    renderCduContent();
+
+    const entries = [];
+    const failed = [];
+    for (const e of list) {
+        if (!e || !e.file) continue;
+        try {
+            const r = await fetch('charts/' + e.file + '?_=' + Date.now());
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            const blob = await r.blob();
+            if (/\.zip$/i.test(e.file)) {
+                const raw = await _readZipEntries(blob);
+                raw.forEach(z => {
+                    const meta = _parseChartPath(z.path, e.icao);
+                    if (meta) entries.push({ getBuffer: z.getBuffer, ...meta });
+                });
+            } else {
+                // 단일 PDF — index.json 의 값이 우선, 없으면 경로에서 뽑는다
+                const meta = _parseChartPath(e.file, e.icao) || {};
+                const icao = e.icao || meta.icao;
+                const num  = e.num != null ? String(e.num) : meta.num;
+                if (!icao || !num) throw new Error('공항코드(icao)와 번호(num)를 알 수 없습니다');
+                entries.push({
+                    getBuffer: () => blob.arrayBuffer(),
+                    icao, num,
+                    chartName: e.name || meta.chartName || e.file,
+                    cat: e.cat || meta.cat,
+                });
+            }
+        } catch(err) {
+            failed.push((e.name || e.file) + ' — ' + err.message.split('\n')[0]);
+        }
+        importProgress.done++;
+        renderCduContent();
+    }
+
+    if (!entries.length) {
+        importProgress = null;
+        renderCduContent();
+        uiAlert('저장소에서 차트를 하나도 가져오지 못했습니다.\n\n' +
+                (failed.length ? failed.join('\n') : 'charts/index.json 의 파일 경로를 확인하세요.'));
+        return;
+    }
+    await _saveChartEntries(entries);
+    if (failed.length) uiToast(`건너뜀 ${failed.length}건: ` + failed[0], 'warn', 4000);
+    await refreshLocalPdfKeys();
+    renderCduContent();
+}
+
+// ZIP 안의 파일 목록을 읽는다 — 저메모리 스트리밍 리더 우선, 실패하면 JSZip 폴백.
+// ZIP 파일 가져오기와 저장소 가져오기가 함께 쓴다.
+async function _readZipEntries(blob) {
+    try {
+        return await _streamZipEntries(blob);
+    } catch(streamErr) {
+        console.warn('스트리밍 ZIP 실패, JSZip 폴백:', streamErr.message);
+        if (typeof JSZip === 'undefined') {
+            throw new Error('ZIP 파일을 읽을 수 없습니다.\n(' + streamErr.message + ')');
+        }
+        let zip;
+        try { zip = await JSZip.loadAsync(blob); }
+        catch(e) {
+            throw new Error('ZIP 파일을 읽을 수 없습니다.\n파일이 손상되었거나 올바른 ZIP 형식이 아닙니다.\n(' + e.message + ')');
+        }
+        const out = [];
+        zip.forEach((path, entry) => { if (!entry.dir) out.push({ path, getBuffer: () => entry.async('arraybuffer') }); });
+        return out;
+    }
+}
+
 async function handleZipFile(file) {
     if (!file) return;
 
@@ -398,27 +500,7 @@ async function handleZipFile(file) {
     renderCduContent();
 
     try {
-        // ① 저메모리 스트리밍 리더 우선 → 실패 시 JSZip 폴백
-        let rawEntries = null;
-        try {
-            rawEntries = await _streamZipEntries(file);
-        } catch(streamErr) {
-            console.warn('스트리밍 ZIP 실패, JSZip 폴백:', streamErr.message);
-            if (typeof JSZip === 'undefined') {
-                importProgress = null; renderCduContent();
-                uiAlert('ZIP 파일을 읽을 수 없습니다.\n(' + streamErr.message + ')\n네트워크 연결 후 새로고침하거나 폴더 가져오기를 사용해 주세요.');
-                return;
-            }
-            let zip;
-            try { zip = await JSZip.loadAsync(file); }
-            catch(e) {
-                importProgress = null; renderCduContent();
-                uiAlert('ZIP 파일을 읽을 수 없습니다.\n파일이 손상되었거나 올바른 ZIP 형식이 아닙니다.\n(' + e.message + ')');
-                return;
-            }
-            rawEntries = [];
-            zip.forEach((path, entry) => { if (!entry.dir) rawEntries.push({ path, getBuffer: () => entry.async('arraybuffer') }); });
-        }
+        const rawEntries = await _readZipEntries(file);   // 실패하면 예외로 던진다
 
         // 차트 PDF만 필터링(메모리 절약 — blob 추출 X)
         const entries = [];
@@ -1572,7 +1654,7 @@ async function openChart(icao, chartNum, url) {
         _pdfResizeObs.observe(viewArea);
     }
     try {
-        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'vendor/pdf.worker.min.js';
         _pdfDoc = await pdfjsLib.getDocument({ data: await blob.arrayBuffer() }).promise;
         _pdfCurPage = 1;
         await _pdfRender();
@@ -1979,6 +2061,9 @@ function renderChartsScreen(container, footer, title) {
         <div onclick="${importProgress ? '' : 'triggerFolderImport()'}" style="background:${importProgress ? '#1a1a1a' : '#1a140a'};color:${importProgress ? '#444' : '#ffb74d'};border:1px solid ${importProgress ? '#333' : '#ffb74d'};border-radius:5px;padding:3px 10px;font-size:10px;font-weight:bold;cursor:${importProgress ? 'default' : 'pointer'};white-space:nowrap;text-align:center;min-width:52px;line-height:1.25;">
             ${importProgress ? '⏳' : '📁'}<br><span style="font-size:8px;">폴더 가져오기</span><br><span style="font-size:7px;opacity:0.7;">메모리 부족 오류시</span>
         </div>
+        <div ${importProgress ? '' : 'data-act="chartRepoImport"'} style="background:${importProgress ? '#1a1a1a' : '#0a1a14'};color:${importProgress ? '#444' : '#66d9a5'};border:1px solid ${importProgress ? '#333' : '#66d9a5'};border-radius:5px;padding:3px 10px;font-size:10px;font-weight:bold;cursor:${importProgress ? 'default' : 'pointer'};white-space:nowrap;text-align:center;min-width:52px;line-height:1.25;" title="저장소(charts/index.json)에 올려 둔 차트를 이 기기로 가져옵니다">
+            ${importProgress ? '⏳' : '☁'}<br><span style="font-size:8px;">저장소</span><br><span style="font-size:7px;opacity:0.7;">기기 바꿨을 때</span>
+        </div>
     </div>`;
 
     // ZIP 가져오기 진행 바
@@ -2103,6 +2188,7 @@ appRegister({
   addSingleFix,
   addStarWps,
   cduFullScreen,
+  chartRepoImport,
   clearFP,
   closeHelp,
   closePdfViewer,

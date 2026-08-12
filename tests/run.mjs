@@ -2,7 +2,7 @@
 // VFR Flight Simulator — 회귀 테스트 러너
 //   실행:  node tests/run.mjs            (전체)
 //          node tests/run.mjs 홀딩 NAV   (이름으로 일부만)
-// 필요:   npm i -D playwright leaflet@1.9.4   (또는 LEAFLET_DIR 지정)
+// 필요:   npm i -D playwright   (라이브러리는 vendor/ 사본을 그대로 쓴다)
 import { chromium } from 'playwright';
 import { openApp, buildEnv } from './lib/env.mjs';
 import * as smoke from './cases/smoke.mjs';

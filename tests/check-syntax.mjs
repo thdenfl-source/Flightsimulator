@@ -21,8 +21,10 @@ blocks.forEach((code, i) => {
   catch (e) { failed++; console.error(`✗ 스크립트 블록 ${i + 1} 문법 오류\n${e.stderr?.toString() || e.message}`); }
 });
 
-// 외부 js 파일도 함께 검사(파일 분할 이후)
-const srcs = [...html.matchAll(/<script[^>]*\ssrc="(?!https?:)([^"]+)"/g)].map(m => m[1]);
+// 외부 js 파일도 함께 검사(파일 분할 이후).
+// vendor/ 는 npm 배포본을 그대로 둔 사본이라 우리가 고칠 일이 없다 — 검사에서 뺀다.
+const srcs = [...html.matchAll(/<script[^>]*\ssrc="(?!https?:)([^"]+)"/g)]
+  .map(m => m[1]).filter(rel => !/^\.?\/?vendor\//.test(rel));
 srcs.forEach(rel => {
   const f = path.join(ROOT, rel.replace(/^\.\//, ''));
   if (!fs.existsSync(f)) { failed++; console.error(`✗ 없는 스크립트: ${rel}`); return; }

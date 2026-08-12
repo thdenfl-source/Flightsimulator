@@ -7,7 +7,6 @@
     "check": "node tests/check-syntax.mjs"
   },
   "devDependencies": {
-    "leaflet": "1.9.4",
     "playwright": "^1.47.0"
   }
 }

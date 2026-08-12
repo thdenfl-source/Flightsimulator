@@ -6,6 +6,10 @@
 // 사라져 전체화면으로 바뀐 것처럼 보이던 원인이었다.
 export const name = '차트 뷰어 배치';
 
+import fs from 'node:fs';
+import path from 'node:path';
+import { ROOT } from '../lib/env.mjs';
+
 // pdf.js 없이 배치만 검증한다 — 실제 오버레이와 같은 스타일로 얹는다.
 const mkOverlay = () => {
   const ov = document.createElement('div');
@@ -55,6 +59,8 @@ export async function run(page, t) {
     `창 크기가 바뀌어도 패널에 딱 맞음 (${moved.ov.join(',')})`);
 
   await runExternal(page, t);
+  await runRealPdf(page, t);
+  await runChartRepo(page, t);
 }
 
 export async function runExternal(page, t) {
@@ -105,4 +111,144 @@ export async function runExternal(page, t) {
   });
   t.ok(!noHost.overlay && !noHost.bodyChild,
     'CDU 창이 없으면 화면을 덮는 대신 조용히 물러난다');
+}
+
+// 진짜 PDF 로 끝까지 — 가져오기 → 열기 → 페이지 넘김 → 위치 보정 저장.
+// vendor/pdf.js 를 저장소에 들고 있게 되면서 테스트에서도 실제 뷰어를 돌릴 수
+// 있게 됐다. 이 화면은 연달아 두 번(위임 누락·전체화면) 깨진 적이 있어
+// 손으로 확인하는 대신 여기서 붙잡는다.
+export async function runRealPdf(page, t) {
+  t.eq(await page.evaluate(() => typeof pdfjsLib), 'object', 'pdf.js 가 오프라인에서 로드됨');
+
+  await page.setViewportSize({ width: 1400, height: 900 });
+  await page.evaluate(() => { try { selectPanel('left', 'cdu'); } catch (e) { setPage(2); } });
+  await page.waitForTimeout(300);
+  await page.evaluate(() => switchMode('CHARTS'));
+  await page.waitForTimeout(300);
+
+  // 폴더 가져오기 — 실제 사용자 경로 그대로
+  await page.evaluate(() => triggerFolderImport());
+  await page.waitForTimeout(200);
+  await page.locator('input[type=file]').last()
+    .setInputFiles(path.join(ROOT, 'tests', 'fixtures', 'charts', 'AD'));
+  await page.waitForSelector('.ui-dlg', { timeout: 15000 });
+  const msg = await page.locator('.ui-dlg-msg').textContent();
+  t.ok(/PDF 저장: 1개/.test(msg), `PDF 1개가 가져와짐 (${msg.split('\n')[0]})`);
+  await page.locator('.ui-dlg-ok').click();
+  await page.waitForTimeout(300);
+
+  // 열기 — 이번엔 로컬에 있으므로 앱 안 뷰어로 열려야 한다(새 탭 아님)
+  await page.evaluate(async () => {
+    const c = loadSavedCharts().find(x => x.icao === 'RKSI');
+    await openChart(c.icao, c.chartNum, c.url);
+  });
+  await page.waitForSelector('#pdfViewerOverlay', { timeout: 15000 });
+  await page.waitForFunction(() => !!document.querySelector('#pdfViewArea canvas'), null, { timeout: 15000 });
+  t.eq(await page.evaluate(() => _pdfDoc && _pdfDoc.numPages), 3, '3페이지 PDF 가 열림');
+  t.eq(await page.evaluate(() => _pdfCurPage), 1, '첫 페이지부터 표시');
+
+  // ▶ 페이지 넘김 — 위임 경계 때문에 통째로 죽었던 자리
+  await page.locator('[data-act="_pdfNext"]').click();
+  await page.waitForFunction(() => _pdfCurPage === 2, null, { timeout: 8000 }).catch(() => {});
+  t.eq(await page.evaluate(() => _pdfCurPage), 2, '▶ 로 다음 페이지');
+  await page.locator('[data-act="_pdfPrev"]').click();
+  await page.waitForFunction(() => _pdfCurPage === 1, null, { timeout: 8000 }).catch(() => {});
+  t.eq(await page.evaluate(() => _pdfCurPage), 1, '◀ 로 이전 페이지');
+
+  // 📍 위치 보정 — 세 점을 찍고 좌표를 직접 넣어 저장까지
+  await page.locator('[data-act="_pdfToggleCalibration"]').click();
+  await page.waitForTimeout(400);
+  t.ok(await page.evaluate(() => _pdfCalActive), '📍 로 보정 모드 진입');
+
+  const area = await page.locator('#pdfViewArea').boundingBox();
+  const pts = [[0.3, 0.3, '37.4631', '126.4407'], [0.7, 0.35, '37.4631', '126.6407'],
+               [0.5, 0.72, '37.3131', '126.5407']];
+  for (const [rx, ry, la, lo] of pts) {
+    await page.mouse.click(area.x + area.width * rx, area.y + area.height * ry);
+    await page.waitForSelector('#pdfFixManual', { timeout: 8000 });
+    await page.locator('#pdfFixManual').click();
+    for (const v of [la, lo]) {
+      await page.waitForSelector('.ui-dlg-in', { timeout: 8000 });
+      await page.fill('.ui-dlg-in', v);
+      await page.locator('.ui-dlg-ok').click();
+      await page.waitForTimeout(150);
+    }
+  }
+  t.eq(await page.evaluate(() => _pdfCalPts.length), 3, '보정점 3개가 찍힘');
+
+  await page.locator('#pdfCalDoneBtn').click();
+  await page.waitForSelector('.ui-dlg', { timeout: 8000 });
+  await page.locator('.ui-dlg-ok').click();
+  await page.waitForTimeout(400);
+  t.eq(await page.evaluate(() => _pdfCalibration && _pdfCalibration.pts.length), 3, '보정이 저장됨');
+  t.ok(await page.evaluate(() => !!document.getElementById('pdfAcMarker')), '차트에 현재 위치 표식이 뜸');
+
+  // 닫으면 목록으로 — 앱은 그대로
+  await page.locator('[data-act="closePdfViewer"]').click();
+  await page.waitForTimeout(300);
+  t.ok(await page.evaluate(() => !document.getElementById('pdfViewerOverlay') && !!document.querySelector('.page-tab')),
+    '닫으면 목록으로 돌아오고 앱은 그대로');
+}
+
+// 저장소에서 가져오기 — charts/index.json 에 올려 둔 차트를 이 기기로 내려받는다.
+// 차트는 IndexedDB 에 들어가고 그건 기기·브라우저마다 따로라, 기기를 바꿀 때마다
+// 원본 ZIP 을 다시 넣어야 했다. 테스트는 file:// 에서 도니 fetch 가 막힌다 —
+// charts/ 요청만 가로채 실제 파일 내용을 돌려주고 나머지 로직을 그대로 검사한다.
+export async function runChartRepo(page, t) {
+  const pdf = fs.readFileSync(
+    path.join(ROOT, 'tests', 'fixtures', 'charts', 'AD', 'RKSI', '(1) TEST CHART.pdf')).toString('base64');
+
+  const install = async (index) => page.evaluate(({ idx, b64 }) => {
+    const bin = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+    window.__origFetch = window.__origFetch || window.fetch;
+    window.fetch = (u, o) => {
+      const s = String(u);
+      if (s.includes('charts/index.json')) {
+        return idx === null
+          ? Promise.resolve(new Response('', { status: 404 }))
+          : Promise.resolve(new Response(JSON.stringify(idx), { status: 200 }));
+      }
+      if (s.includes('charts/')) return Promise.resolve(new Response(bin, { status: 200 }));
+      return window.__origFetch(u, o);
+    };
+  }, { idx: index, b64: pdf });
+
+  await page.evaluate(() => { switchMode('CHARTS'); });
+  await page.waitForTimeout(300);
+  t.eq(await page.locator('[data-act="chartRepoImport"]').count(), 1, 'CHART 화면에 ☁ 저장소 버튼이 있다');
+
+  // ── 목록이 없을 때: 무엇을 해야 하는지 알려준다 ──
+  await install(null);
+  page.evaluate(() => chartRepoImport());
+  await page.waitForSelector('.ui-dlg', { timeout: 8000 });
+  let msg = await page.locator('.ui-dlg-msg').textContent();
+  t.ok(msg.includes('charts/index.json'), `목록을 못 읽으면 어디를 볼지 알려준다 (${msg.split('\n')[0]})`);
+  await page.locator('.ui-dlg-ok').click();
+  await page.waitForTimeout(200);
+
+  // ── 정상: PDF 낱장 한 건 ──
+  await install([{ file: 'RKTU/(1) AD CHART.pdf', icao: 'RKTU', num: '1', name: 'AD CHART', cat: 'AD' }]);
+  page.evaluate(() => chartRepoImport());
+  await page.waitForSelector('.ui-dlg', { timeout: 8000 });
+  msg = await page.locator('.ui-dlg-msg').textContent();
+  t.ok(msg.includes('1건') && msg.includes('AD CHART'), '가져올 목록을 먼저 보여준다');
+  await page.locator('.ui-dlg-ok').click();               // 가져오기
+
+  await page.waitForFunction(() => [...localPdfKeys].includes('RKTU|1'), null, { timeout: 20000 });
+  t.ok(true, '저장소의 차트가 이 기기(IndexedDB)에 저장됨');
+  await page.locator('.ui-dlg-ok').click().catch(() => {});   // 결과 알림 닫기
+  await page.waitForTimeout(300);
+
+  // 목록에 로컬로 잡히고, 앱 안에서 열린다
+  await page.evaluate(async () => {
+    const c = loadSavedCharts().find(x => x.icao === 'RKTU');
+    await openChart(c.icao, c.chartNum, c.url);
+  });
+  await page.waitForSelector('#pdfViewerOverlay', { timeout: 15000 });
+  t.eq(await page.evaluate(() => _pdfDoc && _pdfDoc.numPages), 3,
+    '받아온 차트가 새 탭이 아니라 앱 안에서 열린다');
+  await page.locator('[data-act="closePdfViewer"]').click();
+  await page.waitForTimeout(200);
+
+  await page.evaluate(() => { if (window.__origFetch) window.fetch = window.__origFetch; });
 }
