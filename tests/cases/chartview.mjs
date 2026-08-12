@@ -64,6 +64,7 @@ export async function run(page, t) {
   await runConnCheck(page, t);
   await runSwScope(page, t);
   await runDiscover(page, t);
+  await runRelay(page, t);
 }
 
 export async function runExternal(page, t) {
@@ -270,10 +271,10 @@ export async function runConnCheck(page, t) {
   const HTML = '<!doctype html><html>앱 페이지</html>';
   const cases = [
     ['허용',          { noCors: true,  cors: true, body: PDF,  type: 'application/pdf' }, '✅ 직접 받아올 수 있습니다'],
-    ['CORS 차단',     { noCors: true,  cors: false, body: '',  type: '' },                '❌ 차단되어 있습니다'],
+    ['CORS 차단',     { noCors: true,  cors: false, body: '',  type: '' },                '❌ 받아올 수 없습니다'],
     ['사이트 불통',    { noCors: false, cors: false, body: '', type: '' },                 '판정 불가'],
     // 종전 서비스워커가 만들던 가짜 성공 — HTTP 200 인데 내용은 우리 index.html
-    ['가짜 성공(HTML)', { noCors: true, cors: true, body: HTML, type: 'text/html' },       '❌ 차단되어 있습니다'],
+    ['가짜 성공(HTML)', { noCors: true, cors: true, body: HTML, type: 'text/html' },       '❌ 받아올 수 없습니다'],
   ];
   for (const [label, sim, expect] of cases) {
     await page.evaluate((s) => {
@@ -374,4 +375,67 @@ export async function runDiscover(page, t) {
   await page.waitForTimeout(200);
 
   await page.evaluate(() => { if (window.__origFetch) window.fetch = window.__origFetch; });
+}
+
+// 차트 중계 — eAIP 가 CORS 를 막으므로(연결 점검으로 확인) 사이에 중계를 둘 수 있다.
+// 비워 두면 아무 일도 하지 않고, 넣으면 모든 차트 요청이 그리로 돈다.
+export async function runRelay(page, t) {
+  await page.evaluate(() => { localStorage.removeItem('chartRelayUrl'); switchMode('CHARTS'); });
+  await page.waitForTimeout(250);
+  t.eq(await page.locator('[data-act="chartRelaySet"]').count(), 1, 'CHART 화면에 중계 설정이 있다');
+  t.ok((await page.locator('[data-act="chartRelaySet"]').textContent()).includes('끔'),
+    '기본은 중계를 쓰지 않는다');
+
+  // 비어 있으면 주소를 건드리지 않는다
+  t.eq(await page.evaluate(() => _viaRelay('https://aim.koca.go.kr/a.pdf')),
+    'https://aim.koca.go.kr/a.pdf', '중계가 없으면 원래 주소 그대로');
+
+  // https 가 아니면 거부한다(중계는 앱과 같은 https 여야 브라우저가 허용한다)
+  page.evaluate(() => chartRelaySet()).catch(() => {});
+  await page.waitForSelector('.ui-dlg-in', { timeout: 8000 });
+  await page.fill('.ui-dlg-in', 'http://relay.example/');
+  await page.locator('.ui-dlg-ok').click();
+  await page.waitForTimeout(300);
+  t.ok((await page.locator('.ui-dlg-msg').textContent()).includes('https:// 로 시작'),
+    'http:// 중계는 거부한다');
+  await page.locator('.ui-dlg-ok').click();
+  await page.waitForTimeout(200);
+  t.eq(await page.evaluate(() => chartRelayUrl()), '', '거부된 값은 저장되지 않는다');
+
+  // 넣으면 모든 차트 요청이 중계를 거친다
+  await page.evaluate(() => { localStorage.setItem('chartRelayUrl', 'https://relay.example/'); renderCduContent(); });
+  await page.waitForTimeout(250);
+  t.eq(await page.evaluate(() => _viaRelay('https://aim.koca.go.kr/a b.pdf')),
+    'https://relay.example/?u=https%3A%2F%2Faim.koca.go.kr%2Fa%20b.pdf',
+    '중계 주소로 감싸고 원본 주소를 인코딩한다');
+  t.ok((await page.locator('[data-act="chartRelaySet"]').textContent()).includes('켬'),
+    '중계를 쓰는 중임을 화면에 표시한다');
+
+  // opaque 응답(no-cors 성공)을 실패로 읽지 않는가 — 이걸 뒤집으면
+  // "차단"과 "사이트 불통"이 거꾸로 판정된다
+  await page.evaluate(() => {
+    window.__origFetch = window.__origFetch || window.fetch;
+    window.fetch = (u, o) => {
+      if (!String(u).includes('relay.example')) return window.__origFetch(u, o);
+      // 실제 opaque 는 만들 수 없다. no-cors 는 ok=false·status=0 로 오는데
+      // 그것을 성공으로 읽어야 한다 — Response.error() 대신 거부로 흉내낼 수 없으므로
+      // cors 만 실패시켜 "닿기는 하는데 못 받는" 상황을 만든다.
+      return (o && o.mode === 'no-cors')
+        ? Promise.resolve(new Response('', { status: 200 }))
+        : Promise.reject(new TypeError('Failed to fetch'));
+    };
+  });
+  page.evaluate(() => chartConnCheck()).catch(() => {});
+  await page.waitForSelector('.ui-dlg', { timeout: 15000 });
+  const msg = await page.locator('.ui-dlg-msg').textContent();
+  t.ok(msg.includes('❌ 받아올 수 없습니다'), '중계를 거쳐도 막히면 차단으로 판정');
+  t.ok(msg.includes('중계를 거쳤는데도'), '중계를 쓰는 중이면 중계를 의심하라고 안내');
+  t.ok(msg.includes('중계: https://relay.example/'), '어떤 중계를 썼는지 결과에 남긴다');
+  await page.locator('.ui-dlg-ok').click();
+  await page.waitForTimeout(200);
+
+  await page.evaluate(() => {
+    if (window.__origFetch) window.fetch = window.__origFetch;
+    localStorage.removeItem('chartRelayUrl');
+  });
 }
