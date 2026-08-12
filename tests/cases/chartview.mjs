@@ -266,10 +266,14 @@ export async function runConnCheck(page, t) {
   await page.waitForTimeout(250);
   t.eq(await page.locator('[data-act="chartConnCheck"]').count(), 1, 'CHART 화면에 연결 점검 줄이 있다');
 
+  const PDF = '%PDF-1.4 x';
+  const HTML = '<!doctype html><html>앱 페이지</html>';
   const cases = [
-    ['허용',      { noCors: true,  cors: true  }, '✅ 직접 받아올 수 있습니다'],
-    ['CORS 차단', { noCors: true,  cors: false }, '❌ 차단되어 있습니다'],
-    ['사이트 불통', { noCors: false, cors: false }, '판정 불가'],
+    ['허용',          { noCors: true,  cors: true, body: PDF,  type: 'application/pdf' }, '✅ 직접 받아올 수 있습니다'],
+    ['CORS 차단',     { noCors: true,  cors: false, body: '',  type: '' },                '❌ 차단되어 있습니다'],
+    ['사이트 불통',    { noCors: false, cors: false, body: '', type: '' },                 '판정 불가'],
+    // 종전 서비스워커가 만들던 가짜 성공 — HTTP 200 인데 내용은 우리 index.html
+    ['가짜 성공(HTML)', { noCors: true, cors: true, body: HTML, type: 'text/html' },       '❌ 차단되어 있습니다'],
   ];
   for (const [label, sim, expect] of cases) {
     await page.evaluate((s) => {
@@ -279,8 +283,7 @@ export async function runConnCheck(page, t) {
         const noCors = o && o.mode === 'no-cors';
         const ok = noCors ? s.noCors : s.cors;
         // 실제 opaque 응답(status 0)은 만들 수 없어 200 으로 대신한다.
-        // 판정이 보는 것은 성공/실패뿐이라 결과는 같다.
-        return ok ? Promise.resolve(new Response('', { status: 200 }))
+        return ok ? Promise.resolve(new Response(s.body, { status: 200, headers: s.type ? { 'content-type': s.type } : {} }))
                   : Promise.reject(new TypeError('Failed to fetch'));
       };
     }, sim);
@@ -288,7 +291,11 @@ export async function runConnCheck(page, t) {
     page.evaluate(() => chartConnCheck()).catch(() => {});
     await page.waitForSelector('.ui-dlg', { timeout: 15000 });
     const msg = await page.locator('.ui-dlg-msg').textContent();
-    t.ok(msg.includes(expect), `${label} → "${expect}" 로 판정 (${msg.split('\n')[2] || ''})`);
+    t.ok(msg.includes(expect), `${label} → "${expect}" 로 판정`);
+    if (label.startsWith('가짜')) {
+      t.ok(msg.includes('HTML 이 왔습니다'),
+        `가짜 성공의 이유를 짚어 준다 (${(msg.match(/PDF 가 아니라[^\n]*/) || [''])[0]})`);
+    }
     await page.locator('.ui-dlg-ok').click();
     await page.waitForTimeout(200);
   }

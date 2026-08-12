@@ -250,37 +250,57 @@ async function chartConnCheck() {
     const pkg = 'https://aim.koca.go.kr/eaipPub/Package/history-en-GB.html';
     const pdf = buildChartPdfUrl(airac.startUrl, 'RKSI', '2-1', 'AD CHART');
 
-    const probe = async (url, mode) => {
+    const probe = async (url, mode, wantPdf) => {
         const ac = typeof AbortController === 'function' ? new AbortController() : null;
         const timer = ac ? setTimeout(() => ac.abort(), 8000) : null;
         try {
             const r = await fetch(url, { mode, credentials: 'omit', signal: ac ? ac.signal : undefined });
-            return { ok: true, status: r.status };
+            const out = { ok: r.ok, status: r.status, type: (r.headers.get('content-type') || '').split(';')[0] };
+            if (mode === 'no-cors') return out;
+            // HTTP 200 을 그대로 믿지 않는다. 종전 서비스워커는 교차 출처 요청이
+            // 실패하면 우리 index.html 을 200 으로 돌려줬고, 점검이 그걸 "성공"
+            // 으로 읽어 CORS 가 허용된 줄 알았다. 진짜 PDF 인지 앞머리를 본다.
+            const buf = new Uint8Array(await (await r.blob()).slice(0, 5).arrayBuffer());
+            out.head = String.fromCharCode(...buf).replace(/[^\x20-\x7e]/g, '.');
+            out.isPdf = out.head.startsWith('%PDF');
+            if (wantPdf && r.ok && !out.isPdf) {
+                out.ok = false;
+                out.why = out.head.toLowerCase().includes('<') || /html/.test(out.type)
+                    ? 'PDF 가 아니라 HTML 이 왔습니다(가짜 성공)'
+                    : `PDF 가 아닙니다 (앞머리 "${out.head}")`;
+            }
+            return out;
         } catch (e) {
-            return { ok: false, msg: e.name === 'AbortError' ? '응답 없음(8초)' : e.message };
+            return { ok: false, why: e.name === 'AbortError' ? '응답 없음(8초)' : e.message };
         } finally { if (timer) clearTimeout(timer); }
     };
 
     uiToast('eAIP 연결을 확인하는 중…', null, 8000);
     const reach = await probe(pkg, 'no-cors');
     const cors  = await probe(pkg, 'cors');
-    const corsPdf = await probe(pdf, 'cors');
+    const corsPdf = await probe(pdf, 'cors', true);
 
     let verdict, detail;
-    if (!reach.ok) {
+    if (!reach.ok && !reach.status) {
         verdict = '판정 불가 — 사이트에 닿지 못했습니다.';
         detail = '네트워크를 확인하고 다시 눌러 주세요.\n(기내·음영지역이면 정상입니다)';
-    } else if (corsPdf.ok || cors.ok) {
+    } else if (corsPdf.ok && corsPdf.isPdf) {
         verdict = '✅ 직접 받아올 수 있습니다.';
         detail = '차트를 누르면 새 탭이 아니라 앱 안에서 열립니다.\n' +
                  '저장소에 차트 파일을 올릴 필요가 없습니다.';
     } else {
         verdict = '❌ 차단되어 있습니다 (CORS).';
         detail = '사이트에는 닿지만 앱이 파일을 직접 받을 수 없습니다.\n' +
-                 '중계 주소를 두거나, 차트를 저장소·ZIP 으로 넣어야 합니다.';
+                 '차트를 저장소·ZIP 으로 넣거나, 중계 주소를 두어야 합니다.';
     }
 
-    const line = (k, r) => `  ${k}: ` + (r.ok ? '성공' + (r.status ? ' (HTTP ' + r.status + ')' : '') : '실패 — ' + r.msg);
+    const line = (k, r) => {
+        let v = r.ok ? '성공' + (r.status ? ' (HTTP ' + r.status + ')' : '') : '실패';
+        if (!r.ok && r.why) v += ' — ' + r.why;
+        else if (!r.ok && r.status) v += ' — HTTP ' + r.status;
+        if (r.ok && r.type) v += ' · ' + r.type;
+        return `  ${k}: ${v}`;
+    };
     await uiAlert(
         `eAIP 직접 연결 점검\n\n${verdict}\n${detail}\n\n` +
         `— 자세히 —\n` +
