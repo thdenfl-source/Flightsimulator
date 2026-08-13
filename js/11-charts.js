@@ -156,351 +156,6 @@ function buildChartPdfUrl(airacStart, icao, num, name) {
     return `https://aim.koca.go.kr/eaipPub/Package/${airacStart}-AIRAC/pdf/AD/${icao}/(${num})%20${name.replace(/ /g, '%20')}.pdf`;
 }
 
-// ── 차트 중계 주소 ────────────────────────────────────────────────
-// eAIP(aim.koca.go.kr)는 CORS 를 허용하지 않는다. 연결 점검으로 확인했다.
-// 브라우저 주소창으로 직접 열면 보이지만, 앱이 fetch 로 받아오는 것은 막힌다.
-// 남의 서버라 우리가 어쩔 수 없다.
-//
-// 중계 주소를 하나 두면 그 벽이 사라진다. 사용자가 직접 띄운 작은 중계가
-// eAIP 에서 받아 CORS 헤더를 붙여 돌려주면, 앱은 그것을 여느 파일처럼 받는다.
-// 그러면 저장소에 차트를 올릴 필요도, AIRAC 주기마다 다시 넣을 필요도 없다.
-//
-// 비워 두면 아무 일도 하지 않는다 — 종전과 똑같이 동작한다.
-// 차트 한 장을 받는 데 허용하는 시간. 중계를 거치면 왕복이 한 번 늘고,
-// 접근절차도는 수 MB 짜리도 있다. 8초로는 모자라 "응답 없음" 으로 끊겼다.
-const CHART_FETCH_TIMEOUT = 25000;
-const CHART_RELAY_KEY = 'chartRelayUrl';
-function chartRelayUrl() {
-    try { return (localStorage.getItem(CHART_RELAY_KEY) || '').trim(); } catch (e) { return ''; }
-}
-// 중계가 있으면 그것을 거치는 주소로, 없으면 원래 주소 그대로.
-function _viaRelay(url) {
-    const relay = chartRelayUrl();
-    if (!relay || !/^https?:/i.test(url)) return url;
-    return relay + (relay.includes('?') ? '&' : '?') + 'u=' + encodeURIComponent(url);
-}
-async function chartRelaySet() {
-    const cur = chartRelayUrl();
-    const v = await uiPrompt(
-        '차트 중계 주소\n\n' +
-        'eAIP 는 앱이 파일을 직접 받는 것을 막습니다(CORS).\n' +
-        '중계를 하나 두면 모든 공항 차트를 공식 사이트에서 바로 받아옵니다.\n' +
-        '만드는 방법은 charts/README.md 에 적어 두었습니다.\n\n' +
-        '비우고 확인하면 중계를 쓰지 않습니다.',
-        cur);
-    if (v === null) return;
-    const url = v.trim();
-    if (url && !/^https:\/\//i.test(url)) {
-        uiAlert('중계 주소는 https:// 로 시작해야 합니다.\n입력한 값: ' + url);
-        return;
-    }
-    try { localStorage.setItem(CHART_RELAY_KEY, url); } catch (e) { _swallow(e); }
-    renderCduContent();
-    uiToast(url ? '중계 주소를 저장했습니다. [연결 점검]으로 확인해 보세요.'
-                : '중계 주소를 지웠습니다.', null, 3500);
-}
-
-// ── 공식 사이트에서 차트 받기 ──────────────────────────────────────
-// 목록 탐색으로 알아낸 것: 디렉터리 목록(/pdf/AD/RKSI/)은 403 으로 막혀 있고,
-// 공항별 AD 2 문서(html/eAIP/KR-AD-2.<ICAO>-en-GB.html)에 그 공항 차트 PDF
-// 링크가 다 들어 있다. 그 문서를 읽어 링크를 뽑으면 무엇을 받을지 알 수 있다.
-//
-// 앱 내장 목록은 22개 공항에 28장뿐이라 실제의 일부만 담고 있었다. 이제는
-// 공식 문서가 곧 목록이므로, AIRAC 이 바뀌어도 그때의 목록을 그대로 따라간다.
-function _eaipAd2Url(icao, airacStart) {
-    return `https://aim.koca.go.kr/eaipPub/Package/${airacStart}-AIRAC/html/eAIP/KR-AD-2.${icao}-en-GB.html`;
-}
-
-// AD 2 문서에서 그 공항의 차트 PDF 링크를 뽑는다.
-async function _eaipChartLinks(icao, airacStart) {
-    const doc = _eaipAd2Url(icao, airacStart);
-    const ac = typeof AbortController === 'function' ? new AbortController() : null;
-    const timer = ac ? setTimeout(() => ac.abort(), 20000) : null;
-    try {
-        const r = await fetch(_viaRelay(doc), { credentials: 'omit', signal: ac ? ac.signal : undefined });
-        if (!r.ok) throw new Error('HTTP ' + r.status);
-        const html = await r.text();
-        const out = new Map();
-        for (const m of html.matchAll(/href\s*=\s*["']([^"']+\.pdf)["']/gi)) {
-            let abs;
-            try { abs = new URL(m[1], doc).href; } catch (e) { continue; }
-            if (!/\/pdf\/AD\//i.test(abs)) continue;          // 차트가 아닌 첨부는 거른다
-            let meta = null;
-            try { meta = _parseChartPath(decodeURIComponent(new URL(abs).pathname), icao); }
-            catch (e) { _swallow(e); }
-            if (!meta || meta.icao !== icao) continue;
-            out.set(`${meta.icao}|${meta.num}`, { url: abs, ...meta });   // 중복 제거
-        }
-        return [...out.values()];
-    } finally { if (timer) clearTimeout(timer); }
-}
-
-// 공식 사이트에 대한 요청은 최소 간격을 둔다.
-// 250ms(초당 4장)로 171장을 몰아쳤더니 원본이 접속을 막아 버렸다 — 중계가
-// HTTP 522(중계↔원본 연결 실패)를 돌려주기 시작했고, 그 뒤로는 한 장도 못 받았다.
-// 공공 자원이니 넉넉히 비운다. 171장이면 3분쯤 걸리지만 그게 맞다.
-// (검사에서는 0 으로 두어 기다리지 않게 한다 — 간격 자체는 검사 대상이 아니다)
-let EAIP_MIN_GAP_MS = 1200;
-let EAIP_RETRY_WAIT_MS = 1500;
-let _eaipNextAt = 0;
-async function _eaipPace() {
-    const now = Date.now();
-    const wait = Math.max(0, _eaipNextAt - now);
-    _eaipNextAt = now + wait + EAIP_MIN_GAP_MS;
-    if (wait) await new Promise(r => setTimeout(r, wait));
-}
-
-// 차트 한 장을 받는다. 한 번 실패하면 잠시 쉬었다 한 번만 더 시도한다 —
-// 잇달아 받다 보면 한두 장은 밀려나는데, 그것 때문에 전부 버릴 이유가 없다.
-async function _fetchChartBuffer(url) {
-    let lastErr = null;
-    for (let attempt = 0; attempt < 2; attempt++) {
-        if (attempt) await new Promise(r => setTimeout(r, EAIP_RETRY_WAIT_MS));
-        await _eaipPace();
-        const ac = typeof AbortController === 'function' ? new AbortController() : null;
-        const timer = ac ? setTimeout(() => ac.abort(), CHART_FETCH_TIMEOUT) : null;
-        try {
-            const r = await fetch(_viaRelay(url), { credentials: 'omit', signal: ac ? ac.signal : undefined });
-            if (!r.ok) throw new Error('HTTP ' + r.status);
-            return await r.arrayBuffer();
-        } catch (e) {
-            lastErr = e;
-        } finally { if (timer) clearTimeout(timer); }
-    }
-    throw lastErr;
-}
-
-// 공식 사이트에서 차트를 받아 이 기기에 저장한다.
-// icaos 가 비면 앱이 아는 공항 전부.
-async function chartFetchFromEaip(icaos) {
-    if (importProgress) return;
-    if (!chartRelayUrl()) {
-        const go = await uiConfirm(
-            '공식 사이트(eAIP)는 앱이 파일을 직접 받는 것을 막습니다(CORS).\n\n' +
-            '[📡 중계] 에 주소를 넣으면 받아올 수 있습니다.\n' +
-            '만드는 법은 저장소의 charts/README.md 에 적어 두었습니다.\n\n' +
-            '중계 없이 그대로 시도해 볼까요? (대개 실패합니다)',
-            { okText: '그래도 시도', cancelText: '취소' });
-        if (!go) return;
-    }
-    const airac = getSafeAiracInfo();
-    const list = (icaos && icaos.length) ? icaos : chartAirportList.map(a => a.icao);
-
-    if (!await uiConfirm(
-        `공식 사이트에서 차트를 받습니다.\n\n` +
-        `공항 ${list.length}곳 · AIRAC ${airac.id}\n` +
-        `${list.join(' ')}\n\n` +
-        `공항마다 목록을 읽고 차트를 한 장씩 내려받습니다.\n` +
-        `사이트에 부담을 주지 않도록 ${(EAIP_MIN_GAP_MS / 1000).toFixed(1)}초 간격을 둡니다 —\n` +
-        `수백 장이면 여러 분 걸리고 데이터도 그만큼 씁니다.\n` +
-        `한꺼번에 몰아 받으면 사이트가 한동안 막을 수 있으니,\n` +
-        `급하지 않으면 공항 줄의 [⤓ 받기] 로 나눠 받는 편이 낫습니다.\n\n` +
-        `받은 차트는 이 기기에 저장되어 다음부터는 바로 열립니다.`,
-        { okText: '받기', cancelText: '취소' })) return;
-
-    // ① 공항별 목록 읽기
-    importProgress = { phase: 'reading', done: 0, total: list.length, found: 0, skipped: 0, error: null };
-    renderCduContent();
-    const entries = [];
-    const failed = [];
-    for (const icao of list) {
-        try {
-            const links = await _eaipChartLinks(icao, airac.startUrl);
-            if (!links.length) failed.push(`${icao} — 목록에 차트가 없습니다`);
-            links.forEach(l => entries.push({
-                getBuffer: () => _fetchChartBuffer(l.url),
-                icao: l.icao, num: l.num, chartName: l.chartName, cat: l.cat,
-            }));
-        } catch (e) {
-            failed.push(`${icao} — ${e.name === 'AbortError' ? '응답 없음' : e.message}`);
-        }
-        importProgress.done++;
-        renderCduContent();
-    }
-
-    if (!entries.length) {
-        importProgress = null;
-        renderCduContent();
-        await uiAlert('받을 차트를 찾지 못했습니다.\n\n' +
-            (failed.length ? failed.slice(0, 8).join('\n') : '[🔎 차트 목록 탐색] 으로 주소를 다시 확인해 주세요.'));
-        return;
-    }
-
-    // ② 실제 내려받기 — 저장·목록 등록은 기존 경로를 그대로 쓴다
-    await _saveChartEntries(entries);
-    if (failed.length) uiToast(`건너뛴 공항 ${failed.length}곳: ${failed[0]}`, 'warn', 5000);
-    await refreshLocalPdfKeys();
-    renderCduContent();
-}
-
-// 한 공항만 받기 — 목록에서 공항 줄의 ⤓ 버튼
-async function chartFetchAirport(icao) {
-    await chartFetchFromEaip([icao]);
-}
-
-// ── eAIP 차트 목록 탐색 ────────────────────────────────────────────
-// 연결 점검으로 CORS 가 허용된 것은 확인했다(차트 PDF 가 HTTP 200 으로 온다).
-// 남은 문제는 "무엇을 받을지" 다. 앱 내장 목록은 22개 공항에 28장뿐인데,
-// 실제로는 공항 하나에만 12~13장이 있다. 공항별 전체 목록을 앱이 모른다.
-//
-// eAIP 패키지 어딘가에 그 목록(색인 페이지)이 있을 텐데 주소 규칙을 모른다.
-// 그래서 그럴듯한 후보를 한꺼번에 두드려 보고, 응답한 것 중 무엇이 차트 PDF
-// 링크를 담고 있는지 세어 화면에 보여준다. 그 결과를 보고 "전체 받기" 를 짠다.
-//
-// 한 번 쓰고 버릴 코드가 아니다 — AIRAC 주기가 바뀌거나 사이트 구조가 바뀌면
-// 다시 눌러 확인하면 된다.
-function _chartDiscoverCandidates(airac, icao) {
-    const pkg = `https://aim.koca.go.kr/eaipPub/Package/${airac.startUrl}-AIRAC`;
-    const eaip = `${pkg}/html/eAIP`;
-    return [
-        // ① 디렉터리 목록(열려 있으면 가장 간단하다)
-        { label: '공항 폴더 목록', url: `${pkg}/pdf/AD/${icao}/` },
-        { label: 'AD 폴더 목록', url: `${pkg}/pdf/AD/` },
-        // ② eAIP 표준 문서 — 공항별 AD 2 절(차트 표가 여기 들어간다)
-        { label: 'AD 2 문서(en)', url: `${eaip}/KR-AD-2.${icao}-en-GB.html` },
-        { label: 'AD 2 문서(ko)', url: `${eaip}/KR-AD-2.${icao}-ko-KR.html` },
-        // ③ 차트 목록 절(AD 2.24 = CHARTS RELATED TO AN AERODROME)
-        { label: 'AD 2.24 차트목록', url: `${eaip}/KR-AD-2.${icao}-2-24-en-GB.html` },
-        // ④ 메뉴·목차
-        { label: '메뉴(en)', url: `${eaip}/KR-menu-en-GB.html` },
-        { label: '패키지 첫 화면', url: `${pkg}/index.html` },
-        { label: '패키지 루트', url: `${pkg}/` },
-    ];
-}
-
-async function chartDiscover() {
-    const airac = getSafeAiracInfo();
-    const icao = 'RKSI';
-    const cands = _chartDiscoverCandidates(airac, icao);
-
-    uiToast(`차트 목록 후보 ${cands.length}곳을 확인하는 중…`, null, 12000);
-
-    const one = async (c) => {
-        const ac = typeof AbortController === 'function' ? new AbortController() : null;
-        const timer = ac ? setTimeout(() => ac.abort(), 15000) : null;
-        try {
-            const r = await fetch(_viaRelay(c.url), { credentials: 'omit', signal: ac ? ac.signal : undefined });
-            const type = (r.headers.get('content-type') || '').split(';')[0];
-            if (!r.ok) return { ...c, line: `HTTP ${r.status}` };
-            const text = await r.text();
-            // 이 문서가 차트 PDF 를 가리키고 있는가 — href 든 본문이든 훑는다
-            const pdfs = [...new Set((text.match(/[^"'<>\s]+\.pdf/gi) || [])
-                .map(u => decodeURIComponent(u.split('/').pop())))];
-            return { ...c, line: `HTTP ${r.status} · ${type} · ${(text.length / 1024).toFixed(0)}KB`,
-                     pdfs, ok: true };
-        } catch (e) {
-            return { ...c, line: e.name === 'AbortError' ? '응답 없음(8초)' : e.message };
-        } finally { if (timer) clearTimeout(timer); }
-    };
-
-    const res = await Promise.all(cands.map(one));
-    const hit = res.filter(r => r.ok && r.pdfs && r.pdfs.length);
-    hit.sort((a, b) => b.pdfs.length - a.pdfs.length);
-
-    let out = `eAIP 차트 목록 탐색 (${icao} · AIRAC ${airac.id})\n\n`;
-    if (hit.length) {
-        const best = hit[0];
-        out += `✅ 차트 목록을 찾았습니다.\n` +
-               `"${best.label}" 에 PDF ${best.pdfs.length}개가 실려 있습니다.\n` +
-               `이 주소로 공항별 전체 받기를 만들 수 있습니다.\n\n`;
-    } else {
-        out += `❌ 차트 목록을 담은 곳을 찾지 못했습니다.\n` +
-               `아래 응답을 보고 후보를 다시 잡아야 합니다.\n\n`;
-    }
-    out += `— 후보별 응답 —\n`;
-    res.forEach(r => {
-        out += `\n▸ ${r.label}\n  ${r.line}`;
-        if (r.pdfs) out += `\n  PDF 링크 ${r.pdfs.length}개`;
-        if (r.pdfs && r.pdfs.length) out += `\n  예: ${r.pdfs.slice(0, 3).join(' / ')}`;
-        out += `\n  ${r.url}`;
-    });
-    await uiAlert(out);
-}
-
-// ── eAIP 직접 연결 점검 ────────────────────────────────────────────
-// 앱은 차트마다의 공식 주소를 이미 계산할 줄 안다(buildChartPdfUrl). 남은 관문은
-// CORS 하나 — aim.koca.go.kr 이 우리 주소에서 오는 요청을 허용해야 앱 안에서 열린다.
-// 허용되면 저장소에 파일을 올릴 필요가 없고, 막히면 중계가 필요하다.
-// PC 개발자도구 없이 기기에서 바로 확인하라고 넣었다.
-//
-// 판정을 두 갈래로 나눈다. fetch 실패만으로는 "망이 안 됨"과 "CORS 차단"을
-//가릴 수 없어서, mode:'no-cors' 로 닿기는 하는지 먼저 본다.
-//   no-cors 성공 + cors 실패 → CORS 차단(중계 필요)
-//   no-cors 실패            → 네트워크·사이트 문제(다시 시도)
-async function chartConnCheck() {
-    const airac = getSafeAiracInfo();
-    const pkg = 'https://aim.koca.go.kr/eaipPub/Package/history-en-GB.html';
-    const pdf = buildChartPdfUrl(airac.startUrl, 'RKSI', '2-1', 'AD CHART');
-
-    const probe = async (url, mode, wantPdf) => {
-        const ac = typeof AbortController === 'function' ? new AbortController() : null;
-        // PDF 는 수 MB 라 HTML 보다 오래 걸린다 — 8초로는 중계를 거칠 때 모자랐다
-        const timer = ac ? setTimeout(() => ac.abort(), wantPdf ? CHART_FETCH_TIMEOUT : 10000) : null;
-        try {
-            const r = await fetch(_viaRelay(url), { mode, credentials: 'omit', signal: ac ? ac.signal : undefined });
-            const out = { ok: r.ok, status: r.status, type: (r.headers.get('content-type') || '').split(';')[0] };
-            // no-cors 로 받은 응답(opaque)은 ok=false, status=0 이다 — 내용을 못 볼
-            // 뿐 요청 자체는 닿았다는 뜻이므로 성공으로 친다. 이걸 실패로 읽으면
-            // "차단"과 "사이트 불통"을 거꾸로 판정한다.
-            if (mode === 'no-cors') { out.ok = true; out.opaque = r.type === 'opaque'; return out; }
-            // HTTP 200 을 그대로 믿지 않는다. 종전 서비스워커는 교차 출처 요청이
-            // 실패하면 우리 index.html 을 200 으로 돌려줬고, 점검이 그걸 "성공"
-            // 으로 읽어 CORS 가 허용된 줄 알았다. 진짜 PDF 인지 앞머리를 본다.
-            const buf = new Uint8Array(await (await r.blob()).slice(0, 5).arrayBuffer());
-            out.head = String.fromCharCode(...buf).replace(/[^\x20-\x7e]/g, '.');
-            out.isPdf = out.head.startsWith('%PDF');
-            if (wantPdf && r.ok && !out.isPdf) {
-                out.ok = false;
-                out.why = out.head.toLowerCase().includes('<') || /html/.test(out.type)
-                    ? 'PDF 가 아니라 HTML 이 왔습니다(가짜 성공)'
-                    : `PDF 가 아닙니다 (앞머리 "${out.head}")`;
-            }
-            return out;
-        } catch (e) {
-            return { ok: false, why: e.name === 'AbortError' ? '응답 없음(8초)' : e.message };
-        } finally { if (timer) clearTimeout(timer); }
-    };
-
-    uiToast('eAIP 연결을 확인하는 중…', null, 8000);
-    const reach = await probe(pkg, 'no-cors');
-    const cors  = await probe(pkg, 'cors');
-    const corsPdf = await probe(pdf, 'cors', true);
-
-    const relay = chartRelayUrl();
-    let verdict, detail;
-    if (!reach.ok) {
-        verdict = '판정 불가 — 닿지 못했습니다.';
-        detail = relay ? '중계 주소가 살아 있는지 확인하고 다시 눌러 주세요.'
-                       : '네트워크를 확인하고 다시 눌러 주세요.\n(기내·음영지역이면 정상입니다)';
-    } else if (corsPdf.ok && corsPdf.isPdf) {
-        verdict = relay ? '✅ 중계를 통해 받아올 수 있습니다.' : '✅ 직접 받아올 수 있습니다.';
-        detail = '차트를 누르면 새 탭이 아니라 앱 안에서 열립니다.\n' +
-                 '저장소에 차트 파일을 올릴 필요가 없습니다.';
-    } else {
-        verdict = '❌ 받아올 수 없습니다 (CORS).';
-        detail = relay
-            ? '중계를 거쳤는데도 막힙니다. 중계가 CORS 헤더를 붙여 주는지,\n주소가 맞는지 확인해 주세요.'
-            : '사이트에는 닿지만 앱이 파일을 직접 받을 수 없습니다.\n' +
-              '중계 주소를 두거나, 차트를 저장소·ZIP 으로 넣어야 합니다.';
-    }
-
-    const line = (k, r) => {
-        let v = r.ok ? '성공' + (r.status ? ' (HTTP ' + r.status + ')' : '') : '실패';
-        if (!r.ok && r.why) v += ' — ' + r.why;
-        else if (!r.ok && r.status) v += ' — HTTP ' + r.status;
-        if (r.ok && r.type) v += ' · ' + r.type;
-        return `  ${k}: ${v}`;
-    };
-    await uiAlert(
-        `eAIP 직접 연결 점검\n\n${verdict}\n${detail}\n\n` +
-        `— 자세히 —\n` +
-        line('사이트 연결', reach) + '\n' +
-        line('패키지 페이지', cors) + '\n' +
-        line(`차트 PDF (AIRAC ${airac.id})`, corsPdf) + '\n\n' +
-        `중계: ${relay || '쓰지 않음'}\n` +
-        `시험한 주소:\n${pdf}`);
-}
-
 // --- IndexedDB PDF Storage ---
 let _idb = null;
 function openIDB() {
@@ -734,87 +389,6 @@ async function _streamZipEntries(file) {
             return await new Response(stream).arrayBuffer();
         }
     }));
-}
-
-// ── 저장소(GitHub Pages)의 공용 차트 불러오기 (charts/index.json) ──
-// 차트 가져오기는 IndexedDB 에 들어가고 그것은 기기·브라우저마다 따로다.
-// 폰에서 AIRAC 을 넣었어도 태블릿 브라우저에는 하나도 없어, 기기를 바꿀 때마다
-// 원본 ZIP 을 찾아 다시 넣어야 했다. 저장소에 올려 두면 어느 기기에서든 한 번에
-// 받아온다. 같은 출처라 CORS 문제도 없다(외부 eAIP 는 CORS 로 막힌다).
-//   charts/index.json  예:
-//   [ { "file": "RKSI-2601.zip", "name": "인천 AIRAC 2601" },
-//     { "file": "RKTU/(1) AD CHART.pdf", "icao": "RKTU", "num": "1", "name": "AD CHART" } ]
-async function chartRepoImport() {
-    if (importProgress) return;   // 이미 가져오는 중
-    let list = null;
-    try {
-        const r = await fetch('charts/index.json?_=' + Date.now());
-        if (!r.ok) throw new Error('HTTP ' + r.status);
-        list = await r.json();
-    } catch(e) {
-        uiAlert('저장소 차트 목록을 불러오지 못했습니다.\n' + e.message +
-                '\n(charts/index.json 확인 — 저장소 README 참고)');
-        return;
-    }
-    if (!Array.isArray(list) || !list.length) {
-        uiAlert('저장소에 등록된 차트가 없습니다.\n' +
-                'charts/ 폴더에 파일을 올리고 charts/index.json 에 목록을 추가하세요.');
-        return;
-    }
-    const names = list.map(e => '  · ' + (e.name || e.file)).join('\n');
-    if (!await uiConfirm(
-        `저장소에 등록된 차트 ${list.length}건을 가져옵니다.\n\n${names}\n\n` +
-        `이 기기에 저장되어 앞으로는 앱 안에서 바로 열립니다.`,
-        { okText: '가져오기', cancelText: '취소' })) return;
-
-    importProgress = { phase: 'reading', done: 0, total: list.length, found: 0, skipped: 0, error: null };
-    renderCduContent();
-
-    const entries = [];
-    const failed = [];
-    for (const e of list) {
-        if (!e || !e.file) continue;
-        try {
-            const r = await fetch('charts/' + e.file + '?_=' + Date.now());
-            if (!r.ok) throw new Error('HTTP ' + r.status);
-            const blob = await r.blob();
-            if (/\.zip$/i.test(e.file)) {
-                const raw = await _readZipEntries(blob);
-                raw.forEach(z => {
-                    const meta = _parseChartPath(z.path, e.icao);
-                    if (meta) entries.push({ getBuffer: z.getBuffer, ...meta });
-                });
-            } else {
-                // 단일 PDF — index.json 의 값이 우선, 없으면 경로에서 뽑는다
-                const meta = _parseChartPath(e.file, e.icao) || {};
-                const icao = e.icao || meta.icao;
-                const num  = e.num != null ? String(e.num) : meta.num;
-                if (!icao || !num) throw new Error('공항코드(icao)와 번호(num)를 알 수 없습니다');
-                entries.push({
-                    getBuffer: () => blob.arrayBuffer(),
-                    icao, num,
-                    chartName: e.name || meta.chartName || e.file,
-                    cat: e.cat || meta.cat,
-                });
-            }
-        } catch(err) {
-            failed.push((e.name || e.file) + ' — ' + err.message.split('\n')[0]);
-        }
-        importProgress.done++;
-        renderCduContent();
-    }
-
-    if (!entries.length) {
-        importProgress = null;
-        renderCduContent();
-        uiAlert('저장소에서 차트를 하나도 가져오지 못했습니다.\n\n' +
-                (failed.length ? failed.join('\n') : 'charts/index.json 의 파일 경로를 확인하세요.'));
-        return;
-    }
-    await _saveChartEntries(entries);
-    if (failed.length) uiToast(`건너뜀 ${failed.length}건: ` + failed[0], 'warn', 4000);
-    await refreshLocalPdfKeys();
-    renderCduContent();
 }
 
 // ZIP 안의 파일 목록을 읽는다 — 저메모리 스트리밍 리더 우선, 실패하면 JSZip 폴백.
@@ -1902,31 +1476,6 @@ const _PDF_IS_IOS = /iP(ad|hone|od)/.test(navigator.userAgent || '') ||
                     (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 const _PDF_PX_BUDGET = _PDF_IS_IOS ? 16000000 : 60000000;
 
-// 저장되지 않은 차트를 앱 안에서 열어 보려는 시도.
-// 받아지면 IndexedDB 에 넣어 다음부터는 곧바로 앱 내 뷰어로 열린다.
-// eAIP 는 대개 CORS 를 막으므로 실패가 정상이다 — 그때는 null 을 돌려준다.
-async function _fetchChartPdf(key, url) {
-    if (!url || !/^https?:/i.test(url)) return null;
-    // 응답이 없는 망(기내·음영지역)에서 탭이 먹통이 되지 않게 시간을 끊는다.
-    // 중계를 거치면 한 번 더 왕복하고 차트 PDF 는 수 MB 라 넉넉히 준다.
-    const ac = typeof AbortController === 'function' ? new AbortController() : null;
-    const timer = ac ? setTimeout(() => ac.abort(), CHART_FETCH_TIMEOUT) : null;
-    try {
-        const res = await fetch(_viaRelay(url), { mode: 'cors', credentials: 'omit', signal: ac ? ac.signal : undefined });
-        if (!res || !res.ok) return null;
-        const type = (res.headers.get('content-type') || '').toLowerCase();
-        const blob = await res.blob();
-        // PDF 인지 확인 — HTML 오류 페이지를 PDF 로 넘기면 뷰어가 깨진다
-        const head = new Uint8Array(await blob.slice(0, 5).arrayBuffer());
-        const isPdf = type.includes('pdf') ||
-            (head[0] === 0x25 && head[1] === 0x50 && head[2] === 0x44 && head[3] === 0x46);
-        if (!isPdf || blob.size < 1000) return null;
-        try { await idbPut(key, blob); await refreshLocalPdfKeys(); } catch(e) { _swallow(e); }
-        return blob;
-    } catch(e) { _swallow(e); return null; }
-    finally { if (timer) clearTimeout(timer); }
-}
-
 // 앱 안에서 못 여는 차트 — 새 탭으로 나가기 전에 알리고 고르게 한다.
 // 확인 버튼은 <a target="_blank"> 라 팝업 차단에 걸리지 않는다.
 async function _offerExternalChart(icao, chartNum, url) {
@@ -1952,11 +1501,8 @@ async function openChart(icao, chartNum, url) {
     // 페이지를 새 탭에 띄웠다. 그러면 앱 화면이 통째로 사라져 "차트를 열었더니
     // 전체화면으로 바뀐다"로 보인다. 차트 가져오기는 기기·브라우저마다 따로라
     // (폰에서 가져와도 태블릿 브라우저에는 없다) 흔히 겪는다.
-    // 먼저 앱 안에서 열 수 있는지 시도하고, 안 되면 무슨 일이 벌어질지 알린다.
-    if (!blob) {
-        blob = await _fetchChartPdf(key, url);
-        if (!blob) { await _offerExternalChart(icao, chartNum, url); return; }
-    }
+    // 무슨 일이 벌어질지 알리고 사용자가 고르게 한다.
+    if (!blob) { await _offerExternalChart(icao, chartNum, url); return; }
 
     _pdfChartKey = key;
     _pdfCalibration = _loadChartCalib(key);
@@ -2429,20 +1975,10 @@ function renderChartsScreen(container, footer, title) {
                 <div style="color:#666;font-size:6px;">days left</div>
             </div>
         </div>
-        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:4px;">
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:4px;">
             ${impBtn('data-act="openAimPackage"', '🌐', 'AIM eAIP', '공식 배포처', '#4caf50', '#0a2a0a')}
-            ${impBtn('onclick="triggerZipImport()"', '📂', 'ZIP', 'AIRAC 묶음', '#29b6f6', '#0a1a2a')}
-            ${impBtn('onclick="triggerFolderImport()"', '📁', '폴더', '메모리 부족시', '#ffb74d', '#1a140a')}
-            ${impBtn('data-act="chartFetchFromEaip"', '⤓', '전체 받기', '공식 사이트에서', '#66d9a5', '#0a1a14')}
-        </div>
-        <div style="margin-top:4px;display:flex;flex-wrap:wrap;gap:2px 6px;justify-content:center;color:#7a8a7a;font-size:7px;">
-            <span data-act="chartRelaySet" style="cursor:pointer;padding:2px;color:${chartRelayUrl() ? '#66d9a5' : '#7a8a7a'};">📡 중계 ${chartRelayUrl() ? '켬' : '끔'}</span>
-            <span style="opacity:0.4;">·</span>
-            <span data-act="chartConnCheck" style="cursor:pointer;padding:2px;">🔌 연결 점검</span>
-            <span style="opacity:0.4;">·</span>
-            <span data-act="chartDiscover" style="cursor:pointer;padding:2px;">🔎 목록 탐색</span>
-            <span style="opacity:0.4;">·</span>
-            <span data-act="chartRepoImport" style="cursor:pointer;padding:2px;">☁ 저장소에서</span>
+            ${impBtn('onclick="triggerZipImport()"', '📂', 'ZIP 가져오기', 'AIRAC 묶음', '#29b6f6', '#0a1a2a')}
+            ${impBtn('onclick="triggerFolderImport()"', '📁', '폴더 가져오기', '메모리 부족시', '#ffb74d', '#1a140a')}
         </div>
     </div>`;
 
@@ -2496,7 +2032,6 @@ function renderChartsScreen(container, footer, title) {
                         <div style="color:#fff;font-size:11px;font-weight:bold;">${headTitle}</div>
                         <div style="color:#666;font-size:8px;">${grp.charts.length}개</div>
                     </div>
-                    ${SECTION_GROUPS[icao] ? '' : `<div onclick="event.stopPropagation(); chartFetchAirport('${icao}')" title="이 공항 차트를 공식 사이트에서 받습니다" style="color:#66d9a5;font-size:9px;cursor:pointer;padding:2px 5px;border:1px solid #66d9a5;border-radius:3px;white-space:nowrap;">⤓ 받기</div>`}
                     <div onclick="event.stopPropagation(); deleteAirportCharts('${icao}')" style="color:#f44336;font-size:9px;cursor:pointer;padding:2px 5px;border:1px solid #f44336;border-radius:3px;white-space:nowrap;">삭제</div>
                 </div>`;
             if (isOpen) {
@@ -2569,12 +2104,6 @@ appRegister({
   addSingleFix,
   addStarWps,
   cduFullScreen,
-  chartRepoImport,
-  chartConnCheck,
-  chartDiscover,
-  chartRelaySet,
-  chartFetchFromEaip,
-  chartFetchAirport,
   clearFP,
   closeHelp,
   closePdfViewer,
