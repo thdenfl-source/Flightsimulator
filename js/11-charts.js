@@ -236,10 +236,11 @@ async function _eaipChartLinks(icao, airacStart) {
 }
 
 // 공식 사이트에 대한 요청은 최소 간격을 둔다.
-// 수백 장을 쉼 없이 두드리면 사이트가 밀어내기도 하고(429), 공공 자원에
-// 무례하기도 하다. 171장이면 약 45초가 더 걸리는데, 그 정도는 감수한다.
+// 250ms(초당 4장)로 171장을 몰아쳤더니 원본이 접속을 막아 버렸다 — 중계가
+// HTTP 522(중계↔원본 연결 실패)를 돌려주기 시작했고, 그 뒤로는 한 장도 못 받았다.
+// 공공 자원이니 넉넉히 비운다. 171장이면 3분쯤 걸리지만 그게 맞다.
 // (검사에서는 0 으로 두어 기다리지 않게 한다 — 간격 자체는 검사 대상이 아니다)
-let EAIP_MIN_GAP_MS = 250;
+let EAIP_MIN_GAP_MS = 1200;
 let EAIP_RETRY_WAIT_MS = 1500;
 let _eaipNextAt = 0;
 async function _eaipPace() {
@@ -290,7 +291,10 @@ async function chartFetchFromEaip(icaos) {
         `공항 ${list.length}곳 · AIRAC ${airac.id}\n` +
         `${list.join(' ')}\n\n` +
         `공항마다 목록을 읽고 차트를 한 장씩 내려받습니다.\n` +
-        `수백 장이면 몇 분 걸리고 데이터도 그만큼 씁니다.\n` +
+        `사이트에 부담을 주지 않도록 ${(EAIP_MIN_GAP_MS / 1000).toFixed(1)}초 간격을 둡니다 —\n` +
+        `수백 장이면 여러 분 걸리고 데이터도 그만큼 씁니다.\n` +
+        `한꺼번에 몰아 받으면 사이트가 한동안 막을 수 있으니,\n` +
+        `급하지 않으면 공항 줄의 [⤓ 받기] 로 나눠 받는 편이 낫습니다.\n\n` +
         `받은 차트는 이 기기에 저장되어 다음부터는 바로 열립니다.`,
         { okText: '받기', cancelText: '취소' })) return;
 
@@ -1046,6 +1050,7 @@ async function _saveChartEntries(entries) {
             // 가장 흔한 사유에 맞춰 다음에 할 일을 짚어 준다
             const w = top[0][0];
             if (/429|Too Many/i.test(w)) msgs.push('\n▸ 사이트가 요청 속도를 제한하고 있습니다.\n  잠시 뒤 공항 하나씩 [⤓ 받기] 로 나눠 받아 주세요.');
+            else if (/HTTP 5(2[0-9]|0[24])/.test(w)) msgs.push('\n▸ 중계와 사이트 사이가 끊깁니다(522 등).\n  한꺼번에 많이 받으면 사이트가 한동안 막습니다.\n  10~30분 뒤 공항 하나씩 [⤓ 받기] 로 받아 주세요.');
             else if (/40[13]/.test(w)) msgs.push('\n▸ 접근이 거부됐습니다. 중계 코드가 eAIP 주소를 그대로\n  전달하는지 확인해 주세요.');
             else if (/시간 초과|Failed to fetch|Load failed/i.test(w)) msgs.push('\n▸ 연결이 끊깁니다. 통신 상태를 확인하고 공항 하나씩\n  [⤓ 받기] 로 나눠 받아 주세요.');
         }
