@@ -224,7 +224,7 @@ export async function runChartRepo(page, t) {
 
   // ── 목록이 없을 때: 무엇을 해야 하는지 알려준다 ──
   await install(null);
-  page.evaluate(() => chartRepoImport());
+  page.evaluate(() => chartRepoImport()).catch(() => {});   // 기다리지 않는다 — 페이지가 닫힐 때 거부되지 않게 잡아 둔다
   await page.waitForSelector('.ui-dlg', { timeout: 8000 });
   let msg = await page.locator('.ui-dlg-msg').textContent();
   t.ok(msg.includes('charts/index.json'), `목록을 못 읽으면 어디를 볼지 알려준다 (${msg.split('\n')[0]})`);
@@ -233,15 +233,18 @@ export async function runChartRepo(page, t) {
 
   // ── 정상: PDF 낱장 한 건 ──
   await install([{ file: 'RKTU/(1) AD CHART.pdf', icao: 'RKTU', num: '1', name: 'AD CHART', cat: 'AD' }]);
-  page.evaluate(() => chartRepoImport());
+  page.evaluate(() => chartRepoImport()).catch(() => {});   // 기다리지 않는다 — 페이지가 닫힐 때 거부되지 않게 잡아 둔다
   await page.waitForSelector('.ui-dlg', { timeout: 8000 });
   msg = await page.locator('.ui-dlg-msg').textContent();
   t.ok(msg.includes('1건') && msg.includes('AD CHART'), '가져올 목록을 먼저 보여준다');
   await page.locator('.ui-dlg-ok').click();               // 가져오기
 
+  // 결과 알림이 닫혀야 저장 절차가 끝난다(알림을 기다리도록 바뀌었다) —
+  // 먼저 닫고 나서 확인해야 서로 기다리다 멈추지 않는다.
+  await page.waitForSelector('.ui-dlg', { timeout: 30000 });
+  await page.locator('.ui-dlg-ok').click();
   await page.waitForFunction(() => [...localPdfKeys].includes('RKTU|1'), null, { timeout: 20000 });
   t.ok(true, '저장소의 차트가 이 기기(IndexedDB)에 저장됨');
-  await page.locator('.ui-dlg-ok').click().catch(() => {});   // 결과 알림 닫기
   await page.waitForTimeout(300);
 
   // 목록에 로컬로 잡히고, 앱 안에서 열린다
@@ -488,6 +491,8 @@ export async function runFetchFromEaip(page, t) {
     localStorage.setItem('savedCharts', '[]');
     localStorage.setItem('chartRelayUrl', 'https://relay.example/');
     window.__reqs = [];   // 중계를 켠 뒤의 요청만 센다
+    // 공식 사이트를 배려한 요청 간격·재시도 대기는 검사에서는 뺀다
+    EAIP_MIN_GAP_MS = 0; EAIP_RETRY_WAIT_MS = 0;
   });
   page.evaluate(() => chartFetchFromEaip(['RKSI', 'RKSS', 'RKPC'])).catch(() => {});
   await page.waitForSelector('.ui-dlg', { timeout: 15000 });
@@ -495,7 +500,11 @@ export async function runFetchFromEaip(page, t) {
   t.ok(ask.includes('공항 3곳'), '받기 전에 몇 곳을 받을지 알린다');
   await page.locator('.ui-dlg-ok').click();
 
-  await page.waitForFunction(() => [...localPdfKeys].length >= 3, null, { timeout: 30000 })
+  // 결과 알림을 먼저 닫아야 저장 절차가 끝난다
+  await page.waitForSelector('.ui-dlg', { timeout: 40000 });
+  const done = await page.locator('.ui-dlg-msg').textContent();
+  await page.locator('.ui-dlg-ok').click();
+  await page.waitForFunction(() => [...localPdfKeys].length >= 3, null, { timeout: 20000 })
     .catch(() => {});
   // 앞선 검사들이 넣어 둔 것이 있으므로 "새로 들어왔는가" 로 본다
   const keys = await page.evaluate(() => [...localPdfKeys].sort());
@@ -511,8 +520,37 @@ export async function runFetchFromEaip(page, t) {
   const viaRelay = await page.evaluate(() => window.__reqs.every(u => u.startsWith('https://relay.example/')));
   t.ok(viaRelay, '모든 요청이 중계를 거친다');
 
-  await page.locator('.ui-dlg-ok').click().catch(() => {});
+  // ③ 실패하면 왜 실패했는지 화면에 남는가 — 숫자만 알려 주면 손쓸 방법이 없다.
+  //    실제 기기에서 "1개 저장 · 170개 건너뜀" 만 뜨고 이유를 알 수 없었다.
+  t.ok(/받지 못해 건너뜀|PDF 저장/.test(done), `받은 결과를 알린다 (${done.split('\n')[0]})`);
   await page.waitForTimeout(300);
+
+  await page.evaluate(() => {
+    // 이번엔 전부 429 로 밀어낸다 — 사유가 화면에 나오는지 본다
+    window.fetch = (u, o) => {
+      const s = String(u);
+      if (!s.includes('aim.koca.go.kr')) return window.__origFetch(u, o);
+      let real = s;
+      try { const q = new URL(s).searchParams.get('u'); if (q) real = q; } catch (e) {}
+      if (/KR-AD-2\.RKSI-en-GB\.html/.test(real)) {
+        return Promise.resolve(new Response(window.__AD2('RKSI', ['(2-1) AD CHART']),
+          { status: 200, headers: { 'content-type': 'text/html' } }));
+      }
+      return Promise.resolve(new Response('', { status: 429 }));
+    };
+    localStorage.setItem('chartRelayUrl', 'https://relay.example/');
+  });
+  page.evaluate(() => chartFetchFromEaip(['RKSI'])).catch(() => {});
+  await page.waitForSelector('.ui-dlg', { timeout: 15000 });
+  await page.locator('.ui-dlg-ok').click();                       // 받기 확인
+  await page.waitForSelector('.ui-dlg', { timeout: 30000 });
+  const fail = await page.locator('.ui-dlg-msg').textContent();
+  t.ok(fail.includes('왜 실패했나'), '실패하면 사유를 함께 보여준다');
+  t.ok(fail.includes('HTTP 429'), `사유에 응답 코드가 담긴다 (${(fail.match(/HTTP \d+ — \d+개/) || [''])[0]})`);
+  t.ok(fail.includes('요청 속도를 제한'), '429 면 무엇을 해야 하는지 짚어 준다');
+  await page.locator('.ui-dlg-ok').click();
+  await page.waitForTimeout(200);
+
   await page.evaluate(() => {
     if (window.__origFetch) window.fetch = window.__origFetch;
     localStorage.removeItem('chartRelayUrl');
