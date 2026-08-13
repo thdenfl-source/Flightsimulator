@@ -551,6 +551,33 @@ export async function runFetchFromEaip(page, t) {
   await page.locator('.ui-dlg-ok').click();
   await page.waitForTimeout(200);
 
+  // 중계↔사이트 구간이 끊기는 경우(522) — 실제 기기에서 이걸로 전부 실패했다.
+  // 한꺼번에 많이 받아 사이트가 막은 상황이라, 429 와는 할 일이 다르다.
+  await page.evaluate(() => {
+    const orig = window.fetch;
+    window.fetch = (u, o) => {
+      const s = String(u);
+      if (!s.includes('aim.koca.go.kr')) return window.__origFetch(u, o);
+      let real = s;
+      try { const q = new URL(s).searchParams.get('u'); if (q) real = q; } catch (e) {}
+      if (/KR-AD-2\.RKSI-en-GB\.html/.test(real)) {
+        return Promise.resolve(new Response(window.__AD2('RKSI', ['(2-1) AD CHART']),
+          { status: 200, headers: { 'content-type': 'text/html' } }));
+      }
+      return Promise.resolve(new Response('', { status: 522 }));
+    };
+  });
+  page.evaluate(() => chartFetchFromEaip(['RKSI'])).catch(() => {});
+  await page.waitForSelector('.ui-dlg', { timeout: 15000 });
+  await page.locator('.ui-dlg-ok').click();
+  await page.waitForSelector('.ui-dlg', { timeout: 30000 });
+  const gw = await page.locator('.ui-dlg-msg').textContent();
+  t.ok(gw.includes('HTTP 522'), `522 도 사유에 담긴다 (${(gw.match(/HTTP \d+ — \d+개/) || [''])[0]})`);
+  t.ok(gw.includes('중계와 사이트 사이가 끊깁니다'), '522 면 429 와 다른 할 일을 짚어 준다');
+  t.ok(gw.includes('[⤓ 받기] 로 받아'), '공항 하나씩 받으라고 안내한다');
+  await page.locator('.ui-dlg-ok').click();
+  await page.waitForTimeout(200);
+
   await page.evaluate(() => {
     if (window.__origFetch) window.fetch = window.__origFetch;
     localStorage.removeItem('chartRelayUrl');
