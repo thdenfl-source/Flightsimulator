@@ -612,26 +612,10 @@ function drawHSI(x, y, w, h) {
   const leftX  = x + 4;
   const rightX = cx + r + 4;
 
-  // ── BRG1 left panel (VOR/ILS, blue) ──
-  if (brg1Visible) {
-    const st = brg1Station();          // 소스가 FMS 여도 튜닝된 VOR 를 가리킨다
-    const brg1NavActive = !!st;
-    const brg1NavBrg    = brg1NavActive ? bearing(S.lat, S.lon, st.lat, st.lon) : 0;
-    const brg1NavDist   = brg1NavActive ? distance(S.lat, S.lon, st.lat, st.lon) : 0;
-    drawHSISidePanel(leftX, y, sideW, h, {
-      label:     'BRG1',
-      sublbl:    st ? st.src : 'VOR',
-      color:     '#44aaff',
-      ident:     (st && st.id) || '----',
-      brg:       brg1NavActive ? fmtA(toMag(brg1NavBrg)) + '°'  : '---°',
-      dist:      brg1NavActive ? (brg1NavDist*D_CV()).toFixed(1) + D_LBL()  : '--.-' + D_LBL(),
-      needleSym: 'single',
-      align:     'left',
-    });
-  }
-
-  // ── BRG2 우측 패널은 아래 NAV SOURCE 3줄이 대신한다(내용 포함관계 + 세로 공간) ──
-  // 나침반의 BRG2 니들은 brg2Visible 토글로 그대로 유지된다.
+  // ── BRG1·BRG2 좌우 패널은 아래 NAV SOURCE 3줄이 대신한다 ──
+  // 그 3줄에 FMS·NAV1·NAV2 의 식별자·방위·거리가 이미 다 있어서, 좌측 BRG1
+  // 패널은 같은 값을 한 번 더 적는 자리였다. 나침반의 BRG1·BRG2 니들은
+  // brg1Visible·brg2Visible 토글로 그대로 유지된다 — 지우는 것은 숫자판뿐이다.
 
   // ── Wind display (HSI top-left) ──
   {
@@ -1301,47 +1285,4 @@ function drawHsiHoverPage(x, y, w, h, cx, cy, rFull) {
   ctx.restore();
 }
 
-// ── HSI Side Panel helper ──
-function drawHSISidePanel(x, y, w, h, opt) {
-  if (w < 30) return;
-  const cx = opt.align==='left' ? x : x + w;
-  const ta = opt.align==='left' ? 'left' : 'right';
-  const lineH = Math.min(16, h * 0.18);
-  const startY = y + h * 0.26;
-
-  ctx.save();
-  ctx.font = `bold ${Math.max(9, lineH * 0.75)}px Helvetica Neue, Arial, sans-serif`;
-  ctx.textAlign = ta;
-
-  // source label + needle symbol
-  const needleSym = opt.needleSym === 'single' ? '⬆' : '⇑';
-
-  ctx.fillStyle = opt.color;
-  ctx.fillText(opt.label, cx, startY);
-  ctx.font = `${Math.max(8, lineH * 0.6)}px Helvetica Neue, Arial, sans-serif`;
-  ctx.fillStyle = '#555';
-  ctx.fillText(opt.sublbl, cx, startY + lineH * 0.85);
-
-  // needle mini symbol
-  ctx.fillStyle = opt.color;
-  ctx.font = `${Math.max(11, lineH)}px Helvetica Neue, Arial, sans-serif`;
-  ctx.fillText(needleSym, cx, startY + lineH * 2.0);
-
-  // ident
-  ctx.font = `bold ${Math.max(9, lineH * 0.72)}px Helvetica Neue, Arial, sans-serif`;
-  ctx.fillStyle = '#fff';
-  ctx.fillText(opt.ident, cx, startY + lineH * 3.1);
-
-  // bearing
-  ctx.font = `bold ${Math.max(11, lineH * 0.88)}px Helvetica Neue, Arial, sans-serif`;
-  ctx.fillStyle = opt.color;
-  ctx.fillText(opt.brg, cx, startY + lineH * 4.2);
-
-  // distance
-  ctx.font = `${Math.max(9, lineH * 0.72)}px Helvetica Neue, Arial, sans-serif`;
-  ctx.fillStyle = '#cccc66';
-  ctx.fillText(opt.dist, cx, startY + lineH * 5.2);
-
-  ctx.restore();
-}
 
