@@ -172,4 +172,45 @@ export async function run(page, t) {
     `그림이 실제로 그려진다 (칠해진 화소 ${(100 * shown.painted / shown.total).toFixed(0)}%)`);
   t.eq(await page.evaluate(() => { toggleHoldEntry(); return document.getElementById('map-wrap').classList.contains('hold-entry-on'); }),
     false, '한 번 더 누르면 닫힌다');
+
+  // 그려진 패턴이 기준선과 같은 각도 기준 위에 있는가
+  // (종전에는 패턴만 좌표 오프셋을 편차만큼 반대로 돌려 18° 어긋나 있었다.
+  //  경계·눈금은 멀쩡했으므로 숫자 검사로는 잡히지 않고 그림에서만 드러났다)
+  const align = await page.evaluate(() => {
+    const FIX = [37.0, 127.5];
+    S.lat = FIX[0] + 0.1; S.lon = FIX[1] + 0.1; S.hdg = 200; S.spd = 120;
+    S.wps = [{ ident: 'ALIGN', lat: FIX[0], lon: FIX[1],
+               hold: { dir: 'L', crs: toTrue(91), legType: 'TIME', legVal: 60 } }];
+    if (!document.getElementById('map-wrap').classList.contains('hold-entry-on')) toggleHoldEntry();
+    drawHoldEntry();
+    const cv = document.getElementById('hold-entry-canvas');
+    const W = cv.clientWidth, H = cv.clientHeight;
+    const dpr = cv.width / W;
+    const cx = W / 2, cy = H / 2, R = Math.min(W, H) / 2 - 12;
+    const pts = holdPatternLatLngs({ lat: FIX[0], lon: FIX[1] },
+                                   { dir: 'L', crs: toTrue(91), legType: 'TIME', legVal: 60 });
+    const pol = pts.map(p => ({ m: toMag(bearing(FIX[0], FIX[1], p[0], p[1])),
+                                d: distance(FIX[0], FIX[1], p[0], p[1]) }));
+    const ext = Math.max(0.5, ...pol.map(q => q.d));
+    const pxPerNM = R * 0.62 / ext;
+    const g = cv.getContext('2d');
+    // 각 꼭짓점이 있어야 할 자리에 밝은 선이 실제로 그려져 있는가(±2px)
+    let hit = 0, miss = 0;
+    pol.forEach(q => {
+      if (q.d * pxPerNM < 4) return;                     // 픽스 바로 옆은 건너뛴다
+      const x = cx + q.d * pxPerNM * Math.sin(q.m * D2R);
+      const y = cy - q.d * pxPerNM * Math.cos(q.m * D2R);
+      let found = false;
+      for (let dx = -2; dx <= 2 && !found; dx++) for (let dy = -2; dy <= 2 && !found; dy++) {
+        const px = g.getImageData(Math.round((x + dx) * dpr), Math.round((y + dy) * dpr), 1, 1).data;
+        // 패턴선(밝은 회색) 또는 그 위에 겹쳐 그린 기준선(노랑). 부채꼴 색은
+        // 셋 다 빨강·초록 중 한쪽이 어두워 여기에 걸리지 않는다.
+        if (px[0] > 140 && px[1] > 140) found = true;
+      }
+      found ? hit++ : miss++;
+    });
+    return { hit, miss };
+  });
+  t.eq(align.miss, 0,
+    `패턴이 부채꼴·기준선과 같은 각도 기준 위에 그려진다 (꼭짓점 ${align.hit}개 일치, ${align.miss}개 어긋남)`);
 }
