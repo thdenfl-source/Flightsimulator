@@ -112,8 +112,20 @@ export async function run(page, t) {
   // 인바운드 091°·좌선회: 픽스 기준 091~161 눈물방울 / 161~341 직진 / 341~091 평행
   const bnd = await page.evaluate(() => holdEntrySectors(toTrue(91), false)
     .map(s => `${s.type} ${Math.round(toMag(s.from))}~${Math.round(toMag(s.to))}`).join(' · '));
-  t.eq(bnd, 'TEARDROP 90~161 · DIRECT 161~341 · PARALLEL 341~90',
+  t.eq(bnd, 'TEARDROP 91~161 · DIRECT 161~341 · PARALLEL 341~91',
     `구역 경계가 자리에 있다 (${bnd})`);
+
+  // 경계 바로 양옆 — 여기가 어긋나면 그림과 판정이 따로 논다.
+  // (종전에는 경계에 2° 여유를 둬서 090°M 접근이 눈물방울로 판정됐다)
+  const edge = await page.evaluate(() => {
+    const crsT = toTrue(91);   // 인바운드 091°M · 좌선회
+    return [89, 90, 90.9, 91, 92, 160.9, 161, 340.9, 341].map(m =>
+      m + ':' + _holdEntryType(normA(toTrue(m) + 180), crsT, false));
+  });
+  t.eq(edge.join(' '),
+    '89:PARALLEL 90:PARALLEL 90.9:PARALLEL 91:TEARDROP 92:TEARDROP ' +
+    '160.9:TEARDROP 161:DIRECT 340.9:DIRECT 341:PARALLEL',
+    `경계가 자북 각도 그대로 갈린다 (${edge.join(' ')})`);
   const srt = w => JSON.stringify(Object.keys(w).sort().map(k => [k, w[k]]));
   t.eq(srt(sec.l), srt(sec.r), '좌선회도 같은 폭(거울상)');
   t.ok(sec.keptCrs === 123 && sec.keptRight === true, '인자로 판정해도 무장된 홀딩 값은 그대로');

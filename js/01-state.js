@@ -630,16 +630,20 @@ function _holdHdgBank(tgtHdg, dir) {
 //
 // 호출부는 기수를 넘긴다(픽스 통과 시점의 S.hdg). 픽스로 곧장 들어오는
 // 상황이므로 방위는 기수의 반대편이다 — 여기서 뒤집어 쓴다.
-const HOLD_ENTRY_TOL = 2;    // 경계(q=0)에서 부동소수점이 359.99…° 로 접히는 것 방지
+//
+// 각도는 전부 자북(°M)으로 맞춰 비교한다. 화면에 보이는 숫자가 자북이므로
+// 판정도 같은 기준이어야 한다 — 경계에 여유를 두거나 기준이 어긋나면
+// "인바운드 091°, 방위 090° 인데 눈물방울" 같은 그림·판정 불일치가 생긴다.
+// (편차는 회전이라 값 자체는 같지만, 기준을 하나로 못박아 둔다)
 // crs·right 를 넘기면 무장되지 않은 홀딩(비행계획에만 있는 것)도 판정할 수 있다.
 // 넘기지 않으면 지금 무장된 홀딩을 본다 — 시뮬 쪽 호출은 전부 이쪽이다.
 function _holdEntryType(hdg, crs, right) {
   const H = (hdg === undefined || hdg === null) ? S.hdg : hdg;
   const C = (crs === undefined || crs === null) ? holdCrs : crs;
   const rgt = (right === undefined || right === null) ? holdRight : right;
-  const brg = normA(H + 180);                       // 픽스에서 본 항공기 방위
-  let q = normA(rgt ? C - brg : brg - C);
-  if (q > 360 - HOLD_ENTRY_TOL) q = 0;              // 경계는 눈물방울 쪽에 붙인다
+  const brgM = toMag(normA(H + 180));               // 픽스에서 본 항공기 방위(자북)
+  const crsM = toMag(C);                            // 인바운드 코스(자북)
+  const q = normA(rgt ? crsM - brgM : brgM - crsM);
   if (q < 70)  return 'TEARDROP';
   if (q < 250) return 'DIRECT';
   return 'PARALLEL';
