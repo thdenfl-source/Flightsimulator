@@ -990,8 +990,8 @@ function updateWpMarkers(){
 // 다시 적으면 둘이 어긋나는 순간 그림이 거짓말을 하게 된다.
 //
 // 구역을 어느 각도에 칠하느냐 — 화면의 각 방향 θ 는 "픽스에서 본 방위",
-// 즉 항공기가 있는 쪽이다. 픽스로 곧장 향하면 기수는 그 반대(θ+180)이므로
-// 그 기수로 판정한다. 그래서 항공기 기호는 언제나 자기 진입 구역 안에 놓인다.
+// 즉 항공기가 어느 방향에서 들어오는가이고, 그것이 곧 판정 기준이다.
+// 그래서 항공기 기호는 언제나 자기 진입 구역 안에 놓인다.
 // 나침반은 자북 위쪽(°M) — 패널의 숫자와 눈금이 같은 기준이어야 읽힌다.
 let holdEntryOn = false;
 
@@ -1165,7 +1165,8 @@ function drawHoldEntry() {
     info.innerHTML =
       `<div style="color:${ec ? ec.line : '#fff'};font-weight:bold;font-size:12px;">` +
       `${ec ? ec.label : entry} <span style="font-size:9px;">${ec ? ec.ko : ''} 진입</span></div>` +
-      `접근방향 <b>${fmtA(toMag(apprT))}°M</b> · 픽스까지 <b>${uDist(dist)}</b><br>` +
+      `픽스 기준 <b>${fmtA(toMag(brgT))}°M</b> 에서 접근 · <b>${uDist(dist)}</b><br>` +
+      `<span style="color:#67788a;">기수 ${fmtA(toMag(apprT))}°</span> · ` +
       `인바운드 <b>${fmtA(inbM)}°M</b> · ${T.right ? '우선회' : '좌선회'} · 레그 ${leg}<br>` +
       `<span style="color:#67788a;">바람 보정 기수 — 인바운드 ${inHdg}° / 아웃바운드 ${outHdg}°</span>`;
   }

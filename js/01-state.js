@@ -617,28 +617,32 @@ function _holdHdgBank(tgtHdg, dir) {
   return Math.max(-bMax, Math.min(bMax, err * 2));
 }
 
-// 홀딩 진입 방식 판정 (우선회 기준, 좌선회는 좌우 반전)
-//   인바운드 코스 C 대비 기수 H 의 상대각 r = H − C
-//   r 0~180° : 직진(DIRECT, 180° 섹터)
-//   r 180~290° : 평행(PARALLEL, 110° 섹터)
-//   r 290~360° : 눈물방울(TEARDROP, 70° 섹터)
-// 0~360 으로 정규화하면 정대 진입(r=0)이 부동소수점 오차로 359.99…° 가 되어
-// 눈물방울 구간에 떨어진다. 레그를 따라 픽스로 들어가면 기수 ≈ 인바운드 코스라
-// 가장 흔한 경우가 여기 걸리므로, −180~+180 부호각으로 판정한다.
-const HOLD_ENTRY_TOL = 2;    // 인바운드 코스와 ±2° 이내면 정대 진입 → 직진
+// 홀딩 진입 방식 판정
+//
+// 기준은 기수가 아니라 **픽스에서 본 항공기 방위(어느 방향에서 들어오는가)** 다.
+// 인바운드 코스 C 대비 그 방위의 상대각 q — 좌선회는 q = 방위 − C,
+// 우선회는 거울상이라 q = C − 방위:
+//   q   0 ~  70° : 눈물방울(TEARDROP,  70° 섹터)
+//   q  70 ~ 250° : 직진(DIRECT,      180° 섹터)
+//   q 250 ~ 360° : 평행(PARALLEL,    110° 섹터)
+// 인바운드 091°·좌선회면 픽스 기준 091~161° 에서 들어오면 눈물방울,
+// 161~341° 는 직진, 341~091° 는 평행이 된다.
+//
+// 호출부는 기수를 넘긴다(픽스 통과 시점의 S.hdg). 픽스로 곧장 들어오는
+// 상황이므로 방위는 기수의 반대편이다 — 여기서 뒤집어 쓴다.
+const HOLD_ENTRY_TOL = 2;    // 경계(q=0)에서 부동소수점이 359.99…° 로 접히는 것 방지
 // crs·right 를 넘기면 무장되지 않은 홀딩(비행계획에만 있는 것)도 판정할 수 있다.
 // 넘기지 않으면 지금 무장된 홀딩을 본다 — 시뮬 쪽 호출은 전부 이쪽이다.
 function _holdEntryType(hdg, crs, right) {
   const H = (hdg === undefined || hdg === null) ? S.hdg : hdg;
   const C = (crs === undefined || crs === null) ? holdCrs : crs;
   const rgt = (right === undefined || right === null) ? holdRight : right;
-  const rs = normAS(rgt ? H - C : C - H);
-  // r = 180°(코스 정반대)는 직진 구역의 끝. 부호각으로 보면 +180 과 −180 이
-  // 같은 각인데 부동소수점에 따라 어느 쪽으로 접힐지 갈려서, 좌·우선회가
-  // 서로 다른 진입으로 판정되던 문제가 있었다. 양쪽 끝 모두 직진으로 본다.
-  if (rs >= -HOLD_ENTRY_TOL || rs <= -180 + HOLD_ENTRY_TOL) return 'DIRECT';  // r 0 ~ 180°
-  if (rs <= -70)             return 'PARALLEL';   // r 180 ~ 290°
-  return 'TEARDROP';                              // r 290 ~ 360°
+  const brg = normA(H + 180);                       // 픽스에서 본 항공기 방위
+  let q = normA(rgt ? C - brg : brg - C);
+  if (q > 360 - HOLD_ENTRY_TOL) q = 0;              // 경계는 눈물방울 쪽에 붙인다
+  if (q < 70)  return 'TEARDROP';
+  if (q < 250) return 'DIRECT';
+  return 'PARALLEL';
 }
 
 // ── 홀딩 경로 추종 ──────────────────────────────────────────────
