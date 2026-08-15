@@ -694,11 +694,11 @@ function _setBrgLine(line, mkRef, show, tLat, tLon, tag, brg, dist, color) {
 }
 const _brg1Ref = { mk: null }, _brg2Ref = { mk: null };
 function updateBrgLines() {
-  // BRG1: 항법시설(VOR/ILS) — HSI BRG1 패널과 동일
-  const b1on = brg1Visible && navLat !== null;
-  _setBrgLine(brg1Line, _brg1Ref, b1on, navLat, navLon, 'BRG1',
-    b1on ? bearing(S.lat, S.lon, navLat, navLon) : 0,
-    b1on ? distance(S.lat, S.lon, navLat, navLon) : 0, '#44aaff');
+  // BRG1: 항법시설(VOR/ILS) — HSI BRG1 패널과 같은 국을 쓴다(brg1Station)
+  const b1 = brg1Visible ? brg1Station() : null;
+  _setBrgLine(brg1Line, _brg1Ref, !!b1, b1?.lat, b1?.lon, 'BRG1',
+    b1 ? bearing(S.lat, S.lon, b1.lat, b1.lon) : 0,
+    b1 ? distance(S.lat, S.lon, b1.lat, b1.lon) : 0, '#44aaff');
   // BRG2: FMS 활성 웨이포인트 — HSI BRG2 패널과 동일
   const wpOk = S.awp >= 0 && S.awp < S.wps.length;
   const wp = wpOk ? S.wps[S.awp] : null;
