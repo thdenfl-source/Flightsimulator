@@ -962,6 +962,11 @@ function act(name, ...args) {
       // Sunrise / Sunset
       sunLat: { label:'위도',  unit:'°', neg:true, dec:4 },
       sunLon: { label:'경도',  unit:'°', neg:true, dec:4 },
+      // True ↔ Indicated Airspeed
+      tasPA:  { label:'기압고도 PA',      unit:'ft', neg:true,  dec:0 },
+      tasOAT: { label:'외기온도 OAT',     unit:'°C', neg:true,  dec:0 },
+      tasIAS: { label:'지시대기속도 IAS', unit:'kt', neg:false, dec:1 },
+      tasTAS: { label:'진대기속도 TAS',   unit:'kt', neg:false, dec:1 },
     };
     const _UV = { m:0, ft:0, km:0, nm:0, sm:0, dd:0, dmd:0, dmm:0, dmsd:0, dmsm:0, dmss:0,
       wkg:0, wlb:0, wg:0, woz:0, wmt:0,
@@ -975,7 +980,8 @@ function act(name, ...args) {
       feQty:0, feFlow:600, feGs:80, feRsv:20, feEnd:0, feUse:0, feRange:0,
       wcCrs:0, wcDir:0, wcSpd:0, wcHead:0, wcCross:0, wcAng:0,
       mvTrue:0, mvVar:-8, mvMag:8,
-      sunLat:37.5665, sunLon:126.9780 };
+      sunLat:37.5665, sunLon:126.9780,
+      tasPA:0, tasOAT:15, tasIAS:100, tasTAS:100 };
 
     // --- EXACT EXCEL PERF DATA ENGINE ---
     let perfData = { alt: "0", temp: "20", weight: "16000", vs: "0" };
@@ -1824,6 +1830,7 @@ function act(name, ...args) {
       PRESS:   { title:'Pressure', fields:['phpa','pinhg','pkpa','ppsi','pmmhg','patm'] },
       FUEL:    { title:'Fuel Conversion', fields:['flb','fkg','fusgal','fltr'], fuel:true },
       DENSALT: { title:'Density Altitude', densalt:true },
+      TAS:     { title:'True / Indicated Airspeed', fields:['tasPA','tasOAT','tasIAS','tasTAS'], tas:true },
       VNAV:    { title:'VNAV', fields:['vnavAlt','vnavAng'], vnav:true },
     };
     const _UMENU = [
@@ -1840,6 +1847,7 @@ function act(name, ...args) {
       { id:'PRESS',   name:'Pressure',          sub:'inHg · hPa · kPa · psi · mmHg · atm' },
       { id:'FUEL',    name:'Fuel Conversion',   sub:'gal · L · lb · kg' },
       { id:'DENSALT', name:'Density Altitude',  sub:'IA · Alt setting · OAT → DA' },
+      { id:'TAS',     name:'True / Indicated Airspeed', sub:'PA · OAT → IAS ↔ TAS' },
     ];
 
     function utilOpen(id) {
@@ -1851,6 +1859,48 @@ function act(name, ...args) {
         utilActive = p.coord ? 'dd' : p.densalt ? 'daIA' : p.sun ? 'sunLat'
                    : (p.inputs ? p.inputs[0] : p.fields[0]);
       }
+      switchMode('UTIL');
+    }
+
+    // 기압고도(ft)에서의 정압(hPa) — ISA 대류권 식
+    function _tasPressHpa(ft) {
+      return 1013.25 * Math.pow(1 - 6.87535e-6 * Math.max(-2000, Math.min(36089, ft)), 5.2558797);
+    }
+    // TAS / IAS 배율 = √(ρ0/ρ)
+    function _tasRatio() {
+      const T = _UV.tasOAT + 273.15;
+      if (T <= 0) return 1;
+      const rho = _tasPressHpa(_UV.tasPA) * 100 / (287.05287 * T);
+      return rho > 0 ? Math.sqrt(1.225 / rho) : 1;
+    }
+    // 근거가 되는 값들을 같이 보여 준다 — 숫자 하나만 던지면 검산할 수가 없다
+    function _tasNoteHtml() {
+      const isa  = 15 - 1.98 * (_UV.tasPA / 1000);
+      const dev  = _UV.tasOAT - isa;
+      const da   = Math.round((_UV.tasPA + 120 * dev) / 10) * 10;
+      const r    = _tasRatio();
+      // 계산기 안에서 검산이 되도록 근거를 한 줄로 붙인다 — 화면을 길게 쓰면
+      // 숫자판이 밀려 내려가므로 두 줄 안에 담는다.
+      const line = (k, v) => `<span style="color:#556;">${k}</span> ` +
+        `<span style="color:#8fb8bf;">${v}</span>`;
+      return `<div style="font-size:9px;line-height:1.7;font-family:-apple-system,BlinkMacSystemFont,` +
+        `Segoe UI,Roboto,Helvetica Neue,Arial,sans-serif;border-top:1px solid #1a2a30;` +
+        `margin-top:8px;padding-top:5px;">` +
+        `<div>` + line('ISA', isa.toFixed(1) + '°C · ' + (dev >= 0 ? '+' : '') + dev.toFixed(1) + '°C') +
+        ` &nbsp;·&nbsp; ` + line('밀도고도', da.toLocaleString() + ' ft') +
+        ` &nbsp;·&nbsp; ` + line('배율', '×' + r.toFixed(4)) + `</div>` +
+        `<div style="color:#445;">밀도비 환산 (TAS = IAS × √(ρ₀/ρ)) · 압축성 보정 없음</div>` +
+        `</div>`;
+    }
+    // 지금 비행 상태를 그대로 넣는다
+    function utilTasHere() {
+      try {
+        _UV.tasPA  = Math.round(S.alt);
+        _UV.tasOAT = Math.round(_oatSurfaceC - 1.98 * S.alt / 1000);
+        _UV.tasIAS = +S.spd.toFixed(1);
+        _utilConvert('tasIAS', _UV.tasIAS);
+      } catch (e) { _swallow(e); }
+      utilInput = '';
       switchMode('UTIL');
     }
 
@@ -1960,6 +2010,18 @@ function act(name, ...args) {
         const pa  = _UV.daIA + (29.92 - _UV.daAS) * 1000;
         const isa = 15 - 1.98 * (pa / 1000);
         _UV.daOut = Math.round((pa + 120 * (_UV.daOAT - isa)) / 10) * 10;
+      }
+      // ── True ↔ Indicated Airspeed ──
+      // 기압고도·외기온도로 공기밀도를 구해 밀도비로 환산한다(E6B·비행컴퓨터와 같은 방식).
+      //   TAS = IAS × √(ρ0/ρ)
+      // 압축성 보정은 넣지 않았다. 200kt 아래에서는 0.1% 수준이라 눈금에 안 보이고,
+      // 넣으면 조종사가 원판 계산기로 검산한 값과 오히려 어긋난다.
+      // IAS 를 넣으면 TAS 가, TAS 를 넣으면 IAS 가 나온다. PA·OAT 를 바꾸면
+      // 지금 들어 있는 IAS 기준으로 TAS 를 다시 잡는다.
+      else if (['tasPA','tasOAT','tasIAS','tasTAS'].includes(src)) {
+        const r = _tasRatio();
+        if (src === 'tasTAS') _UV.tasIAS = +(_UV.tasTAS / r).toFixed(1);
+        else                  _UV.tasTAS = +(_UV.tasIAS * r).toFixed(1);
       }
       // ── Speed (base m/s) ──
       else if (['skt','skmh','smph','sms'].includes(src)) {
@@ -2100,6 +2162,16 @@ function act(name, ...args) {
           ROW('sunLat') + ROW('sunLon') +
           `<div style="color:#556;font-size:9px;letter-spacing:1px;margin:8px 0 4px;">SUN (오늘)</div>` +
           _sunReadoutHtml();
+      } else if (page.tas) {
+        fieldsHtml =
+          `<div data-act="utilTasHere" style="display:inline-flex;align-items:center;gap:4px;` +
+            `padding:5px 10px;margin-bottom:7px;border:1px solid #2a4a5a;border-radius:4px;background:#0a1620;` +
+            `color:#00cfff;font-size:10px;font-weight:bold;cursor:pointer;">✈ 현재 비행상태 사용</div>` +
+          `<div style="color:#556;font-size:9px;letter-spacing:1px;margin:2px 0 4px;">CONDITION (값 입력 후 ENT)</div>` +
+          ROW('tasPA') + ROW('tasOAT') +
+          `<div style="color:#556;font-size:9px;letter-spacing:1px;margin:8px 0 4px;">SPEED (어느 쪽이든 넣으면 나머지가 나온다)</div>` +
+          ROW('tasIAS') + ROW('tasTAS') +
+          _tasNoteHtml();
       } else if (page.inputs) {
         // 입력 → 계산 결과(ANSWER) 형태의 범용 페이지
         fieldsHtml =
@@ -3878,6 +3950,7 @@ switchMode('HOME');
       utilFuelDensity,
       utilNumKey,
       utilOpen,
+      utilTasHere,
       utilSunHere,
     });
 
