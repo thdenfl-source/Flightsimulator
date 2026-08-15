@@ -13,7 +13,7 @@ const KOREA = { lat: [32.5, 39.5], lon: [124.0, 132.5] };   // 국내 AIP 가 �
 // AIP 를 받아 채우면 여기서 지운다 — 그 전까지 새로 생기는 구멍만 걸러 낸다.
 const KNOWN_GAPS = new Set([
   'RKPU/PU801', 'RKPU/PU802', 'RKPU/PU803', 'RKPU/PU851', 'RKPU/PU852', 'RKPU/PU853',
-  'RKTH/DORTI', 'RKTH/MAKUN', 'RKTH/MARMI',
+  'RKTH/DORTI', 'RKTH/MARMI',
   'RKTH/TH801', 'RKTH/TH802', 'RKTH/TH803', 'RKTH/TH804', 'RKTH/TH805', 'RKTH/TH806',
   'RKTH/TH901', 'RKTH/TH902', 'RKTH/TH903', 'RKTH/TH904', 'RKTH/TH905', 'RKTH/TH906',
   'RKTL/TL024', 'RKTL/TL025', 'RKTL/TL026', 'RKTL/TL034', 'RKTL/TL035',
@@ -35,7 +35,7 @@ export async function run(page, t) {
     const procs = [];
     for (const [icao, a] of Object.entries(db))
       for (const kind of ['sids', 'stars', 'approaches'])
-        (a[kind] || []).forEach(p => procs.push({ icao, kind, name: p.name, wps: p.wps || [] }));
+        (a[kind] || []).forEach(p => procs.push({ icao, kind, name: p.name, rwy: p.rwy || '', wps: p.wps || [] }));
 
     procs.forEach(p => p.wps.forEach(w => {
       if (Number.isFinite(w.lat) && Number.isFinite(w.lon))
@@ -104,7 +104,7 @@ export async function run(page, t) {
   const dup = [];
   const seen = new Set();
   for (const p of r.procs) {
-    const k = `${p.icao}|${p.kind}|${p.name}`;
+    const k = `${p.icao}|${p.kind}|${p.name}|${p.rwy}`;
     if (seen.has(k)) dup.push(k); else seen.add(k);
   }
   t.eq(dup.length, 0, `절차 이름 중복 없음${dup.length ? ' — ' + dup.slice(0, 4).join(' / ') : ''}`);
@@ -123,7 +123,8 @@ export async function run(page, t) {
 
   // ── STAR 을 넣은 공항이 실제로 갖고 있는가 ──
   const want = ['RKJB', 'RKJJ', 'RKJY', 'RKNW', 'RKNY',
-                'RKPC', 'RKPD', 'RKPK', 'RKPS', 'RKPU'];
+                'RKPC', 'RKPD', 'RKPK', 'RKPS', 'RKPU',
+                'RKSI', 'RKSS', 'RKTH', 'RKTL', 'RKTN', 'RKTU'];
   const got = await page.evaluate(w => w.map(i => [i, (IFR_DB[i]?.stars || []).length]), want);
   const empty = got.filter(([, n]) => !n).map(([i]) => i);
   t.eq(empty.length, 0,
