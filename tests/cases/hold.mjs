@@ -34,15 +34,16 @@ export async function run(page, t) {
       }
       return best;
     };
-    const one = (dir, appr) => {
+    const one = (dir, appr, spd) => {
       const A = destPoint(FIX[0], FIX[1], normA(appr + 180), 25);
       S.wps = [{ ident: 'A', lat: A[0], lon: A[1] },
                { ident: 'FIX', lat: FIX[0], lon: FIX[1], hold: { dir, crs: C, legType: 'TIME', legVal: 60 } }];
       S.fwp = 0; S.awp = 1; obsOn = false; navSrc = 'FMS'; S.crs = C;
       const st = destPoint(FIX[0], FIX[1], normA(appr + 180), 14);
-      S.lat = st[0]; S.lon = st[1]; S.spd = 120; S.hdg = appr; S.bnk = 0;
+      S.lat = st[0]; S.lon = st[1]; S.spd = spd || 120; S.hdg = appr; S.bnk = 0;
       windSpd = 0; windDir = 0; navApOn = true; hdgSelOn = false; rollApOn = true; holdExit();
       const dt = 0.5; let entry = '', tTrack = -1, devs = [], navOff = false, entryDist = -1;
+      let devCap = 0;   // 패턴을 붙잡는 과도 구간까지 포함한 최대 이탈
       for (let i = 0; i < 3000 / dt; i++) {
         updateNav();
         if (S.awp >= 0 && !obsOn && !holdOn && S.dtw < 0.25 && S.awp + 1 >= S.wps.length) navApOn = false;
@@ -58,14 +59,20 @@ export async function run(page, t) {
         const sc = 1852 / 3600 * dt / 111320;
         S.lat += S.spd * Math.cos(S.hdg * D2R) * sc;
         S.lon += S.spd * Math.sin(S.hdg * D2R) * sc / Math.cos(S.lat * D2R);
-        if (tTrack >= 0 && i > tTrack + 400) devs.push(dev(holdPatternLatLngs(), S.lat, S.lon));
+        if (tTrack >= 0) {
+          const e = dev(holdPatternLatLngs(), S.lat, S.lon);
+          devCap = Math.max(devCap, e);
+          if (i > tTrack + 400) devs.push(e);
+        }
       }
-      return { entry, navOff, entryDist,
+      return { entry, navOff, entryDist, devCap,
                devMax: devs.length ? Math.max(...devs) : NaN,
                devAvg: devs.length ? devs.reduce((a, b) => a + b, 0) / devs.length : NaN };
     };
     return { R90: one('R', 90), R230: one('R', 230), R330: one('R', 330),
-             L90: one('L', 90), L310: one('L', 310), L210: one('L', 210) };
+             L90: one('L', 90), L310: one('L', 310), L210: one('L', 210),
+             // 헬기 순항속도(81kt) — 평행 진입이 패턴을 가장 크게 벗어나는 경우
+             R330s: one('R', 330, 81), L210s: one('L', 210, 81) };
   });
 
   // 판정 기준은 픽스에서 본 방위(기수의 반대편)다. 인바운드 90°·우선회면
@@ -75,9 +82,19 @@ export async function run(page, t) {
   for (const [k, v] of Object.entries(want)) {
     t.eq(fly[k].entry, v, `${k} 진입 = ${v}`);
     t.eq(fly[k].navOff, false, `${k} NAV 유지`);
-    t.ok(fly[k].entryDist <= 0.36, `${k} 픽스 상공에서 진입 시작 (${fly[k].entryDist.toFixed(2)}NM)`);
+    // 픽스를 지나기 전에 꺾으면 안 된다. 종전에는 "0.35NM 안이면 통과" 라는
+    // 지름길이 있어 픽스 앞에서 선회가 시작됐고, 항적에 그대로 드러났다.
+    t.ok(fly[k].entryDist <= 0.05, `${k} 픽스를 지난 뒤에 선회를 시작한다 (${fly[k].entryDist.toFixed(3)}NM)`);
     t.ok(fly[k].devMax < 0.35, `${k} 그려진 트랙 이탈 최대 ${fly[k].devMax.toFixed(3)}NM`);
   }
+
+  // 진입 직후 패턴을 붙잡는 구간 — 여기가 뱅크 상한에 좌우된다.
+  // 상한이 표준선회 뱅크(81kt 면 13°)뿐이던 때는 평행 진입에서 0.58NM 까지
+  // 벌어졌다. 상한을 23° 로 열어 절반 가까이 줄었다.
+  ['R330s', 'L210s'].forEach(k => {
+    t.ok(fly[k].devCap < 0.40,
+      `${k} 81kt 평행 진입 — 패턴을 붙잡기까지 최대 이탈 ${fly[k].devCap.toFixed(3)}NM`);
+  });
 
   // ③ MAP 의 HOLD 진입 판정 레이어
   // 그림이 판정 규칙을 따로 베끼면 둘이 어긋나는 날 그림이 거짓말을 한다.
