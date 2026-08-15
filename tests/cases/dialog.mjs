@@ -116,4 +116,62 @@ export async function run(page, t) {
   await clickBtn('취소'); await p;
 
   t.eq(nativeDialog, null, `브라우저 기본 모달이 뜨지 않음${nativeDialog ? ' (' + nativeDialog + ')' : ''}`);
+
+  // ── 바깥 사이트로 나가는 길 ──
+  // 홈 화면에 설치한 PWA 에서 window.open 을 부르면 새 탭이 아니라 앱 창 자체가
+  // 그 주소로 덮여 시뮬레이터가 사라진다. 그래서 전부 uiOpenExternal(앵커 클릭)로
+  // 바꿨다. 다시 window.open 이 새어들면 여기서 잡는다.
+  const winOpen = [];
+  for (const f of fs.readdirSync(path.join(ROOT, 'js')).filter(f => f.endsWith('.js'))) {
+    const src = fs.readFileSync(path.join(ROOT, 'js', f), 'utf8');
+    src.split('\n').forEach((line, i) => {
+      if (line.trim().startsWith('//')) return;
+      if (/window\.open\s*\(/.test(line)) winOpen.push(`${f}:${i + 1}`);
+    });
+  }
+  t.eq(winOpen.length, 0,
+    `window.open 을 직접 부르는 곳 없음${winOpen.length ? ' (' + winOpen.join(', ') + ')' : ''}`);
+
+  const link = await page.evaluate(() => {
+    let got = null;
+    const on = e => {
+      const a = e.target.closest && e.target.closest('a');
+      if (a) { got = { href: a.href, target: a.target, rel: a.rel }; e.preventDefault(); }
+    };
+    document.addEventListener('click', on, true);
+    uiOpenExternal('https://example.org/x');
+    document.removeEventListener('click', on, true);
+    return got;
+  });
+  t.eq(link && link.target, '_blank', 'uiOpenExternal 은 새 탭 앵커를 눌러 나간다');
+  t.eq(link && link.href, 'https://example.org/x', `주소가 그대로 전달된다 (${link && link.href})`);
+  t.ok(link && /noopener/.test(link.rel), '연 창이 원래 창을 건드리지 못하게 noopener 를 붙인다');
+  await page.waitForTimeout(150);   // 앵커는 클릭 직후 다음 틱에 치운다
+  const left = await page.evaluate(() => [...document.querySelectorAll('a[href="https://example.org/x"]')].map(a => a.outerHTML));
+  t.eq(left.length, 0, `쓰고 난 앵커는 문서에 남지 않는다 ${JSON.stringify(left)}`);
+
+  // UBIKAIS 는 모바일 브라우저를 서버에서 막는다. UA 를 앱이 바꿀 수는 없으니
+  // '데스크톱 사이트' 로 바꾸는 방법을 함께 띄우고, 확인 버튼은 링크여야 한다.
+  // PC 에서는 안내 없이 곧장 나간다
+  const direct = await page.evaluate(() => {
+    let href = null;
+    const on = e => { const a = e.target.closest && e.target.closest('a');
+                      if (a) { href = a.href; e.preventDefault(); } };
+    window.uiIsMobile = () => false;
+    document.addEventListener('click', on, true);
+    CDU_ACT.openUbikais();
+    document.removeEventListener('click', on, true);
+    return { href, dlg: document.querySelectorAll('.ui-dlg').length };
+  });
+  t.ok(/ubikais\.fois\.go\.kr/.test(direct.href || '') && direct.dlg === 0,
+    'PC 에서는 안내 없이 곧바로 새 탭으로 연다');
+
+  p = page.evaluate(() => { window.uiIsMobile = () => true; CDU_ACT.openUbikais(); });
+  await page.waitForSelector('.ui-dlg');
+  const ok = page.locator('.ui-dlg-btns .ui-dlg-ok');
+  const msg = await page.locator('.ui-dlg-msg').innerText();
+  t.eq(await ok.evaluate(el => el.tagName), 'A', 'UBIKAIS 확인 버튼은 앵커라 팝업 차단에 걸리지 않는다');
+  t.ok(/ubikais\.fois\.go\.kr/.test(await ok.getAttribute('href') || ''), 'UBIKAIS 주소로 연결된다');
+  t.ok(/데스크/.test(msg), `모바일에서 막히는 이유와 푸는 방법을 함께 알려 준다`);
+  await clickBtn('취소'); await p.catch(() => {});
 }

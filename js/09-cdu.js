@@ -1329,6 +1329,30 @@ function act(name, ...args) {
         footer.innerHTML = cduFooter('', `<div class="nav-btn" data-act="openUbikais"><span>🛰</span>UBIKAIS</div>`);
     }
 
+    const UBIKAIS_URL = 'https://ubikais.fois.go.kr:8030/common/login?systemId=sysUbikais';
+
+    // UBIKAIS 는 모바일 브라우저를 서버에서 걸러 낸다. 브라우저가 보내는
+    // User-Agent 를 웹 페이지가 바꿀 방법은 없으므로 앱이 대신 통과시켜 줄 수는 없다.
+    // 다만 브라우저의 '데스크톱 사이트' 설정을 켜면 UA 가 PC 것으로 바뀌어 열린다.
+    // 그래서 모바일에서는 링크만 던지지 않고 그 한 단계를 함께 안내한다.
+    // (PC 는 곧장 새 탭으로 연다 — 안내가 필요 없다)
+    function openUbikais() {
+        if (!uiIsMobile()) { uiOpenExternal(UBIKAIS_URL); return; }
+        const ios = /iP(ad|hone|od)/.test(navigator.userAgent || '') ||
+                    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+        const how = ios
+            ? '사파리 주소창 왼쪽 [ㅏA] → "데스크탑 웹사이트 요청"'
+            : '크롬 우측 상단 [⋮] → "데스크톱 사이트" 체크';
+        uiConfirm(
+            'UBIKAIS 는 모바일 브라우저로는 접속이 막혀 있습니다.\n' +
+            '브라우저를 PC 모드로 바꾸면 그대로 열립니다.\n\n' +
+            `① 아래 [새 탭에서 열기] 를 누릅니다\n` +
+            `② ${how}\n` +
+            '③ 새로고침하면 로그인 화면이 나옵니다\n\n' +
+            '(한 번 켜 두면 그 브라우저는 다음부터 기억합니다)',
+            { okText: '새 탭에서 열기', cancelText: '취소', linkHref: UBIKAIS_URL });
+    }
+
     function renderPerfScreen(container, footer, title) {
         calculatePerformance(); 
         title.innerText = "Performance (Hover & Climb)";
@@ -3800,7 +3824,7 @@ switchMode('HOME');
       openFlightPlan,
       openNavSel,
       openProc: () => { setPage(1); fpGo('IFR'); },
-      openUbikais: () => window.open('https://ubikais.fois.go.kr:8030/common/login?systemId=sysUbikais','_blank'),
+      openUbikais,
       pickNavVor,
       prefetchTiles,
       pwaInstall,
