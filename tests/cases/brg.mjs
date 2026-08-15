@@ -1,8 +1,9 @@
 // BRG1 방위 지시침 — NAV SOURCE 를 무엇으로 두든 살아 있어야 한다.
 //
 // BRG1 은 "지금 선택된 소스의 국" 만 보고 있었다. NAV SOURCE 를 FMS 로 두면
-// 그 값이 비어서, BRG1 을 켜 뒀는데도 좌측 패널·나침반 니들·지도 BRG1 선이
-// 통째로 사라졌다. 방위 지시침은 CDI 소스와 따로 도는 계기다.
+// 그 값이 비어서, BRG1 을 켜 뒀는데도 나침반 니들과 지도 BRG1 선이 사라졌다.
+// 방위 지시침은 CDI 소스와 따로 도는 계기다.
+// (숫자는 우측 NAV SOURCE 3줄이 맡는다 — 좌측 BRG1 패널은 중복이라 걷어냈다)
 export const name = 'BRG 지시침';
 
 export async function run(page, t) {
@@ -47,7 +48,7 @@ export async function run(page, t) {
     return { on, off, back: count() };
   });
   // 파란 화소는 우측 NAV1/NAV2 줄에도 있으므로 절대량이 아니라 "켤 때만 생기는
-  // 몫" 을 본다. 그게 곧 좌측 패널 + 나침반 니들이다.
+  // 몫" 을 본다. 그게 곧 나침반의 BRG1 니들이다.
   t.ok(px.on - px.off > 300,
     `FMS 소스에서도 BRG1 이 그려진다 (켤 때만 생기는 파란 화소 ${px.on - px.off}개)`);
   t.eq(px.back, px.on, '껐다 켜면 그대로 돌아온다');
