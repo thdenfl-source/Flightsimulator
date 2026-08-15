@@ -64,12 +64,14 @@ export async function run(page, t) {
                devMax: devs.length ? Math.max(...devs) : NaN,
                devAvg: devs.length ? devs.reduce((a, b) => a + b, 0) / devs.length : NaN };
     };
-    return { R90: one('R', 90), R50: one('R', 50), R330: one('R', 330),
-             L90: one('L', 90), L130: one('L', 130), L210: one('L', 210) };
+    return { R90: one('R', 90), R230: one('R', 230), R330: one('R', 330),
+             L90: one('L', 90), L310: one('L', 310), L210: one('L', 210) };
   });
 
-  const want = { R90: 'DIRECT', R50: 'TEARDROP', R330: 'PARALLEL',
-                 L90: 'DIRECT', L130: 'TEARDROP', L210: 'PARALLEL' };
+  // 판정 기준은 픽스에서 본 방위(기수의 반대편)다. 인바운드 90°·우선회면
+  // 방위 20~90° 가 눈물방울 → 그 방향에서 오는 기수는 200~270°.
+  const want = { R90: 'DIRECT', R230: 'TEARDROP', R330: 'PARALLEL',
+                 L90: 'DIRECT', L310: 'TEARDROP', L210: 'PARALLEL' };
   for (const [k, v] of Object.entries(want)) {
     t.eq(fly[k].entry, v, `${k} 진입 = ${v}`);
     t.eq(fly[k].navOff, false, `${k} NAV 유지`);
@@ -106,6 +108,12 @@ export async function run(page, t) {
   t.eq(sec.mismatch, 0, `부채꼴 색이 진입 판정과 일치 (${sec.n}점)`);
   t.ok(Math.abs(sec.r.DIRECT - 180) < 5 && Math.abs(sec.r.PARALLEL - 110) < 5 && Math.abs(sec.r.TEARDROP - 70) < 5,
     `우선회 부채꼴 폭 직진 ${sec.r.DIRECT}° · 평행 ${sec.r.PARALLEL}° · 눈물방울 ${sec.r.TEARDROP}°`);
+  // 폭만 보면 세 구역의 자리가 바뀌어도 통과한다 — 경계 각도를 못박는다.
+  // 인바운드 091°·좌선회: 픽스 기준 091~161 눈물방울 / 161~341 직진 / 341~091 평행
+  const bnd = await page.evaluate(() => holdEntrySectors(toTrue(91), false)
+    .map(s => `${s.type} ${Math.round(toMag(s.from))}~${Math.round(toMag(s.to))}`).join(' · '));
+  t.eq(bnd, 'TEARDROP 90~161 · DIRECT 161~341 · PARALLEL 341~90',
+    `구역 경계가 자리에 있다 (${bnd})`);
   const srt = w => JSON.stringify(Object.keys(w).sort().map(k => [k, w[k]]));
   t.eq(srt(sec.l), srt(sec.r), '좌선회도 같은 폭(거울상)');
   t.ok(sec.keptCrs === 123 && sec.keptRight === true, '인자로 판정해도 무장된 홀딩 값은 그대로');
