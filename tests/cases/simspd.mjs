@@ -83,4 +83,34 @@ export async function run(page, t) {
   t.eq(ui.bogus, 1, '없는 배속 값은 실시간으로 떨어진다');
   t.eq(ui.rnpUnderNavSrc, true, 'RNP 버튼이 NAV SRC 아래에 있다');
   t.ok(ui.rnp === 0.3 && ui.rnpActive, `RNP 는 자리를 옮겨도 그대로 동작한다 (${ui.rnp})`);
+
+  // ── 배속이 비행 전체에 걸리는가(직선 이동만이 아니라) ──
+  // 홀딩 진입을 rAF 루프와 같은 방식으로 돌려, 같은 프레임 수에서 ×8 이
+  // 실제로 더 멀리 진행하는지 본다.
+  const e2e = await page.evaluate(() => {
+    const fly = (mult, frames) => {
+      const FIX = [37.0, 127.5];
+      const A = destPoint(FIX[0], FIX[1], 270, 2);   // 픽스 서쪽 2NM(120kt 로 1분)
+      S.wps = [{ ident: 'A', lat: A[0], lon: A[1] },
+               { ident: 'FIX', lat: FIX[0], lon: FIX[1],
+                 hold: { dir: 'R', crs: 90, legType: 'TIME', legVal: 60 } }];
+      S.fwp = 0; S.awp = 1; S.crs = 90; obsOn = false; navSrc = 'FMS';
+      S.lat = A[0]; S.lon = A[1]; S.hdg = 90; S.spd = 120; S.bnk = 0;
+      windSpd = 0; navApOn = true; hdgSelOn = false; gspdOn = false;
+      holdExit(); S.running = true; setSimSpeed(mult);
+      let ts = 1000; S.lastT = ts, flown = 0, prev = [S.lat, S.lon];
+      for (let i = 0; i < frames; i++) {
+        ts += 1000 / 60; simStep(ts);
+        flown += distance(prev[0], prev[1], S.lat, S.lon); prev = [S.lat, S.lon];
+      }
+      S.running = false; setSimSpeed(1);
+      return { flown, phase: _holdPhase };
+    };
+    const a = fly(1, 600), b = fly(8, 600);   // 실제 10초씩
+    return { r: b.flown / a.flown, p1: a.phase, p8: b.phase };
+  });
+  t.ok(Math.abs(e2e.r - 8) < 0.3,
+    `홀딩까지 포함한 비행 전체가 ×8 로 흐른다 (${e2e.r.toFixed(2)}배)`);
+  t.ok(e2e.p1 === 'TOFIX' && e2e.p8 !== 'TOFIX',
+    `같은 실제 시간에 ×8 은 진입까지 갔고 ×1 은 아직 픽스로 가는 중 (${e2e.p1} vs ${e2e.p8})`);
 }

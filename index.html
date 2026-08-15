@@ -266,7 +266,12 @@ html, body {
 .brg-tog-btn.brg2-on { background: #001a00; border-color: #00cc44; color: #00cc44; }
 
 /* ── NAV Source ── */
-.nav-src-group { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.nav-src-group { display: flex; flex-direction: column; align-items: center; gap: 1px; }
+/* NAV SRC 와 RNP 는 한 덩어리로 붙여 둔다 — 사이가 벌어지면 다른 그룹처럼 보인다.
+   튜닝 VOR 라벨(빈 줄일 때가 대부분)이 사이를 벌리던 자리도 같이 줄인다. */
+.nav-src-group .nav-icao-lbl { margin-top: 0; min-height: 10px; line-height: 10px; }
+.nav-src-group .rnp-lbl { margin-top: -1px; font-size: 9px; line-height: 10px; }
+.nav-src-group .rnp-btns { margin-top: 1px; }
 .nav-src-btns { display: flex; gap: 2px; }
 .nav-src-btn {
   background: #1a1a2e; border: 1px solid #2a2a5a; color: #ccc;
@@ -1915,7 +1920,7 @@ body.night-mode::after {
           </div>
           <div class="nav-icao-lbl" id="nav-icao-lbl" style="visibility:hidden">----</div>
           <!-- RNP 는 NAV SRC 아래로 — 비행 중 바꿀 일이 드문 설정이다 -->
-          <div class="ctrl-lbl" style="margin-top:1px;">RNP</div>
+          <div class="ctrl-lbl rnp-lbl">RNP</div>
           <div class="rnp-btns">
             <button class="rnp-btn" id="rnp-4" data-act="setRnp" data-arg='[4]'>4</button>
             <button class="rnp-btn" id="rnp-2" data-act="setRnp" data-arg='[2]'>2</button>
