@@ -160,6 +160,32 @@ function uiPrompt(msg, def, opts) {
   return _uiDialog(Object.assign({ kind: 'prompt', msg, def }, opts || {}));
 }
 
+// 바깥 사이트를 여는 유일한 통로.
+//
+// window.open('...','_blank') 은 기기마다 결과가 갈린다. 홈 화면에 설치한
+// PWA(standalone)에서는 새 탭이 아니라 앱 창 자체를 그 주소로 덮어써서
+// 시뮬레이터가 통째로 사라지고 돌아올 길이 없어진다(차트에서 겪은 그 증상이다).
+// 사용자가 누른 <a target="_blank"> 는 어느 기기에서도 바깥 브라우저로 나간다.
+// 그래서 앵커를 만들어 즉시 클릭한다 — 사용자 제스처 안에서 불러야 한다.
+function uiOpenExternal(url) {
+  const a = document.createElement('a');
+  a.href = url;
+  a.target = '_blank';
+  a.rel = 'noopener noreferrer';
+  a.style.display = 'none';
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { try { a.remove(); } catch (e) { _swallow(e); } }, 0);
+}
+
+// 손가락으로 쓰는 기기인가. 데스크톱 크롬의 기기 시뮬레이션까지 맞힐 필요는 없고,
+// "모바일 안내를 보여 줄 만한가"만 가리면 된다.
+function uiIsMobile() {
+  const ua = navigator.userAgent || '';
+  return /Android|iP(ad|hone|od)|Mobile/.test(ua) ||
+         (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1); // iPadOS 13+
+}
+
 let _uiToastWrap = null;
 function uiToast(msg, kind, ms) {
   try {

@@ -149,7 +149,7 @@ function loadSavedCharts() {
 }
 
 function openAimPackage() {
-    window.open('https://aim.koca.go.kr/eaipPub/Package/history-en-GB.html?language=ko_KR', '_blank');
+    uiOpenExternal('https://aim.koca.go.kr/eaipPub/Package/history-en-GB.html?language=ko_KR');
 }
 
 function buildChartPdfUrl(airacStart, icao, num, name) {
@@ -2054,7 +2054,7 @@ function renderChartsScreen(container, footer, title) {
                     const bgColor = isLocal ? '#040d12' : link ? '#0d1418' : '#0a0a0a';
                     const arrowColor = isLocal ? '#29b6f6' : '#4caf50';
                     const onclickAction = link
-                        ? `window.open('${safeUrl}','_blank')`
+                        ? `uiOpenExternal('${safeUrl}')`
                         : `openChart('${c.icao}','${c.chartNum}','${safeUrl}')`;
                     html += `
                     <div onclick="${onclickAction}" style="display:flex;align-items:center;padding:7px 8px;border-top:1px solid #222;gap:5px;background:${bgColor};cursor:pointer;-webkit-tap-highlight-color:rgba(41,182,246,0.15);">
