@@ -614,14 +614,15 @@ function drawHSI(x, y, w, h) {
 
   // ── BRG1 left panel (VOR/ILS, blue) ──
   if (brg1Visible) {
-    const brg1NavActive = navLat !== null && navLon !== null;
-    const brg1NavBrg    = brg1NavActive ? bearing(S.lat, S.lon, navLat, navLon) : 0;
-    const brg1NavDist   = brg1NavActive ? distance(S.lat, S.lon, navLat, navLon) : 0;
+    const st = brg1Station();          // 소스가 FMS 여도 튜닝된 VOR 를 가리킨다
+    const brg1NavActive = !!st;
+    const brg1NavBrg    = brg1NavActive ? bearing(S.lat, S.lon, st.lat, st.lon) : 0;
+    const brg1NavDist   = brg1NavActive ? distance(S.lat, S.lon, st.lat, st.lon) : 0;
     drawHSISidePanel(leftX, y, sideW, h, {
       label:     'BRG1',
-      sublbl:    navSrc !== 'FMS' ? navSrc : 'VOR',
+      sublbl:    st ? st.src : 'VOR',
       color:     '#44aaff',
-      ident:     navIcao || '----',
+      ident:     (st && st.id) || '----',
       brg:       brg1NavActive ? fmtA(toMag(brg1NavBrg)) + '°'  : '---°',
       dist:      brg1NavActive ? (brg1NavDist*D_CV()).toFixed(1) + D_LBL()  : '--.-' + D_LBL(),
       needleSym: 'single',
@@ -903,8 +904,9 @@ function drawHSI(x, y, w, h) {
   ctx.restore();
 
   // ── BRG1 needle (VOR/ILS → 파란 단선, 머리 화살촉·꼬리 선) ──
-  if (brg1Visible && navLat !== null && navLon !== null) {
-    const brg1 = bearing(S.lat, S.lon, navLat, navLon);
+  const _b1st = brg1Visible ? brg1Station() : null;
+  if (_b1st) {
+    const brg1 = bearing(S.lat, S.lon, _b1st.lat, _b1st.lon);
     ctx.save(); ctx.rotate((brg1 - S.hdg) * D2R);
     const C1 = '#44aaff';
     ctx.strokeStyle = C1; ctx.fillStyle = C1; ctx.lineWidth = 2.5;

@@ -885,6 +885,27 @@ function applyNavRadioToPfd() {
   const lbl = document.getElementById('nav-icao-lbl');
   if (lbl) { lbl.style.visibility = 'visible'; lbl.textContent = (r.id || '----') + (r.freq ? ' ' + r.freq : ''); }
 }
+// BRG1(파란 방위 지시침)이 가리킬 항법시설.
+//
+// 방위 지시침은 CDI 소스와 따로 도는 계기다. 실제 RMI 도 그렇고, 이 앱도
+// 우측 3줄에는 NAV1·NAV2 방위를 소스와 무관하게 늘 띄운다. 그런데 BRG1 은
+// navLat/navLon — 즉 "지금 선택된 소스의 국" — 만 보고 있었다. NAV SOURCE 를
+// FMS 로 두면 그 값이 비어서, BRG1 을 켜 뒀는데도 좌측 패널·나침반 니들·지도
+// BRG1 선이 통째로 사라졌다. 소스를 FMS 로 바꿨다고 꺼질 이유가 없다.
+//
+// 규칙: 소스가 VOR(NAV1/NAV2)이면 그 국, FMS 면 튜닝돼 있는 NAV1(없으면 NAV2).
+// 어느 무선을 가리키는지는 패널의 부제(NAV1/NAV2)에 그대로 나온다.
+function brg1Station() {
+  if (navSrc !== 'FMS' && navLat !== null && navLon !== null)
+    return { lat: navLat, lon: navLon, id: navIcao, src: navSrc };
+  for (const k of ['NAV1', 'NAV2']) {
+    const r = navRadios[k];
+    if (r && r.lat !== null && r.lat !== undefined && r.lon !== null && r.lon !== undefined)
+      return { lat: r.lat, lon: r.lon, id: r.id, src: k };
+  }
+  return null;
+}
+
 // PFD OAT용 지면 온도(°C) — METAR 조회 시 갱신, 기본은 ISA 해면온도 15°C.
 // 09-cdu.js 에 있던 것을 여기로 옮겼다. 거기서 정의하면 첫 drawPFD 가 그보다
 // 먼저 돌아 "_oatSurfaceC is not defined" 예외가 한 번 나고 OAT 가 빈 채로 그려졌다.
