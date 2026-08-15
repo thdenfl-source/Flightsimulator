@@ -113,4 +113,67 @@ export async function run(page, t) {
     `홀딩까지 포함한 비행 전체가 ×8 로 흐른다 (${e2e.r.toFixed(2)}배)`);
   t.ok(e2e.p1 === 'TOFIX' && e2e.p8 !== 'TOFIX',
     `같은 실제 시간에 ×8 은 진입까지 갔고 ×1 은 아직 픽스로 가는 중 (${e2e.p1} vs ${e2e.p8})`);
+
+  // ── 스톱워치가 기체와 같은 시간을 재는가 ──
+  // 계기비행에서 아웃바운드 1분·선회 시점을 이걸로 잰다. 배속을 걸었을 때
+  // 시계만 실시간으로 가면 "1분 뒤 선회" 가 실제 레그와 어긋난다.
+  const sw = await page.evaluate(() => {
+    const spin = (mult, { running = true, gps = false } = {}) => {
+      S.lat = 37; S.lon = 127; S.hdg = 90; S.spd = 120; S.bnk = 0;
+      S.wps = []; S.awp = -1; navApOn = false; hdgSelOn = false;
+      gspdOn = false; gspdCoasting = false; windSpd = 0;
+      swReset(); SW.running = true;
+      S.running = running; gpsMode = gps; setSimSpeed(mult);
+      let ts = 1000; S.lastT = ts; _swPrevTs = ts;
+      for (let i = 0; i < 60; i++) { ts += 1000 / 60; simStep(ts); }   // 실제 1초
+      S.running = false; gpsMode = false; setSimSpeed(1);
+      const ms = swElapsedMs();
+      swReset();
+      return ms;
+    };
+    return { x1: spin(1), x2: spin(2), x8: spin(8),
+             paused: spin(8, { running: false }),
+             gps: spin(8, { gps: true }) };
+  });
+  t.ok(Math.abs(sw.x1 - 1000) < 40, `실시간 1초에 스톱워치도 1초 (${(sw.x1 / 1000).toFixed(2)}s)`);
+  t.ok(Math.abs(sw.x2 - 2000) < 60, `×2 에서는 2초 (${(sw.x2 / 1000).toFixed(2)}s)`);
+  t.ok(Math.abs(sw.x8 - 8000) < 200, `×8 에서는 8초 (${(sw.x8 / 1000).toFixed(2)}s)`);
+  t.eq(sw.paused, 0, '시뮬이 멈춰 있으면 스톱워치도 멈춘다');
+  t.ok(Math.abs(sw.gps - 1000) < 40,
+    `GPS 모드(실제 비행)에서는 배속과 무관하게 실시간 (${(sw.gps / 1000).toFixed(2)}s)`);
+
+  // 홀딩 레그 타이머와 같은 시간축인가 — 이게 어긋나면 눈금이 서로 안 맞는다.
+  // 평행 진입의 아웃바운드 구간(PAR_OUT)은 _holdT 로 1분을 재는 자리다.
+  // 조종사가 스톱워치로 재는 것과 같은 1분이어야 한다.
+  const legs = await page.evaluate(() => {
+    const FIX = [37.0, 127.5], APPR = 330;       // 우선회 90° 홀딩에서 평행 진입
+    const A = destPoint(FIX[0], FIX[1], normA(APPR + 180), 3);
+    S.wps = [{ ident: 'A', lat: A[0], lon: A[1] },
+             { ident: 'FIX', lat: FIX[0], lon: FIX[1],
+               hold: { dir: 'R', crs: 90, legType: 'TIME', legVal: 60 } }];
+    S.fwp = 0; S.awp = 1; S.crs = 90; obsOn = false; navSrc = 'FMS';
+    S.lat = A[0]; S.lon = A[1]; S.hdg = APPR; S.bnk = 0; S.spd = 120;
+    windSpd = 0; navApOn = true; hdgSelOn = false; gspdOn = false;
+    holdExit(); swReset(); SW.running = true;
+    S.running = true; setSimSpeed(8);
+    let ts = 1000; S.lastT = ts; _swPrevTs = ts;
+    let sw0 = null, last = null, entry = '';
+    for (let i = 0; i < 2400; i++) {             // 실제 40초 = 시뮬 5분 20초
+      ts += 1000 / 60; simStep(ts);
+      if (_holdPhase === 'PAR_OUT') {
+        if (sw0 === null) sw0 = swElapsedMs();
+        last = { sw: (swElapsedMs() - sw0) / 1000, leg: _holdT };
+        entry = _holdEntry;
+      }
+    }
+    S.running = false; setSimSpeed(1); swReset();
+    return { last, entry };
+  });
+  if (!legs.last) t.ok(false, '홀딩 아웃바운드 구간에 들어가지 못했다');
+  else {
+    t.eq(legs.entry, 'PARALLEL', '평행 진입으로 들어갔다');
+    t.ok(Math.abs(legs.last.sw - legs.last.leg) < 0.5,
+      `스톱워치와 홀딩 레그 타이머가 같은 시간축 ` +
+      `(아웃바운드 ${legs.last.sw.toFixed(1)}s vs ${legs.last.leg.toFixed(1)}s)`);
+  }
 }

@@ -945,19 +945,29 @@ function pitchFromSpd(spd) {
 // ══════════════════════════════════════════════════════
 // STOPWATCH
 // ══════════════════════════════════════════════════════
-const SW = { running: false, startMs: 0, accMs: 0 };
+// 스톱워치는 벽시계가 아니라 **시뮬 시간**으로 간다.
+// 계기비행에서 이걸로 아웃바운드 1분·선회 시점을 재는데, 배속을 걸면 기체는
+// 8배로 나는데 시계만 실시간으로 가서 눈금이 서로 어긋난다. 홀딩 레그 타이머
+// (_holdT += dt)와 같은 시간축이어야 "1분 뒤 선회" 가 맞아떨어진다.
+//   · 배속 ×N  → N 배로 흐른다
+//   · 시뮬 정지 → 멈춘다(기체가 멈춰 있으니 시간도 멈춘다)
+//   · GPS 모드 → 실제 비행이므로 실시간
+// 그래서 경과시간을 Date.now() 차로 구하지 않고 매 프레임 더해 쌓는다(swAddMs).
+const SW = { running: false, accMs: 0 };
 
 function swElapsedMs() {
-  return SW.running ? SW.accMs + (Date.now() - SW.startMs) : SW.accMs;
+  return SW.accMs;
+}
+// 프레임마다 흘려 넣는 시간(ms). 흐름의 기준은 부르는 쪽(simStep)이 정한다.
+function swAddMs(ms) {
+  if (SW.running && ms > 0) SW.accMs += ms;
 }
 function swToggle() {
   if (SW.running) {
-    SW.accMs += Date.now() - SW.startMs;
     SW.running = false;
     document.getElementById('sw-toggle').textContent = 'GO';
     document.getElementById('sw-toggle').classList.remove('run');
   } else {
-    SW.startMs = Date.now();
     SW.running = true;
     document.getElementById('sw-toggle').textContent = 'STP';
     document.getElementById('sw-toggle').classList.add('run');
