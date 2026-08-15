@@ -15,7 +15,54 @@ const IFR_DB = {
   },
   RKNW: {
     name: '원주',
-    stars: [], approaches: [],
+    stars: [
+      { name:'GANAM 1 · KAKSO', rwy:'03', wps:[
+        {ident:'KAKSO',lat:37.12906,lon:127.44372},
+        {ident:'GANAM',lat:37.11113,lon:127.66447},
+        {ident:'ESLOL',lat:37.4095,lon:127.83216},
+        {ident:'OPUPI',lat:37.31542,lon:128.07101},
+        {ident:'OGEBU',lat:37.24064,lon:128.02472},
+        {ident:'OLGOD',lat:37.21039,lon:127.93604},
+        {ident:'IKOSU',lat:37.24735,lon:127.84246},
+      ]},
+      { name:'GANAM 1 · GUKDO', rwy:'03', wps:[
+        {ident:'GUKDO',lat:37.0197,lon:127.63968},
+        {ident:'GANAM',lat:37.11113,lon:127.66447},
+        {ident:'ESLOL',lat:37.4095,lon:127.83216},
+        {ident:'OPUPI',lat:37.31542,lon:128.07101},
+        {ident:'OGEBU',lat:37.24064,lon:128.02472},
+        {ident:'OLGOD',lat:37.21039,lon:127.93604},
+        {ident:'IKOSU',lat:37.24735,lon:127.84246},
+      ]},
+      { name:'GANAM 1', rwy:'03', wps:[
+        {ident:'GANAM',lat:37.11113,lon:127.66447},
+        {ident:'ESLOL',lat:37.4095,lon:127.83216},
+        {ident:'OPUPI',lat:37.31542,lon:128.07101},
+        {ident:'OGEBU',lat:37.24064,lon:128.02472},
+        {ident:'OLGOD',lat:37.21039,lon:127.93604},
+        {ident:'IKOSU',lat:37.24735,lon:127.84246},
+      ]},
+      { name:'GANAM 2 · KAKSO', rwy:'21', wps:[
+        {ident:'KAKSO',lat:37.12906,lon:127.44372},
+        {ident:'GANAM',lat:37.11113,lon:127.66447},
+        {ident:'ENLAR',lat:37.37005,lon:127.80784},
+        {ident:'MAJIF',lat:37.43606,lon:128.14592},
+        {ident:'JOOKA',lat:37.56912,lon:128.22924},
+      ]},
+      { name:'GANAM 2 · GUKDO', rwy:'21', wps:[
+        {ident:'GUKDO',lat:37.0197,lon:127.63968},
+        {ident:'GANAM',lat:37.11113,lon:127.66447},
+        {ident:'ENLAR',lat:37.37005,lon:127.80784},
+        {ident:'MAJIF',lat:37.43606,lon:128.14592},
+        {ident:'JOOKA',lat:37.56912,lon:128.22924},
+      ]},
+      { name:'GANAM 2', rwy:'21', wps:[
+        {ident:'GANAM',lat:37.11113,lon:127.66447},
+        {ident:'ENLAR',lat:37.37005,lon:127.80784},
+        {ident:'MAJIF',lat:37.43606,lon:128.14592},
+        {ident:'JOOKA',lat:37.56912,lon:128.22924},
+      ]},
+    ], approaches: [],
     sids: [
       { name:'IKILA1 · KARBU', rwy:'03', wps:[{ident:'IKILA',lat:37.61324,lon:128.06913}, {ident:'AROKU',lat:37.66499,lon:127.93747}, {ident:'KARBU',lat:37.53306,lon:127.66444}] },
       { name:'IKILA1 · BIKSI', rwy:'03', wps:[{ident:'IKILA',lat:37.61324,lon:128.06913}, {ident:'BIKSI',lat:37.67556,lon:128.58444}] },
@@ -26,7 +73,48 @@ const IFR_DB = {
   },
   RKJB: {
     name: '무안',
-    stars: [], approaches: [],
+    stars: [
+      { name:'MANGI 2C', rwy:'01', wps:[
+        {ident:'MANGI',lat:35.50314,lon:126.74214},
+        {ident:'OSROX',lat:35.25503,lon:126.71561},
+        {ident:'JB704',lat:35.049,lon:126.69369},
+        {ident:'VASVA',lat:34.91653,lon:126.67967},
+        {ident:'PEGRO',lat:34.76917,lon:126.56725},
+      ]},
+      { name:'MANGI 2H', rwy:'01', wps:[
+        {ident:'MANGI',lat:35.50314,lon:126.74214},
+        {ident:'OSROX',lat:35.25503,lon:126.71561},
+        {ident:'JB703',lat:35.18072,lon:126.60569},
+        {ident:'JB702',lat:35.01247,lon:126.35817},
+        {ident:'JB701',lat:34.886,lon:126.16953},
+        {ident:'OVGEN',lat:34.77283,lon:126.19664},
+      ]},
+      { name:'KAMIT 2C', rwy:'01', wps:[
+        {ident:'KAMIT',lat:34.25392,lon:126.77158},
+        {ident:'JB705',lat:34.30408,lon:126.71633},
+        {ident:'JB706',lat:34.471,lon:126.53169},
+        {ident:'OLBES',lat:34.60225,lon:126.37556},
+      ]},
+      { name:'MANGI 1D', rwy:'19', wps:[
+        {ident:'MANGI',lat:35.50314,lon:126.74214},
+        {ident:'JB755',lat:35.25372,lon:126.71547},
+        {ident:'DOWAN',lat:35.15447,lon:126.55444},
+      ]},
+      { name:'SAMUL 1D', rwy:'19', wps:[
+        {ident:'SAMUL',lat:35.12653,lon:126.86511},
+        {ident:'KWA',lat:35.12622,lon:126.81211},
+        {ident:'DALSU',lat:35.12528,lon:126.70181},
+        {ident:'DOWAN',lat:35.15447,lon:126.55444},
+      ]},
+      { name:'KAMIT 1D', rwy:'19', wps:[
+        {ident:'KAMIT',lat:34.25392,lon:126.77158},
+        {ident:'JB751',lat:34.51608,lon:126.79947},
+        {ident:'JB752',lat:34.72533,lon:126.55794},
+        {ident:'JB753',lat:34.88369,lon:126.37389},
+        {ident:'JB754',lat:35.02383,lon:126.21011},
+        {ident:'AYEON',lat:35.15283,lon:126.20892},
+      ]},
+    ], approaches: [],
     sids: [
       { name:'DOTOL1N', rwy:'01', wps:[{ident:'JB801',lat:35.09764,lon:126.38208}, {ident:'JB802',lat:35.09672,lon:126.22161}, {ident:'JB803',lat:34.97986,lon:126.22272}, {ident:'JB804',lat:34.90556,lon:126.30428}, {ident:'JB805',lat:34.67767,lon:126.55303}, {ident:'JB806',lat:34.59247,lon:126.64553}, {ident:'JB807',lat:34.50075,lon:126.63592}, {ident:'DOTOL',lat:34.25428,lon:126.61017}] },
       { name:'MAKSA1N', rwy:'01', wps:[{ident:'BEMGA',lat:35.17053,lon:126.38239}, {ident:'NAKZY',lat:35.21494,lon:126.65961}, {ident:'JB809',lat:35.30478,lon:126.78522}, {ident:'JB808',lat:35.3815,lon:126.89281}, {ident:'MAKSA',lat:35.50314,lon:126.90611}] },
@@ -37,7 +125,44 @@ const IFR_DB = {
   },
   RKJJ: {
     name: '광주',
-    stars: [], approaches: [],
+    stars: [
+      { name:'ARIMU 1 · IGDOK', rwy:'04L/R', wps:[
+        {ident:'IGDOK',lat:35.51767,lon:127.8185},
+        {ident:'JJ502',lat:35.36667,lon:127.42658},
+        {ident:'JJ503',lat:35.27528,lon:127.19161},
+        {ident:'JJ504',lat:35.00011,lon:127.08153},
+        {ident:'ARIMU',lat:34.83442,lon:126.78397},
+      ]},
+      { name:'ARIMU 1 · TEDAN', rwy:'04L/R', wps:[
+        {ident:'TEDAN',lat:35.12883,lon:127.31447},
+        {ident:'JJ504',lat:35.00011,lon:127.08153},
+        {ident:'ARIMU',lat:34.83442,lon:126.78397},
+      ]},
+      { name:'ARIMU 1 · KAMIT', rwy:'04L/R', wps:[
+        {ident:'KAMIT',lat:34.25392,lon:126.77158},
+        {ident:'ARIMU',lat:34.83442,lon:126.78397},
+      ]},
+      { name:'XEMIX 1 · MANGI', rwy:'04L/R', wps:[
+        {ident:'MANGI',lat:35.50314,lon:126.74214},
+        {ident:'JJ501',lat:35.24833,lon:126.71489},
+        {ident:'XEMIX',lat:34.9615,lon:126.51494},
+      ]},
+      { name:'ORUSA 1 · IGDOK', rwy:'22L/R', wps:[
+        {ident:'IGDOK',lat:35.51767,lon:127.8185},
+        {ident:'JJ321',lat:35.34097,lon:127.36036},
+        {ident:'ORUSA',lat:35.29028,lon:127.10403},
+      ]},
+      { name:'ORUSA 1 · TEDAN', rwy:'22L/R', wps:[
+        {ident:'TEDAN',lat:35.12883,lon:127.31447},
+        {ident:'ORUSA',lat:35.29028,lon:127.10403},
+      ]},
+      { name:'ORUSA 1 · KAMIT', rwy:'22L/R', wps:[
+        {ident:'KAMIT',lat:34.25392,lon:126.77158},
+        {ident:'JJ322',lat:34.62544,lon:126.81117},
+        {ident:'JJ323',lat:35.00008,lon:127.01158},
+        {ident:'ORUSA',lat:35.29028,lon:127.10403},
+      ]},
+    ], approaches: [],
     sids: [
       { name:'LILVI1 · MAKSA', rwy:'04L/04R', wps:[{ident:'LILVI',lat:35.21878,lon:126.87503}, {ident:'MAKSA',lat:35.50314,lon:126.90611}] },
       { name:'LILVI1 · IGDOK', rwy:'04L/04R', wps:[{ident:'LILVI',lat:35.21878,lon:126.87503}, {ident:'JJ401',lat:35.22253,lon:126.97664}, {ident:'PUMEG',lat:35.22572,lon:127.06514}, {ident:'GUMAM',lat:35.36642,lon:127.42603}, {ident:'IGDOK',lat:35.51767,lon:127.8185}] },
@@ -51,7 +176,36 @@ const IFR_DB = {
   },
   RKJY: {
     name: '여수',
-    stars: [], approaches: [],
+    stars: [
+      { name:'TEDAN 1D', rwy:'17', wps:[
+        {ident:'TEDAN',lat:35.12883,lon:127.31447},
+        {ident:'YEONA',lat:34.95106,lon:127.41447},
+      ]},
+      { name:'NISAV 1D', rwy:'17', wps:[
+        {ident:'NISAV',lat:34.25531,lon:127.97639},
+        {ident:'AVMET',lat:34.45211,lon:127.77483},
+        {ident:'ADGES',lat:34.63417,lon:127.58722},
+        {ident:'ISDOV',lat:34.79889,lon:127.49861},
+        {ident:'BUGYO',lat:34.87389,lon:127.45806},
+        {ident:'YEONA',lat:34.95106,lon:127.41447},
+      ]},
+      { name:'TEDAN 1E', rwy:'17', wps:[
+        {ident:'TEDAN',lat:35.12883,lon:127.31447},
+        {ident:'SKOTA',lat:35.10136,lon:127.49006},
+      ]},
+      { name:'TEDAN 3C', rwy:'35', wps:[
+        {ident:'TEDAN',lat:35.12883,lon:127.31447},
+        {ident:'ISRIV',lat:34.90278,lon:127.43},
+        {ident:'SEHEE',lat:34.74361,lon:127.51083},
+        {ident:'MENIV',lat:34.59617,lon:127.58553},
+        {ident:'SOONA',lat:34.64097,lon:127.71556},
+      ]},
+      { name:'NISAV 1C', rwy:'35', wps:[
+        {ident:'NISAV',lat:34.25531,lon:127.97639},
+        {ident:'JY752',lat:34.39256,lon:127.88389},
+        {ident:'SOONA',lat:34.64097,lon:127.71556},
+      ]},
+    ], approaches: [],
     sids: [
       { name:'ANUBA1M', rwy:'17', wps:[{ident:'JY801',lat:34.65153,lon:127.71381}, {ident:'JY802',lat:34.60903,lon:127.83017}, {ident:'JY803',lat:34.74031,lon:127.90056}, {ident:'YSU',lat:34.84286,lon:127.61908}, {ident:'ANUBA',lat:35.12942,lon:127.58967}] },
       { name:'POVOR1M', rwy:'17', wps:[{ident:'JY801',lat:34.65153,lon:127.71381}, {ident:'JY806',lat:34.42017,lon:127.72517}, {ident:'POVOR',lat:34.25547,lon:127.73325}] },
@@ -284,22 +438,22 @@ const IFR_DB = {
         {ident:'PILIT',lat:37.4419,lon:129.2919},
       ]},
     ],
-    stars: [
-      { name:'KAE 2H',   rwy:'33', wps:[
-        {ident:'KAE',  lat:37.7008,lon:128.7538},
-        {ident:'NY049',lat:37.7527,lon:128.6738},
-        {ident:'NY042',lat:37.8742,lon:128.6738},
-        {ident:'NY031',lat:38.0594,lon:128.6738},
-        {ident:'NIMAL',lat:38.0714,lon:128.7638},
-        {ident:'DUBUN',lat:38.0874,lon:128.8705},
+stars: [
+      { name:'KAE 2H', rwy:'33', wps:[
+        {ident:'KAE',lat:37.70078,lon:128.75378},
+        {ident:'NY049',lat:37.75311,lon:128.67353},
+        {ident:'NY042',lat:37.87483,lon:128.67364},
+        {ident:'NY031',lat:38.05947,lon:128.67383},
+        {ident:'NIMAL',lat:38.07267,lon:128.76661},
+        {ident:'DUBUN',lat:38.08736,lon:128.8705},
       ]},
       { name:'BIKSI 2H', rwy:'33', wps:[
-        {ident:'BIKSI',lat:37.6756,lon:128.5844},
-        {ident:'NY049',lat:37.7527,lon:128.6738},
-        {ident:'NY042',lat:37.8742,lon:128.6738},
-        {ident:'NY031',lat:38.0594,lon:128.6738},
-        {ident:'NIMAL',lat:38.0714,lon:128.7638},
-        {ident:'DUBUN',lat:38.0874,lon:128.8705},
+        {ident:'BIKSI',lat:37.67556,lon:128.58444},
+        {ident:'NY049',lat:37.75311,lon:128.67353},
+        {ident:'NY042',lat:37.87483,lon:128.67364},
+        {ident:'NY031',lat:38.05947,lon:128.67383},
+        {ident:'NIMAL',lat:38.07267,lon:128.76661},
+        {ident:'DUBUN',lat:38.08736,lon:128.8705},
       ]},
     ],
     approaches: [

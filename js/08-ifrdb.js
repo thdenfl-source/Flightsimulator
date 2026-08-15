@@ -210,6 +210,9 @@ function procUnresolved(proc) {
   }).map(w => w.ident);
 }
 // 경유점 좌표 해석(픽스 DB 우선)
+// 절차의 경유점 좌표를 정한다. 픽스 DB 에 이름이 있으면 그 값을 쓰고, 없으면
+// 절차에 적힌 값을 쓴다. SID 는 좌표를 생략하고 이름만 적은 항목이 많아서
+// (RKSI·RKSS 등 476건) 이 조회가 없으면 그대로 죽는다.
 function _resolveWp(w) {
   const f = IFR_FIXES[w.ident];
   if (f) return { ident: w.ident, lat: f.lat, lon: f.lon, arc: w.arc };
@@ -400,7 +403,13 @@ function addStarWps() {
   if (!db || !db.stars || isNaN(idx)) return;
   const star = db.stars[idx];
   if (!star) return;
-  star.wps.forEach(wp => pushWP({ident:wp.ident, lat:wp.lat, lon:wp.lon, arc:wp.arc}, 'APP'));
+  // SID 와 같은 방식으로 좌표를 푼다. 종전에는 STAR·접근절차만 절차에 적힌 값을
+  // 그대로 썼는데, 좌표 없는 항목이 섞이면 NaN 경유점이 비행계획에 들어갔다.
+  star.wps.forEach(wp => {
+    const r = _resolveWp(wp);
+    if (typeof r.lat !== 'number' || isNaN(r.lat)) return;
+    pushWP({ident:r.ident, lat:r.lat, lon:r.lon, arc:r.arc}, 'APP');
+  });
   fpGo('LIST');
 }
 
@@ -425,7 +434,11 @@ function addAppWps() {
   if (!db || isNaN(idx)) return;
   const app = db.approaches[idx];
   if (!app) return;
-  app.wps.forEach(wp => pushWP({ident:wp.ident, lat:wp.lat, lon:wp.lon, arc:wp.arc}, 'APP'));
+  app.wps.forEach(wp => {
+    const r = _resolveWp(wp);
+    if (typeof r.lat !== 'number' || isNaN(r.lat)) return;
+    pushWP({ident:r.ident, lat:r.lat, lon:r.lon, arc:r.arc}, 'APP');
+  });
   fpGo('LIST');
 }
 
