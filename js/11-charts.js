@@ -2181,6 +2181,7 @@ appRegister({
   toggleRuler,
   toggleShip,
   toggleSim,
+  setSimSpeed,
   toggleHoldEntry,
   toggleTcut,
   toggleTrackRec,

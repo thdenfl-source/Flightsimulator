@@ -297,6 +297,19 @@ html, body {
 }
 .rnp-btn.active { background: #0e2e0e; border-color: #44aa44; color: #fff; }
 
+/* ── SIM SPD (배속) ── */
+.simspd-group { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.simspd-btns { display: flex; gap: 2px; }
+.simspd-btn {
+  background: #2a1a2a; border: 1px solid #4a2a4a; color: #ccc;
+  font-size: 11px; padding: 3px 5px; cursor: pointer; border-radius: 2px;
+  touch-action: manipulation; font-family: 'Helvetica Neue', Arial, sans-serif;
+}
+/* 실시간(×1)은 평상시라 눈에 띄지 않게, 빨라진 상태는 확실히 보이게 */
+.simspd-btn.active { background: #2e0e2e; border-color: #cc66ff; color: #fff; }
+#simspd-1.active { background: #1e1e1e; border-color: #666; color: #aaa; box-shadow: none; }
+#simspd-2.active, #simspd-4.active, #simspd-8.active { box-shadow: 0 0 6px rgba(204,102,255,0.45); }
+
 /* ── divider ── */
 .ctrl-div { width: 1px; height: 34px; background: #2a2a2a; margin: 0 2px; }
 
@@ -1604,6 +1617,10 @@ body.night-mode::after {
       <h3>4. PFD · HOVER PAGE</h3>
       <ul>
         <li><b>NAV SRC</b>: <b>FMS / NAV1 / NAV2</b>. NAV1·NAV2는 CDU에서 튜닝한 VOR을 따라갑니다.</li>
+        <li><b>RNP</b>: NAV SRC 바로 아래. <b>4 / 2 / 1 / 0.3</b> NM — CDI 최대편위(스케일)를 정합니다.</li>
+        <li><b>SIM SPD</b>: <b>×1 / ×2 / ×4 / ×8</b> 배속. 홀딩 한 바퀴 4분, 절차 하나 20분을 실시간으로
+            기다리지 않아도 됩니다. <b>시뮬 시간만 빨리 흐르고 계산은 그대로</b>라 항적·진입·타이머가
+            실시간과 같습니다(프레임을 건너뛰지 않습니다). <b>RESET</b> 하면 ×1 로 돌아옵니다.</li>
         <li><b>GSPD 작동 중에는 NAV·OBS 가 조향하지 못합니다.</b> GSPD 는 요/롤 축을 가져가
             (요 조작은 <b>ANTI-TORQUE PEDAL</b> 전용) 오토파일럿이 뱅크를 지령해도 기수가 돌지 않습니다.
             이때 NAV·OBS 버튼은 <b>빗금으로 흐리게</b> 표시되고 FMA 는 <b>GS·NAV대기</b>로 바뀝니다.
@@ -1897,17 +1914,26 @@ body.night-mode::after {
             <button class="nav-src-btn" id="nav-nav2" data-act="setNavSrc" data-arg='["NAV2"]'>NAV2</button>
           </div>
           <div class="nav-icao-lbl" id="nav-icao-lbl" style="visibility:hidden">----</div>
-        </div>
-
-        <div class="ctrl-div"></div>
-
-        <div class="rnp-group">
-          <div class="ctrl-lbl">RNP</div>
+          <!-- RNP 는 NAV SRC 아래로 — 비행 중 바꿀 일이 드문 설정이다 -->
+          <div class="ctrl-lbl" style="margin-top:1px;">RNP</div>
           <div class="rnp-btns">
             <button class="rnp-btn" id="rnp-4" data-act="setRnp" data-arg='[4]'>4</button>
             <button class="rnp-btn" id="rnp-2" data-act="setRnp" data-arg='[2]'>2</button>
             <button class="rnp-btn active" id="rnp-1" data-act="setRnp" data-arg='[1]'>1</button>
             <button class="rnp-btn" id="rnp-03" data-act="setRnp" data-arg='[0.3]'>0.3</button>
+          </div>
+        </div>
+
+        <div class="ctrl-div"></div>
+
+        <!-- 배속 — 홀딩 한 바퀴 4분, 절차 하나 20분을 실시간으로 기다리지 않게 -->
+        <div class="simspd-group">
+          <div class="ctrl-lbl">SIM SPD</div>
+          <div class="simspd-btns">
+            <button class="simspd-btn active" id="simspd-1" data-act="setSimSpeed" data-arg='[1]' title="실시간">×1</button>
+            <button class="simspd-btn" id="simspd-2" data-act="setSimSpeed" data-arg='[2]' title="2배속">×2</button>
+            <button class="simspd-btn" id="simspd-4" data-act="setSimSpeed" data-arg='[4]' title="4배속">×4</button>
+            <button class="simspd-btn" id="simspd-8" data-act="setSimSpeed" data-arg='[8]' title="8배속">×8</button>
           </div>
         </div>
 
