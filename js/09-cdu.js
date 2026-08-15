@@ -160,7 +160,6 @@ function init(){
   const _restored = restoreSession();   // 자동 리로드 복원(있으면 FPL 복원 생략)
   if (!_restored) _fplRestore();        // 저장된 비행계획 복원(새로고침 대비)
   fpRender();
-  renderNavBox();
   updateAcOnMap();
   S.pit = pitchFromSpd(S.spd);
   // NAV1/NAV2 무선의 튜닝 VOR 좌표 해석(ENR_VORS 정의 이후에 실행되도록 지연)
