@@ -121,8 +121,9 @@ export async function run(page, t) {
   }
   t.eq(jump.length, 0, `구간 거리가 상식 범위${jump.length ? ' — ' + jump.slice(0, 3).join(' / ') : ''}`);
 
-  // ── 이번에 넣은 다섯 공항이 실제로 STAR 을 갖고 있는가 ──
-  const want = ['RKJB', 'RKJJ', 'RKJY', 'RKNW', 'RKNY'];
+  // ── STAR 을 넣은 공항이 실제로 갖고 있는가 ──
+  const want = ['RKJB', 'RKJJ', 'RKJY', 'RKNW', 'RKNY',
+                'RKPC', 'RKPD', 'RKPK', 'RKPS', 'RKPU'];
   const got = await page.evaluate(w => w.map(i => [i, (IFR_DB[i]?.stars || []).length]), want);
   const empty = got.filter(([, n]) => !n).map(([i]) => i);
   t.eq(empty.length, 0,
