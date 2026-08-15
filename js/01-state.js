@@ -62,6 +62,8 @@ const S = {
 
 // bankTarget: goal bank angle; smoothed each frame
 let bankTarget = 0;
+// 배속(1·2·4·8) — 시뮬 시간이 실시간의 몇 배로 흐르는가. 계산 자체는 그대로다.
+let simSpeed = 1;
 let _simLoopRunning = false;  // guard against double-starting the rAF loop
 
 // ── AFCS Preselects ──

@@ -238,8 +238,25 @@ function toggleSim(){
   S.lastT=null;
   if(S.running&&S.trail.length===0) S.trail.push([S.lat,S.lon]);
 }
+// ── 배속 ───────────────────────────────────────────────────────────
+// 홀딩 한 바퀴가 4분, 절차 하나가 20분씩 걸린다. 그 시간을 실시간으로
+// 앉아 기다리게 하지 않는다. 시뮬 시간만 빨리 흐르게 하고 계산은 그대로다
+// (프레임 간격을 늘리는 게 아니라 한 프레임에 흐를 시간을 늘린다).
+const SIM_SPEEDS = [1, 2, 4, 8];
+function setSimSpeed(v) {
+  simSpeed = SIM_SPEEDS.includes(v) ? v : 1;
+  updateSimSpeedBtns();
+}
+function updateSimSpeedBtns() {
+  SIM_SPEEDS.forEach(v => {
+    const el = document.getElementById('simspd-' + v);
+    if (el) el.classList.toggle('active', simSpeed === v);
+  });
+}
+
 function resetSim(){
   S.running=false;
+  setSimSpeed(1);            // 리셋하면 실시간으로 돌아온다
   updateFlyBtns();
   S.trail=[];trailLine.setLatLngs([]);_update3dTrail();S.lastT=null;
   updateAcOnMap();
@@ -251,7 +268,15 @@ function simStep(ts){
   _simLastTick = performance.now();
   try {
   if(S.running && !gpsMode && !_fdrPlaying && S.lastT!==null){
-    const dt=(ts-S.lastT)/1000;
+    const _raw=(ts-S.lastT)/1000;
+    // 배속: 한 프레임에 흐르게 할 시뮬 시간 = 실제 경과시간 × simSpeed.
+    // 한 번에 몰아 적분하면 큰 dt 에서 오차가 커지므로(선회 중 특히) 0.2초를
+    // 넘지 않게 쪼갠다. 60fps·8배속이면 0.133초라 그대로 한 번에 돈다 —
+    // 프레임이 튀었을 때만 나뉜다.
+    const _tot=_raw>0&&_raw<0.5 ? _raw*simSpeed : 0;
+    const _n=Math.max(1, Math.ceil(_tot/0.2));
+    for(let _sub=0;_sub<_n;_sub++){
+    const dt=_tot/_n;
     if(dt>0&&dt<0.5){
       // smooth bank toward target — GSPD 중에는 ADI 자세 변화 없음(수평 유지)
       const bt = gspdOn ? 0 : bankTarget;
@@ -447,6 +472,7 @@ function simStep(ts){
         _spdPrev = S.spd;
       }
     }
+    }
   } else if(!S.running){
     // bank snaps back to level even when not flying
     const bankDiff=bankTarget-S.bnk;
@@ -456,8 +482,8 @@ function simStep(ts){
 
   // Ship movement (wind-independent)
   if (shipVisible && shipMarker && shipSpd > 0 && S.lastT !== null) {
-    const sdt = (ts - S.lastT) / 1000;
-    if (sdt > 0 && sdt < 0.5) {
+    const sdt = (ts - S.lastT) / 1000 * simSpeed;   // 배가 항공기와 같은 시간을 흐르게
+    if (sdt > 0 && sdt < 0.5 * simSpeed) {
       const [nLat, nLon] = destPoint(shipLat, shipLon, shipHdg, shipSpd * sdt / 3600);
       shipLat = nLat; shipLon = nLon;
       if (!shipDragging) shipMarker.setLatLng([shipLat, shipLon]);
