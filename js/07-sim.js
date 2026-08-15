@@ -262,6 +262,7 @@ function resetSim(){
   updateAcOnMap();
 }
 
+let _swPrevTs = null;   // 스톱워치에 시간을 흘려 넣기 위한 직전 프레임 시각
 let _simLastTick = 0;   // 렌더 루프 생존 감시용
 let _pfdDrawLast = 0;   // GPS 모드 PFD 10fps 제한용
 function simStep(ts){
@@ -497,6 +498,17 @@ function simStep(ts){
   }
   S.lastT=ts;
   updateHoverBtns();
+  // 스톱워치에 흘려 넣을 시간 — 기체가 겪는 시간과 같아야 한다.
+  // 배속이 걸리면 그만큼 빨리, 시뮬이 멈춰 있으면 함께 멈춘다.
+  // GPS 모드는 실제 비행이므로 실시간으로 간다(여기서 멈추면 안 된다).
+  if (_swPrevTs !== null) {
+    const _swReal = ts - _swPrevTs;
+    if (_swReal > 0 && _swReal < 2000) {
+      swAddMs(gpsMode ? _swReal
+            : (S.running && !_fdrPlaying) ? _swReal * simSpeed : 0);
+    }
+  }
+  _swPrevTs = ts;
   swRender();
   // 발열 저감: GPS 모드(데이터 3초 주기)에서는 PFD를 10fps로 제한.
   // 시뮬 비행·FDR 리플레이는 기존 60fps 유지.
