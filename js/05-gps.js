@@ -462,16 +462,21 @@ function vnavCalc() {
       d = Math.sqrt(Math.max(0, dDir * dDir - _x * _x));      // 레그 방향 성분
     }
   } catch(e) { _swallow(e); }
+  // 웨이포인트에 VNAV 고도를 넣어 뒀으면 그것이 타깃이다(UTIL 의 전역값보다 우선).
+  // 오프셋은 "지점보다 몇 NM 앞에서 그 고도에 닿는가" 이므로 남은 거리에서 뺀다.
+  const tgtAlt = Number.isFinite(wp.vnavAlt) ? wp.vnavAlt : vnavTgtAlt;
+  const ofs = Number.isFinite(wp.vnavOfs) ? Math.max(0, wp.vnavOfs) : 0;
+  d = Math.max(0, d - ofs);
   const slope = Math.tan(Math.abs(vnavAngle) * D2R);
   const sign = vnavAngle < 0 ? 1 : -1;                        // 강하각이면 타깃보다 높은 곳이 경로
   const pathH = d * FT_PER_NM * slope * sign;                 // 타깃 대비 현재 거리에서의 경로 고도차
-  const reqAlt = vnavTgtAlt + pathH;                          // 현재 위치에서 경로상 고도
+  const reqAlt = tgtAlt + pathH;                              // 현재 위치에서 경로상 고도
   const dev = S.alt - reqAlt;                                 // +면 경로 위(높음)
   const gs = Math.max(1, groundSpdKt());                      // 실제 지상속도
   const vs = -sign * gs * FT_PER_NM / 60 * slope;             // 유지 수직속도(ft/min)
-  const todFromTgt = (S.alt - vnavTgtAlt) / (FT_PER_NM * slope); // 타깃에서 강하시작점까지 거리
+  const todFromTgt = (S.alt - tgtAlt) / (FT_PER_NM * slope);   // 타깃에서 강하시작점까지 거리
   const todDist = d - todFromTgt;                             // 현재→강하시작(TOD)까지 남은 거리
-  return { wp: wp.ident, d, reqAlt, dev, vs, todDist, tgtAlt: vnavTgtAlt, ang: vnavAngle };
+  return { wp: wp.ident, d, reqAlt, dev, vs, todDist, tgtAlt, ang: vnavAngle, ofs };
 }
 
 // VNAV 강하 알림: TOD 10초 전 예고 + Begin Descent

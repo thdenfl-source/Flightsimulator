@@ -33,19 +33,15 @@ function updateNav(){
 
   updateCrsLine();
   updateBrgLines();
-  renderNavBox();
-}
-function renderNavBox(){
-  document.getElementById('nav-brg1').textContent = S.awp>=0    ? fmtA(toMag(S.brg))+'°'  : '---°';
-  document.getElementById('nav-brg2').textContent = S.brg2wp>=0 ? fmtA(toMag(S.brg2))+'°' : '---°';
-  document.getElementById('nav-crs').textContent  = fmtA(toMag(activeCrs()))+'°';
-  document.getElementById('nav-dtw').textContent  = S.awp>=0    ? (S.dtw*D_CV()).toFixed(1)+D_LBL() : '---'+D_LBL();
 }
 
 // ══════════════════════════════════════════════════════
 // FLIGHT PLAN STATE MACHINE
 // ══════════════════════════════════════════════════════
-let fpMode = 'LIST'; // 'LIST'|'ADD'|'IDENT'|'LAT'|'LON'|'IFR'|'SIDNEW'|'HOLD'
+let fpMode = 'LIST'; // 'LIST'|'ADD'|'IDENT'|'LAT'|'LON'|'IFR'|'SIDNEW'|'HOLD'|'WPT'|'WPTNUM'
+let fpWptIdx  = -1;    // 상세 화면을 연 웨이포인트
+let fpEditIdx = -1;    // 이름·좌표를 '새로 추가' 가 아니라 '고치는' 대상
+let fpNumFld  = null;  // 상세 화면의 숫자 입력 대상 ('VALT' | 'VOFS')
 let fpInputBuf = '';
 let fpTempLat = null;
 let fpIfrPhase = 'dep';
@@ -82,6 +78,8 @@ function fpRender() {
     case 'IFR':   fpRenderIfr(area, title, footer);  break;
     case 'SIDNEW': fpRenderSidNew(area, title, footer); break;
     case 'HOLD':  fpRenderHold(area, title, footer);  break;
+    case 'WPT':   fpRenderWpt(area, title, footer);   break;
+    case 'WPTNUM': fpRenderWptNum(area, title, footer); break;
     case 'RB':    fpRenderRadial(area, title, footer); break;
     case 'RR':    fpRenderRadial(area, title, footer); break;
     case 'REFPICK': fpRenderRefPick(area, title, footer); break;
@@ -442,7 +440,7 @@ function fpRenderList(area, title, footer) {
       let cls='fp-wp-row'+(isA?' active-wp':'')+(isB2?' brg2-wp':'');
       const d=distance(S.lat,S.lon,wp.lat,wp.lon), b=bearing(S.lat,S.lon,wp.lat,wp.lon);
       const badge=wp.phase?`<span class="fp-phase-badge badge-${wp.phase.toLowerCase()}">${wp.phase}</span>`:'';
-      html+=`<div class="${cls}" onclick="selectWP(${i})">
+      html+=`<div class="${cls}" data-act="fpWptOpen" data-arg='[${i}]'>
         <span class="fp-wp-seq">${i+1}</span>
         <span class="fp-wp-ident">${badge}${wp.ident}</span>
         <span class="fp-wp-hdg">${fmtA(toMag(b))}°</span>
@@ -466,6 +464,176 @@ function fpRenderList(area, title, footer) {
     <div class="fp-nav-btn" data-act="clearFP"><span>✕</span>Clr</div>
     <div class="fp-nav-btn" data-act="resetSim"><span>⟳</span>Rst</div>
     <div class="fp-nav-btn" data-act="fpBackToCdu"><span>↩</span>Back</div>`;
+}
+
+// ══════════════════════════════════════════════════════
+// 웨이포인트 상세 (목록에서 항목을 누르면 열린다)
+// ══════════════════════════════════════════════════════
+// 종전에는 항목을 누르면 곧바로 활성 웨이포인트가 됐다. 되돌릴 방법도 없고,
+// 이름·좌표를 고치거나 VNAV 를 걸 자리도 없었다. 한 번 눌러 카드를 펴고,
+// 거기서 고르게 한다 — Direct To 도 그 카드 안의 버튼 하나다.
+function fpWptOpen(i) {
+  if (i < 0 || i >= S.wps.length) return;
+  fpWptIdx = i;
+  fpGo('WPT');
+}
+
+function fpRenderWpt(area, title, footer) {
+  const i = fpWptIdx, wp = S.wps[i];
+  if (!wp) { fpGo('LIST'); return; }
+  title.textContent = 'WAYPOINT — ' + (wp.ident || 'WPT');
+
+  const b = bearing(S.lat, S.lon, wp.lat, wp.lon);
+  const d = distance(S.lat, S.lon, wp.lat, wp.lon);
+  // 이 지점으로 들어오는 레그 코스(직전 웨이포인트 기준). 첫 지점은 현재 위치에서.
+  const from = i > 0 ? S.wps[i - 1] : { lat: S.lat, lon: S.lon };
+  const legCrs = fmtA(toMag(bearing(from.lat, from.lon, wp.lat, wp.lon)));
+  const isA = i === S.awp, isB2 = i === S.brg2wp;
+  const hold = wp.hold;
+  const holdTxt = hold
+    ? `${String(Math.round(toMag(hold.crs))).padStart(3,'0')}° ${hold.dir === 'L' ? '좌' : '우'}`
+    : '— — —';
+  const vAlt = Number.isFinite(wp.vnavAlt) ? Math.round(wp.vnavAlt).toLocaleString() + ' FT' : '— — —';
+  const vOfs = Number.isFinite(wp.vnavOfs) && wp.vnavOfs ? wp.vnavOfs.toFixed(1) + ' NM' : '0 NM';
+
+  // 카드 안의 버튼 — 위 라벨(작게) + 아래 값(크게)
+  const CARD = (lbl, val, act, arg, on) =>
+    `<div data-act="${act}"${arg !== undefined ? ` data-arg='${arg}'` : ''} style="` +
+    `padding:6px 4px;border:1px solid ${on ? '#00cfff' : '#2a3a4a'};border-radius:5px;` +
+    `background:${on ? '#00252e' : '#0a1218'};cursor:pointer;text-align:center;">` +
+    `<div style="color:#6a8494;font-size:8px;letter-spacing:0.5px;">${lbl}</div>` +
+    `<div style="color:${on ? '#00e5ff' : '#dfeaf2'};font-size:12px;font-weight:bold;margin-top:2px;">${val}</div>` +
+    `</div>`;
+
+  area.innerHTML =
+    `<div class="fp-panel-border" style="padding:8px;">` +
+      // ── 이름·좌표 ──
+      `<div data-act="fpWptRename" style="cursor:pointer;display:flex;align-items:baseline;gap:6px;">` +
+        `<span style="color:#fff;font-size:20px;font-weight:bold;letter-spacing:1px;">${wp.ident || 'WPT'}</span>` +
+        `<span style="color:#00cfff;font-size:9px;">✎ 이름</span>` +
+        (wp.phase ? `<span class="fp-phase-badge badge-${wp.phase.toLowerCase()}">${wp.phase}</span>` : '') +
+      `</div>` +
+      `<div data-act="fpWptCoord" style="cursor:pointer;color:#8fb8bf;font-size:10px;margin-top:3px;">` +
+        `${decToDMS(wp.lat, true)} ${decToDMS(wp.lon, false)} <span style="color:#00cfff;">✎</span></div>` +
+      `<div style="color:#6a8494;font-size:10px;margin-top:5px;">` +
+        `현재 위치에서 <b style="color:#c8ff00;">${fmtA(toMag(b))}°</b>` +
+        ` · <b style="color:#00ffff;">${uDist(d)}</b></div>` +
+
+      // ── 설정 ──
+      `<div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-top:9px;">` +
+        CARD('VNAV 고도', vAlt, 'fpWptNum', '["VALT"]', Number.isFinite(wp.vnavAlt)) +
+        CARD('VNAV 오프셋', vOfs, 'fpWptNum', '["VOFS"]', !!wp.vnavOfs) +
+        CARD('레그 코스', legCrs + '°M', 'fpWptNoop') +
+        CARD('HOLD', holdTxt, 'fpHoldOpen', `[${i}]`, !!hold) +
+      `</div>` +
+
+      // ── 동작 ──
+      `<div data-act="fpWptDirect" style="margin-top:9px;padding:9px;border-radius:5px;cursor:pointer;` +
+        `text-align:center;font-size:13px;font-weight:bold;letter-spacing:1px;` +
+        `background:${isA ? '#0e2e0e' : '#0e2233'};border:1px solid ${isA ? '#44cc44' : '#2a6a8a'};` +
+        `color:${isA ? '#7fe07f' : '#7ac6f5'};">` +
+        (isA ? `✔ 활성 — ${wp.ident || 'WPT'}` : `➤ Direct To ${wp.ident || 'WPT'}`) + `</div>` +
+      `<div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-top:5px;">` +
+        CARD('BRG2 지시침', isB2 ? '지정됨' : '지정', 'fpWptBrg2', undefined, isB2) +
+        `<div data-act="fpWptDel" style="padding:6px 4px;border:1px solid #663333;border-radius:5px;` +
+          `background:#1a0a0a;cursor:pointer;text-align:center;">` +
+          `<div style="color:#8a6a6a;font-size:8px;letter-spacing:0.5px;">비행계획에서</div>` +
+          `<div style="color:#ff6666;font-size:12px;font-weight:bold;margin-top:2px;">✕ 삭제</div></div>` +
+      `</div>` +
+      `<div style="color:#445;font-size:8px;line-height:1.6;margin-top:8px;border-top:1px solid #1a2a30;padding-top:6px;">` +
+        `VNAV 고도를 넣으면 이 지점이 활성일 때 그 고도를 목표로 강하선을 그립니다.` +
+        ` 오프셋은 <b>지점보다 몇 NM 앞에서</b> 그 고도에 닿을지입니다.</div>` +
+    `</div>`;
+
+  footer.innerHTML =
+    `<div class="fp-nav-btn" data-act="fpGo" data-arg='["LIST"]'><span>📋</span>FP List</div>` +
+    `<div class="fp-nav-btn" data-act="fpGo" data-arg='["ADD"]'><span>＋</span>Add WPT</div>` +
+    `<div class="fp-nav-btn" data-act="fpGo" data-arg='["LIST"]'><span>↩</span>Back</div>`;
+}
+
+function fpWptNoop() { /* 레그 코스는 읽기 전용 — 앞뒤 지점에서 저절로 정해진다 */ }
+
+function fpWptDirect() {
+  if (fpWptIdx < 0 || fpWptIdx >= S.wps.length) return;
+  selectWP(fpWptIdx);
+  fpGo('LIST');
+}
+function fpWptBrg2() {
+  if (fpWptIdx < 0 || fpWptIdx >= S.wps.length) return;
+  setBrg2(fpWptIdx);
+  fpGo('WPT');
+}
+async function fpWptDel() {
+  const wp = S.wps[fpWptIdx];
+  if (!wp) return;
+  if (!await uiConfirm(`${wp.ident || 'WPT'} 을(를) 비행계획에서 지웁니다.`,
+                       { okText: '삭제', cancelText: '취소' })) return;
+  removeWP(fpWptIdx);
+  fpWptIdx = -1;
+  fpGo('LIST');
+}
+function fpWptRename() {
+  if (fpWptIdx < 0) return;
+  fpEditIdx = fpWptIdx; fpInputBuf = '';
+  fpGo('IDENT');
+}
+function fpWptCoord() {
+  if (fpWptIdx < 0) return;
+  fpEditIdx = fpWptIdx; fpInputBuf = ''; fpTempLat = null;
+  fpGo('LAT');
+}
+
+// ── VNAV 고도·오프셋 입력 ──
+function fpWptNum(fld) {
+  fpNumFld = fld; fpInputBuf = '';
+  fpGo('WPTNUM');
+}
+function fpRenderWptNum(area, title, footer) {
+  const wp = S.wps[fpWptIdx];
+  if (!wp) { fpGo('LIST'); return; }
+  const isAlt = fpNumFld === 'VALT';
+  title.textContent = (isAlt ? 'VNAV ALTITUDE' : 'VNAV OFFSET') + ' — ' + (wp.ident || 'WPT');
+  const cur = isAlt ? (Number.isFinite(wp.vnavAlt) ? wp.vnavAlt : '') : (wp.vnavOfs || 0);
+  area.innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:10px;padding-top:4px;">
+      <div style="font-size:8px;color:#87ceeb;">${isAlt
+        ? '이 지점에서 목표로 할 고도(ft). 비우고 ENTER 하면 해제됩니다.'
+        : '지점보다 몇 NM 앞에서 그 고도에 닿을지(NM).'}</div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <div class="fp-disp-box">${fpInputBuf || `<span style="color:#222">${cur === '' ? '——' : cur}</span>`}<span class="fp-disp-cursor">|</span></div>
+        <div class="fp-bksp-btn" data-act="fpBksp">⬅<br><span style="font-size:8px;">BKSP</span></div>
+      </div>
+      <div class="fp-numpad-grid">
+        ${[1,2,3,4,5,6,7,8,9].map(n=>`<div class="fp-num-circ" data-act="fpType" data-arg='["${n}"]'>${n}</div>`).join('')}
+        <div class="fp-num-circ" data-act="fpType" data-arg='["."]'>.</div>
+        <div class="fp-num-circ" data-act="fpType" data-arg='["0"]'>0</div>
+        <div class="fp-num-circ" data-act="fpWptNumClr">CLR</div>
+      </div>
+    </div>`;
+  footer.innerHTML = `
+    <div class="fp-nav-btn" data-act="fpGo" data-arg='["WPT"]'><span>↩</span>Cancel</div>
+    <div class="fp-nav-btn fp-nav-enter" data-act="fpConfirmWptNum"><span>↩</span>Enter</div>`;
+}
+function fpWptNumClr() { fpInputBuf = ''; fpRender(); }
+function fpConfirmWptNum() {
+  const wp = S.wps[fpWptIdx];
+  if (!wp) { fpGo('LIST'); return; }
+  const txt = fpInputBuf.trim();
+  const v = parseFloat(txt);
+  if (fpNumFld === 'VALT') {
+    // 비우고 ENTER = 해제. 없는 값을 0 으로 남겨 두면 "해면으로 강하" 가 된다.
+    if (txt === '') delete wp.vnavAlt;
+    else if (isNaN(v) || v < -1000 || v > 45000) { uiAlert('고도 범위: -1000 ~ 45000 ft'); return; }
+    else { wp.vnavAlt = v; vnavActive = true; }
+  } else {
+    if (txt === '') delete wp.vnavOfs;
+    else if (isNaN(v) || v < 0 || v > 50) { uiAlert('오프셋 범위: 0 ~ 50 NM'); return; }
+    else wp.vnavOfs = v;
+  }
+  fpInputBuf = ''; fpNumFld = null;
+  _fplPersist();
+  try { updateTerrainCut(); } catch(e) { _swallow(e); }
+  fpGo('WPT');
 }
 
 function fpRenderAdd(area, title, footer) {
@@ -694,6 +862,15 @@ function fpBksp() { fpInputBuf=fpInputBuf.slice(0,-1); fpRender(); }
 function fpConfirmIdent() {
   const v = fpInputBuf.trim().toUpperCase();
   if(!v) return;
+  // 이름 고치기 — 좌표는 그대로 두고 부르는 이름만 바꾼다.
+  // (공항 목록에 없는 이름도 허용한다. 지도에서 찍은 지점에 이름을 붙이는 자리다)
+  if (fpEditIdx >= 0 && fpEditIdx < S.wps.length) {
+    S.wps[fpEditIdx].ident = v;
+    fpInputBuf=''; fpEditIdx=-1;
+    updateWpMarkers(); updateNav(); _fplPersist();
+    fpGo('WPT');
+    return;
+  }
   const f = AIRPORTS.find(a=>a.ident===v);
   if(f){ fpMode='LIST'; fpInputBuf=''; pushWP({ident:f.ident,lat:f.lat,lon:f.lon}); }
   else uiAlert(`"${v}" not found.\nAvailable: ${AIRPORTS.map(a=>a.ident).join(', ')}`);
@@ -708,6 +885,14 @@ function fpConfirmCoord(field) {
   } else {
     if(val<-180||val>180){ uiAlert('경도 범위: -180 ~ 180'); return; }
     const lat=fpTempLat, lon=val;
+    if (fpEditIdx >= 0 && fpEditIdx < S.wps.length) {
+      const w = S.wps[fpEditIdx];
+      w.lat = lat; w.lon = lon;
+      fpTempLat=null; fpInputBuf=''; fpEditIdx=-1;
+      updateWpMarkers(); updateNav(); updateHoldLine(); _fplPersist();
+      fpGo('WPT');
+      return;
+    }
     const name='WP'+(S.wps.length+1);
     fpMode='LIST'; fpTempLat=null; fpInputBuf='';
     pushWP({ident:name,lat,lon});

@@ -1127,18 +1127,6 @@ body.solo-mode .solo-panel-visible {
   padding: 6px; background: #000;
   display: flex; flex-direction: column; overflow-y: auto; gap: 3px;
 }
-.fp-nav-box {
-  background: #080808; border-top: 1px solid #1a1a1a;
-  display: grid; grid-template-columns: 1fr 1fr 1fr 1fr;
-  padding: 3px; flex-shrink: 0;
-}
-.nav-cell { text-align: center; }
-.nav-lbl { color: #87ceeb; font-size: 7px; font-weight: bold; letter-spacing: 0.5px; }
-.nav-val { font-size: 11px; font-weight: bold; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; }
-.brg1-val { color: #44aaff; }
-.brg2-val { color: #00cc44; }
-.crs-val  { color: #c8ff00; }
-.dtw-val  { color: #00ffff; }
 .fp-footer-nav {
   height: 50px; display: flex; justify-content: space-around;
   align-items: center; background: #111;
@@ -1676,6 +1664,12 @@ body.night-mode::after {
             <b>명칭 · 방위 · 거리</b>를 동시에 표시합니다. 현재 선택된 소스는 배경 강조로 구분되며,
             좌우의 <b>BRG1 · BRG2 판독을 모두 대신합니다</b> — 같은 값을 두 번 적지 않습니다.
             <b>나침반의 BRG1(파랑) · BRG2(녹색) 니들</b>은 그대로이고, 하단 <b>BRG</b> 버튼으로 켜고 끕니다.</li>
+        <li><b>웨이포인트 상세</b>: 비행계획 목록에서 <b>항목을 누르면</b> 카드가 열립니다.
+            <b>이름 · 좌표</b>를 고치고, <b>VNAV 고도 / 오프셋</b>(지점보다 몇 NM 앞에서 그 고도에 닿을지)을 넣고,
+            <b>HOLD</b> 설정과 <b>BRG2 지정 · 삭제</b>를 여기서 합니다.
+            활성 웨이포인트로 잡으려면 카드 안의 <b>➤ Direct To</b> 를 누릅니다
+            (종전에는 목록을 누르면 곧바로 활성이 돼 되돌릴 수가 없었습니다).
+            VNAV 고도를 비우고 ENTER 하면 해제됩니다.</li>
         <li><b>HOVER PAGE</b>(80kt 미만): 호버 속도·위치 지시. 좌측 HOVER 그룹의 <b>HOVER PAGE / HOVER POS</b> 사각 버튼으로 켜고,
             기준 속도는 트림 옆 원형 <b>GSPD</b> 버튼으로 잡습니다(실제 조종간 배치에 맞춘 위치).</li>
         <li>HOVER PAGE에는 <b>SHIP</b>(청록)과 <b>비행계획 활성 웨이포인트</b>(빨강 삼각형)가 함께 표시됩니다.
@@ -2188,12 +2182,6 @@ body.night-mode::after {
           <div class="touch-display">
             <div class="fp-mode-title" id="fp-mode-title">ACTIVE FLIGHT PLAN</div>
             <div class="fp-content-area" id="fp-content-area"></div>
-            <div class="fp-nav-box">
-              <div class="nav-cell"><div class="nav-lbl">BRG1</div><div class="nav-val brg1-val" id="nav-brg1">---°</div></div>
-              <div class="nav-cell"><div class="nav-lbl">BRG2</div><div class="nav-val brg2-val" id="nav-brg2">---°</div></div>
-              <div class="nav-cell"><div class="nav-lbl">CRS</div><div class="nav-val crs-val" id="nav-crs">---°</div></div>
-              <div class="nav-cell"><div class="nav-lbl">DTW</div><div class="nav-val dtw-val" id="nav-dtw">---NM</div></div>
-            </div>
             <div class="fp-footer-nav" id="fp-footer-nav"></div>
           </div>
         </div>
