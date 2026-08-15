@@ -979,3 +979,211 @@ function updateWpMarkers(){
   routeLine.setLatLngs(coords);
 }
 
+
+// ══════════════════════════════════════════════════════════════
+// HOLD ENTRY — 홀딩 진입 판정 레이어
+// ══════════════════════════════════════════════════════════════
+// 홀딩 픽스에 다 와서 "직진이냐 평행이냐 눈물방울이냐"를 머릿속으로 그리는
+// 일이 실기에서 제일 자주 틀리는 대목이다. 그 그림을 그대로 띄운다.
+//
+// 판정은 시뮬이 실제로 쓰는 _holdEntryType 하나만 쓴다. 그림을 위해 규칙을
+// 다시 적으면 둘이 어긋나는 순간 그림이 거짓말을 하게 된다.
+//
+// 구역을 어느 각도에 칠하느냐 — 화면의 각 방향 θ 는 "픽스에서 본 방위",
+// 즉 항공기가 있는 쪽이다. 픽스로 곧장 향하면 기수는 그 반대(θ+180)이므로
+// 그 기수로 판정한다. 그래서 항공기 기호는 언제나 자기 진입 구역 안에 놓인다.
+// 나침반은 자북 위쪽(°M) — 패널의 숫자와 눈금이 같은 기준이어야 읽힌다.
+let holdEntryOn = false;
+
+const HOLD_ENTRY_COLOR = {
+  DIRECT:   { fill: 'rgba(196,110,42,0.32)',  line: '#e08a3c', label: 'DIRECT',   ko: '직진' },
+  PARALLEL: { fill: 'rgba(38,132,80,0.32)',   line: '#3fbf7f', label: 'PARALLEL', ko: '평행' },
+  TEARDROP: { fill: 'rgba(48,110,190,0.32)',  line: '#5aa7f0', label: 'TEARDROP', ko: '눈물방울' },
+};
+
+// 그릴 홀딩을 고른다 — 무장된 것이 먼저, 없으면 비행계획의 첫 홀딩.
+// (아직 활성 웨이포인트가 아니어도 미리 보고 준비할 수 있어야 한다)
+function _holdEntryTarget() {
+  if (holdOn && holdFix) {
+    return { fix: holdFix, right: holdRight, crs: holdCrs,
+             legType: holdLegType, legVal: holdLegVal, armed: true };
+  }
+  const wp = (S.wps || []).find(w => w && w.hold);
+  if (!wp) return null;
+  const h = wp.hold;
+  return { fix: { lat: wp.lat, lon: wp.lon, ident: wp.ident || 'WPT' },
+           right: h.dir !== 'L', crs: h.crs,
+           legType: h.legType === 'DIST' ? 'DIST' : 'TIME',
+           legVal: h.legVal || (h.legType === 'DIST' ? 5 : 60), armed: false };
+}
+
+// 진입 구역의 경계를 _holdEntryType 에서 되읽는다(규칙을 베끼지 않는다).
+// 반환: [{type, from, to}] — 진방위 기준, from→to 는 시계방향.
+function holdEntrySectors(crs, right) {
+  const at = θ => _holdEntryType(normA(θ + 180), crs, right);
+  const runs = [];
+  for (let θ = 0; θ < 360; θ += 0.5) {
+    const t = at(θ);
+    const last = runs[runs.length - 1];
+    if (last && last.type === t) last.to = θ + 0.5;
+    else runs.push({ type: t, from: θ, to: θ + 0.5 });
+  }
+  // 0° 를 걸쳐 이어지는 구역은 하나로 잇는다
+  if (runs.length > 1 && runs[0].type === runs[runs.length - 1].type) {
+    const first = runs.shift();
+    runs[runs.length - 1].to = first.to + 360;
+  }
+  return runs;
+}
+
+function drawHoldEntry() {
+  const wrap = document.getElementById('map-wrap');
+  const cv = document.getElementById('hold-entry-canvas');
+  if (!wrap || !cv || !wrap.classList.contains('hold-entry-on')) return;
+  const info = document.getElementById('hold-entry-info');
+  const T = _holdEntryTarget();
+  const fixEl = document.getElementById('hold-entry-fix');
+
+  const W = cv.clientWidth || 210, H = cv.clientHeight || 210;
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  if (cv.width !== Math.round(W * dpr) || cv.height !== Math.round(H * dpr)) {
+    cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+  }
+  const g = cv.getContext('2d');
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  g.clearRect(0, 0, W, H);
+
+  if (!T) {
+    if (fixEl) fixEl.textContent = '—';
+    g.fillStyle = '#4a5866';
+    g.font = '10px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Arial, sans-serif';
+    g.textAlign = 'center';
+    g.fillText('설정된 홀딩이 없습니다', W / 2, H / 2 - 6);
+    g.fillText('FPL → 웨이포인트 → HOLD', W / 2, H / 2 + 10);
+    if (info) info.innerHTML = '비행계획의 웨이포인트에 홀딩을 넣으면 여기에 진입 구역이 그려집니다.';
+    return;
+  }
+
+  const cx = W / 2, cy = H / 2, R = Math.min(W, H) / 2 - 12;
+  const P = m => [cx + R * Math.sin(m * D2R), cy - R * Math.cos(m * D2R)];   // 자방위 → 원둘레
+  const at = (m, r) => [cx + r * Math.sin(m * D2R), cy - r * Math.cos(m * D2R)];
+
+  // ── 진입 구역 ──
+  const sectors = holdEntrySectors(T.crs, T.right);
+  sectors.forEach(s => {
+    const c = HOLD_ENTRY_COLOR[s.type];
+    if (!c) return;
+    // 캔버스 각은 3시 방향 0°·시계방향. 자방위 m 은 12시 0° 이므로 m − 90.
+    const a0 = (toMag(s.from) - 90) * D2R, a1 = a0 + (s.to - s.from) * D2R;
+    g.beginPath(); g.moveTo(cx, cy); g.arc(cx, cy, R, a0, a1); g.closePath();
+    g.fillStyle = c.fill; g.fill();
+    g.strokeStyle = c.line; g.lineWidth = 1; g.stroke();
+  });
+  // 구역 이름 — 부채꼴 한가운데
+  g.font = 'bold 9px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Arial, sans-serif';
+  g.textAlign = 'center'; g.textBaseline = 'middle';
+  sectors.forEach(s => {
+    const c = HOLD_ENTRY_COLOR[s.type];
+    if (!c) return;
+    const [lx, ly] = at(toMag((s.from + s.to) / 2), R * 0.7);
+    // 밑에 부채꼴·눈금·패턴이 깔려 있어 글자만 얹으면 읽히지 않는다
+    g.lineWidth = 3; g.strokeStyle = 'rgba(6,10,14,0.85)';
+    g.strokeText(c.label, lx, ly);
+    g.fillStyle = c.line;
+    g.fillText(c.label, lx, ly);
+  });
+
+  // ── 나침반 눈금 ──
+  g.strokeStyle = '#3d4a58'; g.lineWidth = 1;
+  for (let m = 0; m < 360; m += 10) {
+    const long = m % 30 === 0;
+    const [x0, y0] = at(m, R), [x1, y1] = at(m, R - (long ? 8 : 4));
+    g.beginPath(); g.moveTo(x0, y0); g.lineTo(x1, y1); g.stroke();
+  }
+  g.fillStyle = '#8fa6bb'; g.font = '8px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Arial, sans-serif';
+  for (let m = 0; m < 360; m += 30) {
+    const [lx, ly] = at(m, R - 16);
+    g.fillText(m === 0 ? 'N' : String(m / 10).padStart(2, '0'), lx, ly);
+  }
+
+  // ── 홀딩 패턴 ──
+  // 픽스 기준 NM 오프셋으로 바꿔 그린다. 패턴이 원 안쪽 62% 를 채우도록 맞춘다.
+  const pts = holdPatternLatLngs(T.fix, { dir: T.right ? 'R' : 'L', crs: T.crs,
+                                          legType: T.legType, legVal: T.legVal });
+  const off = pts.map(p => [(p[1] - T.fix.lon) * Math.cos(T.fix.lat * D2R) * 60,
+                            (p[0] - T.fix.lat) * 60]);
+  let ext = 0.5;
+  off.forEach(([e, n]) => { ext = Math.max(ext, Math.hypot(e, n)); });
+  const pxPerNM = (R * 0.62) / ext;
+  // 자북 위쪽이므로 진북 기준 오프셋을 편차만큼 돌린다
+  const rot = -RULER_VAR * D2R, cr = Math.cos(rot), sr = Math.sin(rot);
+  g.beginPath();
+  off.forEach(([e, n], i) => {
+    const x = cx + (e * cr - n * sr) * pxPerNM, y = cy - (e * sr + n * cr) * pxPerNM;
+    i ? g.lineTo(x, y) : g.moveTo(x, y);
+  });
+  g.strokeStyle = '#d0d6dd'; g.lineWidth = 1.6; g.stroke();
+
+  // ── 인바운드 코스 화살표(픽스로 들어오는 방향) ──
+  const inbM = toMag(T.crs);
+  const [tx, ty] = at(normA(inbM + 180), R * 0.95);
+  g.strokeStyle = '#ffd54f'; g.lineWidth = 1.4;
+  g.beginPath(); g.moveTo(tx, ty); g.lineTo(cx, cy); g.stroke();
+
+  // ── 픽스 ──
+  g.fillStyle = '#fff';
+  g.beginPath(); g.arc(cx, cy, 3, 0, 2 * Math.PI); g.fill();
+
+  // ── 항공기 — 픽스에서 본 실제 방위·거리에 놓는다 ──
+  const brgT = bearing(T.fix.lat, T.fix.lon, S.lat, S.lon);   // 픽스 → 항공기
+  const dist = distance(S.lat, S.lon, T.fix.lat, T.fix.lon);
+  const apprT = normA(brgT + 180);                            // 픽스로 향하는 접근방향
+  const entry = _holdEntryType(apprT, T.crs, T.right);
+  const rAc = Math.min(R * 0.9, Math.max(6, dist * pxPerNM));
+  const [ax, ay] = at(toMag(brgT), rAc);
+  g.save();
+  g.translate(ax, ay); g.rotate(toMag(apprT) * D2R);
+  g.fillStyle = '#fff'; g.strokeStyle = '#111'; g.lineWidth = 1;
+  g.beginPath(); g.moveTo(0, -7); g.lineTo(5, 6); g.lineTo(0, 3); g.lineTo(-5, 6); g.closePath();
+  g.fill(); g.stroke();
+  g.restore();
+  // 접근방향 화살(항공기 → 픽스)
+  const ec = HOLD_ENTRY_COLOR[entry];
+  g.strokeStyle = ec ? ec.line : '#fff'; g.lineWidth = 2;
+  g.setLineDash([4, 3]);
+  g.beginPath(); g.moveTo(ax, ay); g.lineTo(cx, cy); g.stroke();
+  g.setLineDash([]);
+
+  // ── 글자 ──
+  if (fixEl) fixEl.textContent = (T.fix.ident || 'WPT') + (T.armed ? '' : ' (예정)');
+  if (info) {
+    const outHdg = fmtA(toMag(windCorrectedHdg(normA(T.crs + 180))));
+    const inHdg  = fmtA(toMag(windCorrectedHdg(T.crs)));
+    const leg = T.legType === 'DIST' ? T.legVal + ' NM'
+              : (T.legVal >= 60 ? (T.legVal / 60) + ':' + String(T.legVal % 60).padStart(2, '0')
+                                : T.legVal + 's');
+    info.innerHTML =
+      `<div style="color:${ec ? ec.line : '#fff'};font-weight:bold;font-size:12px;">` +
+      `${ec ? ec.label : entry} <span style="font-size:9px;">${ec ? ec.ko : ''} 진입</span></div>` +
+      `접근방향 <b>${fmtA(toMag(apprT))}°M</b> · 픽스까지 <b>${uDist(dist)}</b><br>` +
+      `인바운드 <b>${fmtA(inbM)}°M</b> · ${T.right ? '우선회' : '좌선회'} · 레그 ${leg}<br>` +
+      `<span style="color:#67788a;">바람 보정 기수 — 인바운드 ${inHdg}° / 아웃바운드 ${outHdg}°</span>`;
+  }
+}
+
+// HOLD 버튼 — 진입 판정 레이어 표시/숨김
+function toggleHoldEntry() {
+  const wrap = document.getElementById('map-wrap');
+  if (!wrap) return;
+  if (!holdEntryOn && !_holdEntryTarget()) {
+    uiToast('설정된 홀딩이 없습니다 — FPL 에서 웨이포인트를 골라 HOLD 를 넣어 주세요.', 'warn');
+    return;
+  }
+  holdEntryOn = wrap.classList.toggle('hold-entry-on');
+  const b = document.getElementById('map-hold-btn');
+  if (b) b.classList.toggle('active', holdEntryOn);
+  if (holdEntryOn) { try { drawHoldEntry(); } catch (e) { _swallow(e); } }
+}
+
+// 항공기가 움직이는 동안 계속 다시 그린다(꺼져 있으면 첫 줄에서 곧장 빠진다)
+setInterval(() => { try { drawHoldEntry(); } catch (e) { _swallow(e); } }, 400);

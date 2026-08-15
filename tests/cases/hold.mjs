@@ -76,4 +76,80 @@ export async function run(page, t) {
     t.ok(fly[k].entryDist <= 0.36, `${k} 픽스 상공에서 진입 시작 (${fly[k].entryDist.toFixed(2)}NM)`);
     t.ok(fly[k].devMax < 0.35, `${k} 그려진 트랙 이탈 최대 ${fly[k].devMax.toFixed(3)}NM`);
   }
+
+  // ③ MAP 의 HOLD 진입 판정 레이어
+  // 그림이 판정 규칙을 따로 베끼면 둘이 어긋나는 날 그림이 거짓말을 한다.
+  // 그래서 부채꼴은 _holdEntryType 에서 되읽어 만든다 — 여기서 그걸 확인한다.
+  const sec = await page.evaluate(() => {
+    const span = (crs, right) => {
+      const w = {};
+      holdEntrySectors(crs, right).forEach(s => { w[s.type] = (w[s.type] || 0) + (s.to - s.from); });
+      return w;
+    };
+    // 부채꼴 각도 θ(픽스에서 본 방위)에 칠한 색이, 그 방향에서 픽스로 곧장
+    // 들어올 때(기수 θ+180)의 판정과 같은가
+    let mismatch = 0, n = 0;
+    [[90, true], [90, false], [217, true], [4, false]].forEach(([crs, right]) => {
+      holdEntrySectors(crs, right).forEach(s => {
+        for (let θ = s.from + 0.25; θ < s.to; θ += 5) {
+          n++;
+          if (_holdEntryType(normA(θ + 180), crs, right) !== s.type) mismatch++;
+        }
+      });
+    });
+    // 인자로 넘긴 판정이 무장된 홀딩의 전역값을 건드리지 않는가
+    holdCrs = 123; holdRight = true;
+    _holdEntryType(0, 300, false);
+    return { r: span(90, true), l: span(90, false), mismatch, n,
+             keptCrs: holdCrs, keptRight: holdRight };
+  });
+  t.eq(sec.mismatch, 0, `부채꼴 색이 진입 판정과 일치 (${sec.n}점)`);
+  t.ok(Math.abs(sec.r.DIRECT - 180) < 5 && Math.abs(sec.r.PARALLEL - 110) < 5 && Math.abs(sec.r.TEARDROP - 70) < 5,
+    `우선회 부채꼴 폭 직진 ${sec.r.DIRECT}° · 평행 ${sec.r.PARALLEL}° · 눈물방울 ${sec.r.TEARDROP}°`);
+  const srt = w => JSON.stringify(Object.keys(w).sort().map(k => [k, w[k]]));
+  t.eq(srt(sec.l), srt(sec.r), '좌선회도 같은 폭(거울상)');
+  t.ok(sec.keptCrs === 123 && sec.keptRight === true, '인자로 판정해도 무장된 홀딩 값은 그대로');
+
+  // 홀딩이 없으면 열리지 않는다(빈 원을 띄워 두면 없는 정보를 있는 척하게 된다)
+  const none = await page.evaluate(() => {
+    S.wps = []; holdExit();
+    document.getElementById('map-wrap').classList.remove('hold-entry-on');
+    toggleHoldEntry();
+    return document.getElementById('map-wrap').classList.contains('hold-entry-on');
+  });
+  t.eq(none, false, '설정된 홀딩이 없으면 레이어가 열리지 않는다');
+
+  // 비행계획에만 있고 아직 활성이 아닌 홀딩도 미리 볼 수 있어야 한다
+  const shown = await page.evaluate(() => {
+    const FIX = [37.0, 127.5];
+    const A = destPoint(FIX[0], FIX[1], 45, 6);      // 픽스 북동 6NM
+    S.lat = A[0]; S.lon = A[1]; S.hdg = 225; S.spd = 120;
+    S.wps = [{ ident: 'ROKAN', lat: FIX[0], lon: FIX[1],
+               hold: { dir: 'R', crs: 90, legType: 'TIME', legVal: 60 } }];
+    S.awp = -1;                                       // 무장 전
+    toggleHoldEntry();
+    drawHoldEntry();
+    const cv = document.getElementById('hold-entry-canvas');
+    const g = cv.getContext('2d');
+    const px = g.getImageData(0, 0, cv.width, cv.height).data;
+    let painted = 0;
+    for (let i = 3; i < px.length; i += 4) if (px[i] > 8) painted++;
+    return {
+      on: document.getElementById('map-wrap').classList.contains('hold-entry-on'),
+      btn: document.getElementById('map-hold-btn').classList.contains('active'),
+      fix: document.getElementById('hold-entry-fix').textContent,
+      info: document.getElementById('hold-entry-info').textContent,
+      want: _holdEntryType(normA(bearing(FIX[0], FIX[1], S.lat, S.lon) + 180), 90, true),
+      painted, total: cv.width * cv.height,
+    };
+  });
+  t.eq(shown.on && shown.btn, true, '비행계획에만 있는 홀딩도 레이어가 열린다');
+  t.ok(/ROKAN/.test(shown.fix) && /예정/.test(shown.fix),
+    `픽스 이름과 아직 무장 전임을 함께 보여 준다 (${shown.fix})`);
+  t.ok(shown.info.startsWith(shown.want),
+    `판정이 시뮬과 같다 — ${shown.want} (${shown.info.split('\n')[0].slice(0, 24)})`);
+  t.ok(shown.painted / shown.total > 0.3,
+    `그림이 실제로 그려진다 (칠해진 화소 ${(100 * shown.painted / shown.total).toFixed(0)}%)`);
+  t.eq(await page.evaluate(() => { toggleHoldEntry(); return document.getElementById('map-wrap').classList.contains('hold-entry-on'); }),
+    false, '한 번 더 누르면 닫힌다');
 }
