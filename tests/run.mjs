@@ -16,8 +16,9 @@ import * as dialog from './cases/dialog.mjs';
 import * as chartview from './cases/chartview.mjs';
 import * as procdata from './cases/procdata.mjs';
 import * as simspd from './cases/simspd.mjs';
+import * as tascalc from './cases/tascalc.mjs';
 
-const SUITES = [smoke, actions, coords, chartcal, hold, nav, gspd, dialog, chartview, procdata, simspd];
+const SUITES = [smoke, actions, coords, chartcal, hold, nav, gspd, dialog, chartview, procdata, simspd, tascalc];
 const filter = process.argv.slice(2);
 
 function makeT() {

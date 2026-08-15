@@ -1706,6 +1706,11 @@ body.night-mode::after {
       <ul>
         <li><b>INFO</b>: 비행장별 TWR·APP·GND 주파수, VOR/ATIS, ILS, RWY, 표고. <b>주파수를 탭하면 COM1/2·NAV1/2에 바로 튜닝</b>됩니다. 상단 <b>ALL</b>은 코드 입력 시 전체 공개(기본은 AIP 공개 공항만).</li>
         <li><b>VNAV</b>: 타깃 고도와 강하각(−3° 등)을 넣으면 요구고도·편차·수직속도·TOD를 실시간 계산하고, T-CUT에 강하선을 그립니다. <b>강하 10초 전</b>과 <b>Begin Descent</b> 알림 제공.</li>
+        <li><b>TAS / IAS</b> (UTIL → True / Indicated Airspeed): <b>기압고도·외기온도</b>를 넣고
+            <b>IAS 를 넣으면 TAS 가</b>, <b>TAS 를 넣으면 IAS 가</b> 나옵니다.
+            <b>✈ 현재 비행상태 사용</b> 을 누르면 지금 고도·속도·외기온도가 그대로 들어갑니다.
+            ISA 편차·밀도고도·배율을 함께 보여 주므로 원판 계산기로 검산할 수 있습니다.
+            (밀도비 환산 TAS = IAS × √(ρ₀/ρ) — 압축성 보정 없음)</li>
         <li><b>Utilities</b>: 길이·속도·온도·중량·압력·연료 환산, Time/Speed/Distance, <b>Fuel Endurance</b>, <b>Wind Component</b>, <b>Sunrise/Sunset</b>, <b>True↔Magnetic</b>, 밀도고도, 좌표 변환.</li>
         <li><b>Track &amp; Point</b>: 포인트·항적을 기기에 저장, 폴더·아이콘 관리, GPX/KML 내보내기·가져오기. 지도 포인트를 탭하면 <b>숨기기·플랜 추가·Direct</b> 선택.</li>
         <li><b>Checklist</b>: KUH-1CG 정상·특수·비상 절차(계통별), 이전/다음 이동.</li>
