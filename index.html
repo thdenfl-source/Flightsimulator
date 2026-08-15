@@ -993,6 +993,30 @@ body.solo-mode .solo-panel-visible {
 #map-wrap.tcut-off #fdr-panel { bottom: 165px; }
 #map-wrap.tcut-off.map3d-on #fdr-btn-wrap { bottom: 175px; }
 #map-tcut-btn.active { color: #00e5ff; border-color: #00e5ff; box-shadow: 0 0 6px rgba(0,229,255,0.35); }
+/* ── HOLD ENTRY (홀딩 진입 판정 레이어) ── */
+#map-hold-btn.active { color: #ffb74d; border-color: #ffb74d; box-shadow: 0 0 6px rgba(255,183,77,0.35); }
+#hold-entry {
+  display: none; position: absolute; right: 8px; top: 48px; z-index: 996;
+  width: 226px; max-width: 52%;   /* 분할 화면에서 지도를 덮지 않게 — 창이 아니라 지도 폭 기준 */
+  background: rgba(8,12,18,0.94); border: 1px solid #2a3a4a; border-radius: 6px;
+  font: 10px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.6);
+}
+#map-wrap.hold-entry-on #hold-entry { display: block; }
+#hold-entry-head {
+  position: relative; color: #ffb74d; font-weight: bold; letter-spacing: .5px;
+  padding: 5px 22px 5px 8px; border-bottom: 1px solid #22303c;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+#hold-entry-head button {
+  position: absolute; top: 50%; right: 5px; transform: translateY(-50%);
+  background: none; border: none; color: #667; font-size: 12px; line-height: 1;
+  cursor: pointer; padding: 2px 4px;
+}
+#hold-entry-canvas { display: block; width: calc(100% - 16px); aspect-ratio: 1; margin: 4px auto 0; }
+#hold-entry-info { padding: 4px 8px 7px; color: #8fa6bb; line-height: 1.5; }
+#hold-entry-info b { color: #e8eaed; }
+
 #terrain-cut canvas { width: 100%; height: 100%; display: block; }
 #tcut-title {
   position: absolute; top: 3px; left: 8px; color: #7fa8c9;
@@ -1566,7 +1590,7 @@ body.night-mode::after {
             접근절차 픽스(주황 ◇)는 태안 RNP 16 / RNP 34 / 태안 IFR 로 나뉘며, 탭하면 기준점 라디얼·거리가 함께 뜹니다.</li>
         <li><b>공역 → 서산 반경권</b>: 서산비행장 기준 <b>5 / 10 / 15 / 18NM</b> 거리권.
             태안 절차상 해미 APPROACH 허가 없이는 서산 <b>10NM</b> 안에서 비행이 금지되므로 그 확인용입니다.</li>
-        <li>하단: FLY/RESET/CLR/<b>SHIP</b>/<b>T-CUT</b>/<b>INHIB</b>/N↑/1인칭/MAP(위성)/3D/<b>🔒 잠금</b>.</li>
+        <li>하단: FLY/RESET/CLR/<b>SHIP</b>/<b>T-CUT</b>/<b>⟳ HOLD</b>/<b>INHIB</b>/N↑/1인칭/MAP(위성)/3D/<b>🔒 잠금</b>.</li>
         <li><b>📏 측정자</b>: 지도를 탭해 점을 찍으면 구간 방위·거리, 합계, 시작→끝 직선거리 표시.</li>
         <li><b>공역</b>: 관제권·금지(P)·제한(R)·위험(D)구역, FIR·KADIZ. <b>모두 테두리만</b> 그려 내부의 심볼을 그대로 터치할 수 있습니다.
             테두리 선을 탭하면 공역 정보가 뜨고, 접근/진입 시 경보는 종전과 동일합니다.</li>
@@ -1636,6 +1660,11 @@ body.night-mode::after {
             확장하기 위한 배치입니다.</li>
         <li>지도에 SHIP이 켜져 있으면 호버 페이지에 <b>선박 상대위치</b>가 표시됩니다(멀면 니들, 50ft 이내면 실제 위치).</li>
         <li><b>T-CUT</b>: 전방 20NM 지형 단면. 현재 고도가 화면 중앙에 오고 지형이 상대적으로 움직입니다.</li>
+        <li><b>⟳ HOLD</b>: 홀딩 진입 판정 레이어. 홀딩 픽스를 중심으로 <b>직진 / 평행 / 눈물방울</b> 구역을
+            자북 기준으로 칠하고, 픽스로 향하는 <b>현재 접근방향</b>이 어느 구역에 있는지 항공기 기호로 표시합니다.
+            판정·접근방향·픽스까지 거리와 <b>바람 보정 기수</b>(인바운드/아웃바운드)를 함께 읽어 줍니다.
+            비행계획에 홀딩이 <b>아직 활성이 아니어도</b>(예정) 미리 볼 수 있습니다.
+            홀딩은 <b>FPL → 웨이포인트 → HOLD</b> 에서 넣습니다.</li>
       </ul>
 
       <h3>5. CDU 홈 (20개 기능)</h3>
@@ -2034,12 +2063,22 @@ body.night-mode::after {
       <div id="terrain-alert">⚠ TERRAIN</div>
       <div id="vnav-alert"></div>
       <div id="terrain-cut"><canvas id="tcut-canvas"></canvas><div id="tcut-title">TERRAIN — 전방 20NM</div></div>
+      <!-- 홀딩 진입 판정 레이어 — 홀딩 픽스로 향하는 현재 접근방향이
+           직진·평행·눈물방울 중 어느 구역에 있는지 보여 준다 -->
+      <div id="hold-entry">
+        <div id="hold-entry-head">⟳ HOLD ENTRY — <span id="hold-entry-fix">—</span>
+          <button data-act="toggleHoldEntry" title="닫기">✕</button>
+        </div>
+        <canvas id="hold-entry-canvas"></canvas>
+        <div id="hold-entry-info"></div>
+      </div>
       <div id="map-sim-bar">
         <button class="sim-btn" id="map-fly-btn" data-act="toggleSim">▶ FLY</button>
         <button class="sim-btn" data-act="resetSim">⟳ RESET</button>
         <button class="sim-btn clr" data-act="clearFP">✕ CLR</button>
         <button class="sim-btn" id="map-ship-btn" data-act="toggleShip">⛵ SHIP</button>
         <button class="sim-btn" id="map-tcut-btn" data-act="toggleTcut">⛰ T-CUT</button>
+        <button class="sim-btn" id="map-hold-btn" data-act="toggleHoldEntry">⟳ HOLD</button>
         <button class="sim-btn" id="inhib-btn" data-act="toggleInhibMenu">INHIB</button>
         <button class="sim-btn" id="orient-btn" data-act="toggleMapOrient">N↑</button>
         <button class="sim-btn" id="follow-btn" data-act="toggleFollow">1인칭</button>

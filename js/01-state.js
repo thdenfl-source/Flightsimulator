@@ -626,9 +626,13 @@ function _holdHdgBank(tgtHdg, dir) {
 // 눈물방울 구간에 떨어진다. 레그를 따라 픽스로 들어가면 기수 ≈ 인바운드 코스라
 // 가장 흔한 경우가 여기 걸리므로, −180~+180 부호각으로 판정한다.
 const HOLD_ENTRY_TOL = 2;    // 인바운드 코스와 ±2° 이내면 정대 진입 → 직진
-function _holdEntryType(hdg) {
+// crs·right 를 넘기면 무장되지 않은 홀딩(비행계획에만 있는 것)도 판정할 수 있다.
+// 넘기지 않으면 지금 무장된 홀딩을 본다 — 시뮬 쪽 호출은 전부 이쪽이다.
+function _holdEntryType(hdg, crs, right) {
   const H = (hdg === undefined || hdg === null) ? S.hdg : hdg;
-  const rs = normAS(holdRight ? H - holdCrs : holdCrs - H);
+  const C = (crs === undefined || crs === null) ? holdCrs : crs;
+  const rgt = (right === undefined || right === null) ? holdRight : right;
+  const rs = normAS(rgt ? H - C : C - H);
   // r = 180°(코스 정반대)는 직진 구역의 끝. 부호각으로 보면 +180 과 −180 이
   // 같은 각인데 부동소수점에 따라 어느 쪽으로 접힐지 갈려서, 좌·우선회가
   // 서로 다른 진입으로 판정되던 문제가 있었다. 양쪽 끝 모두 직진으로 본다.
