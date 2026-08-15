@@ -610,10 +610,15 @@ function holdDefaultCrsMag(i) {
 // (평행 진입의 "180° 넘는 합류 선회" 는 이 시점 오차가 90° 를 크게 넘으므로
 //  그대로 유지된다.)
 const HOLD_FORCE_MIN = 90;
+// 추종에 쓸 수 있는 최대 뱅크. 지령은 기수 오차에 비례(err×2)하므로 경로에
+// 붙어 있는 동안은 표준선회 뱅크 근처에 머물고, 벗어났을 때만 여기까지 눕는다.
+// 종전에는 상한이 표준선회 뱅크였다(81kt 면 13°). 그래서 한 번 벗어나면
+// 되돌아오는 데 시간이 걸려 패턴을 크게 돌아 나갔다.
+const HOLD_BANK_MAX = 23;
 function _holdHdgBank(tgtHdg, dir) {
   let err = normAS(tgtHdg - S.hdg);
   if (dir && Math.abs(err) > HOLD_FORCE_MIN && Math.sign(err) !== dir) err = err - 360 * Math.sign(err);
-  const bMax = Math.max(5, Math.min(25, stdRateBank(S.spd)));
+  const bMax = Math.max(5, Math.min(HOLD_BANK_MAX, Math.max(stdRateBank(S.spd), HOLD_BANK_MAX)));
   return Math.max(-bMax, Math.min(bMax, err * 2));
 }
 
@@ -719,16 +724,17 @@ function holdBankTarget(dt) {
   const sgn = holdRight ? 1 : -1;
 
   if (_holdPhase === 'TOFIX') {
-    // 홀딩 로직은 "픽스를 실제로 통과한 뒤" 에만 시작한다.
-    //  ① 상공 통과: 0.35NM 이내
-    //  ② 살짝 빗겨 지나감: 0.8NM 이내까지 접근했던 적이 있고(HOLD_PASS_NEAR),
-    //     지금은 픽스가 정횡 뒤(120° 초과)이며 멀어지는 중
-    // 접근 최근접거리(_holdMinD)를 요구하지 않으면, 픽스에서 1NM 넘게 떨어진 곳에서
-    // 순간적으로 방위·거리 조건이 맞아 진입이 미리 시작될 수 있다.
+    // 홀딩 로직은 "픽스를 실제로 지나간 뒤" 에만 시작한다.
+    //   · 0.8NM 이내까지 접근했던 적이 있고(HOLD_PASS_NEAR — 최근접거리 _holdMinD),
+    //   · 지금 픽스가 정횡이나 그 뒤(90° 초과)이며 멀어지는 중
+    // 종전에는 "0.35NM 이내면 통과" 라는 지름길이 있었다. 그 탓에 픽스 0.35NM
+    // 앞에서 선회가 시작돼, 항적이 픽스를 지나기 전에 꺾였다. 0.2NM 눈금 지도에서는
+    // 한눈에 보이는 거리다. 지름길을 걷어내고 실제로 지나갔는지만 본다.
+    // (완전 상공 통과 프레임을 위해 아주 가까운 거리 하나만 남겨 둔다)
     _holdMinD = Math.min(_holdMinD, d);
     const relFixDeg = Math.abs(normAS(bearing(S.lat, S.lon, holdFix.lat, holdFix.lon) - S.hdg));
-    const passed = (d < 0.35) ||
-      (_holdMinD < HOLD_PASS_NEAR && relFixDeg > 120 && d > _holdPrevD);
+    const passed = (d < 0.02) ||
+      (_holdMinD < HOLD_PASS_NEAR && relFixDeg > 90 && d > _holdPrevD);
     _holdPrevD = d;
     if (!passed) return null;                     // 픽스까지는 일반 NAV 로 비행
     _holdClosing = false; _holdMinD = Infinity;
