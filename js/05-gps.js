@@ -1107,28 +1107,52 @@ function drawHoldEntry() {
   }
 
   // ── 홀딩 패턴 ──
-  // 픽스 기준 NM 오프셋으로 바꿔 그린다. 패턴이 원 안쪽 62% 를 채우도록 맞춘다.
+  // 픽스에서 본 방위·거리로 놓는다. 부채꼴·눈금·기준선과 같은 at() 을 쓰므로
+  // 인바운드 레그가 기준선 위에 정확히 얹힌다. (종전에는 좌표 오프셋을 편차만큼
+  // 직접 돌렸는데 방향이 반대라 패턴만 18° 어긋나 있었다 — 각도 변환을 두 벌
+  // 두면 이런 일이 난다)
   const pts = holdPatternLatLngs(T.fix, { dir: T.right ? 'R' : 'L', crs: T.crs,
                                           legType: T.legType, legVal: T.legVal });
-  const off = pts.map(p => [(p[1] - T.fix.lon) * Math.cos(T.fix.lat * D2R) * 60,
-                            (p[0] - T.fix.lat) * 60]);
+  const pol = pts.map(p => ({ m: toMag(bearing(T.fix.lat, T.fix.lon, p[0], p[1])),
+                              d: distance(T.fix.lat, T.fix.lon, p[0], p[1]) }));
   let ext = 0.5;
-  off.forEach(([e, n]) => { ext = Math.max(ext, Math.hypot(e, n)); });
+  pol.forEach(q => { ext = Math.max(ext, q.d); });
   const pxPerNM = (R * 0.62) / ext;
-  // 자북 위쪽이므로 진북 기준 오프셋을 편차만큼 돌린다
-  const rot = -RULER_VAR * D2R, cr = Math.cos(rot), sr = Math.sin(rot);
   g.beginPath();
-  off.forEach(([e, n], i) => {
-    const x = cx + (e * cr - n * sr) * pxPerNM, y = cy - (e * sr + n * cr) * pxPerNM;
+  pol.forEach((q, i) => {
+    const [x, y] = at(q.m, q.d * pxPerNM);
     i ? g.lineTo(x, y) : g.moveTo(x, y);
   });
   g.strokeStyle = '#d0d6dd'; g.lineWidth = 1.6; g.stroke();
 
-  // ── 인바운드 코스 화살표(픽스로 들어오는 방향) ──
+  // ── 인바운드 코스 기준선 ──
+  // 구역은 이 선에서 각도를 재어 나눈다. 종전에는 픽스로 들어오는 쪽(반대편)
+  // 반쪽만 그려서, 정작 평행·눈물방울을 가르는 연장선 쪽에는 아무 선이 없었다.
+  // 눈에 띄는 선이 기준이 아닌 쪽에 있으니 거꾸로 읽기 딱 좋았다.
+  // 지도의 홀딩 인바운드 연장선처럼 픽스를 지나 반대편까지 긋는다.
   const inbM = toMag(T.crs);
-  const [tx, ty] = at(normA(inbM + 180), R * 0.95);
-  g.strokeStyle = '#ffd54f'; g.lineWidth = 1.4;
-  g.beginPath(); g.moveTo(tx, ty); g.lineTo(cx, cy); g.stroke();
+  const [hx, hy] = at(normA(inbM + 180), R);   // 인바운드 레그가 들어오는 쪽
+  const [ex, ey] = at(inbM, R);                // 픽스 너머 — 연장선
+  g.strokeStyle = '#ffd54f'; g.lineWidth = 1.6;
+  g.beginPath(); g.moveTo(hx, hy); g.lineTo(cx, cy); g.stroke();
+  g.setLineDash([5, 4]);
+  g.beginPath(); g.moveTo(cx, cy); g.lineTo(ex, ey); g.stroke();
+  g.setLineDash([]);
+  // 픽스로 향하는 방향 화살표 — 어느 쪽이 인바운드인지 선만으로는 모른다
+  const [px, py] = at(normA(inbM + 180), R * 0.45);
+  g.save(); g.translate(px, py); g.rotate(inbM * D2R);
+  g.fillStyle = '#ffd54f';
+  g.beginPath(); g.moveTo(0, -6); g.lineTo(4, 4); g.lineTo(-4, 4); g.closePath(); g.fill();
+  g.restore();
+  // 기준선 각도 — 연장선 끝에 적는다(구역 경계가 이 각도다)
+  g.font = 'bold 8px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Arial, sans-serif';
+  g.textAlign = 'center'; g.textBaseline = 'middle';
+  // 항공기가 연장선 위로 들어오면 글자와 겹치므로 선에서 살짝 비켜 놓는다
+  const [qx0, qy0] = at(inbM, R * 0.86);
+  const qx = qx0 + 9 * Math.sin((inbM + 90) * D2R), qy = qy0 - 9 * Math.cos((inbM + 90) * D2R);
+  g.lineWidth = 3; g.strokeStyle = 'rgba(6,10,14,0.85)';
+  g.strokeText(fmtA(inbM), qx, qy);
+  g.fillStyle = '#ffd54f'; g.fillText(fmtA(inbM), qx, qy);
 
   // ── 픽스 ──
   g.fillStyle = '#fff';
