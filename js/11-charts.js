@@ -2121,6 +2121,8 @@ appRegister({
   fpBksp,
   fpConfirmIdent,
   fpGo,
+  fpAddPP,
+  fpAddPreset,
   fpWptOpen,
   fpWptNoop,
   fpWptDirect,

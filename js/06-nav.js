@@ -636,34 +636,59 @@ function fpConfirmWptNum() {
   fpGo('WPT');
 }
 
+// 입력 방법을 먼저 고르고, 그 다음에 값을 넣는다.
+// 종전에는 여섯 가지 버튼이 한 줄에 섞여 있어 "좌표로 넣을지 방위로 넣을지"를
+// 고르는 일과 "어느 공항인지" 고르는 일이 같은 무게로 보였다. 넷으로 갈라 둔다.
+const FP_ADD_MODES = [
+  { id:'LATLON', act:'fpGo',      arg:'["LAT"]',  icon:'📍', name:'LAT/LON',
+    sub:'좌표를 직접 넣는다' },
+  { id:'RADDIS', act:'fpRefOpen', arg:'["RB"]',   icon:'⌖',  name:'RAD/DIS',
+    sub:'기준점 · 방위 · 거리' },
+  { id:'RADRAD', act:'fpRefOpen', arg:'["RR"]',   icon:'✛',  name:'RAD/RAD',
+    sub:'두 기준점 방위의 교점' },
+  { id:'PPOS',   act:'fpAddPP',   arg:undefined,  icon:'✈',  name:'P.POS',
+    sub:'지금 있는 자리' },
+];
+
 function fpRenderAdd(area, title, footer) {
   title.textContent = 'ADD WAYPOINT';
-  const apBtns = FP_PRESETS.map(a=>`<button class="fp-ap-btn" onclick="fpAddPreset('${a.ident}')" title="${a.name}">${a.ident}</button>`).join('');
+  const mode = m =>
+    `<div data-act="${m.act}"${m.arg ? ` data-arg='${m.arg}'` : ''} style="` +
+    `display:flex;flex-direction:column;align-items:center;gap:2px;` +
+    `padding:9px 4px;border:1px solid #2a5a7a;border-radius:5px;background:#0a1620;cursor:pointer;">` +
+    `<div style="font-size:19px;line-height:1;color:#87ceeb;">${m.icon}</div>` +
+    `<div style="color:#00cfff;font-size:12px;font-weight:bold;letter-spacing:0.5px;">${m.name}</div>` +
+    `<div style="color:#5a7484;font-size:8px;">${m.sub}</div>` +
+    `</div>`;
+  const apBtns = FP_PRESETS.map(a =>
+    `<button class="fp-ap-btn" data-act="fpAddPreset" data-arg='["${a.ident}"]' title="${a.name}">${a.ident}</button>`).join('');
   area.innerHTML = `
-    <div style="color:#87ceeb;font-size:8px;font-weight:bold;letter-spacing:0.5px;">KOREAN AIRPORTS</div>
-    <div class="fp-ap-grid">${apBtns}</div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px;">
+    <div style="color:#87ceeb;font-size:9px;font-weight:bold;letter-spacing:1px;margin-bottom:5px;">입력 방법</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
+      ${FP_ADD_MODES.map(mode).join('')}
+    </div>
+    <div style="color:#87ceeb;font-size:9px;font-weight:bold;letter-spacing:1px;margin:10px 0 5px;">그 밖의 방법</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
       <div class="fp-input-type-btn fp-cyan" data-act="fpGo" data-arg='["IDENT"]'>
-        <span style="font-size:20px;">⌨</span><span>IDENT</span>
+        <span style="font-size:18px;">⌨</span><span>IDENT</span>
       </div>
-      <div class="fp-input-type-btn fp-cyan" data-act="fpGo" data-arg='["LAT"]'>
-        <span style="font-size:20px;">📍</span><span>COORDS</span>
-      </div>
-    </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px;">
-      <div class="fp-input-type-btn fp-cyan" data-act="fpRefOpen" data-arg='["RB"]'>
-        <span style="font-size:17px;">⌖</span><span>BRG / DIST</span>
-      </div>
-      <div class="fp-input-type-btn fp-cyan" data-act="fpRefOpen" data-arg='["RR"]'>
-        <span style="font-size:17px;">✛</span><span>BRG / BRG</span>
+      <div class="fp-input-type-btn" data-act="fpGo" data-arg='["IFR"]'>
+        <span style="font-size:16px;">✈</span><span>IFR 절차</span>
       </div>
     </div>
-    <div class="fp-input-type-btn" style="margin-top:6px;" data-act="fpGo" data-arg='["IFR"]'>
-      <span style="font-size:18px;">✈</span><span>IFR PROCEDURES</span>
-    </div>`;
+    <div style="color:#87ceeb;font-size:9px;font-weight:bold;letter-spacing:1px;margin:10px 0 5px;">국내 공항</div>
+    <div class="fp-ap-grid">${apBtns}</div>`;
   footer.innerHTML = `
     <div class="fp-nav-btn" data-act="fpGo" data-arg='["LIST"]'><span>📋</span>FP List</div>
     <div class="fp-nav-btn" data-act="fpGo" data-arg='["LIST"]'><span>↩</span>Back</div>`;
+}
+
+// P.POS — 지금 있는 자리를 그대로 웨이포인트로. 넣자마자 상세 카드를 열어
+// 이름·좌표를 다듬을 수 있게 한다(지도의 'PP 현재위치' 와 이름 규칙을 맞춘다).
+function fpAddPP() {
+  const n = S.wps.filter(w => /^PP\d*$/.test(w.ident)).length + 1;
+  pushWP({ ident: 'PP' + n, lat: S.lat, lon: S.lon });
+  fpWptOpen(S.wps.length - 1);
 }
 
 function fpAddPreset(ident) {
