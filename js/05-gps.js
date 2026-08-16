@@ -228,10 +228,13 @@ function applyGPS(pos) {
 
 function decToDMS(deg, isLat) {
   const abs = Math.abs(deg);
-  const d = Math.floor(abs);
+  let d = Math.floor(abs);
   const mTotal = (abs - d) * 60;
-  const m = Math.floor(mTotal);
-  const s = Math.round((mTotal - m) * 60);
+  let m = Math.floor(mTotal);
+  let s = Math.round((mTotal - m) * 60);
+  // 초를 반올림하면 60 이 될 수 있다. 올려 주지 않으면 126.8 이 126°47′60″ 로 나온다.
+  if (s === 60) { s = 0; m++; }
+  if (m === 60) { m = 0; d++; }
   const dir = isLat ? (deg >= 0 ? 'N' : 'S') : (deg >= 0 ? 'E' : 'W');
   return `${d}°${String(m).padStart(2,'0')}′${String(s).padStart(2,'0')}″${dir}`;
 }
@@ -970,7 +973,18 @@ function updateWpMarkers(){
       iconSize:[10,10],iconAnchor:[5,5],className:'',
     });
     const m=L.marker([wp.lat,wp.lon],{icon}).addTo(leafMap);
-    m.on('click',()=>selectWP(i));
+    // 공항·VOR 처럼 설명창을 연다. 종전에는 누르는 즉시 활성 웨이포인트가 되어
+    // 좌표를 확인할 방법도, 되돌릴 방법도 없었다(비행계획 목록과 같은 문제였다).
+    m.bindPopup(() => _mapSymPopup({
+      title: (isA ? '◉ ' : '● ') + (wp.ident || 'WPT'),
+      color: isA ? '#c47a00' : isB2 ? '#c46a00' : '#1f5fa9',
+      sub: `비행계획 ${i + 1}번째` + (isA ? ' · 활성' : '') + (isB2 ? ' · BRG2' : '')
+           + (wp.hold ? ' · HOLD' : '')
+           + (Number.isFinite(wp.vnavAlt) ? ` · VNAV ${Math.round(wp.vnavAlt).toLocaleString()}ft` : ''),
+      name: wp.ident || 'WPT', lat: wp.lat, lon: wp.lon,
+      noAdd: true,
+      extra: [{ label: 'ℹ 정보', onclick: `_mapOpenWpt(${i})`, bg: '#e8eefb', fg: '#1f5fa9' }],
+    }), { maxWidth: 260 });
     wpMarkers.push(m);
     if (i > 0 && wp.arc) {
       const prev = S.wps[i - 1];
