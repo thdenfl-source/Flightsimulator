@@ -136,4 +136,36 @@ export async function run(page, t) {
   t.eq(rest.b2, 1, 'BRG2 지시침을 그 지점으로 지정한다');
   t.eq(rest.asked, true, '삭제는 되묻고 나서 지운다');
   t.ok(rest.n === 1 && rest.mode === 'LIST', `지우면 목록으로 돌아온다 (남은 ${rest.n}개)`);
+
+  // ── 입력 방법을 먼저 고른다 ──
+  // 값을 넣는 화면으로 곧장 들어가는 대신, 네 가지 방법을 먼저 보여 준다.
+  const add = await page.evaluate(() => {
+    S.wps = []; S.awp = -1; S.brg2wp = -1;
+    fpGo('ADD');
+    const txt = document.getElementById('fp-content-area').textContent;
+    const go = sel => { fpGo('ADD'); document.querySelector(sel).click(); return fpMode; };
+    const r = {
+      shown: ['LAT/LON', 'RAD/DIS', 'RAD/RAD', 'P.POS'].filter(m => txt.includes(m)),
+      latlon: go(`[data-act="fpGo"][data-arg='["LAT"]']`),
+      raddis: go(`[data-act="fpRefOpen"][data-arg='["RB"]']`),
+      radrad: go(`[data-act="fpRefOpen"][data-arg='["RR"]']`),
+    };
+    S.lat = 37.1; S.lon = 127.2;
+    r.ppos = go(`[data-act="fpAddPP"]`);
+    r.wp = S.wps[0] && { id: S.wps[0].ident, lat: +S.wps[0].lat.toFixed(4), lon: +S.wps[0].lon.toFixed(4) };
+    r.idx = fpWptIdx;
+    fpGo('ADD');
+    document.querySelector('[data-act="fpAddPreset"]').click();
+    r.preset = S.wps[S.wps.length - 1].ident;
+    return r;
+  });
+  t.eq(add.shown.join(','), 'LAT/LON,RAD/DIS,RAD/RAD,P.POS', '네 가지 입력 방법이 먼저 보인다');
+  t.eq(add.latlon, 'LAT', 'LAT/LON → 좌표 입력');
+  t.eq(add.raddis, 'RB', 'RAD/DIS → 기준점·방위·거리');
+  t.eq(add.radrad, 'RR', 'RAD/RAD → 두 방위의 교점');
+  t.ok(add.wp && add.wp.id === 'PP1' && add.wp.lat === 37.1 && add.wp.lon === 127.2,
+    `P.POS 는 지금 있는 자리로 만든다 (${add.wp && add.wp.id})`);
+  t.ok(add.ppos === 'WPT' && add.idx === 0,
+    'P.POS 로 만들면 바로 그 지점의 상세 카드가 열린다(이름을 다듬으라고)');
+  t.eq(add.preset, 'RKSI', '공항 프리셋도 그대로 동작한다');
 }
