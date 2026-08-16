@@ -349,7 +349,6 @@ function fpRenderRefPick(area, title, footer) {
 // ══════════════════════════════════════════════════════
 let fpHoldIdx = -1;
 let fpHoldDraft = null;    // { dir, crsM, legType, legVal }
-const HOLD_TIMES = [30, 60, 90, 120, 150, 180];
 
 function fpHoldOpen(i) {
   if (i < 0 || i >= S.wps.length) return;
@@ -360,6 +359,7 @@ function fpHoldOpen(i) {
         legType: h.legType === 'DIST' ? 'DIST' : 'TIME',
         legVal: h.legVal || (h.legType === 'DIST' ? 5 : 60) }
     : { dir: 'R', crsM: holdDefaultCrsMag(i), legType: 'TIME', legVal: 60 };
+  fpHoldNumFld = 'crs'; fpInputBuf = '';
   fpGo('HOLD');
 }
 function fpHoldSet(k, v) {
@@ -367,24 +367,46 @@ function fpHoldSet(k, v) {
   if (k === 'legType') {
     fpHoldDraft.legType = v;
     fpHoldDraft.legVal = (v === 'DIST') ? 5 : 60;   // 기본값으로 되돌린다
+    fpInputBuf = '';                                 // 초와 NM 은 자릿수가 다르다
   } else fpHoldDraft[k] = v;
   fpRender();
 }
-function fpHoldCrsAdj(d) {
+// 코스·레그도 다른 화면과 같이 숫자판으로 넣는다. 종전에는 ≪ ◄ ► ≫ 와
+// ▼ ▲ 로 밀어야 했고, 시간은 정해진 여섯 값(30·60·90·120·150·180초)만
+// 고를 수 있어 45초 같은 값은 아예 넣을 수 없었다.
+let fpHoldNumFld = 'crs';   // 'crs' | 'leg'
+function fpHoldNum(fld) { fpHoldNumFld = fld; fpInputBuf = ''; fpRender(); }
+function _holdNumCfg() {
+  if (fpHoldNumFld === 'crs')
+    return { lbl: '인바운드 코스', unit: '°M', min: 1, max: 360,
+             hint: '픽스로 들어오는 자북 코스. 1 ~ 360' };
+  if (fpHoldDraft && fpHoldDraft.legType === 'DIST')
+    return { lbl: '아웃바운드 거리', unit: 'NM', min: 0.5, max: 20,
+             hint: '아웃바운드 레그 길이(NM). 0.5 ~ 20' };
+  return { lbl: '아웃바운드 시간', unit: 's', min: 10, max: 600,
+           hint: '아웃바운드 레그 시간을 초로. 60 = 1:00 (10 ~ 600)' };
+}
+function fpConfirmHoldNum() {
   if (!fpHoldDraft) return;
-  fpHoldDraft.crsM = ((Math.round(fpHoldDraft.crsM) + d + 359) % 360) + 1;
+  const c = _holdNumCfg();
+  const v = parseFloat(fpInputBuf);
+  if (isNaN(v)) { uiAlert('숫자를 입력하세요'); return; }
+  if (v < c.min || v > c.max) { uiAlert(`${c.lbl} 범위: ${c.min} ~ ${c.max}${c.unit}`); return; }
+  if (fpHoldNumFld === 'crs') fpHoldDraft.crsM = ((Math.round(v) + 359) % 360) + 1;
+  else fpHoldDraft.legVal = (fpHoldDraft.legType === 'DIST')
+    ? Math.round(v * 10) / 10 : Math.round(v);
+  fpInputBuf = '';
+  // 코스를 넣으면 레그 칸으로 넘겨 준다 — 손이 위아래로 오가지 않게
+  if (fpHoldNumFld === 'crs') fpHoldNumFld = 'leg';
   fpRender();
 }
-function fpHoldLegAdj(d) {
-  if (!fpHoldDraft) return;
-  if (fpHoldDraft.legType === 'DIST') {
-    fpHoldDraft.legVal = Math.max(1, Math.min(20, fpHoldDraft.legVal + d));
-  } else {
-    const i = HOLD_TIMES.indexOf(fpHoldDraft.legVal);
-    const j = Math.max(0, Math.min(HOLD_TIMES.length - 1, (i < 0 ? 1 : i) + Math.sign(d)));
-    fpHoldDraft.legVal = HOLD_TIMES[j];
-  }
-  fpRender();
+// 값 칸 — 누르면 그 칸으로 입력이 옮겨 간다(아래 숫자판은 늘 펴져 있다)
+function _holdNumHtml(fld, txt) {
+  const act = fpHoldNumFld === fld;
+  return `<div class="hold-btn${act ? '' : ' on'}" data-act="fpHoldNum" data-arg='["${fld}"]'
+            style="text-align:center;font-size:15px;` +
+    (act ? 'border-color:#00e5ff;color:#00e5ff;background:#001e28;' : '') + `">` +
+    `${act && fpInputBuf ? fpInputBuf + '<span class="fp-disp-cursor">|</span>' : txt}</div>`;
 }
 function fpHoldApply() {
   if (fpHoldIdx < 0 || fpHoldIdx >= S.wps.length || !fpHoldDraft) { fpGo('LIST'); return; }
@@ -427,13 +449,7 @@ function fpRenderHold(area, title, footer) {
       </div>
       <div class="hold-row">
         <div class="hold-lbl">INBD CRS</div>
-        <div class="hold-spin">
-          <div class="hold-btn" data-act="fpHoldCrsAdj" data-arg='[-10]'>≪</div>
-          <div class="hold-btn" data-act="fpHoldCrsAdj" data-arg='[-1]'>◄</div>
-          <div class="hold-val">${String(d.crsM).padStart(3,'0')}°M</div>
-          <div class="hold-btn" data-act="fpHoldCrsAdj" data-arg='[1]'>►</div>
-          <div class="hold-btn" data-act="fpHoldCrsAdj" data-arg='[10]'>≫</div>
-        </div>
+        ${_holdNumHtml('crs', String(d.crsM).padStart(3,'0') + '°M')}
       </div>
       <div class="hold-row">
         <div class="hold-lbl">LEG</div>
@@ -444,19 +460,15 @@ function fpRenderHold(area, title, footer) {
       </div>
       <div class="hold-row">
         <div class="hold-lbl">${d.legType==='DIST'?'거리':'시간'}</div>
-        <div class="hold-spin">
-          <div class="hold-btn" data-act="fpHoldLegAdj" data-arg='[-1]'>▼</div>
-          <div class="hold-val">${legTxt}</div>
-          <div class="hold-btn" data-act="fpHoldLegAdj" data-arg='[1]'>▲</div>
-        </div>
+        ${_holdNumHtml('leg', legTxt)}
       </div>
-      <div style="color:#567;font-size:9px;line-height:1.6;margin-top:8px;border-top:1px solid #1a2a3a;padding-top:6px;">
+      <div style="color:#567;font-size:9px;line-height:1.5;margin-top:6px;border-top:1px solid #1a2a3a;padding-top:5px;">
         선회반경 ${R.toFixed(2)}NM · 아웃바운드 ${legNM.toFixed(1)}NM · 패턴 폭 ${(2*R).toFixed(2)}NM
-        (현재 지상속도 ${Math.round(groundSpdKt())}kt 기준)<br>
-        ENTER 하면 지도에 패턴이 그려지고, <b>NAV 오토파일럿</b>이 이 웨이포인트를 활성으로 잡았을 때
-        <b>진입 규칙(직진 / 평행 / 눈물방울)</b>에 따라 자동으로 진입해 홀딩을 돕니다.
-        홀딩을 빠져나가려면 <b>DEL HOLD</b> 로 지우세요.
+        (지상속도 ${Math.round(groundSpdKt())}kt 기준)
       </div>
+      <div style="color:#00cfff;font-size:9px;letter-spacing:0.5px;margin-top:4px;">
+        ${_holdNumCfg().lbl} 입력 중 · ${_holdNumCfg().hint}</div>
+      ${_padHtml('fpConfirmHoldNum')}
     </div>`;
   footer.innerHTML = `
     <div class="fp-nav-btn" data-act="fpGo" data-arg='["LIST"]'><span>↩</span>Cancel</div>

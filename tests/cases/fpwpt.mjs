@@ -277,4 +277,55 @@ export async function run(page, t) {
   ]);
   t.eq(dms.join(' '), '126°48′00″E 38°00′00″S 130°00′00″E',
     `도분초 올림이 맞는다 (${dms.join(' ')})`);
+
+  // ── 홀딩 설정도 같은 숫자판으로 ──
+  // 종전에는 코스가 ≪ ◄ ► ≫, 시간이 ▼ ▲ 였고 시간은 정해진 여섯 값
+  // (30·60·90·120·150·180초)만 고를 수 있었다. 45초짜리 레그는 못 넣었다.
+  const hold = await page.evaluate(() => {
+    S.wps = []; S.awp = -1;
+    pushWP({ ident: 'DUBUN', lat: 37.5, lon: 127.0 });
+    fpHoldOpen(0);
+    const r = { fld: fpHoldNumFld, pad: !!document.querySelector('.fp-pad5'),
+                spinner: /≪|▼/.test(document.getElementById('fp-content-area').textContent),
+                crsAdj: typeof fpHoldCrsAdj, legAdj: typeof fpHoldLegAdj };
+    const ent = () => document.querySelector('[data-act="fpConfirmHoldNum"]').click();
+    '288'.split('').forEach(c => fpType(c)); ent();
+    r.crs = fpHoldDraft.crsM; r.next = fpHoldNumFld; r.mode = fpMode;
+    '45'.split('').forEach(c => fpType(c)); ent();     // 정해진 값이 아닌 45초
+    r.leg = fpHoldDraft.legVal;
+    fpHoldSet('legType', 'DIST');
+    fpHoldNum('leg'); '2.5'.split('').forEach(c => fpType(c)); ent();
+    r.dist = fpHoldDraft.legVal;
+    fpHoldSet('legType', 'TIME');
+    fpHoldNum('leg'); '45'.split('').forEach(c => fpType(c)); ent();
+    fpHoldApply();
+    r.saved = S.wps[0].hold;
+    r.savedCrsM = r.saved ? Math.round(toMag(r.saved.crs)) : null;
+    return r;
+  });
+  t.ok(!hold.spinner && hold.crsAdj === 'undefined' && hold.legAdj === 'undefined',
+    '화살표 스텝 버튼이 없어졌다');
+  t.ok(hold.pad && hold.fld === 'crs' && hold.mode === 'HOLD',
+    '홀딩 화면을 열면 코스 칸이 잡히고 숫자판이 함께 펴져 있다');
+  t.ok(hold.crs === 288 && hold.next === 'leg',
+    `코스를 치면 그대로 들어가고 레그 칸으로 넘어간다 (${hold.crs}°M)`);
+  t.eq(hold.leg, 45, `정해진 값이 아닌 시간도 넣을 수 있다 (${hold.leg}초 — 종전에는 30·60·90… 만)`);
+  t.eq(hold.dist, 2.5, `거리도 소수로 넣을 수 있다 (${hold.dist}NM)`);
+  t.ok(hold.saved && hold.saved.legVal === 45 && hold.savedCrsM === 288,
+    `ENTER 하면 그 값이 웨이포인트에 저장된다 (${hold.saved && hold.saved.legVal}초 · ${hold.savedCrsM}°M)`);
+
+  // 범위 밖은 되묻고 값을 지킨다
+  const hbad = await page.evaluate(async () => {
+    fpHoldOpen(0);
+    const before = fpHoldDraft.crsM;
+    '999'.split('').forEach(c => fpType(c));
+    document.querySelector('[data-act="fpConfirmHoldNum"]').click();
+    await new Promise(r => setTimeout(r, 60));
+    const asked = !!document.querySelector('.ui-dlg');
+    document.querySelector('.ui-dlg-btns .ui-dlg-ok')?.click();
+    await new Promise(r => setTimeout(r, 60));
+    return { before, after: fpHoldDraft.crsM, asked };
+  });
+  t.ok(hbad.asked && hbad.after === hbad.before,
+    `홀딩도 범위 밖(999°)은 알리고 값을 지킨다 (${hbad.after}°M 유지)`);
 }
