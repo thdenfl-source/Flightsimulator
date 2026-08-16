@@ -55,17 +55,21 @@ export async function run(page, t) {
   const vnav = await page.evaluate(() => {
     const type = (act, txt) => {
       document.querySelector(`[data-act="fpWptNum"][data-arg='["${act}"]']`).click();
-      const m = fpMode;
+      // 다른 화면으로 넘어가지 않고, 카드 안에 숫자판이 펴진다
+      const r = { mode: fpMode, pad: !!document.querySelector('.fp-pad5') };
       String(txt).split('').forEach(c => fpType(c));
-      fpConfirmWptNum();
-      return m;
+      document.querySelector('[data-act="fpConfirmWptNum"]').click();
+      return r;
     };
     const m1 = type('VALT', 2500);
     const m2 = type('VOFS', 3);
     return { m1, m2, alt: S.wps[1].vnavAlt, ofs: S.wps[1].vnavOfs, active: vnavActive,
+             padGone: !document.querySelector('.fp-pad5'),
              shown: document.getElementById('fp-content-area').textContent };
   });
-  t.ok(vnav.m1 === 'WPTNUM' && vnav.m2 === 'WPTNUM', 'VNAV 칸을 누르면 숫자 입력 화면이 열린다');
+  t.ok(vnav.m1.mode === 'WPT' && vnav.m1.pad && vnav.m2.pad,
+    'VNAV 칸을 누르면 화면을 옮기지 않고 카드 안에 숫자판이 펴진다');
+  t.eq(vnav.padGone, true, '값을 넣고 나면 숫자판이 접히고 동작 버튼이 돌아온다');
   t.ok(vnav.alt === 2500 && vnav.ofs === 3, `VNAV 고도·오프셋이 들어간다 (${vnav.alt}ft / ${vnav.ofs}NM)`);
   t.eq(vnav.active, true, 'VNAV 고도를 넣으면 VNAV 가 걸린다');
   t.ok(/2,500 FT/.test(vnav.shown) && /3\.0 NM/.test(vnav.shown), '넣은 값이 카드에 보인다');
@@ -178,25 +182,29 @@ export async function run(page, t) {
     fpRefChoose('APT', 'RKSI');
     const type = (fld, txt) => {
       document.querySelector(`[data-act="fpRefNum"][data-arg='["${fld}"]']`).click();
-      const m = fpMode;
+      const m = { mode: fpMode, pad: !!document.querySelector('.fp-pad5') };
       String(txt).split('').forEach(c => fpType(c));
-      fpConfirmRefNum();
+      document.querySelector('[data-act="fpConfirmRefNum"]').click();
       return m;
     };
     const r = { spinner: document.getElementById('fp-content-area').textContent.includes('≪'),
-                adjFn: typeof fpRefAdj };
+                adjFn: typeof fpRefAdj,
+                padOnOpen: !!document.querySelector('.fp-pad5') };
     r.mBrg = type('b1', 117);
-    r.b1 = fpRef.b1; r.back = fpMode;
+    r.b1 = fpRef.b1; r.back = fpMode; r.nextFld = fpRefNumFld;
     r.mDis = type('d1', '8.8');
-    r.d1 = fpRef.d1;
+    r.d1 = fpRef.d1; r.padStays = !!document.querySelector('.fp-pad5');
     const s = fpRefSolve();
     r.solved = s.err ? s.err : { id: s.ident, lat: +s.lat.toFixed(4), lon: +s.lon.toFixed(4) };
     return r;
   });
   t.ok(!ref.spinner && ref.adjFn === 'undefined', '화살표 스피너가 없어졌다');
-  t.ok(ref.mBrg === 'REFNUM' && ref.mDis === 'REFNUM', '방위·거리 칸을 누르면 숫자판이 열린다');
+  t.eq(ref.padOnOpen, true, '화면을 열면 숫자판이 값 칸과 함께 펴져 있다');
+  t.ok(ref.mBrg.mode === 'RB' && ref.mDis.mode === 'RB' && ref.mBrg.pad && ref.mDis.pad,
+    '값을 넣는 동안 화면이 바뀌지 않는다(숫자판만 있는 화면으로 넘어가지 않는다)');
   t.ok(ref.b1 === 117 && ref.d1 === 8.8, `친 값이 그대로 들어간다 (${ref.b1}° / ${ref.d1}NM)`);
-  t.eq(ref.back, 'RB', '넣고 나면 원래 화면으로 돌아온다');
+  t.eq(ref.nextFld, 'd1', '방위를 넣으면 다음 칸(거리)으로 저절로 옮겨 간다');
+  t.eq(ref.padStays, true, '넣고 나서도 숫자판은 그대로 펴져 있다');
   t.ok(ref.solved.id === 'RKSI117/8.8' && Math.abs(ref.solved.lat - 37.4149) < 0.001,
     `넣은 값으로 좌표가 나온다 (${ref.solved.id} → ${ref.solved.lat}, ${ref.solved.lon})`);
 
@@ -223,9 +231,9 @@ export async function run(page, t) {
     document.querySelector(`[data-act="fpRefNum"][data-arg='["b2"]']`).click();
     const m = fpMode;
     '249'.split('').forEach(c => fpType(c));
-    fpConfirmRefNum();
+    document.querySelector('[data-act="fpConfirmRefNum"]').click();
     return { m, b2: fpRef.b2, back: fpMode };
   });
-  t.ok(rr.m === 'REFNUM' && rr.b2 === 249 && rr.back === 'RR',
-    `RAD/RAD 의 방위 #2 도 같은 입력창으로 넣는다 (${rr.b2}°)`);
+  t.ok(rr.m === 'RR' && rr.b2 === 249 && rr.back === 'RR',
+    `RAD/RAD 의 방위 #2 도 같은 자리에서 넣는다 (${rr.b2}°)`);
 }
