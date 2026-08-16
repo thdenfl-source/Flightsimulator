@@ -1262,6 +1262,20 @@ body.solo-mode .solo-panel-visible {
 }
 .fp-key:active { background: radial-gradient(circle at 30% 30%, #666, #222); transform: scale(0.92); }
 .fp-numpad-grid { display: grid; grid-template-columns: repeat(3, 44px); gap: 8px; justify-content: center; margin: 6px auto; }
+/* 화면 안에 함께 놓는 숫자판 — 값 칸 바로 아래에 붙여 두느라 5열로 낮게 만든다.
+   (종전에는 숫자판만 있는 화면으로 넘어갔다 돌아왔다) */
+.fp-pad5 { display: grid; grid-template-columns: repeat(5, 1fr); gap: 5px; margin-top: 7px; }
+.fp-pad-key {
+  height: 38px; background: radial-gradient(circle at 30% 30%, #3a3a3a, #111);
+  border: 0.7px solid #555; border-radius: 6px;
+  color: #fff; font-size: 15px; font-weight: bold;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; touch-action: manipulation; box-shadow: 0 2px 4px rgba(0,0,0,0.6);
+}
+.fp-pad-key:active { transform: scale(0.95); box-shadow: inset 0 2px 5px rgba(0,0,0,0.8); }
+.fp-pad-key.wide { grid-column: span 2; }
+.fp-pad-key.ent  { background: #00252e; border-color: #00e5ff; color: #00e5ff; font-size: 13px; }
+.fp-pad-key.clr  { background: #2a0e0e; border-color: #663333; color: #ff6666; font-size: 13px; }
 .fp-num-circ {
   width: 42px; height: 42px;
   background: radial-gradient(circle at 30% 30%, #444, #111);
@@ -1675,9 +1689,11 @@ body.night-mode::after {
             <b>RAD/RAD</b>(두 기준점 방위의 교점) · <b>P.POS</b>(지금 있는 자리).
             그 아래에 <b>IDENT · IFR 절차 · 국내 공항</b> 프리셋이 있습니다.
             P.POS 로 만들면 곧바로 상세 카드가 열려 이름·좌표를 다듬을 수 있습니다.</li>
-        <li><b>방위 · 거리 입력</b>: RAD/DIS · RAD/RAD 의 <b>BRG · DIST</b> 칸을 누르면
-            <b>좌표 입력과 같은 숫자판</b>이 열립니다(종전의 ≪ ◄ ► ≫ 화살표는 없앴습니다).
-            범위를 벗어난 값(방위 0~360, 거리 0.1~400NM)은 알리고 <b>원래 값을 그대로 둡니다</b>.</li>
+        <li><b>방위 · 거리 입력</b>: RAD/DIS · RAD/RAD 는 <b>값 칸 바로 아래에 숫자판이 함께</b> 있습니다.
+            칸을 눌러 고르고 숫자판으로 칩니다 — <b>다른 화면으로 넘어가지 않아</b> 넣은 값과 결과 좌표를 같이 봅니다.
+            <b>ENT</b> 를 누르면 다음 칸으로 저절로 옮겨 갑니다.
+            범위를 벗어난 값(방위 0~360, 거리 0.1~400NM)은 알리고 <b>원래 값을 그대로 둡니다</b>.
+            웨이포인트 카드의 <b>VNAV 고도 · 오프셋</b>도 같은 방식입니다(칸을 누르면 카드 안에 숫자판이 펴집니다).</li>
         <li><b>HOVER PAGE</b>(80kt 미만): 호버 속도·위치 지시. 좌측 HOVER 그룹의 <b>HOVER PAGE / HOVER POS</b> 사각 버튼으로 켜고,
             기준 속도는 트림 옆 원형 <b>GSPD</b> 버튼으로 잡습니다(실제 조종간 배치에 맞춘 위치).</li>
         <li>HOVER PAGE에는 <b>SHIP</b>(청록)과 <b>비행계획 활성 웨이포인트</b>(빨강 삼각형)가 함께 표시됩니다.

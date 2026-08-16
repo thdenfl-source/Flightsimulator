@@ -38,7 +38,7 @@ function updateNav(){
 // ══════════════════════════════════════════════════════
 // FLIGHT PLAN STATE MACHINE
 // ══════════════════════════════════════════════════════
-let fpMode = 'LIST'; // 'LIST'|'ADD'|'IDENT'|'LAT'|'LON'|'IFR'|'SIDNEW'|'HOLD'|'WPT'|'WPTNUM'
+let fpMode = 'LIST'; // 'LIST'|'ADD'|'IDENT'|'LAT'|'LON'|'IFR'|'SIDNEW'|'HOLD'|'WPT'
 let fpWptIdx  = -1;    // 상세 화면을 연 웨이포인트
 let fpEditIdx = -1;    // 이름·좌표를 '새로 추가' 가 아니라 '고치는' 대상
 let fpNumFld  = null;  // 상세 화면의 숫자 입력 대상 ('VALT' | 'VOFS')
@@ -79,11 +79,9 @@ function fpRender() {
     case 'SIDNEW': fpRenderSidNew(area, title, footer); break;
     case 'HOLD':  fpRenderHold(area, title, footer);  break;
     case 'WPT':   fpRenderWpt(area, title, footer);   break;
-    case 'WPTNUM': fpRenderWptNum(area, title, footer); break;
     case 'RB':    fpRenderRadial(area, title, footer); break;
     case 'RR':    fpRenderRadial(area, title, footer); break;
     case 'REFPICK': fpRenderRefPick(area, title, footer); break;
-    case 'REFNUM':  fpRenderRefNum(area, title, footer);  break;
   }
 }
 
@@ -129,6 +127,8 @@ let fpRef = { r1: null, b1: 360, d1: 10, r2: null, b2: 360 };
 function fpRefOpen(mode) {
   fpRefMode = mode;
   if (!fpRef.r1) fpRefQ = '';
+  // 숫자판은 늘 펴 둔다 — 값 칸과 함께 보이는 게 이 화면의 요점이다
+  fpRefNumFld = 'b1'; fpInputBuf = '';
   fpGo(mode);
 }
 // 참조점 후보 — 비행계획 WP · VOR · 공항 · AIP 픽스
@@ -159,13 +159,33 @@ function fpRefChoose(cat, ident) {
 function fpRefType(ch) { if (fpRefQ.length < 6) { fpRefQ += ch; fpRender(); } }
 function fpRefBksp()   { fpRefQ = fpRefQ.slice(0, -1); fpRender(); }
 function fpRefSetCat(c) { fpRefCat = c; fpRender(); }
+// 화면 안에 함께 놓는 숫자판. 값 칸을 누르면 그 칸이 '입력 중' 이 되고,
+// 바로 아래 숫자판으로 친다. 숫자판만 있는 화면으로 넘어갔다 돌아오지 않는다 —
+// 넘어가면 방금 넣은 값과 나머지 칸을 같이 볼 수가 없다.
+function _padHtml(entAct) {
+  const k = (label, act, arg, cls) =>
+    `<div class="fp-pad-key${cls ? ' ' + cls : ''}" data-act="${act}"` +
+    `${arg !== undefined ? ` data-arg='${arg}'` : ''}>${label}</div>`;
+  const num = n => k(n, 'fpType', `["${n}"]`);
+  return `<div class="fp-pad5">` +
+    [1,2,3,4,5].map(num).join('') +
+    [6,7,8,9,0].map(num).join('') +
+    k('.', 'fpType', '["."]') +
+    k('⬅', 'fpBksp') +
+    k('CLR', 'fpPadClr', undefined, 'clr') +
+    k('ENT', entAct, undefined, 'ent wide') +
+    `</div>`;
+}
+function fpPadClr() { fpInputBuf = ''; fpRender(); }
+
 // 방위·거리도 좌표와 같은 방식으로 넣는다 — 화살표로 한 칸씩 밀지 않고,
 // 값을 눌러 숫자판에 직접 친다. 입력 방식이 화면마다 다르면 손이 헷갈린다.
 let fpRefNumFld = null;   // 'b1' | 'd1' | 'b2'
 function fpRefNum(fld) {
   fpRefNumFld = fld; fpInputBuf = '';
-  fpGo('REFNUM');
+  fpRender();
 }
+
 const FP_REF_NUM = {
   b1: { lbl: '방위 (RADIAL)',    unit: '°M', hint: '참조점에서 바깥으로 향하는 자북 방위. 0 ~ 360',
         min: 0, max: 360 },
@@ -174,30 +194,6 @@ const FP_REF_NUM = {
   d1: { lbl: '거리 (DISTANCE)',  unit: 'NM', hint: '참조점에서 그 방위로 나아갈 거리. 0.1 ~ 400 NM',
         min: 0.1, max: 400 },
 };
-function fpRenderRefNum(area, title, footer) {
-  const c = FP_REF_NUM[fpRefNumFld];
-  if (!c) { fpGo(fpRefMode); return; }
-  title.textContent = c.lbl;
-  const cur = fpRefNumFld === 'd1' ? fpRef.d1.toFixed(1) : String(Math.round(fpRef[fpRefNumFld])).padStart(3,'0');
-  area.innerHTML = `
-    <div style="display:flex;flex-direction:column;gap:10px;padding-top:4px;">
-      <div style="font-size:8px;color:#87ceeb;">${c.hint}</div>
-      <div style="display:flex;align-items:center;gap:8px;">
-        <div class="fp-disp-box">${fpInputBuf || `<span style="color:#222">${cur}</span>`}<span class="fp-disp-cursor">|</span></div>
-        <div class="fp-bksp-btn" data-act="fpBksp">⬅<br><span style="font-size:8px;">BKSP</span></div>
-      </div>
-      <div class="fp-numpad-grid">
-        ${[1,2,3,4,5,6,7,8,9].map(n=>`<div class="fp-num-circ" data-act="fpType" data-arg='["${n}"]'>${n}</div>`).join('')}
-        <div class="fp-num-circ" data-act="fpType" data-arg='["."]'>.</div>
-        <div class="fp-num-circ" data-act="fpType" data-arg='["0"]'>0</div>
-        <div class="fp-num-circ" data-act="fpRefNumClr">CLR</div>
-      </div>
-    </div>`;
-  footer.innerHTML = `
-    <div class="fp-nav-btn" onclick="fpGo('${fpRefMode}')"><span>↩</span>Cancel</div>
-    <div class="fp-nav-btn fp-nav-enter" data-act="fpConfirmRefNum"><span>↩</span>Enter</div>`;
-}
-function fpRefNumClr() { fpInputBuf = ''; fpRender(); }
 function fpConfirmRefNum() {
   const c = FP_REF_NUM[fpRefNumFld];
   if (!c) { fpGo(fpRefMode); return; }
@@ -208,8 +204,11 @@ function fpConfirmRefNum() {
   fpRef[fpRefNumFld] = (fpRefNumFld === 'd1')
     ? Math.round(v * 10) / 10
     : ((Math.round(v) + 359) % 360) + 1;
-  fpInputBuf = ''; fpRefNumFld = null;
-  fpGo(fpRefMode);
+  // 다음 칸으로 옮겨 준다 — 방위 다음은 거리(RAD/RAD 는 방위 #2), 그 다음은 처음으로.
+  // 숫자판을 닫지 않는다: 닫으면 화면이 다시 텅 비고 손이 위아래로 오간다.
+  const next = { b1: fpRefMode === 'RB' ? 'd1' : 'b2', d1: 'b1', b2: 'b1' };
+  fpInputBuf = ''; fpRefNumFld = next[fpRefNumFld] || 'b1';
+  fpRender();
 }
 // 현재 입력으로 산출되는 좌표 — { lat, lon, ident } 또는 { err }
 function fpRefSolve() {
@@ -262,11 +261,15 @@ function _refBtnHtml(slot) {
 }
 // 값 칸 — 누르면 숫자판이 열린다(참조점 고르는 칸과 같은 생김새)
 function _refNumHtml(key) {
+  const act = fpRefNumFld === key;
   const v = fpRef[key];
-  const txt = key === 'd1' ? (Math.round(v*10)/10).toFixed(1) + ' NM'
+  const txt = act && fpInputBuf ? fpInputBuf
+            : key === 'd1' ? (Math.round(v*10)/10).toFixed(1) + ' NM'
                            : String(Math.round(v)).padStart(3,'0') + '°M';
-  return `<div class="hold-btn on" style="text-align:left;padding-left:8px;flex:1;"
-            data-act="fpRefNum" data-arg='["${key}"]'>${txt} <span style="color:#5a7484;">▸ 입력</span></div>`;
+  return `<div class="hold-btn${act ? '' : ' on'}" data-act="fpRefNum" data-arg='["${key}"]'
+            style="text-align:left;padding-left:8px;flex:1;font-size:13px;` +
+    (act ? 'border-color:#00e5ff;color:#00e5ff;background:#001e28;' : '') + `">` +
+    `${txt}${act ? '<span class="fp-disp-cursor">|</span>' : ''}</div>`;
 }
 
 function fpRenderRadial(area, title, footer) {
@@ -291,11 +294,10 @@ function fpRenderRadial(area, title, footer) {
           : `<div class="hold-row"><div class="hold-lbl">REF #2</div>${_refBtnHtml(2)}</div>
              <div class="hold-row"><div class="hold-lbl">BRG #2</div>${_refNumHtml('b2')}</div>`}
       <div style="border-top:1px solid #1a2a3a;margin-top:6px;">${okHtml}</div>
-      <div style="color:#567;font-size:9px;line-height:1.6;">
-        방위는 <b>참조점에서 바깥으로 향하는 자북 방위</b>(라디얼)입니다.
-        ${rb ? '참조점에서 그 방위로 지정 거리만큼 나아간 지점을 만듭니다.'
-             : '두 참조점의 방위선이 만나는 지점을 대권 기하로 계산합니다.'}
-      </div>
+      <div style="color:#00cfff;font-size:9px;letter-spacing:0.5px;margin-top:2px;">
+        ${FP_REF_NUM[fpRefNumFld] ? FP_REF_NUM[fpRefNumFld].lbl + ' 입력 중 · ' + FP_REF_NUM[fpRefNumFld].hint
+                                  : '값 칸을 눌러 고른 뒤 아래 숫자판으로 칩니다'}</div>
+      ${_padHtml('fpConfirmRefNum')}
     </div>`;
   footer.innerHTML = `
     <div class="fp-nav-btn" data-act="fpGo" data-arg='["ADD"]'><span>↩</span>Back</div>
@@ -532,8 +534,11 @@ function fpRenderWpt(area, title, footer) {
   const holdTxt = hold
     ? `${String(Math.round(toMag(hold.crs))).padStart(3,'0')}° ${hold.dir === 'L' ? '좌' : '우'}`
     : '— — —';
-  const vAlt = Number.isFinite(wp.vnavAlt) ? Math.round(wp.vnavAlt).toLocaleString() + ' FT' : '— — —';
-  const vOfs = Number.isFinite(wp.vnavOfs) && wp.vnavOfs ? wp.vnavOfs.toFixed(1) + ' NM' : '0 NM';
+  let vAlt = Number.isFinite(wp.vnavAlt) ? Math.round(wp.vnavAlt).toLocaleString() + ' FT' : '— — —';
+  let vOfs = Number.isFinite(wp.vnavOfs) && wp.vnavOfs ? wp.vnavOfs.toFixed(1) + ' NM' : '0 NM';
+  const cur = fpInputBuf + '<span class="fp-disp-cursor">|</span>';
+  if (fpNumFld === 'VALT') vAlt = cur;
+  if (fpNumFld === 'VOFS') vOfs = cur;
 
   // 카드 안의 버튼 — 위 라벨(작게) + 아래 값(크게)
   const CARD = (lbl, val, act, arg, on) =>
@@ -560,12 +565,20 @@ function fpRenderWpt(area, title, footer) {
 
       // ── 설정 ──
       `<div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-top:9px;">` +
-        CARD('VNAV 고도', vAlt, 'fpWptNum', '["VALT"]', Number.isFinite(wp.vnavAlt)) +
-        CARD('VNAV 오프셋', vOfs, 'fpWptNum', '["VOFS"]', !!wp.vnavOfs) +
+        CARD('VNAV 고도', vAlt, 'fpWptNum', '["VALT"]', fpNumFld === 'VALT' || Number.isFinite(wp.vnavAlt)) +
+        CARD('VNAV 오프셋', vOfs, 'fpWptNum', '["VOFS"]', fpNumFld === 'VOFS' || !!wp.vnavOfs) +
         CARD('레그 코스', legCrs + '°M', 'fpWptNoop') +
         CARD('HOLD', holdTxt, 'fpHoldOpen', `[${i}]`, !!hold) +
       `</div>` +
 
+      // ── 입력 중이면 그 자리에 숫자판을 편다(다른 화면으로 넘어가지 않는다) ──
+      (fpNumFld ? (
+        `<div style="color:#00cfff;font-size:9px;letter-spacing:0.5px;margin-top:8px;">` +
+        (fpNumFld === 'VALT'
+          ? 'VNAV 고도 입력 중 · 비우고 ENT 하면 해제됩니다 (-1000 ~ 45000 ft)'
+          : 'VNAV 오프셋 입력 중 · 지점보다 몇 NM 앞에서 그 고도에 닿을지 (0 ~ 50 NM)') +
+        `</div>` + _padHtml('fpConfirmWptNum')
+      ) : (
       // ── 동작 ──
       `<div data-act="fpWptDirect" style="margin-top:9px;padding:9px;border-radius:5px;cursor:pointer;` +
         `text-align:center;font-size:13px;font-weight:bold;letter-spacing:1px;` +
@@ -581,7 +594,8 @@ function fpRenderWpt(area, title, footer) {
       `</div>` +
       `<div style="color:#445;font-size:8px;line-height:1.6;margin-top:8px;border-top:1px solid #1a2a30;padding-top:6px;">` +
         `VNAV 고도를 넣으면 이 지점이 활성일 때 그 고도를 목표로 강하선을 그립니다.` +
-        ` 오프셋은 <b>지점보다 몇 NM 앞에서</b> 그 고도에 닿을지입니다.</div>` +
+        ` 오프셋은 <b>지점보다 몇 NM 앞에서</b> 그 고도에 닿을지입니다.</div>`
+      )) +
     `</div>`;
 
   footer.innerHTML =
@@ -624,36 +638,10 @@ function fpWptCoord() {
 
 // ── VNAV 고도·오프셋 입력 ──
 function fpWptNum(fld) {
-  fpNumFld = fld; fpInputBuf = '';
-  fpGo('WPTNUM');
+  fpNumFld = (fpNumFld === fld) ? null : fld;   // 한 번 더 누르면 닫는다
+  fpInputBuf = '';
+  fpRender();
 }
-function fpRenderWptNum(area, title, footer) {
-  const wp = S.wps[fpWptIdx];
-  if (!wp) { fpGo('LIST'); return; }
-  const isAlt = fpNumFld === 'VALT';
-  title.textContent = (isAlt ? 'VNAV ALTITUDE' : 'VNAV OFFSET') + ' — ' + (wp.ident || 'WPT');
-  const cur = isAlt ? (Number.isFinite(wp.vnavAlt) ? wp.vnavAlt : '') : (wp.vnavOfs || 0);
-  area.innerHTML = `
-    <div style="display:flex;flex-direction:column;gap:10px;padding-top:4px;">
-      <div style="font-size:8px;color:#87ceeb;">${isAlt
-        ? '이 지점에서 목표로 할 고도(ft). 비우고 ENTER 하면 해제됩니다.'
-        : '지점보다 몇 NM 앞에서 그 고도에 닿을지(NM).'}</div>
-      <div style="display:flex;align-items:center;gap:8px;">
-        <div class="fp-disp-box">${fpInputBuf || `<span style="color:#222">${cur === '' ? '——' : cur}</span>`}<span class="fp-disp-cursor">|</span></div>
-        <div class="fp-bksp-btn" data-act="fpBksp">⬅<br><span style="font-size:8px;">BKSP</span></div>
-      </div>
-      <div class="fp-numpad-grid">
-        ${[1,2,3,4,5,6,7,8,9].map(n=>`<div class="fp-num-circ" data-act="fpType" data-arg='["${n}"]'>${n}</div>`).join('')}
-        <div class="fp-num-circ" data-act="fpType" data-arg='["."]'>.</div>
-        <div class="fp-num-circ" data-act="fpType" data-arg='["0"]'>0</div>
-        <div class="fp-num-circ" data-act="fpWptNumClr">CLR</div>
-      </div>
-    </div>`;
-  footer.innerHTML = `
-    <div class="fp-nav-btn" data-act="fpGo" data-arg='["WPT"]'><span>↩</span>Cancel</div>
-    <div class="fp-nav-btn fp-nav-enter" data-act="fpConfirmWptNum"><span>↩</span>Enter</div>`;
-}
-function fpWptNumClr() { fpInputBuf = ''; fpRender(); }
 function fpConfirmWptNum() {
   const wp = S.wps[fpWptIdx];
   if (!wp) { fpGo('LIST'); return; }
@@ -672,7 +660,7 @@ function fpConfirmWptNum() {
   fpInputBuf = ''; fpNumFld = null;
   _fplPersist();
   try { updateTerrainCut(); } catch(e) { _swallow(e); }
-  fpGo('WPT');
+  fpRender();
 }
 
 // 입력 방법을 먼저 고르고, 그 다음에 값을 넣는다.
