@@ -83,6 +83,7 @@ function fpRender() {
     case 'RB':    fpRenderRadial(area, title, footer); break;
     case 'RR':    fpRenderRadial(area, title, footer); break;
     case 'REFPICK': fpRenderRefPick(area, title, footer); break;
+    case 'REFNUM':  fpRenderRefNum(area, title, footer);  break;
   }
 }
 
@@ -158,10 +159,57 @@ function fpRefChoose(cat, ident) {
 function fpRefType(ch) { if (fpRefQ.length < 6) { fpRefQ += ch; fpRender(); } }
 function fpRefBksp()   { fpRefQ = fpRefQ.slice(0, -1); fpRender(); }
 function fpRefSetCat(c) { fpRefCat = c; fpRender(); }
-function fpRefAdj(k, d) {
-  if (k === 'b1' || k === 'b2') fpRef[k] = ((Math.round(fpRef[k]) + d + 359) % 360) + 1;
-  else fpRef[k] = Math.max(0.1, Math.min(400, Math.round((fpRef[k] + d) * 10) / 10));
-  fpRender();
+// 방위·거리도 좌표와 같은 방식으로 넣는다 — 화살표로 한 칸씩 밀지 않고,
+// 값을 눌러 숫자판에 직접 친다. 입력 방식이 화면마다 다르면 손이 헷갈린다.
+let fpRefNumFld = null;   // 'b1' | 'd1' | 'b2'
+function fpRefNum(fld) {
+  fpRefNumFld = fld; fpInputBuf = '';
+  fpGo('REFNUM');
+}
+const FP_REF_NUM = {
+  b1: { lbl: '방위 (RADIAL)',    unit: '°M', hint: '참조점에서 바깥으로 향하는 자북 방위. 0 ~ 360',
+        min: 0, max: 360 },
+  b2: { lbl: '방위 #2 (RADIAL)', unit: '°M', hint: '참조점 #2 에서 바깥으로 향하는 자북 방위. 0 ~ 360',
+        min: 0, max: 360 },
+  d1: { lbl: '거리 (DISTANCE)',  unit: 'NM', hint: '참조점에서 그 방위로 나아갈 거리. 0.1 ~ 400 NM',
+        min: 0.1, max: 400 },
+};
+function fpRenderRefNum(area, title, footer) {
+  const c = FP_REF_NUM[fpRefNumFld];
+  if (!c) { fpGo(fpRefMode); return; }
+  title.textContent = c.lbl;
+  const cur = fpRefNumFld === 'd1' ? fpRef.d1.toFixed(1) : String(Math.round(fpRef[fpRefNumFld])).padStart(3,'0');
+  area.innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:10px;padding-top:4px;">
+      <div style="font-size:8px;color:#87ceeb;">${c.hint}</div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <div class="fp-disp-box">${fpInputBuf || `<span style="color:#222">${cur}</span>`}<span class="fp-disp-cursor">|</span></div>
+        <div class="fp-bksp-btn" data-act="fpBksp">⬅<br><span style="font-size:8px;">BKSP</span></div>
+      </div>
+      <div class="fp-numpad-grid">
+        ${[1,2,3,4,5,6,7,8,9].map(n=>`<div class="fp-num-circ" data-act="fpType" data-arg='["${n}"]'>${n}</div>`).join('')}
+        <div class="fp-num-circ" data-act="fpType" data-arg='["."]'>.</div>
+        <div class="fp-num-circ" data-act="fpType" data-arg='["0"]'>0</div>
+        <div class="fp-num-circ" data-act="fpRefNumClr">CLR</div>
+      </div>
+    </div>`;
+  footer.innerHTML = `
+    <div class="fp-nav-btn" onclick="fpGo('${fpRefMode}')"><span>↩</span>Cancel</div>
+    <div class="fp-nav-btn fp-nav-enter" data-act="fpConfirmRefNum"><span>↩</span>Enter</div>`;
+}
+function fpRefNumClr() { fpInputBuf = ''; fpRender(); }
+function fpConfirmRefNum() {
+  const c = FP_REF_NUM[fpRefNumFld];
+  if (!c) { fpGo(fpRefMode); return; }
+  const v = parseFloat(fpInputBuf);
+  if (isNaN(v)) { uiAlert('숫자를 입력하세요'); return; }
+  if (v < c.min || v > c.max) { uiAlert(`${c.lbl} 범위: ${c.min} ~ ${c.max}${c.unit}`); return; }
+  // 방위는 정수 1~360 으로 보관한다(0 은 360 과 같은 각이다)
+  fpRef[fpRefNumFld] = (fpRefNumFld === 'd1')
+    ? Math.round(v * 10) / 10
+    : ((Math.round(v) + 359) % 360) + 1;
+  fpInputBuf = ''; fpRefNumFld = null;
+  fpGo(fpRefMode);
 }
 // 현재 입력으로 산출되는 좌표 — { lat, lon, ident } 또는 { err }
 function fpRefSolve() {
@@ -212,17 +260,13 @@ function _refBtnHtml(slot) {
   return `<div class="hold-btn${r ? ' on' : ''}" style="text-align:left;padding-left:8px;"
             onclick="fpRefPick(${slot})">${r ? r.cat + ' · ' + r.ident : '▸ 참조점 선택'}</div>`;
 }
-function _spinHtml(key, big, small, unit) {
+// 값 칸 — 누르면 숫자판이 열린다(참조점 고르는 칸과 같은 생김새)
+function _refNumHtml(key) {
   const v = fpRef[key];
-  const txt = unit === '°' ? String(v).padStart(3,'0') + '°M'
-                           : (Math.round(v*10)/10).toFixed(1) + ' NM';
-  return `<div class="hold-spin">
-      <div class="hold-btn" onclick="fpRefAdj('${key}',${-big})">≪</div>
-      <div class="hold-btn" onclick="fpRefAdj('${key}',${-small})">◄</div>
-      <div class="hold-val">${txt}</div>
-      <div class="hold-btn" onclick="fpRefAdj('${key}',${small})">►</div>
-      <div class="hold-btn" onclick="fpRefAdj('${key}',${big})">≫</div>
-    </div>`;
+  const txt = key === 'd1' ? (Math.round(v*10)/10).toFixed(1) + ' NM'
+                           : String(Math.round(v)).padStart(3,'0') + '°M';
+  return `<div class="hold-btn on" style="text-align:left;padding-left:8px;flex:1;"
+            data-act="fpRefNum" data-arg='["${key}"]'>${txt} <span style="color:#5a7484;">▸ 입력</span></div>`;
 }
 
 function fpRenderRadial(area, title, footer) {
@@ -242,15 +286,10 @@ function fpRenderRadial(area, title, footer) {
   area.innerHTML = `
     <div class="fp-panel-border" style="padding:8px;">
       <div class="hold-row"><div class="hold-lbl">REF ${rb ? '' : '#1'}</div>${_refBtnHtml(1)}</div>
-      <div class="hold-row"><div class="hold-lbl">BRG ${rb ? '' : '#1'}</div>${_spinHtml('b1',10,1,'°')}</div>
-      ${rb ? `<div class="hold-row"><div class="hold-lbl">DIST</div>${_spinHtml('d1',10,1,'NM')}</div>
-              <div class="hold-row"><div class="hold-lbl"></div>
-                <div class="hold-spin">
-                  <div class="hold-btn" data-act="fpRefAdj" data-arg='["d1", -0.1]'>−0.1</div>
-                  <div class="hold-btn" data-act="fpRefAdj" data-arg='["d1", 0.1]'>+0.1</div>
-                </div></div>`
+      <div class="hold-row"><div class="hold-lbl">BRG ${rb ? '' : '#1'}</div>${_refNumHtml('b1')}</div>
+      ${rb ? `<div class="hold-row"><div class="hold-lbl">DIST</div>${_refNumHtml('d1')}</div>`
           : `<div class="hold-row"><div class="hold-lbl">REF #2</div>${_refBtnHtml(2)}</div>
-             <div class="hold-row"><div class="hold-lbl">BRG #2</div>${_spinHtml('b2',10,1,'°')}</div>`}
+             <div class="hold-row"><div class="hold-lbl">BRG #2</div>${_refNumHtml('b2')}</div>`}
       <div style="border-top:1px solid #1a2a3a;margin-top:6px;">${okHtml}</div>
       <div style="color:#567;font-size:9px;line-height:1.6;">
         방위는 <b>참조점에서 바깥으로 향하는 자북 방위</b>(라디얼)입니다.

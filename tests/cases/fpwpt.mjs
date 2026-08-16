@@ -168,4 +168,64 @@ export async function run(page, t) {
   t.ok(add.ppos === 'WPT' && add.idx === 0,
     'P.POS 로 만들면 바로 그 지점의 상세 카드가 열린다(이름을 다듬으라고)');
   t.eq(add.preset, 'RKSI', '공항 프리셋도 그대로 동작한다');
+
+  // ── 방위·거리도 좌표와 같은 입력창으로 ──
+  // 종전에는 ≪ ◄ ► ≫ 로 한 칸씩 밀어야 했다. 117° 를 넣으려면 열 번 넘게
+  // 눌러야 하고, 좌표는 숫자판인데 방위는 화살표라 손이 헷갈렸다.
+  const ref = await page.evaluate(() => {
+    S.wps = []; S.awp = -1; S.lat = 37.0; S.lon = 127.0;
+    fpRefOpen('RB');
+    fpRefChoose('APT', 'RKSI');
+    const type = (fld, txt) => {
+      document.querySelector(`[data-act="fpRefNum"][data-arg='["${fld}"]']`).click();
+      const m = fpMode;
+      String(txt).split('').forEach(c => fpType(c));
+      fpConfirmRefNum();
+      return m;
+    };
+    const r = { spinner: document.getElementById('fp-content-area').textContent.includes('≪'),
+                adjFn: typeof fpRefAdj };
+    r.mBrg = type('b1', 117);
+    r.b1 = fpRef.b1; r.back = fpMode;
+    r.mDis = type('d1', '8.8');
+    r.d1 = fpRef.d1;
+    const s = fpRefSolve();
+    r.solved = s.err ? s.err : { id: s.ident, lat: +s.lat.toFixed(4), lon: +s.lon.toFixed(4) };
+    return r;
+  });
+  t.ok(!ref.spinner && ref.adjFn === 'undefined', '화살표 스피너가 없어졌다');
+  t.ok(ref.mBrg === 'REFNUM' && ref.mDis === 'REFNUM', '방위·거리 칸을 누르면 숫자판이 열린다');
+  t.ok(ref.b1 === 117 && ref.d1 === 8.8, `친 값이 그대로 들어간다 (${ref.b1}° / ${ref.d1}NM)`);
+  t.eq(ref.back, 'RB', '넣고 나면 원래 화면으로 돌아온다');
+  t.ok(ref.solved.id === 'RKSI117/8.8' && Math.abs(ref.solved.lat - 37.4149) < 0.001,
+    `넣은 값으로 좌표가 나온다 (${ref.solved.id} → ${ref.solved.lat}, ${ref.solved.lon})`);
+
+  // 범위 밖은 되묻고 값을 바꾸지 않는다 — 잘못 친 값을 조용히 받아들이면 안 된다
+  const bad = await page.evaluate(async () => {
+    const before = fpRef.b1;
+    fpRefNum('b1');
+    '500'.split('').forEach(c => fpType(c));
+    fpConfirmRefNum();
+    await new Promise(r => setTimeout(r, 60));
+    const asked = !!document.querySelector('.ui-dlg');
+    document.querySelector('.ui-dlg-btns .ui-dlg-ok')?.click();
+    await new Promise(r => setTimeout(r, 60));
+    return { before, after: fpRef.b1, asked, mode: fpMode };
+  });
+  t.ok(bad.asked && bad.after === bad.before,
+    `범위 밖(500°)은 알리고 값을 바꾸지 않는다 (${bad.after}° 유지)`);
+
+  // RAD/RAD 의 두 번째 방위도 같은 방식
+  const rr = await page.evaluate(() => {
+    fpRefOpen('RR');
+    fpRefSlot = 1; fpRefChoose('APT', 'RKSI');
+    fpRefSlot = 2; fpRefChoose('APT', 'RKSS');
+    document.querySelector(`[data-act="fpRefNum"][data-arg='["b2"]']`).click();
+    const m = fpMode;
+    '249'.split('').forEach(c => fpType(c));
+    fpConfirmRefNum();
+    return { m, b2: fpRef.b2, back: fpMode };
+  });
+  t.ok(rr.m === 'REFNUM' && rr.b2 === 249 && rr.back === 'RR',
+    `RAD/RAD 의 방위 #2 도 같은 입력창으로 넣는다 (${rr.b2}°)`);
 }
