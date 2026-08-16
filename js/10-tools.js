@@ -408,7 +408,9 @@ function _mapSymPopup(o) {
     (o.note ? `<div style="color:#b26a00;font-size:10px;margin-top:2px;">${o.note}</div>` : '') +
     `<div style="display:flex;gap:5px;margin-top:6px;">` +
       `<span onclick="fixCopyCoord(this,'${o.name}',${o.lat},${o.lon})" style="${btn}background:#eef3f7;color:#3b5a70;border:1px solid #3b5a7055;">📋 좌표 복사</span>` +
-      `<span onclick="fixAddToPlan('${o.name}',${o.lat},${o.lon})" style="${btn}background:#e3f2ee;color:#00796b;border:1px solid #00796b55;">✈ 플랜 추가</span>` +
+      // 이미 비행계획에 들어 있는 지점에는 '플랜 추가' 를 주지 않는다(같은 점이 둘 생긴다)
+      (o.noAdd ? '' :
+        `<span onclick="fixAddToPlan('${o.name}',${o.lat},${o.lon})" style="${btn}background:#e3f2ee;color:#00796b;border:1px solid #00796b55;">✈ 플랜 추가</span>`) +
     `</div>` +
     (extra ? `<div style="display:flex;gap:5px;margin-top:5px;">${extra}</div>` : '') +
     `</div>`;
@@ -429,6 +431,14 @@ function _afldIndexOf(icao) {
     if (nm) i = AIRFIELD_INFO.findIndex(a => a.name === nm || a.name.startsWith(nm));
     return i;
   } catch(e) { return -1; }
+}
+// 지도의 비행계획 웨이포인트 → CDU 의 그 지점 카드로
+// 공항·VOR 은 팝업에서 곧장 상세로 갈 수 있는데 웨이포인트만 갈 데가 없었다.
+function _mapOpenWpt(i) {
+  try { leafMap.closePopup(); } catch(e) { _swallow(e); }
+  if (i < 0 || i >= S.wps.length) return;
+  if (leftSel !== 'cdu' && rightSel !== 'cdu') selectPanel(leftSel === 'map' ? 'right' : 'left', 'cdu');
+  try { openFlightPlan(); fpWptOpen(i); } catch(e) { _swallow(e); }
 }
 function _mapOpenAirfield(icao) {
   try { leafMap.closePopup(); } catch(e) { _swallow(e); }

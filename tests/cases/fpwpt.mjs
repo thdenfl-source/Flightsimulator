@@ -236,4 +236,45 @@ export async function run(page, t) {
   });
   t.ok(rr.m === 'RR' && rr.b2 === 249 && rr.back === 'RR',
     `RAD/RAD 의 방위 #2 도 같은 자리에서 넣는다 (${rr.b2}°)`);
+
+  // ── 지도에서 웨이포인트를 누르면 설명창 ──
+  // 공항·VOR 은 팝업으로 좌표를 확인하고 상세로 갈 수 있는데, 웨이포인트만
+  // 누르는 즉시 활성이 되고 갈 데가 없었다.
+  const mapPop = await page.evaluate(() => {
+    S.wps = []; S.awp = -1; S.brg2wp = -1;
+    pushWP({ ident: 'WP1', lat: 37.40, lon: 126.66 });
+    pushWP({ ident: 'WP2', lat: 37.45, lon: 126.80,
+             hold: { dir: 'R', crs: 90, legType: 'TIME', legVal: 60 }, vnavAlt: 2500 });
+    S.awp = 0; updateWpMarkers();
+    const before = S.awp;
+    wpMarkers[1].fire('click');
+    const html = document.querySelector('.leaflet-popup-content')?.innerHTML || '';
+    return { awp: S.awp, before, html };
+  });
+  t.eq(mapPop.awp, mapPop.before, '지도의 웨이포인트를 눌러도 곧바로 활성이 되지 않는다');
+  t.ok(/WP2/.test(mapPop.html) && /37°27′00″N/.test(mapPop.html) && /126°48′00″E/.test(mapPop.html),
+    '이름과 좌표(도분초)가 설명창에 나온다');
+  t.ok(/비행계획 2번째/.test(mapPop.html) && /HOLD/.test(mapPop.html) && /VNAV 2,500ft/.test(mapPop.html),
+    '몇 번째인지와 HOLD·VNAV 가 걸려 있는지도 함께 보여 준다');
+  t.ok(/정보/.test(mapPop.html) && !/플랜 추가/.test(mapPop.html),
+    '「정보」 버튼이 있고, 이미 플랜에 있으므로 「플랜 추가」는 주지 않는다');
+
+  // 「정보」 → 그 지점의 카드
+  const jump = await page.evaluate(() => {
+    _mapOpenWpt(1);
+    return { mode: fpMode, idx: fpWptIdx,
+             title: document.getElementById('fp-mode-title').textContent,
+             cduShown: leftSel === 'cdu' || rightSel === 'cdu' || rightSel === 'plan' };
+  });
+  t.ok(jump.mode === 'WPT' && jump.idx === 1,
+    '「정보」를 누르면 비행계획의 그 웨이포인트 카드로 간다');
+  t.ok(/WP2/.test(jump.title) && jump.cduShown,
+    `CDU 패널까지 함께 띄운다 (${jump.title})`);
+
+  // 초 반올림이 60 이 되면 분으로 올린다 — 126.8 이 126°47′60″ 로 나오던 자리
+  const dms = await page.evaluate(() => [
+    decToDMS(126.80, false), decToDMS(-37.99999, true), decToDMS(129.99999, false),
+  ]);
+  t.eq(dms.join(' '), '126°48′00″E 38°00′00″S 130°00′00″E',
+    `도분초 올림이 맞는다 (${dms.join(' ')})`);
 }
