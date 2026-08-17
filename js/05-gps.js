@@ -846,11 +846,24 @@ try { updateCenterCoord(); } catch(e) { _swallow(e); }
 // screen (vertical position ≈ 0.75 H from top) so the forward view is larger.
 const FOLLOW_FWD_FRAC = 0.25; // fraction of screen height the aircraft sits above the bottom
 
+// 3D 카메라 방위 — HDG↑ 면 기수 위로 맞춘다.
+// 추종(1인칭)과는 별개다. 추종을 꺼 두고 지도를 손으로 옮겨 보는 중에도
+// HDG↑ 는 살아 있어야 한다(2D 는 그렇게 동작한다). 중심·줌·틸트는 건드리지
+// 않고 방위만 맞춘다 — 그래야 손으로 옮겨 둔 자리가 유지된다.
+// N↑ 에서는 매 프레임 강제하지 않는다. 3D 는 손으로 돌려 볼 수 있는 화면이고,
+// 매번 북쪽으로 되돌리면 그 조작을 빼앗는다. (N↑ 로 되돌리는 그 순간에만
+// 한 번 북쪽으로 맞춘다 — toggleMapOrient 참고)
+function _apply3dBearing() {
+  if (!mapHdgUp || !_view3dOn || !_ml3d || !_ml3dReady) return;
+  if (Math.abs(normAS(_ml3d.getBearing() - S.hdg)) < 0.3) return;
+  _ml3d.easeTo({ bearing: S.hdg, duration: 0, easing: t => t });
+}
+
 // Called every frame from updateAcOnMap() to keep the view locked to the aircraft.
 function _applyFollow() {
   if (!followMode) return;
 
-  if (_view3dOn && _ml3d && _ml3d.loaded()) {
+  if (_view3dOn && _ml3d && _ml3dReady) {
     // ── 3D follow ──
     // Altitude-based zoom: camera feels proportional to S.alt each frame.
     // S.alt is in feet; 500 ft → zoom≈14, 10000 ft → zoom≈10.
@@ -861,15 +874,19 @@ function _applyFollow() {
     // offset [x,y]: positive y shifts the focal point DOWN → aircraft moves DOWN.
     const H      = _ml3d.getContainer().clientHeight || 600;
     const offsetY = H * FOLLOW_FWD_FRAC; // 0.25 * H → aircraft at 75% from top
-    _ml3d.easeTo({
+    const opt = {
       center:   [S.lon, S.lat],
-      bearing:  S.hdg,
       zoom,
       pitch:    _ml3dPitch,
       offset:   [0, offsetY],
       duration: 0,
       easing:   t => t
-    });
+    };
+    // 방위는 N↑/HDG↑ 버튼을 따른다 — 2D 와 같은 규칙이다. 종전에는 추종 중이면
+    // N↑ 를 골라 놔도 3D 만 늘 기수 위로 돌아, 버튼이 3D 에서는 없는 것과 같았다.
+    // N↑ 에서는 bearing 을 넣지 않는다(사용자가 손으로 돌려 둔 각도를 지운다).
+    if (mapHdgUp) opt.bearing = S.hdg;
+    _ml3d.easeTo(opt);
   } else {
     // ── 2D follow ──
     // Shift the map centre forward (along heading when HDG-UP, else north) so
@@ -958,6 +975,7 @@ function toggleMapOrient() {
     btn.textContent = 'HDG↑'; btn.classList.add('hdg-up');
     leafMap.dragging.disable();
     _hdgUpApplySize();
+    _apply3dBearing();          // 3D 도 즉시 기수 위로
   } else {
     btn.textContent = 'N↑'; btn.classList.remove('hdg-up');
     document.getElementById('map').style.transform = '';
@@ -968,6 +986,11 @@ function toggleMapOrient() {
       ctrl.style.width = ctrl.style.height = '';
     }
     _hdgUpApplySize();          // 크기·위치를 원래대로
+    // 3D 는 N↑ 로 돌아오는 이 순간에만 북쪽으로 맞춘다(이후 손 조작은 그대로 둔다)
+    try {
+      if (_view3dOn && _ml3d && _ml3dReady)
+        _ml3d.easeTo({ bearing: 0, duration: 250 });
+    } catch (e) { _swallow(e); }
     // Only re-enable dragging if follow mode is also off
     if (!followMode) leafMap.dragging.enable();
   }
@@ -1023,6 +1046,7 @@ function updateAcOnMap(){
   if (followMode) updateCenterCoord();   // 1인칭: 항공기 기준 좌표 갱신
   _update3dMarker();
   _applyFollow();    // 1인칭: centre map / 3D view on aircraft every frame
+  _apply3dBearing(); // HDG↑: 3D 카메라도 기수 위로(추종을 꺼도 동작)
   if (mapHdgUp) {
     // 확대하지 않는다 — 크기(정사각형)로 모서리를 덮으므로 축척이 그대로다
     document.getElementById('map').style.transform = `rotate(${-S.hdg}deg)`;
