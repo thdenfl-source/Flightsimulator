@@ -294,7 +294,6 @@ function updateGpsBtn() {
 // When HDG-UP is active, Leaflet dragging is disabled (toggleMapOrient).
 // We handle panning manually: rotate the screen drag vector by the current heading
 // so dragging right always shows content to the visual right (absolute, not heading-relative).
-// Divide by 1.42 (the CSS scale factor) so pan speed matches the drag distance on screen.
 let _hdgPanState = null, _hdgPanMoved = false;
 leafMap.getContainer().addEventListener('pointerdown', e => {
   if (!mapHdgUp) return;
@@ -308,12 +307,13 @@ leafMap.getContainer().addEventListener('pointerdown', e => {
     if (Math.abs(dx) < 1 && Math.abs(dy) < 1) return;
     _hdgPanMoved = true;
     // 화면 드래그 벡터를 heading 각도로 회전해 Leaflet 내부 좌표로 변환.
-    // CSS rotate(-heading)의 역변환(+heading 회전) 적용 후 scale(1.42) 보정.
+    // CSS rotate(-heading)의 역변환(+heading 회전)만 하면 된다 — 확대가 없으므로
+    // 화면 1px 이 지도 1px 이다(종전에는 scale(1.42) 를 나눠 줘야 했다).
     // panBy에 음수 부호: 손가락이 닿은 지점의 지도 내용이 손가락을 따라오게 함.
     const θ = S.hdg * D2R;
     const dxL = dx * Math.cos(θ) - dy * Math.sin(θ);
     const dyL = dx * Math.sin(θ) + dy * Math.cos(θ);
-    leafMap.panBy([-dxL / 1.42, -dyL / 1.42], { animate: false });
+    leafMap.panBy([-dxL, -dyL], { animate: false });
   };
   document.addEventListener('pointermove', onMove);
   document.addEventListener('pointerup', () => {
@@ -665,6 +665,9 @@ function toggleTcut() {
   const hidden = wrap.classList.toggle('tcut-off');
   document.getElementById('map-tcut-btn').classList.toggle('active', !hidden);
   setTimeout(() => {
+    // T-CUT 은 #map 의 높이를 바꾼다(80%↔100%). 감싸는 상자는 그대로라
+    // ResizeObserver 가 울지 않으므로 여기서 직접 다시 잰다.
+    try { hdgUpResize(); } catch(e) { _swallow(e); }
     try { leafMap.invalidateSize(); } catch(e) { _swallow(e); }
     try { if (_ml3d) _ml3d.resize(); } catch(e) { _swallow(e); }
     try { updateCenterCoord(); } catch(e) { _swallow(e); }
@@ -874,9 +877,10 @@ function _applyFollow() {
     const z = leafMap.getZoom();
     const acP = leafMap.project([S.lat, S.lon], z);
     const ang = (mapHdgUp ? S.hdg : 0) * D2R;
-    // HDG-UP applies a CSS scale(1.42); divide the pixel offset by it so the
-    // aircraft lands at the intended on-screen position after scaling.
-    const k = leafMap.getSize().y * FOLLOW_FWD_FRAC / (mapHdgUp ? 1.42 : 1);
+    // HDG↑ 에서 지도 엘리먼트는 보이는 영역보다 크다(대각선 정사각형). 화면에서
+    // 원하는 위치에 놓으려면 보이는 높이를 기준으로 계산해야 한다.
+    const visH = (mapHdgUp && _hdgBox) ? _hdgBox.h : leafMap.getSize().y;
+    const k = visH * FOLLOW_FWD_FRAC;
     const cP = L.point(acP.x + Math.sin(ang) * k, acP.y - Math.cos(ang) * k);
     leafMap.setView(leafMap.unproject(cP, z), z, { animate: false });
     // HDG-UP CSS rotation (rotate(-hdg)) is re-applied by updateAcOnMap below,
@@ -885,17 +889,82 @@ function _applyFollow() {
 }
 
 let mapHdgUp = false;
+
+// ── HDG↑ 에서 모서리를 채우는 방법 ──
+// 종전에는 지도를 scale(1.42) 로 키워 덮었다. 그런데 그건 축척이 바뀌는 일이라
+// 모드를 바꾸는 순간 지도가 확대돼 버렸고, 게다가 √2 배는 정사각형에서만 충분해서
+// 세로로 긴 화면에서는 여전히 모서리에 검은 삼각형이 남았다.
+//
+// 크기로 덮는다. 보이는 영역의 대각선 길이를 한 변으로 하는 정사각형으로 #map 을
+// 키우고 그 중심을 보이는 영역 중심에 맞추면, 어느 각도로 돌려도 모서리가 채워진다
+// (정사각형은 회전해도 내접원이 그대로다). 축척은 그대로 — scale 을 쓰지 않는다.
+let _hdgBox = null;   // { w, h } — 보이는 지도 영역(회전 전 크기)
+function _hdgUpApplySize() {
+  const el = document.getElementById('map');
+  const wrap = document.getElementById('map-wrap');
+  if (!el || !wrap) return;
+  if (!mapHdgUp) {
+    el.classList.remove('hdg-rot');
+    el.style.width = el.style.height = el.style.left = el.style.top = '';
+    _hdgBox = null;
+    return;
+  }
+  // 보이는 크기는 회전을 걸기 전(=클래스가 없을 때)에 재야 한다
+  if (!_hdgBox) {
+    el.classList.remove('hdg-rot');
+    el.style.width = el.style.height = el.style.left = el.style.top = '';
+    _hdgBox = { w: el.clientWidth, h: el.clientHeight };
+  }
+  const { w, h } = _hdgBox;
+  if (!w || !h) { _hdgBox = null; return; }
+  const d = Math.ceil(Math.hypot(w, h));
+  el.classList.add('hdg-rot');
+  el.style.width = d + 'px';
+  el.style.height = d + 'px';
+  el.style.left = Math.round(w / 2 - d / 2) + 'px';
+  el.style.top  = Math.round(h / 2 - d / 2) + 'px';
+  // 줌 버튼 등은 커진 지도의 모서리로 밀려난다. 보이는 사각형 위로 되돌리고
+  // 부모의 회전을 상쇄해 세워 둔다(둘의 중심이 같아 정확히 겹친다).
+  const ctrl = wrap.querySelector('.leaflet-control-container');
+  if (ctrl) {
+    ctrl.style.position = 'absolute';
+    ctrl.style.left = Math.round(d / 2 - w / 2) + 'px';
+    ctrl.style.top  = Math.round(d / 2 - h / 2) + 'px';
+    ctrl.style.width = w + 'px';
+    ctrl.style.height = h + 'px';
+    ctrl.style.transformOrigin = 'center center';
+  }
+  try { leafMap.invalidateSize({ animate: false }); } catch (e) { _swallow(e); }
+}
+// 화면이 바뀌면(분할↔전체, T-CUT 등) 다시 잰다
+function hdgUpResize() {
+  if (!mapHdgUp) return;
+  _hdgBox = null;
+  _hdgUpApplySize();
+  updateAcOnMap();
+}
+try {
+  new ResizeObserver(() => { try { hdgUpResize(); } catch (e) { _swallow(e); } })
+    .observe(document.getElementById('map-wrap'));
+} catch (e) { _swallow(e); }
+
 function toggleMapOrient() {
   mapHdgUp = !mapHdgUp;
   const btn = document.getElementById('orient-btn');
   if (mapHdgUp) {
     btn.textContent = 'HDG↑'; btn.classList.add('hdg-up');
     leafMap.dragging.disable();
+    _hdgUpApplySize();
   } else {
     btn.textContent = 'N↑'; btn.classList.remove('hdg-up');
     document.getElementById('map').style.transform = '';
     const ctrl = document.querySelector('.leaflet-control-container');
-    if (ctrl) ctrl.style.transform = '';
+    if (ctrl) {
+      ctrl.style.transform = '';
+      ctrl.style.position = ctrl.style.left = ctrl.style.top = '';
+      ctrl.style.width = ctrl.style.height = '';
+    }
+    _hdgUpApplySize();          // 크기·위치를 원래대로
     // Only re-enable dragging if follow mode is also off
     if (!followMode) leafMap.dragging.enable();
   }
@@ -952,8 +1021,8 @@ function updateAcOnMap(){
   _update3dMarker();
   _applyFollow();    // 1인칭: centre map / 3D view on aircraft every frame
   if (mapHdgUp) {
-    // scale(1.42 ≈ √2): rotated rectangle always covers map-wrap corners
-    document.getElementById('map').style.transform = `rotate(${-S.hdg}deg) scale(1.42)`;
+    // 확대하지 않는다 — 크기(정사각형)로 모서리를 덮으므로 축척이 그대로다
+    document.getElementById('map').style.transform = `rotate(${-S.hdg}deg)`;
     const ctrl = document.querySelector('.leaflet-control-container');
     if (ctrl) { ctrl.style.transformOrigin='center center'; ctrl.style.transform=`rotate(${S.hdg}deg)`; }
   }
