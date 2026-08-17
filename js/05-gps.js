@@ -907,6 +907,9 @@ function _hdgUpApplySize() {
     el.classList.remove('hdg-rot');
     el.style.width = el.style.height = el.style.left = el.style.top = '';
     _hdgBox = null;
+    // 되돌릴 때도 반드시 알려야 한다. 이걸 빠뜨리면 Leaflet 은 커진 크기를
+    // 그대로 기억한 채 계산해서, 1인칭(추종)이 항공기를 화면 밖에 놓는다.
+    try { leafMap.invalidateSize({ animate: false }); } catch (e) { _swallow(e); }
     return;
   }
   // 보이는 크기는 회전을 걸기 전(=클래스가 없을 때)에 재야 한다

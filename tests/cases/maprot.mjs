@@ -135,4 +135,49 @@ export async function run(page, t) {
   t.ok(tcut.restored.h === tcut.before.h,
     `T-CUT 을 끄면 원래 높이로 돌아온다 (${tcut.restored.h}px)`);
   await page.evaluate(() => { if (mapHdgUp) toggleMapOrient(); });
+
+  // ── HDG↑ 를 거쳐 N↑ 로 돌아와도 1인칭(추종)이 제자리인가 ──
+  // HDG↑ 는 #map 을 키운다. 되돌리면서 Leaflet 에 크기 변경을 알리지 않으면
+  // 커진 크기(1068)를 그대로 기억한 채 계산해서, 추종이 항공기를 화면 밖으로
+  // 밀어낸다. 화면만 봐서는 "1인칭이 이상해졌다" 로만 보이는 고장이다.
+  const foll = await page.evaluate(async () => {
+    const wait = () => new Promise(r => setTimeout(r, 60));
+    const at = () => {
+      const wrap = document.getElementById('map-wrap').getBoundingClientRect();
+      const r = acMarker.getElement().getBoundingClientRect();
+      return { x: Math.round((r.left + r.right) / 2 - wrap.left),
+               y: Math.round((r.top + r.bottom) / 2 - wrap.top),
+               w: wrap.width, h: wrap.height };
+    };
+    const sizes = () => ({ leaf: [leafMap.getSize().x, leafMap.getSize().y],
+                           dom: [document.getElementById('map').clientWidth,
+                                 document.getElementById('map').clientHeight] });
+    S.lat = 37.4602; S.lon = 126.4407; S.hdg = 40;
+    if (mapHdgUp) toggleMapOrient();
+    leafMap.setView([S.lat, S.lon], 12, { animate: false });
+    if (!followMode) toggleFollow();
+    updateAcOnMap(); await wait();
+    const a = at(), sa = sizes();
+    toggleMapOrient(); updateAcOnMap(); await wait();          // HDG↑
+    const b = at(), sb = sizes();
+    toggleMapOrient(); updateAcOnMap(); await wait();          // 다시 N↑
+    const c = at(), sc = sizes();
+    if (followMode) toggleFollow();
+    return { a, b, c, sa, sb, sc };
+  });
+  // 있어야 할 자리를 앞뒤 비교가 아니라 절대값으로 잡는다 — 앞 검사들이 남긴
+  // 상태 때문에 '전' 도 이미 틀어져 있으면 비교만으로는 못 잡는다.
+  // 1인칭은 항공기를 가로 한가운데, 세로로는 아래에서 25% 되는 곳에 둔다.
+  const want = (p, mapH) => Math.abs(p.x - p.w / 2) <= 2 &&
+                            Math.abs(p.y - mapH * (1 - 0.25)) <= 3;
+  t.ok(want(foll.c, foll.sc.dom[1]),
+    `HDG↑ 를 거쳐 N↑ 로 돌아와도 항공기가 제자리다 ` +
+    `(${foll.c.x},${foll.c.y} — 가운데 ${Math.round(foll.c.w / 2)}, ` +
+    `아래에서 25% 지점 ${Math.round(foll.sc.dom[1] * 0.75)})`);
+  t.ok(foll.c.x >= 0 && foll.c.x <= foll.c.w && foll.c.y >= 0 && foll.c.y <= foll.c.h,
+    '항공기가 화면 안에 있다');
+  t.eq(foll.sc.leaf.join('×'), foll.sc.dom.join('×'),
+    `Leaflet 이 기억하는 크기가 실제와 같다 (${foll.sc.leaf.join('×')} vs ${foll.sc.dom.join('×')})`);
+  t.eq(foll.sb.leaf.join('×'), foll.sb.dom.join('×'),
+    `HDG↑ 중에도 마찬가지 (${foll.sb.leaf.join('×')})`);
 }
