@@ -682,12 +682,16 @@ function holdKeyPoints() {
 
 // 경로 추종(pure pursuit): 패턴 폴리라인에서 최근접점을 찾고, 그보다
 // lookahead 만큼 앞선 점을 향하는 대지 트랙을 만든 뒤 편류수정해 기수를 뽑는다.
+// 추종할 구간을 고를 때 허용하는 기수-구간 방향차(°).
+// 이보다 크게 어긋난 구간은 "반대로 달리는 레그" 로 보고 후보에서 뺀다.
+const HOLD_TRACK_MAX_REL = 100;
 function holdTrackBank() {
   const pts = holdPatternLatLngs();
   if (!pts || pts.length < 4) return 0;
   const XY = pts.map(p => _holdXY(p[0], p[1]));
   const me = _holdXY(S.lat, S.lon);
   let bi = 0, bt = 0, bd = Infinity;
+  let fi = 0, ft = 0, fd = Infinity;   // 진행 방향이 맞는 구간 중 최근접
   for (let i = 0; i < XY.length - 1; i++) {
     const ax = XY[i][0], ay = XY[i][1];
     const dx = XY[i+1][0] - ax, dy = XY[i+1][1] - ay;
@@ -697,7 +701,24 @@ function holdTrackBank() {
     const ex = me[0] - (ax + t*dx), ey = me[1] - (ay + t*dy);
     const d2 = ex*ex + ey*ey;
     if (d2 < bd) { bd = d2; bi = i; bt = t; }
+    // 지금 기수와 반대로 달리는 구간은 후보에서 뺀다.
+    // 평행 진입을 마치면 항공기는 인바운드 기수인 채로 아웃바운드 레그
+    // (반대 방향, 2R 밖에 안 떨어진 곳) 곁에 서게 된다. 방향을 보지 않고
+    // 가장 가까운 점만 쫓으면 그 레그를 잡아 180° 를 돌아 거꾸로 붙는다 —
+    // 항적에 큰 고리가 하나 생긴다(사용자가 본 그 고리다).
+    // 길이가 0 에 가까운 이음매(원호의 시작점과 직전 점이 같은 자리)는 건너뛴다.
+    // 그런 구간의 방향은 부동소수점 찌꺼기라, 하필 기수와 비슷하게 나오면
+    // "여기가 맞다" 며 붙잡고는 곧바로 원호 안쪽으로 끌려 들어간다.
+    if (L2 > 1e-4) {
+      const segTrk = normA(Math.atan2(dx, dy) / D2R);
+      if (Math.abs(normAS(segTrk - S.hdg)) <= HOLD_TRACK_MAX_REL && d2 < fd) {
+        fd = d2; fi = i; ft = t;
+      }
+    }
   }
+  // 방향이 맞는 후보가 하나라도 있으면 그중 가장 가까운 것을 쫓는다.
+  // 하나도 없으면(패턴을 옆으로 가로지르는 중 등) 종전대로 최근접점을 쓴다.
+  if (fd < Infinity) { bd = fd; bi = fi; bt = ft; }
   // lookahead — 선회반경에 비례. 짧으면 진동, 길면 모서리를 자른다.
   const look = Math.max(0.2, navTurnRadiusNM() * 0.9);
   let need = look, i = bi, t = bt, tx = XY[bi][0], ty = XY[bi][1], guard = 0;
@@ -778,7 +799,9 @@ function holdBankTarget(dt) {
     else return _holdHdgBank(tgt, _holdForceDir);
   }
 
-  // 평행 합류 선회: 좌장주면 우선회, 우장주면 좌선회 → 인바운드 코스로
+  // 평행 합류 선회: 좌장주면 우선회, 우장주면 좌선회 → 인바운드 코스로.
+  // 아웃바운드는 홀딩 반대쪽에서 날았으므로, 코스를 가로질러 홀딩측으로
+  // 넘어가는 쪽으로 돌아야 한다(그 반대로 돌면 코스에서 멀어진다).
   if (_holdPhase === 'PAR_TURN') {
     const tgt = windCorrectedHdg(holdCrs);
     if (Math.abs(normAS(tgt - S.hdg)) > 15) return _holdHdgBank(tgt, _holdForceDir);
