@@ -823,9 +823,6 @@ function toggleFollow() {
   // 1인칭 모드에서는 중앙 십자마크 숨김(항공기 기준 좌표 표시 중)
   const ch = document.getElementById('map-crosshair');
   if (ch) ch.style.display = followMode ? 'none' : '';
-  // ＋좌표칸도 같이 감춘다 — 가리킬 십자마크가 없는데 좌표만 남으면 헷갈린다
-  const wrap = document.getElementById('map-wrap');
-  if (wrap) wrap.classList.toggle('follow-on', followMode);
   if (followMode) {
     // Disable Leaflet dragging while following
     leafMap.dragging.disable();
@@ -839,19 +836,13 @@ function toggleFollow() {
 }
 
 // ── 지도 중앙(1인칭: 항공기 위치) 좌표 표시 ──
-// 좌하단 좌표 두 칸 — 위는 항공기(✈), 아래는 십자마크(＋).
-// 종전에는 한 칸이 1인칭 여부에 따라 둘 중 하나로 바뀌었다. 그래서 지도를
-// 옮겨 어떤 지점의 좌표를 읽는 동안에는 항공기가 어디 있는지 알 수 없었고,
-// 1인칭에서는 반대였다. 둘 다 늘 자기 것만 보여 준다.
 function updateCenterCoord() {
-  const ac = document.getElementById('center-coord');
-  const ch = document.getElementById('crosshair-coord');
-  const fmt = (lat, lon) => `${decToDMS(lat, true)} ${decToDMS(lon, false)}`;
-  if (ac) ac.textContent = `✈ ${fmt(S.lat, S.lon)}`;
-  if (ch) {
-    const c = leafMap.getCenter();
-    ch.textContent = `＋ ${fmt(c.lat, c.lng)}`;
-  }
+  const el = document.getElementById('center-coord');
+  if (!el) return;
+  let lat, lon, tag;
+  if (followMode) { lat = S.lat; lon = S.lon; tag = '✈'; }   // 1인칭: 항공기 기준
+  else { const c = leafMap.getCenter(); lat = c.lat; lon = c.lng; tag = '＋'; }
+  el.textContent = `${tag} ${decToDMS(lat, true)} ${decToDMS(lon, false)}`;   // 북위·동경 1줄 표시
 }
 leafMap.on('move', updateCenterCoord);
 try { updateCenterCoord(); } catch(e) { _swallow(e); }

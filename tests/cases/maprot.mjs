@@ -180,4 +180,29 @@ export async function run(page, t) {
     `Leaflet 이 기억하는 크기가 실제와 같다 (${foll.sc.leaf.join('×')} vs ${foll.sc.dom.join('×')})`);
   t.eq(foll.sb.leaf.join('×'), foll.sb.dom.join('×'),
     `HDG↑ 중에도 마찬가지 (${foll.sb.leaf.join('×')})`);
+
+  // ── 좌하단 좌표칸이 무엇을 가리키는가 ──
+  // 한 칸으로, 1인칭이면 항공기(✈)·아니면 십자마크(＋) 좌표다.
+  // 1인칭을 끄면 지도는 항공기 자리에 그대로 남으므로, 그 직후에는 두 값의
+  // 경도가 같게 나온다 — 잘못된 값이 아니라 지도 중심이 정말 그 자리에 있다.
+  const coord = await page.evaluate(async () => {
+    const wait = () => new Promise(r => setTimeout(r, 150));
+    if (followMode) toggleFollow();
+    if (mapHdgUp) toggleMapOrient();
+    S.lat = 38.2475; S.lon = 129.29;
+    leafMap.setView([38.35, 129.20], 11, { animate: false });
+    updateAcOnMap(); updateCenterCoord(); await wait();
+    const box = () => document.getElementById('center-coord').textContent.trim();
+    const north = box();
+    toggleFollow(); updateAcOnMap(); updateCenterCoord(); await wait();
+    const foll = box();
+    toggleFollow(); updateAcOnMap(); updateCenterCoord(); await wait();
+    return { north, foll, after: box() };
+  });
+  t.ok(/^＋/.test(coord.north) && /38°21′00″N 129°12′00″E/.test(coord.north),
+    `1인칭이 아니면 십자마크(지도 중심) 좌표다 (${coord.north})`);
+  t.ok(/^✈/.test(coord.foll) && /38°14′51″N 129°17′2[45]″E/.test(coord.foll),
+    `1인칭이면 항공기 좌표다 (${coord.foll})`);
+  t.ok(/^＋/.test(coord.after) && coord.after !== coord.foll,
+    `1인칭을 끄면 다시 십자마크 좌표로 돌아온다 (${coord.after})`);
 }
