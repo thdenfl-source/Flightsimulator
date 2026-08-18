@@ -515,7 +515,7 @@ html, body {
    bottom:0 기준 + margin 만 준다(20%를 또 더하면 축척이 좌표 위로 밀려 올라감). */
 /* 좌하단 세로 순서: Visit(20%+120px) → 축척 → 좌표(20%+44px).
    세 요소의 간격이 균등해지도록 축척 위치를 가운데로 맞춤 */
-#map-wrap .leaflet-bottom.leaflet-left  { margin-bottom: 90px; bottom: 0; }   /* 축척 — 사다리 3번째 칸 */
+#map-wrap .leaflet-bottom.leaflet-left  { margin-bottom: 62px; bottom: 0; }
 #map-wrap .leaflet-bottom.leaflet-right { margin-bottom: 44px; bottom: 0; }
 /* ── Solo (single-screen) mode ── */
 #solo-bar {
@@ -627,26 +627,17 @@ body.solo-mode .solo-panel-visible {
 }
 #map-crosshair .ch-h { left: -11px; top: -1px; width: 22px; height: 2px; }
 #map-crosshair .ch-v { left: -1px; top: -11px; width: 2px; height: 22px; }
-/* ── 좌하단 겹침 사다리 ──────────────────────────────────────────
-   아래에서 위로: ＋좌표(빨강) → ✈좌표(노랑) → 축척 → Visit.
-   간격은 6px 로 통일한다(종전에는 5·6·11px 로 들쭉날쭉했다).
-   높이: 좌표칸 22px · 축척 37px · Visit 17px → 바닥에서 44 / 72 / 100 / 143.
-   T-CUT 이 켜지면 지도가 80% 라 20% 를 더한다(아래 .tcut-off 규칙이 그 반대). */
-#center-coord, #crosshair-coord {
-  position: absolute; left: 10px; z-index: 1100;
+/* ── 중앙 좌표 표시 (좌하단 최하단: Visit → 축척 → 좌표) ── */
+#center-coord {
+  position: absolute; bottom: calc(20% + 44px); left: 10px; z-index: 1100;
   background: rgba(0,0,0,0.72); border: 1px solid #444; border-radius: 4px;
   padding: 3px 7px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  font-size: 10px; font-weight: bold; line-height: 1.4; white-space: nowrap;
+  font-size: 10px; font-weight: bold; line-height: 1.4; color: #ffd54f; white-space: nowrap;
   pointer-events: none;
 }
-#center-coord    { bottom: calc(20% + 72px); color: #ffd54f; }   /* ✈ 항공기 */
-/* ＋좌표는 십자마크와 같은 빨강으로 — 지도 위의 그 표시를 가리킨다 */
-#crosshair-coord { bottom: calc(20% + 44px); color: #ff6e7f; border-color: #6a2a33; }
-/* 1인칭에서는 십자마크를 감추므로 그 좌표칸도 함께 감춘다(가리킬 표시가 없다) */
-#map-wrap.follow-on #crosshair-coord { display: none; }
 #counter-wrap {
   position: absolute;
-  bottom: calc(20% + 143px);   /* Visit — 사다리 맨 위 칸 */
+  bottom: calc(20% + 120px);
   left: 10px;
   z-index: 1100;
   background: rgba(0,0,0,0.72);
@@ -977,13 +968,13 @@ body.solo-mode .solo-panel-visible {
 
 /* GPS 상태창: 하단 좌표창(#center-coord, left:10px) 오른쪽에 나란히 배치 */
 #gps-status {
-  position: absolute; bottom: calc(20% + 72px); left: 235px; z-index: 1100;   /* ✈ 좌표칸과 같은 줄 */
+  position: absolute; bottom: calc(20% + 44px); left: 235px; z-index: 1100;
   background: rgba(0,20,0,0.80); border: 1px solid #226622; color: #00cc66;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 9px;
   padding: 3px 7px; border-radius: 3px; display: none;
   text-align: left; line-height: 1.5; white-space: nowrap;
 }
-#map-wrap.tcut-off #gps-status { bottom: 72px; }
+#map-wrap.tcut-off #gps-status { bottom: 44px; }
 #wx-btn.wx-active {
   background: rgba(0,20,40,0.92); border-color: #00aaff; color: #66ccff;
   box-shadow: 0 0 8px rgba(0,170,255,0.4);
@@ -1019,9 +1010,8 @@ body.solo-mode .solo-panel-visible {
 #map-wrap.tcut-off #map, #map-wrap.tcut-off #map3d { height: 100%; }
 #map-wrap.tcut-off #map-crosshair { top: 50%; }
 #map-wrap.tcut-off #map-sim-bar { bottom: 0; }
-#map-wrap.tcut-off #center-coord    { bottom: 72px; }
-#map-wrap.tcut-off #crosshair-coord { bottom: 44px; }
-#map-wrap.tcut-off #counter-wrap { bottom: 143px; }
+#map-wrap.tcut-off #center-coord { bottom: 44px; }
+#map-wrap.tcut-off #counter-wrap { bottom: 120px; }
 #map-wrap.tcut-off #fdr-btn-wrap { bottom: 120px; }
 #map-wrap.tcut-off #fdr-panel { bottom: 165px; }
 #map-wrap.tcut-off.map3d-on #fdr-btn-wrap { bottom: 175px; }
@@ -1632,10 +1622,6 @@ body.night-mode::after {
             회전하며 생기는 모서리는 지도를 확대하지 않고 <b>보이는 영역의 대각선만큼 넓혀서</b> 채웁니다.
             (종전에는 1.42배 확대로 덮어 모드를 바꾸는 순간 지도가 확대됐고, 세로로 긴 화면에서는
             그래도 모서리에 검은 삼각형이 남았습니다.)</li>
-        <li><b>좌하단 좌표칸 두 개</b>: 위(노랑 <b>✈</b>)는 <b>항공기 현재 위치</b>, 아래(빨강 <b>＋</b>)는
-            <b>십자마크(지도 중심)</b> 좌표입니다. 종전에는 한 칸이 1인칭 여부에 따라 둘 중 하나로 바뀌어
-            한쪽을 읽는 동안 다른 쪽을 알 수 없었습니다. 1인칭에서는 십자마크와 함께 ＋칸도 사라집니다.
-            아래에서 위로 <b>＋ → ✈ → 축척 → Visit</b> 순으로 <b>같은 간격</b>으로 놓았습니다.</li>
         <li><b>DME 아크(Y 절차)</b>: 접근절차의 아크 구간은 <b>기준국에서 지정된 거리를 유지하며</b> 돕니다.
             지도에 그려지는 원호와 <b>NAV 오토파일럿이 나는 길이 같습니다</b> — 종전에는 두 픽스를 잇는
             직선으로 날아 원호 안쪽을 가로질렀습니다(11NM 아크에서 약 0.3NM). CDI 편차도 이 구간에서는
@@ -2160,7 +2146,6 @@ body.night-mode::after {
       <div id="aspc-alert"></div>
       <div id="terrain-alert">⚠ TERRAIN</div>
       <div id="vnav-alert"></div>
-      <div id="crosshair-coord">＋ ----</div>
       <div id="terrain-cut"><canvas id="tcut-canvas"></canvas><div id="tcut-title">TERRAIN — 전방 20NM</div></div>
       <!-- 홀딩 진입 판정 레이어 — 홀딩 픽스로 향하는 현재 접근방향이
            직진·평행·눈물방울 중 어느 구역에 있는지 보여 준다 -->
