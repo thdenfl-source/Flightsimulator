@@ -130,10 +130,18 @@ let _ml3d = null;          // Maplibre GL map instance (lazy init)
 let _ml3dMarker = null;    // aircraft marker on 3D map
 let _view3dOn = false;
 let _ml3dPitch = 70;       // current 3D map pitch (adjustable via tilt buttons)
+// 카메라를 움직여도 되는 상태인가.
+// 종전에는 _ml3d.loaded() 로 물었다. 그건 "스타일도 타일도 전부 준비됨" 이라
+// 비행 중 새 타일을 받는 동안 계속 false 가 되고, 그 사이 1인칭 추종과 방위
+// 맞추기가 통째로 멈췄다 — 네트워크가 느릴수록 "3D 에서 안 된다" 가 된다.
+// (load 이벤트를 기다리는 것도 같은 함정이다. 타일이 안 잡히면 영영 안 온다)
+// 카메라 이동(easeTo)은 타일도 스타일도 필요 없다 — 지도 객체가 만들어진
+// 순간부터 허용한다. 타일이 필요한 일(항적 소스·비 레이어)만 따로 기다린다.
+let _ml3dReady = false;
 
 function tiltAdj(delta) {
   _ml3dPitch = Math.max(0, Math.min(85, _ml3dPitch + delta));
-  if (_ml3d && _ml3d.loaded()) {
+  if (_ml3d && _ml3dReady) {
     if (followMode) {
       _applyFollow(); // let follow recalculate with new pitch
     } else {
@@ -235,11 +243,14 @@ function _init3dMap() {
     return;
   }
 
+  _ml3dReady = true;   // 카메라는 지금부터 움직일 수 있다(타일을 기다리지 않는다)
+
   _ml3d.on('error', (e) => console.warn('[3D] map error:', e && e.error ? e.error.message : e));
   // 사용자가 3D 지도를 수동 회전할 때도 마커가 실제 기수를 가리키도록 갱신
   _ml3d.on('rotate', () => { try { _update3dMarker(); } catch(e) { _swallow(e); } });
 
   _ml3d.on('load', () => {
+    _ml3dReady = true;
     // Terrain is best-effort — a DEM failure must not blank the satellite view
     try { _ml3d.setTerrain({ source: 'terrain', exaggeration: 1.5 }); }
     catch (e) { console.warn('[3D] terrain unavailable:', e); }
