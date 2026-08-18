@@ -449,7 +449,7 @@ async function _tcFetch(key, x, y) {
 }
 // ── VNAV (수직항법) : 타깃 WP까지 거리 기준 입력 각도의 강하/상승선 ──
 let vnavActive = false, vnavTgtAlt = 0, vnavAngle = -3;   // angle: 음수=강하
-const FT_PER_NM = 6076.12;
+// FT_PER_NM 은 01-state.js 에 있다(DME 경사거리와 같은 값을 쓴다)
 function vnavCalc() {
   if (!vnavActive) return null;
   if (S.awp < 0 || S.awp >= S.wps.length) return { err: '활성 웨이포인트(타깃) 없음' };
@@ -709,7 +709,7 @@ function updateBrgLines() {
   const b1 = brg1Visible ? brg1Station() : null;
   _setBrgLine(brg1Line, _brg1Ref, !!b1, b1?.lat, b1?.lon, 'BRG1',
     b1 ? bearing(S.lat, S.lon, b1.lat, b1.lon) : 0,
-    b1 ? distance(S.lat, S.lon, b1.lat, b1.lon) : 0, '#44aaff');
+    b1 ? dmeDist(b1.lat, b1.lon, b1.elev) : 0, '#44aaff');   // DME 는 경사거리
   // BRG2: FMS 활성 웨이포인트 — HSI BRG2 패널과 동일
   const wpOk = S.awp >= 0 && S.awp < S.wps.length;
   const wp = wpOk ? S.wps[S.awp] : null;
