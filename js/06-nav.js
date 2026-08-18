@@ -935,6 +935,7 @@ function fpConfirmIdent() {
     fpGo('WPT');
     return;
   }
+  // 빈 계획이면 이 지점이 ORIGIN 이 된다 — pushWP 안에서 항공기를 옮긴다
   const f = AIRPORTS.find(a=>a.ident===v);
   if(f){ fpMode='LIST'; fpInputBuf=''; pushWP({ident:f.ident,lat:f.lat,lon:f.lon}); }
   else uiAlert(`"${v}" not found.\nAvailable: ${AIRPORTS.map(a=>a.ident).join(', ')}`);
@@ -951,10 +952,12 @@ function fpConfirmCoord(field) {
     const lat=fpTempLat, lon=val;
     if (fpEditIdx >= 0 && fpEditIdx < S.wps.length) {
       const w = S.wps[fpEditIdx];
+      const wasOrigin = fpEditIdx === 0;
       w.lat = lat; w.lon = lon;
       fpTempLat=null; fpInputBuf=''; fpEditIdx=-1;
       updateWpMarkers(); updateNav(); updateHoldLine(); _fplPersist();
       fpGo('WPT');
+      if (wasOrigin) _fpOriginMoveAircraft(w);   // 출발지를 옮겼으면 항공기도 따라간다
       return;
     }
     const name='WP'+(S.wps.length+1);
@@ -983,11 +986,42 @@ function parseDegrees(str) {
   return sign * (d + m / 60 + s / 3600);
 }
 
+// ORIGIN(첫 웨이포인트)을 넣거나 고치면 항공기를 그 자리로 옮긴다.
+//
+// 시작 위치는 앱을 켤 때 GPS(또는 송도)로 한 번 잡히고 그만이었다. 그래서
+// "김포에서 출발" 을 해 보려면 지도를 끌어다 항공기를 손으로 옮겨야 했다.
+// 출발지는 비행계획의 첫 줄에 이미 적는 것이니, 그걸 적으면 거기 서 있게 한다.
+//
+//   · GPS 모드에서는 옮기지 않는다 — 위치는 수신기가 정한다.
+//   · 비행 중(FLY)이면 되묻는다 — 날고 있는 기체를 말없이 순간이동시키지 않는다.
+//   · 옮기면 항적을 지운다. 안 지우면 옛 자리에서 새 자리까지 선이 하나 그어진다.
+async function _fpOriginMoveAircraft(wp) {
+  if (!wp || typeof gpsMode !== 'undefined' && gpsMode) return;
+  const d = distance(S.lat, S.lon, wp.lat, wp.lon);
+  if (d < 0.05) return;                       // 이미 그 자리다
+  if (S.running) {
+    const ok = await uiConfirm(
+      `출발지를 ${wp.ident || 'ORIGIN'} 으로 넣었습니다.\n` +
+      `비행 중입니다 — 항공기를 그 자리(${uDist(d)} 떨어짐)로 옮길까요?`,
+      { okText: '옮기기', cancelText: '그대로' });
+    if (!ok) return;
+  }
+  S.lat = wp.lat; S.lon = wp.lon;
+  S.trail = []; try { updateTrail(); } catch(e) { _swallow(e); }
+  S.lastT = null;                              // 옮긴 만큼을 속도로 적분하지 않게
+  try { leafMap.setView([S.lat, S.lon], leafMap.getZoom(), { animate: false }); } catch(e) { _swallow(e); }
+  try { updateAcOnMap(); updateNav(); updateCenterCoord(); } catch(e) { _swallow(e); }
+  uiToast(`항공기를 출발지 ${wp.ident || ''} 로 옮겼습니다.`);
+}
+
 function pushWP(wp, phase){
   if(phase) wp.phase=phase;
+  const wasEmpty = S.wps.length === 0;
   S.wps.push(wp);
   if(S.awp<0) selectWP(0);
   else{updateWpMarkers();fpRender();updateNav();}
+  // 빈 계획에 처음 넣은 지점이 곧 ORIGIN 이다
+  if (wasEmpty) _fpOriginMoveAircraft(S.wps[0]);
 }
 function removeWP(i){
   S.wps.splice(i,1);
