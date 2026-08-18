@@ -44,6 +44,9 @@ export async function run(page, t) {
       windSpd = 0; windDir = 0; navApOn = true; hdgSelOn = false; rollApOn = true; holdExit();
       const dt = 0.5; let entry = '', tTrack = -1, devs = [], navOff = false, entryDist = -1;
       let devCap = 0;   // 패턴을 붙잡는 과도 구간까지 포함한 최대 이탈
+      // 패턴을 붙잡은 뒤 60초 동안 기수를 몇 도나 돌렸는가.
+      // 제대로면 인바운드로 살짝 물어 들어가는 정도(<100°)로 끝난다.
+      let capTurn = 0, prevHdg = S.hdg;
       for (let i = 0; i < 3000 / dt; i++) {
         updateNav();
         if (S.awp >= 0 && !obsOn && !holdOn && S.dtw < 0.25 && S.awp + 1 >= S.wps.length) navApOn = false;
@@ -59,13 +62,15 @@ export async function run(page, t) {
         const sc = 1852 / 3600 * dt / 111320;
         S.lat += S.spd * Math.cos(S.hdg * D2R) * sc;
         S.lon += S.spd * Math.sin(S.hdg * D2R) * sc / Math.cos(S.lat * D2R);
+        if (tTrack >= 0 && i < tTrack + 120) capTurn += Math.abs(normAS(S.hdg - prevHdg));
+        prevHdg = S.hdg;
         if (tTrack >= 0) {
           const e = dev(holdPatternLatLngs(), S.lat, S.lon);
           devCap = Math.max(devCap, e);
           if (i > tTrack + 400) devs.push(e);
         }
       }
-      return { entry, navOff, entryDist, devCap,
+      return { entry, navOff, entryDist, devCap, capTurn,
                devMax: devs.length ? Math.max(...devs) : NaN,
                devAvg: devs.length ? devs.reduce((a, b) => a + b, 0) / devs.length : NaN };
     };
@@ -87,6 +92,16 @@ export async function run(page, t) {
     t.ok(fly[k].entryDist <= 0.05, `${k} 픽스를 지난 뒤에 선회를 시작한다 (${fly[k].entryDist.toFixed(3)}NM)`);
     t.ok(fly[k].devMax < 0.35, `${k} 그려진 트랙 이탈 최대 ${fly[k].devMax.toFixed(3)}NM`);
   }
+
+  // 평행 진입에서 반대 방향으로 크게 한 바퀴 도는 일이 없어야 한다.
+  // 종전에는 추종 대상 구간을 "가장 가까운 선분" 으로만 골랐다. 평행 진입을
+  // 마치면 항공기는 홀딩측에서 인바운드를 향하는데, 이때 반대 방향인
+  // 아웃바운드 구간이 더 가까이(2R≈0.57NM 대 0.71NM) 있어 그쪽을 잡고
+  // 거의 한 바퀴(≈354°)를 돌아 거꾸로 합류했다.
+  ['R330', 'L210', 'R330s', 'L210s'].forEach(k => {
+    t.ok(fly[k].capTurn < 150,
+      `${k} 평행 진입 뒤 곧장 인바운드로 붙는다 (붙잡고 60초간 기수 변화 ${Math.round(fly[k].capTurn)}° — 종전 217°)`);
+  });
 
   // 진입 직후 패턴을 붙잡는 구간 — 여기가 뱅크 상한에 좌우된다.
   // 상한이 표준선회 뱅크(81kt 면 13°)뿐이던 때는 평행 진입에서 0.58NM 까지
