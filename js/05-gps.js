@@ -763,6 +763,11 @@ function updateCrsLine() {
 // Leaflet은 두 점을 머케이터 직선으로 잇기 때문에, 긴 구간을 두 점으로 그리면
 // CDI가 쓰는 대권과 지도의 선이 어긋난다(150NM에서 최대 0.6NM).
 function _gcCourseLatLngs(L, extNM) {
+  // 아크 구간은 원호 그대로 그린다 — 나는 길과 그려진 길이 달라선 안 된다
+  if (L.arc) {
+    return arcPoints(L.from[0], L.from[1], L.to[0], L.to[1],
+                     L.arc.clat, L.arc.clon, L.arc.dir, 64);
+  }
   const b0 = bearing(L.from[0], L.from[1], L.to[0], L.to[1]);
   const dTot = distance(L.from[0], L.from[1], L.to[0], L.to[1]);
   // to 지점에서의 진행 방위(대권은 지점마다 방위가 달라진다)
@@ -818,6 +823,9 @@ function toggleFollow() {
   // 1인칭 모드에서는 중앙 십자마크 숨김(항공기 기준 좌표 표시 중)
   const ch = document.getElementById('map-crosshair');
   if (ch) ch.style.display = followMode ? 'none' : '';
+  // ＋좌표칸도 같이 감춘다 — 가리킬 십자마크가 없는데 좌표만 남으면 헷갈린다
+  const wrap = document.getElementById('map-wrap');
+  if (wrap) wrap.classList.toggle('follow-on', followMode);
   if (followMode) {
     // Disable Leaflet dragging while following
     leafMap.dragging.disable();
@@ -831,13 +839,19 @@ function toggleFollow() {
 }
 
 // ── 지도 중앙(1인칭: 항공기 위치) 좌표 표시 ──
+// 좌하단 좌표 두 칸 — 위는 항공기(✈), 아래는 십자마크(＋).
+// 종전에는 한 칸이 1인칭 여부에 따라 둘 중 하나로 바뀌었다. 그래서 지도를
+// 옮겨 어떤 지점의 좌표를 읽는 동안에는 항공기가 어디 있는지 알 수 없었고,
+// 1인칭에서는 반대였다. 둘 다 늘 자기 것만 보여 준다.
 function updateCenterCoord() {
-  const el = document.getElementById('center-coord');
-  if (!el) return;
-  let lat, lon, tag;
-  if (followMode) { lat = S.lat; lon = S.lon; tag = '✈'; }   // 1인칭: 항공기 기준
-  else { const c = leafMap.getCenter(); lat = c.lat; lon = c.lng; tag = '＋'; }
-  el.textContent = `${tag} ${decToDMS(lat, true)} ${decToDMS(lon, false)}`;   // 북위·동경 1줄 표시
+  const ac = document.getElementById('center-coord');
+  const ch = document.getElementById('crosshair-coord');
+  const fmt = (lat, lon) => `${decToDMS(lat, true)} ${decToDMS(lon, false)}`;
+  if (ac) ac.textContent = `✈ ${fmt(S.lat, S.lon)}`;
+  if (ch) {
+    const c = leafMap.getCenter();
+    ch.textContent = `＋ ${fmt(c.lat, c.lng)}`;
+  }
 }
 leafMap.on('move', updateCenterCoord);
 try { updateCenterCoord(); } catch(e) { _swallow(e); }

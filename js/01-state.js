@@ -933,6 +933,20 @@ function activeCourseLine() {
   // 이전 경유점이 있으면 그 구간(leg)이 코스선
   if (!obsOn && S.fwp >= 0 && S.fwp < S.wps.length) {
     const f = S.wps[S.fwp];
+    // DME 아크 구간(Y 절차) — 이 구간의 코스는 직선이 아니라 기준국을 중심으로
+    // 한 원호다. 조종사는 "기준국에서 10NM 을 유지하며 돈다". 종전에는 두 픽스를
+    // 잇는 직선으로 날아 원호 안쪽을 가로질렀다(지도에는 원호가 그려져 있는데도).
+    // 반지름은 양 끝점까지의 거리 평균 — 지도에 그리는 arcPoints 와 같은 기준이다.
+    if (wp.arc && Number.isFinite(wp.arc.clat) && Number.isFinite(wp.arc.clon)) {
+      const c = wp.arc;
+      const r = (distance(c.clat, c.clon, f.lat, f.lon) +
+                 distance(c.clat, c.clon, wp.lat, wp.lon)) / 2;
+      if (r > 0.5) {
+        return { from: [f.lat, f.lon], to: [wp.lat, wp.lon],
+                 crs: bearing(f.lat, f.lon, wp.lat, wp.lon),
+                 arc: { clat: c.clat, clon: c.clon, r, dir: c.dir === 'L' ? 'L' : 'R' } };
+      }
+    }
     return { from: [f.lat, f.lon], to: [wp.lat, wp.lon],
              crs: bearing(f.lat, f.lon, wp.lat, wp.lon) };
   }
@@ -943,11 +957,24 @@ function activeCourseLine() {
 // 코스선 기준 횡편차(NM, + = 코스 오른쪽)
 function courseXtk(L) {
   if (!L) return 0;
+  if (L.arc) {
+    // 아크에서는 "기준국에서 정해진 거리" 가 코스다 — 그 거리와의 차이가 편차.
+    // 우선회(시계방향)면 기준국이 오른쪽에 있으므로, 바깥으로 벗어나는 것은
+    // 코스의 왼쪽으로 벗어나는 것이다(+ = 코스 오른쪽).
+    const d = distance(S.lat, S.lon, L.arc.clat, L.arc.clon);
+    return L.arc.dir === 'R' ? (L.arc.r - d) : (d - L.arc.r);
+  }
   return crossTrack(L.from[0], L.from[1], L.to[0], L.to[1], S.lat, S.lon);
 }
 // 현재 위치에서 본 코스선의 방향(대권은 위치마다 방위가 달라진다)
 function courseCrsHere(L) {
   if (!L) return 0;
+  if (L.arc) {
+    // 지금 있는 자리에서의 접선 방향 — 기준국에서 본 방위의 ±90°.
+    // 원호를 도는 동안 매 순간 바뀐다(그래서 직선 코스로는 흉내 낼 수 없다).
+    const th = bearing(L.arc.clat, L.arc.clon, S.lat, S.lon);
+    return normA(th + (L.arc.dir === 'R' ? 90 : -90));
+  }
   const d = distance(L.from[0], L.from[1], L.to[0], L.to[1]);
   if (d < 0.05) return L.crs;
   // 항공기를 코스선에 정사영한 지점에서의 진행 방위
