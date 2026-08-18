@@ -22,8 +22,9 @@ import * as fpwpt from './cases/fpwpt.mjs';
 import * as maprot from './cases/maprot.mjs';
 import * as map3d from './cases/map3d.mjs';
 import * as dmearc from './cases/dmearc.mjs';
+import * as dme from './cases/dme.mjs';
 
-const SUITES = [smoke, actions, coords, chartcal, hold, nav, gspd, dialog, chartview, procdata, simspd, tascalc, brg, fpwpt, maprot, map3d, dmearc];
+const SUITES = [smoke, actions, coords, chartcal, hold, nav, gspd, dialog, chartview, procdata, simspd, tascalc, brg, fpwpt, maprot, map3d, dmearc, dme];
 const filter = process.argv.slice(2);
 
 function makeT() {

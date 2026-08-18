@@ -895,15 +895,15 @@ function setNavRadio(navId, freq, id) {
     if (!byId || Math.abs(parseFloat(byId.freq) - parseFloat(r.freq)) >= 0.001) r.id = '';
   }
   const v = _resolveVor(r.freq, r.id);
-  if (v) { r.lat = v.lat; r.lon = v.lon; r.id = v.id; r.freq = v.freq; }
-  else   { r.lat = null; r.lon = null; }
+  if (v) { r.lat = v.lat; r.lon = v.lon; r.id = v.id; r.freq = v.freq; r.elev = v.elev || 0; }
+  else   { r.lat = null; r.lon = null; r.elev = 0; }
   if (navSrc === navId) applyNavRadioToPfd();
 }
 // 현재 navSrc(NAV1/NAV2)의 튜닝 VOR를 PFD 항법 상태로 반영
 function applyNavRadioToPfd() {
   const r = navRadios[navSrc];
   if (!r) { navLat = navLon = null; navIcao = ''; return; }
-  if (r.lat === null) { const v = _resolveVor(r.freq, r.id); if (v) { r.lat = v.lat; r.lon = v.lon; r.id = v.id; } }
+  if (r.lat === null) { const v = _resolveVor(r.freq, r.id); if (v) { r.lat = v.lat; r.lon = v.lon; r.id = v.id; r.elev = v.elev || 0; } }
   navLat = r.lat; navLon = r.lon; navIcao = r.id || '';
   const lbl = document.getElementById('nav-icao-lbl');
   if (lbl) { lbl.style.visibility = 'visible'; lbl.textContent = (r.id || '----') + (r.freq ? ' ' + r.freq : ''); }
@@ -920,13 +920,30 @@ function applyNavRadioToPfd() {
 // 어느 무선을 가리키는지는 패널의 부제(NAV1/NAV2)에 그대로 나온다.
 function brg1Station() {
   if (navSrc !== 'FMS' && navLat !== null && navLon !== null)
-    return { lat: navLat, lon: navLon, id: navIcao, src: navSrc };
+    return { lat: navLat, lon: navLon, id: navIcao, src: navSrc,
+             elev: (navRadios[navSrc] || {}).elev || 0 };
   for (const k of ['NAV1', 'NAV2']) {
     const r = navRadios[k];
     if (r && r.lat !== null && r.lat !== undefined && r.lon !== null && r.lon !== undefined)
-      return { lat: r.lat, lon: r.lon, id: r.id, src: k };
+      return { lat: r.lat, lon: r.lon, id: r.id, src: k, elev: r.elev || 0 };
   }
   return null;
+}
+
+// ── DME 경사거리(slant range) ────────────────────────────────────────
+// DME 는 항공기와 지상국 안테나 사이의 '직선거리' 를 잰다. 지도상의 수평거리가
+// 아니다. 그래서 6,000ft 로 송신소 상공을 지나가면 0 이 아니라 약 1.0NM 에서
+// 멈춘다(6,000ft ÷ 6,076.1ft = 0.99NM). 이 차이가 흔히 말하는 DME 경사거리
+// 오차이고, 고도가 높고 국이 가까울수록 커진다 — 상공에서 최대, 멀어지면 0 에
+// 수렴한다. GPS/FMS 가 주는 거리는 수평거리라 이 오차가 없다.
+//
+// 지상국 표고는 AIP 에 실린 값이 있으면 쓰고(vor.elev, ft), 없으면 0 으로 둔다.
+// 국 표고를 빼먹어도 오차는 그 표고만큼(수백 ft = 0.1NM 미만)이다.
+const FT_PER_NM = 6076.115;
+function dmeDist(lat, lon, stnElevFt) {
+  const d = distance(S.lat, S.lon, lat, lon);
+  const dh = (S.alt - (stnElevFt || 0)) / FT_PER_NM;
+  return Math.sqrt(d * d + dh * dh);
 }
 
 // PFD OAT용 지면 온도(°C) — METAR 조회 시 갱신, 기본은 ISA 해면온도 15°C.

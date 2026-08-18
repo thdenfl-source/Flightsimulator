@@ -661,7 +661,8 @@ function drawHSI(x, y, w, h) {
       const rr = navRadios[id] || {};
       const ok = rr.lat !== null && rr.lat !== undefined && rr.lon !== null && rr.lon !== undefined;
       rows.push({ src:id, ident: ok ? (rr.id || '----') : '----',
-                  lat: ok ? rr.lat : null, lon: ok ? rr.lon : null, color:'#44aaff' });
+                  lat: ok ? rr.lat : null, lon: ok ? rr.lon : null, color:'#44aaff',
+                  dme: true, elev: rr.elev || 0 });
     });
 
     const colX  = rightX + sideW / 2;
@@ -676,7 +677,11 @@ function drawHSI(x, y, w, h) {
     rows.forEach((rw, i) => {
       const has = rw.lat !== null;
       const brg = has ? fmtA(toMag(bearing(S.lat, S.lon, rw.lat, rw.lon))) + '°' : '---°';
-      const dst = has ? uDist(distance(S.lat, S.lon, rw.lat, rw.lon), 1) : '--.-';
+      // VOR/DME 는 경사거리(항공기↔국 직선거리), FMS 는 GPS 수평거리다.
+      const dNM = !has ? 0
+                : rw.dme ? dmeDist(rw.lat, rw.lon, rw.elev)
+                : distance(S.lat, S.lon, rw.lat, rw.lon);
+      const dst = has ? uDist(dNM, 1) : '--.-';
       const parts = [
         [rw.src + ' ', navSrc === rw.src ? rw.color : '#888', lblFont],
         [rw.ident,     has ? '#fff' : '#666',                 valFont],
