@@ -27,8 +27,9 @@ import * as fporder from './cases/fporder.mjs';
 import * as wptcrs from './cases/wptcrs.mjs';
 import * as brglbl from './cases/brglbl.mjs';
 import * as directto from './cases/directto.mjs';
+import * as crssync from './cases/crssync.mjs';
 
-const SUITES = [smoke, actions, coords, chartcal, hold, nav, gspd, dialog, chartview, procdata, simspd, tascalc, brg, fpwpt, maprot, map3d, dmearc, dme, fporder, wptcrs, brglbl, directto];
+const SUITES = [smoke, actions, coords, chartcal, hold, nav, gspd, dialog, chartview, procdata, simspd, tascalc, brg, fpwpt, maprot, map3d, dmearc, dme, fporder, wptcrs, brglbl, directto, crssync];
 const filter = process.argv.slice(2);
 
 function makeT() {
