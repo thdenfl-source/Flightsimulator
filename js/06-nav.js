@@ -476,6 +476,93 @@ function fpRenderHold(area, title, footer) {
     <div class="fp-nav-btn fp-nav-enter" data-act="fpHoldApply"><span>↩</span>Enter</div>`;
 }
 
+// ══════════════════════════════════════════════════════
+// 비행계획 순서 바꾸기 (손잡이 ≡ 를 끌어서)
+// ══════════════════════════════════════════════════════
+// 순서는 인덱스가 아니라 '어느 웨이포인트냐' 로 유지한다. 활성 WP(S.awp)·
+// 이전 WP(S.fwp)·BRG2(S.brg2wp) 를 인덱스로 들고 있으면 순서를 바꾸는 순간
+// 엉뚱한 지점을 가리킨다 — 객체를 기억했다가 새 자리에서 다시 찾는다.
+//   order: 새 순서대로 늘어놓은 '옛 인덱스' 배열
+function fpReorder(order) {
+  const n = S.wps.length;
+  if (!Array.isArray(order) || order.length !== n) return false;
+  const seen = new Set(order);
+  if (seen.size !== n || order.some(i => !(i >= 0 && i < n))) return false;
+  if (order.every((v, i) => v === i)) { fpRender(); return false; }
+  const keepA = S.wps[S.awp], keepF = S.wps[S.fwp], keepB = S.wps[S.brg2wp];
+  S.wps = order.map(i => S.wps[i]);
+  S.awp    = keepA ? S.wps.indexOf(keepA) : -1;
+  S.fwp    = keepF ? S.wps.indexOf(keepF) : -1;
+  S.brg2wp = keepB ? S.wps.indexOf(keepB) : -1;
+  // 이전 WP 가 활성 WP 뒤로 가면 그 구간(leg)은 더 이상 말이 되지 않는다.
+  // 이럴 때는 활성 WP 를 지나는 코스선(Direct-To)으로 돌린다.
+  if (S.fwp >= 0 && S.awp >= 0 && S.fwp >= S.awp) S.fwp = S.awp - 1;
+  try { updateNav(); } catch(e) { _swallow(e); }
+  try { updateWpMarkers(); } catch(e) { _swallow(e); }
+  try { updateHoldLine(); } catch(e) { _swallow(e); }
+  fpRender();
+  return true;
+}
+// i 번째를 j 자리로 옮긴다(드래그의 결과와 같다 — 시험·외부 호출용)
+function fpMoveWp(from, to) {
+  const n = S.wps.length;
+  if (!(from >= 0 && from < n && to >= 0 && to < n) || from === to) return false;
+  const order = S.wps.map((_, i) => i);
+  order.splice(to, 0, order.splice(from, 1)[0]);
+  return fpReorder(order);
+}
+
+// 손잡이 끌기 — 포인터 이벤트 하나로 마우스·터치를 함께 받는다.
+// (HTML5 드래그앤드롭은 터치에서 동작하지 않아 태블릿에서 쓸 수 없다)
+let _fpDrag = null;
+function _fpDragRows(box) { return Array.from(box.querySelectorAll('.fp-wp-row')); }
+document.addEventListener('pointerdown', ev => {
+  const grip = ev.target && ev.target.closest && ev.target.closest('.fp-wp-grip');
+  if (!grip) return;
+  const row = grip.closest('.fp-wp-row');
+  if (!row || !row.parentElement) return;
+  ev.preventDefault();
+  _fpDrag = { row, box: row.parentElement, pid: ev.pointerId };
+  row.classList.add('fp-dragging');
+  try { grip.setPointerCapture(ev.pointerId); } catch(e) { _swallow(e); }
+});
+document.addEventListener('pointermove', ev => {
+  const D = _fpDrag;
+  if (!D || ev.pointerId !== D.pid) return;
+  // 끌고 있는 행을 뺀 나머지의 중간선을 세어 '몇 번째 자리인가' 를 바로 구한다.
+  // 이웃과 한 칸씩 맞바꾸면 한 번에 크게 끌었을 때 한 칸밖에 못 따라온다.
+  const rows = _fpDragRows(D.box).filter(r => r !== D.row);
+  let k = 0;
+  while (k < rows.length) {
+    const b = rows[k].getBoundingClientRect();
+    if (ev.clientY < b.top + b.height / 2) break;
+    k++;
+  }
+  // 맨 끝자리는 마지막 행 '다음' — 목록 끝의 Destination 머리글 앞이다
+  const anchor = rows[k] || (rows.length ? rows[rows.length - 1].nextSibling : null);
+  if (anchor !== D.row) D.box.insertBefore(D.row, anchor);
+});
+let _fpDragJustEnded = false;
+function _fpDragEnd(ev) {
+  const D = _fpDrag;
+  if (!D || (ev && ev.pointerId !== D.pid)) return;
+  _fpDrag = null;
+  D.row.classList.remove('fp-dragging');
+  // 손잡이에서 손을 떼면 그 자리에서 click 이 한 번 더 난다. 그대로 두면
+  // 순서만 바꿨는데 웨이포인트 상세 카드가 열린다 — 그 한 번만 삼킨다.
+  _fpDragJustEnded = true;
+  setTimeout(() => { _fpDragJustEnded = false; }, 400);
+  fpReorder(_fpDragRows(D.box).map(r => +r.dataset.i));
+}
+document.addEventListener('click', ev => {
+  if (!_fpDragJustEnded) return;
+  if (!(ev.target && ev.target.closest && ev.target.closest('.fp-wp-row'))) return;
+  _fpDragJustEnded = false;
+  ev.stopPropagation(); ev.preventDefault();
+}, true);
+document.addEventListener('pointerup', _fpDragEnd);
+document.addEventListener('pointercancel', _fpDragEnd);
+
 function fpRenderList(area, title, footer) {
   title.textContent = 'ACTIVE FLIGHT PLAN';
   if (S.wps.length === 0) {
@@ -493,7 +580,8 @@ function fpRenderList(area, title, footer) {
       let cls='fp-wp-row'+(isA?' active-wp':'')+(isB2?' brg2-wp':'');
       const d=distance(S.lat,S.lon,wp.lat,wp.lon), b=bearing(S.lat,S.lon,wp.lat,wp.lon);
       const badge=wp.phase?`<span class="fp-phase-badge badge-${wp.phase.toLowerCase()}">${wp.phase}</span>`:'';
-      html+=`<div class="${cls}" data-act="fpWptOpen" data-arg='[${i}]'>
+      html+=`<div class="${cls}" data-act="fpWptOpen" data-arg='[${i}]' data-i="${i}">
+        <span class="fp-wp-grip" title="끌어서 순서 변경">≡</span>
         <span class="fp-wp-seq">${i+1}</span>
         <span class="fp-wp-ident">${badge}${wp.ident}</span>
         <span class="fp-wp-hdg">${fmtA(toMag(b))}°</span>
