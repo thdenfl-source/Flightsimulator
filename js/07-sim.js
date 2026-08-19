@@ -74,11 +74,18 @@ function fcpSync(which) {
     hdgSelOn = true; bankTarget = 0; rollApOn = true;  // 현재 헤딩 유지
   } else if (which === 'crs') {
     S.dtoLive = false;   // 코스를 손으로 정하는 순간 '현 위치 기준' 은 끝난다
+    // 코스선은 '그 지점을 지나고, 그 지점에서의 방위가 CRS 인 대권' 이다.
+    // 그래서 지금 자리를 지나게 하려면 '지점에서 본 항공기 방위의 반대' 를 넣어야
+    // 한다. 항공기에서 본 지점 방위를 그대로 넣으면 대권의 방위가 양 끝에서
+    // 다른 만큼(수렴각) 어긋나, 먼 거리에서는 코스선이 항공기를 비켜 간다
+    // (82NM 에서 1° ≈ 1.4NM — 지도에서 눈에 띄게 벌어진다).
+    // 반올림도 하지 않는다. 1° 를 버리면 그 거리에서 0.7NM 이 다시 벌어진다.
     if ((navSrc !== 'FMS') && navLat !== null) {
-      vorObsCrs = normA(Math.round(bearing(S.lat, S.lon, navLat, navLon)));
+      vorObsCrs = normA(bearing(navLat, navLon, S.lat, S.lon) + 180);
       updateNav();
     } else if (navSrc === 'FMS' && S.awp >= 0) {
-      S.crs = normA(Math.round(bearing(S.lat, S.lon, S.wps[S.awp].lat, S.wps[S.awp].lon)));
+      const _w = S.wps[S.awp];
+      S.crs = normA(bearing(_w.lat, _w.lon, S.lat, S.lon) + 180);
       S.fwp = -1;   // 이전 leg 대신 활성 WP 를 지나는 S.crs 선을 추적
       updateNav();
     } else {
