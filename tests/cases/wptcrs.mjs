@@ -10,7 +10,7 @@ export async function run(page, t) {
   const setup = () => page.evaluate(() => {
     S.wps = [{ ident: 'AAA', lat: 37.0, lon: 127.0 },
              { ident: 'BBB', lat: 37.5, lon: 127.5 }];
-    S.awp = 0; S.fwp = -1; S.brg2wp = -1;   // BBB 는 아직 활성이 아니다
+    S.awp = 0; S.fwp = -1;                  // BBB 는 아직 활성이 아니다
     obsOn = false; navSrc = 'FMS'; holdExit();
     S.lat = 37.2; S.lon = 127.9; S.alt = 3000; S.hdg = 270; S.spd = 120;
     selectPanel('right', 'plan', true);

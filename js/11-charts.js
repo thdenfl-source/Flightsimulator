@@ -2126,7 +2126,6 @@ appRegister({
   fpWptOpen,
   fpWptNoop,
   fpWptDirect,
-  fpWptBrg2,
   fpWptDel,
   fpWptRename,
   fpWptCoord,

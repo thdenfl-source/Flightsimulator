@@ -12,7 +12,7 @@ export async function run(page, t) {
   const setup = () => page.evaluate(([A, B]) => {
     S.wps = [{ ident: 'AAA', lat: A[0], lon: A[1] },
              { ident: 'BBB', lat: B[0], lon: B[1] }];
-    S.awp = 1; S.fwp = 0; S.brg2wp = -1;
+    S.awp = 1; S.fwp = 0;
     obsOn = false; navSrc = 'FMS'; holdExit();
     S.lat = 37.1; S.lon = 127.4; S.alt = 3000; S.hdg = 45; S.spd = 120;
     selectPanel('right', 'plan', true);

@@ -1038,8 +1038,8 @@ function updateWpMarkers(){
   wpMarkers=[];
   const coords=[];
   S.wps.forEach((wp,i)=>{
-    const isA=i===S.awp, isB2=i===S.brg2wp;
-    const bg=isA?'#ffaa00':isB2?'#ff8800':'#3377dd';
+    const isA=i===S.awp;
+    const bg=isA?'#ffaa00':'#3377dd';
     const icon=L.divIcon({
       html:`<div style="position:relative;">
         <div style="width:10px;height:10px;border-radius:50%;background:${bg};border:2px solid #fff;box-shadow:0 0 4px rgba(0,0,0,0.6);"></div>
@@ -1052,8 +1052,8 @@ function updateWpMarkers(){
     // 좌표를 확인할 방법도, 되돌릴 방법도 없었다(비행계획 목록과 같은 문제였다).
     m.bindPopup(() => _mapSymPopup({
       title: (isA ? '◉ ' : '● ') + (wp.ident || 'WPT'),
-      color: isA ? '#c47a00' : isB2 ? '#c46a00' : '#1f5fa9',
-      sub: `비행계획 ${i + 1}번째` + (isA ? ' · 활성' : '') + (isB2 ? ' · BRG2' : '')
+      color: isA ? '#c47a00' : '#1f5fa9',
+      sub: `비행계획 ${i + 1}번째` + (isA ? ' · 활성' : '')
            + (wp.hold ? ' · HOLD' : '')
            + (Number.isFinite(wp.vnavAlt) ? ` · VNAV ${Math.round(wp.vnavAlt).toLocaleString()}ft` : ''),
       name: wp.ident || 'WPT', lat: wp.lat, lon: wp.lon,

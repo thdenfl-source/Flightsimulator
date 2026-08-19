@@ -8,7 +8,7 @@ export const name = 'BRG 지도 시현';
 export async function run(page, t) {
   const setup = () => page.evaluate(() => {
     S.wps = [{ ident: 'TGT', lat: 37.6, lon: 127.4 }];
-    S.awp = 0; S.fwp = -1; S.brg2wp = 0;
+    S.awp = 0; S.fwp = -1;
     S.lat = 37.2; S.lon = 127.0; S.alt = 3000;
     setNavRadio('NAV1', '115.5', 'SEL'); navSrc = 'NAV1'; applyNavRadioToPfd();
     obsOn = false; holdExit();

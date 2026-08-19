@@ -17,7 +17,7 @@ function saveSession() {
     const snap = {
       v: 1, ts: Date.now(),
       s: { lat:S.lat, lon:S.lon, hdg:S.hdg, spd:S.spd, alt:S.alt, pit:S.pit, bnk:S.bnk,
-           crs:S.crs, vs:S.vs, running:S.running, wps:S.wps, awp:S.awp, fwp:S.fwp, brg2wp:S.brg2wp },
+           crs:S.crs, vs:S.vs, running:S.running, wps:S.wps, awp:S.awp, fwp:S.fwp },
       gps: gpsMode,
       fcp: { selSpd, selAlt, selCrht, selVS, selHdg, hdgSelOn, altHoldOn, crhtOn, gspdOn, rollApOn, bankTarget,
              gspdActLat, gspdActFwd, gspdRefLat, gspdRefFwd, gspdCoasting },
@@ -37,7 +37,7 @@ function restoreSession() {
     Object.assign(S, {
       lat:s.lat, lon:s.lon, hdg:s.hdg, spd:s.spd, alt:s.alt, pit:s.pit, bnk:s.bnk,
       crs:s.crs, vs:s.vs, running:!!s.running, lastT:null,
-      wps:Array.isArray(s.wps)?s.wps:[], awp:s.awp??-1, fwp:s.fwp??-1, brg2wp:s.brg2wp??-1,
+      wps:Array.isArray(s.wps)?s.wps:[], awp:s.awp??-1, fwp:s.fwp??-1,
     });
     const f = snap.fcp || {};
     if (f.selSpd!=null) selSpd=f.selSpd; if (f.selAlt!=null) selAlt=f.selAlt;
@@ -3199,7 +3199,7 @@ function act(name, ...args) {
       if (S.wps.length && !await uiConfirm('현재 비행계획을 이 트랙으로 대체할까요?',
             { okText: '대체', cancelText: '취소' })) return;
       S.wps = t.pts.map((p, k) => ({ ident: p.ident || ('WP' + (k + 1)), lat: p.lat, lon: p.lon }));
-      S.awp = -1; S.fwp = -1; S.brg2wp = -1;
+      S.awp = -1; S.fwp = -1;
       selectWP(0);
       try { cduOpenMap(); } catch(e) { _swallow(e); }
     }

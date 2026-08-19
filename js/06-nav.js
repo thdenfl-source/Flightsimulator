@@ -30,12 +30,6 @@ function updateNav(){
     S.xtk = 0;
   }
 
-  // BRG2: always flight-plan waypoint
-  if (S.brg2wp>=0&&S.brg2wp<S.wps.length) {
-    const wp2=S.wps[S.brg2wp];
-    S.brg2 = bearing(S.lat,S.lon,wp2.lat,wp2.lon);
-    S.dtw2 = distance(S.lat,S.lon,wp2.lat,wp2.lon);
-  } else { S.brg2=0;S.dtw2=0; }
 
   updateCrsLine();
   updateBrgLines();
@@ -486,7 +480,7 @@ function fpRenderHold(area, title, footer) {
 // 비행계획 순서 바꾸기 (손잡이 ≡ 를 끌어서)
 // ══════════════════════════════════════════════════════
 // 순서는 인덱스가 아니라 '어느 웨이포인트냐' 로 유지한다. 활성 WP(S.awp)·
-// 이전 WP(S.fwp)·BRG2(S.brg2wp) 를 인덱스로 들고 있으면 순서를 바꾸는 순간
+// 이전 WP(S.fwp) 를 인덱스로 들고 있으면 순서를 바꾸는 순간
 // 엉뚱한 지점을 가리킨다 — 객체를 기억했다가 새 자리에서 다시 찾는다.
 //   order: 새 순서대로 늘어놓은 '옛 인덱스' 배열
 function fpReorder(order) {
@@ -495,11 +489,10 @@ function fpReorder(order) {
   const seen = new Set(order);
   if (seen.size !== n || order.some(i => !(i >= 0 && i < n))) return false;
   if (order.every((v, i) => v === i)) { fpRender(); return false; }
-  const keepA = S.wps[S.awp], keepF = S.wps[S.fwp], keepB = S.wps[S.brg2wp];
+  const keepA = S.wps[S.awp], keepF = S.wps[S.fwp];
   S.wps = order.map(i => S.wps[i]);
   S.awp    = keepA ? S.wps.indexOf(keepA) : -1;
   S.fwp    = keepF ? S.wps.indexOf(keepF) : -1;
-  S.brg2wp = keepB ? S.wps.indexOf(keepB) : -1;
   // 이전 WP 가 활성 WP 뒤로 가면 그 구간(leg)은 더 이상 말이 되지 않는다.
   // 이럴 때는 활성 WP 를 지나는 코스선(Direct-To)으로 돌린다.
   if (S.fwp >= 0 && S.awp >= 0 && S.fwp >= S.awp) S.fwp = S.awp - 1;
@@ -582,8 +575,8 @@ function fpRenderList(area, title, footer) {
     let html = `<div class="fp-panel-border" style="padding:0;overflow-y:auto;">`;
     html += `<div class="fp-section-hdr"><svg width="10" height="10" viewBox="0 0 10 10"><circle cx="5" cy="5" r="3.5" fill="none" stroke="#87ceeb" stroke-width="1.2"/></svg>Origin – ${S.wps[0].ident}</div>`;
     S.wps.forEach((wp,i)=>{
-      const isA=i===S.awp, isB2=i===S.brg2wp;
-      let cls='fp-wp-row'+(isA?' active-wp':'')+(isB2?' brg2-wp':'');
+      const isA=i===S.awp;
+      let cls='fp-wp-row'+(isA?' active-wp':'');
       const d=distance(S.lat,S.lon,wp.lat,wp.lon), b=bearing(S.lat,S.lon,wp.lat,wp.lon);
       const badge=wp.phase?`<span class="fp-phase-badge badge-${wp.phase.toLowerCase()}">${wp.phase}</span>`:'';
       html+=`<div class="${cls}" data-act="fpWptOpen" data-arg='[${i}]' data-i="${i}">
@@ -593,7 +586,6 @@ function fpRenderList(area, title, footer) {
         <span class="fp-wp-hdg">${fmtA(toMag(b))}°</span>
         <span class="fp-wp-dist">${d.toFixed(0)}NM</span>
         <button class="fp-wp-hold${wp.hold?' active':''}" onclick="event.stopPropagation();fpHoldOpen(${i})" title="홀딩 패턴">HOLD</button>
-        <button class="fp-wp-b2${isB2?' active':''}" onclick="event.stopPropagation();setBrg2(${i})">B2</button>
         <button class="fp-wp-del" onclick="event.stopPropagation();removeWP(${i})">✕</button>
       </div>`;
     });
@@ -632,7 +624,7 @@ function fpRenderWpt(area, title, footer) {
 
   const b = bearing(S.lat, S.lon, wp.lat, wp.lon);
   const d = distance(S.lat, S.lon, wp.lat, wp.lon);
-  const isA = i === S.awp, isB2 = i === S.brg2wp;
+  const isA = i === S.awp;
   // 이 지점으로 들어오는 레그 코스.
   // 활성 지점이면 '실제로 나는 코스선' 에서 읽는다 — 카드가 딴소리를 하면 안 된다.
   // Direct To 로 잡은 구간은 그 선이 현재 위치에서 시작하므로, 항공기가 움직이면
@@ -706,8 +698,7 @@ function fpRenderWpt(area, title, footer) {
           `<div style="color:${isA ? '#7fe07f' : '#7ac6f5'};font-size:12px;font-weight:bold;letter-spacing:0.5px;">` +
           (isA ? `✔ 활성 — ${wp.ident || 'WPT'}` : `➤ Direct To ${wp.ident || 'WPT'}`) + `</div></div>` +
       `</div>` +
-      `<div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-top:5px;">` +
-        CARD('BRG2 지시침', isB2 ? '지정됨' : '지정', 'fpWptBrg2', undefined, isB2) +
+      `<div style="margin-top:5px;">` +
         `<div data-act="fpWptDel" style="padding:6px 4px;border:1px solid #663333;border-radius:5px;` +
           `background:#1a0a0a;cursor:pointer;text-align:center;">` +
           `<div style="color:#8a6a6a;font-size:8px;letter-spacing:0.5px;">비행계획에서</div>` +
@@ -770,11 +761,6 @@ function fpWptLiveTick(nowMs) {
   if (nowMs - _fpWptTick < 500) return;
   _fpWptTick = nowMs;
   fpRender();
-}
-function fpWptBrg2() {
-  if (fpWptIdx < 0 || fpWptIdx >= S.wps.length) return;
-  setBrg2(fpWptIdx);
-  fpGo('WPT');
 }
 async function fpWptDel() {
   const wp = S.wps[fpWptIdx];
@@ -1186,7 +1172,6 @@ function removeWP(i){
   S.wps.splice(i,1);
   if(S.awp===i)    S.awp=Math.max(-1,i-1); else if(S.awp>i)    S.awp--;
   if(S.fwp===i)    S.fwp=-1;               else if(S.fwp>i)    S.fwp--;
-  if(S.brg2wp===i) S.brg2wp=-1;            else if(S.brg2wp>i) S.brg2wp--;
   updateWpMarkers();fpRender();updateNav();
 }
 function selectWP(i){
@@ -1200,12 +1185,8 @@ function selectWP(i){
   }
   updateWpMarkers();fpRender();updateNav();
 }
-function setBrg2(i){
-  S.brg2wp=(S.brg2wp===i)?-1:i;
-  updateNav();fpRender();updateWpMarkers();
-}
 function clearFP(){
-  S.wps=[];S.awp=-1;S.fwp=-1;S.brg2wp=-1;S.dtoLive=false;
+  S.wps=[];S.awp=-1;S.fwp=-1;S.dtoLive=false;
   fpMode='LIST';
   updateWpMarkers();fpRender();updateNav();
 }
