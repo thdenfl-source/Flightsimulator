@@ -482,7 +482,7 @@ html, body {
 /* Lift the 3D zoom/tilt controls above the bottom SHIP/sim bar */
 /* #map3d 는 높이 80%라 하단 가장자리가 이미 terrain-cut 위에 있음 → px만 올림 */
 #map3d .maplibregl-ctrl-bottom-right { bottom: 44px; }
-/* 좌하단 축척은 좌표창(20%+44px)과 Visit(20%+120px) 사이에 균등 간격으로 배치 */
+/* 좌하단 축척은 좌표창(20%+44px) 위에 배치 */
 #map3d .maplibregl-ctrl-bottom-left { bottom: 62px; }
 /* 3D 축척(.vfr-scale)은 #map3d에 직접 절대배치(left:10px, bottom:62px).
    maplibre 기본값이 섞이지 않도록 박스 스타일을 2D와 동일하게 명시 */
@@ -517,8 +517,7 @@ html, body {
 /* Push Leaflet bottom controls above the sim bar.
    #map 높이가 80%라 하단 가장자리가 이미 terrain-cut(하단 20%) 위에 있으므로
    bottom:0 기준 + margin 만 준다(20%를 또 더하면 축척이 좌표 위로 밀려 올라감). */
-/* 좌하단 세로 순서: Visit(20%+120px) → 축척 → 좌표(20%+44px).
-   세 요소의 간격이 균등해지도록 축척 위치를 가운데로 맞춤 */
+/* 좌하단 세로 순서: 축척 → 좌표(20%+44px) */
 #map-wrap .leaflet-bottom.leaflet-left  { margin-bottom: 62px; bottom: 0; }
 #map-wrap .leaflet-bottom.leaflet-right { margin-bottom: 44px; bottom: 0; }
 /* ── Solo (single-screen) mode ── */
@@ -631,41 +630,13 @@ body.solo-mode .solo-panel-visible {
 }
 #map-crosshair .ch-h { left: -11px; top: -1px; width: 22px; height: 2px; }
 #map-crosshair .ch-v { left: -1px; top: -11px; width: 2px; height: 22px; }
-/* ── 중앙 좌표 표시 (좌하단 최하단: Visit → 축척 → 좌표) ── */
+/* ── 중앙 좌표 표시 (좌하단 최하단: 축척 → 좌표) ── */
 #center-coord {
   position: absolute; bottom: calc(20% + 44px); left: 10px; z-index: 1100;
   background: rgba(0,0,0,0.72); border: 1px solid #444; border-radius: 4px;
   padding: 3px 7px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   font-size: 10px; font-weight: bold; line-height: 1.4; color: #ffd54f; white-space: nowrap;
   pointer-events: none;
-}
-#counter-wrap {
-  position: absolute;
-  bottom: calc(20% + 120px);
-  left: 10px;
-  z-index: 1100;
-  background: rgba(0,0,0,0.72);
-  border: 1px solid #444;
-  border-radius: 4px;
-  padding: 2px 8px;
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: 5px;
-  user-select: none;
-}
-#counter-label {
-  font-size: 10px;
-  font-weight: bold;
-  color: #aaa;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-}
-#counter-value {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  font-size: 11px;
-  font-weight: bold;
-  color: #00e5ff;
-  line-height: 1;
 }
 /* FDR upload button — above Leaflet zoom control (bottom-right) */
 #fdr-btn-wrap {
@@ -1015,7 +986,6 @@ body.solo-mode .solo-panel-visible {
 #map-wrap.tcut-off #map-crosshair { top: 50%; }
 #map-wrap.tcut-off #map-sim-bar { bottom: 0; }
 #map-wrap.tcut-off #center-coord { bottom: 44px; }
-#map-wrap.tcut-off #counter-wrap { bottom: 120px; }
 #map-wrap.tcut-off #fdr-btn-wrap { bottom: 120px; }
 #map-wrap.tcut-off #fdr-panel { bottom: 165px; }
 #map-wrap.tcut-off.map3d-on #fdr-btn-wrap { bottom: 175px; }
@@ -2131,11 +2101,6 @@ body.night-mode::after {
       <div id="fix-panel"></div>
       <div id="awy-panel"></div>
       <input type="file" id="notamFileInput" accept=".kml,.gpx" style="display:none" onchange="loadNotamFile(this)">
-      <!-- Visitor counter widget (above scale bar, bottom-left) -->
-      <div id="counter-wrap">
-        <div id="counter-label">Visit</div>
-        <div id="counter-value">…</div>
-      </div>
       <!-- 지도 중앙 십자마크 + 중앙(1인칭: 항공기) 좌표 표시 -->
       <div id="map-crosshair"><div class="ch-h"></div><div class="ch-v"></div></div>
       <div id="center-coord"></div>

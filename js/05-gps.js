@@ -8,34 +8,6 @@
 // ══════════════════════════════════════════════════════
 let gpsMode = false;
 let gpsWatchId = null;
-// ── Visitor counter widget ──
-// 페이지가 로드될 때마다 방문 횟수를 1 증가시키고 누적 총방문수를 표시한다.
-// 원격 카운터(counterapi.dev)를 우선 사용하고, 실패 시 localStorage로 폴백한다.
-async function initVisitorCounter() {
-  const el = document.getElementById('counter-value');
-  if (!el) return;
-  const NS = 'thdenfl-flightsim', KEY = 'visits';
-  try {
-    const res = await Promise.race([
-      fetch(`https://api.counterapi.dev/v1/${NS}/${KEY}/up`),
-      new Promise((_, r) => setTimeout(() => r(new Error('timeout')), 4000)),
-    ]);
-    const data = await res.json();
-    const count = data.count ?? data.value;
-    if (typeof count === 'number') {
-      el.textContent = count.toLocaleString();
-      localStorage.setItem('visitCount', count);
-      return;
-    }
-    throw new Error('bad response');
-  } catch (e) {
-    // 폴백: 로컬 누적 방문수
-    let n = parseInt(localStorage.getItem('visitCount') || '0', 10) + 1;
-    localStorage.setItem('visitCount', n);
-    el.textContent = n.toLocaleString();
-  }
-}
-window.addEventListener('load', initVisitorCounter);
 
 let lastGpsMs = 0;
 
