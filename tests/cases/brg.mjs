@@ -58,6 +58,7 @@ export async function run(page, t) {
   const map = await page.evaluate(() => {
     setNavSrc('FMS');
     if (!brg1Visible) toggleBrg1();
+    if (!brg1LblOn) toggleBrg1Lbl();      // 지도 시현은 #1BDP 가 정한다
     updateBrgLines();
     const pts = brg1Line.getLatLngs();
     const s = brg1Station();

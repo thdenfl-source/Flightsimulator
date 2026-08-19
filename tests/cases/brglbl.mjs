@@ -1,9 +1,9 @@
-// 지도 BRG 이름표 시현 토글 — #1BDP · #2BDP
+// 지도 BRG 시현 토글 — #1BDP · #2BDP
 //
-// 니들(선)은 보고 싶은데 방위·거리 이름표까지 늘 붙어 있으면 지도를 가린다.
-// BRG1/BRG2 버튼 아래에 이름표 전용 토글을 두고, 기본은 끔.
-// '선은 그대로, 이름표만 사라진다' 가 핵심이다 — 선까지 사라지면 다른 기능이다.
-export const name = 'BRG 이름표 시현';
+// 지도에 BRG 선과 방위·거리 글자가 늘 붙어 있으면 지형·항로를 가린다.
+// BRG1/BRG2 버튼은 계기의 니들, 이 토글은 지도에 그릴지 말지다 — 기본은 끔.
+// 선과 글자가 '함께' 켜지고 '함께' 꺼져야 한다(하나만 남으면 어중간하다).
+export const name = 'BRG 지도 시현';
 
 export async function run(page, t) {
   const setup = () => page.evaluate(() => {
@@ -52,24 +52,26 @@ export async function run(page, t) {
   // ── 기본은 미시현 ──
   await setup();
   const off = await read();
-  t.eq(off.l1, null, '처음에는 BRG1 이름표가 없다 (기본 미시현)');
-  t.eq(off.l2, null, '처음에는 BRG2 이름표도 없다');
-  t.ok(off.line1 === 2 && off.line2 === 2, '이름표가 없어도 니들 선은 그대로 그려진다');
+  t.eq(off.l1, null, '처음에는 BRG1 글자가 없다 (기본 미시현)');
+  t.eq(off.l2, null, '처음에는 BRG2 글자도 없다');
+  t.ok(off.line1 === 0 && off.line2 === 0, '선도 함께 그려지지 않는다');
   t.ok(!off.on1 && !off.on2, '버튼도 꺼진 모양이다');
 
   // ── 켜면 그때만 나타난다 ──
   await page.evaluate(() => { document.getElementById('brg1-bdp').click(); });
   const on1 = await read();
   t.ok(on1.l1 && /^BRG1 \d{3}° [\d.]+NM$/.test(on1.l1),
-    `#1BDP 를 켜면 BRG1 이름표가 나온다 (${on1.l1})`);
-  t.eq(on1.l2, null, 'BRG2 는 따로 논다 — 아직 없다');
+    `#1BDP 를 켜면 BRG1 글자가 나온다 (${on1.l1})`);
+  t.eq(on1.line1, 2, '선도 같이 나온다');
+  t.ok(on1.l2 === null && on1.line2 === 0, 'BRG2 는 따로 논다 — 선도 글자도 아직 없다');
   t.ok(on1.on1 && !on1.on2, '버튼 상태도 따로 표시된다');
 
   await page.evaluate(() => { document.getElementById('brg2-bdp').click(); });
   const on2 = await read();
   t.ok(on2.l2 && /^BRG2 \d{3}° [\d.]+NM$/.test(on2.l2),
-    `#2BDP 를 켜면 BRG2 이름표가 나온다 (${on2.l2})`);
-  t.ok(on2.l1, 'BRG1 이름표는 그대로 남아 있다');
+    `#2BDP 를 켜면 BRG2 도 나온다 (${on2.l2})`);
+  t.eq(on2.line2, 2, 'BRG2 선도 같이 나온다');
+  t.ok(on2.l1 && on2.line1 === 2, 'BRG1 은 그대로 남아 있다');
 
   // ── 다시 끄면 사라진다(선은 남는다) ──
   const back = await page.evaluate(async () => {
@@ -81,9 +83,9 @@ export async function run(page, t) {
              line1: brg1Line.getLatLngs().length, line2: brg2Line.getLatLngs().length,
              layer1: !!(_brg1Ref.mk), layer2: !!(_brg2Ref.mk) };
   });
-  t.ok(back.l1 === null && back.l2 === null, '한 번 더 누르면 이름표가 사라진다');
-  t.ok(!back.layer1 && !back.layer2, '지도에서 이름표 레이어까지 걷어낸다(빈 글자만 남기지 않는다)');
-  t.ok(back.line1 === 2 && back.line2 === 2, '선은 여전히 남아 있다');
+  t.ok(back.l1 === null && back.l2 === null, '한 번 더 누르면 글자가 사라진다');
+  t.ok(!back.layer1 && !back.layer2, '지도에서 글자 레이어까지 걷어낸다(빈 글자만 남기지 않는다)');
+  t.ok(back.line1 === 0 && back.line2 === 0, '선도 함께 사라진다');
 
   // ── 니들 자체를 끄면 이름표도 함께 사라진다 ──
   const needleOff = await page.evaluate(async () => {

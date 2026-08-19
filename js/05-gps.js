@@ -690,18 +690,13 @@ function _brgLabelMarker(color) {
   });
   return L.marker([0, 0], { icon, interactive: false }).addTo(leafMap);
 }
-function _setBrgLine(line, mkRef, show, tLat, tLon, tag, brg, dist, color, lbl) {
+function _setBrgLine(line, mkRef, show, tLat, tLon, tag, brg, dist, color) {
   if (!show || tLat == null) {
     line.setLatLngs([]);
     if (mkRef.mk) { leafMap.removeLayer(mkRef.mk); mkRef.mk = null; }
     return;
   }
   line.setLatLngs([[S.lat, S.lon], [tLat, tLon]]);
-  // 선은 그리되 이름표는 켰을 때만(#1BDP·#2BDP) — 껐으면 지워 둔다
-  if (!lbl) {
-    if (mkRef.mk) { leafMap.removeLayer(mkRef.mk); mkRef.mk = null; }
-    return;
-  }
   if (!mkRef.mk) mkRef.mk = _brgLabelMarker(color);
   const midLat = (S.lat + tLat) / 2, midLon = (S.lon + tLon) / 2;
   mkRef.mk.setLatLng([midLat, midLon]);
@@ -710,17 +705,19 @@ function _setBrgLine(line, mkRef, show, tLat, tLon, tag, brg, dist, color, lbl) 
 }
 const _brg1Ref = { mk: null }, _brg2Ref = { mk: null };
 function updateBrgLines() {
+  // 지도 시현은 #1BDP·#2BDP 가 정한다 — 선과 이름표가 함께 켜지고 함께 꺼진다.
+  // (BRG1·BRG2 버튼은 계기의 니들, 여기 토글은 지도에 그릴지 말지)
   // BRG1: 항법시설(VOR/ILS) — HSI BRG1 패널과 같은 국을 쓴다(brg1Station)
-  const b1 = brg1Visible ? brg1Station() : null;
+  const b1 = (brg1Visible && brg1LblOn) ? brg1Station() : null;
   _setBrgLine(brg1Line, _brg1Ref, !!b1, b1?.lat, b1?.lon, 'BRG1',
     b1 ? bearing(S.lat, S.lon, b1.lat, b1.lon) : 0,
-    b1 ? dmeDist(b1.lat, b1.lon, b1.elev) : 0, '#44aaff', brg1LblOn);   // DME 는 경사거리
+    b1 ? dmeDist(b1.lat, b1.lon, b1.elev) : 0, '#44aaff');   // DME 는 경사거리
   // BRG2: FMS 활성 웨이포인트 — HSI BRG2 패널과 동일
   const wpOk = S.awp >= 0 && S.awp < S.wps.length;
   const wp = wpOk ? S.wps[S.awp] : null;
-  _setBrgLine(brg2Line, _brg2Ref, brg2Visible && wpOk, wp?.lat, wp?.lon, 'BRG2',
+  _setBrgLine(brg2Line, _brg2Ref, brg2Visible && brg2LblOn && wpOk, wp?.lat, wp?.lon, 'BRG2',
     wp ? bearing(S.lat, S.lon, wp.lat, wp.lon) : 0,
-    wp ? distance(S.lat, S.lon, wp.lat, wp.lon) : 0, '#00cc44', brg2LblOn);
+    wp ? distance(S.lat, S.lon, wp.lat, wp.lon) : 0, '#00cc44');
 }
 let vorStationMarker = null;
 let wpMarkers = [];
