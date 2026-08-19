@@ -1639,12 +1639,13 @@ body.night-mode::after {
         <li><b>DME 경사거리</b>: VOR/DME·TACAN 거리는 <b>항공기와 지상국 사이의 직선거리</b>입니다
             (수평거리가 아닙니다). 그래서 <b>6,000ft 로 송신소 상공을 지나면 0 이 아니라 약 1.0NM</b> 에서
             멈춥니다(6,000ft ÷ 6,076ft = 0.99NM). 고도가 높고 국이 가까울수록 차이가 커지고, 멀어지면
-            수평거리에 수렴합니다. PFD 우측 <b>NAV1·NAV2</b> 줄과 지도 <b>BRG1</b> 이름표에 반영됩니다.
+            수평거리에 수렴합니다. PFD 우측 <b>NAV1·NAV2</b> 줄과 지도 <b>BRG1</b> 글자에 반영됩니다.
             <b>FMS(GPS) 거리는 수평거리</b>라 이 차이가 없습니다 — 두 값이 다르게 보이는 건 정상입니다.</li>
-        <li><b>BRG 이름표 시현</b>(<b>#1BDP · #2BDP</b>): PFD 의 BRG1·BRG2 버튼 <b>아래</b>에 있습니다.
-            켜야만 지도의 그 니들에 <b>방위·거리 이름표</b>가 붙습니다 — <b>기본은 미시현</b>입니다.
-            껐을 때도 <b>니들 선은 그대로</b> 그려집니다(선만 보고 싶을 때 지도를 가리지 않습니다).
-            니들 자체(BRG1·BRG2)를 끄면 선과 이름표가 함께 사라집니다.</li>
+        <li><b>지도 BRG 시현</b>(<b>#1BDP · #2BDP</b>): PFD 의 BRG1·BRG2 버튼 <b>아래</b>에 있습니다.
+            켜야만 지도에 그 니들의 <b>선과 방위·거리 글자</b>가 나타납니다 — <b>기본은 미시현</b>이고
+            선·글자가 <b>함께</b> 켜지고 <b>함께</b> 꺼집니다. <b>BRG1·BRG2</b> 버튼은 계기(HSI)의 니들,
+            <b>#1BDP·#2BDP</b> 는 지도 시현입니다 — 계기로만 보고 지도는 깨끗하게 둘 수 있습니다.
+            니들 자체를 끄면 지도에서도 함께 사라집니다.</li>
         <li><b>DME 아크(Y 절차)</b>: 접근절차의 아크 구간은 <b>기준국에서 지정된 거리를 유지하며</b> 돕니다.
             지도에 그려지는 원호와 <b>NAV 오토파일럿이 나는 길이 같습니다</b> — 종전에는 두 픽스를 잇는
             직선으로 날아 원호 안쪽을 가로질렀습니다(11NM 아크에서 약 0.3NM). CDI 편차도 이 구간에서는
@@ -1973,9 +1974,9 @@ body.night-mode::after {
           <!-- 이름표(방위·거리) 시현 — 기본은 끔. 니들만 필요할 때가 있다 -->
           <div class="brg-tog-btns">
             <button class="brg-tog-btn brg-bdp" id="brg1-bdp" data-act="toggleBrg1Lbl"
-                    title="BRG1 방위·거리 이름표를 지도에 시현">#1BDP</button>
+                    title="BRG1 선·방위·거리를 지도에 시현">#1BDP</button>
             <button class="brg-tog-btn brg-bdp" id="brg2-bdp" data-act="toggleBrg2Lbl"
-                    title="BRG2 방위·거리 이름표를 지도에 시현">#2BDP</button>
+                    title="BRG2 선·방위·거리를 지도에 시현">#2BDP</button>
           </div>
         </div>
 

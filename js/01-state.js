@@ -102,8 +102,9 @@ let altHoldOn = true;
 let brg1Visible = true;
 let brg2Visible = true;
 
-// 지도 BRG 이름표(방위·거리) 시현 여부 — 기본은 끔.
-// 니들(선)만 보고 싶을 때가 있는데 이름표가 늘 붙어 있으면 지도를 가린다.
+// 지도에 BRG 를 그릴지(선 + 방위·거리 이름표) — 기본은 끔.
+// BRG1·BRG2 버튼은 계기의 니들, 이 토글(#1BDP·#2BDP)은 지도 시현이다.
+// 지도에 늘 선과 글자가 붙어 있으면 지형·항로를 가린다.
 let brg1LblOn = false, brg2LblOn = false;
 function toggleBrg1Lbl() {
   brg1LblOn = !brg1LblOn;
