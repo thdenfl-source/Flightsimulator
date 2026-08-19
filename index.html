@@ -1155,7 +1155,7 @@ body.solo-mode .solo-panel-visible {
 .fp-nav-btn.fp-nav-active { background: linear-gradient(to bottom, #0e2a0e, #050d05); border-color: #00cc00; color: #00ff88; }
 .fp-wp-row {
   display: grid;
-  grid-template-columns: 18px 1fr 34px 38px 30px 26px 26px;
+  grid-template-columns: 14px 18px 1fr 34px 38px 30px 26px 26px;
   align-items: center; gap: 2px;
   padding: 5px 4px; border-bottom: 1px solid #0e0e0e;
   cursor: pointer; touch-action: manipulation;
@@ -1164,6 +1164,16 @@ body.solo-mode .solo-panel-visible {
 .fp-wp-row.active-wp { background: #081a08; border-left: 3px solid #00ff88; }
 .fp-wp-row.brg2-wp  { border-right: 3px solid #87ceeb; }
 .fp-wp-seq { color: #333; font-size: 8px; }
+/* 순서 바꾸기 손잡이 — 여기만 끌면 목록이 스크롤되지 않고 행이 따라온다 */
+.fp-wp-grip {
+  color: #4a5a6a; font-size: 12px; line-height: 1; text-align: center;
+  cursor: grab; touch-action: none; user-select: none;
+}
+.fp-wp-grip:active { cursor: grabbing; color: #87ceeb; }
+.fp-wp-row.fp-dragging {
+  background: #0d1b2a; opacity: 0.9;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.6); border-bottom-color: #87ceeb;
+}
 .fp-wp-ident { color: #fff; font-weight: bold; font-size: 12px; }
 .fp-wp-hdg { color: #c8ff00; font-size: 10px; font-weight: bold; text-align: right; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; }
 .fp-wp-dist { color: #00ffff; font-size: 10px; text-align: right; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; }
@@ -1702,6 +1712,10 @@ body.night-mode::after {
             <b>명칭 · 방위 · 거리</b>를 동시에 표시합니다. 현재 선택된 소스는 배경 강조로 구분되며,
             좌우의 <b>BRG1 · BRG2 판독을 모두 대신합니다</b> — 같은 값을 두 번 적지 않습니다.
             <b>나침반의 BRG1(파랑) · BRG2(녹색) 니들</b>은 그대로이고, 하단 <b>BRG</b> 버튼으로 켜고 끕니다.</li>
+        <li><b>순서 바꾸기</b>: 비행계획 목록에서 각 줄 왼쪽의 <b>≡ 손잡이</b>를 <b>끌어서</b> 순서를 바꿉니다
+            (터치·마우스 모두 됩니다). 놓으면 <b>번호가 1,2,3… 로 다시 매겨지고</b>, <b>활성 웨이포인트</b>와
+            <b>BRG2</b> 는 자리가 아니라 <b>그 지점</b>을 따라갑니다. 손잡이 밖을 누르면 종전대로
+            웨이포인트 카드가 열립니다.</li>
         <li><b>웨이포인트 상세</b>: 비행계획 목록에서 <b>항목을 누르면</b> 카드가 열립니다.
             <b>이름 · 좌표</b>를 고치고, <b>VNAV 고도 / 오프셋</b>(지점보다 몇 NM 앞에서 그 고도에 닿을지)을 넣고,
             <b>HOLD</b> 설정과 <b>BRG2 지정 · 삭제</b>를 여기서 합니다.
