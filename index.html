@@ -264,6 +264,10 @@ html, body {
 }
 .brg-tog-btn.brg1-on { background: #0e1e3a; border-color: #44aaff; color: #44aaff; }
 .brg-tog-btn.brg2-on { background: #001a00; border-color: #00cc44; color: #00cc44; }
+/* 이름표 토글(#1BDP·#2BDP) — 니들 토글보다 한 단계 작게 두어 종속 관계를 보인다 */
+.brg-tog-btn.brg-bdp { font-size: 8px; padding: 2px 5px; letter-spacing: 0.3px; }
+.brg-tog-btn.brg-bdp.brg1-on { background: #0e1e3a; border-color: #44aaff; color: #44aaff; }
+.brg-tog-btn.brg-bdp.brg2-on { background: #001a00; border-color: #00cc44; color: #00cc44; }
 
 /* ── NAV Source ── */
 .nav-src-group { display: flex; flex-direction: column; align-items: center; gap: 1px; }
@@ -1637,6 +1641,10 @@ body.night-mode::after {
             멈춥니다(6,000ft ÷ 6,076ft = 0.99NM). 고도가 높고 국이 가까울수록 차이가 커지고, 멀어지면
             수평거리에 수렴합니다. PFD 우측 <b>NAV1·NAV2</b> 줄과 지도 <b>BRG1</b> 이름표에 반영됩니다.
             <b>FMS(GPS) 거리는 수평거리</b>라 이 차이가 없습니다 — 두 값이 다르게 보이는 건 정상입니다.</li>
+        <li><b>BRG 이름표 시현</b>(<b>#1BDP · #2BDP</b>): PFD 의 BRG1·BRG2 버튼 <b>아래</b>에 있습니다.
+            켜야만 지도의 그 니들에 <b>방위·거리 이름표</b>가 붙습니다 — <b>기본은 미시현</b>입니다.
+            껐을 때도 <b>니들 선은 그대로</b> 그려집니다(선만 보고 싶을 때 지도를 가리지 않습니다).
+            니들 자체(BRG1·BRG2)를 끄면 선과 이름표가 함께 사라집니다.</li>
         <li><b>DME 아크(Y 절차)</b>: 접근절차의 아크 구간은 <b>기준국에서 지정된 거리를 유지하며</b> 돕니다.
             지도에 그려지는 원호와 <b>NAV 오토파일럿이 나는 길이 같습니다</b> — 종전에는 두 픽스를 잇는
             직선으로 날아 원호 안쪽을 가로질렀습니다(11NM 아크에서 약 0.3NM). CDI 편차도 이 구간에서는
@@ -1961,6 +1969,13 @@ body.night-mode::after {
           <div class="brg-tog-btns">
             <button class="brg-tog-btn brg1-on" id="brg1-tog" data-act="toggleBrg1">BRG1</button>
             <button class="brg-tog-btn brg2-on" id="brg2-tog" data-act="toggleBrg2">BRG2</button>
+          </div>
+          <!-- 이름표(방위·거리) 시현 — 기본은 끔. 니들만 필요할 때가 있다 -->
+          <div class="brg-tog-btns">
+            <button class="brg-tog-btn brg-bdp" id="brg1-bdp" data-act="toggleBrg1Lbl"
+                    title="BRG1 방위·거리 이름표를 지도에 시현">#1BDP</button>
+            <button class="brg-tog-btn brg-bdp" id="brg2-bdp" data-act="toggleBrg2Lbl"
+                    title="BRG2 방위·거리 이름표를 지도에 시현">#2BDP</button>
           </div>
         </div>
 

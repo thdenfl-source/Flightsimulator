@@ -102,6 +102,21 @@ let altHoldOn = true;
 let brg1Visible = true;
 let brg2Visible = true;
 
+// 지도 BRG 이름표(방위·거리) 시현 여부 — 기본은 끔.
+// 니들(선)만 보고 싶을 때가 있는데 이름표가 늘 붙어 있으면 지도를 가린다.
+let brg1LblOn = false, brg2LblOn = false;
+function toggleBrg1Lbl() {
+  brg1LblOn = !brg1LblOn;
+  const btn = document.getElementById('brg1-bdp');
+  if (btn) btn.classList.toggle('brg1-on', brg1LblOn);
+  if (typeof updateBrgLines === 'function') updateBrgLines();
+}
+function toggleBrg2Lbl() {
+  brg2LblOn = !brg2LblOn;
+  const btn = document.getElementById('brg2-bdp');
+  if (btn) btn.classList.toggle('brg2-on', brg2LblOn);
+  if (typeof updateBrgLines === 'function') updateBrgLines();
+}
 function toggleBrg1() {
   brg1Visible = !brg1Visible;
   const btn = document.getElementById('brg1-tog');

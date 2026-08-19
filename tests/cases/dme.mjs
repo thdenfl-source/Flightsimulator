@@ -68,7 +68,7 @@ export async function run(page, t) {
   // ── 지도 BRG1 이름표도 같은 값이다 ──
   // 계기와 지도가 다른 거리를 말하면 둘 중 하나는 거짓말이다.
   const lbl = await page.evaluate(() => {
-    brg1Visible = true; updateNav();
+    brg1Visible = true; brg1LblOn = true; updateNav();
     const el = _brg1Ref.mk && _brg1Ref.mk.getElement();
     return el ? el.firstChild.textContent : '';
   });
@@ -80,7 +80,7 @@ export async function run(page, t) {
     S.wps = [{ ident: 'OVER', lat: SEL[0], lon: SEL[1] }];
     S.awp = 0; navSrc = 'FMS'; applyNavRadioToPfd(); updateNav();
     return { dtw: S.dtw, brg2: (() => {
-      brg2Visible = true; updateBrgLines();
+      brg2Visible = true; brg2LblOn = true; updateBrgLines();
       const el = _brg2Ref.mk && _brg2Ref.mk.getElement();
       return el ? el.firstChild.textContent : '';
     })() };
