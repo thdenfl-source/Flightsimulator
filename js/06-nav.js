@@ -13,6 +13,12 @@ function updateNav(){
       const wp=S.wps[S.awp];
       S.brg = bearing(S.lat,S.lon,wp.lat,wp.lon);
       S.dtw = distance(S.lat,S.lon,wp.lat,wp.lon);
+      // Direct To 로 잡은 구간의 코스는 '지금 있는 자리에서 그 지점으로' 다 —
+      // 항공기가 움직이면 같이 움직인다. S.fwp < 0 만으로는 가릴 수 없다.
+      // 그 상태는 '활성 WP 를 지나는 고정 코스(FCP CRS·OBS 해제 등)' 와 같기
+      // 때문이다. 그쪽은 코스를 정해 두고 인터셉트하는 것이라 굳어 있어야 한다.
+      if (S.dtoLive && !obsOn && !holdOn && S.fwp < 0 && !Number.isFinite(wp.inCrs))
+        S.crs = S.brg;
       S.xtk = courseXtk(activeCourseLine());   // CDI·지도·AP와 같은 기준선
     } else { S.brg=0; S.dtw=0; S.xtk=0; }
   } else {
@@ -626,10 +632,18 @@ function fpRenderWpt(area, title, footer) {
 
   const b = bearing(S.lat, S.lon, wp.lat, wp.lon);
   const d = distance(S.lat, S.lon, wp.lat, wp.lon);
-  // 이 지점으로 들어오는 레그 코스(직전 웨이포인트 기준). 첫 지점은 현재 위치에서.
-  const from = i > 0 ? S.wps[i - 1] : { lat: S.lat, lon: S.lon };
-  const legCrs = fmtA(toMag(bearing(from.lat, from.lon, wp.lat, wp.lon)));
   const isA = i === S.awp, isB2 = i === S.brg2wp;
+  // 이 지점으로 들어오는 레그 코스.
+  // 활성 지점이면 '실제로 나는 코스선' 에서 읽는다 — 카드가 딴소리를 하면 안 된다.
+  // Direct To 로 잡은 구간은 그 선이 현재 위치에서 시작하므로, 항공기가 움직이면
+  // 이 값도 따라 움직인다(아래 fpWptLiveTick 이 카드를 되그린다).
+  const _L = isA ? activeCourseLine() : null;
+  const legCrs = _L ? fmtA(toMag(courseCrsHere(_L)))
+                    : fmtA(toMag(bearing((i > 0 ? S.wps[i - 1] : S).lat,
+                                         (i > 0 ? S.wps[i - 1] : S).lon, wp.lat, wp.lon)));
+  // 그 코스가 '현재 위치에서 그 지점으로' 인 경우에는 그렇다고 적어 준다
+  const legLbl = (isA && S.dtoLive && !obsOn && S.fwp < 0 && !Number.isFinite(wp.inCrs) && !holdOn)
+    ? '레그 코스 · 현 위치' : '레그 코스';
   const hold = wp.hold;
   const holdTxt = hold
     ? `${String(Math.round(toMag(hold.crs))).padStart(3,'0')}° ${hold.dir === 'L' ? '좌' : '우'}`
@@ -672,7 +686,7 @@ function fpRenderWpt(area, title, footer) {
       `<div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-top:9px;">` +
         CARD('VNAV 고도', vAlt, 'fpWptNum', '["VALT"]', fpNumFld === 'VALT' || Number.isFinite(wp.vnavAlt)) +
         CARD('VNAV 오프셋', vOfs, 'fpWptNum', '["VOFS"]', fpNumFld === 'VOFS' || !!wp.vnavOfs) +
-        CARD('레그 코스', legCrs + '°M', 'fpWptNoop') +
+        CARD(legLbl, legCrs + '°M', 'fpWptNoop') +
         CARD('HOLD', holdTxt, 'fpHoldOpen', `[${i}]`, !!hold) +
       `</div>` +
 
@@ -728,10 +742,34 @@ function fpRenderWpt(area, title, footer) {
 
 function fpWptNoop() { /* 레그 코스는 읽기 전용 — 앞뒤 지점에서 저절로 정해진다 */ }
 
+// Direct To — 지금 있는 자리에서 그 지점으로.
+// 이미 활성인 지점에도 다시 걸 수 있어야 한다. 코스에서 한참 밀려난 뒤
+// "여기서 다시 곧장" 이 필요한 순간이 그때이기 때문이다.
+// selectWP 를 쓰지 않는 이유: 그 함수는 S.fwp 에 '직전 활성 WP' 를 넣는데,
+// 이미 활성인 지점을 다시 누르면 자기 자신이 들어가 구간이 한 점이 된다.
 function fpWptDirect() {
-  if (fpWptIdx < 0 || fpWptIdx >= S.wps.length) return;
-  selectWP(fpWptIdx);
+  const i = fpWptIdx;
+  if (i < 0 || i >= S.wps.length) return;
+  const wp = S.wps[i];
+  delete wp.inCrs;               // 지정 진입 코스와는 양자택일이다
+  S.awp = i;
+  S.fwp = -1;                    // 앞 구간이 아니라 '현재 위치에서' 가 기준
+  S.dtoLive = true;              // 그 코스는 항공기를 따라 계속 다시 잡힌다
+  if (!obsOn) S.crs = bearing(S.lat, S.lon, wp.lat, wp.lon);
+  if (holdOn) holdExit();        // 홀딩 중이면 그 코스가 우선이라 Direct 가 묻힌다
+  updateWpMarkers(); updateNav(); _fplPersist();
   fpGo('LIST');
+}
+
+// 카드가 열려 있는 동안 값이 굳지 않게 되그린다.
+// Direct To 구간의 레그 코스·거리는 항공기가 움직이면 같이 움직인다.
+// 입력(숫자판) 중에는 건드리지 않는다 — 치던 값이 지워진다.
+let _fpWptTick = 0;
+function fpWptLiveTick(nowMs) {
+  if (fpMode !== 'WPT' || fpNumFld) return;
+  if (nowMs - _fpWptTick < 500) return;
+  _fpWptTick = nowMs;
+  fpRender();
 }
 function fpWptBrg2() {
   if (fpWptIdx < 0 || fpWptIdx >= S.wps.length) return;
@@ -777,6 +815,7 @@ function fpConfirmWptNum() {
     // 넣은 그 자리에서 바로 쓰이도록 이 지점을 활성으로 잡는다(Direct To 와 같다).
     // 코스만 정해 두고 활성이 아니면 아무 일도 일어나지 않아 넣은 보람이 없다.
     if (fpWptIdx !== S.awp) selectWP(fpWptIdx);
+    S.dtoLive = false;                       // 정해 둔 코스로 들어간다
     if (Number.isFinite(wp.inCrs)) S.crs = toTrue(wp.inCrs);
   } else if (fpNumFld === 'VALT') {
     // 비우고 ENTER = 해제. 없는 값을 0 으로 남겨 두면 "해면으로 강하" 가 된다.
@@ -1152,6 +1191,7 @@ function removeWP(i){
 }
 function selectWP(i){
   S.fwp=S.awp;S.awp=i;
+  S.dtoLive=false;   // 구간을 따라간다 — Direct To 의 '현 위치 기준' 은 여기서 끝난다
   if (!obsOn) {
     // 지정 진입 코스가 있으면 CRS 도 그 값이다 — 계기와 나는 길이 달라선 안 된다
     S.crs = Number.isFinite(S.wps[i].inCrs)
@@ -1165,7 +1205,7 @@ function setBrg2(i){
   updateNav();fpRender();updateWpMarkers();
 }
 function clearFP(){
-  S.wps=[];S.awp=-1;S.fwp=-1;S.brg2wp=-1;
+  S.wps=[];S.awp=-1;S.fwp=-1;S.brg2wp=-1;S.dtoLive=false;
   fpMode='LIST';
   updateWpMarkers();fpRender();updateNav();
 }

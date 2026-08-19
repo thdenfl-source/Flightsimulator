@@ -73,6 +73,7 @@ function fcpSync(which) {
     selHdg = ((Math.round(S.hdg) + 359) % 360) + 1;   // 1–360
     hdgSelOn = true; bankTarget = 0; rollApOn = true;  // 현재 헤딩 유지
   } else if (which === 'crs') {
+    S.dtoLive = false;   // 코스를 손으로 정하는 순간 '현 위치 기준' 은 끝난다
     if ((navSrc !== 'FMS') && navLat !== null) {
       vorObsCrs = normA(Math.round(bearing(S.lat, S.lon, navLat, navLon)));
       updateNav();
@@ -498,6 +499,7 @@ function simStep(ts){
   }
   S.lastT=ts;
   updateHoverBtns();
+  try { fpWptLiveTick(ts); } catch(e) { _swallow(e); }
   // 스톱워치에 흘려 넣을 시간 — 기체가 겪는 시간과 같아야 한다.
   // 배속이 걸리면 그만큼 빨리, 시뮬이 멈춰 있으면 함께 멈춘다.
   // GPS 모드는 실제 비행이므로 실시간으로 간다(여기서 멈추면 안 된다).
