@@ -7,7 +7,7 @@ export const name = '웨이포인트 상세';
 
 export async function run(page, t) {
   const setup = () => page.evaluate(() => {
-    S.wps = []; S.awp = -1; S.fwp = -1; S.brg2wp = -1;
+    S.wps = []; S.awp = -1; S.fwp = -1;
     pushWP({ ident: 'WP1', lat: 37.5, lon: 127.0 });
     pushWP({ ident: 'WP2', lat: 37.8, lon: 127.6 });
     S.awp = 0; fpWptIdx = -1; fpEditIdx = -1;
@@ -123,12 +123,12 @@ export async function run(page, t) {
     `좌표를 고치면 그 지점이 옮겨간다 (${edit.lat}, ${edit.lon})`);
   t.eq(edit.n, 2, '고치기가 새 웨이포인트를 만들지 않는다');
 
-  // ── BRG2 지정 · 삭제 ──
+  // ── 삭제 ──
+  // B2(BRG2 지정)는 걷어냈다 — 지시침이 그 값을 쓰지 않아 표시만 남던 기능이다.
   const rest = await page.evaluate(async () => {
     fpWptOpen(1);
-    document.querySelector('[data-act="fpWptBrg2"]').click();
-    const b2 = S.brg2wp;
-    fpWptOpen(1);
+    const b2 = !document.querySelector('[data-act="fpWptBrg2"]') &&
+               !document.querySelector('.fp-wp-b2');
     const p = fpWptDel();                       // 확인 다이얼로그가 뜬다
     await new Promise(r => setTimeout(r, 60));
     const asked = !!document.querySelector('.ui-dlg');
@@ -137,14 +137,14 @@ export async function run(page, t) {
     await p;
     return { b2, asked, n: S.wps.length, mode: fpMode };
   });
-  t.eq(rest.b2, 1, 'BRG2 지시침을 그 지점으로 지정한다');
+  t.eq(rest.b2, true, 'B2 버튼은 카드에도 목록에도 없다');
   t.eq(rest.asked, true, '삭제는 되묻고 나서 지운다');
   t.ok(rest.n === 1 && rest.mode === 'LIST', `지우면 목록으로 돌아온다 (남은 ${rest.n}개)`);
 
   // ── 입력 방법을 먼저 고른다 ──
   // 값을 넣는 화면으로 곧장 들어가는 대신, 네 가지 방법을 먼저 보여 준다.
   const add = await page.evaluate(() => {
-    S.wps = []; S.awp = -1; S.brg2wp = -1;
+    S.wps = []; S.awp = -1;
     fpGo('ADD');
     const txt = document.getElementById('fp-content-area').textContent;
     const go = sel => { fpGo('ADD'); document.querySelector(sel).click(); return fpMode; };

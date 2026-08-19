@@ -51,11 +51,9 @@ const S = {
   bnk: 0,     // bank   — driven by HDG button; returns to 0 on release
   crs: 360,
   brg: 0,     // BRG1: bearing to active (TO) WP
-  brg2: 0,    // BRG2: bearing to user-selected WP
   xtk: 0,
   dtw: 0,     // dist to active WP
-  dtw2: 0,    // dist to BRG2 WP
-  wps: [], awp: -1, fwp: -1, brg2wp: -1,
+  wps: [], awp: -1, fwp: -1,
   // Direct To 로 잡은 구간인가 — 참이면 코스를 '현재 위치 → 활성 WP' 로
   // 매 프레임 다시 잡는다. 구간(leg)을 따라가거나 코스를 손으로 정하면 꺼진다.
   dtoLive: false,

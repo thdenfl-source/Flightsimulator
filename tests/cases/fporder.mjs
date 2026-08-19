@@ -15,7 +15,7 @@ const WPS = [
 export async function run(page, t) {
   const setup = () => page.evaluate((WPS) => {
     S.wps = WPS.map(w => Object.assign({}, w));
-    S.awp = 2; S.fwp = 1; S.brg2wp = 3;      // 활성 CCC · 이전 BBB · BRG2 DDD
+    S.awp = 2; S.fwp = 1;                    // 활성 CCC · 이전 BBB
     obsOn = false; navSrc = 'FMS'; holdExit();
     S.lat = 36.5; S.lon = 126.5;
     selectPanel('right', 'plan', true);   // 목록이 실제로 화면에 놓여야 끌 수 있다
@@ -26,7 +26,6 @@ export async function run(page, t) {
     order: S.wps.map(w => w.ident),
     awp: S.awp >= 0 ? S.wps[S.awp].ident : null,
     fwp: S.fwp >= 0 ? S.wps[S.fwp].ident : null,
-    b2:  S.brg2wp >= 0 ? S.wps[S.brg2wp].ident : null,
     rows: Array.from(document.querySelectorAll('.fp-wp-row'))
             .map(r => r.querySelector('.fp-wp-ident').textContent.trim()),
     seq: Array.from(document.querySelectorAll('.fp-wp-seq')).map(e => e.textContent.trim()),
@@ -41,7 +40,6 @@ export async function run(page, t) {
   t.eq(a.seq.join(''), '1234', `번호는 1,2,3,4 로 다시 매겨진다 (${a.seq.join(',')})`);
   // 가리키던 지점이 그대로인가 — 인덱스로 들고 있었다면 CCC→AAA 로 어긋난다
   t.eq(a.awp, 'CCC', `활성 WP 는 그대로 CCC (인덱스 ${await page.evaluate(() => S.awp)})`);
-  t.eq(a.b2,  'DDD', 'BRG2 도 그대로 DDD');
   t.eq(a.fwp, 'BBB', '이전 WP(구간 시작)도 그대로 BBB');
 
   // ── 활성 구간이 뒤집히면 Direct-To 로 돌린다 ──
