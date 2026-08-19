@@ -970,6 +970,13 @@ function activeCourseLine() {
              to: [holdFix.lat, holdFix.lon], crs: holdCrs };
   }
   const wp = S.wps[S.awp];
+  // 지정 진입 코스(CDU 웨이포인트 카드) — 이 지점을 그 방위로 향해 들어간다.
+  // OBS 와 같은 모양의 선이지만, 코스를 지점마다 따로 들고 있는 것이 다르다.
+  if (!obsOn && Number.isFinite(wp.inCrs)) {
+    const cT = toTrue(wp.inCrs);
+    return { from: destPoint(wp.lat, wp.lon, normA(cT + 180), 100),
+             to: [wp.lat, wp.lon], crs: cT };
+  }
   // 이전 경유점이 있으면 그 구간(leg)이 코스선
   if (!obsOn && S.fwp >= 0 && S.fwp < S.wps.length) {
     const f = S.wps[S.fwp];

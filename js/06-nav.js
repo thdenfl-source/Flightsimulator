@@ -636,9 +636,14 @@ function fpRenderWpt(area, title, footer) {
     : '— — —';
   let vAlt = Number.isFinite(wp.vnavAlt) ? Math.round(wp.vnavAlt).toLocaleString() + ' FT' : '— — —';
   let vOfs = Number.isFinite(wp.vnavOfs) && wp.vnavOfs ? wp.vnavOfs.toFixed(1) + ' NM' : '0 NM';
+  // 지정 진입 코스 — 이 지점을 '어느 방위로 향해' 들어갈지(OBS 모드처럼).
+  // 비워 두면 앞 지점에서 이어지는 레그 코스를 그대로 쓴다.
+  let inCrs = Number.isFinite(wp.inCrs)
+    ? String(Math.round(wp.inCrs)).padStart(3, '0') + '°M' : '— — —';
   const cur = fpInputBuf + '<span class="fp-disp-cursor">|</span>';
   if (fpNumFld === 'VALT') vAlt = cur;
   if (fpNumFld === 'VOFS') vOfs = cur;
+  if (fpNumFld === 'ICRS') inCrs = cur;
 
   // 카드 안의 버튼 — 위 라벨(작게) + 아래 값(크게)
   const CARD = (lbl, val, act, arg, on) =>
@@ -671,20 +676,22 @@ function fpRenderWpt(area, title, footer) {
         CARD('HOLD', holdTxt, 'fpHoldOpen', `[${i}]`, !!hold) +
       `</div>` +
 
-      // ── 입력 중이면 그 자리에 숫자판을 편다(다른 화면으로 넘어가지 않는다) ──
-      (fpNumFld ? (
-        `<div style="color:#00cfff;font-size:9px;letter-spacing:0.5px;margin-top:8px;">` +
-        (fpNumFld === 'VALT'
-          ? 'VNAV 고도 입력 중 · 비우고 ENT 하면 해제됩니다 (-1000 ~ 45000 ft)'
-          : 'VNAV 오프셋 입력 중 · 지점보다 몇 NM 앞에서 그 고도에 닿을지 (0 ~ 50 NM)') +
-        `</div>` + _padHtml('fpConfirmWptNum')
-      ) : (
-      // ── 동작 ──
-      `<div data-act="fpWptDirect" style="margin-top:9px;padding:9px;border-radius:5px;cursor:pointer;` +
-        `text-align:center;font-size:13px;font-weight:bold;letter-spacing:1px;` +
-        `background:${isA ? '#0e2e0e' : '#0e2233'};border:1px solid ${isA ? '#44cc44' : '#2a6a8a'};` +
-        `color:${isA ? '#7fe07f' : '#7ac6f5'};">` +
-        (isA ? `✔ 활성 — ${wp.ident || 'WPT'}` : `➤ Direct To ${wp.ident || 'WPT'}`) + `</div>` +
+      // ── 동작: 왼쪽 진입 코스 · 오른쪽 Direct To ──
+      // 왼쪽은 OBS 처럼 '어느 방위로 향해 들어갈지' 를 정하고, 오른쪽은 종전대로
+      // 지금 자리에서 곧장 그 지점으로 간다.
+      `<div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-top:9px;">` +
+        `<div data-act="fpWptNum" data-arg='["ICRS"]' style="padding:6px 4px;border-radius:5px;cursor:pointer;` +
+          `text-align:center;border:1px solid ${fpNumFld === 'ICRS' || Number.isFinite(wp.inCrs) ? '#00cfff' : '#2a6a8a'};` +
+          `background:${fpNumFld === 'ICRS' || Number.isFinite(wp.inCrs) ? '#00252e' : '#0e2233'};">` +
+          `<div style="color:#6a8494;font-size:8px;letter-spacing:0.5px;">➟ 진입 코스</div>` +
+          `<div style="color:${Number.isFinite(wp.inCrs) ? '#00e5ff' : '#7ac6f5'};font-size:13px;` +
+            `font-weight:bold;margin-top:2px;">${inCrs}</div></div>` +
+        `<div data-act="fpWptDirect" style="padding:6px 4px;border-radius:5px;cursor:pointer;` +
+          `text-align:center;display:flex;align-items:center;justify-content:center;` +
+          `background:${isA ? '#0e2e0e' : '#0e2233'};border:1px solid ${isA ? '#44cc44' : '#2a6a8a'};">` +
+          `<div style="color:${isA ? '#7fe07f' : '#7ac6f5'};font-size:12px;font-weight:bold;letter-spacing:0.5px;">` +
+          (isA ? `✔ 활성 — ${wp.ident || 'WPT'}` : `➤ Direct To ${wp.ident || 'WPT'}`) + `</div></div>` +
+      `</div>` +
       `<div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-top:5px;">` +
         CARD('BRG2 지시침', isB2 ? '지정됨' : '지정', 'fpWptBrg2', undefined, isB2) +
         `<div data-act="fpWptDel" style="padding:6px 4px;border:1px solid #663333;border-radius:5px;` +
@@ -692,8 +699,23 @@ function fpRenderWpt(area, title, footer) {
           `<div style="color:#8a6a6a;font-size:8px;letter-spacing:0.5px;">비행계획에서</div>` +
           `<div style="color:#ff6666;font-size:12px;font-weight:bold;margin-top:2px;">✕ 삭제</div></div>` +
       `</div>` +
+
+      // ── 아래 빈 자리에 숫자판 ──
+      // 값 칸은 그대로 보인 채 아래에서 친다. 숫자판만 있는 화면으로 넘어가면
+      // 방금 넣은 값과 나머지 칸을 같이 볼 수가 없다.
+      (fpNumFld ? (
+        `<div style="color:#00cfff;font-size:9px;letter-spacing:0.5px;margin-top:8px;">` +
+        (fpNumFld === 'VALT'
+          ? 'VNAV 고도 입력 중 · 비우고 ENT 하면 해제됩니다 (-1000 ~ 45000 ft)'
+          : fpNumFld === 'VOFS'
+          ? 'VNAV 오프셋 입력 중 · 지점보다 몇 NM 앞에서 그 고도에 닿을지 (0 ~ 50 NM)'
+          : '진입 코스(자북) 입력 중 · 비우고 ENT 하면 해제됩니다 (001 ~ 360°M)') +
+        `</div>` + _padHtml('fpConfirmWptNum')
+      ) : (
       `<div style="color:#445;font-size:8px;line-height:1.6;margin-top:8px;border-top:1px solid #1a2a30;padding-top:6px;">` +
-        `VNAV 고도를 넣으면 이 지점이 활성일 때 그 고도를 목표로 강하선을 그립니다.` +
+        `<b>진입 코스</b>를 넣으면 이 지점을 그 방위로 향해 들어갑니다(OBS 처럼) —` +
+        ` CDI·지도 코스선·NAV 오토파일럿이 모두 그 선을 씁니다. 비우면 앞 지점에서 이어지는 레그를 씁니다.<br>` +
+        `<b>VNAV 고도</b>를 넣으면 이 지점이 활성일 때 그 고도를 목표로 강하선을 그립니다.` +
         ` 오프셋은 <b>지점보다 몇 NM 앞에서</b> 그 고도에 닿을지입니다.</div>`
       )) +
     `</div>`;
@@ -747,7 +769,16 @@ function fpConfirmWptNum() {
   if (!wp) { fpGo('LIST'); return; }
   const txt = fpInputBuf.trim();
   const v = parseFloat(txt);
-  if (fpNumFld === 'VALT') {
+  if (fpNumFld === 'ICRS') {
+    // 진입 코스(자북). 비우고 ENTER = 해제 → 앞 지점에서 이어지는 레그로 돌아간다.
+    if (txt === '') delete wp.inCrs;
+    else if (isNaN(v) || v < 0 || v > 360) { uiAlert('코스 범위: 001 ~ 360°M'); return; }
+    else wp.inCrs = (normA(v) === 0) ? 360 : normA(v);
+    // 넣은 그 자리에서 바로 쓰이도록 이 지점을 활성으로 잡는다(Direct To 와 같다).
+    // 코스만 정해 두고 활성이 아니면 아무 일도 일어나지 않아 넣은 보람이 없다.
+    if (fpWptIdx !== S.awp) selectWP(fpWptIdx);
+    if (Number.isFinite(wp.inCrs)) S.crs = toTrue(wp.inCrs);
+  } else if (fpNumFld === 'VALT') {
     // 비우고 ENTER = 해제. 없는 값을 0 으로 남겨 두면 "해면으로 강하" 가 된다.
     if (txt === '') delete wp.vnavAlt;
     else if (isNaN(v) || v < -1000 || v > 45000) { uiAlert('고도 범위: -1000 ~ 45000 ft'); return; }
@@ -759,6 +790,7 @@ function fpConfirmWptNum() {
   }
   fpInputBuf = ''; fpNumFld = null;
   _fplPersist();
+  try { updateNav(); } catch(e) { _swallow(e); }
   try { updateTerrainCut(); } catch(e) { _swallow(e); }
   fpRender();
 }
@@ -1121,7 +1153,10 @@ function removeWP(i){
 function selectWP(i){
   S.fwp=S.awp;S.awp=i;
   if (!obsOn) {
-    S.crs=bearing(S.lat,S.lon,S.wps[i].lat,S.wps[i].lon);
+    // 지정 진입 코스가 있으면 CRS 도 그 값이다 — 계기와 나는 길이 달라선 안 된다
+    S.crs = Number.isFinite(S.wps[i].inCrs)
+      ? toTrue(S.wps[i].inCrs)
+      : bearing(S.lat,S.lon,S.wps[i].lat,S.wps[i].lon);
   }
   updateWpMarkers();fpRender();updateNav();
 }
