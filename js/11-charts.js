@@ -2174,6 +2174,8 @@ appRegister({
   toggleAwyLayer,
   toggleBrg1,
   toggleBrg2,
+  toggleBrg1Lbl,
+  toggleBrg2Lbl,
   toggleCrht,
   toggleFdrPanel,
   toggleFixPanel,
