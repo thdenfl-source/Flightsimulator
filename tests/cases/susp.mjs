@@ -53,16 +53,26 @@ export async function run(page, t) {
   t.ok(/\bon\b/.test(held.cls), `버튼이 켜진 모양이다 (${held.cls})`);
 
   // ── 이름표는 위에, 버튼에는 ON/OFF 만 ──
-  const ui = await page.evaluate(() => {
+  const ui = await page.evaluate(async () => {
     const b = document.getElementById('susp-btn');
     const grp = b.closest('.susp-group');
     const lbl = grp && grp.querySelector('.ctrl-lbl');
     const spd = document.getElementById('simspd-1').closest('.simspd-group');
     const spdLbl = spd && spd.querySelector('.ctrl-lbl');
     const box = e => e.getBoundingClientRect();
+    // 켜진 SUSP 와 켜진 NAV 의 실제 색을 나란히 잰다.
+    // 색은 0.15초에 걸쳐 바뀐다 — 바꾸자마자 읽으면 옛 색이 나온다.
+    const nav = document.getElementById('nav-ap-btn');
+    const navWasOn = nav.classList.contains('on');
+    nav.classList.add('on');
+    await new Promise(r => setTimeout(r, 300));
+    const cs = e => ({ border: getComputedStyle(e).borderTopColor,
+                       text: getComputedStyle(e).color });
+    const onCol = cs(b), navCol = cs(nav);
+    if (!navWasOn) nav.classList.remove('on');
     return { lbl: lbl ? lbl.textContent.trim() : null,
              spdLbl: spdLbl ? spdLbl.textContent.trim() : null,
-             txt: b.textContent.trim(),
+             txt: b.textContent.trim(), onCol, navCol,
              lblAbove: lbl ? box(lbl).bottom <= box(b).top + 1 : false,
              spdAbove: spdLbl ? box(spdLbl).bottom <= box(document.getElementById('simspd-1')).top + 1 : false,
              rightOfSpd: box(b).left > box(document.getElementById('simspd-8')).left,
@@ -74,7 +84,11 @@ export async function run(page, t) {
   t.eq(ui.lbl, 'SUSP', `버튼 위에 SUSP 이름표가 따로 선다 (${ui.lbl})`);
   t.eq(ui.spdLbl, 'SIM SPD', `배속 이름표도 제 버튼 위에 있다 (${ui.spdLbl})`);
   t.ok(ui.lblAbove && ui.spdAbove, '두 이름표가 각각 자기 버튼 위에 있다');
-  t.eq(ui.txt, 'ON', `켜졌을 때 버튼 글자는 ON (${ui.txt})`);
+  t.eq(ui.txt, 'On', `버튼 글자는 늘 On 이다 (${ui.txt})`);
+  // 켜짐은 AP 의 NAV·OBS 버튼과 같은 녹색으로 보인다 — 실제로 칠해진 색을 잰다
+  t.ok(/^rgb\(0, 2[0-9][0-9], /.test(ui.onCol.border) && ui.onCol.border === ui.navCol.border,
+    `켜지면 NAV 버튼과 같은 녹색이다 (${ui.onCol.border} · NAV ${ui.navCol.border})`);
+  t.eq(ui.onCol.text, ui.navCol.text, `글자색도 같다 (${ui.onCol.text})`);
   t.ok(ui.twoRows && ui.sameCol, '배속은 ×1 ×2 / ×4 ×8 두 줄이다');
   t.eq(ui.rightOfSpd, true, 'SUSP 는 배속 오른쪽에 있다');
 
@@ -86,8 +100,15 @@ export async function run(page, t) {
     return { on: suspOn, awp: S.wps[S.awp].ident };
   });
   t.eq(rel.on, false, '한 번 더 누르면 풀린다');
-  t.eq(await page.evaluate(() => document.getElementById('susp-btn').textContent.trim()),
-    'OFF', '꺼졌을 때 버튼 글자는 OFF');
+  const off = await page.evaluate(async () => {
+    const b = document.getElementById('susp-btn');
+    await new Promise(r => setTimeout(r, 300));   // 색 전환이 끝나기를 기다린다
+    return { txt: b.textContent.trim(), cls: b.className,
+             border: getComputedStyle(b).borderTopColor };
+  });
+  t.eq(off.txt, 'On', '꺼져도 글자는 On 그대로다 — 켜짐은 색으로 보인다');
+  t.ok(!/\b(on|auto)\b/.test(off.cls) && !/rgb\(0, 2/.test(off.border),
+    `꺼지면 녹색이 빠진다 (${off.border})`);
   t.eq(rel.awp, 'CCC', `풀고 나면 다음 지점으로 넘어간다 (${rel.awp})`);
 
   // ── 마지막 지점에서도 NAV 가 풀리지 않는다 ──
@@ -147,7 +168,7 @@ export async function run(page, t) {
   t.ok(auto.inHold.susp && !auto.inHold.manual,
     '홀딩이면 SUSP 가 저절로 걸린다(손으로 켠 것은 아니다)');
   t.ok(/auto/.test(auto.inHold.cls), `버튼이 '자동' 으로 보인다 (${auto.inHold.cls})`);
-  t.eq(auto.inHold.txt, 'ON자동', `저절로 걸린 것은 ON 옆에 '자동' 이 붙는다 (${auto.inHold.txt})`);
+  t.eq(auto.inHold.txt, 'On자동', `저절로 걸린 것은 On 옆에 '자동' 이 붙는다 (${auto.inHold.txt})`);
   t.eq(auto.inHold.awp, 'FIX', '홀딩 중에는 그 지점에 머문다');
   t.eq(auto.after.holdOn, false, 'SUSP 를 누르면 홀딩을 그만둔다');
   t.eq(auto.after.susp, false, '보류도 함께 풀린다');

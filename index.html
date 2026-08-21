@@ -323,21 +323,25 @@ html, body {
 
 /* ── SUSP (시퀀싱 보류) ──
    켜져 있으면 활성 웨이포인트를 지나도 다음으로 넘어가지 않는다.
-   배속과는 상관없는 기능이라 이름표를 따로 세우고, 버튼에는 ON/OFF 만 적는다.
-   홀딩·미스드어프로치에서 저절로 켜지므로(auto) 손으로 켠 것과 구분해 보인다. */
+   배속과는 상관없는 기능이라 이름표(SUSP)를 따로 세우고, 버튼에는 'On' 만 적는다.
+   켜짐/꺼짐은 AP 의 NAV·OBS 버튼과 같은 색으로 보인다(꺼지면 회색, 켜지면 녹색) —
+   같은 뜻의 표시는 같은 색이어야 눈이 헷갈리지 않는다.
+   홀딩·미스드어프로치에서 저절로 켜지면(auto) '자동' 을 덧붙여 구분한다. */
 .susp-group { display: flex; flex-direction: column; align-items: center; gap: 2px; }
 .susp-btn {
-  background: #1a1a1a; border: 1px solid #3a3a3a; color: #888;
-  font-size: 11px; font-weight: bold; letter-spacing: 0.5px;
-  min-width: 46px; padding: 6px 8px; cursor: pointer; border-radius: 3px;
+  background: #111; border: 1px solid #333; color: #555;
+  font-size: 11px; font-weight: bold; letter-spacing: 1px;
+  min-width: 46px; padding: 5px 10px; cursor: pointer; border-radius: 3px;
   touch-action: manipulation; font-family: 'Helvetica Neue', Arial, sans-serif;
   transition: background 0.15s, border-color 0.15s, color 0.15s;
   line-height: 1.15;
 }
-.susp-btn.on   { background: #2a1c00; border-color: #ffaa00; color: #ffcc44;
-                 box-shadow: 0 0 7px rgba(255,170,0,0.45); }
-.susp-btn.auto { background: #2a1c00; border-color: #ffaa00; color: #ffcc44;
-                 box-shadow: 0 0 7px rgba(255,170,0,0.45); }
+.susp-btn:active { background: #0a1a0a; }
+/* NAV·OBS 버튼(.obs-btn.on)과 같은 녹색 */
+.susp-btn.on, .susp-btn.auto {
+  background: #001a00; border-color: #00cc44; color: #00ee66;
+  box-shadow: 0 0 6px rgba(0,200,68,0.45);
+}
 /* 저절로 걸린 것은 '자동' 을 덧붙여 손으로 켠 것과 구분한다 */
 .susp-btn .susp-auto { display: block; font-size: 7px; letter-spacing: 0; opacity: 0.85; }
 
@@ -1664,7 +1668,7 @@ body.night-mode::after {
       <ul>
         <li><b>NAV SRC</b>: <b>FMS / NAV1 / NAV2</b>. NAV1·NAV2는 CDU에서 튜닝한 VOR을 따라갑니다.</li>
         <li><b>RNP</b>: NAV SRC 바로 아래. <b>4 / 2 / 1 / 0.3</b> NM — CDI 최대편위(스케일)를 정합니다.</li>
-        <li><b>SUSP</b>(SIM SPD 오른쪽, 버튼에 <b>ON/OFF</b>): <b>시퀀싱 보류</b> — 켜져 있으면 활성 웨이포인트를 지나도
+        <li><b>SUSP</b>(SIM SPD 오른쪽): 버튼에는 <b>On</b> 만 적히고, 켜지면 <b>NAV 버튼과 같은 녹색</b>으로 바뀝니다. <b>시퀀싱 보류</b> — 켜져 있으면 활성 웨이포인트를 지나도
             <b>다음으로 넘어가지 않고</b> 그 구간의 코스를 계속 따라갑니다. <b>마지막 지점이어도 NAV 가
             풀리지 않아</b>, 홀딩이나 미스드어프로치를 계속 수행할 수 있습니다.
             비행계획에 <b>홀딩이 걸리면 저절로 켜지고</b>(버튼에 「자동」 표시), 그만하고 다음 절차로 가려면
@@ -2056,7 +2060,7 @@ body.night-mode::after {
         <div class="susp-group">
           <div class="ctrl-lbl">SUSP</div>
           <button class="susp-btn" id="susp-btn" data-act="toggleSusp"
-                  title="SUSPEND — 다음 웨이포인트로 자동으로 넘어가지 않고 지금 구간을 계속 유지합니다. 홀딩·미스드어프로치에서 자동으로 켜집니다.">OFF</button>
+                  title="SUSPEND — 다음 웨이포인트로 자동으로 넘어가지 않고 지금 구간을 계속 유지합니다. 홀딩·미스드어프로치에서 자동으로 켜집니다.">On</button>
         </div>
 
         <div class="ctrl-div"></div>
