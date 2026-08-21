@@ -188,6 +188,77 @@ export async function run(page, t) {
   t.eq(map.hit.length, 3, `지도에 식별부호와 주파수가 함께 나온다 (${map.hit.join(' / ')})`);
   t.eq(map.gone, true, '레이어를 끄면 사라진다');
 
+  // ── 같은 주파수를 쓰는 국이 여럿이면 가까운 국이 잡힌다 ──
+  // 로컬라이저 주파수는 공항끼리 겹친다(108.70 하나에 김포·대구 세 곳).
+  // 목록 앞쪽을 무조건 잡으면 엉뚱한 공항이 걸린다.
+  const dup = await page.evaluate(() => {
+    const at = (lat, lon, f) => { S.lat = lat; S.lon = lon;
+                                  setNavRadio('NAV1', f, null); return navRadios.NAV1.id; };
+    return { yang: at(38.0, 128.6, '109.30'),   // 양양 상공
+             inch: at(37.45, 126.45, '109.30'), // 인천 상공 — 같은 주파수
+             gimp: at(37.55, 126.80, '108.70'), // 김포
+             daeg: at(35.89, 128.65, '108.70') };
+  });
+  t.eq(dup.yang, 'IYAN', `양양 상공에서 109.30 은 IYAN (${dup.yang})`);
+  t.eq(dup.inch, 'INLL', `인천 상공에서 같은 109.30 은 INLL (${dup.inch})`);
+  t.eq(dup.gimp, 'IOFR', `김포에서 108.70 은 IOFR (${dup.gimp})`);
+  t.eq(dup.daeg, 'ITAG', `대구에서 같은 108.70 은 ITAG (${dup.daeg})`);
+
+  // ── PFD 우측 NAV 줄에 명칭·방위·거리가 나오는가 ──
+  // 캔버스라 글자를 읽을 수 없으니 fillText 를 엿본다.
+  const pfd = await page.evaluate(() => {
+    S.lat = 38.0; S.lon = 128.6; S.alt = 3000; S.awp = -1;
+    setNavRadio('NAV1', '109.30', null); setNavSrc('NAV1');
+    const proto = CanvasRenderingContext2D.prototype, orig = proto.fillText, seen = [];
+    proto.fillText = function (x, ...a) { seen.push(String(x)); return orig.call(this, x, ...a); };
+    try { drawPFD(); } finally { proto.fillText = orig; }
+    const i = seen.indexOf('NAV1 ');
+    return i < 0 ? '' : seen.slice(i, i + 4).join('').replace(/\s+/g, ' ').trim();
+  });
+  t.ok(/^NAV1 IYAN\s+\d{3}°\s+[\d.]+ NM$/.test(pfd),
+    `PFD NAV1 줄에 로컬라이저 명칭·방위·거리가 나온다 (${pfd || '없음'})`);
+
+  // ── CDU 주파수 입력창에 명칭이 뜨는가 ──
+  // 종전에는 VOR 목록만 뒤져서 ILS 주파수를 넣으면 명칭 칸이 빈 채로 남았다.
+  const cdu = await page.evaluate(async () => {
+    S.lat = 38.0; S.lon = 128.6;
+    CDU_ACT.switchMode('COM_INPUT', 'nav1');
+    await new Promise(r => setTimeout(r, 40));
+    ['1', '0', '9', '3', '0'].forEach(n => CDU_ACT.addInput(n));
+    CDU_ACT.confirmInput();
+    await new Promise(r => setTimeout(r, 60));
+    CDU_ACT.switchAudioTab('NAV');          // NAV 탭이 무선 명칭을 보여 준다
+    await new Promise(r => setTimeout(r, 60));
+    const txt = document.getElementById('cdu-wrap').textContent.replace(/\s+/g, ' ');
+    return { navId: navRadios.NAV1.id, shown: /IYAN/.test(txt) };
+  });
+  t.eq(cdu.navId, 'IYAN', `109.30 을 쳐 넣으면 IYAN 이 잡힌다 (${cdu.navId})`);
+  t.eq(cdu.shown, true, 'CDU 화면에도 그 명칭이 보인다');
+
+  // ── CDU 항행표지 선택 목록에 로컬라이저가 있는가 ──
+  const sel = await page.evaluate(async () => {
+    CDU_ACT.openNavSel('nav1');
+    await new Promise(r => setTimeout(r, 60));
+    const txt = document.getElementById('cdu-wrap').textContent.replace(/\s+/g, ' ');
+    const rows = Array.from(document.querySelectorAll('[data-act="pickNavVor"]'))
+      .map(e => (e.getAttribute('data-arg') || '').replace(/[\[\]"]/g, ''));
+    return { hasGrp: /로컬라이저/.test(txt), hasName: /양양 RWY 33 LOC/.test(txt),
+             n: rows.length, hasIYAN: rows.includes('IYAN'), hasSEL: rows.includes('SEL') };
+  });
+  t.eq(sel.hasGrp, true, '목록에 로컬라이저 묶음이 있다');
+  t.eq(sel.hasName, true, '공항·활주로가 이름으로 나온다 (양양 RWY 33 LOC)');
+  t.ok(sel.hasIYAN && sel.hasSEL, `VOR 과 로컬라이저를 한 목록에서 고른다 (${sel.n}줄)`);
+
+  // 이름으로 고르면 그 국이 확실히 잡힌다 — 주파수가 겹쳐도
+  const pick = await page.evaluate(async () => {
+    S.lat = 37.45; S.lon = 126.45;         // 인천 상공(같은 109.30 의 INLL 이 더 가깝다)
+    CDU_ACT.pickNavVor('IYAN');
+    await new Promise(r => setTimeout(r, 40));
+    return { id: navRadios.NAV1.id, freq: navRadios.NAV1.freq };
+  });
+  t.ok(pick.id === 'IYAN' && pick.freq === '109.30',
+    `이름으로 고르면 가까운 국이 있어도 그 국이 잡힌다 (${pick.id} ${pick.freq})`);
+
   // 뒷정리
   await page.evaluate(() => { setNavSrc('FMS'); });
 }
