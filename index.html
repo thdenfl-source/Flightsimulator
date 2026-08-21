@@ -308,8 +308,7 @@ html, body {
 
 /* ── SIM SPD (배속) ── */
 .simspd-group { display: flex; flex-direction: column; align-items: center; gap: 2px; }
-.simspd-wrap { display: flex; align-items: stretch; gap: 4px; }
-/* ×1 ×2 / ×4 ×8 두 줄로 접는다 — 오른쪽에 SUSP 자리를 내기 위해서다 */
+/* ×1 ×2 / ×4 ×8 두 줄로 접는다 — 옆의 SUSP 와 높이를 맞추기 위해서다 */
 .simspd-grid { display: grid; grid-template-columns: repeat(2, auto); gap: 2px; }
 .simspd-btns { display: flex; gap: 2px; }
 .simspd-btn {
@@ -324,20 +323,23 @@ html, body {
 
 /* ── SUSP (시퀀싱 보류) ──
    켜져 있으면 활성 웨이포인트를 지나도 다음으로 넘어가지 않는다.
+   배속과는 상관없는 기능이라 이름표를 따로 세우고, 버튼에는 ON/OFF 만 적는다.
    홀딩·미스드어프로치에서 저절로 켜지므로(auto) 손으로 켠 것과 구분해 보인다. */
+.susp-group { display: flex; flex-direction: column; align-items: center; gap: 2px; }
 .susp-btn {
   background: #1a1a1a; border: 1px solid #3a3a3a; color: #888;
-  font-size: 10px; font-weight: bold; letter-spacing: 0.5px;
-  padding: 0 8px; cursor: pointer; border-radius: 3px;
+  font-size: 11px; font-weight: bold; letter-spacing: 0.5px;
+  min-width: 46px; padding: 6px 8px; cursor: pointer; border-radius: 3px;
   touch-action: manipulation; font-family: 'Helvetica Neue', Arial, sans-serif;
   transition: background 0.15s, border-color 0.15s, color 0.15s;
+  line-height: 1.15;
 }
 .susp-btn.on   { background: #2a1c00; border-color: #ffaa00; color: #ffcc44;
                  box-shadow: 0 0 7px rgba(255,170,0,0.45); }
 .susp-btn.auto { background: #2a1c00; border-color: #ffaa00; color: #ffcc44;
                  box-shadow: 0 0 7px rgba(255,170,0,0.45); }
-.susp-btn.auto::after { content: '\A자동'; white-space: pre; font-size: 7px; display: block;
-                        letter-spacing: 0; opacity: 0.85; }
+/* 저절로 걸린 것은 '자동' 을 덧붙여 손으로 켠 것과 구분한다 */
+.susp-btn .susp-auto { display: block; font-size: 7px; letter-spacing: 0; opacity: 0.85; }
 
 /* ── divider ── */
 .ctrl-div { width: 1px; height: 34px; background: #2a2a2a; margin: 0 2px; }
@@ -1662,7 +1664,7 @@ body.night-mode::after {
       <ul>
         <li><b>NAV SRC</b>: <b>FMS / NAV1 / NAV2</b>. NAV1·NAV2는 CDU에서 튜닝한 VOR을 따라갑니다.</li>
         <li><b>RNP</b>: NAV SRC 바로 아래. <b>4 / 2 / 1 / 0.3</b> NM — CDI 최대편위(스케일)를 정합니다.</li>
-        <li><b>SUSP</b>(SIM SPD 오른쪽): <b>시퀀싱 보류</b> — 켜져 있으면 활성 웨이포인트를 지나도
+        <li><b>SUSP</b>(SIM SPD 오른쪽, 버튼에 <b>ON/OFF</b>): <b>시퀀싱 보류</b> — 켜져 있으면 활성 웨이포인트를 지나도
             <b>다음으로 넘어가지 않고</b> 그 구간의 코스를 계속 따라갑니다. <b>마지막 지점이어도 NAV 가
             풀리지 않아</b>, 홀딩이나 미스드어프로치를 계속 수행할 수 있습니다.
             비행계획에 <b>홀딩이 걸리면 저절로 켜지고</b>(버튼에 「자동」 표시), 그만하고 다음 절차로 가려면
@@ -2039,19 +2041,22 @@ body.night-mode::after {
         <div class="ctrl-div"></div>
 
         <!-- 배속 — 홀딩 한 바퀴 4분, 절차 하나 20분을 실시간으로 기다리지 않게 -->
-        <!-- 2×2 로 접어 오른쪽에 SUSP 자리를 낸다 -->
+        <!-- 2×2 로 접는다(옆의 SUSP 와 높이를 맞추기 위해서다) -->
         <div class="simspd-group">
           <div class="ctrl-lbl">SIM SPD</div>
-          <div class="simspd-wrap">
-            <div class="simspd-grid">
-              <button class="simspd-btn active" id="simspd-1" data-act="setSimSpeed" data-arg='[1]' title="실시간">×1</button>
-              <button class="simspd-btn" id="simspd-2" data-act="setSimSpeed" data-arg='[2]' title="2배속">×2</button>
-              <button class="simspd-btn" id="simspd-4" data-act="setSimSpeed" data-arg='[4]' title="4배속">×4</button>
-              <button class="simspd-btn" id="simspd-8" data-act="setSimSpeed" data-arg='[8]' title="8배속">×8</button>
-            </div>
-            <button class="susp-btn" id="susp-btn" data-act="toggleSusp"
-                    title="SUSPEND — 다음 웨이포인트로 자동으로 넘어가지 않고 지금 구간을 계속 유지합니다. 홀딩·미스드어프로치에서 자동으로 켜집니다.">SUSP</button>
+          <div class="simspd-grid">
+            <button class="simspd-btn active" id="simspd-1" data-act="setSimSpeed" data-arg='[1]' title="실시간">×1</button>
+            <button class="simspd-btn" id="simspd-2" data-act="setSimSpeed" data-arg='[2]' title="2배속">×2</button>
+            <button class="simspd-btn" id="simspd-4" data-act="setSimSpeed" data-arg='[4]' title="4배속">×4</button>
+            <button class="simspd-btn" id="simspd-8" data-act="setSimSpeed" data-arg='[8]' title="8배속">×8</button>
           </div>
+        </div>
+
+        <!-- SUSP — 배속과는 상관없는 기능이라 이름표를 따로 세운다 -->
+        <div class="susp-group">
+          <div class="ctrl-lbl">SUSP</div>
+          <button class="susp-btn" id="susp-btn" data-act="toggleSusp"
+                  title="SUSPEND — 다음 웨이포인트로 자동으로 넘어가지 않고 지금 구간을 계속 유지합니다. 홀딩·미스드어프로치에서 자동으로 켜집니다.">OFF</button>
         </div>
 
         <div class="ctrl-div"></div>
