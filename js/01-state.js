@@ -131,9 +131,12 @@ function navSuspended() { return suspOn || navSuspAuto(); }
 function updateSuspBtn() {
   const b = document.getElementById('susp-btn');
   if (!b) return;
-  const auto = navSuspAuto();
-  b.classList.toggle('auto', auto && !suspOn);
+  const auto = navSuspAuto() && !suspOn;
+  b.classList.toggle('auto', auto);
   b.classList.toggle('on', suspOn);
+  // 켜짐/꺼짐만 적는다 — 무엇을 켜고 끄는지는 위 이름표(SUSP)가 말해 준다
+  const want = navSuspended() ? (auto ? 'ON<span class="susp-auto">자동</span>' : 'ON') : 'OFF';
+  if (b.innerHTML !== want) b.innerHTML = want;
 }
 function toggleSusp() {
   const wasHold = navSuspAuto();

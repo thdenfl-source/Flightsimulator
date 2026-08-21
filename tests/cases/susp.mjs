@@ -52,6 +52,32 @@ export async function run(page, t) {
     `지나온 구간의 코스를 그대로 따라간다 (편차 ${held.xtk.toFixed(2)}NM)`);
   t.ok(/\bon\b/.test(held.cls), `버튼이 켜진 모양이다 (${held.cls})`);
 
+  // ── 이름표는 위에, 버튼에는 ON/OFF 만 ──
+  const ui = await page.evaluate(() => {
+    const b = document.getElementById('susp-btn');
+    const grp = b.closest('.susp-group');
+    const lbl = grp && grp.querySelector('.ctrl-lbl');
+    const spd = document.getElementById('simspd-1').closest('.simspd-group');
+    const spdLbl = spd && spd.querySelector('.ctrl-lbl');
+    const box = e => e.getBoundingClientRect();
+    return { lbl: lbl ? lbl.textContent.trim() : null,
+             spdLbl: spdLbl ? spdLbl.textContent.trim() : null,
+             txt: b.textContent.trim(),
+             lblAbove: lbl ? box(lbl).bottom <= box(b).top + 1 : false,
+             spdAbove: spdLbl ? box(spdLbl).bottom <= box(document.getElementById('simspd-1')).top + 1 : false,
+             rightOfSpd: box(b).left > box(document.getElementById('simspd-8')).left,
+             // ×1 ×2 / ×4 ×8 두 줄인가
+             twoRows: box(document.getElementById('simspd-4')).top > box(document.getElementById('simspd-1')).top + 3,
+             sameCol: Math.abs(box(document.getElementById('simspd-1')).left -
+                               box(document.getElementById('simspd-4')).left) < 2 };
+  });
+  t.eq(ui.lbl, 'SUSP', `버튼 위에 SUSP 이름표가 따로 선다 (${ui.lbl})`);
+  t.eq(ui.spdLbl, 'SIM SPD', `배속 이름표도 제 버튼 위에 있다 (${ui.spdLbl})`);
+  t.ok(ui.lblAbove && ui.spdAbove, '두 이름표가 각각 자기 버튼 위에 있다');
+  t.eq(ui.txt, 'ON', `켜졌을 때 버튼 글자는 ON (${ui.txt})`);
+  t.ok(ui.twoRows && ui.sameCol, '배속은 ×1 ×2 / ×4 ×8 두 줄이다');
+  t.eq(ui.rightOfSpd, true, 'SUSP 는 배속 오른쪽에 있다');
+
   // ── 풀면 그때 다음 지점으로 넘어간다 ──
   const rel = await page.evaluate(async () => {
     document.getElementById('susp-btn').click();
@@ -60,6 +86,8 @@ export async function run(page, t) {
     return { on: suspOn, awp: S.wps[S.awp].ident };
   });
   t.eq(rel.on, false, '한 번 더 누르면 풀린다');
+  t.eq(await page.evaluate(() => document.getElementById('susp-btn').textContent.trim()),
+    'OFF', '꺼졌을 때 버튼 글자는 OFF');
   t.eq(rel.awp, 'CCC', `풀고 나면 다음 지점으로 넘어간다 (${rel.awp})`);
 
   // ── 마지막 지점에서도 NAV 가 풀리지 않는다 ──
@@ -106,7 +134,8 @@ export async function run(page, t) {
     await new Promise(r => setTimeout(r, 20));
     const inHold = { holdOn, susp: navSuspended(), manual: suspOn,
                      awp: S.wps[S.awp].ident,
-                     cls: document.getElementById('susp-btn').className };
+                     cls: document.getElementById('susp-btn').className,
+                     txt: document.getElementById('susp-btn').textContent.trim() };
     // 눌러서 풀면 홀딩을 그만두고 다음 지점으로 간다
     document.getElementById('susp-btn').click();
     const t1 = performance.now();
@@ -118,6 +147,7 @@ export async function run(page, t) {
   t.ok(auto.inHold.susp && !auto.inHold.manual,
     '홀딩이면 SUSP 가 저절로 걸린다(손으로 켠 것은 아니다)');
   t.ok(/auto/.test(auto.inHold.cls), `버튼이 '자동' 으로 보인다 (${auto.inHold.cls})`);
+  t.eq(auto.inHold.txt, 'ON자동', `저절로 걸린 것은 ON 옆에 '자동' 이 붙는다 (${auto.inHold.txt})`);
   t.eq(auto.inHold.awp, 'FIX', '홀딩 중에는 그 지점에 머문다');
   t.eq(auto.after.holdOn, false, 'SUSP 를 누르면 홀딩을 그만둔다');
   t.eq(auto.after.susp, false, '보류도 함께 풀린다');
