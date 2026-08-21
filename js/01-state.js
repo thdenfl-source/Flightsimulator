@@ -911,8 +911,19 @@ function _resolveVor(freq, id) {
   if (freq) {
     const v = vors().find(x => sameF(x.freq, freq));
     if (v) return v;
-    const L = asLoc(locs().find(x => sameF(x.freq, freq)));
-    if (L) return L;
+    // 로컬라이저 주파수는 공항끼리 겹친다 — 108.70 하나만 해도 김포·대구 세 곳이
+    // 쓴다. 출력이 약해 가까이서만 잡히는 시설이니, 여러 곳이 걸리면 지금 자리에서
+    // 가장 가까운 국을 잡는다(목록 앞쪽을 무조건 잡으면 엉뚱한 공항이 걸린다).
+    const cand = locs().filter(x => sameF(x.freq, freq));
+    if (cand.length === 1) return asLoc(cand[0]);
+    if (cand.length > 1) {
+      let best = cand[0], bd = Infinity;
+      cand.forEach(x => {
+        const d = distance(S.lat, S.lon, x.lat, x.lon);
+        if (d < bd) { bd = d; best = x; }
+      });
+      return asLoc(best);
+    }
   }
   return null;
 }

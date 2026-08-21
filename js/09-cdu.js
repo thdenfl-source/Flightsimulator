@@ -3458,29 +3458,40 @@ function act(name, ...args) {
     let _navSelTarget = 'nav1';   // 현재 튜닝 대상 무선
     function openNavSel(id) { _navSelTarget = id; switchMode('NAV_SEL'); }
     function renderNavSelectScreen(container, footer, title) {
-        title.innerText = (_navSelTarget === 'nav1' ? 'NAV1' : 'NAV2') + ' — VOR 선택';
+        title.innerText = (_navSelTarget === 'nav1' ? 'NAV1' : 'NAV2') + ' — 항행표지 선택';
         const cur = freqs[_navSelTarget];
-        const rows = (typeof ENR_VORS !== 'undefined' ? ENR_VORS : []).filter(v => v.freq).map(v => {
-            const sel = (v.id === cur.id) ? 'border-color:#00e5ff;background:#03202a;' : '';
-            return `<div data-act="pickNavVor" data-arg='["${v.id}"]' style="display:grid;grid-template-columns:56px 1fr 64px;align-items:center;gap:8px;
+        // 한 줄 = 한 표지소. VOR 은 하늘색, 로컬라이저는 분홍(지도 심볼과 같은 색).
+        const row = (id, name, freq, col) => {
+            const sel = (id === cur.id) ? 'border-color:#00e5ff;background:#03202a;' : '';
+            return `<div data-act="pickNavVor" data-arg='["${id}"]' style="display:grid;grid-template-columns:56px 1fr 64px;align-items:center;gap:8px;
                 padding:9px 10px;margin-bottom:6px;border:1px solid #234;border-radius:6px;cursor:pointer;${sel}">
-                <span style="color:#fff;font-weight:bold;font-size:13px;">${v.id}</span>
-                <span style="color:#9fb4c8;font-size:11px;">${v.name}</span>
-                <span style="color:#00e5ff;font-weight:bold;font-size:12px;text-align:right;">${v.freq}</span>
+                <span style="color:#fff;font-weight:bold;font-size:13px;">${id}</span>
+                <span style="color:#9fb4c8;font-size:11px;">${name}</span>
+                <span style="color:${col};font-weight:bold;font-size:12px;text-align:right;">${freq}</span>
             </div>`;
-        }).join('');
+        };
+        const grp = t => `<div style="color:#6a8494;font-size:9px;letter-spacing:1px;margin:10px 2px 5px;">${t}</div>`;
+        const vorRows = (typeof ENR_VORS !== 'undefined' ? ENR_VORS : []).filter(v => v.freq)
+            .map(v => row(v.id, v.name, v.freq, '#00e5ff')).join('');
+        // 로컬라이저는 공항끼리 주파수가 겹친다 — 이름으로 고르면 그 국이 확실히 잡힌다.
+        const locs = (typeof LOC_STATIONS !== 'undefined' ? LOC_STATIONS : []);
+        const locRows = locs.map(v => row(v.id, `${v.name} RWY ${v.rwy} LOC`, v.freq, '#f06292')).join('');
+        const rows = grp('VOR · VORTAC') + vorRows +
+                     (locRows ? grp(`로컬라이저(LOC) — ${locs.length}개소`) + locRows : '');
         container.innerHTML = `<div style="padding:8px 6px;overflow-y:auto;height:100%;">
             <div style="color:#9fb4c8;font-size:10px;margin-bottom:8px;">현재: <b style="color:#00e5ff;">${cur.id||'----'} ${cur.act||''}</b>
-                &nbsp;·&nbsp;VOR 명칭을 선택하거나 아래 버튼으로 주파수를 직접 입력하세요.</div>
+                &nbsp;·&nbsp;명칭을 선택하거나 아래 버튼으로 주파수를 직접 입력하세요.
+                <br><span style="color:#6a8494;">로컬라이저는 여러 공항이 같은 주파수를 씁니다 —
+                주파수만 넣으면 <b>가장 가까운 국</b>이 잡힙니다.</span></div>
             <div data-act="switchMode" data-arg='["COM_INPUT","${_navSelTarget}"]' style="text-align:center;padding:9px;margin-bottom:10px;
                 border:1px solid #b8860b;border-radius:6px;color:#facc15;font-weight:bold;font-size:12px;cursor:pointer;">⌨ 직접 주파수 입력</div>
             ${rows}
         </div>`;
         footer.innerHTML = cduFooter("switchMode('AUDIO')");
     }
-    // VOR 명칭 선택 → 무선 튜닝 + PFD 연동
+    // 명칭 선택 → 무선 튜닝 + PFD 연동 (VOR · 로컬라이저 공용)
     function pickNavVor(vorId) {
-        const v = (typeof ENR_VORS !== 'undefined' ? ENR_VORS : []).find(x => x.id === vorId);
+        const v = (typeof _resolveVor === 'function') ? _resolveVor(null, vorId) : null;
         if (!v) return;
         freqs[_navSelTarget].act = v.freq;
         freqs[_navSelTarget].id  = v.id;
@@ -3521,7 +3532,9 @@ function act(name, ...args) {
     // NAV/LLZ → 선택한 NAV + VOR 매칭 + PFD 연동
     function afldPutNav(freq, id) {    // id: 'nav1' | 'nav2'
         freqs[id].act = freq;
-        const m = (typeof ENR_VORS !== 'undefined' ? ENR_VORS : []).find(x => x.freq && Math.abs(parseFloat(x.freq) - parseFloat(freq)) < 0.001);
+        // VOR 뿐 아니라 로컬라이저까지 찾는다(_resolveVor) — 종전에는 ILS 주파수를
+        // 넣으면 명칭 칸이 빈 채로 남았다.
+        const m = (typeof _resolveVor === 'function') ? _resolveVor(freq, null) : null;
         freqs[id].id = m ? m.id : '';
         try { setNavRadio(id === 'nav1' ? 'NAV1' : 'NAV2', freq, m ? m.id : null); } catch(e) { _swallow(e); }
         _afldMsg = `${id.toUpperCase()} ← ${freq}${m ? ' (' + m.id + ')' : ''}`;
@@ -3838,7 +3851,8 @@ function act(name, ...args) {
             // NAV1/NAV2는 입력 주파수를 즉시 활성(ACT)으로 튜닝 + VOR 자동 매칭 + PFD 연동
             if (inputTarget === 'nav1' || inputTarget === 'nav2') {
                 freqs[inputTarget].act = v;
-                let match = (typeof ENR_VORS !== 'undefined' ? ENR_VORS : []).find(x => x.freq && Math.abs(parseFloat(x.freq) - parseFloat(v)) < 0.001);
+                // VOR + 로컬라이저 (_resolveVor) — 같은 주파수를 여러 LOC 이 쓰면 가까운 국
+                let match = (typeof _resolveVor === 'function') ? _resolveVor(v, null) : null;
                 freqs[inputTarget].id = match ? match.id : '';
                 try { setNavRadio(inputTarget === 'nav1' ? 'NAV1' : 'NAV2', v, match ? match.id : null); } catch(e) { _swallow(e); }
             } else {
