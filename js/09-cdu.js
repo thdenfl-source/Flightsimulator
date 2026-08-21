@@ -3449,7 +3449,7 @@ function act(name, ...args) {
                     <span style="color:var(--text-green);">${freqs[id].act}</span>
                     <span style="color:white;">${freqs[id].id}</span>
                 </div>
-                <div style="color:var(--text-cyan); font-size:9px; font-weight:bold;">▾ VOR 선택</div>
+                <div style="color:var(--text-cyan); font-size:9px; font-weight:bold;">▾ 표지 선택</div>
             </div>
         </div>`;
     }
@@ -3863,9 +3863,15 @@ function act(name, ...args) {
         switchMode(backMode, inputTarget);
     }
 
+    // XFER — COM 은 넣은 값을 대기(STBY)에 두고 활성과 맞바꾼다.
+    // NAV 는 대기 개념이 없다(무선 행에도 활성 주파수와 명칭만 보인다).
+    // 그래서 종전처럼 맞바꾸면 방금 넣은 값이 대기로 밀려나고 옛 주파수가
+    // 다시 활성이 됐다 — 넣어도 반영되지 않는 것처럼 보이던 원인이다.
+    // NAV 에서는 ENTER 와 같이 그대로 튜닝만 한다.
     function handleInputXfer() {
+        const tgt = inputTarget;
         saveInputAndReturn();
-        swapFreq(inputTarget);
+        if (!String(tgt).startsWith('nav')) swapFreq(tgt);
     }
 
     function confirmInput() { 

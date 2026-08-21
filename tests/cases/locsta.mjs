@@ -259,6 +259,54 @@ export async function run(page, t) {
   t.ok(pick.id === 'IYAN' && pick.freq === '109.30',
     `이름으로 고르면 가까운 국이 있어도 그 국이 잡힌다 (${pick.id} ${pick.freq})`);
 
+  // ── XFER 로 넣어도 반영되는가 ──
+  // COM 은 넣은 값을 대기(STBY)에 두고 활성과 맞바꾸는 버튼이다. NAV 는 대기가
+  // 없는데 같이 맞바꿔서, 방금 넣은 값이 대기로 밀려나고 옛 주파수가 다시
+  // 활성이 됐다 — 넣어도 반영되지 않는 것처럼 보였다.
+  const xfer = await page.evaluate(async () => {
+    S.lat = 38.0; S.lon = 128.6;
+    // 먼저 옛 주파수를 CDU 로 직접 넣어 둔다(그 화면의 활성 주파수가 된다)
+    CDU_ACT.switchMode('COM_INPUT', 'nav1');
+    await new Promise(r => setTimeout(r, 40));
+    ['1', '1', '5', '5', '0'].forEach(n => CDU_ACT.addInput(n));
+    CDU_ACT.confirmInput();
+    await new Promise(r => setTimeout(r, 60));
+    // 이제 XFER 로 새 주파수를 넣는다
+    CDU_ACT.switchMode('COM_INPUT', 'nav1');
+    await new Promise(r => setTimeout(r, 40));
+    ['1', '0', '9', '3', '0'].forEach(n => CDU_ACT.addInput(n));
+    CDU_ACT.handleInputXfer();                    // ENTER 가 아니라 XFER
+    await new Promise(r => setTimeout(r, 60));
+    CDU_ACT.switchAudioTab('NAV');
+    await new Promise(r => setTimeout(r, 60));
+    // NAV1 행만 본다 — 다른 행에도 비슷한 주파수가 있을 수 있다
+    const row = Array.from(document.querySelectorAll('[data-act="openNavSel"]'))
+      .find(e => (e.getAttribute('data-arg') || '').includes('nav1'));
+    const txt = row ? row.textContent.replace(/\s+/g, ' ') : '';
+    return { id: navRadios.NAV1.id, freq: navRadios.NAV1.freq,
+             shownFreq: /109\.30/.test(txt), shownId: /IYAN/.test(txt),
+             oldGone: !/115\.50/.test(txt), row: txt };
+  });
+  t.eq(xfer.id, 'IYAN', `XFER 로 넣어도 그 국이 잡힌다 (${xfer.id})`);
+  t.eq(xfer.freq, '109.30', `주파수도 넣은 값이다 (${xfer.freq})`);
+  t.ok(xfer.shownFreq && xfer.shownId, 'CDU NAV 행에 넣은 주파수와 명칭이 보인다');
+  t.eq(xfer.oldGone, true, `옛 주파수가 되살아나지 않는다 (NAV1 행: ${xfer.row})`);
+
+  // COM 은 종전대로 맞바꾼다 — NAV 를 고치면서 COM 까지 바꿔선 안 된다
+  const com = await page.evaluate(async () => {
+    CDU_ACT.switchMode('COM_INPUT', 'com1');
+    await new Promise(r => setTimeout(r, 40));
+    const before = document.getElementById('cdu-wrap').textContent;
+    ['1', '2', '3', '4', '5', '0'].forEach(n => CDU_ACT.addInput(n));
+    CDU_ACT.handleInputXfer();
+    await new Promise(r => setTimeout(r, 60));
+    CDU_ACT.switchAudioTab('COM');
+    await new Promise(r => setTimeout(r, 60));
+    const txt = document.getElementById('cdu-wrap').textContent.replace(/\s+/g, ' ');
+    return { has: /123\.450/.test(txt), before: before.length > 0 };
+  });
+  t.eq(com.has, true, 'COM 은 종전대로 XFER 로 맞바꾼다');
+
   // 뒷정리
   await page.evaluate(() => { setNavSrc('FMS'); });
 }
