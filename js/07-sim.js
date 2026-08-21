@@ -265,6 +265,7 @@ function updateSimSpeedBtns() {
 function resetSim(){
   S.running=false;
   setSimSpeed(1);            // 리셋하면 실시간으로 돌아온다
+  suspOn = false; try { updateSuspBtn(); } catch(e) { _swallow(e); }
   updateFlyBtns();
   S.trail=[];trailLine.setLatLngs([]);_update3dTrail();S.lastT=null;
   updateAcOnMap();
@@ -421,7 +422,8 @@ function simStep(ts){
       // 활성 웨이포인트에 홀딩이 걸려 있으면(아직 진입 전이라도) 시퀀싱하지 않는다.
       // TOFIX 상태만 제외하면, 픽스 통과 프레임에서 진입 판정보다 시퀀싱이 먼저
       // 돌아 "마지막 WP 통과" 로 NAV 가 해제되고 HDG 모드로 떨어진다.
-      if (S.awp >= 0 && !obsOn && !holdOn) {
+      // SUSP 가 걸려 있으면 지나가도 넘어가지 않는다(홀딩이면 저절로 걸린다).
+      if (S.awp >= 0 && !obsOn && !navSuspended()) {
         if (navApOn && navSrc === 'FMS' && S.awp + 1 < S.wps.length) {
           // Fly-by: anticipate turn toward next leg before reaching WP
           const nextLegCrs = bearing(S.wps[S.awp].lat, S.wps[S.awp].lon,
@@ -506,6 +508,7 @@ function simStep(ts){
   }
   S.lastT=ts;
   updateHoverBtns();
+  try { updateSuspBtn(); } catch(e) { _swallow(e); }
   try { fpWptLiveTick(ts); } catch(e) { _swallow(e); }
   // 스톱워치에 흘려 넣을 시간 — 기체가 겪는 시간과 같아야 한다.
   // 배속이 걸리면 그만큼 빨리, 시뮬이 멈춰 있으면 함께 멈춘다.

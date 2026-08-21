@@ -2171,6 +2171,7 @@ appRegister({
   toggleAltHold,
   toggleAspcPanel,
   toggleAwyLayer,
+  toggleSusp,
   toggleBrg1,
   toggleBrg2,
   toggleBrg1Lbl,
