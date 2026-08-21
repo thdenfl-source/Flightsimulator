@@ -134,8 +134,9 @@ function updateSuspBtn() {
   const auto = navSuspAuto() && !suspOn;
   b.classList.toggle('auto', auto);
   b.classList.toggle('on', suspOn);
-  // 켜짐/꺼짐만 적는다 — 무엇을 켜고 끄는지는 위 이름표(SUSP)가 말해 준다
-  const want = navSuspended() ? (auto ? 'ON<span class="susp-auto">자동</span>' : 'ON') : 'OFF';
+  // 글자는 늘 'On' — 켜졌는지는 AP 의 NAV 버튼처럼 색으로 보인다(녹색).
+  // 저절로 걸린 경우에만 '자동' 을 덧붙인다.
+  const want = auto ? 'On<span class="susp-auto">자동</span>' : 'On';
   if (b.innerHTML !== want) b.innerHTML = want;
 }
 function toggleSusp() {
