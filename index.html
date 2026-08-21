@@ -1603,6 +1603,12 @@ body.night-mode::after {
             멈춥니다(6,000ft ÷ 6,076ft = 0.99NM). 고도가 높고 국이 가까울수록 차이가 커지고, 멀어지면
             수평거리에 수렴합니다. PFD 우측 <b>NAV1·NAV2</b> 줄과 지도 <b>BRG1</b> 글자에 반영됩니다.
             <b>FMS(GPS) 거리는 수평거리</b>라 이 차이가 없습니다 — 두 값이 다르게 보이는 건 정상입니다.</li>
+        <li><b>로컬라이저(LOC)</b>: 지도 <b>AWY</b> 패널의 <b>로컬라이저(LOC)</b> 를 켜면 VOR 처럼
+            <b>분홍 삼각형 + 식별부호·주파수</b>로 표시됩니다(삼각형은 항공기가 들어오는 쪽을 가리킵니다).
+            눌러서 <b>NAV1/NAV2 튜닝</b>도 됩니다 — <b>ILS 주파수를 넣으면 이제 국이 잡히고</b>,
+            그 순간 <b>OBS 코스가 게재 접근 코스로 맞춰집니다</b>(로컬라이저는 코스가 시설에 붙어 있으므로).
+            안테나는 <b>활주로 반대편 끝</b>에 있습니다. 자료는 <b>AIP AD 2.19</b> 게재 좌표 그대로이며,
+            현재 <b>김포·청주·대구·울진·포항</b> 14개소입니다.</li>
         <li><b>지도 BRG 시현</b>(<b>#1BDP · #2BDP</b>): PFD 의 BRG1·BRG2 버튼 <b>아래</b>에 있습니다.
             켜야만 지도에 그 니들의 <b>선과 방위·거리 글자</b>가 나타납니다 — <b>기본은 미시현</b>이고
             선·글자가 <b>함께</b> 켜지고 <b>함께</b> 꺼집니다. <b>BRG1·BRG2</b> 버튼은 계기(HSI)의 니들,
@@ -2316,6 +2322,7 @@ body.night-mode::after {
   <script src="js/data/ifr-procedures.js"></script>
   <script src="js/data/airfield-info.js"></script>
   <script src="js/data/enr-vors.js"></script>
+  <script src="js/data/loc-stations.js"></script>
   <script src="js/data/enr-routes.js"></script>
   <script src="js/data/airspace.js"></script>
   <!-- 앱 코드 -->

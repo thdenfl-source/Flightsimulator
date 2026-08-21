@@ -888,15 +888,33 @@ let navRadios = {
   NAV1: { freq: '115.50', id: 'SEL', lat: null, lon: null },   // 안양 VORTAC
   NAV2: { freq: '116.10', id: 'CJU', lat: null, lon: null }    // 제주 VORTAC
 };
-// 주파수 또는 ident로 ENR_VORS에서 VOR 찾기(freq 매칭 오차 허용)
+// 주파수 또는 ident 로 항행표지 찾기(freq 매칭 오차 허용).
+// VOR 목록에서 먼저 찾고, 없으면 로컬라이저 목록에서 찾는다 — ILS 주파수를
+// 넣었는데 국을 못 찾아 NAV 가 조용히 아무 일도 하지 않는 일이 없도록.
+// LOC 는 방향을 가진 시설이라 접근 코스(crs)를 함께 돌려준다.
 function _resolveVor(freq, id) {
-  let list;
-  try { list = ENR_VORS; } catch(e) { return null; }   // 로드 중 TDZ 대비
-  if (!list) return null;
-  let v = null;
-  if (id)   v = list.find(x => x.id === id && x.freq);
-  if (!v && freq) v = list.find(x => x.freq && Math.abs(parseFloat(x.freq) - parseFloat(freq)) < 0.001);
-  return v || null;
+  const vors = () => { try { return ENR_VORS || []; } catch(e) { return []; } };   // 로드 중 TDZ 대비
+  const locs = () => { try { return (typeof LOC_STATIONS !== 'undefined' && LOC_STATIONS) || []; }
+                       catch(e) { return []; } };
+  const asLoc = L => L && { id: L.id, name: `${L.name} RWY ${L.rwy} LOC`, freq: L.freq,
+                            lat: L.lat, lon: L.lon, loc: true, crs: L.crs,
+                            elev: L.dme && L.dme.elev };
+  const sameF = (a, b) => a && b && Math.abs(parseFloat(a) - parseFloat(b)) < 0.001;
+  // 식별부호를 먼저 본다 — 이름을 대고 부른 것이므로 주파수보다 앞선다.
+  // 각 단계 안에서는 VOR 이 먼저다(같은 주파수대라도 VOR 을 밀어내지 않는다).
+  if (id) {
+    const v = vors().find(x => x.id === id && x.freq);
+    if (v) return v;
+    const L = asLoc(locs().find(x => x.id === id));
+    if (L) return L;
+  }
+  if (freq) {
+    const v = vors().find(x => sameF(x.freq, freq));
+    if (v) return v;
+    const L = asLoc(locs().find(x => sameF(x.freq, freq)));
+    if (L) return L;
+  }
+  return null;
 }
 // CDU에서 NAV1/NAV2 튜닝 시 호출 — 무선 상태 갱신 + 현재 소스면 PFD 반영
 function setNavRadio(navId, freq, id) {
@@ -912,8 +930,9 @@ function setNavRadio(navId, freq, id) {
     if (!byId || Math.abs(parseFloat(byId.freq) - parseFloat(r.freq)) >= 0.001) r.id = '';
   }
   const v = _resolveVor(r.freq, r.id);
-  if (v) { r.lat = v.lat; r.lon = v.lon; r.id = v.id; r.freq = v.freq; r.elev = v.elev || 0; }
-  else   { r.lat = null; r.lon = null; r.elev = 0; }
+  if (v) { r.lat = v.lat; r.lon = v.lon; r.id = v.id; r.freq = v.freq; r.elev = v.elev || 0;
+           r.loc = !!v.loc; r.crs = v.crs; }
+  else   { r.lat = null; r.lon = null; r.elev = 0; r.loc = false; r.crs = undefined; }
   if (navSrc === navId) applyNavRadioToPfd();
 }
 // 현재 navSrc(NAV1/NAV2)의 튜닝 VOR를 PFD 항법 상태로 반영
@@ -922,6 +941,14 @@ function applyNavRadioToPfd() {
   if (!r) { navLat = navLon = null; navIcao = ''; return; }
   if (r.lat === null) { const v = _resolveVor(r.freq, r.id); if (v) { r.lat = v.lat; r.lon = v.lon; r.id = v.id; r.elev = v.elev || 0; } }
   navLat = r.lat; navLon = r.lon; navIcao = r.id || '';
+  // 로컬라이저는 코스가 시설에 붙어 있다 — 조종사가 OBS 로 돌려 정하는 것이
+  // 아니라 접근 코스가 정해져 있다. 튜닝하거나 그 소스로 바꾸는 순간 맞춰 준다.
+  // (그 뒤 CRS 손잡이로 미세조정하는 것은 그대로 살아 있다 — 이 함수는 튜닝·
+  //  소스 전환 때만 불린다)
+  if (r.loc && Number.isFinite(r.crs)) {
+    vorObsCrs = toTrue(r.crs);
+    try { updateNav(); } catch(e) { _swallow(e); }
+  }
   const lbl = document.getElementById('nav-icao-lbl');
   if (lbl) { lbl.style.visibility = 'visible'; lbl.textContent = (r.id || '----') + (r.freq ? ' ' + r.freq : ''); }
 }
