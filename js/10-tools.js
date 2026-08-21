@@ -706,14 +706,19 @@ function _drawLocGroup(list) {
       iconSize: [12, 12], iconAnchor: [6, 6], className: ''
     });
     const mk = L.marker([v.lat, v.lon], { icon });
-    mk.bindTooltip(`${v.name} RWY ${v.rwy} LOC (${v.id})<br>${v.freq} MHz · 접근 ${String(v.crs).padStart(3,'0')}°M`,
-                   { sticky: true });
+    mk.bindTooltip(`${v.name} RWY ${v.rwy} LOC (${v.id})<br>${v.freq} MHz · 접근 ` +
+                   `${String(v.crs).padStart(3,'0')}°M${v.crsSrc ? '(산출)' : ''}`, { sticky: true });
     const dmeTxt = v.dme ? ` · DME CH ${v.dme.ch}` : '';
+    // 접근 코스가 AIP 게재값이 아니면 어디서 낸 값인지 밝힌다
+    const SRC = { pair: '반대편 LOC 안테나로 산출(±1°)',
+                  gp:   'GP 안테나로 산출(±3°)',
+                  rwy:  '활주로 표기값' };
+    const crsNote = v.crsSrc ? ` · 접근 코스는 ${SRC[v.crsSrc] || '산출값'}` : '';
     mk.bindPopup(_mapSymPopup({
       title: `◮ ${v.id}`, color: col, name: v.id, lat: v.lat, lon: v.lon,
       sub: `${v.name} RWY ${v.rwy} LOC · ${v.freq} MHz · 접근 ${String(v.crs).padStart(3,'0')}°M` +
-           (v.cat ? ` · ILS CAT ${v.cat}` : '') + dmeTxt,
-      note: '※ 안테나는 활주로 반대편 끝에 있습니다',
+           (v.crsSrc ? '(산출)' : '') + (v.cat ? ` · ILS CAT ${v.cat}` : '') + dmeTxt,
+      note: '※ 안테나는 활주로 반대편 끝에 있습니다' + crsNote,
       extra: [
         { label: 'NAV1 튜닝', onclick: `mapTuneNav('NAV1','${v.freq}','${v.id}')`, fg: '#3b5a70', bg: '#eef3f7' },
         { label: 'NAV2 튜닝', onclick: `mapTuneNav('NAV2','${v.freq}','${v.id}')`, fg: '#3b5a70', bg: '#eef3f7' },
