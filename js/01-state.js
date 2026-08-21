@@ -119,6 +119,50 @@ function toggleBrg2Lbl() {
   if (btn) btn.classList.toggle('brg2-on', brg2LblOn);
   if (typeof updateBrgLines === 'function') updateBrgLines();
 }
+// ── SUSP (시퀀싱 보류) ────────────────────────────────────────────
+// 켜져 있으면 활성 웨이포인트를 지나도 다음으로 넘어가지 않고, 그 구간의
+// 코스를 계속 따라간다. 마지막 지점이어도 NAV 가 풀리지 않는다.
+// 홀딩이 걸려 있으면 저절로 켜진 것으로 본다(홀딩 자체가 그 자리를 도는 일이다).
+// 실제 FMS 의 SUSP 와 같은 뜻이다 — 홀딩·미스드어프로치에서 켜지고, 조종사가
+// 눌러서 풀면 다음 절차로 넘어간다.
+let suspOn = false;
+function navSuspAuto() { return !!(typeof holdOn !== 'undefined' && holdOn); }
+function navSuspended() { return suspOn || navSuspAuto(); }
+function updateSuspBtn() {
+  const b = document.getElementById('susp-btn');
+  if (!b) return;
+  const auto = navSuspAuto();
+  b.classList.toggle('auto', auto && !suspOn);
+  b.classList.toggle('on', suspOn);
+}
+function toggleSusp() {
+  const wasHold = navSuspAuto();
+  if (wasHold) {
+    // 홀딩으로 저절로 걸린 상태에서 누르면 '그만하고 다음으로' 다.
+    // 그 지점을 기억해 두지 않으면 매 프레임 다시 홀딩이 걸린다.
+    if (S.awp >= 0 && S.awp < S.wps.length) _holdDoneWp = S.wps[S.awp];
+    try { holdExit(); } catch(e) { _swallow(e); }
+    suspOn = false;
+  } else {
+    suspOn = !suspOn;
+  }
+  // 풀고 나면 다음 지점으로 넘긴다.
+  // 시퀀싱은 '지점에 다가갈 때' 일어나므로, 홀딩 패턴 안이나 지나친 자리에서는
+  // 저절로 넘어가지 않는다 — 그대로 두면 옛 코스를 따라 하염없이 멀어진다.
+  //   · 홀딩을 그만둔 경우: 그 픽스는 이미 볼일이 끝났으니 곧장 다음 지점으로.
+  //   · 손으로 걸어 둔 경우: 아직 지점 앞이면 그대로 두고, 지나쳤을 때만 넘긴다.
+  if (!navSuspended() && S.awp >= 0 && S.awp + 1 < S.wps.length) {
+    let go = wasHold;
+    if (!go) {
+      const wp = S.wps[S.awp];
+      go = Math.abs(normAS(bearing(S.lat, S.lon, wp.lat, wp.lon) - S.hdg)) > 90;
+    }
+    if (go) { try { selectWP(S.awp + 1); } catch(e) { _swallow(e); } }
+  }
+  updateSuspBtn();
+  try { updateNav(); } catch(e) { _swallow(e); }
+}
+
 function toggleBrg1() {
   brg1Visible = !brg1Visible;
   const btn = document.getElementById('brg1-tog');
@@ -586,11 +630,15 @@ const HOLD_PASS_NEAR = 0.8;      // 이 거리 안까지 접근했어야 '통과
 // 웨이포인트에 정의된 홀딩을 NAV 와 연동한다.
 // FMS 소스이고 활성 웨이포인트에 hold 가 있으면 자동 무장되고,
 // 비행계획에서 홀딩을 지우면 자동 해제된다.
+// SUSP 로 홀딩을 그만둔 웨이포인트 — 이걸 기억하지 않으면 홀딩이 걸린 지점에
+// 머무는 동안 holdSyncFromWp 가 매 프레임 다시 걸어 버려 빠져나올 수가 없다.
+let _holdDoneWp = null;
 function holdSyncFromWp() {
   const wp = (navSrc === 'FMS' && !obsOn && S.awp >= 0 && S.awp < S.wps.length)
     ? S.wps[S.awp] : null;
   const h = wp && wp.hold;
-  if (!h) { if (holdOn) holdExit(); return; }
+  if (wp && _holdDoneWp && _holdDoneWp !== wp) _holdDoneWp = null;   // 다른 지점이면 잊는다
+  if (!h || wp === _holdDoneWp) { if (holdOn) holdExit(); return; }
   const fresh = !holdOn || _holdWpRef !== wp;
   _holdWpRef = wp;
   holdFix = { lat: wp.lat, lon: wp.lon, ident: wp.ident || 'WPT' };
