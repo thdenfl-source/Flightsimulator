@@ -325,6 +325,65 @@ export async function run(page, t) {
   t.eq(off.on, true, '다시 켜면 듣는다');
   t.eq(off.name, 'TEST STICK', '꺼져 있어도 연결 여부는 알려 준다');
 
+  // ── 버튼이 '키' 로 올라오는 기종(안드로이드) ──
+  // 안드로이드는 조종 장치의 버튼을 게임패드 버튼이 아니라 키 이벤트로 넘기는
+  // 기종이 많다(축·햇만 잡히고 버튼은 조용한 증상). 키도 같은 입력으로 받는다.
+  const key = await page.evaluate(`(() => {
+    (${SETUP.toString()})();
+    const hit = (type, code) => document.dispatchEvent(
+      new KeyboardEvent(type, { code, bubbles: true }));
+    joyBeginCapture('gspd');
+    hit('keydown', 'F13'); hit('keyup', 'F13');      // 배정
+    const bound = joyBindOf('gspd');
+    gspdOn = false;
+    hit('keydown', 'F13');                            // 이제 동작을 부른다
+    const ran = gspdOn;
+    hit('keyup', 'F13');
+    // 배정하지 않은 키는 건드리지 않는다(기존 키보드 단축키와 다투지 않게)
+    let stray = false;
+    const before = selHdg;
+    hit('keydown', 'F14'); hit('keyup', 'F14');
+    stray = (selHdg !== before);
+    if (gspdOn) toggleGspd();
+    return { bound, ran, stray, label: joyCodeLabel(bound) };
+  })()`);
+  t.eq(key.bound, 'kF13', '키로 올라오는 버튼도 배정된다');
+  t.eq(key.ran, true, '배정한 키를 누르면 동작이 돈다');
+  t.eq(key.stray, false, '배정하지 않은 키는 건드리지 않는다');
+  t.eq(key.label, '키 F13', '화면에는 키 이름으로 나온다');
+
+  // ── 게임패드로 안 잡히는 장치를 직접 여는 길(WebHID) ──
+  // 리포트 서술자(WebHID 가 풀어 준 items)를 따라 비트를 잘라 낸다.
+  // 기종별 하드코딩이 없으므로, 서술자와 바이트만 주고 결과를 확인한다.
+  const hid = await page.evaluate(`(() => {
+    const B = (u) => 0x00090000 | u, D = (u) => 0x00010000 | u;
+    const items = [
+      { usageMinimum: B(1), usageMaximum: B(8), usages: [],
+        reportSize: 1, reportCount: 8, logicalMinimum: 0, logicalMaximum: 1 },
+      { usages: [D(0x30)], reportSize: 8, reportCount: 1,
+        logicalMinimum: 0, logicalMaximum: 255 },              // X
+      { usages: [D(0x31)], reportSize: 8, reportCount: 1,
+        logicalMinimum: 0, logicalMaximum: 255 },              // Y
+      { usages: [D(0x39)], reportSize: 4, reportCount: 1,
+        logicalMinimum: 0, logicalMaximum: 7 },                // 햇
+      { isConstant: true, reportSize: 4, reportCount: 1 },     // 자리 채우기
+    ];
+    const bytes = new Uint8Array([0b00000101, 255, 128, 0x02]); // B1·B3 · X끝 · Y중간 · 햇 E
+    const r = hidParseReport(items, new DataView(bytes.buffer));
+    const idle = hidParseReport(items,
+      new DataView(new Uint8Array([0, 128, 128, 0x0f]).buffer)); // 햇 = 범위 밖(가운데)
+    return { b0: r.btn[0], b1: r.btn[1], b2: r.btn[2], x: r.ax[0], y: r.ax[1],
+             hat: r.ax[2], hatDir: joyHatDirs(r.ax[2]),
+             idleHat: idle.ax[2], idleDir: joyHatDirs(idle.ax[2]) };
+  })()`);
+  t.eq(hid.b0, 1, '1비트씩 붙은 버튼을 제자리에서 읽는다 (B1)');
+  t.eq(hid.b1, 0, '누르지 않은 버튼은 0 이다');
+  t.eq(hid.b2, 1, '세 번째 버튼도 제자리다 (B3)');
+  t.eq(hid.x, 1, '축은 논리범위를 -1…1 로 편다 (X 255→+1)');
+  t.ok(Math.abs(hid.y) < 0.01, `가운데 값은 0 근처다 (Y ${hid.y.toFixed(3)})`);
+  t.eq(JSON.stringify(hid.hatDir), '["E"]', '햇은 게임패드 관례값으로 바꿔 방향이 그대로 풀린다');
+  t.eq(JSON.stringify(hid.idleDir), '[]', '범위 밖(가운데) 햇은 아무 방향도 아니다');
+
   // ── 설정 화면에 배정 화면이 있고, 목록이 그려진다 ──
   const ui = await page.evaluate(`(() => {
     (${SETUP.toString()})();
@@ -335,18 +394,20 @@ export async function run(page, t) {
     const txt = el.innerText;
     const rows = el.querySelectorAll('[data-act="joyPick"]').length;
     const hasMon = !!document.getElementById('joy-mon');
+    const hasHid = !!el.querySelector('[data-act="joyHidPick"]');
     const hasHoverPage = txt.includes('HOVER PAGE');
     // 행을 누르면 배정 대기로 들어간다
     el.querySelector('[data-act="joyPick"]').click();
     const cap = joyCapture;
     joyCancelCapture(); switchMode('HOME');
-    return { txt, rows, cap, hasMon, hasHoverPage, n: JOY_ACTIONS.length, first: JOY_ACTIONS[0].id };
+    return { txt, rows, cap, hasMon, hasHid, hasHoverPage, n: JOY_ACTIONS.length, first: JOY_ACTIONS[0].id };
   })()`);
   t.eq(ui.rows, ui.n, `동작 ${ui.n} 가지가 모두 배정 가능하다`);
   t.ok(ui.txt.includes('FORCE TRIM') && ui.txt.includes('버튼 4'),
     '배정된 버튼이 동작 옆에 보인다');
   t.ok(ui.txt.includes('TEST STICK'), '연결된 장치 이름이 보인다');
   t.eq(ui.hasMon, true, '배정 화면에 입력 진단 칸이 있다');
+  t.eq(ui.hasHid, true, '게임패드로 안 잡히는 장치를 직접 열 수 있다');
   t.eq(ui.hasHoverPage, true, 'HOVER PAGE 도 배정할 수 있다');
   t.eq(ui.cap, ui.first, '행을 누르면 그 동작이 입력 대기가 된다');
 
