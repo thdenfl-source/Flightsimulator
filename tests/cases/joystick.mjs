@@ -183,6 +183,58 @@ export async function run(page, t) {
   t.eq(JSON.stringify(hat.codes.analog), '[]', '격자에서 벗어난 아날로그 축 값은 방향으로 보지 않는다');
   t.eq(hat.label, '햇 9 ▲', '화면에는 햇 방향으로 읽힌다');
 
+  // ── 쉬는 자리가 0 인 8방향 햇 ──
+  // 쉬는 값을 1 밖으로 보내지 않는 기종이 있다. 이때 ± 로만 보면 좌우(±3/7·±5/7)가
+  // 전후(±1)와 같은 코드로 뭉쳐서 "좌우가 안 먹는" 증상이 된다.
+  // 8등분 격자에만 나오는 값(±1/7·±3/7·±5/7)으로 햇임을 알아채야 한다.
+  const hat0 = await page.evaluate(`(() => {
+    (${SETUP.toString()})();
+    _pad.axes = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0];      // 축9 햇이 0 에서 쉰다
+    joySetBind('h9N', 'trimF'); joySetBind('h9S', 'trimA');
+    joySetBind('h9W', 'trimL'); joySetBind('h9E', 'trimR');
+    gspdOn = false; S.spd = 100; bankTarget = 0;
+    let now = 1000;
+    joyPoll(now);
+    const idle = { spd: S.spd, bank: bankTarget, hat: !!(_joyHat[0] || {})[9] };
+    _axis(9, -3/7); joyPoll(now += 16);              // ▶ — 격자값이라 여기서 햇으로 판정
+    const right = { bank: bankTarget, hat: !!(_joyHat[0] || {})[9] };
+    _axis(9, 0); joyPoll(now += 16);
+    bankTarget = 0;
+    _axis(9, 5/7); joyPoll(now += 16);               // ◀
+    const left = bankTarget;
+    _axis(9, 0); joyPoll(now += 16);
+    _axis(9, -1); joyPoll(now += 16);                // ▲
+    const up = S.spd;
+    _axis(9, 0); joyPoll(now += 16);
+    stopTrimHold();
+    return { idle, right, left, up,
+             analog: joyIsHatValue(-1), lattice: joyIsHatValue(-3/7) };
+  })()`);
+  t.eq(hat0.idle.hat, false, '가운데 있을 때만으로는 햇인지 알 수 없다');
+  t.eq(hat0.right.hat, true, '8등분 격자값이 오면 그 축을 햇으로 알아챈다');
+  t.eq(hat0.right.bank, 1, '▶ 가 우 트림으로 걸린다 (종전에는 전후와 같은 입력으로 뭉쳤다)');
+  t.eq(hat0.left, -1, '◀ 는 좌 트림이다');
+  t.eq(hat0.up, 101, '햇으로 바뀐 뒤에도 ▲ 는 전방 트림이다');
+  t.eq(hat0.analog, false, '±1 만으로는 햇으로 보지 않는다(보통 축도 내는 값)');
+  t.eq(hat0.lattice, true, '±3/7 같은 값은 햇에서만 나온다');
+
+  // ── 입력 진단 — 지금 들어오는 값을 그대로 보여 준다 ──
+  const mon = await page.evaluate(`(() => {
+    (${SETUP.toString()})();
+    _pad.axes = [0.5, 0, 0, 0, 0, 0, 0, 0, 0, 3.2857142857142856];
+    let now = 1000;
+    joyPoll(now);                       // 축9 를 햇으로 판정
+    _press(4, true); joyPoll(now += 16);
+    const m = joyMonitor();
+    _press(4, false); joyPoll(now += 16);
+    return { id: m.id, btns: m.btns.map(x => x.i), a0: m.axes[0].v, hat9: m.axes[9].hat, n: m.axes.length };
+  })()`);
+  t.eq(mon.id, 'TEST STICK', '진단에 장치 이름이 나온다');
+  t.eq(JSON.stringify(mon.btns), '[4]', '지금 눌린 버튼 번호가 나온다');
+  t.eq(mon.a0, 0.5, '축 원값이 그대로 나온다');
+  t.eq(mon.hat9, true, '햇으로 푸는 축은 그렇게 표시된다');
+  t.eq(mon.n, 10, '축은 빠짐없이 보여 준다');
+
   // ── 배정(캡처) — 동작을 고른 뒤 누른 버튼이 그 자리에서 잡힌다 ──
   const cap = await page.evaluate(`(() => {
     (${SETUP.toString()})();
@@ -237,16 +289,20 @@ export async function run(page, t) {
     const el = document.getElementById('mainContentArea');
     const txt = el.innerText;
     const rows = el.querySelectorAll('[data-act="joyPick"]').length;
+    const hasMon = !!document.getElementById('joy-mon');
+    const hasHoverPage = txt.includes('HOVER PAGE');
     // 행을 누르면 배정 대기로 들어간다
     el.querySelector('[data-act="joyPick"]').click();
     const cap = joyCapture;
     joyCancelCapture(); switchMode('HOME');
-    return { txt, rows, cap, n: JOY_ACTIONS.length, first: JOY_ACTIONS[0].id };
+    return { txt, rows, cap, hasMon, hasHoverPage, n: JOY_ACTIONS.length, first: JOY_ACTIONS[0].id };
   })()`);
   t.eq(ui.rows, ui.n, `동작 ${ui.n} 가지가 모두 배정 가능하다`);
   t.ok(ui.txt.includes('FORCE TRIM') && ui.txt.includes('버튼 4'),
     '배정된 버튼이 동작 옆에 보인다');
   t.ok(ui.txt.includes('TEST STICK'), '연결된 장치 이름이 보인다');
+  t.eq(ui.hasMon, true, '배정 화면에 입력 진단 칸이 있다');
+  t.eq(ui.hasHoverPage, true, 'HOVER PAGE 도 배정할 수 있다');
   t.eq(ui.cap, ui.first, '행을 누르면 그 동작이 입력 대기가 된다');
 
   // 뒷정리 — 다음 검사가 가짜 패드를 물려받지 않도록
