@@ -2834,7 +2834,7 @@ function act(name, ...args) {
     // ── 조종 장치(조이스틱 · 게임패드) 배정 화면 ──
     // 동작 행을 누르면 '입력 대기' 가 되고, 그때 누른 버튼이 그 자리에서 잡힌다.
     // 대기 중에는 화면을 주기적으로 다시 그려 잡힌 결과가 바로 보이게 한다.
-    let _joyTick = null;
+    let _joyTick = null, _joyCapWas = false;
     function joyPick(actId) {
       if (joyCapture === actId) { joyCancelCapture(); }
       else joyBeginCapture(actId);
@@ -2881,15 +2881,38 @@ function act(name, ...args) {
       const foot = `<div data-act="joyResetBinds" style="text-align:right;margin:8px 0 4px;">` +
         `<span style="display:inline-block;color:#ff8877;font-size:9px;border:1px solid #5a2a2a;border-radius:3px;` +
         `padding:3px 9px;cursor:pointer;">전체 배정 해제</span></div>`;
-      container.innerHTML = back + head + rows.join('') + foot;
+      // 입력 진단 — 지금 들어오는 버튼/축 값을 그대로 보여 준다.
+      // 배정이 안 되는 입력이 무엇으로 올라오는지 눈으로 확인할 수 있다.
+      const mon = `<div style="color:#556;font-size:9px;letter-spacing:1px;margin:10px 0 4px;">입력 진단</div>` +
+        `<div id="joy-mon" style="padding:8px 10px;border:1px solid #1e2630;border-radius:5px;background:#080d12;` +
+        `font-family:monospace;font-size:10px;line-height:1.5;color:#8a97a5;">…</div>` +
+        `<div style="color:#4a5563;font-size:9px;margin:4px 2px 0;line-height:1.4;">` +
+        `버튼·축을 움직이면 값이 바뀝니다. <b>HAT</b> 로 표시된 축은 8방향 햇으로 풀어 씁니다.</div>`;
+      container.innerHTML = back + head + rows.join('') + mon + foot;
       footer.innerHTML = cduFooter("switchMode('SETTINGS')");
-      // 배정 대기 중에는 눌린 버튼을 반영해야 하므로 잠깐 갱신을 돌린다
-      if (joyCapture) {
-        _joyTick = setInterval(() => {
-          if (currentMode !== 'JOYSTICK') { clearInterval(_joyTick); _joyTick = null; return; }
-          if (!joyCapture) { clearInterval(_joyTick); _joyTick = null; renderContent(); }
-        }, 150);
-      }
+      // 화면에 있는 동안 진단을 갱신한다(배정이 잡히면 목록도 다시 그린다)
+      _joyTick = setInterval(() => {
+        if (currentMode !== 'JOYSTICK') { clearInterval(_joyTick); _joyTick = null; return; }
+        const box = document.getElementById('joy-mon');
+        if (!box) return;
+        const m = joyMonitor();
+        if (!m) { box.innerHTML = '<span style="color:#ff8877;">장치 없음</span>'; }
+        else {
+          const b = m.btns.length
+            ? m.btns.map(x => `<span style="color:#00ff88;">B${x.i}</span>`).join(' ')
+            : '<span style="color:#4a5563;">없음</span>';
+          const a = m.axes.map(x => {
+            const on = Math.abs(x.v) > 0.2;
+            return `<span style="color:${x.hat ? '#ffcc44' : (on ? '#00e5ff' : '#4a5563')};">` +
+                   `A${x.i}${x.hat ? '(HAT)' : ''} ${x.v.toFixed(2)}</span>`;
+          }).join('&nbsp; ');
+          box.innerHTML = `눌린 버튼: ${b}<br>${a || '축 없음'}` +
+            (m.mapping ? `<br><span style="color:#4a5563;">mapping: ${m.mapping}</span>` : '');
+        }
+        if (_joyCapWas && !joyCapture) { clearInterval(_joyTick); _joyTick = null; renderContent(); }
+        _joyCapWas = !!joyCapture;
+      }, 120);
+      _joyCapWas = !!joyCapture;
     }
     function renderSettingsScreen(container, footer, title) {
       title.innerText = 'Settings';

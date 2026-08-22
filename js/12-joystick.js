@@ -27,6 +27,8 @@ const JOY_ACTIONS = [
     run: () => toggleGspd() },
   { id: 'hovpos', grp: '운항',   label: 'HOVER POSITION', kind: 'press',
     run: () => toggleHoverPosition() },
+  { id: 'hovpage', grp: '운항', label: 'HOVER PAGE (호버 화면)', kind: 'press',
+    run: () => toggleHoverPage() },
 
   { id: 'trimF',  grp: '트림',   label: '트림 ▲ (전/증속)', kind: 'hold',
     on: () => startTrimHold('F'), off: () => stopTrimHold() },
@@ -78,6 +80,15 @@ JOY_ACTIONS.forEach(a => { JOY_ACT_BY_ID[a.id] = a; });
 const JOY_HAT_DIRS = ['N', 'E', 'S', 'W'];
 const JOY_HAT_LBL  = { N: '▲', E: '▶', S: '▼', W: '◀' };
 const JOY_HAT_MAP  = [['N'], ['N', 'E'], ['E'], ['E', 'S'], ['S'], ['S', 'W'], ['W'], ['W', 'N']];
+// 8등분 격자에만 나오는 값(±1/7 · ±3/7 · ±5/7)이 오면 그 축은 햇이다.
+// 쉬는 자리를 1 밖으로 보내지 않는 기종(0 에서 쉬는 햇)을 이것으로 가려낸다.
+// ±1 은 보통의 아날로그 축도 내는 값이라 판정 근거로 쓰지 않는다.
+const JOY_HAT_ODD = [1 / 7, 3 / 7, 5 / 7];
+function joyIsHatValue(v) {
+  if (!Number.isFinite(v)) return false;
+  if (Math.abs(v) > 1.05) return true;             // 쉬는 자리가 범위 밖(3.2857 등)
+  return JOY_HAT_ODD.some(k => Math.abs(Math.abs(v) - k) < 0.02);
+}
 function joyHatDirs(v) {
   if (!Number.isFinite(v) || Math.abs(v) > 1.05) return [];
   const i = Math.round((v + 1) * 3.5);
@@ -216,7 +227,7 @@ function joyPoll(now) {
     // 쉬는 자리를 1 밖(대개 3.2857)으로 보내고, 눌린 방향은 -1…1 을 8등분해
     // 실어 보낸다. 그래서 ± 두 방향으로는 여덟 방향을 가릴 수 없다.
     // 한 번이라도 1 밖의 값이 오면 그 축은 햇으로 보고 방향으로 푼다.
-    if (Math.abs(v) > 1.05 && !hat[i]) {
+    if (!hat[i] && joyIsHatValue(v)) {
       hat[i] = true;
       // 햇으로 판정되기 전에 ± 로 눌려 있었다면 그 자리에서 놓아 준다
       _joyEdge('a' + i + '+', false, now);
@@ -235,6 +246,24 @@ function joyPoll(now) {
       _joyEdge(code, on, now);
     });
   });
+}
+
+// ── 입력 진단 ──
+// "왜 이 버튼이 안 잡히지" 를 눈으로 확인하려고 둔다. 지금 연결된 장치의
+// 버튼/축 원값을 그대로 보여 주므로, 배정이 안 되는 입력이 무엇으로
+// 올라오는지(어느 축에 어떤 값으로) 바로 알 수 있다.
+function joyMonitor() {
+  const pads = joyPads();
+  if (!pads.length) return null;
+  const p = pads[0];
+  const hat = _joyHat[p.index] || {};
+  const btns = [];
+  (p.buttons || []).forEach((b, i) => {
+    const v = (typeof b === 'object') ? (b.value != null ? b.value : (b.pressed ? 1 : 0)) : b;
+    if (v > 0.2) btns.push({ i, v });
+  });
+  const axes = (p.axes || []).map((v, i) => ({ i, v, hat: !!hat[i] }));
+  return { id: p.id || '', mapping: p.mapping || '', btns, axes };
 }
 
 function _joyLoop() {
