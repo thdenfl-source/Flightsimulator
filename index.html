@@ -1897,6 +1897,12 @@ body.night-mode::after {
         <li>일반 아날로그 축은 <b>＋/−</b> 방향별로 잡을 수 있고, 쉬는 자리가 0 이 아닌 장치(정지 상태 −1 등)도
             연결 시점 값을 중립으로 잡아 오작동하지 않습니다.</li>
         <li>장치를 뽑거나 창이 뒤로 가면 누르고 있던 동작은 자동으로 풀립니다.</li>
+        <li><b>안드로이드</b>: 조종 장치의 버튼을 게임패드 버튼이 아니라 <b>키</b>로 넘기는 기종이 많습니다
+            (축·햇만 잡히고 버튼은 조용한 증상). 그런 버튼도 그대로 배정할 수 있고
+            <b>키 F13</b> 처럼 표시됩니다. 배정한 키만 듣기 때문에 기존 키보드 단축키와 다투지 않습니다.</li>
+        <li><b>맥에서 게임패드로 아예 안 잡힐 때</b>: 배정 화면의 <b>🔌 장치 직접 연결(WebHID)</b> 을 누르고
+            목록에서 장치를 고르십시오. 브라우저가 게임패드로 보여 주지 않는 장치도 직접 열어 씁니다
+            (Chrome · Edge. 한 번 허락하면 다음부터 자동으로 다시 연결됩니다).</li>
         <li><b>입력 진단</b>: 배정 화면 아래에 지금 들어오는 <b>버튼 번호와 축 값</b>이 그대로 나옵니다.
             잡히지 않는 입력이 무엇으로 올라오는지 여기서 확인할 수 있습니다
             (<b>HAT</b> 로 표시된 축은 8방향 햇으로 풀어 씁니다).</li>
@@ -2449,6 +2455,7 @@ body.night-mode::after {
   <script src="js/10-tools.js"></script>
   <script src="js/11-charts.js"></script>
   <script src="js/12-joystick.js"></script>
+  <script src="js/13-joyhid.js"></script>
 
 <input type="file" id="zipFileInput" accept=".zip,application/zip,application/x-zip-compressed,application/octet-stream" style="display:none" onchange="handleZipFile(this.files[0]); this.value='';"></body>
 </html>

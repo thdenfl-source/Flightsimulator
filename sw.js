@@ -1,6 +1,6 @@
 // VFR Flight Sim — Service Worker
 // 버전을 올리면 캐시가 갱신됩니다
-const CACHE = 'vfr-flight-v397';
+const CACHE = 'vfr-flight-v398';
 const CORE  = [
   './index.html',
   './manifest.json',
@@ -39,6 +39,7 @@ const CORE  = [
   './js/10-tools.js',
   './js/11-charts.js',
   './js/12-joystick.js',
+  './js/13-joyhid.js',
 ];
 
 // 설치 시 핵심 파일 캐시 (HTTP 캐시 우회로 항상 최신본 저장)

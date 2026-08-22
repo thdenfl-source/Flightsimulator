@@ -154,10 +154,36 @@ export async function run(page, t) {
     const L = LOC_STATIONS.find(x => x.id === 'IYAN');
     return { idents: w.map(x => x.ident), fin: brg(w[n - 2], w[n - 1]), loc: L.crs };
   });
-  t.eq(zCrs.idents.join('→'), 'DUBUN→NY004→NY003→RW33',
-    `ILS Z RWY 33 은 직선 구간만 남는다 (${zCrs.idents.join('→')})`);
+  t.eq(zCrs.idents.join('→'), 'DUBUN→NY015→NY010→IYAN D4.6→IYAN D3.1→IYAN D1.0→RW33',
+    `ILS Z RWY 33 은 AIP 표대로 직선 구간이다 (${zCrs.idents.join('→')})`);
   t.ok(Math.abs(((zCrs.fin - zCrs.loc + 540) % 360) - 180) <= 10,
     `마지막 구간이 IYAN 접근 코스와 같은 방향이다 (${Math.round(zCrs.fin)}°M · LOC ${zCrs.loc}°M)`);
+
+  // AIP 표에 함께 적힌 방위·거리로 좌표를 되짚어 본다.
+  // (옮겨 적다 한 자리 틀리면 여기서 바로 튄다 — 자릿수는 표의 표기 정밀도에 맞춘다)
+  //   D4.6 IYAN : BRG 329.92° / 4.55 NM IYAN   D3.1 : 3.10 NM   D1.0 : 1.00 NM
+  //   DUBUN     : R 091 YAG / 10.00 NM YAG
+  const zGeo = await page.evaluate(() => {
+    const A = IFR_DB.RKNY.approaches.find(x => x.name === 'ILS Z RWY 33');
+    const w = {}; A.wps.forEach(x => { w[x.ident] = x; });
+    const IYAN = [38 + 3 / 60 + 13.8 / 3600, 128 + 40 / 60 + 30.0 / 3600];   // 표의 IYAN DME
+    const YAG = ENR_VORS.find(v => v.id === 'YAG');
+    const at = (p) => ({ d: distance(IYAN[0], IYAN[1], p.lat, p.lon),
+                         b: toMag(bearing(p.lat, p.lon, IYAN[0], IYAN[1])) });
+    return { f46: at(w['IYAN D4.6']), f31: at(w['IYAN D3.1']), f10: at(w['IYAN D1.0']),
+             dubD: distance(YAG.lat, YAG.lon, w.DUBUN.lat, w.DUBUN.lon),
+             dubR: toMag(bearing(YAG.lat, YAG.lon, w.DUBUN.lat, w.DUBUN.lon)) };
+  });
+  [['f46', 4.55], ['f31', 3.10], ['f10', 1.00]].forEach(([k, nm]) => {
+    t.ok(Math.abs(zGeo[k].d - nm) < 0.06,
+      `${k === 'f46' ? 'D4.6' : k === 'f31' ? 'D3.1' : 'D1.0'} 가 IYAN 에서 ${nm}NM 이다 (${zGeo[k].d.toFixed(2)}NM)`);
+  });
+  t.ok(Math.abs(zGeo.f46.b - 329.92) < 1.0,
+    `FAF 가 IYAN 기준 게재 방위와 같다 (${zGeo.f46.b.toFixed(1)}° · 표 329.92°)`);
+  t.ok(Math.abs(zGeo.dubD - 10.0) < 0.15,
+    `DUBUN 이 YAG 에서 10.00NM 이다 (${zGeo.dubD.toFixed(2)}NM)`);
+  t.ok(Math.abs(((zGeo.dubR - 91 + 540) % 360) - 180) <= 1.0,
+    `DUBUN 이 YAG R-091 위에 있다 (${zGeo.dubR.toFixed(1)}°M)`);
 
   // ── CDU 에서 골라 비행계획에 실제로 들어가는가 ──
   const added = await page.evaluate(() => {

@@ -138,6 +138,7 @@ function joyBindOf(actId) {
 function joyCodeLabel(code) {
   if (!code) return '';
   if (code[0] === 'b') return `버튼 ${code.slice(1)}`;
+  if (code[0] === 'k') return `키 ${code.slice(1)}`;
   if (code[0] === 'h') {
     const d = code.replace(/^h\d+/, '');
     return `햇 ${code.slice(1, code.length - d.length)} ${JOY_HAT_LBL[d] || d}`;
@@ -165,6 +166,7 @@ function toggleJoy() {
 
 // 연결이 끊기거나 기능을 끌 때 — 누르고 있던 동작을 반드시 놓는다
 function joyReleaseAll() {
+  try { Object.keys(_joyKeys).forEach(c => delete _joyKeys[c]); } catch (e) { _swallow(e); }
   Object.keys(_joyDown).forEach(code => {
     const a = JOY_ACT_BY_ID[joyBinds[code]];
     if (a && a.kind === 'hold' && a.off) { try { a.off(); } catch (e) { _swallow(e); } }
@@ -178,7 +180,11 @@ function joyPads() {
     const fn = navigator.getGamepads || navigator.webkitGetGamepads;
     if (!fn) return [];
     const g = fn.call(navigator);
-    return Array.prototype.slice.call(g || []).filter(Boolean);
+    const list = Array.prototype.slice.call(g || []).filter(Boolean);
+    // WebHID 로 직접 연 장치도 같은 패드로 취급한다(13-joyhid.js)
+    try { const h = (typeof joyHidPad === 'function') ? joyHidPad() : null; if (h) list.push(h); }
+    catch (e) { _swallow(e); }
+    return list;
   } catch (e) { return []; }
 }
 function joyApiSupported() {
@@ -233,8 +239,34 @@ function _joyEdge(code, pressed, now) {
   }
 }
 
+// ── 키 이벤트로 올라오는 버튼(안드로이드) ──
+// 안드로이드는 조종 장치의 버튼을 게임패드 버튼이 아니라 '키' 로 넘겨 주는
+// 기종이 많다(축·햇만 Gamepad API 로 오고 버튼은 조용한 증상). 그래서 키도
+// 같은 입력으로 받아 배정할 수 있게 한다. 배정한 키만 듣는다(배정 대기 제외).
+const _joyKeys = {};              // code → true (지금 눌려 있는 키)
+function joyKeyCode(e) { return 'k' + (e.code || e.keyCode); }
+function _joyKeyTyping(t) {
+  return !!(t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable));
+}
+document.addEventListener('keydown', e => {
+  if (!joyOn || e.repeat || _joyKeyTyping(e.target)) return;
+  const code = joyKeyCode(e);
+  if (!joyCapture && !joyBinds[code]) return;   // 배정하지 않은 키는 건드리지 않는다
+  e.preventDefault();
+  _joyKeys[code] = true;
+  _joyEdge(code, true, (typeof performance !== 'undefined') ? performance.now() : 0);
+});
+document.addEventListener('keyup', e => {
+  const code = joyKeyCode(e);
+  if (!_joyKeys[code]) return;
+  delete _joyKeys[code];
+  _joyEdge(code, false, (typeof performance !== 'undefined') ? performance.now() : 0);
+});
+
 // 한 프레임분 폴링. 테스트에서 직접 부를 수 있게 시각을 인자로 받는다.
 function joyPoll(now) {
+  // 눌려 있는 키의 연속 동작(repeat)도 여기서 돈다 — 장치가 없어도 듣는다
+  Object.keys(_joyKeys).forEach(code => _joyEdge(code, true, now));
   const pads = joyPads();
   if (!pads.length) { joyPadName = ''; joyActiveIdx = -1; joyReleaseAll(); return; }
   // 축 중립은 패드마다 따로 — 나중에 고르는 패드도 제 중립을 갖고 있어야 한다
