@@ -1,0 +1,209 @@
+// 조종 장치(조이스틱 · 게임패드) 연동.
+//
+// 실제 장치를 꽂을 수 없으므로 navigator.getGamepads 를 가짜 패드로 바꿔 두고
+// joyPoll(시각) 을 직접 돌린다 — 폴링 한 번이 곧 한 프레임이다.
+// 확인할 것은 "버튼을 눌렀을 때 실제로 그 동작이 일어나는가" 이므로,
+// 배정된 동작이 바꾸는 상태값(selHdg · S.running …)을 본다.
+export const name = '조이스틱 연동';
+
+// 가짜 패드를 깔고 버튼 상태를 바꿀 수 있는 손잡이를 만든다
+const SETUP = () => {
+  window._pad = {
+    index: 0, id: 'TEST STICK', mapping: '',
+    buttons: Array.from({ length: 16 }, () => ({ pressed: false, value: 0 })),
+    axes: [0, 0, 0, 0],
+  };
+  navigator.getGamepads = () => [window._pad];
+  window._press = (i, on) => { _pad.buttons[i] = { pressed: !!on, value: on ? 1 : 0 }; };
+  window._axis  = (i, v) => { _pad.axes[i] = v; };
+  joyStop();                      // rAF 루프는 끄고 손으로 돌린다
+  joyBinds = {}; joyCancelCapture();
+  joyOn = true;
+  for (const k in _joyNeutral) delete _joyNeutral[k];
+};
+
+export async function run(page, t) {
+  // ── 배정한 버튼이 동작을 부른다 ──
+  const press = await page.evaluate(`(() => {
+    (${SETUP.toString()})();
+    joySetBind('b5', 'sim');
+    S.running = false;
+    let now = 1000;
+    joyPoll(now);                         // 안 누른 상태 — 아무 일 없어야 한다
+    const idle = S.running;
+    _press(5, true);  joyPoll(now += 16); // 누름 = FLY
+    const down = S.running;
+    joyPoll(now += 16);                   // 누른 채로 더 돌아도 한 번뿐
+    const held = S.running;
+    _press(5, false); joyPoll(now += 16); // 떼도 그대로
+    const up = S.running;
+    _press(5, true);  joyPoll(now += 16); // 다시 누르면 PAUSE
+    const again = S.running;
+    _press(5, false); joyPoll(now += 16);
+    S.running = false;
+    return { idle, down, held, up, again };
+  })()`);
+  t.eq(press.idle, false, '누르지 않으면 아무 일도 없다');
+  t.eq(press.down, true, '배정한 버튼을 누르면 FLY 로 바뀐다');
+  t.eq(press.held, true, '누르고 있는 동안 다시 실행되지 않는다(누르는 순간 한 번)');
+  t.eq(press.up, true, '떼는 것만으로는 바뀌지 않는다');
+  t.eq(press.again, false, '다시 누르면 PAUSE — 토글이다');
+
+  // ── 반복(repeat) 동작은 화면 버튼 홀드와 같은 리듬이다 ──
+  // 누르는 즉시 1회, 350ms 뒤부터 80ms 마다.
+  const rep = await page.evaluate(`(() => {
+    (${SETUP.toString()})();
+    joySetBind('b2', 'hdgUp');
+    gspdOn = false; selHdg = 100;
+    let now = 1000;
+    _press(2, true);
+    joyPoll(now); const first = selHdg;
+    for (let i = 0; i < 20; i++) joyPoll(now += 16);   // +320ms — 아직 반복 전
+    const beforeDelay = selHdg;
+    for (let i = 0; i < 20; i++) joyPoll(now += 16);   // +640ms 까지
+    const after = selHdg;
+    _press(2, false); joyPoll(now += 16);
+    const stopped = selHdg;
+    for (let i = 0; i < 20; i++) joyPoll(now += 16);
+    return { first, beforeDelay, after, stopped, end: selHdg };
+  })()`);
+  t.eq(rep.first, 101, '누르는 즉시 한 번 움직인다 (HDG 100→101)');
+  t.eq(rep.beforeDelay, 101, '350ms 전에는 반복하지 않는다');
+  t.ok(rep.after >= 104 && rep.after <= 106,
+    `그 뒤 80ms 마다 반복한다 (640ms 에 ${rep.after - 100}°)`);
+  t.eq(rep.end, rep.stopped, '떼면 즉시 멈춘다');
+
+  // ── 누르는 동안 유지되는 동작(hold)은 뗄 때 반드시 풀린다 ──
+  // 트림은 자체 반복 타이머를 쓴다 — 떼는 것을 놓치면 타이머가 살아남아
+  // 계속 속도가 오른다(런어웨이). 그래서 타이머가 정리됐는지를 본다.
+  const hold = await page.evaluate(`(() => {
+    (${SETUP.toString()})();
+    joySetBind('b3', 'trimF');
+    gspdOn = false; S.spd = 100;
+    let now = 1000;
+    _press(3, true); joyPoll(now += 16);
+    const on = { spd: S.spd, timer: trimHoldTimer !== null };
+    _press(3, false); joyPoll(now += 16);
+    return { on, offTimer: trimHoldTimer, offInt: trimHoldInt };
+  })()`);
+  t.eq(hold.on.spd, 101, '누르면 트림이 걸린다 (IAS 100→101)');
+  t.eq(hold.on.timer, true, '누르고 있는 동안 트림 홀드가 살아 있다');
+  t.eq(hold.offTimer, null, '떼면 홀드 타이머가 정리된다');
+  t.eq(hold.offInt, null, '반복 타이머도 남지 않는다');
+
+  // 연결이 끊겨도 마찬가지다 — 장치가 사라진 프레임에서 풀어야 한다
+  const lost = await page.evaluate(`(() => {
+    (${SETUP.toString()})();
+    joySetBind('b3', 'trimF');
+    gspdOn = false; S.spd = 100;
+    let now = 1000;
+    _press(3, true); joyPoll(now += 16);
+    navigator.getGamepads = () => [];       // 뽑힘
+    joyPoll(now += 16);
+    return { timer: trimHoldTimer, name: joyPadName };
+  })()`);
+  t.eq(lost.timer, null, '장치가 빠지면 누르고 있던 트림이 풀린다');
+  t.eq(lost.name, '', '연결 표시도 지워진다');
+
+  // ── 햇(HAT)처럼 축으로 올라오는 입력도 방향별로 잡는다 ──
+  // 중립이 0 이 아닌 기종이 있어(정지 상태 -1) 연결 시점 값을 중립으로 삼는다.
+  const ax = await page.evaluate(`(() => {
+    (${SETUP.toString()})();
+    _pad.axes = [0, 0, -1, 0];               // 축2(햇)는 -1 에서 쉰다
+    joySetBind('a0+', 'spdUp');
+    joySetBind('a0-', 'spdDn');
+    joySetBind('a2+', 'altUp');
+    S.spd = 100; selAlt = 1000;
+    let now = 1000;
+    joyPoll(now);                            // 중립 학습 — 쉬는 값이 눌림이 되면 안 된다
+    const idle = { spd: S.spd, alt: selAlt };
+    _axis(0, 1);  joyPoll(now += 16);
+    const plus = S.spd;
+    _axis(0, 0);  joyPoll(now += 16);
+    _axis(0, -1); joyPoll(now += 16);
+    const minus = S.spd;
+    _axis(0, 0);  joyPoll(now += 16);
+    _axis(2, 0);  joyPoll(now += 16);        // 햇을 밀면 중립(-1)에서 +1 만큼
+    const hat = selAlt;
+    _axis(2, -1); joyPoll(now += 16);
+    return { idle, plus, minus, hat };
+  })()`);
+  t.eq(ax.idle.spd, 100, '가운데 있는 축은 눌린 것으로 보지 않는다');
+  t.eq(ax.idle.alt, 1000, '쉬는 값이 -1 인 햇도 눌린 것으로 보지 않는다');
+  t.eq(ax.plus, 101, '축을 + 로 밀면 그 방향 동작이 돈다');
+  t.eq(ax.minus, 100, '반대로 밀면 반대 동작이 돈다');
+  t.eq(ax.hat, 1100, '햇도 쉬는 자리에서 벗어난 만큼으로 판정한다 (ALT 1000→1100)');
+
+  // ── 배정(캡처) — 동작을 고른 뒤 누른 버튼이 그 자리에서 잡힌다 ──
+  const cap = await page.evaluate(`(() => {
+    (${SETUP.toString()})();
+    joySetBind('b1', 'gspd');
+    gspdOn = false;
+    let now = 1000;
+    joyBeginCapture('gspd');
+    _press(7, true); joyPoll(now += 16);     // 배정용 입력은 동작을 실행하지 않는다
+    const ranWhileBinding = gspdOn;
+    _press(7, false); joyPoll(now += 16);
+    const code = joyBindOf('gspd'), old = joyBinds['b1'];
+    _press(7, true); joyPoll(now += 16);     // 이제부터는 그 버튼이 동작을 부른다
+    const ran = gspdOn;
+    _press(7, false); joyPoll(now += 16);
+    if (gspdOn) toggleGspd();
+    return { ranWhileBinding, code, old, ran, capture: joyCapture,
+             label: joyCodeLabel(code), saved: localStorage.getItem('joyBinds') };
+  })()`);
+  t.eq(cap.ranWhileBinding, false, '배정하려고 누른 그 입력은 동작을 실행하지 않는다');
+  t.eq(cap.code, 'b7', '누른 버튼이 그 동작에 잡힌다');
+  t.eq(cap.old, undefined, '한 동작에 입력 하나 — 종전 배정은 지워진다');
+  t.eq(cap.ran, true, '배정 뒤에는 그 버튼이 동작을 부른다');
+  t.eq(cap.capture, null, '한 번 잡으면 대기가 풀린다');
+  t.eq(cap.label, '버튼 7', '화면에 읽을 수 있는 이름으로 나온다');
+  t.ok((cap.saved || '').includes('b7'), '배정은 기기에 저장된다(다시 켜도 남는다)');
+
+  // ── 기능을 끄면 아무 버튼도 듣지 않는다 ──
+  const off = await page.evaluate(`(() => {
+    (${SETUP.toString()})();
+    joySetBind('b5', 'sim');
+    S.running = false; joyOn = false;
+    let now = 1000;
+    _press(5, true); joyPoll(now += 16);
+    const while_off = S.running;
+    joyOn = true; _press(5, false); joyPoll(now += 16);
+    _press(5, true); joyPoll(now += 16);
+    const on = S.running;
+    _press(5, false); joyPoll(now += 16);
+    S.running = false;
+    return { while_off, on, name: joyPadName };
+  })()`);
+  t.eq(off.while_off, false, '설정에서 끄면 버튼이 듣지 않는다');
+  t.eq(off.on, true, '다시 켜면 듣는다');
+  t.eq(off.name, 'TEST STICK', '꺼져 있어도 연결 여부는 알려 준다');
+
+  // ── 설정 화면에 배정 화면이 있고, 목록이 그려진다 ──
+  const ui = await page.evaluate(`(() => {
+    (${SETUP.toString()})();
+    joySetBind('b4', 'ftr');
+    selectPanel('right', 'cdu', true);
+    switchMode('JOYSTICK');
+    const el = document.getElementById('mainContentArea');
+    const txt = el.innerText;
+    const rows = el.querySelectorAll('[data-act="joyPick"]').length;
+    // 행을 누르면 배정 대기로 들어간다
+    el.querySelector('[data-act="joyPick"]').click();
+    const cap = joyCapture;
+    joyCancelCapture(); switchMode('HOME');
+    return { txt, rows, cap, n: JOY_ACTIONS.length, first: JOY_ACTIONS[0].id };
+  })()`);
+  t.eq(ui.rows, ui.n, `동작 ${ui.n} 가지가 모두 배정 가능하다`);
+  t.ok(ui.txt.includes('FORCE TRIM') && ui.txt.includes('버튼 4'),
+    '배정된 버튼이 동작 옆에 보인다');
+  t.ok(ui.txt.includes('TEST STICK'), '연결된 장치 이름이 보인다');
+  t.eq(ui.cap, ui.first, '행을 누르면 그 동작이 입력 대기가 된다');
+
+  // 뒷정리 — 다음 검사가 가짜 패드를 물려받지 않도록
+  await page.evaluate(() => {
+    navigator.getGamepads = () => [];
+    joyBinds = {}; joyCancelCapture(); joyReleaseAll();
+    try { localStorage.removeItem('joyBinds'); } catch (e) {}
+  });
+}
