@@ -119,6 +119,7 @@ let joyBindsSaved = false;
 try { joyBindsSaved = localStorage.getItem('joyBinds') !== null; } catch (e) { _swallow(e); }
 
 let joyPadName = '';          // 연결된 장치 이름(설정 화면 표시용)
+let joyActiveIdx = -1;        // 지금 쓰고 있는 패드 번호(여러 대가 올라올 때)
 let joyLastCode = '';         // 마지막으로 눌린 입력(설정 화면 표시용)
 let joyCapture = null;        // 배정 대기 중인 동작 id
 const _joyDown = {};          // code → { since, next }
@@ -173,9 +174,38 @@ function joyReleaseAll() {
 
 function joyPads() {
   try {
-    const g = navigator.getGamepads ? navigator.getGamepads() : [];
+    // 구형 사파리는 webkit 접두사만 있다
+    const fn = navigator.getGamepads || navigator.webkitGetGamepads;
+    if (!fn) return [];
+    const g = fn.call(navigator);
     return Array.prototype.slice.call(g || []).filter(Boolean);
   } catch (e) { return []; }
+}
+function joyApiSupported() {
+  return !!(navigator.getGamepads || navigator.webkitGetGamepads);
+}
+// 브라우저가 장치를 못 보여 주는 흔한 사정을 한 줄로 알려 준다.
+// (연결은 됐는데 아무 반응이 없을 때 어디를 봐야 하는지가 늘 문제다)
+function joyWhyNoPad() {
+  if (!joyApiSupported()) return 'API_NONE';
+  if (!window.isSecureContext) return 'INSECURE';
+  if (!document.hasFocus()) return 'BLUR';
+  return 'NO_INPUT';
+}
+// 그 패드에서 지금 무언가 움직이고 있는가(장치 고르기·진단에 쓴다)
+function joyPadActive(p) {
+  const neu = _joyNeutral[p.index] || [];
+  const btn = (p.buttons || []).some(b => {
+    const v = (typeof b === 'object') ? (b.value != null ? b.value : (b.pressed ? 1 : 0)) : b;
+    return v >= JOY_ON;
+  });
+  if (btn) return true;
+  return (p.axes || []).some((v, i) => {
+    if (!Number.isFinite(v)) return false;
+    const hat = (_joyHat[p.index] || {})[i];
+    if (hat) return joyHatDirs(v).length > 0;
+    return Math.abs(v - (Number.isFinite(neu[i]) ? neu[i] : 0)) >= JOY_ON;
+  });
 }
 
 // 한 입력의 눌림/뗌을 처리한다. 배정 대기 중이면 동작 대신 배정으로 간다.
@@ -206,12 +236,23 @@ function _joyEdge(code, pressed, now) {
 // 한 프레임분 폴링. 테스트에서 직접 부를 수 있게 시각을 인자로 받는다.
 function joyPoll(now) {
   const pads = joyPads();
-  if (!pads.length) { joyPadName = ''; joyReleaseAll(); return; }
-  joyPadName = pads[0].id || '조종 장치';
+  if (!pads.length) { joyPadName = ''; joyActiveIdx = -1; joyReleaseAll(); return; }
+  // 축 중립은 패드마다 따로 — 나중에 고르는 패드도 제 중립을 갖고 있어야 한다
+  pads.forEach(q => {
+    if (!_joyNeutral[q.index]) _joyNeutral[q.index] = Array.prototype.slice.call(q.axes || []);
+  });
+  // ── 쓸 패드 고르기 ──
+  // 조종 장치 하나가 여러 대로 올라오는 기종이 있다(허브·복합 장치). 그때
+  // 첫 번째가 아무 값도 내지 않는 껍데기면 종전에는 영영 조용했다.
+  // 그래서 '지금 움직이고 있는' 패드로 옮겨 붙는다.
+  let sel = pads.find(q => q.index === joyActiveIdx) || null;
+  const live = pads.find(q => joyPadActive(q));
+  if (live && (!sel || (live.index !== sel.index && !joyPadActive(sel)))) sel = live;
+  if (!sel) sel = pads[0];
+  if (sel.index !== joyActiveIdx) { joyReleaseAll(); joyActiveIdx = sel.index; }
+  joyPadName = sel.id || '조종 장치';
   if (!joyOn) return;
-  const p = pads[0];
-  // 첫 연결이면 축 중립을 잡는다(햇이 -1 에서 쉬는 기종 대응)
-  if (!_joyNeutral[p.index]) _joyNeutral[p.index] = Array.prototype.slice.call(p.axes || []);
+  const p = sel;
   const neu = _joyNeutral[p.index];
 
   (p.buttons || []).forEach((b, i) => {
@@ -254,8 +295,11 @@ function joyPoll(now) {
 // 올라오는지(어느 축에 어떤 값으로) 바로 알 수 있다.
 function joyMonitor() {
   const pads = joyPads();
-  if (!pads.length) return null;
-  const p = pads[0];
+  if (!pads.length) {
+    return { none: true, why: joyWhyNoPad(),
+             api: joyApiSupported(), secure: !!window.isSecureContext, focus: document.hasFocus() };
+  }
+  const p = pads.find(q => q.index === joyActiveIdx) || pads[0];
   const hat = _joyHat[p.index] || {};
   const btns = [];
   (p.buttons || []).forEach((b, i) => {
@@ -263,7 +307,8 @@ function joyMonitor() {
     if (v > 0.2) btns.push({ i, v });
   });
   const axes = (p.axes || []).map((v, i) => ({ i, v, hat: !!hat[i] }));
-  return { id: p.id || '', mapping: p.mapping || '', btns, axes };
+  return { id: p.id || '', mapping: p.mapping || '', btns, axes, index: p.index,
+           pads: pads.map(q => ({ index: q.index, id: q.id || '', act: joyPadActive(q) })) };
 }
 
 function _joyLoop() {
