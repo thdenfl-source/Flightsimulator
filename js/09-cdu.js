@@ -2843,7 +2843,8 @@ function act(name, ...args) {
     function joyUnbind(actId) { joyClearBind(actId); switchMode('JOYSTICK'); }
     // 브라우저가 장치를 게임패드로 안 보여 줄 때(맥에서 흔하다) 직접 연다
     function joyHidPick() {
-      if (!joyHidSupported()) { uiAlert('이 브라우저는 장치 직접 연결(WebHID)을 지원하지 않습니다. Chrome · Edge 를 쓰십시오.'); return; }
+      const st = joyHidStatus();
+      if (!st.supported) { uiAlert(st.msg.replace(/<\/?b>/g, '')); return; }
       joyHidConnect().then(ok => { if (currentMode === 'JOYSTICK') switchMode('JOYSTICK'); });
     }
     function joyHidDrop() { joyHidDisconnect(); switchMode('JOYSTICK'); }
@@ -2861,16 +2862,18 @@ function act(name, ...args) {
         : `<span style="color:#ff8877;">장치 없음</span> — 연결 후 <b>아무 버튼이나 한 번</b> 누르십시오`;
       // 게임패드로 안 잡히는 장치를 직접 여는 길(WebHID)
       const h = joyHidStatus();
+      // 쓸 수 없는 기기(아이패드 등)에서는 눌러 볼 것도 없이 사정을 적어 둔다
       const hidRow = `<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">` +
-        `<div data-act="joyHidPick" style="flex:1;padding:7px 9px;border:1px solid #2a4a5a;border-radius:5px;` +
-        `background:#0a1620;color:#00cfff;font-size:11px;font-weight:bold;cursor:pointer;">` +
-        `🔌 장치 직접 연결 (WebHID)</div>` +
+        `<div data-act="joyHidPick" style="flex:1;padding:7px 9px;border:1px solid ${h.supported ? '#2a4a5a' : '#232a33'};` +
+        `border-radius:5px;background:${h.supported ? '#0a1620' : '#0c1014'};color:${h.supported ? '#00cfff' : '#5a6673'};` +
+        `font-size:11px;font-weight:bold;cursor:pointer;">` +
+        `🔌 장치 직접 연결 (WebHID)${h.supported ? '' : ' — 이 기기에서는 못 씀'}</div>` +
         (h.open ? `<div data-act="joyHidDrop" style="flex:0 0 auto;color:#ff8877;font-size:9px;border:1px solid #5a2a2a;` +
                   `border-radius:3px;padding:5px 9px;cursor:pointer;">해제</div>` : '') + `</div>` +
         `<div style="color:${h.open ? (h.data ? '#00ff88' : '#ffcc44') : '#4a5563'};font-size:9px;margin:-2px 2px 8px;line-height:1.4;">` +
         (h.open ? (h.data ? `직접 연결됨 — ${h.name}` : `${h.name} 을(를) 열었습니다. 버튼을 눌러 보십시오.`)
                 : (h.supported ? '게임패드로 잡히지 않는 장치(맥에서 흔합니다)는 이 버튼으로 직접 열 수 있습니다.'
-                               : '이 브라우저는 직접 연결(WebHID)을 지원하지 않습니다.')) + `</div>`;
+                               : h.msg)) + `</div>`;
       const head = `<div style="padding:8px 10px;margin-bottom:6px;border:1px solid #1e2630;border-radius:5px;background:#0a1116;` +
         `font-size:10px;line-height:1.5;color:#cdd6df;">${conn}<br>` +
         `<span style="color:#567;">동작을 누른 뒤 원하는 버튼을 누르면 그 버튼으로 잡힙니다. ` +
