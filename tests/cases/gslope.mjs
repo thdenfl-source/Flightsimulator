@@ -163,9 +163,73 @@ export async function run(page, t) {
   t.ok(Math.abs(fly.vs - wantVs) < 150,
     `강하율이 이론값에 가깝다 (${Math.round(fly.vs)}fpm · 이론 ${Math.round(wantVs)}fpm)`);
 
+  // ── AFCS 스트립에도 무장·붙잡음이 뜨는가 ──
+  // 계기판만 보고도 지금 무엇이 고도를 몰고 있는지 알아야 한다.
+  const fma = await page.evaluate(([GP, CRS, ELEV, ANG, FT_NM]) => {
+    const p = destPoint(GP[0], GP[1], toTrue(normA(CRS + 180)), 6);
+    S.lat = p[0]; S.lon = p[1];
+    S.alt = ELEV + 6 * FT_NM * Math.tan(ANG * Math.PI / 180);
+    S.spd = 120; gspdOn = false; altHoldOn = true; crhtOn = false;
+    // 스트립은 PFD 왼쪽 절반의 맨 윗줄에 있다. 승강계에도 'G/S' 머리글이 있으므로
+    // 가로 위치로 갈라야 한다 — 승강계는 오른쪽 끝이다.
+    const half = document.getElementById('pfd').width * 0.6;
+    const shot = () => {
+      const proto = CanvasRenderingContext2D.prototype, orig = proto.fillText, seen = [];
+      proto.fillText = function (tx, px, py, ...a) {
+        if (px < half && py < 40) seen.push(String(tx));
+        return orig.call(this, tx, px, py, ...a);
+      };
+      try { drawPFD(); } finally { proto.fillText = orig; }
+      return seen.filter(s => /^(ALT|CRHT|G\/S|NAV|HDG|IAS|GS)/.test(s));
+    };
+    gsArmed = false; gsOn = false; updateGsBtn();
+    const off = shot();
+    gsArmed = true;  gsOn = false; updateGsBtn();
+    const arm = shot();
+    gsArmed = false; gsOn = true;  updateGsBtn();
+    const cap = shot();
+    gsArmed = false; gsOn = false; updateGsBtn();
+    return { off, arm, cap };
+  }, [GP, CRS, ELEV, ANG, FT_NM]);
+  t.ok(fma.off.includes('ALT') && !fma.off.includes('G/S'),
+    `평소에는 종전대로 ALT 만 뜬다 (${fma.off.join(' ')})`);
+  t.ok(fma.arm.includes('ALT') && fma.arm.includes('G/S'),
+    `무장하면 ALT 옆에 G/S 가 함께 뜬다 (${fma.arm.join(' ')})`);
+  t.ok(fma.cap.includes('G/S') && !fma.cap.includes('ALT'),
+    `붙잡으면 그 칸의 주 모드가 G/S 가 된다 (${fma.cap.join(' ')})`);
+
+  // 무장은 흰색, 붙잡음은 자홍색 — 실제로 칠해진 색으로 가른다
+  const col = await page.evaluate(([GP, CRS, ELEV, ANG, FT_NM]) => {
+    const p = destPoint(GP[0], GP[1], toTrue(normA(CRS + 180)), 6);
+    S.lat = p[0]; S.lon = p[1];
+    S.alt = ELEV + 6 * FT_NM * Math.tan(ANG * Math.PI / 180);
+    altHoldOn = true; crhtOn = false; gspdOn = false;
+    // 스트립 글자를 그릴 때의 fillStyle 을 엿본다
+    const half = document.getElementById('pfd').width * 0.6;
+    const grab = () => {
+      const proto = CanvasRenderingContext2D.prototype, orig = proto.fillText;
+      const out = [];
+      proto.fillText = function (tx, px, py, ...a) {
+        if (px < half && py < 40) out.push([String(tx), this.fillStyle]);
+        return orig.call(this, tx, px, py, ...a);
+      };
+      try { drawPFD(); } finally { proto.fillText = orig; }
+      const hit = out.find(r => r[0] === 'G/S');
+      return hit ? String(hit[1]) : null;
+    };
+    gsArmed = true; gsOn = false; updateGsBtn();
+    const arm = grab();
+    gsArmed = false; gsOn = true; updateGsBtn();
+    const cap = grab();
+    gsArmed = false; gsOn = false; updateGsBtn();
+    return { arm, cap };
+  }, [GP, CRS, ELEV, ANG, FT_NM]);
+  t.eq(col.arm, '#ffffff', `무장은 흰 글씨다 (${col.arm})`);
+  t.eq(col.cap, '#ff66ff', `붙잡으면 자홍색이다 — 승강계 마름모와 같은 색 (${col.cap})`);
+
   // 뒷정리
   await page.evaluate(() => {
     gsArmed = false; gsOn = false; updateGsBtn();
-    S.running = false; setNavSrc('FMS');
+    altHoldOn = false; S.running = false; setNavSrc('FMS');
   });
 }
