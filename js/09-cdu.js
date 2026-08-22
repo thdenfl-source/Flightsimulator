@@ -2896,7 +2896,21 @@ function act(name, ...args) {
         const box = document.getElementById('joy-mon');
         if (!box) return;
         const m = joyMonitor();
-        if (!m) { box.innerHTML = '<span style="color:#ff8877;">장치 없음</span>'; }
+        if (!m || m.none) {
+          // 연결했는데도 안 보일 때 어디를 봐야 하는지까지 적는다
+          const why = m ? m.why : 'API_NONE';
+          const msg = {
+            API_NONE: '이 브라우저는 Gamepad API 를 지원하지 않습니다. Chrome · Edge · Safari 최신판을 쓰십시오.',
+            INSECURE: 'https 로 열어야 장치가 보입니다(주소를 확인하십시오).',
+            BLUR: '창이 뒤에 있습니다. 이 창을 클릭해 앞으로 가져오십시오.',
+            NO_INPUT: '브라우저는 <b>장치의 버튼을 한 번 누르기 전까지</b> 장치를 알려 주지 않습니다. ' +
+                      '이 창을 클릭한 뒤 조이스틱 버튼을 눌러 보십시오.',
+          }[why] || '';
+          box.innerHTML = '<span style="color:#ff8877;">장치 없음</span><br>' +
+            `<span style="color:#8a97a5;">${msg}</span>` +
+            `<br><span style="color:#4a5563;">API ${m && m.api ? 'O' : 'X'} · https ${m && m.secure ? 'O' : 'X'} · ` +
+            `창 포커스 ${m && m.focus ? 'O' : 'X'}</span>`;
+        }
         else {
           const b = m.btns.length
             ? m.btns.map(x => `<span style="color:#00ff88;">B${x.i}</span>`).join(' ')
@@ -2906,8 +2920,14 @@ function act(name, ...args) {
             return `<span style="color:${x.hat ? '#ffcc44' : (on ? '#00e5ff' : '#4a5563')};">` +
                    `A${x.i}${x.hat ? '(HAT)' : ''} ${x.v.toFixed(2)}</span>`;
           }).join('&nbsp; ');
+          // 여러 대로 올라오는 장치가 있어 어느 것을 쓰고 있는지도 적는다
+          const list = (m.pads || []).length > 1
+            ? '<br>' + m.pads.map(q => `<span style="color:${q.index === m.index ? '#00e5ff' : '#4a5563'};">` +
+                `#${q.index} ${q.id.slice(0, 22)}${q.index === m.index ? ' ←사용' : ''}</span>`).join('<br>')
+            : '';
           box.innerHTML = `눌린 버튼: ${b}<br>${a || '축 없음'}` +
-            (m.mapping ? `<br><span style="color:#4a5563;">mapping: ${m.mapping}</span>` : '');
+            `<br><span style="color:#4a5563;">#${m.index} ${m.id.slice(0, 28)}` +
+            (m.mapping ? ` · mapping: ${m.mapping}` : ' · mapping: (없음)') + `</span>` + list;
         }
         if (_joyCapWas && !joyCapture) { clearInterval(_joyTick); _joyTick = null; renderContent(); }
         _joyCapWas = !!joyCapture;

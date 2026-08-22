@@ -21,6 +21,7 @@ const SETUP = () => {
   joyOn = true;
   for (const k in _joyNeutral) delete _joyNeutral[k];
   for (const k in _joyHat) delete _joyHat[k];
+  joyActiveIdx = -1;
 };
 
 export async function run(page, t) {
@@ -234,6 +235,50 @@ export async function run(page, t) {
   t.eq(mon.a0, 0.5, '축 원값이 그대로 나온다');
   t.eq(mon.hat9, true, '햇으로 푸는 축은 그렇게 표시된다');
   t.eq(mon.n, 10, '축은 빠짐없이 보여 준다');
+
+  // ── 조종 장치가 여러 대로 올라오는 기종 ──
+  // 스틱 하나가 패드 두 대로 잡히면서 첫 번째가 아무 값도 내지 않는 껍데기인
+  // 경우가 있다(복합 HID). 종전에는 첫 번째만 보다가 영영 조용했다.
+  // 움직이는 쪽으로 옮겨 붙는지 본다.
+  const multi = await page.evaluate(`(() => {
+    (${SETUP.toString()})();
+    const mk = (index, id) => ({ index, id, mapping: '',
+      buttons: Array.from({ length: 8 }, () => ({ pressed: false, value: 0 })), axes: [0, 0] });
+    const dummy = mk(0, 'PXN GHOST'), real = mk(1, 'PXN-F16');
+    navigator.getGamepads = () => [dummy, real];
+    joySetBind('b3', 'sim');
+    S.running = false;
+    let now = 1000;
+    joyPoll(now);                                    // 아무도 안 움직임 — 첫 패드를 본다
+    const idle = { idx: joyActiveIdx, name: joyPadName };
+    real.buttons[3] = { pressed: true, value: 1 };   // 진짜 장치에서 입력
+    joyPoll(now += 16);
+    const moved = { idx: joyActiveIdx, name: joyPadName, run: S.running };
+    real.buttons[3] = { pressed: false, value: 0 };
+    joyPoll(now += 16);
+    const mon = joyMonitor();
+    S.running = false;
+    return { idle, moved, monIdx: mon.index, pads: mon.pads.length };
+  })()`);
+  t.eq(multi.idle.idx, 0, '아무 것도 안 움직이면 첫 장치를 본다');
+  t.eq(multi.moved.idx, 1, '값을 내는 쪽으로 옮겨 붙는다 (껍데기 장치 건너뜀)');
+  t.eq(multi.moved.name, 'PXN-F16', '이름도 그 장치 것으로 바뀐다');
+  t.eq(multi.moved.run, true, '그 장치의 버튼이 동작을 부른다 (종전에는 조용했다)');
+  t.eq(multi.monIdx, 1, '진단도 쓰고 있는 장치를 가리킨다');
+  t.eq(multi.pads, 2, '진단에 연결된 장치가 모두 나온다');
+
+  // ── 장치가 안 보일 때 이유를 알려 준다 ──
+  const why = await page.evaluate(`(() => {
+    (${SETUP.toString()})();
+    navigator.getGamepads = () => [];
+    joyPoll(1000);
+    const m = joyMonitor();
+    return { none: m.none, why: m.why, api: m.api, secure: m.secure };
+  })()`);
+  t.eq(why.none, true, '장치가 없으면 그렇게 알려 준다');
+  t.eq(why.api, true, '이 브라우저가 Gamepad API 를 지원하는지 함께 본다');
+  t.ok(why.why === 'NO_INPUT' || why.why === 'BLUR' || why.why === 'INSECURE',
+    `왜 안 보이는지까지 짚어 준다 (${why.why})`);
 
   // ── 배정(캡처) — 동작을 고른 뒤 누른 버튼이 그 자리에서 잡힌다 ──
   const cap = await page.evaluate(`(() => {
