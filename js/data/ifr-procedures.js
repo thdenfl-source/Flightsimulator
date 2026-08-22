@@ -1045,10 +1045,10 @@ stars: [
       ]},
     ],
     approaches: [
+      // ILS Z 는 아크 전이가 아니라 직선 진입이다(아크 전이는 ILS Y 쪽).
+      // 종전에는 RNP RWY 33 의 앞 두 구간(NY015·NY010 아크)이 잘못 섞여 있었다.
       { name:'ILS Z RWY 33', wps:[
         {ident:'DUBUN', lat:38.0874,lon:128.8705},
-        {ident:'NY015', lat:37.9753,lon:128.8927, arc:{clat:38.0188,clon:128.7798,dir:'R'}},
-        {ident:'NY010', lat:37.9228,lon:128.8108, arc:{clat:38.0188,clon:128.7798,dir:'R'}},
         {ident:'NY004', lat:37.9947,lon:128.7375},
         {ident:'NY003', lat:38.0025,lon:128.7431},
         {ident:'RW33',  lat:38.0526,lon:128.6781},

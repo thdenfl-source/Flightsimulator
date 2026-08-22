@@ -130,6 +130,35 @@ export async function run(page, t) {
   t.eq(empty.length, 0,
     `STAR 반영 확인 — ${got.map(([i, n]) => i + ':' + n).join(' ')}${empty.length ? ' (빈 곳: ' + empty + ')' : ''}`);
 
+  // ── ILS Z 는 직선 진입이다 ──
+  // 같은 활주로에 절차가 둘일 때 아크(호) 전이는 Y 쪽에 붙고 Z 는 직선으로 들어간다.
+  // RNP 절차의 앞 구간을 그대로 옮겨 오면 Z 에 아크가 섞여 든다 — 그것을 막는다.
+  const zArc = await page.evaluate(() => {
+    const bad = [];
+    for (const icao in IFR_DB) {
+      for (const a of (IFR_DB[icao].approaches || [])) {
+        if (!/^ILS\s+Z\b/.test(a.name)) continue;
+        (a.wps || []).forEach(w => { if (w.arc) bad.push(`${icao} ${a.name} ${w.ident}`); });
+      }
+    }
+    return bad;
+  });
+  t.eq(zArc.length, 0, `ILS Z 에는 아크 구간이 없다${zArc.length ? ' — ' + zArc.join(' / ') : ''}`);
+
+  // 양양 ILS Z RWY 33 — 마지막 구간이 로컬라이저 접근 코스와 맞는가.
+  // 아크를 걷어냈으니 남은 구간은 실제 진입 방향이어야 한다.
+  const zCrs = await page.evaluate(() => {
+    const a = IFR_DB.RKNY.approaches.find(x => x.name === 'ILS Z RWY 33');
+    const w = a.wps, n = w.length;
+    const brg = (p, q) => toMag(bearing(p.lat, p.lon, q.lat, q.lon));
+    const L = LOC_STATIONS.find(x => x.id === 'IYAN');
+    return { idents: w.map(x => x.ident), fin: brg(w[n - 2], w[n - 1]), loc: L.crs };
+  });
+  t.eq(zCrs.idents.join('→'), 'DUBUN→NY004→NY003→RW33',
+    `ILS Z RWY 33 은 직선 구간만 남는다 (${zCrs.idents.join('→')})`);
+  t.ok(Math.abs(((zCrs.fin - zCrs.loc + 540) % 360) - 180) <= 10,
+    `마지막 구간이 IYAN 접근 코스와 같은 방향이다 (${Math.round(zCrs.fin)}°M · LOC ${zCrs.loc}°M)`);
+
   // ── CDU 에서 골라 비행계획에 실제로 들어가는가 ──
   const added = await page.evaluate(() => {
     S.wps = [];
