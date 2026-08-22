@@ -108,13 +108,24 @@ function drawFMA(x, y, w) {
     rightOn = true;
   }
 
+  // ── G/S (ILS 강하선) ──
+  // 세로축을 잡으면 그 칸의 주 모드가 G/S 가 된다(승강계 마름모·버튼과 같은 자홍색).
+  // 아직 무장만 한 상태는 실제 FMA 처럼 '흰 글씨로 옆에' 적어 둔다 —
+  // 지금 잡고 있는 모드와 곧 잡을 모드를 한눈에 갈라 보기 위해서다.
+  let leftArm = '';
+  if (typeof gsOn !== 'undefined' && gsOn) { left = 'G/S'; leftOn = true; }
+  else if (typeof gsArmed !== 'undefined' && gsArmed) { leftArm = 'G/S'; }
+
   const modes  = [left,   mid,    right  ];
   const active = [leftOn, midOn,  rightOn];
+  const armed  = [leftArm, '',    ''      ];
 
   const modeColor = (lbl, on) => {
     if (!on) return '#3a3a3a';
     // GS/NAV · GS/HDG = GSPD 가 축을 잡고 있어 NAV·HDG 가 조향하지 못하는 대기 상태.
     // 초록(정상 작동)과 구분되게 호박색으로 표시한다.
+    // G/S 도 빗금이 있으므로 대기 상태(GS/NAV)보다 먼저 가려낸다.
+    if (lbl === 'G/S') return '#ff66ff';   // 강하선을 잡은 상태 — 승강계 마름모와 같은 색
     if (lbl.indexOf('/') >= 0) return '#ffb74d';
     return '#00ff88';  // all active AFCS modes in green
   };
@@ -133,8 +144,27 @@ function drawFMA(x, y, w) {
       ctx.fillStyle = 'rgba(0,25,50,0.85)';
       ctx.fillRect(bx + 1, Y0 + 1, cellW - 2, BOX_H - 2);
     }
-    ctx.fillStyle = modeColor(modes[i], on);
-    ctx.fillText(modes[i], bx + cellW / 2, Y0 + BOX_H / 2 + 0.5);
+    const ty = Y0 + BOX_H / 2 + 0.5;
+    if (armed[i]) {
+      // 주 모드 + 무장 모드를 한 칸에 나란히. 둘을 합친 폭을 재어 가운데 맞춘다.
+      const mainF = ctx.font;
+      const smallF = `bold ${Math.max(7, Math.min(9, w * 0.024))}px 'Helvetica Neue', 'Arial', sans-serif`;
+      ctx.font = mainF;  const w1 = ctx.measureText(modes[i]).width;
+      ctx.font = smallF; const w2 = ctx.measureText(armed[i]).width;
+      const gap2 = 4, total = w1 + gap2 + w2;
+      let px = bx + (cellW - total) / 2;
+      ctx.textAlign = 'left';
+      ctx.font = mainF;  ctx.fillStyle = modeColor(modes[i], on);
+      ctx.fillText(modes[i], px, ty);
+      px += w1 + gap2;
+      // 무장은 흰색 — 아직 잡지 않았다는 뜻이다
+      ctx.font = smallF; ctx.fillStyle = '#ffffff';
+      ctx.fillText(armed[i], px, ty);
+      ctx.font = mainF; ctx.textAlign = 'center';
+    } else {
+      ctx.fillStyle = modeColor(modes[i], on);
+      ctx.fillText(modes[i], bx + cellW / 2, ty);
+    }
   }
   ctx.restore();
 }
