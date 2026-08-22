@@ -69,6 +69,24 @@ const JOY_ACTIONS = [
 const JOY_ACT_BY_ID = {};
 JOY_ACTIONS.forEach(a => { JOY_ACT_BY_ID[a.id] = a; });
 
+// ── 8방향 햇(HAT) 축 풀이 ──
+// 축 하나에 여덟 방향이 실려 오는 기종(대개 축 9)의 표준 배열이다.
+//   -1=▲ · -5/7=▲▶ · -3/7=▶ · -1/7=▼▶ · 1/7=▼ · 3/7=◀▼ · 5/7=◀ · 1=◀▲
+// 즉 (v+1)×3.5 가 0…7 의 방향 번호가 된다. 쉬는 자리는 1 밖(3.2857 등)이다.
+// 대각은 이웃한 두 방향을 함께 누른 것으로 다룬다 — 네 방향만 배정해 두면
+// 대각에서 자연스럽게 두 동작이 함께 걸린다(실물 햇과 같은 느낌).
+const JOY_HAT_DIRS = ['N', 'E', 'S', 'W'];
+const JOY_HAT_LBL  = { N: '▲', E: '▶', S: '▼', W: '◀' };
+const JOY_HAT_MAP  = [['N'], ['N', 'E'], ['E'], ['E', 'S'], ['S'], ['S', 'W'], ['W'], ['W', 'N']];
+function joyHatDirs(v) {
+  if (!Number.isFinite(v) || Math.abs(v) > 1.05) return [];
+  const i = Math.round((v + 1) * 3.5);
+  if (i < 0 || i > 7) return [];
+  // 격자에서 많이 벗어난 값(아날로그 축)은 방향으로 보지 않는다
+  if (Math.abs(v - (i / 3.5 - 1)) > 0.08) return [];
+  return JOY_HAT_MAP[i];
+}
+
 function joyZoom(d) {
   try { if (typeof leafMap !== 'undefined' && leafMap) leafMap.setZoom(leafMap.getZoom() + d); }
   catch (e) { _swallow(e); }
@@ -94,6 +112,7 @@ let joyLastCode = '';         // 마지막으로 눌린 입력(설정 화면 표
 let joyCapture = null;        // 배정 대기 중인 동작 id
 const _joyDown = {};          // code → { since, next }
 const _joyNeutral = {};       // padIndex → 축 중립값 배열
+const _joyHat = {};           // padIndex → { 축번호: true } 햇으로 판정된 축
 let _joyRaf = null;
 
 function joySave() {
@@ -107,6 +126,10 @@ function joyBindOf(actId) {
 function joyCodeLabel(code) {
   if (!code) return '';
   if (code[0] === 'b') return `버튼 ${code.slice(1)}`;
+  if (code[0] === 'h') {
+    const d = code.replace(/^h\d+/, '');
+    return `햇 ${code.slice(1, code.length - d.length)} ${JOY_HAT_LBL[d] || d}`;
+  }
   return `축 ${code.slice(1, -1)} ${code.slice(-1)}`;
 }
 // 한 동작에는 입력 하나 — 같은 입력이 두 동작을 겸하지 않게 정리한다
@@ -186,8 +209,24 @@ function joyPoll(now) {
     const on = _joyDown[code] ? (v > JOY_OFF) : (v >= JOY_ON);
     _joyEdge(code, on, now);
   });
+  const hat = _joyHat[p.index] || (_joyHat[p.index] = {});
   (p.axes || []).forEach((v, i) => {
     if (!Number.isFinite(v)) return;
+    // ── 8방향 햇이 축 하나로 올라오는 기종 ──
+    // 쉬는 자리를 1 밖(대개 3.2857)으로 보내고, 눌린 방향은 -1…1 을 8등분해
+    // 실어 보낸다. 그래서 ± 두 방향으로는 여덟 방향을 가릴 수 없다.
+    // 한 번이라도 1 밖의 값이 오면 그 축은 햇으로 보고 방향으로 푼다.
+    if (Math.abs(v) > 1.05 && !hat[i]) {
+      hat[i] = true;
+      // 햇으로 판정되기 전에 ± 로 눌려 있었다면 그 자리에서 놓아 준다
+      _joyEdge('a' + i + '+', false, now);
+      _joyEdge('a' + i + '-', false, now);
+    }
+    if (hat[i]) {
+      const dirs = joyHatDirs(v);
+      JOY_HAT_DIRS.forEach(d => _joyEdge('h' + i + d, dirs.indexOf(d) >= 0, now));
+      return;
+    }
     const d = v - (Number.isFinite(neu[i]) ? neu[i] : 0);
     ['+', '-'].forEach(sgn => {
       const code = 'a' + i + sgn;
@@ -209,6 +248,7 @@ window.addEventListener('gamepadconnected', e => {
   try {
     const p = e.gamepad;
     delete _joyNeutral[p.index];
+    delete _joyHat[p.index];
     // 표준 배치 패드이고 사용자가 아직 손대지 않았으면 흔한 배치를 넣어 준다
     if (!joyBindsSaved && p.mapping === 'standard') { joyBinds = Object.assign({}, JOY_STD_BINDS); joySave(); }
   } catch (err) { _swallow(err); }
