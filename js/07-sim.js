@@ -266,6 +266,7 @@ function resetSim(){
   S.running=false;
   setSimSpeed(1);            // 리셋하면 실시간으로 돌아온다
   suspOn = false; try { updateSuspBtn(); } catch(e) { _swallow(e); }
+  gsArmed = false; gsOn = false; try { updateGsBtn(); } catch(e) { _swallow(e); }
   updateFlyBtns();
   S.trail=[];trailLine.setLatLngs([]);_update3dTrail();S.lastT=null;
   updateAcOnMap();
@@ -365,7 +366,21 @@ function simStep(ts){
         S.lat += gsN * sc;
         S.lon += gsE * sc / Math.cos(S.lat * D2R);
         // Altitude update — hold modes override manual VS while engaged
-        if (altHoldOn) {
+        // G/S 를 잡고 있으면 고도는 강하선이 정한다(ALT·CRHT 보다 앞선다).
+        try { gsCaptureCheck(); } catch(e) { _swallow(e); }
+        const _gs = gsOn ? gsDeviation() : null;
+        if (_gs) {
+          // 강하선 고도로 수렴시킨다. 기본 강하율은 지상속도와 강하각으로 정해지고
+          // (3°·120kt ≈ 640fpm), 벗어난 만큼만 더 얹어 부드럽게 되돌아온다.
+          const gsKt = Math.max(20, groundSpdKt());
+          const base = gsKt * Math.tan(_gs.angle * D2R) * FT_PER_NM / 60;   // fpm
+          const diff = _gs.path - S.alt;                                    // + = 더 올라야
+          const corr = Math.max(-400, Math.min(400, diff * 0.5));           // fpm
+          const vs = Math.max(-2000, Math.min(500, -base + corr));
+          const step = vs / 60 * dt;
+          S.alt = Math.max(0, Math.min(45000, S.alt + step));
+          S.vs = vs;
+        } else if (altHoldOn) {
           // ALT hold: converge S.alt → selAlt at the pilot-set selVS rate.
           // Sign of climb/descent is determined automatically from the
           // current altitude relative to the target.
@@ -509,6 +524,7 @@ function simStep(ts){
   S.lastT=ts;
   updateHoverBtns();
   try { updateSuspBtn(); } catch(e) { _swallow(e); }
+  try { updateGsBtn(); } catch(e) { _swallow(e); }
   try { fpWptLiveTick(ts); } catch(e) { _swallow(e); }
   // 스톱워치에 흘려 넣을 시간 — 기체가 겪는 시간과 같아야 한다.
   // 배속이 걸리면 그만큼 빨리, 시뮬이 멈춰 있으면 함께 멈춘다.

@@ -31,8 +31,9 @@ import * as crssync from './cases/crssync.mjs';
 import * as locsta from './cases/locsta.mjs';
 import * as susp from './cases/susp.mjs';
 import * as layout from './cases/layout.mjs';
+import * as gslope from './cases/gslope.mjs';
 
-const SUITES = [smoke, actions, coords, chartcal, hold, nav, gspd, dialog, chartview, procdata, simspd, tascalc, brg, fpwpt, maprot, map3d, dmearc, dme, fporder, wptcrs, brglbl, directto, crssync, locsta, susp, layout];
+const SUITES = [smoke, actions, coords, chartcal, hold, nav, gspd, dialog, chartview, procdata, simspd, tascalc, brg, fpwpt, maprot, map3d, dmearc, dme, fporder, wptcrs, brglbl, directto, crssync, locsta, susp, layout, gslope];
 const filter = process.argv.slice(2);
 
 function makeT() {

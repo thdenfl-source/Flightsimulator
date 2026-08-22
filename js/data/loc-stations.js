@@ -10,6 +10,7 @@
 // 좌표와 코스가 서로 어긋나지 않았다는 뜻이다.
 //
 // dme.elev 는 ft. AIP 는 m 로 싣는다(30m = 98ft).
+// gp.angle 은 강하각(°). AIP 비고에 실린 곳만 적고, 없으면 3.0° 로 본다.
 //
 // crs(접근 코스, 자북)의 출처 — crsSrc 로 밝힌다.
 //   (없음)  AIP 게재 ILS 접근 코스
@@ -106,7 +107,7 @@ const LOC_STATIONS = [
   { apt:'RKPS', name:'사천', rwy:'06L', id:'ISAM', freq:'109.10', lat:35.097389, lon:128.083889, crs:63, crsSrc:'pair',
     dme:{ freq:'989', ch:'28X', lat:35.097278, lon:128.084667, elev:0 } },
   { apt:'RKPS', name:'사천', rwy:'24R', id:'ISHA', freq:'108.10', lat:35.081278, lon:128.055222, crs:243, crsSrc:'pair', cat:'I',
-    gp:{ freq:'334.7', lat:35.095611, lon:128.078278 }, dme:{ freq:'979', ch:'18X', lat:35.095611, lon:128.078306, elev:0 } },
+    gp:{ freq:'334.7', lat:35.095611, lon:128.078278 , angle:3.2}, dme:{ freq:'979', ch:'18X', lat:35.095611, lon:128.078306, elev:0 } },
 
   // ── RKPK 김해 (AIP AMDT 10/25) ──
   { apt:'RKPK', name:'김해', rwy:'36L', id:'IKMA', freq:'108.50', lat:35.196556, lon:128.934778, crs:3, crsSrc:'gp', cat:'II',
@@ -130,9 +131,9 @@ const LOC_STATIONS = [
 
   // ── RKNW 원주 (AIP AMDT 6/25) ──
   { apt:'RKNW', name:'원주', rwy:'03', id:'IWNJ', freq:'110.10', lat:37.451472, lon:127.968778, crs:34, crsSrc:'pair', cat:'I',
-    gp:{ freq:'334.40', lat:37.429722, lon:127.953944 }, dme:{ freq:'999', ch:'38X', lat:37.429722, lon:127.953944, elev:0 } },
+    gp:{ freq:'334.40', lat:37.429722, lon:127.953944 , angle:3.3}, dme:{ freq:'999', ch:'38X', lat:37.429722, lon:127.953944, elev:0 } },
   { apt:'RKNW', name:'원주', rwy:'21', id:'IWON', freq:'111.50', lat:37.424722, lon:127.952167, crs:214, crsSrc:'pair', cat:'I',
-    gp:{ freq:'332.90', lat:37.447167, lon:127.96475 }, dme:{ freq:'1013', ch:'52X', lat:37.447167, lon:127.96475, elev:0 } },
+    gp:{ freq:'332.90', lat:37.447167, lon:127.96475 , angle:3.3}, dme:{ freq:'1013', ch:'52X', lat:37.447167, lon:127.96475, elev:0 } },
 
   // ── RKJY 여수 (AIP AMDT 12/25) ──
   { apt:'RKJY', name:'여수', rwy:'17', id:'IYSO', freq:'111.50', lat:34.831111, lon:127.62275, crs:165, cat:'I',
