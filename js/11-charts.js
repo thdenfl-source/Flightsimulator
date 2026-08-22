@@ -2172,6 +2172,7 @@ appRegister({
   toggleAspcPanel,
   toggleAwyLayer,
   toggleSusp,
+  toggleGs,
   toggleBrg1,
   toggleBrg2,
   toggleBrg1Lbl,

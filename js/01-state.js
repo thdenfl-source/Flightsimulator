@@ -119,6 +119,44 @@ function toggleBrg2Lbl() {
   if (btn) btn.classList.toggle('brg2-on', brg2LblOn);
   if (typeof updateBrgLines === 'function') updateBrgLines();
 }
+// ── G/S (글라이드 패스 추종) ──────────────────────────────────────
+// 무장(armed)해 두면 강하선에 닿는 순간 스스로 붙잡아(captured) 고도를 맡는다.
+// 실제 오토파일럿과 같은 순서다 — 아래에서 접근하다 강하선을 만나면 잡는다.
+// 잡고 나면 ALT·CRHT 유지는 물러난다(고도를 두 곳에서 몰면 싸운다).
+let gsArmed = false, gsOn = false;
+function gsAvailable() { return !!gsDeviation(); }
+function updateGsBtn() {
+  const b = document.getElementById('gs-btn');
+  if (!b) return;
+  b.classList.toggle('on', gsOn);
+  b.classList.toggle('armed', gsArmed && !gsOn);
+  const want = gsOn ? 'G/S<span class="gs-sub">CAPT</span>'
+             : gsArmed ? 'G/S<span class="gs-sub">ARM</span>' : 'G/S';
+  if (b.innerHTML !== want) b.innerHTML = want;
+}
+function toggleGs() {
+  if (gsArmed || gsOn) { gsArmed = false; gsOn = false; }
+  else {
+    gsArmed = true;
+    // 이미 강하선 위에 있으면 곧바로 잡는다
+    const g = gsDeviation();
+    if (g && Math.abs(g.dev) < 0.15) { gsOn = true; gsArmed = false; }
+  }
+  updateGsBtn();
+}
+// 매 프레임 — 무장 상태에서 강하선에 닿았는지 본다.
+// 위에서 내려오다 만나는 경우가 대부분이므로 '편차가 0 에 가까워졌을 때' 잡는다.
+function gsCaptureCheck() {
+  if (gsOn) {
+    // 신호를 잃으면(멀어짐·안테나 뒤로 지나감) 놓는다
+    if (!gsDeviation()) { gsOn = false; updateGsBtn(); }
+    return;
+  }
+  if (!gsArmed) return;
+  const g = gsDeviation();
+  if (g && Math.abs(g.dev) < 0.15) { gsOn = true; gsArmed = false; updateGsBtn(); }
+}
+
 // ── SUSP (시퀀싱 보류) ────────────────────────────────────────────
 // 켜져 있으면 활성 웨이포인트를 지나도 다음으로 넘어가지 않고, 그 구간의
 // 코스를 계속 따라간다. 마지막 지점이어도 NAV 가 풀리지 않는다.
@@ -1035,6 +1073,62 @@ function brg1Station() {
       return { lat: r.lat, lon: r.lon, id: r.id, src: k, elev: r.elev || 0 };
   }
   return null;
+}
+
+// ── ILS 글라이드 패스 ────────────────────────────────────────────────
+// 튜닝한 로컬라이저에 GP(활공각 송신기)가 있으면, 그 활주로의 강하선을 따라
+// 지금 있어야 할 고도를 낸다.
+//
+// 강하선은 'GP 안테나 자리에서 비행장 표고, 거기서부터 접근 방향으로 강하각
+// 만큼 올라가는 면' 으로 본다. GP 안테나는 접지대 옆에 서 있으므로 이 기준이
+// 실제 강하선과 거의 겹친다(문턱 통과 높이 50ft 안팎의 차이).
+//
+// 편차는 계기와 같이 '각도' 로 잰다. ILS 규격상 최대편위가 0.7° 이므로
+// 한 점(dot)이 0.35° 다.
+const GS_FULL_DEG = 0.7;        // 최대편위(°)
+const GS_MAX_NM   = 25;         // 이보다 멀면 신호를 잡지 못한 것으로 본다
+// 지금 튜닝된 국이 GP 를 가진 로컬라이저면 그 정보를 돌려준다.
+function gsStation() {
+  for (const k of ['NAV1', 'NAV2']) {
+    if (navSrc !== k) continue;
+    const r = navRadios[k];
+    if (!r || !r.loc || !r.id) return null;
+    try {
+      const L = (typeof LOC_STATIONS !== 'undefined' ? LOC_STATIONS : []).find(x => x.id === r.id);
+      if (L && L.gp) return L;
+    } catch(e) { _swallow(e); }
+    return null;
+  }
+  return null;
+}
+// 그 비행장의 표고(ft) — 강하선의 밑동이다.
+function _gsFieldElev(L) {
+  try {
+    const code = (L.apt || '').slice(2);
+    const a = AIRFIELD_INFO.find(x => x.code === code);
+    if (a && Number.isFinite(a.elev)) return a.elev;
+  } catch(e) { _swallow(e); }
+  return 0;
+}
+// 글라이드 패스 편차. 잡히지 않으면 null.
+//   dev  : 각도 편차(°). + = 강하선 위(높다)
+//   dots : 계기 점(dot). + = 위. 최대편위 2점
+//   path : 지금 자리에서의 강하선 고도(ft)
+//   d    : GP 안테나까지 거리(NM)
+function gsDeviation() {
+  const L = gsStation();
+  if (!L) return null;
+  const g = L.gp;
+  const d = distance(S.lat, S.lon, g.lat, g.lon);
+  if (!(d > 0.15) || d > GS_MAX_NM) return null;          // 너무 가깝거나 멀다
+  // 접근하는 쪽에 있어야 한다 — 안테나 뒤쪽(활주로 너머)에서는 잡히지 않는다.
+  const brgToAc = bearing(g.lat, g.lon, S.lat, S.lon);
+  if (Math.abs(normAS(brgToAc - toTrue(normA(L.crs + 180)))) > 90) return null;
+  const ang = Number.isFinite(g.angle) ? g.angle : 3;
+  const dFt = d * FT_PER_NM;
+  const path = _gsFieldElev(L) + dFt * Math.tan(ang * D2R);
+  const dev  = Math.atan2(S.alt - path, dFt) / D2R;
+  return { dev, dots: dev / (GS_FULL_DEG / 2), path, d, angle: ang, id: L.id };
 }
 
 // ── DME 경사거리(slant range) ────────────────────────────────────────

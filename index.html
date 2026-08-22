@@ -366,6 +366,17 @@ html, body {
 .hover-btn.on     { background: #1a0e2e; border-color: #cc66ff; color: #cc66ff; }
 .hover-pos-btn.on { background: #2e2a0e; border-color: #ffcc00; color: #ffcc00;
                     box-shadow: 0 0 6px rgba(255,204,0,0.45); }
+/* G/S — 무장(ARM)은 호박색, 붙잡으면(CAPT) 승강계 지시침과 같은 자홍색 */
+.gs-btn {
+  background: #1a1a1a; border: 1px solid #333; color: #555;
+  font-size: 10px; font-weight: bold; padding: 3px 6px; cursor: pointer; border-radius: 2px;
+  touch-action: manipulation; white-space: nowrap; font-family: 'Helvetica Neue', Arial, sans-serif;
+  line-height: 1.1; transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.gs-btn .gs-sub { display: block; font-size: 7px; letter-spacing: 0; opacity: 0.9; }
+.gs-btn.armed { background: #2a1c00; border-color: #ffaa00; color: #ffcc44; }
+.gs-btn.on    { background: #2a0e2a; border-color: #ff44ff; color: #ff88ff;
+                box-shadow: 0 0 6px rgba(255,68,255,0.45); }
 .crht-btn.on     { background: #0e2e1a; border-color: #44ff88; color: #44ff88;
                    box-shadow: 0 0 6px rgba(44,255,100,0.4); }
 .alt-hold-btn.on { background: #0e1a2e; border-color: #00cfff; color: #00cfff;
@@ -1631,6 +1642,18 @@ body.night-mode::after {
             멈춥니다(6,000ft ÷ 6,076ft = 0.99NM). 고도가 높고 국이 가까울수록 차이가 커지고, 멀어지면
             수평거리에 수렴합니다. PFD 우측 <b>NAV1·NAV2</b> 줄과 지도 <b>BRG1</b> 글자에 반영됩니다.
             <b>FMS(GPS) 거리는 수평거리</b>라 이 차이가 없습니다 — 두 값이 다르게 보이는 건 정상입니다.</li>
+        <li><b>글라이드 패스(G/S)</b>: <b>GP 가 있는 ILS 주파수</b>를 NAV1/NAV2 에 넣으면
+            <b>승강계 왼편</b>에 <b>G/S</b> 눈금과 <b>자홍색 마름모</b>가 뜹니다 — 마름모가 가운데
+            기준선보다 <b>위에 있으면 강하선보다 높다</b>는 뜻이고, 위아래 점은 각각 <b>0.35°</b>
+            (최대편위 0.7° = 2점)입니다. 최대편위를 넘으면 마름모가 <b>속이 빈</b> 채 끝에 붙습니다.<br>
+            AP 의 <b>G/S</b> 버튼을 누르면 <b>ARM</b>(호박색)이 되고, 강하선에 닿는 순간 스스로
+            <b>CAPT</b>(자홍색)로 붙잡아 <b>고도를 맡습니다</b> — 강하각과 지상속도에 맞는 강하율로
+            내려가며(3°·120kt ≈ 640fpm) 벗어난 만큼만 되돌립니다. 잡고 있는 동안에는
+            <b>ALT·CRHT 유지가 물러납니다</b>(고도를 두 곳에서 몰면 서로 싸웁니다).
+            신호를 잃거나(25NM 밖·안테나 뒤) 한 번 더 누르면 풀립니다.<br>
+            강하선은 <b>GP 안테나 자리에서 비행장 표고</b>, 거기서부터 접근 방향으로 강하각만큼
+            올라가는 면으로 잡습니다. 강하각은 <b>AIP 게재값</b>이며(사천 24R 3.2° · 원주 3.3° 등),
+            비고에 없으면 3.0° 입니다. <b>GP 가 없는 로컬라이저</b>(대구 31R 등)에서는 뜨지 않습니다.</li>
         <li><b>로컬라이저(LOC)</b>: 지도 <b>AWY</b> 패널의 <b>로컬라이저(LOC)</b> 를 켜면 VOR 처럼
             <b>분홍 삼각형 + 식별부호·주파수</b>로 표시됩니다(삼각형은 항공기가 들어오는 쪽을 가리킵니다).
             눌러서 <b>NAV1/NAV2 튜닝</b>도 됩니다 — <b>ILS 주파수를 넣으면 이제 국이 잡히고</b>,
@@ -2008,6 +2031,8 @@ body.night-mode::after {
           <div class="alt-hold-btns">
             <button class="alt-hold-btn" id="alt-hold-btn" data-act="toggleAltHold">ALT</button>
             <button class="crht-btn"     id="crht-btn"     data-act="toggleCrht">CRHT</button>
+            <button class="gs-btn"       id="gs-btn"       data-act="toggleGs"
+                    title="G/S — ILS 강하선 추종. 무장(ARM)해 두면 강하선에 닿는 순간 잡아(CAPT) 고도를 맡습니다.">G/S</button>
           </div>
         </div>
 

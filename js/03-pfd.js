@@ -583,6 +583,41 @@ function drawVSI(x, y, w, h) {
   // label at top
   ctx.fillStyle='#aaa'; ctx.font='bold 7px Helvetica Neue, Arial, sans-serif';
   ctx.fillText(met?'M/S':'FPM',x+w/2,y+9);
+
+  // ── 글라이드 패스 지시(ILS) ──
+  // ILS 를 잡았을 때만 승강계 왼편에 눈금과 마름모가 뜬다. 마름모가 가운데
+  // 기준선 위에 있으면 강하선보다 높다는 뜻이다(계기와 같은 읽기).
+  // 승강계 지시침은 오른쪽 끝을 쓰므로 왼쪽 끝에 두어 서로 가리지 않는다.
+  let gsv = null;
+  try { gsv = (typeof gsDeviation === 'function') ? gsDeviation() : null; } catch(e) { _swallow(e); }
+  if (gsv) {
+    const gx = x + 3.5;                    // 눈금 중심선
+    const span = h * 0.30;                 // 최대편위(2점)까지의 길이
+    const capt = (typeof gsOn !== 'undefined' && gsOn);
+    // 눈금: 가운데 기준선 + 위아래 1·2점
+    ctx.strokeStyle = '#7a7a7a'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(gx - 3, cy); ctx.lineTo(gx + 3, cy); ctx.stroke();
+    ctx.fillStyle = '#9a9a9a';
+    [-2, -1, 1, 2].forEach(n => {
+      const dy = cy - n * span / 2;
+      if (dy < y + 12 || dy > y + h - 22) return;
+      ctx.beginPath(); ctx.arc(gx, dy, 1.6, 0, Math.PI * 2); ctx.fill();
+    });
+    // 마름모 — 최대편위를 넘으면 끝에 붙이고 속을 비운다(신뢰 구간 밖)
+    const dots = Math.max(-2.4, Math.min(2.4, gsv.dots));
+    const py2 = Math.max(y + 12, Math.min(y + h - 22, cy - dots * span / 2));
+    const col = capt ? '#ff44ff' : '#dd88ff';
+    ctx.strokeStyle = col; ctx.fillStyle = col; ctx.lineWidth = 1.6;
+    const r2 = 4.5;
+    ctx.beginPath();
+    ctx.moveTo(gx, py2 - r2); ctx.lineTo(gx + r2, py2);
+    ctx.lineTo(gx, py2 + r2); ctx.lineTo(gx - r2, py2); ctx.closePath();
+    if (Math.abs(gsv.dots) > 2) ctx.stroke(); else ctx.fill();
+    // 머리글 G/S — 붙잡았으면 밝게
+    ctx.fillStyle = capt ? '#ff88ff' : '#996699';
+    ctx.font = 'bold 7px Helvetica Neue, Arial, sans-serif';
+    ctx.textAlign = 'left'; ctx.fillText('G/S', x + 1, y + 18);
+  }
   ctx.restore();
 }
 
