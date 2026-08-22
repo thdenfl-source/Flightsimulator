@@ -167,7 +167,10 @@ function init(){
     try { ['NAV1','NAV2'].forEach(k => setNavRadio(k, navRadios[k].freq, navRadios[k].id)); } catch(e) { _swallow(e); }
     try { setNavSrc(navSrc); } catch(e) { _swallow(e); }   // 현재 소스 라벨/CDI 반영
   }, 0);
-  if (!_restored) setPage(0);   // 복원 시엔 restoreSession의 applyPanels로 배치 유지
+  // 처음 켤 때의 우측 창 — 3분할이면 CDU(좌 PFD · 중 MAP · 우 CDU), 2분할이면 MAP.
+  // 종전에는 늘 setPage(0) 이라 3분할에서도 우측이 MAP 이 되고, 그 바람에
+  // 중앙에 있던 MAP 과 자리가 맞바뀌어 CDU 가 가운데로 밀려났다.
+  if (!_restored) setPage(tripleMode ? 2 : 0);   // 복원 시엔 restoreSession의 applyPanels로 배치 유지
   window.addEventListener('resize', () => { resizePFD(); try { leafMap.invalidateSize(); } catch(e) { _swallow(e); } scaleCdu(); });
   setTimeout(() => leafMap.invalidateSize(), 100);
   // 저장된 표시 포인트를 지도에 복원.

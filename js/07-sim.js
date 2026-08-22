@@ -591,8 +591,14 @@ function scaleCdu() {
 // 양쪽에 같은 창은 불가(사용자 클릭은 거부 피드백, 프로그램 호출은 스왑).
 let leftSel = 'pfd', rightSel = 'map';   // 'pfd' | 'map' | 'cdu' | (우측 한정 'plan')
 let midSel  = 'map';                    // 3분할일 때만 사용하는 중앙 패널
-let tripleMode = false;                 // 3분할(PFD·MAP·CDU) 여부
-try { tripleMode = localStorage.getItem('tripleMode') === '1'; } catch(e) { _swallow(e); }
+// 처음 켜면 3분할 — 좌 PFD · 중 MAP · 우 CDU 가 기본 구성이다.
+// 사용자가 2분할을 골라 뒀으면(저장값 '0') 그 뜻을 따른다.
+let tripleMode = true;                  // 3분할(PFD·MAP·CDU) 여부
+try {
+  const v = localStorage.getItem('tripleMode');
+  if (v !== null) tripleMode = (v === '1');
+} catch(e) { _swallow(e); }
+if (tripleMode) { leftSel = 'pfd'; midSel = 'map'; rightSel = 'cdu'; }
 
 // 3분할 분할 비율 [좌%, 중%] — null 이면 기본 배분(PFD 호스트 1.4배)
 const TRI_MIN = 12;                     // 한 창의 최소 비율(%)
@@ -690,6 +696,11 @@ function applyPanels() {
     scaleCdu();
   }, 60);
 }
+
+// 처음 켤 때 한 번 맞춘다. 마크업의 초기 배치는 2분할(PFD|MAP)이라,
+// 위에서 정한 기본값(3분할 · 좌 PFD · 중 MAP · 우 CDU)을 여기서 화면에 반영한다.
+// 저장된 세션을 복원하면 그쪽에서 다시 applyPanels 를 부르므로 그 뜻이 이긴다.
+try { applyPanels(); } catch(e) { _swallow(e); }
 
 // 레거시 래퍼 — 기존 호출부(CDU 버튼·솔로 모드 등) 호환
 function setLeftPage(n) { selectPanel('left', n === 0 ? 'pfd' : 'map', true); }
