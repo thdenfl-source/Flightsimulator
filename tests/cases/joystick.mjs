@@ -384,6 +384,25 @@ export async function run(page, t) {
   t.eq(JSON.stringify(hid.hatDir), '["E"]', '햇은 게임패드 관례값으로 바꿔 방향이 그대로 풀린다');
   t.eq(JSON.stringify(hid.idleDir), '[]', '범위 밖(가운데) 햇은 아무 방향도 아니다');
 
+  // ── 직접 연결을 못 쓰는 기기에서는 사정을 그대로 알려 준다 ──
+  // 아이패드는 크롬을 깔아도 사파리(WebKit) 엔진이라 WebHID 가 없다.
+  // "크롬을 쓰십시오" 는 그 기기에서 아무 도움이 안 되는 안내다.
+  const ios = await page.evaluate(`(() => ({
+    ipadUA:  joyIsIos('Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X) CriOS/120', 5, 'iPad'),
+    ipadOS:  joyIsIos('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)', 5, 'MacIntel'),
+    mac:     joyIsIos('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Chrome/120', 0, 'MacIntel'),
+    win:     joyIsIos('Mozilla/5.0 (Windows NT 10.0) Chrome/120', 0, 'Win32'),
+    android: joyIsIos('Mozilla/5.0 (Linux; Android 14) Chrome/120', 5, 'Linux armv8l'),
+    msg: JOY_HID_WHY_MSG.IOS,
+  }))()`);
+  t.eq(ios.ipadUA, true, '아이패드(크롬 CriOS)를 알아본다');
+  t.eq(ios.ipadOS, true, '데스크톱으로 위장한 아이패드OS 도 알아본다 (MacIntel + 멀티터치)');
+  t.eq(ios.mac, false, '맥은 아이패드로 보지 않는다 — 여기서는 직접 연결이 된다');
+  t.eq(ios.win, false, '윈도우도 아니다');
+  t.eq(ios.android, false, '안드로이드도 아니다');
+  t.ok(ios.msg.includes('WebKit') && !ios.msg.includes('Chrome · Edge 를 쓰십시오'),
+    '아이패드 안내는 "크롬을 쓰라" 가 아니라 사정을 설명한다');
+
   // ── 설정 화면에 배정 화면이 있고, 목록이 그려진다 ──
   const ui = await page.evaluate(`(() => {
     (${SETUP.toString()})();
@@ -395,12 +414,16 @@ export async function run(page, t) {
     const rows = el.querySelectorAll('[data-act="joyPick"]').length;
     const hasMon = !!document.getElementById('joy-mon');
     const hasHid = !!el.querySelector('[data-act="joyHidPick"]');
+    // 못 쓰는 기기에서는 버튼에 그렇게 적힌다
+    const st = joyHidStatus();
+    const hidTxt = el.querySelector('[data-act="joyHidPick"]').innerText;
+    const hidMark = st.supported ? !hidTxt.includes('못 씀') : hidTxt.includes('못 씀');
     const hasHoverPage = txt.includes('HOVER PAGE');
     // 행을 누르면 배정 대기로 들어간다
     el.querySelector('[data-act="joyPick"]').click();
     const cap = joyCapture;
     joyCancelCapture(); switchMode('HOME');
-    return { txt, rows, cap, hasMon, hasHid, hasHoverPage, n: JOY_ACTIONS.length, first: JOY_ACTIONS[0].id };
+    return { txt, rows, cap, hasMon, hasHid, hidMark, hasHoverPage, n: JOY_ACTIONS.length, first: JOY_ACTIONS[0].id };
   })()`);
   t.eq(ui.rows, ui.n, `동작 ${ui.n} 가지가 모두 배정 가능하다`);
   t.ok(ui.txt.includes('FORCE TRIM') && ui.txt.includes('버튼 4'),
@@ -408,6 +431,7 @@ export async function run(page, t) {
   t.ok(ui.txt.includes('TEST STICK'), '연결된 장치 이름이 보인다');
   t.eq(ui.hasMon, true, '배정 화면에 입력 진단 칸이 있다');
   t.eq(ui.hasHid, true, '게임패드로 안 잡히는 장치를 직접 열 수 있다');
+  t.eq(ui.hidMark, true, '쓸 수 없는 기기에서는 버튼에 그렇게 적혀 있다(눌러 보고 알게 되지 않는다)');
   t.eq(ui.hasHoverPage, true, 'HOVER PAGE 도 배정할 수 있다');
   t.eq(ui.cap, ui.first, '행을 누르면 그 동작이 입력 대기가 된다');
 

@@ -129,6 +129,31 @@ function _hidOnReport(e) {
 
 function joyHidSupported() { return !!(navigator.hid && navigator.hid.requestDevice); }
 
+// ── 왜 직접 연결을 못 쓰는가 ──
+// 아이패드·아이폰은 브라우저 이름과 무관하게 모두 사파리(WebKit) 엔진을 쓴다.
+// 그래서 크롬을 깔아도 WebHID 가 없다 — "크롬을 쓰라" 는 안내는 이 기기에서
+// 아무 도움이 되지 않으므로 사정을 그대로 적어 준다.
+function joyIsIos(ua, maxTouch, platform) {
+  ua = ua || ''; platform = platform || '';
+  if (/iPad|iPhone|iPod/.test(ua) || /iPad|iPhone|iPod/.test(platform)) return true;
+  // 아이패드OS 는 데스크톱 사파리로 위장한다(플랫폼 MacIntel + 멀티터치)
+  return /Mac/.test(platform) && (maxTouch || 0) > 1;
+}
+function joyHidWhy() {
+  if (joyHidSupported()) return '';
+  if (joyIsIos(navigator.userAgent, navigator.maxTouchPoints, navigator.platform)) return 'IOS';
+  if (!window.isSecureContext) return 'INSECURE';
+  return 'BROWSER';
+}
+const JOY_HID_WHY_MSG = {
+  IOS: '아이패드·아이폰은 브라우저 이름과 상관없이 모두 사파리(WebKit) 엔진을 씁니다 — 크롬을 깔아도 ' +
+       '직접 연결(WebHID)이 없습니다. 이 기기에서는 <b>게임패드로 인식되는 컨트롤러</b>(Xbox · PS · MFi)를 ' +
+       '쓰거나, <b>키보드처럼 잡히는 장치</b>를 키로 배정해 쓰십시오. 맥·윈도우·안드로이드의 크롬에서는 ' +
+       '직접 연결이 됩니다.',
+  INSECURE: 'https 로 열어야 직접 연결을 쓸 수 있습니다.',
+  BROWSER: '이 브라우저는 직접 연결(WebHID)을 지원하지 않습니다. Chrome · Edge 를 쓰십시오.',
+};
+
 async function _hidUse(dev) {
   if (!dev) return false;
   try {
@@ -156,8 +181,10 @@ function joyHidDisconnect() {
   hidDev = null; hidName = ''; _hidBtn = []; _hidAx = []; _hidSeen = false;
 }
 function joyHidStatus() {
+  const why = joyHidWhy();
   return { supported: joyHidSupported(), name: hidName,
-           open: !!hidDev, data: _hidSeen };
+           open: !!hidDev, data: _hidSeen,
+           why, msg: why ? JOY_HID_WHY_MSG[why] : '' };
 }
 
 // 한 번 허락한 장치는 권한이 남는다 — 다음에 열 때 조용히 다시 잇는다
