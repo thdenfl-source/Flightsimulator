@@ -20,6 +20,7 @@ const SETUP = () => {
   joyBinds = {}; joyCancelCapture();
   joyOn = true;
   for (const k in _joyNeutral) delete _joyNeutral[k];
+  for (const k in _joyHat) delete _joyHat[k];
 };
 
 export async function run(page, t) {
@@ -133,6 +134,54 @@ export async function run(page, t) {
   t.eq(ax.plus, 101, '축을 + 로 밀면 그 방향 동작이 돈다');
   t.eq(ax.minus, 100, '반대로 밀면 반대 동작이 돈다');
   t.eq(ax.hat, 1100, '햇도 쉬는 자리에서 벗어난 만큼으로 판정한다 (ALT 1000→1100)');
+
+  // ── 축 하나로 올라오는 8방향 햇(HAT) ──
+  // 쉬는 자리를 1 밖(3.2857)으로 보내고 눌린 방향은 -1…1 을 8등분해 싣는
+  // 기종이 많다. ± 두 방향으로 보면 여덟 방향이 죄다 한 입력으로 뭉친다.
+  // 네 방향으로 풀리는지, 대각에서 이웃 두 방향이 함께 걸리는지를 본다.
+  const hat = await page.evaluate(`(() => {
+    (${SETUP.toString()})();
+    _pad.axes = [0, 0, 0, 0, 0, 0, 0, 0, 0, 3.2857142857142856];   // 축9 = 햇
+    joySetBind('h9N', 'trimF'); joySetBind('h9S', 'trimA');
+    joySetBind('h9W', 'trimL'); joySetBind('h9E', 'trimR');
+    gspdOn = false; rollApOn = true;
+    let now = 1000;
+    S.spd = 100; bankTarget = 0;
+    joyPoll(now);                       // 쉬는 자리 — 아무 방향도 아니다
+    const idle = { spd: S.spd, bank: bankTarget };
+    const push = (v) => {
+      _axis(9, v); joyPoll(now += 16);
+      const r = { spd: S.spd, bank: bankTarget };
+      _axis(9, 3.2857142857142856); joyPoll(now += 16);
+      return r;
+    };
+    const up    = push(-1);             // ▲
+    S.spd = 100; bankTarget = 0;
+    const right = push(-3/7);           // ▶
+    S.spd = 100; bankTarget = 0;
+    const down  = push(1/7);            // ▼
+    S.spd = 100; bankTarget = 0;
+    const left  = push(5/7);            // ◀
+    S.spd = 100; bankTarget = 0;
+    const upRight = push(-5/7);         // ▲▶ — 두 방향이 함께
+    S.spd = 100; bankTarget = 0;
+    const codes = { up: joyHatDirs(-1), diag: joyHatDirs(-5/7), rest: joyHatDirs(3.2857142857142856),
+                    analog: joyHatDirs(0.31) };
+    stopTrimHold();
+    return { idle, up, right, down, left, upRight, codes, label: joyCodeLabel('h9N') };
+  })()`);
+  t.eq(hat.idle.spd, 100, '햇이 쉬는 자리에서는 아무 방향도 걸리지 않는다');
+  t.eq(hat.up.spd, 101, '▲ 는 전방 트림이다 (IAS 100→101)');
+  t.eq(hat.down.spd, 99, '▼ 는 후방 트림이다 (IAS 100→99)');
+  t.eq(hat.right.bank, 1, '▶ 는 우 트림이다 (뱅크 +1)');
+  t.eq(hat.left.bank, -1, '◀ 는 좌 트림이다 (뱅크 −1)');
+  t.eq(hat.upRight.spd, 101, '대각 ▲▶ 에서도 전방 트림이 걸린다');
+  t.eq(hat.upRight.bank, 1, '같은 대각에서 우 트림도 함께 걸린다');
+  t.eq(JSON.stringify(hat.codes.up), '["N"]', '▲ 값은 한 방향으로 풀린다');
+  t.eq(JSON.stringify(hat.codes.diag), '["N","E"]', '대각 값은 이웃 두 방향으로 풀린다');
+  t.eq(JSON.stringify(hat.codes.rest), '[]', '쉬는 값(3.2857)은 방향이 아니다');
+  t.eq(JSON.stringify(hat.codes.analog), '[]', '격자에서 벗어난 아날로그 축 값은 방향으로 보지 않는다');
+  t.eq(hat.label, '햇 9 ▲', '화면에는 햇 방향으로 읽힌다');
 
   // ── 배정(캡처) — 동작을 고른 뒤 누른 버튼이 그 자리에서 잡힌다 ──
   const cap = await page.evaluate(`(() => {
