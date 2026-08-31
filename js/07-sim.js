@@ -956,12 +956,34 @@ function _rulerRender() {
   el.style.display = 'block';
 }
 
+// ── 단독(전체화면) 진입 ──
+// 들어가기 전 창 배치를 적어 둔다. 나올 때 그대로 되돌리기 위해서다
+// (종전에는 나오면 무조건 2분할 PFD|MAP 이 되어 3분할 배치가 흐트러졌다).
+function enterSolo(screen) {
+  if (!_soloActive) _soloSaved = { l: leftSel, m: midSel, r: rightSel, tri: tripleMode };
+  _soloActive = true;
+  document.getElementById('solo-bar').style.display = 'flex';
+  setSolo(screen);
+}
+
+// PFD 단독 — 좌측 상단 버튼. 한 번 더 누르면 원래 배치로 돌아온다.
+function pfdSolo() {
+  if (_soloActive && _soloCurrent === 'pfd') { exitSolo(); return; }
+  enterSolo('pfd');
+}
+// 좌측 상단 버튼 라벨(단독 ⇄ 분할)
+function updateSoloBtn() {
+  const b = document.getElementById('pfd-solo-btn');
+  if (!b) return;
+  const on = (_soloActive && _soloCurrent === 'pfd');
+  b.textContent = on ? '✥ 분할' : '⛶ PFD 단독';
+  b.classList.toggle('active', on);
+}
+
 // MAP 상단 툴바의 FULL/HALF 토글 — 상황에 맞게 전체화면 진입/분할 복귀
 function toggleMapFull() {
   if (_soloActive) { exitSolo(); return; }
-  _soloActive = true;
-  document.getElementById('solo-bar').style.display = 'flex';
-  setSolo('map');
+  enterSolo('map');
 }
 
 // Flight Plan 하단 Home 버튼 — CDU 홈 화면으로 전환
@@ -972,11 +994,7 @@ function fpGoCduHome() {
 }
 
 // CDU 하단 Full 버튼 — 상단 Full Screen 탭과 동일하게 CDU 전체화면 진입
-function cduFullScreen() {
-  _soloActive = true;
-  document.getElementById('solo-bar').style.display = 'flex';
-  setSolo('cdu');
-}
+function cduFullScreen() { enterSolo('cdu'); }
 
 // ── CDU 하단 푸터 표준화 ──
 // 전체화면(solo)일 땐 FULL → HALF(우측 상단 ✕와 동일: exitSolo)
@@ -992,11 +1010,7 @@ function openFlightPlan() {
   if (_soloActive) setSolo('plan'); else setPage(1);
 }
 // Flight Plan 화면의 FULL — 플랜을 전체화면으로
-function planFullScreen() {
-  _soloActive = true;
-  document.getElementById('solo-bar').style.display = 'flex';
-  setSolo('plan');
-}
+function planFullScreen() { enterSolo('plan'); }
 // Flight Plan 푸터용 FULL/HALF 버튼(solo 상태 반영)
 function fpFullBtn() {
   return _soloActive
@@ -1033,6 +1047,7 @@ function cduFooter(back, extra) {
 // SOLO (단일화면) 모드
 // ══════════════════════════════════════════════════════
 let _soloActive = false;
+let _soloSaved = null;          // 단독 진입 전 창 배치
 let _soloCurrent = null;
 
 function setSolo(screen) {
@@ -1040,13 +1055,15 @@ function setSolo(screen) {
   const leftPanel  = document.getElementById('left-panel');
   const rightPanel = document.getElementById('right-panel');
   const divider    = document.getElementById('panel-divider');
+  const midPanel   = document.getElementById('mid-panel');
 
-  // 모든 패널 숨기기
+  // 모든 패널 숨기기 — 3분할이면 가운데 창도 함께 접는다
   leftPanel.classList.remove('solo-panel-visible');
   rightPanel.classList.remove('solo-panel-visible');
   leftPanel.style.display  = 'none';
   rightPanel.style.display = 'none';
   divider.style.display = 'none';
+  if (midPanel) { midPanel.classList.remove('solo-panel-visible'); midPanel.style.display = 'none'; }
   document.body.classList.add('solo-mode');
 
   // solo-bar 버튼 강조
@@ -1085,6 +1102,7 @@ function setSolo(screen) {
   // MAP 상단 툴바 버튼 라벨: 전체화면(map)일 때 HALF, 그 외 FULL
   const mapFullBtn = document.getElementById('map-full-btn');
   if (mapFullBtn) mapFullBtn.textContent = (screen === 'map') ? 'HALF' : 'FULL';
+  updateSoloBtn();
   _refreshCduFooters();   // FULL⇄HALF 라벨 갱신
 }
 
@@ -1113,10 +1131,17 @@ function exitSolo() {
   leftPanel.style.display  = '';
   rightPanel.style.display = '';
   divider.style.display = '';
+  const midPanel = document.getElementById('mid-panel');
+  if (midPanel) { midPanel.classList.remove('solo-panel-visible'); midPanel.style.display = ''; }
 
-  // 분할 화면 복귀 시 기본 배치: 좌측 PFD, 우측 MAP
-  setLeftPage(0);
-  setPage(0);
+  // 들어가기 전 배치로 되돌린다(없으면 종전대로 좌 PFD · 우 MAP)
+  if (_soloSaved) {
+    tripleMode = _soloSaved.tri; leftSel = _soloSaved.l;
+    midSel = _soloSaved.m; rightSel = _soloSaved.r;
+    _soloSaved = null;
+    applyPanels();
+  } else { setLeftPage(0); setPage(0); }
+  updateSoloBtn();
   _refreshCduFooters();   // FULL⇄HALF 라벨 갱신
   setTimeout(() => {
     leafMap.invalidateSize();
