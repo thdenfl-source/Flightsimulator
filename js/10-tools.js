@@ -1650,3 +1650,108 @@ function fdrSetSpeed(val) {
   if (wasPlaying) fdrPlay();
 }
 
+
+// ══════════════════════════════════════════════════════════════
+//  주소 · 지명 검색 (지도 ＋ 메뉴)
+//  찾은 자리를 그대로 웨이포인트로 넣는다.
+//  자료는 OpenStreetMap Nominatim — 사용자가 검색을 누를 때만 한 번 부른다
+//  (자동 완성처럼 글자마다 부르지 않는다). 같은 말은 다시 묻지 않게 담아 둔다.
+//  ※ 항법용 자료가 아니다. 안내 문구를 패널에 함께 적어 둔다.
+// ══════════════════════════════════════════════════════════════
+const GEO_URL = 'https://nominatim.openstreetmap.org/search';
+const _geoCache = new Map();
+
+// "37.5665, 126.978" 처럼 좌표를 그대로 넣은 경우 — 검색 없이 그 자리로 간다
+function geoParseLatLon(q) {
+  const m = String(q || '').trim()
+    .match(/^(-?\d{1,2}(?:\.\d+)?)\s*[,\s]\s*(-?\d{1,3}(?:\.\d+)?)$/);
+  if (!m) return null;
+  const lat = parseFloat(m[1]), lon = parseFloat(m[2]);
+  if (!(Math.abs(lat) <= 90 && Math.abs(lon) <= 180)) return null;
+  return { name: `${lat.toFixed(4)}, ${lon.toFixed(4)}`, detail: '좌표 입력', lat, lon };
+}
+
+// 검색 한 번. 결과는 [{name, detail, lat, lon}] 로 다듬어 돌려준다.
+async function geoSearch(q) {
+  const key = String(q || '').trim();
+  if (!key) return [];
+  const direct = geoParseLatLon(key);
+  if (direct) return [direct];
+  if (_geoCache.has(key)) return _geoCache.get(key);
+  const url = `${GEO_URL}?format=jsonv2&limit=8&accept-language=ko&q=${encodeURIComponent(key)}`;
+  const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  const raw = await res.json();
+  const list = (Array.isArray(raw) ? raw : []).map(r => {
+    const full = String(r.display_name || '');
+    return { name: (r.name && r.name.trim()) || full.split(',')[0] || full,
+             detail: full, lat: parseFloat(r.lat), lon: parseFloat(r.lon) };
+  }).filter(x => Number.isFinite(x.lat) && Number.isFinite(x.lon));
+  _geoCache.set(key, list);
+  return list;
+}
+
+let _geoResults = [];
+function openGeoSearch() {
+  const p = document.getElementById('geo-panel');
+  if (!p) return;
+  p.classList.add('open');
+  const q = document.getElementById('geo-q');
+  if (q) { try { q.focus(); q.select(); } catch (e) { _swallow(e); } }
+}
+function closeGeoSearch() {
+  const p = document.getElementById('geo-panel');
+  if (p) p.classList.remove('open');
+}
+function _geoMsg(txt, col) {
+  const el = document.getElementById('geo-list');
+  if (el) el.innerHTML = `<div id="geo-msg" style="color:${col || '#8a97a5'};">${txt}</div>`;
+}
+function _geoRender() {
+  const el = document.getElementById('geo-list');
+  if (!el) return;
+  if (!_geoResults.length) { _geoMsg('찾은 곳이 없습니다. 다른 말로 찾아보십시오.'); return; }
+  el.innerHTML = _geoResults.map((r, i) =>
+    `<div class="geo-item" data-act="geoPick" data-arg='[${i}]'>` +
+    `<b>${_geoEsc(r.name)}</b><span>${_geoEsc(r.detail)}</span>` +
+    `<span style="color:#4a7a8a;">${r.lat.toFixed(4)}, ${r.lon.toFixed(4)}</span></div>`).join('');
+}
+function _geoEsc(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+async function runGeoSearch() {
+  const q = (document.getElementById('geo-q') || {}).value || '';
+  if (!q.trim()) { _geoMsg('찾을 주소나 지명을 넣으십시오.'); return; }
+  _geoMsg('찾는 중…');
+  try {
+    _geoResults = await geoSearch(q);
+    _geoRender();
+  } catch (e) {
+    _geoResults = [];
+    _geoMsg('찾지 못했습니다 — 연결을 확인하십시오(오프라인에서는 검색이 안 됩니다).', '#ff8877');
+  }
+}
+// 결과를 고르면 그 자리에 웨이포인트를 넣고 지도를 옮긴다
+function geoPick(i) {
+  const r = _geoResults[i];
+  if (!r) return;
+  const n = S.wps.filter(w => /^AD\d*$/.test(w.ident)).length + 1;
+  pushWP({ ident: 'AD' + n, name: r.name, lat: r.lat, lon: r.lon });
+  try { leafMap.setView([r.lat, r.lon], Math.max(leafMap.getZoom(), 12)); } catch (e) { _swallow(e); }
+  closeGeoSearch();
+  const btn = document.getElementById('pp-btn');
+  if (btn) {
+    btn.style.background = 'rgba(0,50,10,0.95)'; btn.style.borderColor = '#00ff88'; btn.style.color = '#00ff88';
+    setTimeout(() => { btn.style.background = ''; btn.style.borderColor = ''; btn.style.color = ''; }, 700);
+  }
+}
+// 입력창에서 엔터로도 찾는다
+(function initGeoSearch() {
+  const q = document.getElementById('geo-q');
+  if (!q) return;
+  q.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); runGeoSearch(); }
+  });
+})();
