@@ -96,6 +96,34 @@ export async function run(page, t) {
   t.ok(solo.off.m > 50 && solo.off.r > 50,
     `가운데·우측 창이 다시 자리를 잡는다 (${solo.off.m}px · ${solo.off.r}px)`);
 
+  // ── MAP 단독 · CDU 단독 ──
+  // 같은 방식이 다른 창에도 그대로 되는가. 어느 창이 화면을 차지하는지로 본다.
+  for (const [screen, btnId, wrap] of [['map', 'map-solo-btn', 'map-wrap'],
+                                       ['cdu', 'cdu-solo-btn', 'cdu-wrap']]) {
+    const r = await fresh.evaluate(([sc, id, wr]) => {
+      const W = e => Math.round(e.getBoundingClientRect().width);
+      const btn = document.getElementById(id);
+      const label = btn.textContent;
+      btn.click();
+      const host = document.getElementById(wr).parentElement;
+      const others = ['left-panel', 'mid-panel', 'right-panel']
+        .filter(x => x !== host.id).map(x => W(document.getElementById(x)));
+      const on = { solo: _soloActive, cur: _soloCurrent, host: host.id,
+                   w: W(host), others, shown: !document.getElementById(wr).classList.contains('page-hidden') };
+      exitSolo();
+      return { label, on, sel: [leftSel, midSel, rightSel].join('·'),
+               solo: _soloActive, full: Math.round(window.innerWidth) };
+    }, [screen, btnId, wrap]);
+    t.ok(r.label.includes(screen.toUpperCase() + ' 단독'),
+      `${screen.toUpperCase()} 단독 버튼이 그 창 탭 줄에 있다 (${r.label})`);
+    t.eq(r.on.cur, screen, `누르면 ${screen.toUpperCase()} 단독으로 들어간다`);
+    t.eq(r.on.shown, true, '그 창이 화면에 남는다');
+    t.eq(r.on.others.join('·'), '0·0', `나머지 두 창은 접힌다 (${r.on.others.join('·')}px)`);
+    t.ok(r.on.w > r.full * 0.95, `화면을 가득 채운다 (${r.on.w}px / ${r.full}px)`);
+    t.eq(r.solo, false, '나오면 단독이 풀린다');
+    t.eq(r.sel, 'pfd·map·cdu', `배치도 들어가기 전 그대로다 (${r.sel})`);
+  }
+
   await ctx1.close();
   await ctx2.close();
 }
