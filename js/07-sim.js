@@ -966,18 +966,23 @@ function enterSolo(screen) {
   setSolo(screen);
 }
 
-// PFD 단독 — 좌측 상단 버튼. 한 번 더 누르면 원래 배치로 돌아온다.
-function pfdSolo() {
-  if (_soloActive && _soloCurrent === 'pfd') { exitSolo(); return; }
-  enterSolo('pfd');
+// 단독 버튼 — 각 창 탭 줄의 오른쪽 끝. 한 번 더 누르면 원래 배치로 돌아온다.
+function panelSolo(screen) {
+  if (_soloActive && _soloCurrent === screen) { exitSolo(); return; }
+  enterSolo(screen);
 }
-// 좌측 상단 버튼 라벨(단독 ⇄ 분할)
+function pfdSolo() { panelSolo('pfd'); }        // 종전 이름(좌측 상단 버튼)
+
+// 단독 버튼 라벨(단독 ⇄ 분할) — 지금 단독으로 떠 있는 창의 버튼만 되돌리기가 된다
+const SOLO_BTNS = { pfd: 'pfd-solo-btn', map: 'map-solo-btn', cdu: 'cdu-solo-btn' };
 function updateSoloBtn() {
-  const b = document.getElementById('pfd-solo-btn');
-  if (!b) return;
-  const on = (_soloActive && _soloCurrent === 'pfd');
-  b.textContent = on ? '✥ 분할' : '⛶ PFD 단독';
-  b.classList.toggle('active', on);
+  Object.keys(SOLO_BTNS).forEach(k => {
+    const b = document.getElementById(SOLO_BTNS[k]);
+    if (!b) return;
+    const on = (_soloActive && _soloCurrent === k);
+    b.textContent = on ? '✥ 분할' : `⛶ ${k.toUpperCase()} 단독`;
+    b.classList.toggle('active', on);
+  });
 }
 
 // MAP 상단 툴바의 FULL/HALF 토글 — 상황에 맞게 전체화면 진입/분할 복귀

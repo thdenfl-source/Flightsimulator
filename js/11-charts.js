@@ -2190,6 +2190,7 @@ appRegister({
   toggleLayer,
   toggleMapFull,
   pfdSolo,
+  panelSolo,
   toggleMapOrient,
   toggleNavAp,
   toggleNotamLayer,
