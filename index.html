@@ -646,6 +646,16 @@ body.solo-mode #right-panel {
   display: none;
 }
 body.solo-mode #panel-divider { display: none; }
+/* 3분할이 기본이므로 단독 화면에서는 가운데 창과 두 번째 경계선도 접는다 */
+body.solo-mode #mid-panel,
+body.solo-mode #app.triple #mid-panel,
+body.solo-mode #divider-2,
+body.solo-mode #app.triple #divider-2 { display: none; }
+/* 3분할은 창 폭을 #app.triple #left-panel 처럼 세게 지정한다. 단독 화면에서는
+   남은 한 창이 전부를 차지해야 하므로 여기서 그보다 세게 다시 잡는다. */
+body.solo-mode #app.triple #left-panel,
+body.solo-mode #app.triple #mid-panel,
+body.solo-mode #app.triple #right-panel { flex: 1 1 0 !important; width: 100% !important; }
 body.solo-mode .solo-panel-visible {
   display: flex !important;
   flex-direction: column;
@@ -1616,6 +1626,9 @@ body.night-mode::after {
         <li><b>⿲ 3분할</b>(좌측 상단 탭): 넓은 화면에서 <b>PFD·MAP·CDU</b>를 한 번에 봅니다.
             <b>⿰ 2분할</b>을 누르면 되돌아갑니다. 각 패널의 탭으로 어떤 창을 둘지 바꿀 수 있고,
             같은 창을 고르면 서로 자리를 맞바꿉니다.</li>
+        <li><b>⛶ PFD 단독</b>(좌측 상단 탭): <b>PFD 만 화면 가득</b> 띄웁니다. 계기비행 연습처럼
+            PFD 만 크게 보고 싶을 때 쓰십시오. 버튼을 <b>한 번 더 누르면</b>(또는 떠 있는 <b>✥ HALF</b>)
+            <b>들어가기 전 배치 그대로</b> 돌아옵니다.</li>
         <li>PFD 하단 FCP에서 <b>IAS·HDG·CRS·VS·ALT·CRHT</b>를 ▲▼/◀▶로 조절.</li>
         <li><b>HDG ◀▶</b>는 기수를 즉시 돌리지 않고 <b>선택 헤딩(HSI 청록 벅)</b>만 옮깁니다.
             AFCS가 <b>표준선회(360°/2분 = 3°/s)</b>로 선회하며, 뱅크각은 <b>속도의 16%</b>로 자동 산출됩니다
@@ -1949,6 +1962,7 @@ body.night-mode::after {
       <button class="page-tab active" data-sel="pfd" data-act="selectPanel" data-arg='["left", "pfd"]'>PFD</button>
       <button class="page-tab" data-sel="map" data-act="selectPanel" data-arg='["left", "map"]'>MAP</button>
       <button class="page-tab" data-sel="cdu" data-act="selectPanel" data-arg='["left", "cdu"]'>CDU</button>
+      <button class="page-tab split-tab" id="pfd-solo-btn" data-act="pfdSolo" title="PFD 단독 — PFD 만 화면 가득(한 번 더 누르면 원래 배치)">⛶ PFD 단독</button>
       <button class="page-tab split-tab" id="split-toggle" data-act="toggleTriple" title="2분할 ⇄ 3분할">⿲ 3분할</button>
     </div>
     <div id="pfd-wrap">

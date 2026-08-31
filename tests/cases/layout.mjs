@@ -60,6 +60,42 @@ export async function run(page, t) {
   t.eq(w.sel.join('·'), 'pfd·map', `그때는 종전대로 좌 PFD · 우 MAP (${w.sel.join('·')})`);
   t.eq(w.cduShown, false, '그 배치에서는 CDU 가 접혀 있다');
 
+  // ── PFD 단독 ──
+  // 좌측 상단 버튼 하나로 PFD 만 화면 가득. 한 번 더 누르면 원래 배치로 돌아온다.
+  // 화면에 실제로 무엇이 남아 있는지(패널 폭)로 확인한다 — 3분할이 기본이 된 뒤로는
+  // 가운데 창을 접지 않으면 '단독' 인데도 지도가 옆에 남는다.
+  const solo = await fresh.evaluate(() => {
+    const W = id => Math.round(document.getElementById(id).getBoundingClientRect().width);
+    const btn = document.getElementById('pfd-solo-btn');
+    const before = { l: W('left-panel'), m: W('mid-panel'), r: W('right-panel'), txt: btn.textContent };
+    btn.click();
+    const on = { l: W('left-panel'), m: W('mid-panel'), r: W('right-panel'),
+                 txt: btn.textContent, solo: _soloActive, cur: _soloCurrent,
+                 pfd: document.getElementById('pfd-wrap').parentElement.id,
+                 body: document.body.classList.contains('solo-mode') };
+    btn.click();                                  // 다시 누르면 복귀
+    const off = { l: W('left-panel'), m: W('mid-panel'), r: W('right-panel'),
+                  txt: btn.textContent, solo: _soloActive,
+                  sel: [leftSel, midSel, rightSel].join('·'),
+                  triple: document.getElementById('app').classList.contains('triple') };
+    return { before, on, off, full: Math.round(window.innerWidth) };
+  });
+  t.ok(solo.before.txt.includes('PFD 단독'), `좌측 상단에 PFD 단독 버튼이 있다 (${solo.before.txt})`);
+  t.eq(solo.on.solo, true, '누르면 단독 화면으로 들어간다');
+  t.eq(solo.on.cur, 'pfd', '보이는 것은 PFD 다');
+  t.eq(solo.on.pfd, 'left-panel', 'PFD 가 그 창에 들어 있다');
+  t.eq(solo.on.m, 0, `가운데 지도 창이 접힌다 (${solo.on.m}px — 접지 않으면 옆에 남는다)`);
+  t.eq(solo.on.r, 0, `우측 CDU 창도 접힌다 (${solo.on.r}px)`);
+  t.ok(solo.on.l > solo.full * 0.95,
+    `PFD 가 화면을 가득 채운다 (${solo.on.l}px / ${solo.full}px)`);
+  t.ok(solo.on.txt.includes('분할') && !solo.on.txt.includes('단독'),
+    `그때 버튼은 되돌아가는 버튼이 된다 (${solo.on.txt})`);
+  t.eq(solo.off.solo, false, '한 번 더 누르면 나온다');
+  t.eq(solo.off.triple, true, '나오면 3분할 배치가 그대로 돌아온다');
+  t.eq(solo.off.sel, 'pfd·map·cdu', `창 배치도 들어가기 전 그대로다 (${solo.off.sel})`);
+  t.ok(solo.off.m > 50 && solo.off.r > 50,
+    `가운데·우측 창이 다시 자리를 잡는다 (${solo.off.m}px · ${solo.off.r}px)`);
+
   await ctx1.close();
   await ctx2.close();
 }
