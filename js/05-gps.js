@@ -841,8 +841,14 @@ function _apply3dBearing() {
 // Called every frame from updateAcOnMap() to keep the view locked to the aircraft.
 function _applyFollow() {
   if (!followMode) return;
-
-  if (_ml3d && _ml3dReady && _map3dShown()) {
+  // 2D 와 3D 는 함께 떠 있을 수 있다(탭의 '3D' 로 창을 따로 둘 때).
+  // 종전에는 둘 중 하나만 따라가서, 나란히 놓으면 2D 지도가 제자리에 멈췄다.
+  // 3D 가 2D 위에 겹쳐 있을 때(_view3dOn)만 2D 를 건너뛴다 — 어차피 가려진다.
+  if (_ml3d && _ml3dReady && _map3dShown()) _follow3d();
+  if (!_view3dOn) _follow2d();
+}
+function _follow3d() {
+  {
     // ── 3D follow ──
     // Altitude-based zoom: camera feels proportional to S.alt each frame.
     // S.alt is in feet; 500 ft → zoom≈14, 10000 ft → zoom≈10.
@@ -866,7 +872,10 @@ function _applyFollow() {
     // N↑ 에서는 bearing 을 넣지 않는다(사용자가 손으로 돌려 둔 각도를 지운다).
     if (mapHdgUp) opt.bearing = S.hdg;
     _ml3d.easeTo(opt);
-  } else {
+  }
+}
+function _follow2d() {
+  {
     // ── 2D follow ──
     // Shift the map centre forward (along heading when HDG-UP, else north) so
     // the aircraft appears ~1/4 up from the bottom, showing more ahead.

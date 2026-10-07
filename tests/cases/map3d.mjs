@@ -165,4 +165,37 @@ export async function run(page, t) {
   t.eq(side.off.active, false, '겹치기를 켜 두지 않았으면 그려지지 않는다');
   t.eq(side.off.shown, false, '그때는 추종 대상도 아니다');
   t.eq(side.off.wrapShown, false, '빈 3D 창이 남지 않는다');
+
+  // ── 나란히 놓아도 2D 지도가 항공기를 따라간다 ──
+  // 종전에는 추종이 둘 중 하나만 돌아서, 3D 창을 열어 두면 2D 지도가 제자리에
+  // 멈춰 있었다(회전만 되고 따라가지 않는 증상). 두 지도 중심을 함께 본다.
+  const both = await page.evaluate(async () => {
+    const wait = ms => new Promise(r => setTimeout(r, ms));
+    toggleTriple(true);
+    selectPanel('mid', 'map', true);
+    selectPanel('right', 'm3d', true);
+    await wait(250);
+    if (!followMode) toggleFollow();
+    S.lat = 37.20; S.lon = 126.20; S.hdg = 90; S.alt = 3000;
+    updateAcOnMap(); await wait(150);
+    const a = { two: leafMap.getCenter(), three: _ml3d.getCenter() };
+    S.lat = 37.60; S.lon = 126.90;            // 400/700 분 이동
+    updateAcOnMap(); await wait(150);
+    const b = { two: leafMap.getCenter(), three: _ml3d.getCenter() };
+    const d = (p, q) => Math.hypot(p.lat - q.lat, (p.lng - q.lng));
+    const near = (c) => Math.hypot(c.lat - S.lat, c.lng - S.lon);
+    const r = { moved2d: d(a.two, b.two), moved3d: d(a.three, b.three),
+                near2d: near(b.two), near3d: near(b.three) };
+    if (followMode) toggleFollow();
+    selectPanel('right', 'cdu', true);
+    selectPanel('mid', 'map', true);
+    await wait(150);
+    return r;
+  });
+  t.ok(both.moved2d > 0.2,
+    `3D 창을 열어 둬도 2D 지도가 따라 움직인다 (${both.moved2d.toFixed(3)}° — 종전 0)`);
+  t.ok(both.moved3d > 0.2, `3D 지도도 함께 따라간다 (${both.moved3d.toFixed(3)}°)`);
+  t.ok(both.near2d < 0.25,
+    `2D 중심이 항공기 근처에 머문다 (${both.near2d.toFixed(3)}° — 앞을 더 보려고 조금 앞선다)`);
+  t.ok(both.near3d < 0.25, `3D 중심도 항공기 근처다 (${both.near3d.toFixed(3)}°)`);
 }
