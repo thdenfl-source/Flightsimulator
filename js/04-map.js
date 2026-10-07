@@ -129,6 +129,12 @@ function toggleLayer() {
 let _ml3d = null;          // Maplibre GL map instance (lazy init)
 let _ml3dMarker = null;    // aircraft marker on 3D map
 let _view3dOn = false;
+// 3D 가 화면에 떠 있는가 — 2D 위에 겹쳐 있거나, 제 창(탭의 '3D')을 쓰고 있거나.
+// 창 배치는 07-sim.js 가 쥐고 있고 그쪽이 나중에 로드되므로 있을 때만 묻는다.
+function _map3dShown() {
+  if (_view3dOn) return true;
+  return (typeof map3dPanelOn === 'function') && map3dPanelOn();
+}
 let _ml3dPitch = 70;       // current 3D map pitch (adjustable via tilt buttons)
 // 카메라를 움직여도 되는 상태인가.
 // 종전에는 _ml3d.loaded() 로 물었다. 그건 "스타일도 타일도 전부 준비됨" 이라
@@ -162,6 +168,13 @@ function toggle3dMap() {
     return;
   }
 
+  // 3D 가 이미 제 창(탭의 '3D')을 쓰고 있으면 2D 위에 또 겹칠 일이 아니다.
+  // 그 상태에서 켜면 2D 창이 빈 화면이 되므로 눌러도 바뀌지 않게 한다.
+  if (typeof map3dPanelOn === 'function' && map3dPanelOn()) {
+    btn.textContent = '3D 창';
+    setTimeout(() => { btn.textContent = '3D'; }, 1200);
+    return;
+  }
   _view3dOn = !_view3dOn;
   btn.classList.toggle('active', _view3dOn);
 
@@ -358,7 +371,7 @@ class DualScale3D {
 }
 
 function _update3dMarker() {
-  if (!_ml3d || !_view3dOn || !_ml3dMarker) return;
+  if (!_ml3d || !_ml3dMarker || !_map3dShown()) return;
   _ml3dMarker.setLngLat([S.lon, S.lat]);
   // Rotate the inner wrapper (outer element's transform is owned by maplibre)
   // rotationAlignment:'viewport'(화면 기준)이므로 카메라 방위를 빼야

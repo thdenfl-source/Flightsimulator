@@ -498,6 +498,15 @@ html, body {
   display: none; z-index: 800;   /* above Leaflet panes (~700), below top bars (1000) */
 }
 #map3d.active { display: block; }
+/* 창 하나를 통째로 쓰는 3D — 지도 위에 겹치는 모드와 달리 창을 가득 채운다 */
+#map3d-wrap { overflow: hidden; position: relative; }
+#map3d.panel-3d {
+  position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+  height: 100%; display: block; z-index: 1;
+}
+#map3d.panel-3d .maplibregl-ctrl-bottom-right { bottom: 10px; }
+#map3d.panel-3d .maplibregl-ctrl-bottom-left,
+#map3d.panel-3d .vfr-scale { bottom: 10px; }
 /* When 3D is on, hide the 2D Leaflet map so its panes never paint through */
 #map-wrap.map3d-on #map { visibility: hidden; }
 #layer-btn-3d { background: rgba(0,10,30,0.82); border: 1px solid #333; color: #aaa; }
@@ -1656,6 +1665,11 @@ body.night-mode::after {
       <h3>2. 기본 비행 (시뮬레이션)</h3>
       <ul>
         <li>MAP 하단 <b>▶ FLY</b>로 시작(다시 누르면 PAUSE), <b>RESET</b> 초기화, <b>CLR</b> 비행계획 삭제.</li>
+        <li><b>3D 창</b>: 각 창의 탭에 <b>3D</b> 가 있습니다. 한 창을 <b>MAP</b>, 다른 창을 <b>3D</b> 로 두면
+            <b>2D 지도와 3D 지도를 나란히</b> 볼 수 있습니다(3분할이면 가운데 2D · 우측 3D 처럼).
+            3D 지도는 한 벌을 옮겨 쓰므로 타일을 두 배로 받지 않습니다. 3D 창을 쓰는 동안에는
+            지도 툴바의 <b>3D</b>(2D 위에 겹치기) 버튼이 동작하지 않습니다 — 겹치면 2D 창이 빈 화면이 되기 때문입니다.
+            창을 다른 것으로 바꾸면 3D 지도는 원래 자리(2D 위 겹치기)로 돌아갑니다.</li>
         <li><b>⿲ 3분할</b>(좌측 상단 탭): 넓은 화면에서 <b>PFD·MAP·CDU</b>를 한 번에 봅니다.
             <b>⿰ 2분할</b>을 누르면 되돌아갑니다. 각 패널의 탭으로 어떤 창을 둘지 바꿀 수 있고,
             같은 창을 고르면 서로 자리를 맞바꿉니다.</li>
@@ -2001,6 +2015,7 @@ body.night-mode::after {
       <button class="page-tab active" data-sel="pfd" data-act="selectPanel" data-arg='["left", "pfd"]'>PFD</button>
       <button class="page-tab" data-sel="map" data-act="selectPanel" data-arg='["left", "map"]'>MAP</button>
       <button class="page-tab" data-sel="cdu" data-act="selectPanel" data-arg='["left", "cdu"]'>CDU</button>
+      <button class="page-tab" data-sel="m3d" data-act="selectPanel" data-arg='["left", "m3d"]' title="3D 지도 — 2D 지도와 나란히 볼 수 있습니다">3D</button>
       <button class="page-tab split-tab" id="pfd-solo-btn" data-act="pfdSolo" title="PFD 단독 — PFD 만 화면 가득(한 번 더 누르면 원래 배치)">⛶ PFD 단독</button>
       <button class="page-tab split-tab" id="split-toggle" data-act="toggleTriple" title="2분할 ⇄ 3분할">⿲ 3분할</button>
     </div>
@@ -2234,6 +2249,7 @@ body.night-mode::after {
       <button class="page-tab" data-sel="pfd" data-act="selectPanel" data-arg='["mid", "pfd"]'>PFD</button>
       <button class="page-tab active" data-sel="map" data-act="selectPanel" data-arg='["mid", "map"]'>MAP</button>
       <button class="page-tab" data-sel="cdu" data-act="selectPanel" data-arg='["mid", "cdu"]'>CDU</button>
+      <button class="page-tab" data-sel="m3d" data-act="selectPanel" data-arg='["mid", "m3d"]' title="3D 지도 — 2D 지도와 나란히 볼 수 있습니다">3D</button>
       <button class="page-tab split-tab" id="map-solo-btn" data-act="panelSolo" data-arg='["map"]' title="MAP 단독 — 지도만 화면 가득(한 번 더 누르면 원래 배치)">⛶ MAP 단독</button>
     </div>
   </div>
@@ -2245,9 +2261,14 @@ body.night-mode::after {
       <button class="page-tab" data-sel="pfd" data-act="selectPanel" data-arg='["right", "pfd"]'>PFD</button>
       <button class="page-tab active" data-sel="map" data-act="selectPanel" data-arg='["right", "map"]'>MAP</button>
       <button class="page-tab" data-sel="cdu" data-act="selectPanel" data-arg='["right", "cdu"]'>CDU</button>
+      <button class="page-tab" data-sel="m3d" data-act="selectPanel" data-arg='["right", "m3d"]' title="3D 지도 — 2D 지도와 나란히 볼 수 있습니다">3D</button>
       <button class="page-tab split-tab" id="cdu-solo-btn" data-act="panelSolo" data-arg='["cdu"]' title="CDU 단독 — CDU 만 화면 가득(한 번 더 누르면 원래 배치)">⛶ CDU 단독</button>
       <button id="reload-btn" data-act="hardReload" title="새로고침(상태 초기화)">⟳</button>
     </div>
+
+    <!-- 3D 전용 창 — 탭에서 '3D' 를 고르면 #map3d 가 이 안으로 옮겨 온다.
+         (지도 한 벌을 옮겨 쓰므로 3D 지도가 두 번 그려지지 않는다) -->
+    <div id="map3d-wrap" class="page-content page-hidden"></div>
 
     <!-- Page 1: Map -->
     <div id="map-wrap" class="page-content tcut-off">
