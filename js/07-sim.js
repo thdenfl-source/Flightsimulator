@@ -654,6 +654,39 @@ function toggleTriple(on) {
   applyPanels();
 }
 
+// ── 3D 지도의 자리 옮기기 ──
+// 3D 지도(#map3d)는 한 벌뿐이다. 평소에는 2D 지도 위에 겹쳐 쓰고(지도 툴바의 3D 버튼),
+// 탭에서 '3D' 를 고르면 그 창으로 통째로 옮겨 간다. 그러면 2D 와 3D 를 나란히 볼 수 있다.
+function map3dPanelOn() {
+  return leftSel === 'm3d' || (tripleMode && midSel === 'm3d') || rightSel === 'm3d';
+}
+// 3D 지도가 지금 화면에 떠 있는가(겹쳐 쓰든, 제 창을 쓰든) — 카메라 추종 판단에 쓴다
+function syncMap3dHost(toPanel) {
+  const d3 = document.getElementById('map3d');
+  const w3 = document.getElementById('map3d-wrap');
+  const mw = document.getElementById('map-wrap');
+  const tilt = document.getElementById('tilt-ctrl');
+  if (!d3 || !w3 || !mw) return;
+  if (toPanel) {
+    if (d3.parentElement !== w3) w3.appendChild(d3);
+    d3.classList.add('panel-3d', 'active');
+    mw.classList.remove('map3d-on');          // 2D 는 제 창에서 그대로 보인다
+    if (tilt) tilt.classList.add('active');
+    try { _init3dMap(); } catch (e) { _swallow(e); }
+    requestAnimationFrame(() => {
+      try { if (_ml3d) { _ml3d.resize(); _applyFollow(); } } catch (e) { _swallow(e); }
+    });
+  } else {
+    if (d3.parentElement !== mw) mw.insertBefore(d3, mw.firstElementChild.nextSibling);
+    d3.classList.remove('panel-3d');
+    // 제 창에서 빠져나오면 겹치기 모드의 상태(3D 버튼)를 그대로 따른다
+    d3.classList.toggle('active', _view3dOn);
+    mw.classList.toggle('map3d-on', _view3dOn);
+    if (tilt) tilt.classList.toggle('active', _view3dOn);
+    setTimeout(() => { try { leafMap.invalidateSize(); } catch (e) { _swallow(e); } }, 50);
+  }
+}
+
 function selectPanel(side, sel, force) {
   const get = k => k === 'left' ? leftSel : k === 'mid' ? midSel : rightSel;
   const set = (k, v) => { if (k === 'left') leftSel = v; else if (k === 'mid') midSel = v; else rightSel = v; };
@@ -675,13 +708,17 @@ function applyPanels() {
   const btn = document.getElementById('split-toggle');
   if (btn) btn.textContent = tripleMode ? '⿰ 2분할' : '⿲ 3분할';
 
-  const wrapIds = { pfd: 'pfd-wrap', map: 'map-wrap', cdu: 'cdu-wrap' };
-  ['pfd', 'map', 'cdu'].forEach(k => {
+  const wrapIds = { pfd: 'pfd-wrap', map: 'map-wrap', cdu: 'cdu-wrap', m3d: 'map3d-wrap' };
+  const hostOf = k => (leftSel === k ? L : (tripleMode && midSel === k ? M : (rightSel === k ? R : null)));
+  ['pfd', 'map', 'cdu', 'm3d'].forEach(k => {
     const el = document.getElementById(wrapIds[k]);
-    const host = leftSel === k ? L : (tripleMode && midSel === k ? M : (rightSel === k ? R : null));
+    if (!el) return;
+    const host = hostOf(k);
     if (host && el.parentElement !== host) host.appendChild(el);
     el.classList.toggle('page-hidden', !host);
   });
+  // 3D 지도를 어느 창이 쓰는지 — 지도 위에 겹칠지, 제 창을 통째로 쓸지
+  syncMap3dHost(!!hostOf('m3d'));
   // PLAN(fp-wrap)은 우측 전용 내부 페이지(CDU FPL 버튼 등으로 진입)
   document.getElementById('fp-wrap').classList.toggle('page-hidden', rightSel !== 'plan');
 
@@ -699,7 +736,7 @@ function applyPanels() {
     b.classList.toggle('active', b.dataset.sel === rightSel));
 
   // 레거시 상태 동기화(솔로 모드 진입 판단 등에서 사용)
-  leftPage = leftSel === 'map' ? 1 : 0;
+  leftPage = (leftSel === 'map' || leftSel === 'm3d') ? 1 : 0;
   currentPage = rightSel === 'map' ? 0 : rightSel === 'plan' ? 1 : rightSel === 'cdu' ? 2 : 0;
 
   // 3분할은 --tri-l/--tri-m 로 배분한다(2분할의 인라인 flex 는 무효화)

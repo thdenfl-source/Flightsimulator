@@ -113,4 +113,56 @@ export async function run(page, t) {
     if (_view3dOn) toggle3dMap();
     await new Promise(r => setTimeout(r, 100));
   });
+
+  // ── 2D 와 3D 를 나란히 ──
+  // 3분할에서 한 창은 2D 지도, 다른 창은 3D 지도. 3D 지도(#map3d)는 한 벌뿐이라
+  // 고른 창으로 '옮겨' 간다 — 두 벌을 띄우면 타일을 두 배로 받게 된다.
+  const side = await page.evaluate(async () => {
+    const wait = ms => new Promise(r => setTimeout(r, ms));
+    toggleTriple(true);
+    selectPanel('mid', 'map', true);
+    selectPanel('right', 'm3d', true);
+    await wait(250);
+    const d3 = document.getElementById('map3d');
+    const W = id => Math.round(document.getElementById(id).getBoundingClientRect().width);
+    const on = {
+      sel: [leftSel, midSel, rightSel].join('·'),
+      host: d3.parentElement.id,
+      inPanel: d3.classList.contains('panel-3d'),
+      active: d3.classList.contains('active'),
+      overlay: document.getElementById('map-wrap').classList.contains('map3d-on'),
+      mapShown: !document.getElementById('map-wrap').classList.contains('page-hidden'),
+      wrapShown: !document.getElementById('map3d-wrap').classList.contains('page-hidden'),
+      twoD: W('mid-panel'), threeD: W('right-panel'),
+      shown: _map3dShown(), one: document.querySelectorAll('#map3d').length,
+    };
+    // 2D 지도 위에 또 겹치려 해도 바뀌지 않는다(겹치면 2D 창이 빈 화면이 된다)
+    toggle3dMap();
+    const guard = { view: _view3dOn, overlay: document.getElementById('map-wrap').classList.contains('map3d-on') };
+    // 3D 창을 접으면 지도가 제자리로 돌아간다
+    selectPanel('right', 'cdu', true);
+    await wait(150);
+    const off = { host: d3.parentElement.id, inPanel: d3.classList.contains('panel-3d'),
+                  active: d3.classList.contains('active'), shown: _map3dShown(),
+                  wrapShown: !document.getElementById('map3d-wrap').classList.contains('page-hidden') };
+    selectPanel('mid', 'map', true);
+    return { on, guard, off };
+  });
+  t.eq(side.on.sel, 'pfd·map·m3d', `한 창은 2D, 다른 창은 3D 로 둘 수 있다 (${side.on.sel})`);
+  t.eq(side.on.host, 'map3d-wrap', '3D 지도가 그 창으로 옮겨 간다');
+  t.eq(side.on.one, 1, '3D 지도는 한 벌뿐이다(두 벌로 늘리지 않는다)');
+  t.eq(side.on.inPanel, true, '창을 가득 쓰는 모양이 된다');
+  t.eq(side.on.active, true, '3D 가 그려진다');
+  t.eq(side.on.overlay, false, '2D 지도를 덮지 않는다');
+  t.eq(side.on.mapShown, true, '2D 지도 창은 그대로 보인다');
+  t.ok(side.on.twoD > 50 && side.on.threeD > 50,
+    `두 창이 나란히 자리를 차지한다 (2D ${side.on.twoD}px · 3D ${side.on.threeD}px)`);
+  t.eq(side.on.shown, true, '카메라 추종도 켜진 것으로 본다(제 창에 떠 있으므로)');
+  t.eq(side.guard.view, false, '그 상태에서 지도 툴바 3D 를 눌러도 겹치기로 바뀌지 않는다');
+  t.eq(side.guard.overlay, false, '2D 창이 빈 화면이 되지 않는다');
+  t.eq(side.off.host, 'map-wrap', '3D 창을 접으면 지도가 제자리로 돌아간다');
+  t.eq(side.off.inPanel, false, '창을 쓰던 모양도 풀린다');
+  t.eq(side.off.active, false, '겹치기를 켜 두지 않았으면 그려지지 않는다');
+  t.eq(side.off.shown, false, '그때는 추종 대상도 아니다');
+  t.eq(side.off.wrapShown, false, '빈 3D 창이 남지 않는다');
 }

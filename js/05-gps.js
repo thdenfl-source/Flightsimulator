@@ -833,7 +833,7 @@ const FOLLOW_FWD_FRAC = 0.25; // fraction of screen height the aircraft sits abo
 // 매번 북쪽으로 되돌리면 그 조작을 빼앗는다. (N↑ 로 되돌리는 그 순간에만
 // 한 번 북쪽으로 맞춘다 — toggleMapOrient 참고)
 function _apply3dBearing() {
-  if (!mapHdgUp || !_view3dOn || !_ml3d || !_ml3dReady) return;
+  if (!mapHdgUp || !_ml3d || !_ml3dReady || !_map3dShown()) return;
   if (Math.abs(normAS(_ml3d.getBearing() - S.hdg)) < 0.3) return;
   _ml3d.easeTo({ bearing: S.hdg, duration: 0, easing: t => t });
 }
@@ -842,7 +842,7 @@ function _apply3dBearing() {
 function _applyFollow() {
   if (!followMode) return;
 
-  if (_view3dOn && _ml3d && _ml3dReady) {
+  if (_ml3d && _ml3dReady && _map3dShown()) {
     // ── 3D follow ──
     // Altitude-based zoom: camera feels proportional to S.alt each frame.
     // S.alt is in feet; 500 ft → zoom≈14, 10000 ft → zoom≈10.
@@ -967,7 +967,7 @@ function toggleMapOrient() {
     _hdgUpApplySize();          // 크기·위치를 원래대로
     // 3D 는 N↑ 로 돌아오는 이 순간에만 북쪽으로 맞춘다(이후 손 조작은 그대로 둔다)
     try {
-      if (_view3dOn && _ml3d && _ml3dReady)
+      if (_ml3d && _ml3dReady && _map3dShown())
         _ml3d.easeTo({ bearing: 0, duration: 250 });
     } catch (e) { _swallow(e); }
     // Only re-enable dragging if follow mode is also off

@@ -1601,7 +1601,7 @@ function _fdrRafLoop(wallNow) {
     _fdrRenderFrame(lo);
   } else {
     // Index unchanged but 3D camera (follow/track-up) must update every frame
-    if (_view3dOn && _ml3d && _ml3dReady && followMode) _applyFollow();
+    if (_ml3d && _ml3dReady && followMode && _map3dShown()) _applyFollow();
   }
 
   _fdrRafId = requestAnimationFrame(_fdrRafLoop);
