@@ -78,7 +78,9 @@ export async function run(page, t) {
     const wait = ms => new Promise(r => setTimeout(r, ms));
     toggleMapOrient();                       // N↑
     for (let i = 0; i < 40 && Math.abs(normAS(_ml3d.getBearing())) > 0.5; i++) await wait(50);
-    const north = Math.round(normA(_ml3d.getBearing()));
+    // normA 는 0 을 360 으로 돌려준다. 북쪽에 '거의' 닿으면(-0.3° 등) 359.7 → 360 이
+    // 되어 0 과 어긋난다 — 북쪽인지만 보면 되므로 360 으로 나눈 나머지로 읽는다.
+    const north = Math.round(normA(_ml3d.getBearing())) % 360;
     _ml3d.jumpTo({ bearing: 75 });           // 손으로 돌려 본다
     S.hdg = 10; updateAcOnMap();
     await wait(200);

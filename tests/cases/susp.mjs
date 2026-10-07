@@ -62,14 +62,29 @@ export async function run(page, t) {
     const box = e => e.getBoundingClientRect();
     // 켜진 SUSP 와 켜진 NAV 의 실제 색을 나란히 잰다.
     // 색은 0.15초에 걸쳐 바뀐다 — 바꾸자마자 읽으면 옛 색이 나온다.
+    // 켜진 색을 재려면 두 버튼이 '정말로' 켜져 있어야 한다. class 만 붙여 두면
+    // 시뮬 루프가 상태대로 다시 칠해 버리므로, 시뮬을 멈추고 상태를 켠 뒤 잰다.
     const nav = document.getElementById('nav-ap-btn');
-    const navWasOn = nav.classList.contains('on');
-    nav.classList.add('on');
-    await new Promise(r => setTimeout(r, 300));
+    const wasRunning = S.running; S.running = false;
+    const navWasOn = navApOn, suspWasOn = suspOn;
+    if (!navApOn) toggleNavAp();
+    if (!navSuspended()) toggleSusp();
+    updateSuspBtn();
     const cs = e => ({ border: getComputedStyle(e).borderTopColor,
                        text: getComputedStyle(e).color });
+    // 색은 0.15초에 걸쳐 바뀌므로 바꾸자마자 읽으면 옛 색이 나온다. 고정 시간으로
+    // 기다리면 느린 기계에서 덜 바뀐 채로 읽히므로, 녹색이 될 때까지(최대 3초) 기다린다.
+    // 시뮬 루프가 매 프레임 class 를 다시 칠하므로 기다리는 동안 계속 켜 둔다.
+    const green = e => /^rgb\(0, 2[0-9][0-9], /.test(cs(e).border);
+    for (let i = 0; i < 60; i++) {
+      nav.classList.add('on'); updateSuspBtn();
+      if (green(nav) && green(b)) break;
+      await new Promise(r => setTimeout(r, 50));
+    }
     const onCol = cs(b), navCol = cs(nav);
-    if (!navWasOn) nav.classList.remove('on');
+    if (navApOn !== navWasOn) toggleNavAp();
+    if (suspOn !== suspWasOn) { toggleSusp(); updateSuspBtn(); }
+    S.running = wasRunning;
     return { lbl: lbl ? lbl.textContent.trim() : null,
              spdLbl: spdLbl ? spdLbl.textContent.trim() : null,
              txt: b.textContent.trim(), onCol, navCol,
