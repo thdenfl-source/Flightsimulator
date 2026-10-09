@@ -124,6 +124,52 @@ export async function run(page, t) {
     t.eq(r.sel, 'pfd·map·cdu', `배치도 들어가기 전 그대로다 (${r.sel})`);
   }
 
+  // ── Flight Plan 은 CDU 가 있는 창에서 열린다 ──
+  // 종전에는 늘 우측 창에서 열려, CDU 를 좌측에 둔 3분할에서 FPL 을 누르면
+  // 엉뚱하게 우측(PFD) 창이 Flight Plan 으로 바뀌었다.
+  const plan = await fresh.evaluate(async () => {
+    const wait = ms => new Promise(r => setTimeout(r, ms));
+    toggleTriple(true);
+    selectPanel('left', 'cdu', true);
+    selectPanel('mid', 'map', true);
+    selectPanel('right', 'pfd', true);
+    await wait(150);
+    const host = id => {
+      const e = document.getElementById(id);
+      return e && e.parentElement && !e.classList.contains('page-hidden') ? e.parentElement.id : null;
+    };
+    openFlightPlan();
+    await wait(150);
+    const on = { plan: host('fp-wrap'), pfd: host('pfd-wrap'), map: host('map-wrap'),
+                 cdu: host('cdu-wrap'), sel: [leftSel, midSel, rightSel].join('·'),
+                 // 탭 표시는 CDU 가 켜진 것으로 본다(PLAN 은 CDU 의 한 화면이다)
+                 tab: (document.querySelector('#left-tabs [data-sel].active') || {}).dataset?.sel };
+    fpBackToCdu();                       // BACK 으로 돌아오면 그 자리가 다시 CDU
+    await wait(150);
+    const back = { cdu: host('cdu-wrap'), plan: host('fp-wrap'), pfd: host('pfd-wrap') };
+    // 우측에 CDU 를 둔 평소 배치에서는 종전과 같다
+    selectPanel('left', 'pfd', true);
+    selectPanel('right', 'cdu', true);
+    await wait(150);
+    openFlightPlan();
+    await wait(150);
+    const usual = { plan: host('fp-wrap'), pfd: host('pfd-wrap') };
+    fpBackToCdu();
+    await wait(150);
+    return { on, back, usual };
+  });
+  t.eq(plan.on.plan, 'left-panel', `CDU 가 좌측이면 Flight Plan 도 좌측에서 열린다 (${plan.on.plan})`);
+  t.eq(plan.on.pfd, 'right-panel', 'PFD 는 제자리에 그대로 있다 (종전에는 여기가 바뀌었다)');
+  t.eq(plan.on.map, 'mid-panel', '가운데 지도도 그대로다');
+  t.eq(plan.on.cdu, null, 'CDU 화면은 그 자리에서 Flight Plan 으로 바뀐 것이다');
+  t.eq(plan.on.sel, 'plan·map·pfd', `창 상태도 그렇다 (${plan.on.sel})`);
+  t.eq(plan.on.tab, 'cdu', 'CDU 탭이 켜진 채로 보인다');
+  t.eq(plan.back.cdu, 'left-panel', 'BACK 을 누르면 그 자리가 다시 CDU 가 된다');
+  t.eq(plan.back.plan, null, 'Flight Plan 은 접힌다');
+  t.eq(plan.back.pfd, 'right-panel', 'PFD 는 끝까지 제자리다');
+  t.eq(plan.usual.plan, 'right-panel', `CDU 가 우측이면 종전대로 우측에서 열린다 (${plan.usual.plan})`);
+  t.eq(plan.usual.pfd, 'left-panel', '그때는 좌측 PFD 가 그대로다');
+
   await ctx1.close();
   await ctx2.close();
 }

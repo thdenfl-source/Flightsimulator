@@ -4051,7 +4051,7 @@ switchMode('HOME');
       openAudioCom: () => { switchMode('AUDIO'); switchAudioTab('COM'); },
       openFlightPlan,
       openNavSel,
-      openProc: () => { setPage(1); fpGo('IFR'); },
+      openProc: () => { if (_soloActive) setSolo('plan'); else goCduPage('plan'); fpGo('IFR'); },
       openUbikais,
       pickNavVor,
       prefetchTiles,
