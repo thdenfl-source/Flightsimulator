@@ -708,9 +708,10 @@ function applyPanels() {
   const btn = document.getElementById('split-toggle');
   if (btn) btn.textContent = tripleMode ? '⿰ 2분할' : '⿲ 3분할';
 
-  const wrapIds = { pfd: 'pfd-wrap', map: 'map-wrap', cdu: 'cdu-wrap', m3d: 'map3d-wrap' };
+  const wrapIds = { pfd: 'pfd-wrap', map: 'map-wrap', cdu: 'cdu-wrap', m3d: 'map3d-wrap',
+                    plan: 'fp-wrap' };
   const hostOf = k => (leftSel === k ? L : (tripleMode && midSel === k ? M : (rightSel === k ? R : null)));
-  ['pfd', 'map', 'cdu', 'm3d'].forEach(k => {
+  ['pfd', 'map', 'cdu', 'm3d', 'plan'].forEach(k => {
     const el = document.getElementById(wrapIds[k]);
     if (!el) return;
     const host = hostOf(k);
@@ -719,8 +720,6 @@ function applyPanels() {
   });
   // 3D 지도를 어느 창이 쓰는지 — 지도 위에 겹칠지, 제 창을 통째로 쓸지
   syncMap3dHost(!!hostOf('m3d'));
-  // PLAN(fp-wrap)은 우측 전용 내부 페이지(CDU FPL 버튼 등으로 진입)
-  document.getElementById('fp-wrap').classList.toggle('page-hidden', rightSel !== 'plan');
 
   // PFD 호스트 패널은 FCP 조작부가 다 보이도록 넓게(2분할 55% / 3분할 1.4배)
   L.classList.toggle('pfd-host', leftSel === 'pfd');
@@ -728,12 +727,14 @@ function applyPanels() {
   R.classList.toggle('pfd-host', rightSel === 'pfd');
 
   // 탭 활성 표시
+  // PLAN 은 CDU 자리에서 열리는 화면이라 탭은 CDU 가 켜진 것으로 본다
+  const tabSel = v => (v === 'plan' ? 'cdu' : v);
   document.querySelectorAll('#left-tabs [data-sel]').forEach(b =>
-    b.classList.toggle('active', b.dataset.sel === leftSel));
+    b.classList.toggle('active', b.dataset.sel === tabSel(leftSel)));
   document.querySelectorAll('#mid-tabs [data-sel]').forEach(b =>
-    b.classList.toggle('active', b.dataset.sel === midSel));
+    b.classList.toggle('active', b.dataset.sel === tabSel(midSel)));
   document.querySelectorAll('#page-tabs [data-sel]').forEach(b =>
-    b.classList.toggle('active', b.dataset.sel === rightSel));
+    b.classList.toggle('active', b.dataset.sel === tabSel(rightSel)));
 
   // 레거시 상태 동기화(솔로 모드 진입 판단 등에서 사용)
   leftPage = (leftSel === 'map' || leftSel === 'm3d') ? 1 : 0;
@@ -1028,10 +1029,23 @@ function toggleMapFull() {
   enterSolo('map');
 }
 
+// ── CDU · PLAN 이 있는 자리 ──
+// Flight Plan 은 CDU 의 한 화면이므로 'CDU 가 있는 창' 에서 열려야 한다.
+// 종전에는 늘 우측이어서, CDU 를 좌측에 둔 3분할에서 FPL 을 누르면
+// 엉뚱하게 우측(PFD) 창이 Flight Plan 으로 바뀌었다.
+function cduSide(want) {
+  const sides = tripleMode ? ['left', 'mid', 'right'] : ['left', 'right'];
+  const get = k => (k === 'left' ? leftSel : k === 'mid' ? midSel : rightSel);
+  return sides.find(k => get(k) === want)
+      || sides.find(k => get(k) === 'cdu' || get(k) === 'plan')
+      || 'right';
+}
+function goCduPage(sel) { selectPanel(cduSide(sel), sel, true); }
+
 // Flight Plan 하단 Home 버튼 — CDU 홈 화면으로 전환
 function fpGoCduHome() {
   if (_soloActive) setSolo('cdu');
-  else setPage(2);
+  else goCduPage('cdu');
   try { switchMode('HOME'); } catch(e) { _swallow(e); }
 }
 
@@ -1049,7 +1063,7 @@ function cduFullNavBtn() {
 function openFlightPlan() {
   // 직전에 PROC(IFR) 등을 열어 fpMode가 남아있으면 플랜 목록으로 되돌림
   try { fpMode = 'LIST'; fpRender(); } catch(e) { _swallow(e); }
-  if (_soloActive) setSolo('plan'); else setPage(1);
+  if (_soloActive) setSolo('plan'); else goCduPage('plan');
 }
 // Flight Plan 화면의 FULL — 플랜을 전체화면으로
 function planFullScreen() { enterSolo('plan'); }
@@ -1061,7 +1075,7 @@ function fpFullBtn() {
 }
 // Flight Plan 화면의 BACK — CDU(직전 화면)로 복귀
 function fpBackToCdu() {
-  if (_soloActive) setSolo('cdu'); else setPage(2);
+  if (_soloActive) setSolo('cdu'); else goCduPage('cdu');
 }
 // 표준 CDU 푸터: HOME · FULL/HALF · PLAN · BACK (+ 필요 시 Enter 등 extra)
 // backOnclick이 비어있으면 BACK 버튼은 생략(예: HOME 화면)
