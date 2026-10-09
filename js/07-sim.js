@@ -687,19 +687,43 @@ function syncMap3dHost(toPanel) {
   }
 }
 
+// 같은 창으로 치는 묶음 — PLAN 은 CDU 창의 한 화면이다.
+// 2D 지도(map)와 3D 지도(m3d)는 서로 다른 창이라 나란히 둘 수 있다.
+function panelFam(sel) { return sel === 'plan' ? 'cdu' : sel; }
+function panelGet(k) { return k === 'left' ? leftSel : k === 'mid' ? midSel : rightSel; }
+function panelSet(k, v) { if (k === 'left') leftSel = v; else if (k === 'mid') midSel = v; else rightSel = v; }
+// 두 창이 같은 것을 가리키고 있으면 바로잡는다. 저장된 배치를 되살릴 때처럼
+// selectPanel 을 거치지 않는 길도 있어서, 그릴 때 한 번 더 본다.
+// (지도는 2D·3D 가 서로 다른 창이라 나란히 둘 수 있다)
+function fixPanelDupes() {
+  const sides = tripleMode ? ['left', 'mid', 'right'] : ['left', 'right'];
+  const seen = new Set();
+  sides.forEach(k => {
+    let v = panelGet(k);
+    if (seen.has(panelFam(v))) {
+      v = ['pfd', 'map', 'cdu', 'm3d'].find(x => !seen.has(panelFam(x))) || 'map';
+      panelSet(k, v);
+    }
+    seen.add(panelFam(v));
+  });
+}
+
 function selectPanel(side, sel, force) {
   const get = k => k === 'left' ? leftSel : k === 'mid' ? midSel : rightSel;
   const set = (k, v) => { if (k === 'left') leftSel = v; else if (k === 'mid') midSel = v; else rightSel = v; };
   const sides = tripleMode ? ['left', 'mid', 'right'] : ['left', 'right'];
   if (!sides.includes(side)) side = 'right';
-  // 같은 창을 이미 다른 패널이 갖고 있으면 서로 맞바꾼다(창이 사라지지 않게)
-  const holder = sides.find(k => k !== side && get(k) === sel);
+  // 같은 창을 이미 다른 패널이 갖고 있으면 서로 맞바꾼다(창이 사라지지 않게).
+  // CDU 와 PLAN 은 '한 창의 두 화면' 이므로 같은 것으로 친다 — 따로 보면
+  // 두 패널에 CDU 가 겹쳐 뜨고, 한쪽에서 FPL 을 눌러도 다른 쪽이 바뀐다.
+  const holder = sides.find(k => k !== side && panelFam(get(k)) === panelFam(sel));
   if (holder) set(holder, get(side));
   set(side, sel);
   applyPanels();
 }
 
 function applyPanels() {
+  fixPanelDupes();
   const L = document.getElementById('left-panel');
   const M = document.getElementById('mid-panel');
   const R = document.getElementById('right-panel');

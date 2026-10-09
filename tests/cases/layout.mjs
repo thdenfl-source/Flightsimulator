@@ -170,6 +170,47 @@ export async function run(page, t) {
   t.eq(plan.usual.plan, 'right-panel', `CDU 가 우측이면 종전대로 우측에서 열린다 (${plan.usual.plan})`);
   t.eq(plan.usual.pfd, 'left-panel', '그때는 좌측 PFD 가 그대로다');
 
+  // ── 같은 창이 두 패널에 겹쳐 뜨지 않는다 ──
+  // CDU 와 PLAN 은 한 창의 두 화면이다. 따로 치면 두 패널에 CDU 가 겹쳐 뜨고,
+  // 한쪽에서 FPL 을 눌러도 다른 쪽이 바뀐다 — 실제로 났던 증상이다.
+  // 2D 지도와 3D 지도만 서로 다른 창이라 나란히 둘 수 있다.
+  const dup = await fresh.evaluate(async () => {
+    const wait = ms => new Promise(r => setTimeout(r, ms));
+    const sel = () => [leftSel, midSel, rightSel].join('·');
+    toggleTriple(true);
+    selectPanel('left', 'cdu', true); selectPanel('mid', 'map', true);
+    selectPanel('right', 'pfd', true);
+    await wait(120);
+    openFlightPlan();                       // 좌측이 PLAN 이 된다
+    await wait(120);
+    const a = sel();
+    // 그 상태에서 우측에 CDU 를 부르면 좌측 PLAN 과 겹쳐서는 안 된다
+    selectPanel('right', 'cdu', true);
+    await wait(120);
+    const b = sel();
+    const frames = document.querySelectorAll('.page-content:not(.page-hidden) .cdu-frame').length;
+    // 저장된 배치를 되살리듯 상태를 직접 겹쳐 놓아도 그릴 때 바로잡는다
+    leftSel = 'cdu'; midSel = 'map'; rightSel = 'plan';
+    applyPanels(); await wait(120);
+    const c = sel();
+    // 2D·3D 지도는 나란히 둘 수 있다
+    selectPanel('left', 'pfd', true);
+    selectPanel('mid', 'map', true); selectPanel('right', 'm3d', true);
+    await wait(120);
+    const d = sel();
+    selectPanel('left', 'pfd', true); selectPanel('mid', 'map', true);
+    selectPanel('right', 'cdu', true);
+    await wait(120);
+    return { a, b, c, d, frames };
+  });
+  t.eq(dup.a, 'plan·map·pfd', `CDU 자리에서 Flight Plan 이 열린다 (${dup.a})`);
+  t.ok(!/plan/.test(dup.b) || !/cdu/.test(dup.b),
+    `CDU 를 다른 창으로 부르면 PLAN 과 겹치지 않는다 (${dup.b})`);
+  t.eq(dup.frames, 1, `CDU 화면은 한 번만 뜬다 (${dup.frames}개)`);
+  t.ok(!(/cdu/.test(dup.c) && /plan/.test(dup.c)),
+    `겹친 배치를 되살려도 그릴 때 바로잡는다 (${dup.c})`);
+  t.eq(dup.d, 'pfd·map·m3d', `2D 와 3D 지도는 나란히 둘 수 있다 (${dup.d})`);
+
   await ctx1.close();
   await ctx2.close();
 }
