@@ -2848,6 +2848,14 @@ function act(name, ...args) {
       joyHidConnect().then(ok => { if (currentMode === 'JOYSTICK') switchMode('JOYSTICK'); });
     }
     function joyHidDrop() { joyHidDisconnect(); switchMode('JOYSTICK'); }
+    // 아날로그 축(SIM 모드 조종간) 배정
+    function joyAxPick(role) {
+      if (joyAxCapture === role) joyAxCancelCapture();
+      else joyAxBeginCapture(role);
+      switchMode('JOYSTICK');
+    }
+    function joyAxUnbind(role) { joyAxClear(role); switchMode('JOYSTICK'); }
+    function joyAxFlip(role) { joyAxInvert(role); switchMode('JOYSTICK'); }
     function joyResetBinds() {
       joyBinds = {}; joySave(); joyCancelCapture(); switchMode('JOYSTICK');
     }
@@ -2899,6 +2907,29 @@ function act(name, ...args) {
                   `border:1px solid #5a2a2a;border-radius:3px;padding:3px 8px;cursor:pointer;">해제</div>` : '') +
           `</div>`);
       });
+      // ── SIM 모드 조종간(아날로그 축) ──
+      rows.push(`<div style="color:#556;font-size:9px;letter-spacing:1px;margin:10px 0 4px;">` +
+        `SIM 모드 조종간 (아날로그 축)</div>`);
+      JOY_AX_ROLES.forEach(r => {
+        const wait = (joyAxCapture === r.id);
+        const has = !!joyAxes[r.id];
+        const val = wait ? '그 축을 끝까지 밀었다 놓으십시오…' : joyAxLabel(r.id);
+        const vc  = wait ? '#ffcc44' : (has ? '#ffb74d' : '#4a5563');
+        rows.push(
+          `<div style="display:flex;align-items:center;gap:6px;padding:7px 8px;margin-bottom:3px;` +
+          `border:1px solid ${wait ? '#ffcc4488' : '#1e2630'};border-radius:5px;background:#0a1116;">` +
+          `<div data-act="joyAxPick" data-arg='["${r.id}"]' style="flex:1;cursor:pointer;">` +
+          `<div style="color:#cdd6df;font-size:11px;font-weight:bold;">${r.label}</div>` +
+          `<div style="color:${vc};font-size:9px;margin-top:1px;">${val}</div></div>` +
+          (has ? `<div data-act="joyAxFlip" data-arg='["${r.id}"]' style="flex:0 0 auto;color:#ffb74d;font-size:9px;` +
+                 `border:1px solid #5a4420;border-radius:3px;padding:3px 8px;cursor:pointer;">반전</div>` +
+                 `<div data-act="joyAxUnbind" data-arg='["${r.id}"]' style="flex:0 0 auto;color:#ff8877;font-size:9px;` +
+                 `border:1px solid #5a2a2a;border-radius:3px;padding:3px 8px;cursor:pointer;">해제</div>` : '') +
+          `</div>`);
+      });
+      rows.push(`<div style="color:#4a5563;font-size:9px;margin:2px 2px 0;line-height:1.45;">` +
+        `PFD 의 <b>SIM</b> 버튼을 켜면 이 축으로 직접 조종합니다. 켜는 동안 AFCS` +
+        `(NAV·HDG·ALT·CRHT·GSPD)는 풀립니다.</div>`);
       const foot = `<div data-act="joyResetBinds" style="text-align:right;margin:8px 0 4px;">` +
         `<span style="display:inline-block;color:#ff8877;font-size:9px;border:1px solid #5a2a2a;border-radius:3px;` +
         `padding:3px 9px;cursor:pointer;">전체 배정 해제</span></div>`;
@@ -2950,10 +2981,11 @@ function act(name, ...args) {
             `<br><span style="color:#4a5563;">#${m.index} ${m.id.slice(0, 28)}` +
             (m.mapping ? ` · mapping: ${m.mapping}` : ' · mapping: (없음)') + `</span>` + list;
         }
-        if (_joyCapWas && !joyCapture) { clearInterval(_joyTick); _joyTick = null; renderContent(); }
-        _joyCapWas = !!joyCapture;
+        const cap = !!(joyCapture || joyAxCapture);
+        if (_joyCapWas && !cap) { clearInterval(_joyTick); _joyTick = null; renderContent(); }
+        _joyCapWas = cap;
       }, 120);
-      _joyCapWas = !!joyCapture;
+      _joyCapWas = !!(joyCapture || joyAxCapture);
     }
     function renderSettingsScreen(container, footer, title) {
       title.innerText = 'Settings';
@@ -4022,6 +4054,9 @@ switchMode('HOME');
       joyUnbind,
       joyHidPick,
       joyHidDrop,
+      joyAxPick,
+      joyAxUnbind,
+      joyAxFlip,
       joyResetBinds,
       addInput,
       addSelcalInput,
