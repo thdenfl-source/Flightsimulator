@@ -34,7 +34,9 @@ function drawPFD() {
   ctx.fillStyle = '#000';
   ctx.fillRect(0, 0, W, H);
 
-  drawSpeedTape(0, 0, tapW, usableH);
+  // 왼쪽 줄: 위는 속도계, 아래는 TQ(토크) 막대 — 오른쪽 줄(ALT·CRHT)과 짝이 맞는다
+  drawSpeedTape(0, 0, tapW, aiH);
+  drawTqGauge(0, aiH, tapW, hsiH);
   // Right column:
   //   Top half (aiH):  ALT tape + VSI (only beside ALT)
   //   Bottom half (hsiH): CRHT display takes the full right-column width (tapW + vsiW)
@@ -45,6 +47,8 @@ function drawPFD() {
   // Dividers
   ctx.strokeStyle = '#1e1e1e'; ctx.lineWidth = 1;
   ctx.beginPath(); ctx.moveTo(tapW, 0);             ctx.lineTo(tapW, usableH);          ctx.stroke();
+  // 속도계와 TQ 사이
+  ctx.beginPath(); ctx.moveTo(0, aiH);              ctx.lineTo(tapW, aiH);              ctx.stroke();
   // Left edge of ALT tape (only top half — bottom half belongs to CRHT)
   ctx.beginPath(); ctx.moveTo(W-tapW-vsiW, 0);      ctx.lineTo(W-tapW-vsiW, aiH);       ctx.stroke();
   // Left edge of CRHT display in bottom half = same x as alt tape edge
@@ -384,6 +388,74 @@ function drawAI(x, y, w, h) {
 // ────────────────────────────────────────
 // SPEED TAPE
 // ────────────────────────────────────────
+// ── TQ(토크) 계기 ──
+// 헬기에서 제일 많이 보는 계기다. 컬렉티브를 올린 만큼 토크가 오르고,
+// 지금 필요한 토크(호버 기준 + 뱅크 − 전진양력)보다 남으면 그만큼 올라간다.
+// 그래서 막대 위의 '필요 토크' 표식과 지금 값의 차이가 곧 상승·강하다.
+function drawTqGauge(x, y, w, h) {
+  ctx.save(); ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
+  ctx.fillStyle = '#0d0d0d'; ctx.fillRect(x, y, w, h);
+
+  let tq = 0, need = 60, over = false;
+  try { tq = tqShown(); need = tqRequired(); over = tqOver(); } catch (e) { _swallow(e); }
+
+  const HEAD = 16;                       // 머리글 'TQ %'
+  const barX = x + Math.round(w * 0.22), barW = Math.round(w * 0.40);
+  const barY = y + HEAD + 6, barH = h - HEAD - 26;
+  const vToY = v => barY + barH * (1 - Math.max(0, Math.min(TQ_MAX, v)) / TQ_MAX);
+
+  ctx.textAlign = 'left';
+  ctx.font = 'bold 9px Helvetica, Arial';
+  ctx.fillStyle = '#8a97a5';
+  ctx.fillText('TQ %', x + 3, y + 11);
+
+  if (barH > 10) {
+    // 바탕 + 구간(연속한계 위는 붉게)
+    ctx.fillStyle = '#161a1e'; ctx.fillRect(barX, barY, barW, barH);
+    ctx.fillStyle = 'rgba(255,60,60,0.22)';
+    ctx.fillRect(barX, vToY(TQ_MAX), barW, vToY(TQ_LIMIT) - vToY(TQ_MAX));
+
+    // 눈금 — 0·20·…·120
+    ctx.strokeStyle = '#3a4653'; ctx.lineWidth = 1;
+    ctx.font = '7px Helvetica, Arial'; ctx.fillStyle = '#6a7784';
+    for (let v = 0; v <= TQ_MAX; v += 20) {
+      const ty = Math.round(vToY(v)) + 0.5;
+      ctx.beginPath(); ctx.moveTo(barX - 3, ty); ctx.lineTo(barX, ty); ctx.stroke();
+      ctx.textAlign = 'right';
+      ctx.fillText(String(v), barX - 4, ty + 2.5);
+    }
+
+    // 지금 토크 — 아래에서 채운다
+    const topY = vToY(tq);
+    ctx.fillStyle = over ? '#ff5555' : '#00e5ff';
+    ctx.fillRect(barX, topY, barW, barY + barH - topY);
+    ctx.strokeStyle = over ? '#ff8888' : '#8ae8ff'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(barX, topY + 0.5); ctx.lineTo(barX + barW, topY + 0.5); ctx.stroke();
+
+    // 필요 토크 표식(여기에 맞추면 고도가 유지된다)
+    const ny = Math.round(vToY(need)) + 0.5;
+    ctx.strokeStyle = '#ffcc44'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(barX - 2, ny); ctx.lineTo(barX + barW + 4, ny); ctx.stroke();
+
+    // 연속 사용 한계(100%) — 붉은 선
+    const ly = Math.round(vToY(TQ_LIMIT)) + 0.5;
+    ctx.strokeStyle = '#ff4444'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(barX - 2, ly); ctx.lineTo(barX + barW + 4, ly); ctx.stroke();
+  }
+
+  // 숫자 — 막대 아래
+  ctx.textAlign = 'center';
+  ctx.font = 'bold 13px Helvetica, Arial';
+  ctx.fillStyle = over ? '#ff5555' : '#ffffff';
+  ctx.fillText(tq.toFixed(0), x + w / 2, y + h - 6);
+  if (over) {
+    ctx.font = 'bold 8px Helvetica, Arial';
+    ctx.fillStyle = '#ff5555';
+    ctx.fillText('OVER TQ', x + w / 2, y + h - 18);
+  }
+  ctx.restore();
+}
+
 function drawSpeedTape(x, y, w, h) {
   ctx.save(); ctx.beginPath(); ctx.rect(x,y,w,h); ctx.clip();
   ctx.fillStyle='#0d0d0d'; ctx.fillRect(x,y,w,h);

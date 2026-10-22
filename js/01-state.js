@@ -49,6 +49,7 @@ const S = {
   alt: 500,   // feet   (AFCS default 500 ft)
   pit: 0,     // pitch  — auto-derived from speed: (120−spd)×3/20
   bnk: 0,     // bank   — driven by HDG button; returns to 0 on release
+  tq: 60,     // torque(%) — SIM 모드의 컬렉티브 값. 남는 토크가 상승률이 된다
   crs: 360,
   brg: 0,     // BRG1: bearing to active (TO) WP
   xtk: 0,
@@ -137,6 +138,35 @@ function updateGsBtn() {
 // SIM 모드(조종간 직접 조종) — 법칙은 14-simmode.js. 선언만 여기 둔다:
 // 시뮬 루프(07-sim.js)가 그 파일보다 먼저 실행될 수 있어 TDZ 를 피한다.
 let simModeOn = false;
+
+// ── 토크(TQ) ──
+// 헬기의 컬렉티브는 '상승률 레버' 가 아니라 '출력 레버' 다. 올린 만큼 토크가
+// 오르고, 그 토크가 지금 필요한 만큼보다 남으면 그 차이가 상승률이 된다.
+// 그래서 같은 레버 위치라도 뱅크를 주거나 속도가 바뀌면 오르내림이 달라진다.
+const TQ_HOVER   = 60;         // 무풍·수평·제자리에서 필요한 토크(%)
+const TQ_SPAN    = 45;         // 컬렉티브 끝까지 = ±45%
+const TQ_MAX     = 120;        // 계기 최대 눈금
+const TQ_LIMIT   = 100;        // 연속 사용 한계(넘으면 오버토크)
+const TQ_RATE    = 60;         // 토크가 따라가는 속도(%/s)
+const TQ_PER_FPM = 55;         // 남는 토크 1% 당 상승률(fpm)
+const TQ_BANK    = 22;         // 뱅크로 더 드는 토크(1/cosφ−1 에 곱한다)
+const TQ_TLIFT   = 9;          // 전진 양력으로 덜 드는 토크(최대 %)
+const TLIFT_KT   = 55;         // 그 효과가 다 차는 속도(kt)
+
+// 지금 '수평 비행' 에 필요한 토크(%)
+function tqRequired() {
+  const bank = Math.min(60, Math.abs(S.bnk));
+  const lift = (1 / Math.cos(bank * D2R) - 1) * TQ_BANK;      // 선회 중 더 필요
+  const tl   = Math.min(1, Math.max(0, S.spd) / TLIFT_KT) * TQ_TLIFT;  // 전진 양력
+  return TQ_HOVER + lift - tl;
+}
+// 계기에 보일 토크. SIM 모드에서는 실제 레버 값, 평소에는 지금 비행 상태에서
+// 들 법한 값을 거꾸로 셈해 보여 준다(계기가 비어 보이지 않게).
+function tqShown() {
+  if (simModeOn) return S.tq;
+  return Math.max(0, Math.min(TQ_MAX, tqRequired() + (S.vs || 0) / TQ_PER_FPM));
+}
+function tqOver() { return tqShown() > TQ_LIMIT; }
 
 function toggleGs() {
   if (gsArmed || gsOn) { gsArmed = false; gsOn = false; }
