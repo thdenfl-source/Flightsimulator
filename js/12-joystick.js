@@ -301,7 +301,11 @@ let joyAxSaved = false;
 try { joyAxSaved = localStorage.getItem('joyAxes') !== null; } catch (e) { _swallow(e); }
 // 흔한 조종간 배치 — 축 0 좌우(롤) · 1 전후(피치) · 2 스로틀(컬렉티브) · 5 비틀기(요).
 // 아직 아무것도 배정하지 않은 장치에만 한 번 넣어 준다(바꾸면 그 값이 이긴다).
+// 피치와 컬렉티브는 반전이 기본이다 — 조종간을 앞으로 밀면 축 값이 늘어나는
+// 기종이 흔한데, 그건 '기수 내림' 이 아니라 반대로 읽힌다. 스로틀도 아래로
+// 내릴수록 값이 커지는 배선이 많다.
 const JOY_AX_DEFAULT = { roll: 0, pitch: 1, coll: 2, yaw: 5 };
+const JOY_AX_DEF_INV = { pitch: true, coll: true };
 function joyAxApplyDefault(p, neu) {
   if (joyAxSaved || Object.keys(joyAxes).length) return;
   const n = (p.axes || []).length;
@@ -310,7 +314,8 @@ function joyAxApplyDefault(p, neu) {
     const i = JOY_AX_DEFAULT[k];
     // 스로틀은 보통 아래에 세워 둔 채 꽂는다 — 그러면 '레버식' 으로 본다
     const rest = Number.isFinite(neu[i]) ? neu[i] : 0;
-    joyAxes[k] = { i, inv: false, abs: (k === 'coll') && Math.abs(rest) > 0.5 };
+    joyAxes[k] = { i, inv: !!JOY_AX_DEF_INV[k],
+                   abs: (k === 'coll') && Math.abs(rest) > 0.5 };
   });
   joyAxSave();
 }
