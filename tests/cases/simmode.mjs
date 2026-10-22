@@ -18,7 +18,10 @@ const SETUP = () => {
   joyOn = true; joyCancelCapture(); joyAxCancelCapture();
   for (const k in _joyNeutral) delete _joyNeutral[k];
   for (const k in _joyHat) delete _joyHat[k];
+  for (const k in _joyNoHat) delete _joyNoHat[k];
+  for (const k in _joyOdd) delete _joyOdd[k];
   joyActiveIdx = -1;
+  joyAxSaved = true;
   joyAxes = { roll: { i: 0, inv: false }, pitch: { i: 1, inv: false },
               yaw: { i: 2, inv: false }, coll: { i: 3, inv: false } };
   joyPoll(1000);                       // 중립 학습

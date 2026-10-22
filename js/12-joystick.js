@@ -80,14 +80,28 @@ JOY_ACTIONS.forEach(a => { JOY_ACT_BY_ID[a.id] = a; });
 const JOY_HAT_DIRS = ['N', 'E', 'S', 'W'];
 const JOY_HAT_LBL  = { N: '▲', E: '▶', S: '▼', W: '◀' };
 const JOY_HAT_MAP  = [['N'], ['N', 'E'], ['E'], ['E', 'S'], ['S'], ['S', 'W'], ['W'], ['W', 'N']];
-// 8등분 격자에만 나오는 값(±1/7 · ±3/7 · ±5/7)이 오면 그 축은 햇이다.
-// 쉬는 자리를 1 밖으로 보내지 않는 기종(0 에서 쉬는 햇)을 이것으로 가려낸다.
-// ±1 은 보통의 아날로그 축도 내는 값이라 판정 근거로 쓰지 않는다.
+// ── 햇으로 볼지 말지 ──
+// 8방향 햇은 '정해진 값만' 낸다(±1/7 · ±3/7 · ±5/7 · ±1, 쉬는 자리는 1 밖).
+// 반면 아날로그 축은 그 사이를 연속으로 지나간다. 그래서 '격자값이 한 번
+// 나왔다' 만으로는 갈라낼 수 없다 — 사이클릭을 천천히 움직이면 1/7 을 그냥
+// 스쳐 지나가고, 그러면 조종간이 햇으로 잘못 잡혀 아예 듣지 않게 된다.
+// 그래서 격자에서 벗어난 값이 한 번이라도 나오면 그 축은 영영 햇이 아니다.
 const JOY_HAT_ODD = [1 / 7, 3 / 7, 5 / 7];
+const JOY_LATTICE = [0, 1 / 7, 3 / 7, 5 / 7, 1];   // 0 은 '쉬는 자리' 로 허용
+const JOY_LAT_TOL = 0.012;
+function joyLatticeHit(v) {
+  const a = Math.abs(v);
+  let best = Infinity;
+  JOY_LATTICE.forEach(k => { best = Math.min(best, Math.abs(a - k)); });
+  return best;
+}
 function joyIsHatValue(v) {
   if (!Number.isFinite(v)) return false;
-  if (Math.abs(v) > 1.05) return true;             // 쉬는 자리가 범위 밖(3.2857 등)
-  return JOY_HAT_ODD.some(k => Math.abs(Math.abs(v) - k) < 0.02);
+  return Math.abs(v) > 1.05;                       // 쉬는 자리가 범위 밖(3.2857 등)
+}
+function joyIsOddValue(v) {
+  const a = Math.abs(v);
+  return JOY_HAT_ODD.some(k => Math.abs(a - k) < JOY_LAT_TOL);
 }
 function joyHatDirs(v) {
   if (!Number.isFinite(v) || Math.abs(v) > 1.05) return [];
@@ -125,6 +139,14 @@ let joyCapture = null;        // 배정 대기 중인 동작 id
 const _joyDown = {};          // code → { since, next }
 const _joyNeutral = {};       // padIndex → 축 중립값 배열
 const _joyHat = {};           // padIndex → { 축번호: true } 햇으로 판정된 축
+const _joyNoHat = {};         // padIndex → { 축번호: true } 햇이 아님이 드러난 축
+const _joyOdd = {};           // padIndex → { 축번호: {7배값: true} } 본 격자값들
+// SIM 조종간으로 배정해 둔 축인가 — 그런 축은 햇으로 보지 않는다
+function _joyAxUsed(i) {
+  try {
+    return Object.keys(joyAxes).some(k => joyAxes[k] && joyAxes[k].i === i);
+  } catch (e) { return false; }
+}
 let _joyRaf = null;
 
 function joySave() {
@@ -275,9 +297,29 @@ const JOY_AX_ROLES = [
 const JOY_AX_DEAD = 0.08;          // 중립 근처 떨림 무시
 let joyAxes = {};
 try { joyAxes = JSON.parse(localStorage.getItem('joyAxes') || 'null') || {}; } catch (e) { joyAxes = {}; }
+let joyAxSaved = false;
+try { joyAxSaved = localStorage.getItem('joyAxes') !== null; } catch (e) { _swallow(e); }
+// 흔한 조종간 배치 — 축 0 좌우(롤) · 1 전후(피치) · 2 스로틀(컬렉티브) · 5 비틀기(요).
+// 아직 아무것도 배정하지 않은 장치에만 한 번 넣어 준다(바꾸면 그 값이 이긴다).
+const JOY_AX_DEFAULT = { roll: 0, pitch: 1, coll: 2, yaw: 5 };
+function joyAxApplyDefault(p, neu) {
+  if (joyAxSaved || Object.keys(joyAxes).length) return;
+  const n = (p.axes || []).length;
+  if (n <= Math.max.apply(null, Object.values(JOY_AX_DEFAULT))) return;
+  Object.keys(JOY_AX_DEFAULT).forEach(k => {
+    const i = JOY_AX_DEFAULT[k];
+    // 스로틀은 보통 아래에 세워 둔 채 꽂는다 — 그러면 '레버식' 으로 본다
+    const rest = Number.isFinite(neu[i]) ? neu[i] : 0;
+    joyAxes[k] = { i, inv: false, abs: (k === 'coll') && Math.abs(rest) > 0.5 };
+  });
+  joyAxSave();
+}
 let joyAxCapture = null;           // 축 배정 대기 중인 역할 id
 
-function joyAxSave() { try { localStorage.setItem('joyAxes', JSON.stringify(joyAxes)); } catch (e) { _swallow(e); } }
+function joyAxSave() {
+  try { localStorage.setItem('joyAxes', JSON.stringify(joyAxes)); joyAxSaved = true; }
+  catch (e) { _swallow(e); }
+}
 function joyAxBeginCapture(role) { joyAxCapture = role; }
 function joyAxCancelCapture() { joyAxCapture = null; }
 function joyAxClear(role) { delete joyAxes[role]; joyAxSave(); }
@@ -379,15 +421,34 @@ function joyPoll(now) {
     const on = _joyDown[code] ? (v > JOY_OFF) : (v >= JOY_ON);
     _joyEdge(code, on, now);
   });
+  joyAxApplyDefault(p, neu);
   const hat = _joyHat[p.index] || (_joyHat[p.index] = {});
+  const no  = _joyNoHat[p.index] || (_joyNoHat[p.index] = {});
+  const odd = _joyOdd[p.index] || (_joyOdd[p.index] = {});
   (p.axes || []).forEach((v, i) => {
     if (!Number.isFinite(v)) return;
     // ── 8방향 햇이 축 하나로 올라오는 기종 ──
     // 쉬는 자리를 1 밖(대개 3.2857)으로 보내고, 눌린 방향은 -1…1 을 8등분해
     // 실어 보낸다. 그래서 ± 두 방향으로는 여덟 방향을 가릴 수 없다.
-    // 한 번이라도 1 밖의 값이 오면 그 축은 햇으로 보고 방향으로 푼다.
-    if (!hat[i] && joyIsHatValue(v)) {
-      hat[i] = true;
+    //
+    // 가려내는 규칙:
+    //   ① 1 밖의 값이 오면 그 자리에서 햇이다(그런 값은 햇만 낸다).
+    //   ② 격자(0·±1/7·±3/7·±5/7·±1) 밖의 값이 한 번이라도 오면 영영 아니다.
+    //   ③ 격자만 지키면서 ±1/7·±3/7·±5/7 이 나오면 햇이다(한 번이면 충분하다 —
+    //      ②가 아날로그 축을 이미 걸러 냈으므로).
+    // SIM 조종간으로 배정한 축은 아예 보지 않는다 — 그 축은 사람이 이미
+    // "이건 조종간" 이라고 말한 것이다.
+    const wasHat = hat[i];
+    if (_joyAxUsed(i)) { no[i] = true; }
+    else if (!hat[i] && !no[i]) {
+      if (joyIsHatValue(v)) hat[i] = true;                   // ① 1 밖 — 확정
+      else if (joyLatticeHit(v) > JOY_LAT_TOL) no[i] = true; // ② 격자 밖 — 영영 아님
+      else if (joyIsOddValue(v)) {                           // ③ 햇에서만 나오는 값
+        (odd[i] || (odd[i] = {}))[Math.round(Math.abs(v) * 7)] = true;
+        hat[i] = true;
+      }
+    }
+    if (hat[i] && !wasHat) {
       // 햇으로 판정되기 전에 ± 로 눌려 있었다면 그 자리에서 놓아 준다
       _joyEdge('a' + i + '+', false, now);
       _joyEdge('a' + i + '-', false, now);
@@ -441,6 +502,8 @@ window.addEventListener('gamepadconnected', e => {
     const p = e.gamepad;
     delete _joyNeutral[p.index];
     delete _joyHat[p.index];
+    delete _joyNoHat[p.index];
+    delete _joyOdd[p.index];
     // 표준 배치 패드이고 사용자가 아직 손대지 않았으면 흔한 배치를 넣어 준다
     if (!joyBindsSaved && p.mapping === 'standard') { joyBinds = Object.assign({}, JOY_STD_BINDS); joySave(); }
   } catch (err) { _swallow(err); }
