@@ -43,7 +43,7 @@ const FLY = `(sec) => {
 
 export async function run(page, t) {
   // ── 버튼이 스톱워치 오른쪽에 있다 ──
-  const btn = await page.evaluate(() => {
+  const btn = await page.evaluate(async () => {
     selectPanel('left', 'pfd', true);
     const b = document.getElementById('sim-mode-btn');
     const sw = document.getElementById('sw-display');
@@ -53,19 +53,66 @@ export async function run(page, t) {
     if (simModeOn) toggleSimMode();
     const off = b.className;
     b.click();
-    const on = { cls: b.className, state: simModeOn };
-    toggleSimMode(false);
-    if (was) toggleSimMode(true);
-    return { txt: b.textContent.trim(), lbl: lbl.textContent.trim(),
+    await new Promise(r => setTimeout(r, 40));   // 다이얼로그는 한 박자 뒤에 뜬다
+    const res = { txt: b.textContent.trim(), lbl: lbl.textContent.trim(),
              right: bb.left >= sb.right - 1, sameRow: Math.abs(bb.top - sb.top) < 60,
-             off, on };
+             off, was, dlg: !!document.querySelector('.ui-dlg'),
+             asks: (document.querySelector('.ui-dlg-msg') || {}).textContent,
+             btns: [...document.querySelectorAll('.ui-dlg-btns button')].map(x => x.textContent) };
+    // 물음을 닫아 둔다(다음 검사가 가려지지 않게)
+    const cancel = document.querySelector('.ui-dlg-btns button');
+    if (cancel) cancel.click();
+    await new Promise(r => setTimeout(r, 40));
+    if (simModeOn) toggleSimMode(false);
+    return res;
   });
   t.eq(btn.lbl, 'SIM', `버튼 위에 SIM 이름표가 있다 (${btn.lbl})`);
   t.eq(btn.right, true, '스톱워치 오른쪽에 있다');
   t.eq(btn.sameRow, true, '같은 줄이다');
   t.ok(!/\bon\b/.test(btn.off), `평소에는 꺼져 있다 (${btn.off})`);
-  t.eq(btn.on.state, true, '누르면 SIM 모드가 켜진다');
-  t.ok(/\bon\b/.test(btn.on.cls), `버튼도 켜진 모양이 된다 (${btn.on.cls})`);
+  // 누르면 바로 켜지는 게 아니라 '어디서 시작할지' 를 먼저 묻는다
+  t.eq(btn.dlg, true, '누르면 시작 지점을 묻는다');
+  t.ok((btn.asks || '').includes('어디서'), `무엇을 묻는지 분명하다 (${btn.asks})`);
+  t.ok(btn.btns.some(x => x.includes('지상')) && btn.btns.some(x => x.includes('공중')),
+    `지상·공중 중에 고른다 (${btn.btns.join(' / ')})`);
+
+  // 지상을 고르면 0ft·정지, 공중을 고르면 날던 고도 그대로
+  const start = await page.evaluate(async () => {
+    const pick = async (txt) => {
+      if (simModeOn) toggleSimMode(false);
+      S.alt = 2500; S.spd = 90; S.vs = 300; S.tq = 70;
+      document.getElementById('sim-mode-btn').click();
+      await new Promise(r => setTimeout(r, 30));
+      const b = [...document.querySelectorAll('.ui-dlg-btns button')]
+        .find(x => x.textContent.includes(txt));
+      b.click();
+      await new Promise(r => setTimeout(r, 60));
+      return { alt: S.alt, spd: S.spd, vs: S.vs, tq: S.tq, on: simModeOn,
+               cls: document.getElementById('sim-mode-btn').className };
+    };
+    const ground = await pick('지상');
+    const air = await pick('공중');
+    // 거의 땅에 있는데 '공중' 을 고르면 띄워 준다
+    if (simModeOn) toggleSimMode(false);
+    S.alt = 0;
+    document.getElementById('sim-mode-btn').click();
+    await new Promise(r => setTimeout(r, 30));
+    [...document.querySelectorAll('.ui-dlg-btns button')]
+      .find(x => x.textContent.includes('공중')).click();
+    await new Promise(r => setTimeout(r, 60));
+    const lifted = S.alt;
+    if (simModeOn) toggleSimMode(false);
+    return { ground, air, lifted };
+  });
+  t.eq(start.ground.on, true, '지상을 고르면 SIM 모드가 켜진다');
+  t.ok(/\bon\b/.test(start.ground.cls), '버튼도 켜진 모양이 된다');
+  t.ok(start.ground.alt < 20, `지상은 0ft 에서 시작한다 (${start.ground.alt.toFixed(0)}ft)`);
+  t.ok(start.ground.spd < 5, `속도도 0 이다 (${start.ground.spd.toFixed(0)}kt)`);
+  t.ok(start.ground.tq < 15, `토크도 내려 둔다 — 레버를 올리며 뜬다 (${start.ground.tq.toFixed(0)}%)`);
+  t.ok(Math.abs(start.air.alt - 2500) < 20,
+    `공중은 날던 고도 그대로다 (${start.air.alt.toFixed(0)}ft)`);
+  t.ok(Math.abs(start.lifted - 500) < 30,
+    `땅에 붙어 있는데 공중을 고르면 띄워 준다 (${start.lifted.toFixed(0)}ft)`);
 
   // ── 켜면 AFCS 를 놓는다 ── (두 곳에서 같은 축을 몰면 싸운다)
   const afcs = await page.evaluate(`(() => {
@@ -365,6 +412,51 @@ export async function run(page, t) {
     '돌려서 비는 모서리를 덮을 만큼 키운다');
   t.eq(view.levelTf, '', '수평으로 돌아오면 기울임도 풀린다');
   t.eq(view.after.sel, 'map', '끄면 지도 창이 2D 로 되돌아온다');
+
+  // ── 1인칭: 눈이 헬기 자리에 있다 ──
+  // 뒤에서 따라가는 3인칭이면 헬기가 화면 안(아래쪽 1/4 즈음)에 보인다.
+  // 1인칭이면 헬기는 화면 아래 끝(또는 그 밖)이고, 화면에 보이는 것은 '앞' 이다.
+  // 카메라 높이가 고도계와 맞는지는 지도 축척에서 거꾸로 셈해 확인한다.
+  const fpv = await page.evaluate(`(() => {
+    (${SETUP.toString()})();
+    toggleSimMode(false);
+    toggleTriple(true);
+    selectPanel('left', 'pfd', true); selectPanel('mid', 'map', true);
+    selectPanel('right', 'cdu', true);
+    toggleSimMode(true);
+    S.hdg = 90; S.pit = 0; S.bnk = 0; S.alt = 1000;
+    _applyFollow();
+    const el = _ml3d.getContainer();
+    const H = el.clientHeight, W = el.clientWidth;
+    const pAc = _ml3d.project([S.lon, S.lat]);          // 헬기가 화면 어디에 찍히나
+    // 지도 중심은 기수 앞쪽이어야 한다
+    const c = _ml3d.getCenter();
+    const ahead = distance(S.lat, S.lon, c.lat, c.lng) * 1852;   // m
+    const brgToC = normAS(bearing(S.lat, S.lon, c.lat, c.lng) - S.hdg);
+    // zoom 에서 카메라 높이를 거꾸로 셈한다(512px 타일)
+    const mpp = 78271.51696 * Math.cos(S.lat * D2R) / Math.pow(2, _ml3d.getZoom());
+    const pr = _ml3d.getPitch() * D2R;
+    const eye = (H / 2 / _ml3dHalfFovTan()) * Math.cos(pr) * mpp;
+    S.alt = 4000; _applyFollow();
+    const mpp2 = 78271.51696 * Math.cos(S.lat * D2R) / Math.pow(2, _ml3d.getZoom());
+    const eye2 = (H / 2 / _ml3dHalfFovTan()) * Math.cos(_ml3d.getPitch() * D2R) * mpp2;
+    toggleSimMode(false);
+    return { H, W, acX: pAc.x, acY: pAc.y, ahead, brgToC,
+             eyeFt: eye / 0.3048, eyeFt2: eye2 / 0.3048,
+             tanPitch: Math.tan(pr) };
+  })()`);
+  t.ok(fpv.acY > fpv.H * 0.92,
+    `헬기는 화면 아래 끝에 있다 — 눈이 그 자리다 (y ${fpv.acY.toFixed(0)} / 높이 ${fpv.H})`);
+  t.ok(Math.abs(fpv.acX - fpv.W / 2) < 8,
+    `좌우로는 한가운데다 (x ${fpv.acX.toFixed(0)} / 폭 ${fpv.W})`);
+  t.ok(Math.abs(fpv.brgToC) < 2,
+    `보는 곳은 기수 정면이다 (기수에서 ${fpv.brgToC.toFixed(1)}°)`);
+  t.ok(Math.abs(fpv.eyeFt - 1000) < 60,
+    `카메라 높이가 고도계와 같다 (${fpv.eyeFt.toFixed(0)}ft · 고도 1,000ft)`);
+  t.ok(Math.abs(fpv.eyeFt2 - 4000) < 240,
+    `고도를 올리면 눈높이도 따라 오른다 (${fpv.eyeFt2.toFixed(0)}ft · 고도 4,000ft)`);
+  t.ok(Math.abs(fpv.ahead - 1000 * 0.3048 * fpv.tanPitch) < 60,
+    `중심은 눈 아래에서 앞으로 꼭 그만큼 밀려 있다 (${fpv.ahead.toFixed(0)}m)`);
   t.eq(view.after.tf, '', '화면 기울임도 남지 않는다');
 
   // ── 4방향 햇 = 사이클릭 비퍼 트림 ──

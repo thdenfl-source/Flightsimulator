@@ -59,7 +59,25 @@ function updateSimModeBtn() {
   b.classList.toggle('on', simModeOn);
 }
 
-function toggleSimMode(on) {
+// 지상에서 시작할지 공중에서 이어 갈지 — 버튼으로 켤 때 한 번 묻는다.
+// (프로그램에서 부르는 toggleSimMode 는 묻지 않는다 — 검사·복원용)
+const SIM_AIR_MIN_FT = 500;     // '공중' 을 골랐는데 거의 땅이면 이만큼 띄운다
+function simModeBtnPress() {
+  if (simModeOn) { toggleSimMode(false); return; }
+  uiConfirm('SIM 모드를 어디서 시작할까요?',
+            { okText: '지상 (0 ft)', cancelText: '공중 (현 고도)' })
+    .then(ground => toggleSimMode(true, { ground: !!ground }))
+    .catch(e => { _swallow(e); toggleSimMode(true); });
+}
+
+function simStartGround() {
+  S.alt = 0; S.vs = 0; S.spd = 0;
+  S.pit = 0; S.bnk = 0; bankTarget = 0;
+  S.tq = 0;                      // 레버를 내려 둔 상태에서 올리며 뜬다
+  try { updateAcOnMap(); } catch (e) { _swallow(e); }
+}
+
+function toggleSimMode(on, opt) {
   simModeOn = (on === undefined) ? !simModeOn : !!on;
   if (simModeOn) {
     // 손으로 모는 동안에는 AFCS 를 놓는다 — 같은 축을 둘이 몰면 싸운다
@@ -74,6 +92,8 @@ function toggleSimMode(on) {
     // 지금 날고 있는 상태를 유지할 만큼의 토크로 레버를 맞춰 둔다(진입 충격 방지)
     S.tq = Math.max(0, Math.min(TQ_MAX, tqRequired() + (S.vs || 0) / TQ_PER_FPM));
     if (!S.running) toggleSim();        // 멈춰 있으면 바로 날기 시작한다
+    if (opt && opt.ground) simStartGround();
+    else if (S.alt < 50) S.alt = SIM_AIR_MIN_FT;   // 공중에서 시작하는데 땅에 붙어 있으면 띄운다
     simEnterView();
   } else {
     simExitView();
@@ -184,5 +204,5 @@ function simFly(dt) {
 
 // 화면 버튼(data-act) 연결 — 이 파일이 11-charts.js 보다 나중에 로드되므로
 // 거기 목록에 넣으면 아직 정의되지 않은 이름이 된다. 여기서 직접 등록한다.
-try { appRegister({ toggleSimMode }); } catch (e) { _swallow(e); }
+try { appRegister({ toggleSimMode, simModeBtnPress }); } catch (e) { _swallow(e); }
 try { updateSimModeBtn(); } catch (e) { _swallow(e); }

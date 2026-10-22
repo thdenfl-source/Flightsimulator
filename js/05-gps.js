@@ -871,12 +871,29 @@ function _follow3d() {
     // N↑ 를 골라 놔도 3D 만 늘 기수 위로 돌아, 버튼이 3D 에서는 없는 것과 같았다.
     // N↑ 에서는 bearing 을 넣지 않는다(사용자가 손으로 돌려 둔 각도를 지운다).
     if (mapHdgUp) opt.bearing = S.hdg;
-    // ── SIM 모드: 계기와 같은 것을 보는 조종석 시야 ──
-    // 방위는 늘 기수 위(방향지시계), 카메라 각도는 기수 자세(자세계)를 따르고,
-    // 높이는 고도계를 따른다(위 zoom). 그래야 계기와 바깥 그림이 어긋나지 않는다.
+    // ── SIM 모드: 조종석에서 내다보는 1인칭 ──
+    // 뒤에서 따라가는 3인칭이 아니라 '눈이 헬기 자리에 있는' 그림이어야 한다.
+    // 이 maplibre 에는 카메라를 직접 놓는 길(FreeCamera)이 없으므로, 화면 중심을
+    // 기수 앞쪽으로 꼭 그만큼 밀어 카메라가 헬기 자리에 오게 한다.
+    //   · 카메라 높이 = 고도계(S.alt)
+    //   · 그 높이를 만드는 zoom: 카메라높이 = 1.5 × 화면높이(px) × cos(기울기) × m/px
+    //   · 중심은 카메라 바로 아래에서 앞으로 (카메라높이 × tan(기울기)) 만큼
     if (simModeOn) {
       opt.bearing = S.hdg;
-      opt.pitch = Math.max(40, Math.min(85, SIM_CAM_PITCH + S.pit * SIM_CAM_PIT_K));
+      const pitchDeg = Math.max(40, Math.min(85, SIM_CAM_PITCH + S.pit * SIM_CAM_PIT_K));
+      opt.pitch = pitchDeg;
+      const eye = Math.max(SIM_EYE_MIN_M, S.alt * 0.3048);          // 눈높이(m)
+      const pr = pitchDeg * D2R;
+      // 화면 높이와 시야각으로 'm/px' 를 정하면 그 zoom 이 곧 카메라 높이가 된다
+      const halfFov = _ml3dHalfFovTan();
+      const mpp = eye / (H / 2 / halfFov * Math.cos(pr));
+      // maplibre 는 512px 타일을 쓴다 — zoom 0 에서 78,271.5 m/px.
+      const z2 = Math.log2(78271.51696 * Math.cos(S.lat * D2R) / mpp);
+      opt.zoom = Math.max(1, Math.min(22, z2));
+      const aheadNm = (eye * Math.tan(pr)) / 1852;
+      const c = destPoint(S.lat, S.lon, S.hdg, aheadNm);
+      opt.center = [c[1], c[0]];
+      opt.offset = [0, 0];
     }
     _ml3d.easeTo(opt);
     _apply3dRoll();
@@ -887,6 +904,15 @@ function _follow3d() {
 // 그래서 2D 의 HDG↑ 와 같은 방법을 쓴다 — 화면을 반대로 돌리고, 돌려서 비는
 // 모서리는 그만큼 키워 덮는다. 축척이 조금 커지지만 시야가 깨지지 않는다.
 const SIM_CAM_PITCH = 78;     // 수평 비행에서의 카메라 각도(°)
+const SIM_EYE_MIN_M = 8;      // 땅에 있어도 이 정도 눈높이는 둔다(m)
+// 카메라-중심 거리는 1/(2·tan(fov/2)) × 화면높이 다. maplibre 기본 fov 는
+// 36.87° 이며, 혹시 바뀌어도 지도에서 직접 읽어 쓴다.
+function _ml3dHalfFovTan() {
+  let fov = 36.87;
+  try { if (_ml3d && _ml3d.transform && Number.isFinite(_ml3d.transform.fov)) fov = _ml3d.transform.fov; }
+  catch (e) { _swallow(e); }
+  return Math.tan(fov / 2 * D2R);
+}
 const SIM_CAM_PIT_K = 1.2;    // 기수 1° 당 카메라 각도 변화
 function _apply3dRoll() {
   const el = document.getElementById('map3d');
