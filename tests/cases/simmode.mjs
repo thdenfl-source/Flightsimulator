@@ -364,6 +364,73 @@ export async function run(page, t) {
   t.eq(view.after.sel, 'map', '끄면 지도 창이 2D 로 되돌아온다');
   t.eq(view.after.tf, '', '화면 기울임도 남지 않는다');
 
+  // ── 4방향 햇 = 사이클릭 비퍼 트림 ──
+  // 실제 헬기의 사이클릭 햇은 트림이다. 좌우는 롤, 전후는 피치 중립을 옮겨 둬서
+  // 조종간을 가운데 두어도 그 자세로 날게 한다.
+  const trim = await page.evaluate(`(() => {
+    (${SETUP.toString()})();
+    const fly = ${FLY};
+    simTrimReset();
+    for (let i = 0; i < 10; i++) simTrimNudge('R');     // 우 트림
+    const t1 = JSON.parse(JSON.stringify(simTrim));
+    fly(4);                                             // 조종간은 가운데 그대로
+    const rolled = { bnk: S.bnk, axis: joyAxVal('roll') };
+    for (let i = 0; i < 20; i++) simTrimNudge('L');     // 반대로 넘겨 본다
+    fly(5);
+    const back = S.bnk;
+    simTrimReset(); fly(4);
+    const level = S.bnk;
+    // 전후는 피치
+    for (let i = 0; i < 10; i++) simTrimNudge('F');
+    fly(4);
+    const nose = { pit: S.pit, trim: simTrim.pitch };
+    simTrimReset();
+    return { t1, rolled, back, level, nose, max: (() => {
+      for (let i = 0; i < 200; i++) simTrimNudge('R');
+      const m = simTrim.roll; simTrimReset(); return m;
+    })() };
+  })()`);
+  t.ok(trim.t1.roll > 0.2, `우 트림을 넣으면 롤 중립이 옮겨 간다 (${trim.t1.roll.toFixed(2)})`);
+  t.eq(trim.rolled.axis, 0, '조종간은 가운데 그대로다');
+  t.ok(trim.rolled.bnk > 8, `그래도 오른쪽으로 기운 채 난다 (${trim.rolled.bnk.toFixed(1)}°)`);
+  t.ok(trim.back < -8, `반대로 넘기면 왼쪽으로 기운다 (${trim.back.toFixed(1)}°)`);
+  t.ok(Math.abs(trim.level) < 2, `트림을 풀면 수평으로 돌아온다 (${trim.level.toFixed(1)}°)`);
+  t.ok(trim.nose.pit < -3, `앞 트림은 기수를 내린다 (${trim.nose.pit.toFixed(1)}°)`);
+  t.ok(trim.max <= 0.8 + 1e-9, `한없이 쌓이지는 않는다 (최대 ${trim.max.toFixed(2)})`);
+
+  // ── 스로틀처럼 세워 두는 레버(레버식) ──
+  // 자리 자체가 출력이다. 맨 아래면 토크가 바닥, 맨 위면 110%.
+  const lever = await page.evaluate(`(() => {
+    (${SETUP.toString()})();
+    const fly = ${FLY};
+    joyAxes.coll = { i: 3, inv: false, abs: true };
+    _ax(3, -1); joyPoll(1000); fly(4);          // 맨 아래
+    const down = { tq: S.tq, vs: S.vs, raw: joyAxRaw('coll') };
+    _ax(3, 0); fly(4);                          // 가운데
+    const mid = S.tq;
+    _ax(3, 1); fly(4);                          // 맨 위
+    const up = { tq: S.tq, over: tqOver() };
+    return { down, mid, up, lbl: joyAxLabel('coll') };
+  })()`);
+  t.eq(trim.rolled.axis, 0, '레버식은 중립을 빼지 않는다 — 자리 그대로 읽는다');
+  t.ok(lever.down.tq < 10, `맨 아래면 토크가 바닥이다 (${lever.down.tq.toFixed(0)}%)`);
+  t.ok(lever.down.vs < -500, `그러면 내려간다 (${lever.down.vs.toFixed(0)}fpm)`);
+  t.ok(Math.abs(lever.mid - 55) < 8, `가운데면 호버 언저리다 (${lever.mid.toFixed(0)}%)`);
+  t.ok(lever.up.tq > 100, `맨 위면 연속한계를 넘는다 (${lever.up.tq.toFixed(0)}%)`);
+  t.eq(lever.up.over, true, '오버토크로 뜬다');
+  t.ok(lever.lbl.includes('레버식'), `설정에도 그렇게 적힌다 (${lever.lbl})`);
+
+  // 가운데로 돌아오는 축이면 종전대로 호버 토크 기준이다
+  const spring = await page.evaluate(`(() => {
+    (${SETUP.toString()})();
+    const fly = ${FLY};
+    joyAxes.coll = { i: 3, inv: false, abs: false };
+    _ax(3, 0); fly(3);
+    return { tq: S.tq, hover: TQ_HOVER };
+  })()`);
+  t.ok(Math.abs(spring.tq - spring.hover) < 3,
+    `가운데면 호버 토크다 (${spring.tq.toFixed(0)}% · 호버 ${spring.hover}%)`);
+
   // ── 끄면 종전 방식으로 돌아온다 ──
   const off = await page.evaluate(`(() => {
     (${SETUP.toString()})();

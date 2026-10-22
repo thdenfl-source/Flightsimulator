@@ -31,6 +31,23 @@ const SIM_VS_RATE   = 900;     // 상승률이 따라가는 속도(fpm/s)
 
 // simModeOn 은 01-state.js 에 둔다 — 시뮬 루프(07)가 이 파일보다 먼저 돌 수 있어서다.
 
+// ── 사이클릭 비퍼 트림(4방향 햇) ──
+// 실제 헬기의 사이클릭 햇은 '트림' 이다 — 조금씩 중립을 옮겨 두면 손을 놓아도
+// 그 자세로 난다. SIM 모드에서 좌우는 롤, 전후는 피치 트림으로 쓴다.
+const SIM_TRIM_STEP = 0.03;    // 한 번 누를 때 옮기는 양(조종간 전체폭의 3%)
+const SIM_TRIM_MAX  = 0.8;     // 트림만으로 갈 수 있는 한계
+let simTrim = { roll: 0, pitch: 0 };
+function simTrimNudge(dir) {
+  const k = SIM_TRIM_STEP;
+  if (dir === 'R') simTrim.roll += k;
+  else if (dir === 'L') simTrim.roll -= k;
+  else if (dir === 'F') simTrim.pitch += k;      // 앞으로 = 기수 내림
+  else if (dir === 'A') simTrim.pitch -= k;
+  simTrim.roll = Math.max(-SIM_TRIM_MAX, Math.min(SIM_TRIM_MAX, simTrim.roll));
+  simTrim.pitch = Math.max(-SIM_TRIM_MAX, Math.min(SIM_TRIM_MAX, simTrim.pitch));
+}
+function simTrimReset() { simTrim = { roll: 0, pitch: 0 }; }
+
 function simModeAxes() {
   const ax = r => { try { return joyAxVal(r); } catch (e) { return 0; } };
   return { roll: ax('roll'), pitch: ax('pitch'), yaw: ax('yaw'), coll: ax('coll') };
@@ -53,6 +70,7 @@ function toggleSimMode(on) {
     try { updateHoverBtns(); } catch (e) { _swallow(e); }
     // 손을 떼면 그 자리에서 날던 대로 — 지금 자세를 그대로 이어받는다
     bankTarget = S.bnk;
+    simTrimReset();
     // 지금 날고 있는 상태를 유지할 만큼의 토크로 레버를 맞춰 둔다(진입 충격 방지)
     S.tq = Math.max(0, Math.min(TQ_MAX, tqRequired() + (S.vs || 0) / TQ_PER_FPM));
     if (!S.running) toggleSim();        // 멈춰 있으면 바로 날기 시작한다
@@ -103,15 +121,20 @@ function simFly(dt) {
   if (!simModeOn || !(dt > 0)) return;
   const a = simModeAxes();
 
+  // 조종간 값에 트림을 더한다 — 가운데 두어도 트림 자세를 지킨다
+  const cl = v => Math.max(-1, Math.min(1, v));
+  const roll = cl(a.roll + simTrim.roll);
+  const pitch = cl(a.pitch + simTrim.pitch);
+
   // ── 사이클릭 좌우 → 뱅크 ──
-  const bTgt = a.roll * SIM_BANK_MAX;
+  const bTgt = roll * SIM_BANK_MAX;
   const dB = bTgt - S.bnk;
   S.bnk += Math.sign(dB) * Math.min(Math.abs(dB), SIM_ROLL_RATE * dt);
   bankTarget = S.bnk;             // 모드를 빠져나가도 자세가 튀지 않게
 
   // ── 사이클릭 전후 → 피치 ──
   // 조종간을 밀면(+) 기수가 내려간다. S.pit 은 기수 올림이 +.
-  const pTgt = -a.pitch * SIM_PITCH_MAX;
+  const pTgt = -pitch * SIM_PITCH_MAX;
   const dP = pTgt - S.pit;
   S.pit += Math.sign(dP) * Math.min(Math.abs(dP), SIM_PITCH_RATE * dt);
 
@@ -131,10 +154,18 @@ function simFly(dt) {
   // 레버 자리가 곧 토크다. 토크는 천천히 따라 오른다(엔진·로터 관성).
   // 컬렉티브 축을 배정하지 않았으면 레버가 없는 셈이다 — 지금 고도를 지킬
   // 만큼만 걸어 둔다(조이스틱 없이 켰다고 저절로 떠오르지 않게).
-  const hasColl = !!(typeof joyAxes === 'object' && joyAxes && joyAxes.coll);
-  const tTgt = hasColl
-    ? Math.max(0, Math.min(TQ_MAX, TQ_HOVER + a.coll * TQ_SPAN))
-    : tqRequired();
+  const cfg = (typeof joyAxes === 'object' && joyAxes) ? joyAxes.coll : null;
+  let tTgt;
+  if (!cfg) tTgt = tqRequired();
+  else if (cfg.abs) {
+    // 스로틀·컬렉티브처럼 '세워 두는' 레버는 자리 자체가 출력이다.
+    // 맨 아래 0% … 맨 위 110%(연속한계 100% 를 조금 넘을 수 있게).
+    tTgt = (joyAxRaw('coll') + 1) / 2 * 110;
+  } else {
+    // 가운데로 돌아오는 축은 호버 토크를 기준으로 오르내린다
+    tTgt = TQ_HOVER + a.coll * TQ_SPAN;
+  }
+  tTgt = Math.max(0, Math.min(TQ_MAX, tTgt));
   const dT = tTgt - S.tq;
   S.tq += Math.sign(dT) * Math.min(Math.abs(dT), TQ_RATE * dt);
 

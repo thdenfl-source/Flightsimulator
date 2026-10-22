@@ -288,7 +288,8 @@ function joyAxInvert(role) {
 }
 function joyAxLabel(role) {
   const a = joyAxes[role];
-  return a ? `축 ${a.i}${a.inv ? ' (반전)' : ''}` : '없음';
+  if (!a) return '없음';
+  return `축 ${a.i}${a.inv ? ' · 반전' : ''}${a.abs ? ' · 레버식' : ''}`;
 }
 // 지금 쓰고 있는 패드에서 그 역할의 값(-1…1)을 읽는다. 배정이 없으면 0.
 function joyAxVal(role) {
@@ -307,6 +308,24 @@ function joyAxVal(role) {
   const k = (Math.abs(d) - JOY_AX_DEAD) / (1 - JOY_AX_DEAD);
   return Math.max(-1, Math.min(1, Math.sign(d) * k));
 }
+// 레버식(절대값) 축 — 중립을 빼지 않고 자리 그대로 -1…1 로 읽는다.
+// 스로틀·컬렉티브처럼 민 자리에 서 있는 레버에 쓴다.
+function joyAxRaw(role) {
+  const a = joyAxes[role];
+  if (!a || !joyOn) return -1;
+  const pads = joyPads();
+  if (!pads.length) return -1;
+  const p = pads.find(q => q.index === joyActiveIdx) || pads[0];
+  const v = (p.axes || [])[a.i];
+  if (!Number.isFinite(v)) return -1;
+  return Math.max(-1, Math.min(1, a.inv ? -v : v));
+}
+function joyAxToggleAbs(role) {
+  const a = joyAxes[role];
+  if (!a) return;
+  a.abs = !a.abs; joyAxSave();
+}
+
 // 폴링 중 축 배정 — 가장 크게 움직인 축을 그 역할로 잡는다
 function _joyAxCaptureStep(p, neu) {
   let best = -1, bestD = 0.45;      // 이만큼은 움직여야 '고른 것' 으로 본다
@@ -319,7 +338,12 @@ function _joyAxCaptureStep(p, neu) {
   if (best < 0) return;
   const v = p.axes[best] - (Number.isFinite(neu[best]) ? neu[best] : 0);
   // 민 방향이 '+' 가 되도록 맞춰 둔다(밀었더니 반대로 가는 일이 없게)
-  joyAxes[joyAxCapture] = { i: best, inv: v < 0 };
+  const inv = v < 0;
+  // 쉬는 자리가 가운데가 아니면 '세워 두는 레버'(스로틀·컬렉티브)로 본다 —
+  // 그런 축은 자리 자체가 값이므로 중립을 빼지 않고 그대로 쓴다.
+  const rest = Number.isFinite(neu[best]) ? neu[best] : 0;
+  const abs = (joyAxCapture === 'coll') && Math.abs(rest) > 0.5;
+  joyAxes[joyAxCapture] = { i: best, inv, abs };
   joyAxSave();
   joyAxCapture = null;
 }

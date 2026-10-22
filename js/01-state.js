@@ -454,6 +454,15 @@ let _trimGuard = null;
 function startTrimHold(dir) {
   stopTrimHold();                       // 중복 시작 방지(이전 홀드가 남아 있으면 정리)
   _trimGuard = setTimeout(stopTrimHold, 20000);   // 런어웨이 방지(최대 20초)
+  // SIM 모드에서는 사이클릭의 '비퍼 트림' 그대로다 — 좌우는 롤, 전후는 피치를
+  // 조금씩 옮겨 둔다(조종간을 가운데 두어도 그 자세로 날게 된다).
+  if (simModeOn) {
+    simTrimNudge(dir);
+    trimHoldTimer = setTimeout(() => {
+      trimHoldInt = setInterval(() => simTrimNudge(dir), 100);
+    }, 300);
+    return;
+  }
   if (gspdOn) {
     gspdTrim(dir);
     trimHoldTimer = setTimeout(() => {

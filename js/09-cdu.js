@@ -2856,6 +2856,7 @@ function act(name, ...args) {
     }
     function joyAxUnbind(role) { joyAxClear(role); switchMode('JOYSTICK'); }
     function joyAxFlip(role) { joyAxInvert(role); switchMode('JOYSTICK'); }
+    function joyAxAbs(role) { joyAxToggleAbs(role); switchMode('JOYSTICK'); }
     function joyResetBinds() {
       joyBinds = {}; joySave(); joyCancelCapture(); switchMode('JOYSTICK');
     }
@@ -2921,6 +2922,10 @@ function act(name, ...args) {
           `<div data-act="joyAxPick" data-arg='["${r.id}"]' style="flex:1;cursor:pointer;">` +
           `<div style="color:#cdd6df;font-size:11px;font-weight:bold;">${r.label}</div>` +
           `<div style="color:${vc};font-size:9px;margin-top:1px;">${val}</div></div>` +
+          (has && r.id === 'coll' ? `<div data-act="joyAxAbs" data-arg='["${r.id}"]' style="flex:0 0 auto;` +
+                 `color:${joyAxes[r.id].abs ? '#00e5ff' : '#6a7784'};font-size:9px;` +
+                 `border:1px solid ${joyAxes[r.id].abs ? '#2a5a7a' : '#2a3a4a'};border-radius:3px;` +
+                 `padding:3px 8px;cursor:pointer;" title="스로틀처럼 세워 두는 레버면 켜십시오">레버식</div>` : '') +
           (has ? `<div data-act="joyAxFlip" data-arg='["${r.id}"]' style="flex:0 0 auto;color:#ffb74d;font-size:9px;` +
                  `border:1px solid #5a4420;border-radius:3px;padding:3px 8px;cursor:pointer;">반전</div>` +
                  `<div data-act="joyAxUnbind" data-arg='["${r.id}"]' style="flex:0 0 auto;color:#ff8877;font-size:9px;` +
@@ -2929,7 +2934,11 @@ function act(name, ...args) {
       });
       rows.push(`<div style="color:#4a5563;font-size:9px;margin:2px 2px 0;line-height:1.45;">` +
         `PFD 의 <b>SIM</b> 버튼을 켜면 이 축으로 직접 조종합니다. 켜는 동안 AFCS` +
-        `(NAV·HDG·ALT·CRHT·GSPD)는 풀립니다.</div>`);
+        `(NAV·HDG·ALT·CRHT·GSPD)는 풀립니다.<br>` +
+        `스로틀처럼 <b>세워 두는 레버</b>를 컬렉티브로 쓰면 <b>레버식</b>을 켜십시오 — 레버 자리가 ` +
+        `그대로 토크(0…110%)가 됩니다. 가운데로 돌아오는 축이면 끄십시오(호버 토크 기준 ±45%).<br>` +
+        `<b>4방향 햇</b>을 트림 ▲▼◀▶ 에 배정해 두면 SIM 모드에서 <b>사이클릭 비퍼 트림</b>이 됩니다 — ` +
+        `좌우는 롤, 전후는 피치를 조금씩 옮겨 둡니다.</div>`);
       const foot = `<div data-act="joyResetBinds" style="text-align:right;margin:8px 0 4px;">` +
         `<span style="display:inline-block;color:#ff8877;font-size:9px;border:1px solid #5a2a2a;border-radius:3px;` +
         `padding:3px 9px;cursor:pointer;">전체 배정 해제</span></div>`;
@@ -4057,6 +4066,7 @@ switchMode('HOME');
       joyAxPick,
       joyAxUnbind,
       joyAxFlip,
+      joyAxAbs,
       joyResetBinds,
       addInput,
       addSelcalInput,
