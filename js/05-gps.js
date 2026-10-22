@@ -871,8 +871,35 @@ function _follow3d() {
     // N↑ 를 골라 놔도 3D 만 늘 기수 위로 돌아, 버튼이 3D 에서는 없는 것과 같았다.
     // N↑ 에서는 bearing 을 넣지 않는다(사용자가 손으로 돌려 둔 각도를 지운다).
     if (mapHdgUp) opt.bearing = S.hdg;
+    // ── SIM 모드: 계기와 같은 것을 보는 조종석 시야 ──
+    // 방위는 늘 기수 위(방향지시계), 카메라 각도는 기수 자세(자세계)를 따르고,
+    // 높이는 고도계를 따른다(위 zoom). 그래야 계기와 바깥 그림이 어긋나지 않는다.
+    if (simModeOn) {
+      opt.bearing = S.hdg;
+      opt.pitch = Math.max(40, Math.min(85, SIM_CAM_PITCH + S.pit * SIM_CAM_PIT_K));
+    }
     _ml3d.easeTo(opt);
+    _apply3dRoll();
   }
+}
+
+// 뱅크(자세계)는 카메라로 줄 수 없다(이 maplibre 는 roll 을 받지 않는다).
+// 그래서 2D 의 HDG↑ 와 같은 방법을 쓴다 — 화면을 반대로 돌리고, 돌려서 비는
+// 모서리는 그만큼 키워 덮는다. 축척이 조금 커지지만 시야가 깨지지 않는다.
+const SIM_CAM_PITCH = 78;     // 수평 비행에서의 카메라 각도(°)
+const SIM_CAM_PIT_K = 1.2;    // 기수 1° 당 카메라 각도 변화
+function _apply3dRoll() {
+  const el = document.getElementById('map3d');
+  if (!el) return;
+  if (!simModeOn || Math.abs(S.bnk) < 0.2) {
+    if (el.style.transform) { el.style.transform = ''; el.style.transformOrigin = ''; }
+    return;
+  }
+  const w = el.clientWidth || 1, h = el.clientHeight || 1;
+  const a = Math.abs(S.bnk) * D2R, c = Math.abs(Math.cos(a)), si = Math.abs(Math.sin(a));
+  const k = Math.max((w * c + h * si) / w, (w * si + h * c) / h);
+  el.style.transformOrigin = '50% 50%';
+  el.style.transform = `rotate(${(-S.bnk).toFixed(2)}deg) scale(${k.toFixed(3)})`;
 }
 function _follow2d() {
   {

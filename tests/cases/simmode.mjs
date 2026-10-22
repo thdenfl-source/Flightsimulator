@@ -285,9 +285,10 @@ export async function run(page, t) {
   const both = await page.evaluate(`(() => {
     (${SETUP.toString()})();
     const fly = ${FLY};
+    toggleSimMode(false);
     selectPanel('left', 'pfd', true); selectPanel('mid', 'map', true);
-    if (!followMode) toggleFollow();
-    const c0 = leafMap.getCenter();
+    toggleSimMode(true);                 // 켜면 지도 창이 3D 로 바뀐다
+    const c0 = (_ml3d ? _ml3d.getCenter() : leafMap.getCenter());
     // PFD 캔버스에 그려진 뱅크 지시(ADI 회전각)를 가로채 본다
     let drawn = null;
     const proto = CanvasRenderingContext2D.prototype, orig = proto.rotate;
@@ -295,17 +296,73 @@ export async function run(page, t) {
     proto.rotate = function (a) { if (drawn === null) drawn = a; return orig.call(this, a); };
     drawPFD();
     proto.rotate = orig;
-    const c1 = leafMap.getCenter();
-    if (followMode) toggleFollow();
-    return { bnk: S.bnk, drawn,
+    const c1 = (_ml3d ? _ml3d.getCenter() : leafMap.getCenter());
+    const el = document.getElementById('map3d');
+    return { bnk: S.bnk, drawn, three: midSel,
+             tf: el.style.transform, pitch: _ml3d ? _ml3d.getPitch() : null,
+             bearing: _ml3d ? Math.round(normA(_ml3d.getBearing())) % 360 : null,
+             hdg: Math.round(S.hdg) % 360,
              moved: Math.hypot(c1.lat - c0.lat, c1.lng - c0.lng),
              nearAc: Math.hypot(c1.lat - S.lat, c1.lng - S.lon) };
   })()`);
   t.ok(Math.abs(both.bnk) > 40, `조종한 뱅크가 상태에 들어 있다 (${both.bnk.toFixed(0)}°)`);
   t.ok(both.drawn !== null && Math.abs(both.drawn) > 0.3,
     `PFD 가 그 뱅크로 그려진다 (${both.drawn === null ? '없음' : both.drawn.toFixed(2)}rad)`);
-  t.ok(both.moved > 0.002, `지도도 함께 따라 움직인다 (${both.moved.toFixed(4)}°)`);
+  t.eq(both.three, 'm3d', 'SIM 을 켜면 지도 창이 3D 로 바뀐다');
+  t.ok(both.moved > 0.002, `3D 지도도 함께 따라 움직인다 (${both.moved.toFixed(4)}°)`);
   t.ok(both.nearAc < 0.25, `지도 중심이 항공기를 따라온다 (${both.nearAc.toFixed(3)}°)`);
+  t.eq(both.bearing, both.hdg, `방위는 기수를 따른다 (${both.bearing}° · 기수 ${both.hdg}°)`);
+  t.ok(/rotate\(-?\d/.test(both.tf || ''),
+    `뱅크만큼 화면이 기운다 (${both.tf || '없음'})`);
+
+  // ── 바깥 그림이 계기를 따른다 ──
+  // 고도계(높이) · 방향지시계(방위) · 자세계(카메라 각도와 기울기).
+  const view = await page.evaluate(`(() => {
+    (${SETUP.toString()})();
+    const fly = ${FLY};
+    toggleSimMode(false);
+    toggleTriple(true);
+    selectPanel('left', 'pfd', true); selectPanel('mid', 'map', true);
+    selectPanel('right', 'cdu', true);
+    const before = midSel;
+    toggleSimMode(true);
+    const el = document.getElementById('map3d');
+    const read = () => ({ pitch: _ml3d.getPitch(), zoom: _ml3d.getZoom(),
+                          bearing: Math.round(normA(_ml3d.getBearing())) % 360,
+                          tf: el.style.transform });
+    S.alt = 1000; S.pit = 0; S.bnk = 0; S.hdg = 90;
+    _applyFollow(); const low = read();
+    S.alt = 9000;
+    _applyFollow(); const high = read();
+    S.alt = 1000; S.pit = -10;              // 기수를 숙이면 더 아래를 본다
+    _applyFollow(); const down = read();
+    S.pit = 10;
+    _applyFollow(); const up = read();
+    S.pit = 0; S.hdg = 250;
+    _applyFollow(); const turn = read();
+    S.bnk = -30;
+    _applyFollow(); const rolled = read();
+    S.bnk = 0;
+    _applyFollow(); const levelTf = el.style.transform;
+    toggleSimMode(false);
+    const after = { sel: midSel, tf: el.style.transform };
+    return { before, low, high, down, up, turn, rolled, levelTf, after };
+  })()`);
+  t.eq(view.before, 'map', '켜기 전에는 2D 지도였다');
+  t.ok(view.high.zoom < view.low.zoom - 1,
+    `고도가 높아지면 시야가 멀어진다 (1,000ft z${view.low.zoom.toFixed(1)} → 9,000ft z${view.high.zoom.toFixed(1)})`);
+  t.ok(view.down.pitch < view.low.pitch - 5,
+    `기수를 숙이면 카메라가 더 아래를 본다 (${view.low.pitch.toFixed(0)}° → ${view.down.pitch.toFixed(0)}°)`);
+  t.ok(view.up.pitch > view.low.pitch + 5,
+    `기수를 들면 더 멀리 본다 (${view.up.pitch.toFixed(0)}°)`);
+  t.eq(view.turn.bearing, 250, `기수를 돌리면 시야도 돈다 (${view.turn.bearing}°)`);
+  t.ok(/rotate\(30/.test(view.rolled.tf),
+    `좌로 기울이면 화면이 반대로 돈다 (${view.rolled.tf})`);
+  t.ok(/scale\(1\.[1-9]/.test(view.rolled.tf),
+    '돌려서 비는 모서리를 덮을 만큼 키운다');
+  t.eq(view.levelTf, '', '수평으로 돌아오면 기울임도 풀린다');
+  t.eq(view.after.sel, 'map', '끄면 지도 창이 2D 로 되돌아온다');
+  t.eq(view.after.tf, '', '화면 기울임도 남지 않는다');
 
   // ── 끄면 종전 방식으로 돌아온다 ──
   const off = await page.evaluate(`(() => {
