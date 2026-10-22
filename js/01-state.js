@@ -134,6 +134,10 @@ function updateGsBtn() {
              : gsArmed ? 'G/S<span class="gs-sub">ARM</span>' : 'G/S';
   if (b.innerHTML !== want) b.innerHTML = want;
 }
+// SIM 모드(조종간 직접 조종) — 법칙은 14-simmode.js. 선언만 여기 둔다:
+// 시뮬 루프(07-sim.js)가 그 파일보다 먼저 실행될 수 있어 TDZ 를 피한다.
+let simModeOn = false;
+
 function toggleGs() {
   if (gsArmed || gsOn) { gsArmed = false; gsOn = false; }
   else {

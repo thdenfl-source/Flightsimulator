@@ -263,6 +263,67 @@ document.addEventListener('keyup', e => {
   _joyEdge(code, false, (typeof performance !== 'undefined') ? performance.now() : 0);
 });
 
+// ══ 아날로그 축 배정(SIM 모드 조종간) ══
+// 버튼과 달리 '얼마나 밀었는가' 가 그대로 쓰인다. 기종마다 축 번호가 달라
+// 설정 화면에서 해당 축을 한 번 움직여 잡는다. 중립은 연결 시점 값을 쓴다.
+const JOY_AX_ROLES = [
+  { id: 'roll',  label: '사이클릭 좌우 (롤)' },
+  { id: 'pitch', label: '사이클릭 전후 (피치)' },
+  { id: 'yaw',   label: '페달 (요)' },
+  { id: 'coll',  label: '컬렉티브 (상승·강하)' },
+];
+const JOY_AX_DEAD = 0.08;          // 중립 근처 떨림 무시
+let joyAxes = {};
+try { joyAxes = JSON.parse(localStorage.getItem('joyAxes') || 'null') || {}; } catch (e) { joyAxes = {}; }
+let joyAxCapture = null;           // 축 배정 대기 중인 역할 id
+
+function joyAxSave() { try { localStorage.setItem('joyAxes', JSON.stringify(joyAxes)); } catch (e) { _swallow(e); } }
+function joyAxBeginCapture(role) { joyAxCapture = role; }
+function joyAxCancelCapture() { joyAxCapture = null; }
+function joyAxClear(role) { delete joyAxes[role]; joyAxSave(); }
+function joyAxInvert(role) {
+  const a = joyAxes[role];
+  if (!a) return;
+  a.inv = !a.inv; joyAxSave();
+}
+function joyAxLabel(role) {
+  const a = joyAxes[role];
+  return a ? `축 ${a.i}${a.inv ? ' (반전)' : ''}` : '없음';
+}
+// 지금 쓰고 있는 패드에서 그 역할의 값(-1…1)을 읽는다. 배정이 없으면 0.
+function joyAxVal(role) {
+  const a = joyAxes[role];
+  if (!a || !joyOn) return 0;
+  const pads = joyPads();
+  if (!pads.length) return 0;
+  const p = pads.find(q => q.index === joyActiveIdx) || pads[0];
+  const v = (p.axes || [])[a.i];
+  if (!Number.isFinite(v)) return 0;
+  const neu = (_joyNeutral[p.index] || [])[a.i];
+  let d = v - (Number.isFinite(neu) ? neu : 0);
+  if (a.inv) d = -d;
+  if (Math.abs(d) < JOY_AX_DEAD) return 0;
+  // 중립 밖의 나머지 구간을 -1…1 로 편다(문턱에서 값이 튀지 않게)
+  const k = (Math.abs(d) - JOY_AX_DEAD) / (1 - JOY_AX_DEAD);
+  return Math.max(-1, Math.min(1, Math.sign(d) * k));
+}
+// 폴링 중 축 배정 — 가장 크게 움직인 축을 그 역할로 잡는다
+function _joyAxCaptureStep(p, neu) {
+  let best = -1, bestD = 0.45;      // 이만큼은 움직여야 '고른 것' 으로 본다
+  (p.axes || []).forEach((v, i) => {
+    if (!Number.isFinite(v)) return;
+    if ((_joyHat[p.index] || {})[i]) return;        // 햇은 조종간이 아니다
+    const d = Math.abs(v - (Number.isFinite(neu[i]) ? neu[i] : 0));
+    if (d > bestD) { bestD = d; best = i; }
+  });
+  if (best < 0) return;
+  const v = p.axes[best] - (Number.isFinite(neu[best]) ? neu[best] : 0);
+  // 민 방향이 '+' 가 되도록 맞춰 둔다(밀었더니 반대로 가는 일이 없게)
+  joyAxes[joyAxCapture] = { i: best, inv: v < 0 };
+  joyAxSave();
+  joyAxCapture = null;
+}
+
 // 한 프레임분 폴링. 테스트에서 직접 부를 수 있게 시각을 인자로 받는다.
 function joyPoll(now) {
   // 눌려 있는 키의 연속 동작(repeat)도 여기서 돈다 — 장치가 없어도 듣는다
@@ -287,6 +348,7 @@ function joyPoll(now) {
   const p = sel;
   const neu = _joyNeutral[p.index];
 
+  if (joyAxCapture) _joyAxCaptureStep(p, neu);
   (p.buttons || []).forEach((b, i) => {
     const v = (typeof b === 'object') ? (b.value != null ? b.value : (b.pressed ? 1 : 0)) : b;
     const code = 'b' + i;

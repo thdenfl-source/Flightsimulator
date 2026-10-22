@@ -251,6 +251,19 @@ html, body {
 /* 스톱워치 ↔ 현재 시각 전환 버튼 */
 .sw-btn-time { border-color: #2a4a6a; color: #7ab8f5; }
 .sw-btn-time:active { background: #1a2c44; }
+/* ── SIM 모드 버튼 ── 스톱워치 오른쪽. 켜짐은 AFCS 계열과 구분되게 호박색. */
+.sim-mode-group { display: flex; flex-direction: column; align-items: center; gap: 2px; margin-left: 6px; }
+.sim-mode-btn {
+  background: #111; border: 1px solid #333; color: #555;
+  font-size: 11px; font-weight: bold; letter-spacing: 1px;
+  min-width: 44px; padding: 5px 10px; cursor: pointer; border-radius: 3px;
+  touch-action: manipulation; font-family: 'Helvetica Neue', Arial, sans-serif;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.sim-mode-btn.on {
+  background: #2a1a00; border-color: #ffb74d; color: #ffcc66;
+  box-shadow: 0 0 6px rgba(255,183,77,0.45);
+}
 .sw-display.clock-mode { color: #7ab8f5; }
 
 /* ── BRG Toggle ── */
@@ -1682,6 +1695,15 @@ body.night-mode::after {
             화면 가득 띄웁니다. 계기비행 연습처럼 PFD 만 크게 보거나, 지도·CDU 를 넓게 볼 때 쓰십시오.
             버튼을 <b>한 번 더 누르면</b>(또는 떠 있는 <b>✥ HALF</b> · 상단 막대의 <b>✕</b>)
             <b>들어가기 전 배치 그대로</b> 돌아옵니다. 단독 중에는 <b>상단 막대</b>에서 다른 창으로 바로 넘어갈 수 있습니다.</li>
+        <li><b>SIM 모드</b>(스톱워치 오른쪽 <b>SIM</b> 버튼): 조이스틱으로 <b>직접 조종</b>합니다.
+            PFD 의 자세·속도·고도와 지도의 위치·항적이 함께 움직입니다.<br>
+            <b>사이클릭 좌우</b> → 뱅크(최대 45°)와 선회, <b>사이클릭 전후</b> → 기수(최대 12°)와 가감속
+            (내리면 빨라지고 올리면 느려집니다), <b>페달</b> → 기수만 회전(최대 25°/s),
+            <b>컬렉티브</b> → 상승·강하(최대 1,200fpm, 뱅크를 주면 그만큼 가라앉습니다).<br>
+            축 배정은 <b>설정 → 조종 장치 버튼 배정</b> 맨 아래 <b>「SIM 모드 조종간」</b>에서 합니다 —
+            역할을 누르고 그 축을 끝까지 밀면 잡히며, <b>민 방향이 ＋</b> 가 되도록 반전까지 맞춰 둡니다.<br>
+            켜는 동안 <b>AFCS(NAV·HDG·ALT·CRHT·GSPD)는 풀립니다</b>(같은 축을 둘이 몰면 싸웁니다).
+            끄면 수평으로 돌아오고 종전 방식으로 돌아갑니다.</li>
         <li>PFD 하단 FCP에서 <b>IAS·HDG·CRS·VS·ALT·CRHT</b>를 ▲▼/◀▶로 조절.</li>
         <li><b>HDG ◀▶</b>는 기수를 즉시 돌리지 않고 <b>선택 헤딩(HSI 청록 벅)</b>만 옮깁니다.
             AFCS가 <b>표준선회(360°/2분 = 3°/s)</b>로 선회하며, 뱅크각은 <b>속도의 16%</b>로 자동 산출됩니다
@@ -2091,6 +2113,13 @@ body.night-mode::after {
           <div class="sw-btns" id="sw-btns-clock">
             <button class="sw-btn sw-btn-time" data-act="swSetMode" data-arg='["sw"]'>STOP WATCH</button>
           </div>
+        </div>
+
+        <!-- SIM — 조종간으로 직접 모는 모드(PFD·지도가 함께 움직인다) -->
+        <div class="ctrl-group sim-mode-group">
+          <div class="ctrl-lbl">SIM</div>
+          <button class="sim-mode-btn" id="sim-mode-btn" data-act="toggleSimMode"
+                  title="SIM 모드 — 조이스틱으로 직접 조종합니다. AFCS(NAV·HDG·ALT·CRHT·GSPD)는 풀립니다.">On</button>
         </div>
 
       </div><!-- end ctrl-sub-row 1 -->
@@ -2556,6 +2585,7 @@ body.night-mode::after {
   <script src="js/11-charts.js"></script>
   <script src="js/12-joystick.js"></script>
   <script src="js/13-joyhid.js"></script>
+  <script src="js/14-simmode.js"></script>
 
 <input type="file" id="zipFileInput" accept=".zip,application/zip,application/x-zip-compressed,application/octet-stream" style="display:none" onchange="handleZipFile(this.files[0]); this.value='';"></body>
 </html>
