@@ -123,20 +123,140 @@ export async function run(page, t) {
   t.ok(pitch.aft.spd < pitch.fwd.spd - 5,
     `그러면 느려진다 (${pitch.fwd.spd.toFixed(0)} → ${pitch.aft.spd.toFixed(0)}kt)`);
 
-  // ── 컬렉티브 → 오르내린다 ──
+  // ── 컬렉티브 → 토크 → 오르내린다 ──
+  // 컬렉티브는 '상승률 레버' 가 아니라 '출력 레버' 다. 올린 만큼 토크가 오르고,
+  // 지금 필요한 토크보다 남는 만큼이 상승률이 된다.
   const coll = await page.evaluate(`(() => {
     (${SETUP.toString()})();
     const fly = ${FLY};
-    const a0 = S.alt;
+    const a0 = S.alt, tq0 = S.tq;
     _ax(3, 1); fly(6);
-    const up = { alt: S.alt, vs: S.vs };
+    const up = { alt: S.alt, vs: S.vs, tq: S.tq };
     _ax(3, -1); fly(10);
-    return { up, gain: up.alt - a0, dn: { alt: S.alt, vs: S.vs } };
+    return { tq0, up, gain: up.alt - a0, dn: { alt: S.alt, vs: S.vs, tq: S.tq } };
   })()`);
-  t.ok(coll.gain > 60, `올리면 고도가 오른다 (6초에 +${coll.gain.toFixed(0)}ft)`);
+  t.ok(coll.up.tq > coll.tq0 + 20,
+    `올리면 토크가 오른다 (${coll.tq0.toFixed(0)}% → ${coll.up.tq.toFixed(0)}%)`);
+  t.ok(coll.gain > 60, `그만큼 고도가 오른다 (6초에 +${coll.gain.toFixed(0)}ft)`);
   t.ok(coll.up.vs > 900, `상승률이 붙는다 (${coll.up.vs.toFixed(0)}fpm)`);
-  t.ok(coll.dn.vs < -900, `내리면 강하한다 (${coll.dn.vs.toFixed(0)}fpm)`);
+  t.ok(coll.dn.tq < coll.tq0 - 20, `내리면 토크가 내려간다 (${coll.dn.tq.toFixed(0)}%)`);
+  t.ok(coll.dn.vs < -900, `그러면 강하한다 (${coll.dn.vs.toFixed(0)}fpm)`);
   t.ok(coll.dn.alt < coll.up.alt, '고도도 다시 내려온다');
+
+  // ── 같은 레버라도 선회를 걸면 가라앉는다 ──
+  // 뱅크를 주면 양력이 기울어 필요 토크가 오른다. 컬렉티브를 그대로 두면
+  // 남는 토크가 줄어 상승률이 떨어진다 — 헬기에서 늘 겪는 일이다.
+  const bankSink = await page.evaluate(`(() => {
+    (${SETUP.toString()})();
+    const fly = ${FLY};
+    _ax(3, 0.25); fly(5);                 // 적당히 올려 상승 중
+    const level = { vs: S.vs, need: tqRequired(), tq: S.tq };
+    _ax(0, 1); fly(5);                    // 레버는 그대로 두고 선회만 건다
+    return { level, turn: { vs: S.vs, need: tqRequired(), tq: S.tq, bnk: S.bnk } };
+  })()`);
+  t.ok(bankSink.turn.need > bankSink.level.need + 3,
+    `선회를 걸면 필요 토크가 오른다 (${bankSink.level.need.toFixed(0)}% → ${bankSink.turn.need.toFixed(0)}%)`);
+  t.ok(Math.abs(bankSink.turn.tq - bankSink.level.tq) < 2,
+    '컬렉티브는 그대로다(레버를 움직이지 않았다)');
+  t.ok(bankSink.turn.vs < bankSink.level.vs - 150,
+    `그래서 같은 레버인데 가라앉는다 (${bankSink.level.vs.toFixed(0)} → ${bankSink.turn.vs.toFixed(0)}fpm)`);
+
+  // ── 속도가 붙으면 필요 토크가 줄어든다(전진 양력) ──
+  const tlift = await page.evaluate(`(() => {
+    (${SETUP.toString()})();
+    S.bnk = 0; S.spd = 0;
+    const hover = tqRequired();
+    S.spd = 90;
+    const cruise = tqRequired();
+    return { hover, cruise };
+  })()`);
+  t.ok(tlift.cruise < tlift.hover - 5,
+    `제자리보다 전진 중에 덜 든다 (${tlift.hover.toFixed(0)}% → ${tlift.cruise.toFixed(0)}%)`);
+
+  // ── 오르내림과 속도를 맞바꾼다 ──
+  // 출력이 정해져 있으면 올라가는 만큼 속도를 내준다.
+  const trade = await page.evaluate(`(() => {
+    (${SETUP.toString()})();
+    const fly = ${FLY};
+    S.spd = 100;
+    _ax(3, 1); fly(8);                    // 세게 올라간다
+    return { spd: S.spd, vs: S.vs };
+  })()`);
+  t.ok(trade.vs > 500 && trade.spd < 100,
+    `올라가면 속도를 내준다 (${trade.vs.toFixed(0)}fpm · 100 → ${trade.spd.toFixed(0)}kt)`);
+
+  // ── TQ 계기가 속도계 아래에 막대로 그려진다 ──
+  const gauge = await page.evaluate(`(() => {
+    (${SETUP.toString()})();
+    const fly = ${FLY};
+    selectPanel('left', 'pfd', true);
+    _ax(3, 1); fly(6);                    // 토크를 올려 둔다
+    // 그려진 글자와 자리(세로)를 가로채 본다
+    const seen = [];
+    const proto = CanvasRenderingContext2D.prototype, orig = proto.fillText;
+    const cv = document.getElementById('pfd');
+    proto.fillText = function (tx, px, py, ...a) {
+      if (px < cv.width * 0.2) seen.push({ t: String(tx), x: px, y: py });
+      return orig.call(this, tx, px, py, ...a);
+    };
+    drawPFD();
+    proto.fillText = orig;
+    const head = seen.find(v => v.t === 'TQ %');
+    const hi = seen.findIndex(v => v.t === 'TQ %');
+    const val  = seen.slice(hi + 1).some(v => v.t === String(Math.round(S.tq)));
+    // 속도계 눈금(현재 속도)이 TQ 머리글보다 위에 있어야 한다
+    const spdTick = seen.find(v => v.t === String(Math.round(S.spd / 10) * 10));
+    return { head: !!head, headY: head && head.y, val,
+             spdAbove: spdTick ? spdTick.y < head.y : null,
+             tq: S.tq, h: cv.height };
+  })()`);
+  t.eq(gauge.head, true, 'TQ % 머리글이 그려진다');
+  t.eq(gauge.val, true, `지금 토크 값이 숫자로 나온다 (${gauge.tq.toFixed(0)}%)`);
+  t.eq(gauge.spdAbove, true, '속도계가 TQ 계기보다 위에 있다(속도계 아래가 TQ 다)');
+
+  // 한계를 넘으면 붉게 — 오버토크를 눈으로 알 수 있어야 한다
+  const over = await page.evaluate(`(() => {
+    (${SETUP.toString()})();
+    const cv = document.getElementById('pfd');
+    const grab = () => {
+      const seen = [];
+      const proto = CanvasRenderingContext2D.prototype, orig = proto.fillText;
+      proto.fillText = function (tx, px, py, ...a) {
+        if (px < cv.width * 0.2) seen.push({ t: String(tx), col: this.fillStyle });
+        return orig.call(this, tx, px, py, ...a);
+      };
+      drawPFD();
+      proto.fillText = orig;
+      // 속도계 눈금에도 같은 숫자가 나온다 — 'TQ %' 머리글 뒤쪽만 본다
+      const i = seen.findIndex(v => v.t === 'TQ %');
+      return i < 0 ? [] : seen.slice(i);
+    };
+    S.tq = 80;
+    const okCol = (grab().find(v => v.t === '80' && v.col !== '#6a7784') || {}).col;
+    S.tq = 110;
+    const rows = grab();
+    const hiCol = (rows.find(v => v.t === '110') || {}).col;
+    return { okCol, hiCol, warn: rows.some(v => v.t === 'OVER TQ'), over: tqOver() };
+  })()`);
+  t.eq(over.okCol, '#ffffff', `한계 안에서는 흰 숫자다 (${over.okCol})`);
+  t.eq(over.hiCol, '#ff5555', `100% 를 넘으면 붉어진다 (${over.hiCol})`);
+  t.eq(over.warn, true, 'OVER TQ 경고가 함께 뜬다');
+  t.eq(over.over, true, '상태로도 오버토크다');
+
+  // SIM 모드가 아니어도 계기는 지금 비행 상태에 맞는 값을 보여 준다
+  const idle = await page.evaluate(`(() => {
+    (${SETUP.toString()})();
+    toggleSimMode(false);
+    S.bnk = 0; S.spd = 100; S.vs = 0;
+    const level = tqShown();
+    S.vs = 500;
+    const climb = tqShown();
+    return { level, climb };
+  })()`);
+  t.ok(idle.level > 40 && idle.level < 70,
+    `SIM 모드가 아닐 때도 수평이면 그럴듯한 값이다 (${idle.level.toFixed(0)}%)`);
+  t.ok(idle.climb > idle.level + 5,
+    `올라가고 있으면 더 높게 나온다 (${idle.climb.toFixed(0)}%)`);
 
   // ── 페달 → 기수만 돌아간다(뱅크 없이) ──
   const ped = await page.evaluate(`(() => {

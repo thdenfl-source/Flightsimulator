@@ -11,7 +11,7 @@
 //   · 사이클릭 좌우 → 뱅크, 뱅크가 선회를 만든다(조화선회는 기존 코드가 한다)
 //   · 사이클릭 전후 → 피치, 피치가 가감속을 만든다(기수를 내리면 빨라진다)
 //   · 페달         → 기수만 돌린다(저속에서 쓰는 요 조작)
-//   · 컬렉티브     → 상승·강하율
+//   · 컬렉티브     → 토크(TQ %). 남는 토크가 상승률이 된다
 // SIM 모드에서는 AFCS(NAV·HDG·ALT·CRHT·GSPD)를 잡아 두지 않는다 — 두 곳에서
 // 같은 축을 몰면 서로 싸운다.
 // ─────────────────────────────────────────────────────────────
@@ -24,8 +24,10 @@ const SIM_YAW_RATE  = 25;      // 페달 최대 요율(°/s)
 const SIM_SPD_MAX   = 160;     // 최대 대기속도(kt)
 const SIM_ACC       = 0.9;     // 피치 1° 당 가속(kt/s)
 const SIM_DRAG      = 0.015;   // 속도에 비례하는 감속(1/s)
-const SIM_VS_MAX    = 1200;    // 컬렉티브 최대 상승·강하율(fpm)
 const SIM_VS_RATE   = 900;     // 상승률이 따라가는 속도(fpm/s)
+
+// 토크(TQ) 상수와 tqRequired()·tqShown() 는 01-state.js 에 있다 —
+// PFD 가 이 파일보다 먼저 그려질 수 있어 TDZ 를 피한다.
 
 // simModeOn 은 01-state.js 에 둔다 — 시뮬 루프(07)가 이 파일보다 먼저 돌 수 있어서다.
 
@@ -51,6 +53,8 @@ function toggleSimMode(on) {
     try { updateHoverBtns(); } catch (e) { _swallow(e); }
     // 손을 떼면 그 자리에서 날던 대로 — 지금 자세를 그대로 이어받는다
     bankTarget = S.bnk;
+    // 지금 날고 있는 상태를 유지할 만큼의 토크로 레버를 맞춰 둔다(진입 충격 방지)
+    S.tq = Math.max(0, Math.min(TQ_MAX, tqRequired() + (S.vs || 0) / TQ_PER_FPM));
     if (!S.running) toggleSim();        // 멈춰 있으면 바로 날기 시작한다
   } else {
     // 손을 뗀 자리에서 수평으로 돌려 놓는다(기울어진 채 남지 않게)
@@ -90,13 +94,28 @@ function simFly(dt) {
     selHdg = ((Math.round(S.hdg) + 359) % 360) + 1;
   }
 
-  // ── 컬렉티브 → 상승·강하 ──
-  // 뱅크를 주면 그만큼 양력이 기울어 가라앉는다(컬렉티브를 더 당겨야 한다).
-  const sink = (1 / Math.cos(Math.min(60, Math.abs(S.bnk)) * D2R) - 1) * 600;
-  const vTgt = a.coll * SIM_VS_MAX - sink;
+  // ── 컬렉티브 → 토크 ──
+  // 레버 자리가 곧 토크다. 토크는 천천히 따라 오른다(엔진·로터 관성).
+  // 컬렉티브 축을 배정하지 않았으면 레버가 없는 셈이다 — 지금 고도를 지킬
+  // 만큼만 걸어 둔다(조이스틱 없이 켰다고 저절로 떠오르지 않게).
+  const hasColl = !!(typeof joyAxes === 'object' && joyAxes && joyAxes.coll);
+  const tTgt = hasColl
+    ? Math.max(0, Math.min(TQ_MAX, TQ_HOVER + a.coll * TQ_SPAN))
+    : tqRequired();
+  const dT = tTgt - S.tq;
+  S.tq += Math.sign(dT) * Math.min(Math.abs(dT), TQ_RATE * dt);
+
+  // ── 남는 토크 → 상승·강하 ──
+  // 필요한 토크보다 남으면 오르고, 모자라면 내려간다. 그래서 같은 레버라도
+  // 선회를 걸면 가라앉고(필요 토크 증가), 속도가 붙으면 저절로 떠오른다.
+  const vTgt = Math.max(-2000, Math.min(2000, (S.tq - tqRequired()) * TQ_PER_FPM));
   const dV = vTgt - S.vs;
   S.vs += Math.sign(dV) * Math.min(Math.abs(dV), SIM_VS_RATE * dt);
   if (S.alt <= 0 && S.vs < 0) S.vs = 0;      // 땅 아래로는 내려가지 않는다
+
+  // ── 에너지 교환 ──
+  // 오르면 그만큼 속도를 내주고, 내려가면 속도를 얻는다(출력이 정해져 있으므로).
+  S.spd = Math.max(0, Math.min(SIM_SPD_MAX, S.spd - (S.vs / 1000) * 1.2 * dt));
 }
 
 // 화면 버튼(data-act) 연결 — 이 파일이 11-charts.js 보다 나중에 로드되므로
