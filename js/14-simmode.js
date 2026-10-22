@@ -56,13 +56,46 @@ function toggleSimMode(on) {
     // 지금 날고 있는 상태를 유지할 만큼의 토크로 레버를 맞춰 둔다(진입 충격 방지)
     S.tq = Math.max(0, Math.min(TQ_MAX, tqRequired() + (S.vs || 0) / TQ_PER_FPM));
     if (!S.running) toggleSim();        // 멈춰 있으면 바로 날기 시작한다
+    simEnterView();
   } else {
+    simExitView();
     // 손을 뗀 자리에서 수평으로 돌려 놓는다(기울어진 채 남지 않게)
     bankTarget = 0; S.vs = 0;
     selHdg = ((Math.round(S.hdg) + 359) % 360) + 1;
   }
   updateSimModeBtn();
   try { updateApInhibit(); } catch (e) { _swallow(e); }
+}
+
+// ── 바깥 그림도 조종석에서 보는 대로 ──
+// SIM 모드에서는 지도 창을 3D 로 바꾸고 항공기를 따라가게 한다. 바꾸기 전
+// 상태를 적어 두었다가 모드를 끄면 그대로 되돌린다.
+let _simView = null;
+function simEnterView() {
+  if (_simView) return;
+  const sides = tripleMode ? ['left', 'mid', 'right'] : ['left', 'right'];
+  const get = k => (k === 'left' ? leftSel : k === 'mid' ? midSel : rightSel);
+  const v = { side: null, was: null, follow: followMode, overlay: false };
+  if (!sides.some(k => get(k) === 'm3d')) {
+    const mapSide = sides.find(k => get(k) === 'map');
+    if (mapSide) { v.side = mapSide; v.was = 'map'; }
+    else if (typeof _view3dOn !== 'undefined' && !_view3dOn) {
+      // 지도 창이 아예 없으면 2D 위에 겹쳐 띄운다
+      try { toggle3dMap(); v.overlay = true; } catch (e) { _swallow(e); }
+    }
+  }
+  _simView = v;
+  if (v.side) { try { selectPanel(v.side, 'm3d', true); } catch (e) { _swallow(e); } }
+  // 조종석 시야이므로 항공기를 따라가야 한다
+  try { if (!followMode) toggleFollow(); } catch (e) { _swallow(e); }
+}
+function simExitView() {
+  const v = _simView; _simView = null;
+  try { _apply3dRoll(); } catch (e) { _swallow(e); }    // 기울여 둔 화면을 되돌린다
+  if (!v) return;
+  if (v.side) { try { selectPanel(v.side, v.was, true); } catch (e) { _swallow(e); } }
+  if (v.overlay) { try { if (_view3dOn) toggle3dMap(); } catch (e) { _swallow(e); } }
+  try { if (followMode !== v.follow) toggleFollow(); } catch (e) { _swallow(e); }
 }
 
 // 한 적분 구간(dt초)의 조종 입력 적용. simStep 안에서 불린다.
