@@ -22,6 +22,7 @@ const SIM_PITCH_MAX = 12;      // 사이클릭 최대 피치(°)
 const SIM_PITCH_RATE = 30;     // 피치가 따라가는 속도(°/s)
 const SIM_YAW_RATE  = 25;      // 페달 최대 요율(°/s)
 const SIM_SPD_MAX   = 160;     // 최대 대기속도(kt)
+const SIM_SPD_BACK  = -40;     // 후방 비행 한계(kt) — 헬기는 뒤로도 난다
 const SIM_ACC       = 0.9;     // 피치 1° 당 가속(kt/s)
 const SIM_DRAG      = 0.015;   // 속도에 비례하는 감속(1/s)
 const SIM_VS_RATE   = 900;     // 상승률이 따라가는 속도(fpm/s)
@@ -70,10 +71,39 @@ function simModeBtnPress() {
     .catch(e => { _swallow(e); toggleSimMode(true); });
 }
 
+// ── 발밑의 땅 ──
+// '0 ft 에서 시작' 은 해수면이 아니라 지면(AGL 0)이다. 지형 표고를 모르면
+// 땅속에서 시작하거나 공중에 떠서 시작해 3D 그림이 깨진다.
+// 지형 자료는 T-CUT(지형 단면)이 쓰는 것과 같은 DEM 타일이다. 타일이 아직
+// 오지 않았으면 null 이 오므로, 마지막으로 안 값을 들고 있다가 쓴다.
+let _simGndFt = 0, _simGndAt = null;
+function simTerrainFt(lat, lon) {
+  const la = (lat == null) ? S.lat : lat, lo = (lon == null) ? S.lon : lon;
+  let m = null;
+  try { m = _tcElev(la, lo); } catch (e) { _swallow(e); }
+  if (m == null) return _simGndFt;          // 아직 모르면 마지막 값
+  _simGndFt = m / 0.3048;
+  _simGndAt = [la, lo];
+  return _simGndFt;
+}
+
 function simStartGround() {
-  S.alt = 0; S.vs = 0; S.spd = 0;
+  S.vs = 0; S.spd = 0;
   S.pit = 0; S.bnk = 0; bankTarget = 0;
   S.tq = 0;                      // 레버를 내려 둔 상태에서 올리며 뜬다
+  S.alt = simTerrainFt();        // 지면 높이 = AGL 0
+  // DEM 타일은 받아 오는 데 한 박자 걸린다. 도착하면 다시 지면에 맞춘다.
+  let n = 0;
+  const t = setInterval(() => {
+    if (!simModeOn || ++n > 20) { clearInterval(t); return; }
+    const g = simTerrainFt();
+    // 아직 손대지 않은 상태(거의 지면)에서만 맞춘다 — 이미 떠올랐으면 두고 본다
+    if (Math.abs(S.alt - g) > 1 && Math.abs(S.alt - _simGndFt) < 300 && S.vs <= 0) {
+      S.alt = g;
+      try { updateAcOnMap(); } catch (e) { _swallow(e); }
+    }
+    if (_simGndAt) { clearInterval(t); }
+  }, 300);
   try { updateAcOnMap(); } catch (e) { _swallow(e); }
 }
 
@@ -161,7 +191,8 @@ function simFly(dt) {
   // ── 피치 → 가감속 ──
   // 기수를 내리면 빨라지고, 올리면 느려진다. 항력은 속도에 비례해 걸어
   // 중립에서는 저절로 느려진다(헬기의 감속 느낌).
-  S.spd = Math.max(0, Math.min(SIM_SPD_MAX,
+  // 기수를 들면 뒤로도 간다 — 헬기는 후방 비행을 한다(40kt 까지).
+  S.spd = Math.max(SIM_SPD_BACK, Math.min(SIM_SPD_MAX,
     S.spd + (-S.pit * SIM_ACC - S.spd * SIM_DRAG) * dt));
 
   // ── 페달 → 기수 ──
@@ -195,11 +226,17 @@ function simFly(dt) {
   const vTgt = Math.max(-2000, Math.min(2000, (S.tq - tqRequired()) * TQ_PER_FPM));
   const dV = vTgt - S.vs;
   S.vs += Math.sign(dV) * Math.min(Math.abs(dV), SIM_VS_RATE * dt);
-  if (S.alt <= 0 && S.vs < 0) S.vs = 0;      // 땅 아래로는 내려가지 않는다
+  // 땅 아래로는 내려가지 않는다 — 바닥은 해수면이 아니라 '발밑의 지면' 이다
+  const gnd = simTerrainFt();
+  if (S.alt <= gnd + 0.5) {
+    if (S.vs < 0) { S.vs = 0; S.alt = gnd; }
+    // 땅에 닿아 있으면 미끄러지지 않게 천천히 선다
+    S.spd -= Math.sign(S.spd) * Math.min(Math.abs(S.spd), 8 * dt);
+  }
 
   // ── 에너지 교환 ──
   // 오르면 그만큼 속도를 내주고, 내려가면 속도를 얻는다(출력이 정해져 있으므로).
-  S.spd = Math.max(0, Math.min(SIM_SPD_MAX, S.spd - (S.vs / 1000) * 1.2 * dt));
+  S.spd = Math.max(SIM_SPD_BACK, Math.min(SIM_SPD_MAX, S.spd - (S.vs / 1000) * 1.2 * dt));
 }
 
 // 화면 버튼(data-act) 연결 — 이 파일이 11-charts.js 보다 나중에 로드되므로

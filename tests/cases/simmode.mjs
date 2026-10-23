@@ -27,9 +27,11 @@ const SETUP = () => {
   joyPoll(1000);                       // 중립 학습
   // 늘 같은 자리에서 시작한다
   S.lat = 37.5; S.lon = 127.0; S.hdg = 90; S.spd = 100; S.alt = 2000;
-  S.bnk = 0; S.pit = 0; S.vs = 0; S.wps = []; S.awp = -1; S.fwp = -1;
+  S.bnk = 0; S.pit = 0; S.vs = 0; S.tq = 60; S.wps = []; S.awp = -1; S.fwp = -1;
+  _simGndFt = 0;                       // 지형 캐시도 비운다(검사끼리 물려받지 않게)
   windSpd = 0; simSpeed = 1;
   if (!simModeOn) toggleSimMode();
+  S.tq = 60; S.vs = 0; S.alt = 2000;   // 모드 진입이 손댄 값을 되돌린다
 };
 
 // 시뮬 루프를 손으로 돌린다 — 실제 경과시간 대신 정해진 간격으로.
@@ -172,6 +174,56 @@ export async function run(page, t) {
   t.ok(pitch.aft.pit > 10, `뒤로 당기면 기수가 올라간다 (${pitch.aft.pit.toFixed(1)}°)`);
   t.ok(pitch.aft.spd < pitch.fwd.spd - 5,
     `그러면 느려진다 (${pitch.fwd.spd.toFixed(0)} → ${pitch.aft.spd.toFixed(0)}kt)`);
+
+  // ── 뒤로도 난다 ──
+  // 헬기는 후방 비행을 한다. 기수를 들고 있으면 뒤로 가속되어야 하고,
+  // 그 속도로 실제로 뒷걸음질해야 한다(지도상 위치가 기수 반대쪽으로 간다).
+  const back = await page.evaluate(`(() => {
+    (${SETUP.toString()})();
+    const fly = ${FLY};
+    S.spd = 0; S.hdg = 90; S.alt = 2000;          // 동쪽을 보고 제자리
+    const lon0 = S.lon;
+    _ax(1, -1); fly(20);                          // 끝까지 당겨 둔다
+    const r = { spd: S.spd, lon: S.lon, pit: S.pit };
+    fly(30);                                      // 더 당겨도 한계에서 멈춘다
+    r.limit = S.spd;
+    _ax(1, 0); fly(15);                           // 놓으면 항력으로 되돌아온다
+    r.idle = S.spd;
+    r.wentBack = S.lon < lon0;
+    return r;
+  })()`);
+  t.ok(back.spd < -20, `기수를 들면 뒤로 간다 (${back.spd.toFixed(0)}kt)`);
+  t.ok(back.limit >= -41 && back.limit <= -35,
+    `뒤로는 40kt 가 한계다 (${back.limit.toFixed(0)}kt)`);
+  t.eq(back.wentBack, true, '지도상 위치도 기수 반대쪽으로 간다');
+  t.ok(back.idle > back.limit + 5,
+    `놓으면 항력으로 멈춰 간다 (${back.limit.toFixed(0)} → ${back.idle.toFixed(0)}kt)`);
+
+  // ── 바닥은 해수면이 아니라 '발밑의 지면' 이다 ──
+  // 0 ft 로 시작한다는 것은 AGL 0 — 지형 표고를 모르면 땅속에서 시작하거나
+  // 공중에 떠서 시작해 3D 그림이 깨진다.
+  const gnd = await page.evaluate(`(() => {
+    (${SETUP.toString()})();
+    const fly = ${FLY};
+    // 지형 자료가 있는 것처럼 꾸민다(검사 중에는 타일을 받지 않는다)
+    const real = window._tcElev;
+    window._tcElev = () => 305;                   // 1,000ft 쯤 되는 산 위
+    const g = simTerrainFt();
+    S.alt = g; S.vs = 0; S.tq = 0;
+    _ax(3, -1); fly(8);                           // 레버를 바닥까지 내려도
+    const onGnd = { alt: S.alt, vs: S.vs, gndFt: g };
+    _ax(3, 1); fly(8);                            // 올리면 지면 위로 뜬다
+    const lifted = S.alt;
+    window._tcElev = real;
+    return { onGnd, lifted };
+  })()`);
+  t.ok(Math.abs(gnd.onGnd.gndFt - 1000) < 5,
+    `지형 표고를 피트로 읽는다 (305m → ${gnd.onGnd.gndFt.toFixed(0)}ft)`);
+  t.ok(Math.abs(gnd.onGnd.alt - gnd.onGnd.gndFt) < 2,
+    `지면 아래로 꺼지지 않는다 (${gnd.onGnd.alt.toFixed(0)}ft · 지면 ${gnd.onGnd.gndFt.toFixed(0)}ft)`);
+  t.eq(gnd.onGnd.vs, 0, '땅에 닿아 있으면 강하율도 0 이다');
+  t.ok(gnd.lifted > gnd.onGnd.gndFt + 50,
+    `레버를 올리면 지면 위로 뜬다 (${gnd.lifted.toFixed(0)}ft)`);
 
   // ── 컬렉티브 → 토크 → 오르내린다 ──
   // 컬렉티브는 '상승률 레버' 가 아니라 '출력 레버' 다. 올린 만큼 토크가 오르고,
