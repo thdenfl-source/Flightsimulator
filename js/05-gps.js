@@ -880,7 +880,8 @@ function _follow3d() {
     //   · 중심은 카메라 바로 아래에서 앞으로 (카메라높이 × tan(기울기)) 만큼
     if (simModeOn) {
       opt.bearing = S.hdg;
-      const pitchDeg = Math.max(40, Math.min(85, SIM_CAM_PITCH + S.pit * SIM_CAM_PIT_K));
+      const pitchDeg = Math.max(SIM_CAM_PIT_MIN, Math.min(SIM_CAM_PIT_MAX,
+                                 SIM_CAM_PITCH + S.pit * SIM_CAM_PIT_K));
       opt.pitch = pitchDeg;
       // 눈높이 — 화면에 보이는 땅은 실제 표고의 MAP3D_EXAG 배로 부풀려져 있다.
       // 카메라는 '부풀린 지면 + 지면 위 높이(AGL)' 에 놓아야 땅에 파묻히지 않는다.
@@ -911,7 +912,12 @@ function _follow3d() {
 // 뱅크(자세계)는 카메라로 줄 수 없다(이 maplibre 는 roll 을 받지 않는다).
 // 그래서 2D 의 HDG↑ 와 같은 방법을 쓴다 — 화면을 반대로 돌리고, 돌려서 비는
 // 모서리는 그만큼 키워 덮는다. 축척이 조금 커지지만 시야가 깨지지 않는다.
-const SIM_CAM_PITCH = 78;     // 수평 비행에서의 카메라 각도(°)
+// 수평 비행에서의 카메라 각도. 지도 엔진은 85° 까지만 기울일 수 있어(그 위는
+// 지평선 너머라 그릴 것이 없다) 기준을 낮춰 두어야 기수를 들었을 때 위를 볼
+// 여유가 생긴다. 78° 로 두면 기수 6° 에서 벌써 끝에 닿았다.
+const SIM_CAM_PITCH  = 68;    // 수평 비행에서의 카메라 각도(°)
+const SIM_CAM_PIT_MIN = 20;   // 기수를 숙일 때(아래를 볼 때) 한계
+const SIM_CAM_PIT_MAX = 85;   // 지도 엔진의 한계
 const SIM_EYE_MIN_M = 8;      // 땅에 있어도 이 정도 눈높이는 둔다(m)
 // 카메라-중심 거리는 1/(2·tan(fov/2)) × 화면높이 다. maplibre 기본 fov 는
 // 36.87° 이며, 혹시 바뀌어도 지도에서 직접 읽어 쓴다.
@@ -921,7 +927,7 @@ function _ml3dHalfFovTan() {
   catch (e) { _swallow(e); }
   return Math.tan(fov / 2 * D2R);
 }
-const SIM_CAM_PIT_K = 1.2;    // 기수 1° 당 카메라 각도 변화
+const SIM_CAM_PIT_K = 1.0;    // 기수 1° 당 카메라 각도 변화(+17° 까지 따라간다)
 // 돌리면 모서리가 비므로 화면을 그만큼 키워 덮는데, 그 배율을 뱅크에 따라
 // 바꾸면 기울일 때마다 지도가 확대·축소되어 보인다. 그래서 배율은 '최대 뱅크를
 // 덮을 만큼' 으로 늘 같게 두고, 그만큼 카메라를 멀리 둬서(zoom 보정) 땅의

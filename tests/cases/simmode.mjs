@@ -45,6 +45,7 @@ const FLY = `(sec) => {
 
 // 자세 값을 그대로 쓰기 위한 작은 도우미(읽기 쉬우라고 둔다)
 const trimSpdPit = (p) => p;
+const hoverSide = (v) => Math.abs(v);
 
 export async function run(page, t) {
   // ── 버튼이 스톱워치 오른쪽에 있다 ──
@@ -259,6 +260,52 @@ export async function run(page, t) {
     `그만큼 속도가 붙는다 — 위치에너지가 운동에너지로 (${energy.trim.spd.toFixed(0)} → ${energy.sink.spd.toFixed(0)}kt)`);
   t.ok(energy.climb.vs > 300 && energy.climb.spd < energy.sink.spd - 10,
     `반대로 올리면 고도를 얻고 속도를 내준다 (${energy.climb.vs.toFixed(0)}fpm · ${energy.climb.spd.toFixed(0)}kt)`);
+
+  // ── 저속에서는 뱅크가 '옆걸음' 이 된다 ──
+  // 헬기는 제자리에서 기울이면 선회하지 않고 옆으로 간다. 속도가 붙으면
+  // 그 성분이 사라지고 보통의 선회가 된다. 기수와 실제 이동 방향으로 가른다.
+  const side = await page.evaluate(`(() => {
+    (${SETUP.toString()})();
+    const fly = ${FLY};
+    const DEAD = 0.08;
+    const stick = (k) => (k === 0 ? 0 : Math.sign(k) * (Math.abs(k) * (1 - DEAD) + DEAD));
+    joyAxes = { roll: { i: 0, inv: false }, pitch: { i: 1, inv: false } };
+    S.alt = 1000; _simGndFt = 0;
+
+    // ① 제자리(0kt)에서 오른쪽으로 기울인다
+    S.hdg = 90; S.spd = 0; simLat = 0; S.bnk = 0;
+    _ax(1, stick(-12 / 60));                  // 기수를 들어 속도를 0 근처로 눌러 둔다
+    _ax(0, 1);
+    fly(8);                                   // 자세·속도가 자리잡을 때까지
+    const p0 = [S.lat, S.lon], h0 = S.hdg;
+    fly(12);
+    const hover = { lat: simLat, bnk: S.bnk, dHdg: normAS(S.hdg - h0),
+                    moveBrg: toMag(bearing(p0[0], p0[1], S.lat, S.lon)),
+                    hdgM: toMag(S.hdg), spd: S.spd,
+                    moved: distance(p0[0], p0[1], S.lat, S.lon) };
+
+    // ② 순항(120kt)에서는 그대로 선회한다
+    (${SETUP.toString()})();
+    joyAxes = { roll: { i: 0, inv: false } };
+    S.alt = 1000; _simGndFt = 0; S.hdg = 90; S.spd = 120; simLat = 0;
+    _ax(0, 1);
+    const h1 = S.hdg;
+    fly(12);
+    const cruise = { lat: simLat, dHdg: normAS(S.hdg - h1), spd: S.spd };
+    return { hover, cruise, frac: [simTurnFrac()] };
+  })()`);
+  t.ok(hoverSide(side.hover.lat) > 15,
+    `제자리에서 기울이면 옆방향 속도가 붙는다 (${side.hover.lat.toFixed(0)}kt)`);
+  t.ok(Math.abs(side.hover.dHdg) < 12,
+    `그동안 기수는 거의 그대로다 (${side.hover.dHdg.toFixed(0)}°)`);
+  t.ok(side.hover.moved > 0.02,
+    `실제로 자리를 옮긴다 (${side.hover.moved.toFixed(2)}NM)`);
+  t.ok(Math.abs(((side.hover.moveBrg - side.hover.hdgM - 90 + 540) % 360) - 180) < 25,
+    `간 방향은 기수의 오른쪽 옆이다 (이동 ${side.hover.moveBrg.toFixed(0)}°M · 기수 ${side.hover.hdgM.toFixed(0)}°M)`);
+  t.ok(Math.abs(side.cruise.lat) < 6,
+    `순항에서는 옆걸음이 사라진다 (${side.cruise.lat.toFixed(1)}kt)`);
+  t.ok(side.cruise.dHdg > 60,
+    `그때는 뱅크가 그대로 선회가 된다 (${side.cruise.dHdg.toFixed(0)}°)`);
 
   // ── 뒤로도 난다 ──
   // 헬기는 후방 비행을 한다. 기수를 들고 있으면 뒤로 가속되어야 하고,

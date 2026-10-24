@@ -364,8 +364,11 @@ function simStep(ts){
           // helicopter only starts drifting once it is no longer in hover.
           const wt = normA(windDir + 180) * D2R;
           const wEff = effectiveWindSpd();
-          gsN = S.spd * Math.cos(S.hdg * D2R) + wEff * Math.cos(wt);
-          gsE = S.spd * Math.sin(S.hdg * D2R) + wEff * Math.sin(wt);
+          // SIM 모드의 옆미끄럼(저속에서 뱅크를 주면 옆으로 간다)도 함께 더한다
+          const lat = simModeOn ? simLat : 0;
+          const ch = Math.cos(S.hdg * D2R), sh = Math.sin(S.hdg * D2R);
+          gsN = S.spd * ch - lat * sh + wEff * Math.cos(wt);
+          gsE = S.spd * sh + lat * ch + wEff * Math.sin(wt);
         }
         const sc = 1852/3600 * dt / 111320;
         S.lat += gsN * sc;
@@ -419,8 +422,14 @@ function simStep(ts){
 
         // Coordinated turn: bank angle drives heading change (g·tan(bank)/V).
         if (Math.abs(S.bnk) > 0.5 && !gspdOn && !gspdCoasting) {
-          const V_ms = Math.max(10, S.spd) * 0.5144;
-          const turnRate = 9.81 * Math.tan(S.bnk * D2R) / V_ms / D2R;  // °/s
+          const V_ms = Math.max(10, Math.abs(S.spd)) * 0.5144;
+          let turnRate = 9.81 * Math.tan(S.bnk * D2R) / V_ms / D2R;  // °/s
+          // SIM 모드의 저속에서는 뱅크가 선회가 아니라 옆걸음으로 쓰인다
+          // 저속일수록 선회 몫이 급히 줄어든다(제곱) — 그 자리에서 도는 것이 아니라
+          // 옆으로 미끄러지는 것이 헬기의 저속 거동이다.
+          if (simModeOn) {
+            try { const f = simTurnFrac(); turnRate *= f * f; } catch(e) { _swallow(e); }
+          }
           S.hdg = normA(S.hdg + turnRate * dt);
         }
 
@@ -432,7 +441,7 @@ function simStep(ts){
         // base motion model, but the readout reflects only what is being
         // commanded, not transient wind effects.
         if (hoverPageOn && !gspdOn && !gspdCoasting) {
-          gspdActLat = 0;
+          gspdActLat = simModeOn ? simLat : 0;
           gspdActFwd = S.spd;
         }
 
