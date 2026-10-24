@@ -18,14 +18,18 @@
 
 const SIM_BANK_MAX  = 45;      // 사이클릭 최대 뱅크(°)
 const SIM_ROLL_RATE = 60;      // 뱅크가 따라가는 속도(°/s)
-// 기수 자세의 한계 — 뒤로 40kt 까지 가려면 16° 가 필요하다(1° = 10kt)
-const SIM_PITCH_MAX = 16;      // 사이클릭 최대 피치(°)
+// 기수 자세의 한계 — 위아래 60° 까지. 속도는 제 한계에서 멎는다
+// (들면 16° 에 뒤로 40kt, 숙이면 −20° 에 160kt).
+const SIM_PITCH_MAX = 60;      // 사이클릭 최대 피치(°)
 const SIM_PITCH_RATE = 30;     // 피치가 따라가는 속도(°/s)
 const SIM_YAW_RATE  = 25;      // 페달 최대 요율(°/s)
 const SIM_SPD_MAX   = 160;     // 최대 대기속도(kt)
 const SIM_SPD_BACK  = -40;     // 후방 비행 한계(kt) — 헬기는 뒤로도 난다
 const SIM_SPD_K     = 0.22;    // 자세에 맞는 속도로 수렴하는 빠르기(1/s · 시정수 ≈4.5초)
-const SIM_CLIMB_KT  = 15;      // 1,000fpm 올라가는 동안 내주는 속도(kt)
+// ── 위치에너지 ↔ 운동에너지 ──
+// 올라가는 동안에는 그만큼 속도를 내주고, 내려가는 동안에는 속도를 얻는다.
+// 그래서 기수를 숙인 채 컬렉티브를 내리면 고도가 빠지면서 속도가 붙는다.
+const SIM_CLIMB_KT  = 25;      // 1,000fpm 당 주고받는 속도(kt)
 const SIM_VS_RATE   = 900;     // 상승률이 따라가는 속도(fpm/s)
 
 // 토크(TQ) 상수와 tqRequired()·tqShown() 는 01-state.js 에 있다 —
