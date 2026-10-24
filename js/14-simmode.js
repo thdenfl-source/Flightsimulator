@@ -92,16 +92,21 @@ function simModeBtnPress() {
 // 땅속에서 시작하거나 공중에 떠서 시작해 3D 그림이 깨진다.
 // 지형 자료는 T-CUT(지형 단면)이 쓰는 것과 같은 DEM 타일이다. 타일이 아직
 // 오지 않았으면 null 이 오므로, 마지막으로 안 값을 들고 있다가 쓴다.
-let _simGndFt = 0, _simGndAt = null;
+let _simGndFt = 0, _simGndAt = null, _simGndFresh = false;
 function simTerrainFt(lat, lon) {
   const la = (lat == null) ? S.lat : lat, lo = (lon == null) ? S.lon : lon;
   let m = null;
   try { m = _tcElev(la, lo); } catch (e) { _swallow(e); }
-  if (m == null) return _simGndFt;          // 아직 모르면 마지막 값
+  if (m == null) { _simGndFresh = false; return _simGndFt; }   // 아직 모르면 마지막 값
   _simGndFt = m / 0.3048;
   _simGndAt = [la, lo];
+  _simGndFresh = true;
   return _simGndFt;
 }
+// '지금 발밑' 의 높이를 아는가. 모르는 채로 묵은 값을 땅으로 믿으면,
+// 공중에 있는데도 땅에 닿은 줄 알고 속도를 0 으로 눌러 버린다
+// (기수를 숙여도 가속되지 않는 증상). 모를 때는 해수면만 바닥으로 본다.
+function simGroundFt() { return _simGndFresh ? _simGndFt : 0; }
 
 function simStartGround() {
   S.vs = 0; S.spd = 0; simLat = 0;
@@ -184,6 +189,25 @@ function simExitView() {
   try { if (followMode !== v.follow) toggleFollow(); } catch (e) { _swallow(e); }
 }
 
+// ── 상승 효율(Vy) ──
+// PERF 가 뽑는 최대상승속도(Vy)에서 상승률이 가장 크고, 그보다 빠르거나
+// 느려질수록 같은 토크로도 덜 오른다. 제자리 호버나 고속 순항에서 같은
+// 토크로 똑같이 오르던 것을 바로잡는다.
+const VY_SPREAD = 70;     // 이만큼 벗어나면 바닥(VY_MIN)에 가까워진다
+const VY_MIN    = 0.30;   // 아무리 벗어나도 이만큼은 오른다
+function simVyKt() {
+  let vy = 70;
+  try {
+    const p = (typeof perfVy === 'function') ? perfVy() : null;
+    if (Number.isFinite(p) && p > 20) vy = p;
+  } catch (e) { _swallow(e); }
+  return vy;
+}
+function simClimbEff() {
+  const d = (Math.abs(S.spd) - simVyKt()) / VY_SPREAD;
+  return Math.max(VY_MIN, Math.min(1, 1 - d * d));
+}
+
 // 한 적분 구간(dt초)의 조종 입력 적용. simStep 안에서 불린다.
 function simFly(dt) {
   if (!simModeOn || !(dt > 0)) return;
@@ -207,7 +231,8 @@ function simFly(dt) {
   S.pit += Math.sign(dP) * Math.min(Math.abs(dP), SIM_PITCH_RATE * dt);
 
   // 땅에 붙어 있는가 — 지면 위에서는 자세를 줘도 미끄러지지 않는다
-  const gnd = simTerrainFt();
+  simTerrainFt();                       // 발밑 높이를 새로 읽어 둔다
+  const gnd = simGroundFt();
   const onGnd = S.alt <= gnd + 0.5;
 
   // ── 피치 → 속도 ──
@@ -263,6 +288,9 @@ function simFly(dt) {
   try { vRaw = (typeof perfVsForTq === 'function') ? perfVsForTq(dTq) : dTq * TQ_PER_FPM; }
   catch (e) { vRaw = dTq * TQ_PER_FPM; }
   if (!Number.isFinite(vRaw)) vRaw = dTq * TQ_PER_FPM;
+  // 같은 토크라도 속도에 따라 오르는 정도가 다르다. 최대상승속도(Vy)에서
+  // 가장 잘 오르고, 그보다 빠르거나 느릴수록 덜 오른다(PERF 의 Vy 를 쓴다).
+  if (vRaw > 0) vRaw *= simClimbEff();
   const vTgt = Math.max(-2000, Math.min(2000, vRaw));
   const dV = vTgt - S.vs;
   S.vs += Math.sign(dV) * Math.min(Math.abs(dV), SIM_VS_RATE * dt);
