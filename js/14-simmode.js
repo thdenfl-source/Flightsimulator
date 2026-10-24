@@ -23,6 +23,17 @@ const SIM_ROLL_RATE = 60;      // 뱅크가 따라가는 속도(°/s)
 const SIM_PITCH_MAX = 60;      // 사이클릭 최대 피치(°)
 const SIM_PITCH_RATE = 30;     // 피치가 따라가는 속도(°/s)
 const SIM_YAW_RATE  = 25;      // 페달 최대 요율(°/s)
+// ── 저속의 옆미끄럼(측방 비행) ──
+// 헬기는 속도가 낮을 때 뱅크를 주면 선회하지 않고 '옆으로 간다'. 속도가
+// 붙을수록 그 성분은 사라지고 보통의 선회가 된다.
+const SIDE_FADE_KT = 45;      // 이 속도부터는 옆으로 가지 않고 선회만 한다
+const SIDE_MAX_KT  = 35;      // 최대 뱅크에서의 옆방향 속도(kt)
+const SIDE_K       = 0.5;     // 옆방향 속도가 따라가는 빠르기(1/s)
+// 지금 속도에서 뱅크가 '선회' 로 쓰이는 몫(0=전부 옆미끄럼, 1=전부 선회)
+function simTurnFrac() {
+  if (!simModeOn) return 1;
+  return Math.max(0, Math.min(1, Math.abs(S.spd) / SIDE_FADE_KT));
+}
 const SIM_SPD_MAX   = 160;     // 최대 대기속도(kt)
 const SIM_SPD_BACK  = -40;     // 후방 비행 한계(kt) — 헬기는 뒤로도 난다
 const SIM_SPD_K     = 0.22;    // 자세에 맞는 속도로 수렴하는 빠르기(1/s · 시정수 ≈4.5초)
@@ -93,7 +104,7 @@ function simTerrainFt(lat, lon) {
 }
 
 function simStartGround() {
-  S.vs = 0; S.spd = 0;
+  S.vs = 0; S.spd = 0; simLat = 0;
   S.pit = 0; S.bnk = 0; bankTarget = 0;
   S.tq = 0;                      // 레버를 내려 둔 상태에서 올리며 뜬다
   S.alt = simTerrainFt();        // 지면 높이 = AGL 0
@@ -135,7 +146,7 @@ function toggleSimMode(on, opt) {
   } else {
     simExitView();
     // 손을 뗀 자리에서 수평으로 돌려 놓는다(기울어진 채 남지 않게)
-    bankTarget = 0; S.vs = 0;
+    bankTarget = 0; S.vs = 0; simLat = 0;
     selHdg = ((Math.round(S.hdg) + 359) % 360) + 1;
   }
   updateSimModeBtn();
@@ -208,6 +219,13 @@ function simFly(dt) {
   sTgt = Math.max(SIM_SPD_BACK, Math.min(SIM_SPD_MAX, sTgt));
   if (onGnd) sTgt = 0;                       // 땅 위에서는 서 있는다
   S.spd += (sTgt - S.spd) * Math.min(1, (onGnd ? 1.2 : SIM_SPD_K) * dt);
+
+  // ── 저속에서는 뱅크가 옆걸음이 된다 ──
+  // 제자리에서 오른쪽으로 기울이면 기수는 그대로 둔 채 오른쪽으로 간다.
+  // 속도가 붙으면 그 몫이 선회로 넘어간다(선회 자체는 07-sim.js 가 한다).
+  const side = (1 - simTurnFrac()) * Math.sin(S.bnk * D2R) / Math.sin(SIM_BANK_MAX * D2R);
+  const latTgt = onGnd ? 0 : Math.max(-SIDE_MAX_KT, Math.min(SIDE_MAX_KT, side * SIDE_MAX_KT));
+  simLat += (latTgt - simLat) * Math.min(1, (onGnd ? 1.2 : SIDE_K) * dt);
 
   // ── 페달 → 기수 ──
   if (a.yaw) {
