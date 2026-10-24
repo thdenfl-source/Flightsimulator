@@ -128,6 +128,9 @@ function toggleLayer() {
 // ══════════════════════════════════════════════════════
 let _ml3d = null;          // Maplibre GL map instance (lazy init)
 let _ml3dMarker = null;    // aircraft marker on 3D map
+// 3D 지도의 지형 과장비 — 화면에 보이는 땅은 실제 표고의 이 배다.
+// 1인칭 카메라를 땅 위에 놓으려면 같은 값을 써야 한다(05-gps.js).
+const MAP3D_EXAG = 1.5;
 let _view3dOn = false;
 // 3D 가 화면에 떠 있는가 — 2D 위에 겹쳐 있거나, 제 창(탭의 '3D')을 쓰고 있거나.
 // 창 배치는 07-sim.js 가 쥐고 있고 그쪽이 나중에 로드되므로 있을 때만 묻는다.
@@ -265,7 +268,7 @@ function _init3dMap() {
   _ml3d.on('load', () => {
     _ml3dReady = true;
     // Terrain is best-effort — a DEM failure must not blank the satellite view
-    try { _ml3d.setTerrain({ source: 'terrain', exaggeration: 1.5 }); }
+    try { _ml3d.setTerrain({ source: 'terrain', exaggeration: MAP3D_EXAG }); }
     catch (e) { console.warn('[3D] terrain unavailable:', e); }
     try { _ml3d.setSky(SKY); } catch (e) { /* sky optional */ }
 

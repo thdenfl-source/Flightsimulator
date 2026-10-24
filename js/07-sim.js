@@ -408,6 +408,13 @@ function simStep(ts){
           }
         } else if (S.vs !== 0) {
           S.alt = Math.max(0, Math.min(45000, S.alt + S.vs / 60 * dt));
+          // SIM 모드에서는 지면이 바닥이다(해수면이 아니라)
+          if (simModeOn) {
+            try {
+              const g = simTerrainFt();
+              if (S.alt < g) { S.alt = g; S.vs = 0; }
+            } catch (e) { _swallow(e); }
+          }
         }
 
         // Coordinated turn: bank angle drives heading change (g·tan(bank)/V).

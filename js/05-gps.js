@@ -882,7 +882,12 @@ function _follow3d() {
       opt.bearing = S.hdg;
       const pitchDeg = Math.max(40, Math.min(85, SIM_CAM_PITCH + S.pit * SIM_CAM_PIT_K));
       opt.pitch = pitchDeg;
-      const eye = Math.max(SIM_EYE_MIN_M, S.alt * 0.3048);          // 눈높이(m)
+      // 눈높이 — 화면에 보이는 땅은 실제 표고의 MAP3D_EXAG 배로 부풀려져 있다.
+      // 카메라는 '부풀린 지면 + 지면 위 높이(AGL)' 에 놓아야 땅에 파묻히지 않는다.
+      let gndM = 0;
+      try { gndM = simTerrainFt() * 0.3048; } catch (e) { _swallow(e); }
+      const aglM = Math.max(SIM_EYE_MIN_M, S.alt * 0.3048 - gndM);
+      const eye = gndM * MAP3D_EXAG + aglM;                          // 눈높이(m)
       const pr = pitchDeg * D2R;
       // 화면 높이와 시야각으로 'm/px' 를 정하면 그 zoom 이 곧 카메라 높이가 된다
       const halfFov = _ml3dHalfFovTan();
