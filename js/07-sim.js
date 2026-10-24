@@ -414,7 +414,7 @@ function simStep(ts){
           // SIM 모드에서는 지면이 바닥이다(해수면이 아니라)
           if (simModeOn) {
             try {
-              const g = simTerrainFt();
+              const g = simGroundFt();     // 발밑 높이를 '아는 때' 만 바닥으로 삼는다
               if (S.alt < g) { S.alt = g; S.vs = 0; }
             } catch (e) { _swallow(e); }
           }

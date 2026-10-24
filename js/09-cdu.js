@@ -995,7 +995,7 @@ function act(name, ...args) {
     // (perfData·perfResults는 화면 렌더에서 읽고 쓰므로 바깥에 남긴다)
     let calculatePerformance;
     // SIM 모드(14-simmode.js)가 쓰는 성능 접근자 — 아래 IIFE 안에서 채운다
-    let perfTqForVs, perfVsForTq, perfHoverTq;
+    let perfTqForVs, perfVsForTq, perfHoverTq, perfVy;
     (function () {
     // Vy Tables
     const vyTemps = [-32, -20, -10, 0, 10, 20, 30, 40];
@@ -1214,6 +1214,12 @@ function act(name, ...args) {
             if (Math.abs(perfTqForVs(mid)) < Math.abs(dTq)) lo = mid; else hi = mid;
         }
         return (lo + hi) / 2;
+    };
+    // 최대상승속도 Vy(kt) — 같은 토크로 가장 잘 오르는 속도
+    perfVy = function () {
+        calculatePerformance();
+        const v = parseFloat(perfResults.vy);
+        return Number.isFinite(v) ? v : null;
     };
     // 제자리 호버에 필요한 토크(%) — 지면효과 안(IGE)·밖(OGE)
     // 매 프레임 불리므로(계기·비행 모델) 입력이 그대로면 셈을 다시 하지 않는다.
@@ -4205,6 +4211,7 @@ switchMode('HOME');
     window.perfHoverTq       = (...a) => perfHoverTq(...a);
     window.perfTqForVs       = (...a) => perfTqForVs(...a);
     window.perfVsForTq       = (...a) => perfVsForTq(...a);
+    window.perfVy            = (...a) => perfVy(...a);
     // 상태 변수: 밖에서 '현재 값'을 읽으므로 접근자로 공개(스냅샷이면 갱신이 안 됨)
     Object.defineProperties(window, {
       currentMode:    { get: () => currentMode,    configurable: true },

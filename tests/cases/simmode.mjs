@@ -46,6 +46,7 @@ const FLY = `(sec) => {
 // 자세 값을 그대로 쓰기 위한 작은 도우미(읽기 쉬우라고 둔다)
 const trimSpdPit = (p) => p;
 const hoverSide = (v) => Math.abs(v);
+const known2 = (v) => !!v;
 
 export async function run(page, t) {
   // ── 버튼이 스톱워치 오른쪽에 있다 ──
@@ -258,7 +259,7 @@ export async function run(page, t) {
     `레버를 내리면 고도가 빠진다 (${energy.sink.vs.toFixed(0)}fpm)`);
   t.ok(energy.sink.spd > energy.trim.spd + 5,
     `그만큼 속도가 붙는다 — 위치에너지가 운동에너지로 (${energy.trim.spd.toFixed(0)} → ${energy.sink.spd.toFixed(0)}kt)`);
-  t.ok(energy.climb.vs > 300 && energy.climb.spd < energy.sink.spd - 10,
+  t.ok(energy.climb.vs > 120 && energy.climb.spd < energy.sink.spd - 10,
     `반대로 올리면 고도를 얻고 속도를 내준다 (${energy.climb.vs.toFixed(0)}fpm · ${energy.climb.spd.toFixed(0)}kt)`);
 
   // ── 저속에서는 뱅크가 '옆걸음' 이 된다 ──
@@ -330,6 +331,36 @@ export async function run(page, t) {
   t.eq(back.wentBack, true, '지도상 위치도 기수 반대쪽으로 간다');
   t.ok(back.idle > back.limit + 2,
     `놓으면 항력으로 멈춰 간다 (${back.limit.toFixed(0)} → ${back.idle.toFixed(0)}kt)`);
+
+  // ── 발밑을 모를 때 묵은 값을 땅으로 믿지 않는다 ──
+  // 지형 타일이 아직 안 온 자리에서 예전 값(예: 산 위 1,000ft)을 땅으로 믿으면,
+  // 공중에 있는데도 땅에 닿은 줄 알고 속도를 0 으로 눌러 버린다
+  // — '기수를 숙여도 가속되지 않는' 증상이 그것이다.
+  const stale = await page.evaluate(`(() => {
+    (${SETUP.toString()})();
+    const fly = ${FLY};
+    const real = window._tcElev;
+    window._tcElev = () => 305;                 // 산 위(1,000ft)를 한 번 읽어 둔다
+    simTerrainFt();
+    const known = { ft: _simGndFt, fresh: _simGndFresh, gnd: simGroundFt() };
+    window._tcElev = () => null;                // 다른 자리로 옮겨 아직 모르는 상태
+    simTerrainFt();
+    const unknown = { ft: _simGndFt, fresh: _simGndFresh, gnd: simGroundFt() };
+    // 그 상태에서 기수를 숙이면 제대로 가속돼야 한다
+    joyAxes = { pitch: { i: 1, inv: false } };
+    S.alt = 500; S.spd = 40; S.vs = 0;
+    _ax(1, 0.3);                                 // 기수를 숙인다
+    fly(15);
+    const flown = { spd: S.spd, pit: S.pit };
+    window._tcElev = real;
+    return { known, unknown, flown };
+  })()`);
+  t.eq(known2(stale.known.fresh), true, '발밑을 읽으면 그 값을 쓴다');
+  t.ok(Math.abs(stale.known.gnd - 1000) < 5, `산 위에서는 1,000ft 가 바닥이다 (${stale.known.gnd.toFixed(0)}ft)`);
+  t.eq(stale.unknown.fresh, false, '모르는 자리로 가면 그렇다고 표시한다');
+  t.eq(stale.unknown.gnd, 0, '그때는 묵은 값을 땅으로 믿지 않는다(해수면만 바닥)');
+  t.ok(stale.flown.pit < -2 && stale.flown.spd > 60,
+    `그 상태에서 기수를 숙이면 제대로 가속된다 (${stale.flown.pit.toFixed(1)}° · 40 → ${stale.flown.spd.toFixed(0)}kt)`);
 
   // ── 바닥은 해수면이 아니라 '발밑의 지면' 이다 ──
   // 0 ft 로 시작한다는 것은 AGL 0 — 지형 표고를 모르면 땅속에서 시작하거나
@@ -445,7 +476,8 @@ export async function run(page, t) {
              inv: [perfVsForTq(12.2), perfVsForTq(-11.0)] };
   })()`);
   t.ok(Math.abs(law.same) < 60, `기준과 같으면 고도를 지킨다 (${law.same.toFixed(0)}fpm)`);
-  t.ok(law.up > 350, `기준보다 높으면 상승한다 (+12.2% → ${law.up.toFixed(0)}fpm)`);
+  // 120kt 는 Vy 에서 멀어 상승 효율이 절반쯤이다(강하는 효율과 무관하다)
+  t.ok(law.up > 150, `기준보다 높으면 상승한다 (+12.2% → ${law.up.toFixed(0)}fpm · Vy 효율 반영)`);
   t.ok(law.dn < -350, `낮으면 강하한다 (−11.0% → ${law.dn.toFixed(0)}fpm)`);
   t.ok(law.big > law.up + 300, `더 올리면 더 빨리 오른다 (+24.8% → ${law.big.toFixed(0)}fpm)`);
   t.ok(Math.abs(law.tbl[0] - 12.2) < 0.2 && Math.abs(law.tbl[1] - 24.8) < 0.2,
@@ -453,6 +485,47 @@ export async function run(page, t) {
   t.ok(Math.abs(law.tbl[2] + 11.0) < 0.2, `강하 쪽도 표 그대로다 (−500fpm ${law.tbl[2].toFixed(1)}%)`);
   t.ok(Math.abs(law.inv[0] - 500) < 15 && Math.abs(law.inv[1] + 500) < 15,
     `토크 → 상승률 되짚기도 맞는다 (${law.inv[0].toFixed(0)} · ${law.inv[1].toFixed(0)}fpm)`);
+
+  // ── Vy 에서 가장 잘 오른다 ──
+  // 같은 토크라도 최대상승속도(Vy)에서 상승률이 가장 크고, 그보다 빠르거나
+  // 느려질수록 떨어진다. PERF 의 Vy 를 그대로 쓴다.
+  const vy = await page.evaluate(`(() => {
+    (${SETUP.toString()})();
+    const fly = ${FLY};
+    S.bnk = 0; S.alt = 4000; _simGndFt = 0;
+    const V = perfVy();
+    const at = (kt) => { S.spd = kt; return simClimbEff(); };
+    const eff = { hover: at(0), slow: at(V - 30), best: at(V), fast: at(V + 30),
+                  cruise: at(140) };
+    // 실제로 날려서도 확인한다 — 같은 여유 토크, 다른 속도.
+    // 속도는 자세로 잡아 둔다(자세를 안 잡으면 120kt 로 흘러간다).
+    const DEAD = 0.08;
+    const stick = (k) => (k === 0 ? 0 : Math.sign(k) * (Math.abs(k) * (1 - DEAD) + DEAD));
+    const run = (kt) => {
+      joyAxes = { pitch: { i: 1, inv: false } };      // 레버는 자동 트림(고도 유지)
+      _ax(1, stick(-pitchFromSpd(kt) / 60));
+      S.spd = kt; S.alt = 4000; S.vs = 0;
+      fly(20);                                        // 그 속도로 자리잡을 때까지
+      const settled = S.spd;
+      joyAxes.coll = { i: 3, inv: false, abs: true }; // 이제 레버를 쥐고 25% 더 준다
+      _ax(3, Math.max(-1, Math.min(1, (tqRequired() + 25) / 110 * 2 - 1)));
+      S.alt = 4000; fly(10);
+      return { vs: S.vs, spd: settled };
+    };
+    const flewBest = run(V), flewHover = run(0);
+    return { V, eff, flewBest, flewHover };
+  })()`);
+  t.ok(vy.V > 40 && vy.V < 110, `PERF 가 Vy 를 준다 (${vy.V.toFixed(0)}kt)`);
+  t.ok(Math.abs(vy.eff.best - 1) < 0.01, `Vy 에서 상승 효율이 가장 높다 (${vy.eff.best.toFixed(2)})`);
+  t.ok(vy.eff.slow < 0.95 && vy.eff.fast < 0.95,
+    `그보다 느리거나 빠르면 떨어진다 (−30kt ${vy.eff.slow.toFixed(2)} · +30kt ${vy.eff.fast.toFixed(2)})`);
+  t.ok(Math.abs(vy.eff.slow - vy.eff.fast) < 0.01, '양쪽으로 고르게 떨어진다');
+  t.ok(vy.eff.hover >= 0.3 && vy.eff.hover < vy.eff.slow,
+    `제자리에서는 가장 낮다 (${vy.eff.hover.toFixed(2)})`);
+  t.ok(vy.flewBest.vs > vy.flewHover.vs + 150,
+    `같은 여유 토크라도 Vy 에서 더 잘 오른다 ` +
+    `(${vy.flewHover.spd.toFixed(0)}kt ${vy.flewHover.vs.toFixed(0)}fpm → ` +
+    `${vy.flewBest.spd.toFixed(0)}kt ${vy.flewBest.vs.toFixed(0)}fpm)`);
 
   // ── 같은 레버라도 선회를 걸면 가라앉는다 ──
   // 뱅크를 주면 양력이 기울어 필요 토크가 오른다. 컬렉티브를 그대로 두면
@@ -718,6 +791,38 @@ export async function run(page, t) {
   t.eq(rollZoom.b.rot, '-30',
     `기울임은 뱅크만큼만 돈다 (${JSON.stringify(rollZoom.on)} · ${rollZoom.b.tf})`);
   t.eq(rollZoom.after, '', '모드를 끄면 되돌아온다');
+
+  // ── 기수를 들면 위를 본다 ──
+  // 지도 엔진은 85° 위로는 기울지 못한다. 그래서 기준 각도를 낮춰 여유를 두고,
+  // 그마저 넘으면 '더 먼 곳' 을 보게 해서 시야가 계속 따라오게 했다.
+  // 종전에는 기수 6° 쯤에서 이미 끝에 닿아 더 들어도 그대로였다.
+  const lookUp = await page.evaluate(`(() => {
+    (${SETUP.toString()})();
+    toggleSimMode(false);
+    toggleTriple(true);
+    selectPanel('left', 'pfd', true); selectPanel('mid', 'map', true);
+    selectPanel('right', 'cdu', true);
+    toggleSimMode(true);
+    S.alt = 2000; S.bnk = 0; S.hdg = 90; _simGndFt = 0;
+    const read = (pit) => {
+      S.pit = pit; _applyFollow();
+      const c = _ml3d.getCenter();
+      return { cam: _ml3d.getPitch(),
+               ahead: distance(S.lat, S.lon, c.lat, c.lng) };   // NM
+    };
+    const lvl = read(0), up8 = read(8), up16 = read(16), up40 = read(40);
+    const dn = read(-20);
+    toggleSimMode(false);
+    return { lvl, up8, up16, up40, dn };
+  })()`);
+  t.ok(lookUp.up8.cam > lookUp.lvl.cam + 6,
+    `기수 8° 를 들면 그만큼 위를 본다 (${lookUp.lvl.cam.toFixed(0)}° → ${lookUp.up8.cam.toFixed(0)}°)`);
+  t.ok(lookUp.up16.cam > lookUp.up8.cam + 5,
+    `16° 까지도 각도로 따라간다 (${lookUp.up16.cam.toFixed(0)}° — 종전에는 6° 에서 멈췄다)`);
+  t.ok(lookUp.up40.ahead > lookUp.up16.ahead * 1.5,
+    `더 들면 각도 대신 더 먼 곳을 본다 (${lookUp.up16.ahead.toFixed(1)} → ${lookUp.up40.ahead.toFixed(1)}NM)`);
+  t.ok(lookUp.dn.cam < lookUp.lvl.cam - 10,
+    `숙이면 아래를 본다 (${lookUp.dn.cam.toFixed(0)}°)`);
 
   // ── 1인칭: 눈이 헬기 자리에 있다 ──
   // 뒤에서 따라가는 3인칭이면 헬기가 화면 안(아래쪽 1/4 즈음)에 보인다.
