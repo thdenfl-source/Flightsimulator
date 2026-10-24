@@ -18,13 +18,14 @@
 
 const SIM_BANK_MAX  = 45;      // 사이클릭 최대 뱅크(°)
 const SIM_ROLL_RATE = 60;      // 뱅크가 따라가는 속도(°/s)
-const SIM_PITCH_MAX = 12;      // 사이클릭 최대 피치(°)
+// 기수 자세의 한계 — 뒤로 40kt 까지 가려면 16° 가 필요하다(1° = 10kt)
+const SIM_PITCH_MAX = 16;      // 사이클릭 최대 피치(°)
 const SIM_PITCH_RATE = 30;     // 피치가 따라가는 속도(°/s)
 const SIM_YAW_RATE  = 25;      // 페달 최대 요율(°/s)
 const SIM_SPD_MAX   = 160;     // 최대 대기속도(kt)
 const SIM_SPD_BACK  = -40;     // 후방 비행 한계(kt) — 헬기는 뒤로도 난다
-const SIM_ACC       = 0.9;     // 피치 1° 당 가속(kt/s)
-const SIM_DRAG      = 0.015;   // 속도에 비례하는 감속(1/s)
+const SIM_SPD_K     = 0.22;    // 자세에 맞는 속도로 수렴하는 빠르기(1/s · 시정수 ≈4.5초)
+const SIM_CLIMB_KT  = 15;      // 1,000fpm 올라가는 동안 내주는 속도(kt)
 const SIM_VS_RATE   = 900;     // 상승률이 따라가는 속도(fpm/s)
 
 // 토크(TQ) 상수와 tqRequired()·tqShown() 는 01-state.js 에 있다 —
@@ -190,12 +191,19 @@ function simFly(dt) {
   const dP = pTgt - S.pit;
   S.pit += Math.sign(dP) * Math.min(Math.abs(dP), SIM_PITCH_RATE * dt);
 
-  // ── 피치 → 가감속 ──
-  // 기수를 내리면 빨라지고, 올리면 느려진다. 항력은 속도에 비례해 걸어
-  // 중립에서는 저절로 느려진다(헬기의 감속 느낌).
-  // 기수를 들면 뒤로도 간다 — 헬기는 후방 비행을 한다(40kt 까지).
-  S.spd = Math.max(SIM_SPD_BACK, Math.min(SIM_SPD_MAX,
-    S.spd + (-S.pit * SIM_ACC - S.spd * SIM_DRAG) * dt));
+  // 땅에 붙어 있는가 — 지면 위에서는 자세를 줘도 미끄러지지 않는다
+  const gnd = simTerrainFt();
+  const onGnd = S.alt <= gnd + 0.5;
+
+  // ── 피치 → 속도 ──
+  // 고도를 지키며 나는 헬기는 '자세 하나가 곧 속도' 다 — 수평 120kt,
+  // 기수 4° 80kt, 7.5° 45kt (1° = 10kt). 그 속도로 천천히 수렴한다.
+  // 기수를 더 들면 뒤로도 간다(16° ≈ −40kt).
+  // 올라가는 중에는 그만큼 출력을 쓰므로 같은 자세에서도 느려진다.
+  let sTgt = spdFromPitch(S.pit) - (S.vs / 1000) * SIM_CLIMB_KT;
+  sTgt = Math.max(SIM_SPD_BACK, Math.min(SIM_SPD_MAX, sTgt));
+  if (onGnd) sTgt = 0;                       // 땅 위에서는 서 있는다
+  S.spd += (sTgt - S.spd) * Math.min(1, (onGnd ? 1.2 : SIM_SPD_K) * dt);
 
   // ── 페달 → 기수 ──
   if (a.yaw) {
@@ -209,7 +217,8 @@ function simFly(dt) {
   // 만큼만 걸어 둔다(조이스틱 없이 켰다고 저절로 떠오르지 않게).
   const cfg = (typeof joyAxes === 'object' && joyAxes) ? joyAxes.coll : null;
   let tTgt;
-  if (!cfg) tTgt = tqRequired();
+  // 레버가 없으면: 땅에서는 그대로 서 있고(출력 0), 공중에서는 고도를 지킨다
+  if (!cfg) tTgt = onGnd ? 0 : tqRequired();
   else if (cfg.abs) {
     // 스로틀·컬렉티브처럼 '세워 두는' 레버는 자리 자체가 출력이다.
     // 맨 아래 0% … 맨 위 110%(연속한계 100% 를 조금 넘을 수 있게).
@@ -236,16 +245,8 @@ function simFly(dt) {
   const dV = vTgt - S.vs;
   S.vs += Math.sign(dV) * Math.min(Math.abs(dV), SIM_VS_RATE * dt);
   // 땅 아래로는 내려가지 않는다 — 바닥은 해수면이 아니라 '발밑의 지면' 이다
-  const gnd = simTerrainFt();
-  if (S.alt <= gnd + 0.5) {
-    if (S.vs < 0) { S.vs = 0; S.alt = gnd; }
-    // 땅에 닿아 있으면 미끄러지지 않게 천천히 선다
-    S.spd -= Math.sign(S.spd) * Math.min(Math.abs(S.spd), 8 * dt);
-  }
+  if (S.alt <= gnd + 0.5 && S.vs < 0) { S.vs = 0; S.alt = gnd; }
 
-  // ── 에너지 교환 ──
-  // 오르면 그만큼 속도를 내주고, 내려가면 속도를 얻는다(출력이 정해져 있으므로).
-  S.spd = Math.max(SIM_SPD_BACK, Math.min(SIM_SPD_MAX, S.spd - (S.vs / 1000) * 1.2 * dt));
 }
 
 // 화면 버튼(data-act) 연결 — 이 파일이 11-charts.js 보다 나중에 로드되므로

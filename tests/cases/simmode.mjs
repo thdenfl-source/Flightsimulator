@@ -175,6 +175,45 @@ export async function run(page, t) {
   t.ok(pitch.aft.spd < pitch.fwd.spd - 5,
     `그러면 느려진다 (${pitch.fwd.spd.toFixed(0)} → ${pitch.aft.spd.toFixed(0)}kt)`);
 
+  // ── 자세 하나가 곧 속도다 ──
+  // 고도를 지키며 날 때: 수평 120kt · 기수 4° 80kt · 7.5° 45kt (1° = 10kt).
+  // 실제 기재의 자세-속도 관계다. 조종간을 잡아 자세를 만들고 멎는 속도를 잰다.
+  const trimSpd = await page.evaluate(`(() => {
+    (${SETUP.toString()})();
+    const fly = ${FLY};
+    S.alt = 3000; _simGndFt = 0;
+    // 고도를 지키도록 토크는 필요한 만큼만 자동으로 걸리게 둔다(컬렉티브 미배정)
+    joyAxes = { pitch: { i: 1, inv: false } };
+    // 조종간은 중립 근처 8% 를 죽은 구간으로 두고 나머지를 폈다 — 그 역을 쓴다
+    const DEAD = 0.08;
+    const stick = (k) => (k === 0 ? 0 : Math.sign(k) * (Math.abs(k) * (1 - DEAD) + DEAD));
+    const hold = (deg) => {
+      // 그 자세가 되도록 조종간을 잡는다(앞으로 밀면 기수가 내려간다)
+      _ax(1, stick(-deg / 16));
+      fly(45);
+      return { pit: S.pit, spd: S.spd, vs: S.vs };
+    };
+    const level = hold(0);
+    const four  = hold(4);
+    const seven = hold(7.5);
+    return { level, four, seven,
+             law: [spdFromPitch(0), spdFromPitch(4), spdFromPitch(7.5)],
+             inv: [pitchFromSpd(120), pitchFromSpd(80), pitchFromSpd(45)] };
+  })()`);
+  t.eq(trimSpd.law.join('/'), '120/80/45',
+    `자세-속도 식이 기재와 같다 (0°→${trimSpd.law[0]} · 4°→${trimSpd.law[1]} · 7.5°→${trimSpd.law[2]}kt)`);
+  t.ok(Math.abs(trimSpd.inv[0]) < 0.01 && Math.abs(trimSpd.inv[1] - 4) < 0.01
+       && Math.abs(trimSpd.inv[2] - 7.5) < 0.01,
+    `거꾸로도 같다 (120kt→${trimSpd.inv[0].toFixed(1)}° · 80kt→${trimSpd.inv[1].toFixed(1)}° · 45kt→${trimSpd.inv[2].toFixed(1)}°)`);
+  t.ok(Math.abs(trimSpd.level.pit) < 0.6 && Math.abs(trimSpd.level.spd - 120) < 8,
+    `수평 자세로 날면 120kt 에서 멎는다 (${trimSpd.level.pit.toFixed(1)}° · ${trimSpd.level.spd.toFixed(0)}kt)`);
+  t.ok(Math.abs(trimSpd.four.pit - 4) < 0.6 && Math.abs(trimSpd.four.spd - 80) < 8,
+    `기수 4° 면 80kt 다 (${trimSpd.four.pit.toFixed(1)}° · ${trimSpd.four.spd.toFixed(0)}kt)`);
+  t.ok(Math.abs(trimSpd.seven.pit - 7.5) < 0.6 && Math.abs(trimSpd.seven.spd - 45) < 8,
+    `기수 7.5° 면 45kt 다 (${trimSpd.seven.pit.toFixed(1)}° · ${trimSpd.seven.spd.toFixed(0)}kt)`);
+  t.ok(Math.abs(trimSpd.level.vs) < 150 && Math.abs(trimSpd.four.vs) < 150,
+    `그동안 고도는 지킨다 (${trimSpd.level.vs.toFixed(0)} · ${trimSpd.four.vs.toFixed(0)}fpm)`);
+
   // ── 뒤로도 난다 ──
   // 헬기는 후방 비행을 한다. 기수를 들고 있으면 뒤로 가속되어야 하고,
   // 그 속도로 실제로 뒷걸음질해야 한다(지도상 위치가 기수 반대쪽으로 간다).
@@ -183,7 +222,7 @@ export async function run(page, t) {
     const fly = ${FLY};
     S.spd = 0; S.hdg = 90; S.alt = 2000;          // 동쪽을 보고 제자리
     const lon0 = S.lon;
-    _ax(1, -1); fly(20);                          // 끝까지 당겨 둔다
+    _ax(1, -1); fly(30);                          // 끝까지 당겨 둔다
     const r = { spd: S.spd, lon: S.lon, pit: S.pit };
     fly(30);                                      // 더 당겨도 한계에서 멈춘다
     r.limit = S.spd;
@@ -292,9 +331,12 @@ export async function run(page, t) {
   const law = await page.evaluate(`(() => {
     (${SETUP.toString()})();
     const fly = ${FLY};
-    S.bnk = 0; S.spd = 0; S.alt = 3000; _simGndFt = 0;
+    S.bnk = 0; S.spd = 120; S.alt = 3000; _simGndFt = 0;
     // 레버식 컬렉티브로 토크를 정확히 지정한다(0…110% 가 축 -1…1)
     joyAxes = { coll: { i: 3, inv: false, abs: true } };
+    // 속도가 변하면 전진 양력 때문에 기준 토크도 변한다 — 120kt 로 안정시켜 둔다
+    _ax(3, 0); fly(20);
+    S.alt = 3000;
     const need = tqRequired();
     const run = (tq) => {
       _ax(3, Math.max(-1, Math.min(1, tq / 110 * 2 - 1)));

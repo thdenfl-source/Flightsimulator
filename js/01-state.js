@@ -1295,9 +1295,18 @@ function courseCrsHere(L) {
 }
 let rnp     = 1.0;     // RNP value for FMS CDI scale
 
-// pitch is always derived from speed — helper
+// ── 자세 ↔ 속도 ──
+// 고도를 지키며 나는 헬기는 자세 하나가 곧 속도다(실제 기재 기준):
+//   수평(0°) 120kt · 기수 4° 80kt · 7.5° 45kt — 1° 당 10kt 로 고르게 선다.
+// SIM 모드의 조종(14-simmode.js)과 AFCS 의 자동 자세가 같은 식을 쓴다.
+const PITCH_KT_PER_DEG = 10;      // 자세 1° = 10kt
+const PITCH_LEVEL_KT   = 120;     // 수평 자세의 속도
 function pitchFromSpd(spd) {
-  return Math.max(-20, Math.min(20, (120 - spd) * (3 / 20)));
+  return Math.max(-20, Math.min(20, (PITCH_LEVEL_KT - spd) / PITCH_KT_PER_DEG));
+}
+// 그 자세로 고도를 지키며 날면 얼마에서 멎는가(위 식의 역)
+function spdFromPitch(pit) {
+  return PITCH_LEVEL_KT - pit * PITCH_KT_PER_DEG;
 }
 
 // ══════════════════════════════════════════════════════
