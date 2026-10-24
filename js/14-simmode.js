@@ -120,7 +120,9 @@ function toggleSimMode(on, opt) {
     bankTarget = S.bnk;
     simTrimReset();
     // 지금 날고 있는 상태를 유지할 만큼의 토크로 레버를 맞춰 둔다(진입 충격 방지)
-    S.tq = Math.max(0, Math.min(TQ_MAX, tqRequired() + (S.vs || 0) / TQ_PER_FPM));
+    let add = (S.vs || 0) / TQ_PER_FPM;
+    try { if (typeof perfTqForVs === 'function') add = perfTqForVs(S.vs || 0); } catch (e) { _swallow(e); }
+    S.tq = Math.max(0, Math.min(TQ_MAX, tqRequired() + add));
     if (!S.running) toggleSim();        // 멈춰 있으면 바로 날기 시작한다
     if (opt && opt.ground) simStartGround();
     else if (S.alt < 50) S.alt = SIM_AIR_MIN_FT;   // 공중에서 시작하는데 땅에 붙어 있으면 띄운다
@@ -214,7 +216,7 @@ function simFly(dt) {
     tTgt = (joyAxRaw('coll') + 1) / 2 * 110;
   } else {
     // 가운데로 돌아오는 축은 호버 토크를 기준으로 오르내린다
-    tTgt = TQ_HOVER + a.coll * TQ_SPAN;
+    tTgt = hoverTqRef() + a.coll * TQ_SPAN;
   }
   tTgt = Math.max(0, Math.min(TQ_MAX, tTgt));
   const dT = tTgt - S.tq;
@@ -223,7 +225,14 @@ function simFly(dt) {
   // ── 남는 토크 → 상승·강하 ──
   // 필요한 토크보다 남으면 오르고, 모자라면 내려간다. 그래서 같은 레버라도
   // 선회를 걸면 가라앉고(필요 토크 증가), 속도가 붙으면 저절로 떠오른다.
-  const vTgt = Math.max(-2000, Math.min(2000, (S.tq - tqRequired()) * TQ_PER_FPM));
+  // 남는 토크가 몇 fpm 인지는 PERF 의 상승·강하 토크표로 되짚는다(중량 반영).
+  // 표를 못 읽으면 종전의 '1% = 55fpm' 으로 떨어진다.
+  const dTq = S.tq - tqRequired();
+  let vRaw;
+  try { vRaw = (typeof perfVsForTq === 'function') ? perfVsForTq(dTq) : dTq * TQ_PER_FPM; }
+  catch (e) { vRaw = dTq * TQ_PER_FPM; }
+  if (!Number.isFinite(vRaw)) vRaw = dTq * TQ_PER_FPM;
+  const vTgt = Math.max(-2000, Math.min(2000, vRaw));
   const dV = vTgt - S.vs;
   S.vs += Math.sign(dV) * Math.min(Math.abs(dV), SIM_VS_RATE * dt);
   // 땅 아래로는 내려가지 않는다 — 바닥은 해수면이 아니라 '발밑의 지면' 이다

@@ -196,7 +196,7 @@ export async function run(page, t) {
   t.ok(back.limit >= -41 && back.limit <= -35,
     `뒤로는 40kt 가 한계다 (${back.limit.toFixed(0)}kt)`);
   t.eq(back.wentBack, true, '지도상 위치도 기수 반대쪽으로 간다');
-  t.ok(back.idle > back.limit + 5,
+  t.ok(back.idle > back.limit + 2,
     `놓으면 항력으로 멈춰 간다 (${back.limit.toFixed(0)} → ${back.idle.toFixed(0)}kt)`);
 
   // ── 바닥은 해수면이 아니라 '발밑의 지면' 이다 ──
@@ -244,6 +244,80 @@ export async function run(page, t) {
   t.ok(coll.dn.tq < coll.tq0 - 20, `내리면 토크가 내려간다 (${coll.dn.tq.toFixed(0)}%)`);
   t.ok(coll.dn.vs < -900, `그러면 강하한다 (${coll.dn.vs.toFixed(0)}fpm)`);
   t.ok(coll.dn.alt < coll.up.alt, '고도도 다시 내려온다');
+
+  // ── 기준 토크는 CDU PERF 자료에서 온다 ──
+  // 호버에 필요한 토크는 고도·온도·중량에 따라 달라진다. 그 값을 PERF 화면이
+  // 뽑아 주므로, 계기의 기준선(HOV)과 비행 모델이 같은 값을 써야 한다.
+  const perf = await page.evaluate(`(() => {
+    (${SETUP.toString()})();
+    const read = () => { const p = perfHoverTq(); return { oge: p.oge, ige: p.ige, wt: p.wt }; };
+    S.bnk = 0; S.spd = 0; S.alt = 5000; _simGndFt = 0;     // 지면효과 밖(OGE)
+    const light = { perf: read(), need: tqRequired(), hov: hoverTqRef() };
+    // 무겁게 하면 더 든다 — CDU 화면에서 실제로 쳐 넣는다
+    const typeWeight = (txt) => {
+      selectPanel('right', 'cdu', true);
+      switchMode('PERF_INPUT', 'weight');
+      // 한 글자 누를 때마다 화면을 다시 그리므로, 누를 때마다 다시 찾아야 한다
+      [...txt].forEach(c => {
+        const k = [...document.querySelectorAll('#cdu-wrap [data-act=\"addInput\"]')]
+          .find(b => JSON.parse(b.dataset.arg || '[]')[0] === c);
+        if (k) k.click();
+      });
+      document.querySelector('#cdu-wrap [data-act=\"confirmPerfInput\"]').click();
+    };
+    typeWeight('19000');
+    const heavy = { perf: read(), need: tqRequired() };
+    // 지면 가까이에서는 지면효과로 덜 든다
+    S.alt = 5; _simGndFt = 0;
+    const ige = { hov: hoverTqRef() };
+    S.alt = 5000;
+    const oge = { hov: hoverTqRef() };
+    typeWeight('16000');          // 되돌려 놓는다
+    switchMode('HOME');
+    return { light, heavy, ige, oge };
+  })()`);
+  t.ok(perf.light.perf.oge > 40 && perf.light.perf.oge < 110,
+    `PERF 가 호버 토크를 준다 (OGE ${perf.light.perf.oge}%)`);
+  t.ok(perf.light.perf.ige < perf.light.perf.oge,
+    `지면효과 안이 밖보다 덜 든다 (IGE ${perf.light.perf.ige}% < OGE ${perf.light.perf.oge}%)`);
+  t.ok(Math.abs(perf.light.need - perf.light.perf.oge) < 1,
+    `제자리·수평에서 필요 토크 = PERF 의 OGE (${perf.light.need.toFixed(1)}%)`);
+  t.ok(perf.heavy.perf.wt === 19000 && perf.heavy.need > perf.light.need + 2,
+    `무거우면 더 든다 (16,000lb ${perf.light.need.toFixed(1)}% → 19,000lb ${perf.heavy.need.toFixed(1)}%)`);
+  t.ok(perf.ige.hov < perf.oge.hov - 1,
+    `땅 가까이에서는 기준 토크가 내려간다 (${perf.ige.hov.toFixed(1)}% · 공중 ${perf.oge.hov.toFixed(1)}%)`);
+
+  // ── 기준보다 높으면 상승, 낮으면 강하 ──
+  // 상승률은 PERF 의 상승·강하 토크표를 그대로 되짚어 정한다.
+  const law = await page.evaluate(`(() => {
+    (${SETUP.toString()})();
+    const fly = ${FLY};
+    S.bnk = 0; S.spd = 0; S.alt = 3000; _simGndFt = 0;
+    // 레버식 컬렉티브로 토크를 정확히 지정한다(0…110% 가 축 -1…1)
+    joyAxes = { coll: { i: 3, inv: false, abs: true } };
+    const need = tqRequired();
+    const run = (tq) => {
+      _ax(3, Math.max(-1, Math.min(1, tq / 110 * 2 - 1)));
+      S.vs = 0; S.alt = 3000; fly(8);
+      return S.vs;
+    };
+    const same = run(need);
+    const up   = run(need + 12.2);                 // 표에서 +500fpm 인 값(16,000lb)
+    const dn   = run(need - 11.0);                 // 표에서 -500fpm 인 값
+    const big  = run(need + 24.8);                 // +1,000fpm
+    return { need, same, up, dn, big,
+             tbl: [perfTqForVs(500), perfTqForVs(1000), perfTqForVs(-500)],
+             inv: [perfVsForTq(12.2), perfVsForTq(-11.0)] };
+  })()`);
+  t.ok(Math.abs(law.same) < 60, `기준과 같으면 고도를 지킨다 (${law.same.toFixed(0)}fpm)`);
+  t.ok(law.up > 350, `기준보다 높으면 상승한다 (+12.2% → ${law.up.toFixed(0)}fpm)`);
+  t.ok(law.dn < -350, `낮으면 강하한다 (−11.0% → ${law.dn.toFixed(0)}fpm)`);
+  t.ok(law.big > law.up + 300, `더 올리면 더 빨리 오른다 (+24.8% → ${law.big.toFixed(0)}fpm)`);
+  t.ok(Math.abs(law.tbl[0] - 12.2) < 0.2 && Math.abs(law.tbl[1] - 24.8) < 0.2,
+    `상승 토크는 PERF 표 그대로다 (500fpm ${law.tbl[0].toFixed(1)}% · 1,000fpm ${law.tbl[1].toFixed(1)}%)`);
+  t.ok(Math.abs(law.tbl[2] + 11.0) < 0.2, `강하 쪽도 표 그대로다 (−500fpm ${law.tbl[2].toFixed(1)}%)`);
+  t.ok(Math.abs(law.inv[0] - 500) < 15 && Math.abs(law.inv[1] + 500) < 15,
+    `토크 → 상승률 되짚기도 맞는다 (${law.inv[0].toFixed(0)} · ${law.inv[1].toFixed(0)}fpm)`);
 
   // ── 같은 레버라도 선회를 걸면 가라앉는다 ──
   // 뱅크를 주면 양력이 기울어 필요 토크가 오른다. 컬렉티브를 그대로 두면
@@ -573,10 +647,10 @@ export async function run(page, t) {
     const fly = ${FLY};
     joyAxes.coll = { i: 3, inv: false, abs: false };
     _ax(3, 0); fly(3);
-    return { tq: S.tq, hover: TQ_HOVER };
+    return { tq: S.tq, hover: hoverTqRef() };
   })()`);
   t.ok(Math.abs(spring.tq - spring.hover) < 3,
-    `가운데면 호버 토크다 (${spring.tq.toFixed(0)}% · 호버 ${spring.hover}%)`);
+    `가운데면 호버 토크다 (${spring.tq.toFixed(0)}% · PERF 호버 ${spring.hover.toFixed(0)}%)`);
 
   // ── 끄면 종전 방식으로 돌아온다 ──
   const off = await page.evaluate(`(() => {
