@@ -432,10 +432,13 @@ function drawTqGauge(x, y, w, h) {
     ctx.strokeStyle = over ? '#ff8888' : '#8ae8ff'; ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(barX, topY + 0.5); ctx.lineTo(barX + barW, topY + 0.5); ctx.stroke();
 
-    // 필요 토크 표식(여기에 맞추면 고도가 유지된다)
+    // 필요 토크 표식(여기에 맞추면 고도가 유지된다) — CDU PERF 의 호버 토크 기준
     const ny = Math.round(vToY(need)) + 0.5;
     ctx.strokeStyle = '#ffcc44'; ctx.lineWidth = 1.5;
     ctx.beginPath(); ctx.moveTo(barX - 2, ny); ctx.lineTo(barX + barW + 4, ny); ctx.stroke();
+    ctx.textAlign = 'left';
+    ctx.font = 'bold 7px Helvetica, Arial'; ctx.fillStyle = '#ffcc44';
+    ctx.fillText('HOV', barX + barW + 6, ny + 2.5);
 
     // 연속 사용 한계(100%) — 붉은 선
     const ly = Math.round(vToY(TQ_LIMIT)) + 0.5;

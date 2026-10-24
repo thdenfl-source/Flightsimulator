@@ -994,6 +994,8 @@ function act(name, ...args) {
     // 있었다. IIFE로 감싸 밖으로 내보내는 이름을 calculatePerformance 하나로 줄인다.
     // (perfData·perfResults는 화면 렌더에서 읽고 쓰므로 바깥에 남긴다)
     let calculatePerformance;
+    // SIM 모드(14-simmode.js)가 쓰는 성능 접근자 — 아래 IIFE 안에서 채운다
+    let perfTqForVs, perfVsForTq, perfHoverTq;
     (function () {
     // Vy Tables
     const vyTemps = [-32, -20, -10, 0, 10, 20, 30, 40];
@@ -1191,6 +1193,41 @@ function act(name, ...args) {
         } else {
             perfResults.vsTq = "0.0";
         }
+    };
+
+    // ── SIM 모드용: 성능표를 그대로 쓰는 토크 ↔ 상승률 변환 ──
+    // PERF 화면이 보여 주는 바로 그 표(상승·강하 토크 증분)를 비행 모델이 쓴다.
+    // 그래야 계기에 뜨는 기준 토크와 실제 오르내림이 어긋나지 않는다.
+    perfTqForVs = function (vsFpm) {
+        const wt = parseFloat(perfData.weight) || 16000;
+        const a = Math.abs(vsFpm);
+        if (!(a > 0)) return 0;
+        const d = interpolate2D(vsRates, vsWeights, vsFpm > 0 ? climbData : descentData, a, wt);
+        return vsFpm > 0 ? d : -d;
+    };
+    // 위의 역 — 남는 토크가 얼마면 몇 fpm 인가(표가 단조라 이분법으로 되짚는다)
+    perfVsForTq = function (dTq) {
+        if (!(Math.abs(dTq) > 0.01)) return 0;
+        let lo = 0, hi = Math.sign(dTq) * 3000;
+        for (let i = 0; i < 40; i++) {
+            const mid = (lo + hi) / 2;
+            if (Math.abs(perfTqForVs(mid)) < Math.abs(dTq)) lo = mid; else hi = mid;
+        }
+        return (lo + hi) / 2;
+    };
+    // 제자리 호버에 필요한 토크(%) — 지면효과 안(IGE)·밖(OGE)
+    // 매 프레임 불리므로(계기·비행 모델) 입력이 그대로면 셈을 다시 하지 않는다.
+    let _hovCache = null, _hovKey = '';
+    perfHoverTq = function () {
+        const key = perfData.alt + '/' + perfData.temp + '/' + perfData.weight;
+        if (_hovCache && key === _hovKey) return _hovCache;
+        calculatePerformance();
+        const oge = parseFloat(perfResults.oge), ige = parseFloat(perfResults.ige);
+        _hovKey = key;
+        _hovCache = { oge: Number.isFinite(oge) ? oge : null,
+                      ige: Number.isFinite(ige) ? ige : null,
+                      wt: parseFloat(perfData.weight) || 16000 };
+        return _hovCache;
     };
     })();
 
@@ -4164,6 +4201,10 @@ switchMode('HOME');
     window.tpMapHide         = tpMapHide;          // 지도 포인트 팝업(#cdu-wrap 밖)
     window.tpMapAddFpl       = tpMapAddFpl;
     window.tpMapDirect       = tpMapDirect;
+    // SIM 모드가 PERF 자료를 그대로 쓰도록 내보낸다(기준 토크·상승률 변환)
+    window.perfHoverTq       = (...a) => perfHoverTq(...a);
+    window.perfTqForVs       = (...a) => perfTqForVs(...a);
+    window.perfVsForTq       = (...a) => perfVsForTq(...a);
     // 상태 변수: 밖에서 '현재 값'을 읽으므로 접근자로 공개(스냅샷이면 갱신이 안 됨)
     Object.defineProperties(window, {
       currentMode:    { get: () => currentMode,    configurable: true },

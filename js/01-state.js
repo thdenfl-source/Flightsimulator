@@ -153,18 +153,37 @@ const TQ_BANK    = 22;         // 뱅크로 더 드는 토크(1/cosφ−1 에 �
 const TQ_TLIFT   = 9;          // 전진 양력으로 덜 드는 토크(최대 %)
 const TLIFT_KT   = 55;         // 그 효과가 다 차는 속도(kt)
 
+// ── 제자리 호버에 필요한 토크 ──
+// CDU 의 PERF 화면이 고도·온도·중량으로 뽑아 주는 바로 그 값을 쓴다.
+// 지면 가까이에서는 지면효과(IGE)로 덜 들고, 떠오르면 OGE 로 수렴한다.
+// 전이 높이는 로터 지름 즈음(≈53ft)으로 둔다 — 그 위는 지면효과가 없다.
+const IGE_FULL_FT = 10, IGE_NONE_FT = 53;
+function hoverTqRef() {
+  let p = null;
+  try { p = (typeof perfHoverTq === 'function') ? perfHoverTq() : null; } catch (e) { _swallow(e); }
+  if (!p || !Number.isFinite(p.oge)) return TQ_HOVER;          // PERF 를 못 읽으면 종전 값
+  const ige = Number.isFinite(p.ige) ? p.ige : p.oge;
+  let agl = 1000;
+  try { agl = S.alt - ((typeof simTerrainFt === 'function') ? simTerrainFt() : 0); }
+  catch (e) { agl = S.alt; }
+  const k = Math.max(0, Math.min(1, (agl - IGE_FULL_FT) / (IGE_NONE_FT - IGE_FULL_FT)));
+  return ige + (p.oge - ige) * k;                              // IGE → OGE
+}
+
 // 지금 '수평 비행' 에 필요한 토크(%)
 function tqRequired() {
   const bank = Math.min(60, Math.abs(S.bnk));
   const lift = (1 / Math.cos(bank * D2R) - 1) * TQ_BANK;      // 선회 중 더 필요
-  const tl   = Math.min(1, Math.max(0, S.spd) / TLIFT_KT) * TQ_TLIFT;  // 전진 양력
-  return TQ_HOVER + lift - tl;
+  const tl   = Math.min(1, Math.abs(S.spd) / TLIFT_KT) * TQ_TLIFT;     // 전진 양력
+  return hoverTqRef() + lift - tl;
 }
 // 계기에 보일 토크. SIM 모드에서는 실제 레버 값, 평소에는 지금 비행 상태에서
 // 들 법한 값을 거꾸로 셈해 보여 준다(계기가 비어 보이지 않게).
 function tqShown() {
   if (simModeOn) return S.tq;
-  return Math.max(0, Math.min(TQ_MAX, tqRequired() + (S.vs || 0) / TQ_PER_FPM));
+  let add = (S.vs || 0) / TQ_PER_FPM;
+  try { if (typeof perfTqForVs === 'function') add = perfTqForVs(S.vs || 0); } catch (e) { _swallow(e); }
+  return Math.max(0, Math.min(TQ_MAX, tqRequired() + add));
 }
 function tqOver() { return tqShown() > TQ_LIMIT; }
 
