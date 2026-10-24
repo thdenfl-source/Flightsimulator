@@ -43,6 +43,9 @@ const FLY = `(sec) => {
   S.running = false;
 }`;
 
+// 자세 값을 그대로 쓰기 위한 작은 도우미(읽기 쉬우라고 둔다)
+const trimSpdPit = (p) => p;
+
 export async function run(page, t) {
   // ── 버튼이 스톱워치 오른쪽에 있다 ──
   const btn = await page.evaluate(async () => {
@@ -189,21 +192,24 @@ export async function run(page, t) {
     const stick = (k) => (k === 0 ? 0 : Math.sign(k) * (Math.abs(k) * (1 - DEAD) + DEAD));
     const hold = (deg) => {
       // 그 자세가 되도록 조종간을 잡는다(앞으로 밀면 기수가 내려간다)
-      _ax(1, stick(-deg / 16));
-      fly(45);
+      _ax(1, stick(-deg / 60));
+      fly(25);
       return { pit: S.pit, spd: S.spd, vs: S.vs };
     };
     const level = hold(0);
     const four  = hold(4);
     const seven = hold(7.5);
-    return { level, four, seven,
-             law: [spdFromPitch(0), spdFromPitch(4), spdFromPitch(7.5)],
-             inv: [pitchFromSpd(120), pitchFromSpd(80), pitchFromSpd(45)] };
+    const down  = hold(-10);                    // 기수 내림 10° → 140kt
+    const max   = hold(-60);                    // 끝까지 숙여도 자세는 60° 까지
+    return { level, four, seven, down, max,
+             law: [spdFromPitch(0), spdFromPitch(4), spdFromPitch(7.5), spdFromPitch(-10)],
+             inv: [pitchFromSpd(120), pitchFromSpd(80), pitchFromSpd(45), pitchFromSpd(140)] };
   })()`);
-  t.eq(trimSpd.law.join('/'), '120/80/45',
-    `자세-속도 식이 기재와 같다 (0°→${trimSpd.law[0]} · 4°→${trimSpd.law[1]} · 7.5°→${trimSpd.law[2]}kt)`);
+  t.eq(trimSpd.law.join('/'), '120/80/45/140',
+    `자세-속도 식이 기재와 같다 (0°→${trimSpd.law[0]} · 4°→${trimSpd.law[1]} · ` +
+    `7.5°→${trimSpd.law[2]} · −10°→${trimSpd.law[3]}kt)`);
   t.ok(Math.abs(trimSpd.inv[0]) < 0.01 && Math.abs(trimSpd.inv[1] - 4) < 0.01
-       && Math.abs(trimSpd.inv[2] - 7.5) < 0.01,
+       && Math.abs(trimSpd.inv[2] - 7.5) < 0.01 && Math.abs(trimSpd.inv[3] + 10) < 0.01,
     `거꾸로도 같다 (120kt→${trimSpd.inv[0].toFixed(1)}° · 80kt→${trimSpd.inv[1].toFixed(1)}° · 45kt→${trimSpd.inv[2].toFixed(1)}°)`);
   t.ok(Math.abs(trimSpd.level.pit) < 0.6 && Math.abs(trimSpd.level.spd - 120) < 8,
     `수평 자세로 날면 120kt 에서 멎는다 (${trimSpd.level.pit.toFixed(1)}° · ${trimSpd.level.spd.toFixed(0)}kt)`);
@@ -211,8 +217,48 @@ export async function run(page, t) {
     `기수 4° 면 80kt 다 (${trimSpd.four.pit.toFixed(1)}° · ${trimSpd.four.spd.toFixed(0)}kt)`);
   t.ok(Math.abs(trimSpd.seven.pit - 7.5) < 0.6 && Math.abs(trimSpd.seven.spd - 45) < 8,
     `기수 7.5° 면 45kt 다 (${trimSpd.seven.pit.toFixed(1)}° · ${trimSpd.seven.spd.toFixed(0)}kt)`);
+  t.ok(Math.abs(trimSpd.down.pit + 10) < 0.6 && Math.abs(trimSpd.down.spd - 140) < 8,
+    `기수를 10° 숙이면 140kt 다 (${trimSpd.down.pit.toFixed(1)}° · ${trimSpd.down.spd.toFixed(0)}kt)`);
+  t.ok(Math.abs(trimSpd.max.pit + 60) < 1.5,
+    `위아래 60° 까지 잡힌다 (${trimSpd.max.pit.toFixed(1)}°)`);
   t.ok(Math.abs(trimSpd.level.vs) < 150 && Math.abs(trimSpd.four.vs) < 150,
     `그동안 고도는 지킨다 (${trimSpd.level.vs.toFixed(0)} · ${trimSpd.four.vs.toFixed(0)}fpm)`);
+
+  // ── 위치에너지 ↔ 운동에너지 ──
+  // 기수를 숙인 채 컬렉티브를 내리면 고도가 빠지면서 속도가 붙고,
+  // 반대로 올리면 고도를 얻는 대신 속도를 내준다. 같은 자세에서 재 본다.
+  const energy = await page.evaluate(`(() => {
+    (${SETUP.toString()})();
+    const fly = ${FLY};
+    S.alt = 4000; _simGndFt = 0;
+    const DEAD = 0.08;
+    const stick = (k) => (k === 0 ? 0 : Math.sign(k) * (Math.abs(k) * (1 - DEAD) + DEAD));
+    // 1단계: 레버 없이(자동 트림) 고도를 지키게 둔다 — 그 자세의 속도로 멎는다
+    joyAxes = { pitch: { i: 1, inv: false } };
+    _ax(1, stick(10 / 60));                 // 기수 10° 아래(하방)
+    fly(30);
+    const trim = { pit: S.pit, spd: S.spd, vs: S.vs, alt: S.alt, tq: S.tq };
+    // 2단계: 같은 자세에서 레버를 쥐고 내린다
+    joyAxes.coll = { i: 3, inv: false, abs: true };
+    const lever = (tq) => _ax(3, Math.max(-1, Math.min(1, tq / 110 * 2 - 1)));
+    lever(trim.tq - 20);
+    fly(25);
+    const sink = { pit: S.pit, spd: S.spd, vs: S.vs, alt: S.alt };
+    lever(trim.tq + 20);                    // 이번에는 올린다
+    fly(25);
+    const climb = { pit: S.pit, spd: S.spd, vs: S.vs };
+    return { trim, sink, climb };
+  })()`);
+  t.ok(Math.abs(trimSpdPit(energy.trim.pit) + 10) < 1.5,
+    `기수를 10° 숙인 채로 잡아 둔다 (${energy.trim.pit.toFixed(1)}°)`);
+  t.ok(Math.abs(energy.trim.spd - 140) < 10 && Math.abs(energy.trim.vs) < 200,
+    `그 자세·고도유지에서 140kt 다 (${energy.trim.spd.toFixed(0)}kt · ${energy.trim.vs.toFixed(0)}fpm)`);
+  t.ok(energy.sink.vs < -300 && energy.sink.alt < energy.trim.alt,
+    `레버를 내리면 고도가 빠진다 (${energy.sink.vs.toFixed(0)}fpm)`);
+  t.ok(energy.sink.spd > energy.trim.spd + 5,
+    `그만큼 속도가 붙는다 — 위치에너지가 운동에너지로 (${energy.trim.spd.toFixed(0)} → ${energy.sink.spd.toFixed(0)}kt)`);
+  t.ok(energy.climb.vs > 300 && energy.climb.spd < energy.sink.spd - 10,
+    `반대로 올리면 고도를 얻고 속도를 내준다 (${energy.climb.vs.toFixed(0)}fpm · ${energy.climb.spd.toFixed(0)}kt)`);
 
   // ── 뒤로도 난다 ──
   // 헬기는 후방 비행을 한다. 기수를 들고 있으면 뒤로 가속되어야 하고,
@@ -222,9 +268,9 @@ export async function run(page, t) {
     const fly = ${FLY};
     S.spd = 0; S.hdg = 90; S.alt = 2000;          // 동쪽을 보고 제자리
     const lon0 = S.lon;
-    _ax(1, -1); fly(30);                          // 끝까지 당겨 둔다
+    _ax(1, -1); fly(25);                          // 끝까지 당겨 둔다
     const r = { spd: S.spd, lon: S.lon, pit: S.pit };
-    fly(30);                                      // 더 당겨도 한계에서 멈춘다
+    fly(20);                                      // 더 당겨도 한계에서 멈춘다
     r.limit = S.spd;
     _ax(1, 0); fly(15);                           // 놓으면 항력으로 되돌아온다
     r.idle = S.spd;
@@ -576,10 +622,55 @@ export async function run(page, t) {
   t.eq(view.turn.bearing, 250, `기수를 돌리면 시야도 돈다 (${view.turn.bearing}°)`);
   t.ok(/rotate\(30/.test(view.rolled.tf),
     `좌로 기울이면 화면이 반대로 돈다 (${view.rolled.tf})`);
-  t.ok(/scale\(1\.[1-9]/.test(view.rolled.tf),
+  t.ok(/scale\([1-9][0-9.]*\)/.test(view.rolled.tf),
     '돌려서 비는 모서리를 덮을 만큼 키운다');
-  t.eq(view.levelTf, '', '수평으로 돌아오면 기울임도 풀린다');
+  t.ok(/rotate\(-?0(\.0+)?deg\)/.test(view.levelTf),
+    `수평으로 돌아오면 기울임도 풀린다 (${view.levelTf})`);
   t.eq(view.after.sel, 'map', '끄면 지도 창이 2D 로 되돌아온다');
+
+  // ── 기울여도 지도가 확대되지 않는다 ──
+  // 돌리면 모서리가 비어 그만큼 화면을 키워 덮는데, 그 배율을 뱅크마다 바꾸면
+  // 기울일 때마다 지도가 확대·축소돼 보인다. 배율은 늘 같게 두고 카메라로
+  // 보정하므로, 화면에 보이는 '1픽셀당 몇 m' 가 뱅크와 상관없이 같아야 한다.
+  const rollZoom = await page.evaluate(`(() => {
+    (${SETUP.toString()})();
+    toggleSimMode(false);
+    toggleTriple(true);
+    selectPanel('left', 'pfd', true); selectPanel('mid', 'map', true);
+    selectPanel('right', 'cdu', true);
+    toggleSimMode(true);
+    S.alt = 2000; S.pit = 0; S.hdg = 90; _simGndFt = 0;
+    const el = document.getElementById('map3d');
+    // 템플릿 문자열 안에서는 정규식 escape 가 한 겹 벗겨지므로 글자로 끊어 읽는다
+    const between = (tf, head) => {
+      const i = (tf || '').indexOf(head);
+      if (i < 0) return null;
+      const j = tf.indexOf(')', i);
+      return tf.slice(i + head.length, j);
+    };
+    const scaleOf = (tf) => { const v = between(tf, 'scale('); return v ? +v : 1; };
+    const read = (bnk) => {
+      S.bnk = bnk; _applyFollow(); _apply3dRoll();
+      const mpp = 78271.51696 * Math.cos(S.lat * D2R) / Math.pow(2, _ml3d.getZoom());
+      const k = scaleOf(el.style.transform);
+      const r = between(el.style.transform, 'rotate(');
+      return { mpp, k, eff: mpp / k, rot: r ? r.replace('deg', '') : null,
+               tf: el.style.transform };
+    };
+    const a = read(0), b = read(30), c = read(-45);
+    const on = { sim: simModeOn, follow: followMode, has3d: !!_ml3d };
+    toggleSimMode(false);
+    return { a, b, c, on, after: el.style.transform };
+  })()`);
+  t.ok(Math.abs(rollZoom.b.eff / rollZoom.a.eff - 1) < 0.02,
+    `30° 기울여도 보이는 축척이 같다 (${rollZoom.a.eff.toFixed(2)} → ${rollZoom.b.eff.toFixed(2)} m/px)`);
+  t.ok(Math.abs(rollZoom.c.eff / rollZoom.a.eff - 1) < 0.02,
+    `45° 에서도 같다 (${rollZoom.c.eff.toFixed(2)} m/px — 종전에는 여기서 1.4배로 확대됐다)`);
+  t.ok(Math.abs(rollZoom.a.k - rollZoom.b.k) < 0.001 && rollZoom.a.k > 1,
+    `화면 배율은 뱅크와 상관없이 늘 같다 (${rollZoom.a.k.toFixed(3)})`);
+  t.eq(rollZoom.b.rot, '-30',
+    `기울임은 뱅크만큼만 돈다 (${JSON.stringify(rollZoom.on)} · ${rollZoom.b.tf})`);
+  t.eq(rollZoom.after, '', '모드를 끄면 되돌아온다');
 
   // ── 1인칭: 눈이 헬기 자리에 있다 ──
   // 뒤에서 따라가는 3인칭이면 헬기가 화면 안(아래쪽 1/4 즈음)에 보인다.
@@ -609,12 +700,17 @@ export async function run(page, t) {
     const mpp2 = 78271.51696 * Math.cos(S.lat * D2R) / Math.pow(2, _ml3d.getZoom());
     const eye2 = (H / 2 / _ml3dHalfFovTan()) * Math.cos(_ml3d.getPitch() * D2R) * mpp2;
     toggleSimMode(false);
-    return { H, W, acX: pAc.x, acY: pAc.y, ahead, brgToC,
+    const cover = _ml3dRollCover();
+    return { H, W, acX: pAc.x, acY: pAc.y, ahead, brgToC, cover,
+             visBottom: H / 2 + H / (2 * cover),
              eyeFt: eye / 0.3048, eyeFt2: eye2 / 0.3048,
              tanPitch: Math.tan(pr) };
   })()`);
-  t.ok(fpv.acY > fpv.H * 0.92,
-    `헬기는 화면 아래 끝에 있다 — 눈이 그 자리다 (y ${fpv.acY.toFixed(0)} / 높이 ${fpv.H})`);
+  // 화면은 기울일 자리를 만들려고 늘 같은 배율로 키워 두므로, '보이는 아래 끝' 은
+  // 캔버스 한가운데에서 아래로 (높이/2 ÷ 배율) 만큼 내려간 자리다.
+  t.ok(fpv.acY >= fpv.visBottom - 12,
+    `헬기는 보이는 화면 아래 끝에 있다 — 눈이 그 자리다 ` +
+    `(y ${fpv.acY.toFixed(0)} · 아래 끝 ${fpv.visBottom.toFixed(0)} / 캔버스 ${fpv.H})`);
   t.ok(Math.abs(fpv.acX - fpv.W / 2) < 8,
     `좌우로는 한가운데다 (x ${fpv.acX.toFixed(0)} / 폭 ${fpv.W})`);
   t.ok(Math.abs(fpv.brgToC) < 2,

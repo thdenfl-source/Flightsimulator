@@ -894,6 +894,9 @@ function _follow3d() {
       const mpp = eye / (H / 2 / halfFov * Math.cos(pr));
       // maplibre 는 512px 타일을 쓴다 — zoom 0 에서 78,271.5 m/px.
       const z2 = Math.log2(78271.51696 * Math.cos(S.lat * D2R) / mpp);
+      // 카메라는 고도계 높이에 그대로 둔다. 화면을 늘 같은 배율로 키워 둔 것은
+      // 기울일 자리를 만들기 위함일 뿐이라, 그만큼 시야각이 좁아질 뿐 눈높이는
+      // 변하지 않는다(여기서 zoom 을 건드리면 눈높이가 어긋난다).
       opt.zoom = Math.max(1, Math.min(22, z2));
       const aheadNm = (eye * Math.tan(pr)) / 1852;
       const c = destPoint(S.lat, S.lon, S.hdg, aheadNm);
@@ -919,18 +922,26 @@ function _ml3dHalfFovTan() {
   return Math.tan(fov / 2 * D2R);
 }
 const SIM_CAM_PIT_K = 1.2;    // 기수 1° 당 카메라 각도 변화
+// 돌리면 모서리가 비므로 화면을 그만큼 키워 덮는데, 그 배율을 뱅크에 따라
+// 바꾸면 기울일 때마다 지도가 확대·축소되어 보인다. 그래서 배율은 '최대 뱅크를
+// 덮을 만큼' 으로 늘 같게 두고, 그만큼 카메라를 멀리 둬서(zoom 보정) 땅의
+// 축척은 그대로 유지한다 — 기울여도 확대되지 않는다.
+const SIM_ROLL_MAX_DEG = 45;      // 사이클릭 최대 뱅크(14-simmode.js 와 같은 값)
+function _ml3dRollCover() {
+  const el = document.getElementById('map3d');
+  const w = (el && el.clientWidth) || 1, h = (el && el.clientHeight) || 1;
+  const a = SIM_ROLL_MAX_DEG * D2R, c = Math.cos(a), si = Math.sin(a);
+  return Math.max((w * c + h * si) / w, (w * si + h * c) / h);
+}
 function _apply3dRoll() {
   const el = document.getElementById('map3d');
   if (!el) return;
-  if (!simModeOn || Math.abs(S.bnk) < 0.2) {
+  if (!simModeOn) {
     if (el.style.transform) { el.style.transform = ''; el.style.transformOrigin = ''; }
     return;
   }
-  const w = el.clientWidth || 1, h = el.clientHeight || 1;
-  const a = Math.abs(S.bnk) * D2R, c = Math.abs(Math.cos(a)), si = Math.abs(Math.sin(a));
-  const k = Math.max((w * c + h * si) / w, (w * si + h * c) / h);
   el.style.transformOrigin = '50% 50%';
-  el.style.transform = `rotate(${(-S.bnk).toFixed(2)}deg) scale(${k.toFixed(3)})`;
+  el.style.transform = `rotate(${(-S.bnk).toFixed(2)}deg) scale(${_ml3dRollCover().toFixed(3)})`;
 }
 function _follow2d() {
   {
