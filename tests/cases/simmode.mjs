@@ -792,10 +792,9 @@ export async function run(page, t) {
     `기울임은 뱅크만큼만 돈다 (${JSON.stringify(rollZoom.on)} · ${rollZoom.b.tf})`);
   t.eq(rollZoom.after, '', '모드를 끄면 되돌아온다');
 
-  // ── 기수를 들면 위를 본다 ──
-  // 지도 엔진은 85° 위로는 기울지 못한다. 그래서 기준 각도를 낮춰 여유를 두고,
-  // 그마저 넘으면 '더 먼 곳' 을 보게 해서 시야가 계속 따라오게 했다.
-  // 종전에는 기수 6° 쯤에서 이미 끝에 닿아 더 들어도 그대로였다.
+  // ── 기수를 들면 하늘을 본다 ──
+  // 지도 엔진은 85° 위로 기울지 못한다. 그 위로는 시선을 앞으로 보내면 '전진'
+  // 으로 보이므로, 카메라는 85° 에 두고 지평선을 화면 아래로 내려 하늘을 편다.
   const lookUp = await page.evaluate(`(() => {
     (${SETUP.toString()})();
     toggleSimMode(false);
@@ -805,24 +804,32 @@ export async function run(page, t) {
     toggleSimMode(true);
     S.alt = 2000; S.bnk = 0; S.hdg = 90; _simGndFt = 0;
     const read = (pit) => {
-      S.pit = pit; _applyFollow();
+      S.pit = pit; _applyFollow(); _apply3dRoll();
       const c = _ml3d.getCenter();
-      return { cam: _ml3d.getPitch(),
-               ahead: distance(S.lat, S.lon, c.lat, c.lng) };   // NM
+      const el = document.getElementById('map3d');
+      return { cam: _ml3d.getPitch(), ahead: distance(S.lat, S.lon, c.lat, c.lng),
+               sky: _sky3dShift(), bg: el.parentElement.style.background };
     };
-    const lvl = read(0), up8 = read(8), up16 = read(16), up40 = read(40);
-    const dn = read(-20);
+    const lvl = read(0), up8 = read(8), up16 = read(16), up20 = read(20),
+          up30 = read(30), up40 = read(40), dn = read(-20);
     toggleSimMode(false);
-    return { lvl, up8, up16, up40, dn };
+    return { lvl, up8, up16, up20, up30, up40, dn };
   })()`);
   t.ok(lookUp.up8.cam > lookUp.lvl.cam + 6,
     `기수 8° 를 들면 그만큼 위를 본다 (${lookUp.lvl.cam.toFixed(0)}° → ${lookUp.up8.cam.toFixed(0)}°)`);
   t.ok(lookUp.up16.cam > lookUp.up8.cam + 5,
-    `16° 까지도 각도로 따라간다 (${lookUp.up16.cam.toFixed(0)}° — 종전에는 6° 에서 멈췄다)`);
-  t.ok(lookUp.up40.ahead > lookUp.up16.ahead * 1.5,
-    `더 들면 각도 대신 더 먼 곳을 본다 (${lookUp.up16.ahead.toFixed(1)} → ${lookUp.up40.ahead.toFixed(1)}NM)`);
-  t.ok(lookUp.dn.cam < lookUp.lvl.cam - 10,
-    `숙이면 아래를 본다 (${lookUp.dn.cam.toFixed(0)}°)`);
+    `16° 까지도 각도로 따라간다 (${lookUp.up16.cam.toFixed(0)}°)`);
+  t.ok(lookUp.up40.cam > 84 && lookUp.up40.cam <= 85.5,
+    `엔진 한계(85°)에서 멈추되 그 위로는 시선을 앞으로 보내지 않는다 (${lookUp.up40.cam.toFixed(1)}°)`);
+  t.ok(Math.abs(lookUp.up40.ahead - lookUp.up30.ahead) < 0.0005,
+    `한계 위에서는 시선이 앞으로 나가지 않는다 — '전진' 으로 보이지 않게 ` +
+    `(30° ${lookUp.up30.ahead.toFixed(4)} · 40° ${lookUp.up40.ahead.toFixed(4)} NM)`);
+  t.ok(lookUp.up20.sky < 1 && lookUp.up30.sky > 5 && lookUp.up40.sky > lookUp.up30.sky + 10,
+    `한계를 넘으면 지평선이 내려와 하늘이 넓어진다 (30° ${lookUp.up30.sky.toFixed(0)}px → 40° ${lookUp.up40.sky.toFixed(0)}px)`);
+  t.ok(/linear-gradient/.test(lookUp.up40.bg) && !/linear-gradient/.test(lookUp.lvl.bg),
+    '하늘색 바탕은 위를 볼 때만 깔린다');
+  t.ok(lookUp.dn.sky === 0 && lookUp.dn.cam < lookUp.lvl.cam - 10,
+    `숙이면 아래를 보고 하늘은 없다 (${lookUp.dn.cam.toFixed(0)}°)`);
 
   // ── 1인칭: 눈이 헬기 자리에 있다 ──
   // 뒤에서 따라가는 3인칭이면 헬기가 화면 안(아래쪽 1/4 즈음)에 보인다.

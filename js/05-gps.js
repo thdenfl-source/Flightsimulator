@@ -884,7 +884,6 @@ function _follow3d() {
       // 기수를 더 들면 각도 대신 '더 먼 곳' 을 보게 해서 시야가 계속 따라오게 한다.
       const want = SIM_CAM_PITCH + S.pit * SIM_CAM_PIT_K;
       const pitchDeg = Math.max(SIM_CAM_PIT_MIN, Math.min(SIM_CAM_PIT_MAX, want));
-      const over = Math.max(0, want - SIM_CAM_PIT_MAX);   // 엔진이 못 따라간 몫(°)
       opt.pitch = pitchDeg;
       // 눈높이 — 화면에 보이는 땅은 실제 표고의 MAP3D_EXAG 배로 부풀려져 있다.
       // 카메라는 '부풀린 지면 + 지면 위 높이(AGL)' 에 놓아야 땅에 파묻히지 않는다.
@@ -902,9 +901,9 @@ function _follow3d() {
       // 기울일 자리를 만들기 위함일 뿐이라, 그만큼 시야각이 좁아질 뿐 눈높이는
       // 변하지 않는다(여기서 zoom 을 건드리면 눈높이가 어긋난다).
       opt.zoom = Math.max(1, Math.min(22, z2));
-      // 못 따라간 각도만큼 시선을 앞으로 더 보낸다(최대 눈높이의 4배)
-      const extra = eye * Math.min(4, over / 6);
-      const aheadNm = (eye * Math.tan(pr) + extra) / 1852;
+      // 엔진 한계(85°) 위를 볼 때는 시선을 앞으로 보내지 않는다 — 그러면 '전진'
+      // 으로 보인다. 대신 아래의 _sky3dShift 가 지평선을 화면 아래로 내린다.
+      const aheadNm = (eye * Math.tan(pr)) / 1852;
       const c = destPoint(S.lat, S.lon, S.hdg, aheadNm);
       opt.center = [c[1], c[0]];
       opt.offset = [0, 0];
@@ -944,15 +943,42 @@ function _ml3dRollCover() {
   const a = SIM_ROLL_MAX_DEG * D2R, c = Math.cos(a), si = Math.sin(a);
   return Math.max((w * c + h * si) / w, (w * si + h * c) / h);
 }
+// 엔진 한계(85°) 위를 보려면 지평선이 화면 아래로 내려와야 한다. 카메라를 더
+// 들 수 없으니, 그만큼 지도 그림을 아래로 내리고 위에는 하늘을 깐다.
+// 반환: 지도 그림을 내릴 픽셀 수(0 이면 그대로).
+const SIM_SKY_MAX_DEG = 140;      // 가상 자세의 상한
+const SIM_SKY_BG = 'linear-gradient(#0d2a5c, #3d7fc4 72%, #a9d2f2)';
+function _sky3dShift() {
+  const el = document.getElementById('map3d');
+  if (!el || !simModeOn) return 0;
+  const H = el.clientHeight || 600;
+  const V = Math.max(SIM_CAM_PIT_MIN, Math.min(SIM_SKY_MAX_DEG, SIM_CAM_PITCH + S.pit * SIM_CAM_PIT_K));
+  const P = Math.max(SIM_CAM_PIT_MIN, Math.min(SIM_CAM_PIT_MAX, V));   // 실제로 그리는 각도
+  if (V <= P) return 0;
+  // 가상 각도 V 의 지평선은 화면 중심에서 (V−90°) 만큼 아래, 실제 P 의 지평선은 (P−90°)
+  const k = (H / 2) * (Math.tan((V - 90) * D2R) - Math.tan((P - 90) * D2R)) / _ml3dHalfFovTan();
+  return Math.max(0, Math.min(H * 0.6, k));
+}
+// 하늘색 바탕은 지도 뒤쪽(지도가 내려간 위쪽)에만 깐다
+function _sky3dBg(on) {
+  const el = document.getElementById('map3d');
+  const par = el && el.parentElement;
+  if (!par) return;
+  if (par.dataset.bg0 === undefined) par.dataset.bg0 = par.style.background || '';
+  par.style.background = on ? SIM_SKY_BG : par.dataset.bg0;
+}
 function _apply3dRoll() {
   const el = document.getElementById('map3d');
   if (!el) return;
   if (!simModeOn) {
     if (el.style.transform) { el.style.transform = ''; el.style.transformOrigin = ''; }
+    _sky3dBg(false);
     return;
   }
+  const sky = _sky3dShift();
   el.style.transformOrigin = '50% 50%';
-  el.style.transform = `rotate(${(-S.bnk).toFixed(2)}deg) scale(${_ml3dRollCover().toFixed(3)})`;
+  el.style.transform = `translateY(${sky.toFixed(1)}px) rotate(${(-S.bnk).toFixed(2)}deg) scale(${_ml3dRollCover().toFixed(3)})`;
+  _sky3dBg(sky > 0.5);
 }
 function _follow2d() {
   {
