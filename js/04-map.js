@@ -128,9 +128,6 @@ function toggleLayer() {
 // ══════════════════════════════════════════════════════
 let _ml3d = null;          // Maplibre GL map instance (lazy init)
 let _ml3dMarker = null;    // aircraft marker on 3D map
-// 3D 지도의 지형 과장비 — 화면에 보이는 땅은 실제 표고의 이 배다.
-// 1인칭 카메라를 땅 위에 놓으려면 같은 값을 써야 한다(05-gps.js).
-const MAP3D_EXAG = 1.5;
 let _view3dOn = false;
 // 3D 가 화면에 떠 있는가 — 2D 위에 겹쳐 있거나, 제 창(탭의 '3D')을 쓰고 있거나.
 // 창 배치는 07-sim.js 가 쥐고 있고 그쪽이 나중에 로드되므로 있을 때만 묻는다.
@@ -251,9 +248,7 @@ function _init3dMap() {
       zoom: 11,
       pitch: 55,
       bearing: 0,
-      // SIM 모드 1인칭은 기수를 들면 하늘을 봐야 하므로 90° 너머까지 연다
-      // (평소 3D 추종·기울기 버튼은 종전대로 85° 안에서 쓴다)
-      maxPitch: 180,
+      maxPitch: 85,
       attributionControl: false
     });
   } catch (e) {
@@ -270,7 +265,7 @@ function _init3dMap() {
   _ml3d.on('load', () => {
     _ml3dReady = true;
     // Terrain is best-effort — a DEM failure must not blank the satellite view
-    try { _ml3d.setTerrain({ source: 'terrain', exaggeration: MAP3D_EXAG }); }
+    try { _ml3d.setTerrain({ source: 'terrain', exaggeration: 1.5 }); }
     catch (e) { console.warn('[3D] terrain unavailable:', e); }
     try { _ml3d.setSky(SKY); } catch (e) { /* sky optional */ }
 
@@ -354,7 +349,7 @@ class DualScale3D {
     // 화면 하단(축척 위치) 줄의 m/px — 카메라 기하로 셈한다.
     // 종전에는 unproject() 로 땅 위 두 점을 집었는데, 지형을 켜면 unproject 가
     // GPU 에서 화면을 읽어 와야 해서(readPixels) 그릴 때마다 렌더링이 멈췄다.
-    // 카메라가 매 프레임 움직이는 추종·SIM 에서 3D 가 버벅거린 원인이 그것이다.
+    // 카메라가 매 프레임 움직이는 추종 중에 3D 가 버벅거린 원인이 그것이다.
     //   중심의 m/px = 78,271.5 × cos(위도) / 2^zoom   (512px 타일)
     //   아래쪽 줄은 원근으로 가까워진다: × cos(a)·cos(φ) / cos(φ − a)
     //     φ = 기울기, a = 그 줄이 중심선에서 아래로 벌어진 각
@@ -375,10 +370,6 @@ class DualScale3D {
     return { px: v * unitM / mpp, label: v + ' ' + unit };
   }
   _update() {
-    // 1인칭(SIM)은 지평선을 보는 그림이라 축척이 뜻이 없다 — 숨긴다
-    const hide = (typeof simModeOn !== 'undefined') && simModeOn;
-    if (this._div.style.display !== (hide ? 'none' : '')) this._div.style.display = hide ? 'none' : '';
-    if (hide) return;
     const MAXW = 120, mpp = this._mpp();
     if (!isFinite(mpp) || mpp <= 0) return;
     const maxM = MAXW * mpp;
@@ -391,13 +382,6 @@ class DualScale3D {
 
 function _update3dMarker() {
   if (!_ml3d || !_ml3dMarker || !_map3dShown()) return;
-  // 1인칭(SIM)에서는 눈이 곧 헬기 자리다 — 제 마커는 지도에서 아예 뗀다.
-  // 숨기기만 하면 maplibre 가 지형에 가렸는지 보려고 GPU 에서 화면을 읽어 와
-  // (readPixels) 매 프레임 렌더링이 멈칫한다.
-  const sim = (typeof simModeOn !== 'undefined') && simModeOn;
-  const onMap = !!_ml3dMarker.getElement().isConnected;
-  if (sim) { if (onMap) _ml3dMarker.remove(); return; }
-  if (!onMap) _ml3dMarker.addTo(_ml3d);
   _ml3dMarker.setLngLat([S.lon, S.lat]);
   // Rotate the inner wrapper (outer element's transform is owned by maplibre)
   // rotationAlignment:'viewport'(화면 기준)이므로 카메라 방위를 빼야

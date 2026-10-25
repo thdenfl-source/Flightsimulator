@@ -111,6 +111,46 @@ export async function run(page, t) {
   t.ok(Math.abs(slow.lat - 37.60) < 0.2 && Math.abs(slow.lon - 126.60) < 0.2,
     `타일을 받는 중에도 추종이 계속된다 (${slow.lat.toFixed(3)}, ${slow.lon.toFixed(3)})`);
 
+  // ── 3D 축척은 GPU 에서 화면을 읽어 오지 않는다(버벅거림) ──
+  // 종전에는 축척이 매 프레임 unproject() 로 땅 위 두 점을 집었다. 지형을 켜면
+  // unproject 가 readPixels 를 불러 GPU 가 그리기를 다 끝낼 때까지 기다리게 해서,
+  // 추종으로 카메라가 계속 움직이면 3D 가 버벅거렸다. 지금은 카메라 기하로 셈한다.
+  const scale = await page.evaluate(async () => {
+    const m = _ml3d, sc = window._ml3dScale;
+    let reads = 0, counting = false;
+    const hook = (P) => { if (!P) return null; const o = P.readPixels;
+      P.readPixels = function (...a) { if (counting) reads++; return o.apply(this, a); };
+      return () => { P.readPixels = o; }; };
+    const u1 = hook(window.WebGLRenderingContext && WebGLRenderingContext.prototype);
+    const u2 = hook(window.WebGL2RenderingContext && WebGL2RenderingContext.prototype);
+    // 항공기 마커의 '지형에 가렸나' 검사도 readPixels 를 쓰므로 축척 계산만 센다
+    for (let i = 0; i < 12; i++) {
+      m.jumpTo({ bearing: 10 * i, pitch: 30 + i * 3 });
+      counting = true; sc._update(); counting = false;
+    }
+    const stall = reads;
+    u1 && u1(); u2 && u2();
+    // 평평한 땅에서 땅 위 두 점을 집던 종전 값과 맞아야 한다
+    const byUnproject = () => {
+      const y = Math.max(1, m.getContainer().clientHeight - 60);
+      const p0 = m.unproject([20, y]), p1 = m.unproject([120, y]);
+      return distance(p0.lat, p0.lng, p1.lat, p1.lng) * 1852 / 100;
+    };
+    const ter = m.getTerrain(); m.setTerrain(null);
+    const out = { stall };
+    for (const pt of [0, 45, 70]) {
+      m.jumpTo({ center: [127, 37.5], zoom: 12, pitch: pt, bearing: 0 });
+      out['p' + pt] = { calc: sc._mpp(), ref: byUnproject() };
+    }
+    if (ter) m.setTerrain(ter);
+    return out;
+  });
+  t.eq(scale.stall, 0, `카메라를 움직여도 축척이 GPU 화면 읽기를 하지 않는다 (${scale.stall}회)`);
+  for (const k of ['p0', 'p45', 'p70']) {
+    const r = scale[k], err = Math.abs(r.calc / r.ref - 1);
+    t.ok(err < 0.06, `3D 축척(${k.slice(1)}°)이 실제 땅 위 거리와 맞는다 (${r.calc.toFixed(2)} · 실측 ${r.ref.toFixed(2)} m/px)`);
+  }
+
   await page.evaluate(async () => {
     if (_view3dOn) toggle3dMap();
     await new Promise(r => setTimeout(r, 100));

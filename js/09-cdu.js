@@ -994,8 +994,6 @@ function act(name, ...args) {
     // 있었다. IIFE로 감싸 밖으로 내보내는 이름을 calculatePerformance 하나로 줄인다.
     // (perfData·perfResults는 화면 렌더에서 읽고 쓰므로 바깥에 남긴다)
     let calculatePerformance;
-    // SIM 모드(14-simmode.js)가 쓰는 성능 접근자 — 아래 IIFE 안에서 채운다
-    let perfTqForVs, perfVsForTq, perfHoverTq, perfVy;
     (function () {
     // Vy Tables
     const vyTemps = [-32, -20, -10, 0, 10, 20, 30, 40];
@@ -1193,47 +1191,6 @@ function act(name, ...args) {
         } else {
             perfResults.vsTq = "0.0";
         }
-    };
-
-    // ── SIM 모드용: 성능표를 그대로 쓰는 토크 ↔ 상승률 변환 ──
-    // PERF 화면이 보여 주는 바로 그 표(상승·강하 토크 증분)를 비행 모델이 쓴다.
-    // 그래야 계기에 뜨는 기준 토크와 실제 오르내림이 어긋나지 않는다.
-    perfTqForVs = function (vsFpm) {
-        const wt = parseFloat(perfData.weight) || 16000;
-        const a = Math.abs(vsFpm);
-        if (!(a > 0)) return 0;
-        const d = interpolate2D(vsRates, vsWeights, vsFpm > 0 ? climbData : descentData, a, wt);
-        return vsFpm > 0 ? d : -d;
-    };
-    // 위의 역 — 남는 토크가 얼마면 몇 fpm 인가(표가 단조라 이분법으로 되짚는다)
-    perfVsForTq = function (dTq) {
-        if (!(Math.abs(dTq) > 0.01)) return 0;
-        let lo = 0, hi = Math.sign(dTq) * 3000;
-        for (let i = 0; i < 40; i++) {
-            const mid = (lo + hi) / 2;
-            if (Math.abs(perfTqForVs(mid)) < Math.abs(dTq)) lo = mid; else hi = mid;
-        }
-        return (lo + hi) / 2;
-    };
-    // 최대상승속도 Vy(kt) — 같은 토크로 가장 잘 오르는 속도
-    perfVy = function () {
-        calculatePerformance();
-        const v = parseFloat(perfResults.vy);
-        return Number.isFinite(v) ? v : null;
-    };
-    // 제자리 호버에 필요한 토크(%) — 지면효과 안(IGE)·밖(OGE)
-    // 매 프레임 불리므로(계기·비행 모델) 입력이 그대로면 셈을 다시 하지 않는다.
-    let _hovCache = null, _hovKey = '';
-    perfHoverTq = function () {
-        const key = perfData.alt + '/' + perfData.temp + '/' + perfData.weight;
-        if (_hovCache && key === _hovKey) return _hovCache;
-        calculatePerformance();
-        const oge = parseFloat(perfResults.oge), ige = parseFloat(perfResults.ige);
-        _hovKey = key;
-        _hovCache = { oge: Number.isFinite(oge) ? oge : null,
-                      ige: Number.isFinite(ige) ? ige : null,
-                      wt: parseFloat(perfData.weight) || 16000 };
-        return _hovCache;
     };
     })();
 
@@ -2891,15 +2848,6 @@ function act(name, ...args) {
       joyHidConnect().then(ok => { if (currentMode === 'JOYSTICK') switchMode('JOYSTICK'); });
     }
     function joyHidDrop() { joyHidDisconnect(); switchMode('JOYSTICK'); }
-    // 아날로그 축(SIM 모드 조종간) 배정
-    function joyAxPick(role) {
-      if (joyAxCapture === role) joyAxCancelCapture();
-      else joyAxBeginCapture(role);
-      switchMode('JOYSTICK');
-    }
-    function joyAxUnbind(role) { joyAxClear(role); switchMode('JOYSTICK'); }
-    function joyAxFlip(role) { joyAxInvert(role); switchMode('JOYSTICK'); }
-    function joyAxAbs(role) { joyAxToggleAbs(role); switchMode('JOYSTICK'); }
     function joyResetBinds() {
       joyBinds = {}; joySave(); joyCancelCapture(); switchMode('JOYSTICK');
     }
@@ -2951,37 +2899,6 @@ function act(name, ...args) {
                   `border:1px solid #5a2a2a;border-radius:3px;padding:3px 8px;cursor:pointer;">해제</div>` : '') +
           `</div>`);
       });
-      // ── SIM 모드 조종간(아날로그 축) ──
-      rows.push(`<div style="color:#556;font-size:9px;letter-spacing:1px;margin:10px 0 4px;">` +
-        `SIM 모드 조종간 (아날로그 축)</div>`);
-      JOY_AX_ROLES.forEach(r => {
-        const wait = (joyAxCapture === r.id);
-        const has = !!joyAxes[r.id];
-        const val = wait ? '그 축을 끝까지 밀었다 놓으십시오…' : joyAxLabel(r.id);
-        const vc  = wait ? '#ffcc44' : (has ? '#ffb74d' : '#4a5563');
-        rows.push(
-          `<div style="display:flex;align-items:center;gap:6px;padding:7px 8px;margin-bottom:3px;` +
-          `border:1px solid ${wait ? '#ffcc4488' : '#1e2630'};border-radius:5px;background:#0a1116;">` +
-          `<div data-act="joyAxPick" data-arg='["${r.id}"]' style="flex:1;cursor:pointer;">` +
-          `<div style="color:#cdd6df;font-size:11px;font-weight:bold;">${r.label}</div>` +
-          `<div style="color:${vc};font-size:9px;margin-top:1px;">${val}</div></div>` +
-          (has && r.id === 'coll' ? `<div data-act="joyAxAbs" data-arg='["${r.id}"]' style="flex:0 0 auto;` +
-                 `color:${joyAxes[r.id].abs ? '#00e5ff' : '#6a7784'};font-size:9px;` +
-                 `border:1px solid ${joyAxes[r.id].abs ? '#2a5a7a' : '#2a3a4a'};border-radius:3px;` +
-                 `padding:3px 8px;cursor:pointer;" title="스로틀처럼 세워 두는 레버면 켜십시오">레버식</div>` : '') +
-          (has ? `<div data-act="joyAxFlip" data-arg='["${r.id}"]' style="flex:0 0 auto;color:#ffb74d;font-size:9px;` +
-                 `border:1px solid #5a4420;border-radius:3px;padding:3px 8px;cursor:pointer;">반전</div>` +
-                 `<div data-act="joyAxUnbind" data-arg='["${r.id}"]' style="flex:0 0 auto;color:#ff8877;font-size:9px;` +
-                 `border:1px solid #5a2a2a;border-radius:3px;padding:3px 8px;cursor:pointer;">해제</div>` : '') +
-          `</div>`);
-      });
-      rows.push(`<div style="color:#4a5563;font-size:9px;margin:2px 2px 0;line-height:1.45;">` +
-        `PFD 의 <b>SIM</b> 버튼을 켜면 이 축으로 직접 조종합니다. 켜는 동안 AFCS` +
-        `(NAV·HDG·ALT·CRHT·GSPD)는 풀립니다.<br>` +
-        `스로틀처럼 <b>세워 두는 레버</b>를 컬렉티브로 쓰면 <b>레버식</b>을 켜십시오 — 레버 자리가 ` +
-        `그대로 토크(0…110%)가 됩니다. 가운데로 돌아오는 축이면 끄십시오(호버 토크 기준 ±45%).<br>` +
-        `<b>4방향 햇</b>을 트림 ▲▼◀▶ 에 배정해 두면 SIM 모드에서 <b>사이클릭 비퍼 트림</b>이 됩니다 — ` +
-        `좌우는 롤, 전후는 피치를 조금씩 옮겨 둡니다.</div>`);
       const foot = `<div data-act="joyResetBinds" style="text-align:right;margin:8px 0 4px;">` +
         `<span style="display:inline-block;color:#ff8877;font-size:9px;border:1px solid #5a2a2a;border-radius:3px;` +
         `padding:3px 9px;cursor:pointer;">전체 배정 해제</span></div>`;
@@ -3033,11 +2950,10 @@ function act(name, ...args) {
             `<br><span style="color:#4a5563;">#${m.index} ${m.id.slice(0, 28)}` +
             (m.mapping ? ` · mapping: ${m.mapping}` : ' · mapping: (없음)') + `</span>` + list;
         }
-        const cap = !!(joyCapture || joyAxCapture);
-        if (_joyCapWas && !cap) { clearInterval(_joyTick); _joyTick = null; renderContent(); }
-        _joyCapWas = cap;
+        if (_joyCapWas && !joyCapture) { clearInterval(_joyTick); _joyTick = null; renderContent(); }
+        _joyCapWas = !!joyCapture;
       }, 120);
-      _joyCapWas = !!(joyCapture || joyAxCapture);
+      _joyCapWas = !!joyCapture;
     }
     function renderSettingsScreen(container, footer, title) {
       title.innerText = 'Settings';
@@ -4106,10 +4022,6 @@ switchMode('HOME');
       joyUnbind,
       joyHidPick,
       joyHidDrop,
-      joyAxPick,
-      joyAxUnbind,
-      joyAxFlip,
-      joyAxAbs,
       joyResetBinds,
       addInput,
       addSelcalInput,
@@ -4207,11 +4119,6 @@ switchMode('HOME');
     window.tpMapHide         = tpMapHide;          // 지도 포인트 팝업(#cdu-wrap 밖)
     window.tpMapAddFpl       = tpMapAddFpl;
     window.tpMapDirect       = tpMapDirect;
-    // SIM 모드가 PERF 자료를 그대로 쓰도록 내보낸다(기준 토크·상승률 변환)
-    window.perfHoverTq       = (...a) => perfHoverTq(...a);
-    window.perfTqForVs       = (...a) => perfTqForVs(...a);
-    window.perfVsForTq       = (...a) => perfVsForTq(...a);
-    window.perfVy            = (...a) => perfVy(...a);
     // 상태 변수: 밖에서 '현재 값'을 읽으므로 접근자로 공개(스냅샷이면 갱신이 안 됨)
     Object.defineProperties(window, {
       currentMode:    { get: () => currentMode,    configurable: true },

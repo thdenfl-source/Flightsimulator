@@ -49,7 +49,6 @@ const S = {
   alt: 500,   // feet   (AFCS default 500 ft)
   pit: 0,     // pitch  — auto-derived from speed: (120−spd)×3/20
   bnk: 0,     // bank   — driven by HDG button; returns to 0 on release
-  tq: 60,     // torque(%) — SIM 모드의 컬렉티브 값. 남는 토크가 상승률이 된다
   crs: 360,
   brg: 0,     // BRG1: bearing to active (TO) WP
   xtk: 0,
@@ -135,61 +134,6 @@ function updateGsBtn() {
              : gsArmed ? 'G/S<span class="gs-sub">ARM</span>' : 'G/S';
   if (b.innerHTML !== want) b.innerHTML = want;
 }
-// SIM 모드(조종간 직접 조종) — 법칙은 14-simmode.js. 선언만 여기 둔다:
-// 시뮬 루프(07-sim.js)가 그 파일보다 먼저 실행될 수 있어 TDZ 를 피한다.
-let simModeOn = false;
-// SIM 모드의 옆방향 속도(kt · 오른쪽이 +). 저속에서 뱅크를 주면 선회 대신
-// 옆으로 미끄러지는 헬기 특성을 담는다(14-simmode.js 가 채운다).
-let simLat = 0;
-
-// ── 토크(TQ) ──
-// 헬기의 컬렉티브는 '상승률 레버' 가 아니라 '출력 레버' 다. 올린 만큼 토크가
-// 오르고, 그 토크가 지금 필요한 만큼보다 남으면 그 차이가 상승률이 된다.
-// 그래서 같은 레버 위치라도 뱅크를 주거나 속도가 바뀌면 오르내림이 달라진다.
-const TQ_HOVER   = 60;         // 무풍·수평·제자리에서 필요한 토크(%)
-const TQ_SPAN    = 45;         // 컬렉티브 끝까지 = ±45%
-const TQ_MAX     = 120;        // 계기 최대 눈금
-const TQ_LIMIT   = 100;        // 연속 사용 한계(넘으면 오버토크)
-const TQ_RATE    = 60;         // 토크가 따라가는 속도(%/s)
-const TQ_PER_FPM = 55;         // 남는 토크 1% 당 상승률(fpm)
-const TQ_BANK    = 22;         // 뱅크로 더 드는 토크(1/cosφ−1 에 곱한다)
-const TQ_TLIFT   = 9;          // 전진 양력으로 덜 드는 토크(최대 %)
-const TLIFT_KT   = 55;         // 그 효과가 다 차는 속도(kt)
-
-// ── 제자리 호버에 필요한 토크 ──
-// CDU 의 PERF 화면이 고도·온도·중량으로 뽑아 주는 바로 그 값을 쓴다.
-// 지면 가까이에서는 지면효과(IGE)로 덜 들고, 떠오르면 OGE 로 수렴한다.
-// 전이 높이는 로터 지름 즈음(≈53ft)으로 둔다 — 그 위는 지면효과가 없다.
-const IGE_FULL_FT = 10, IGE_NONE_FT = 53;
-function hoverTqRef() {
-  let p = null;
-  try { p = (typeof perfHoverTq === 'function') ? perfHoverTq() : null; } catch (e) { _swallow(e); }
-  if (!p || !Number.isFinite(p.oge)) return TQ_HOVER;          // PERF 를 못 읽으면 종전 값
-  const ige = Number.isFinite(p.ige) ? p.ige : p.oge;
-  let agl = 1000;
-  try { agl = S.alt - ((typeof simTerrainFt === 'function') ? simTerrainFt() : 0); }
-  catch (e) { agl = S.alt; }
-  const k = Math.max(0, Math.min(1, (agl - IGE_FULL_FT) / (IGE_NONE_FT - IGE_FULL_FT)));
-  return ige + (p.oge - ige) * k;                              // IGE → OGE
-}
-
-// 지금 '수평 비행' 에 필요한 토크(%)
-function tqRequired() {
-  const bank = Math.min(60, Math.abs(S.bnk));
-  const lift = (1 / Math.cos(bank * D2R) - 1) * TQ_BANK;      // 선회 중 더 필요
-  const tl   = Math.min(1, Math.abs(S.spd) / TLIFT_KT) * TQ_TLIFT;     // 전진 양력
-  return hoverTqRef() + lift - tl;
-}
-// 계기에 보일 토크. SIM 모드에서는 실제 레버 값, 평소에는 지금 비행 상태에서
-// 들 법한 값을 거꾸로 셈해 보여 준다(계기가 비어 보이지 않게).
-function tqShown() {
-  if (simModeOn) return S.tq;
-  let add = (S.vs || 0) / TQ_PER_FPM;
-  try { if (typeof perfTqForVs === 'function') add = perfTqForVs(S.vs || 0); } catch (e) { _swallow(e); }
-  return Math.max(0, Math.min(TQ_MAX, tqRequired() + add));
-}
-function tqOver() { return tqShown() > TQ_LIMIT; }
-
 function toggleGs() {
   if (gsArmed || gsOn) { gsArmed = false; gsOn = false; }
   else {
@@ -476,20 +420,6 @@ let _trimGuard = null;
 function startTrimHold(dir) {
   stopTrimHold();                       // 중복 시작 방지(이전 홀드가 남아 있으면 정리)
   _trimGuard = setTimeout(stopTrimHold, 20000);   // 런어웨이 방지(최대 20초)
-  // SIM 모드에서 '둘러보기' 버튼을 누르고 있으면 햇은 트림이 아니라 시선이다
-  if (simModeOn && typeof simLookHeld !== 'undefined' && simLookHeld) {
-    simLookDir = dir;
-    return;
-  }
-  // SIM 모드에서는 사이클릭의 '비퍼 트림' 그대로다 — 좌우는 롤, 전후는 피치를
-  // 1° 씩 옮겨 둔다(조종간을 가운데 두어도 그 자세로 날게 된다).
-  if (simModeOn) {
-    simTrimNudge(dir);
-    trimHoldTimer = setTimeout(() => {
-      trimHoldInt = setInterval(() => simTrimNudge(dir), 100);
-    }, 300);
-    return;
-  }
   if (gspdOn) {
     gspdTrim(dir);
     trimHoldTimer = setTimeout(() => {
@@ -510,7 +440,6 @@ function startTrimHold(dir) {
   }
 }
 function stopTrimHold() {
-  try { if (typeof simLookDir !== 'undefined') simLookDir = null; } catch (e) { _swallow(e); }
   if (trimHoldTimer) { clearTimeout(trimHoldTimer); trimHoldTimer = null; }
   if (trimHoldInt)   { clearInterval(trimHoldInt);  trimHoldInt   = null; }
   if (_trimGuard)    { clearTimeout(_trimGuard);    _trimGuard    = null; }
@@ -1304,21 +1233,9 @@ function courseCrsHere(L) {
 }
 let rnp     = 1.0;     // RNP value for FMS CDI scale
 
-// ── 자세 ↔ 속도 ──
-// 고도를 지키며 나는 헬기는 자세 하나가 곧 속도다(실제 기재 기준):
-//   기수 올림 쪽 — 수평(0°) 120kt · 4° 80kt · 7.5° 45kt → 1° 당 10kt
-//   기수 내림 쪽 — −10° 140kt → 1° 당 2kt (빨라질수록 항력이 급히 늘어 덜 는다)
-// SIM 모드의 조종(14-simmode.js)과 AFCS 의 자동 자세가 같은 식을 쓴다.
-const PITCH_KT_UP    = 10;        // 기수를 들 때 1° 당 줄어드는 속도
-const PITCH_KT_DN    = 2;         // 기수를 숙일 때 1° 당 늘어나는 속도
-const PITCH_LEVEL_KT = 120;       // 수평 자세의 속도
+// pitch is always derived from speed — helper
 function pitchFromSpd(spd) {
-  const d = PITCH_LEVEL_KT - spd;
-  return Math.max(-60, Math.min(60, d >= 0 ? d / PITCH_KT_UP : d / PITCH_KT_DN));
-}
-// 그 자세로 고도를 지키며 날면 얼마에서 멎는가(위 식의 역)
-function spdFromPitch(pit) {
-  return PITCH_LEVEL_KT - pit * (pit >= 0 ? PITCH_KT_UP : PITCH_KT_DN);
+  return Math.max(-20, Math.min(20, (120 - spd) * (3 / 20)));
 }
 
 // ══════════════════════════════════════════════════════
