@@ -322,6 +322,7 @@ function _init3dMap() {
   // 2D와 동일한 km+NM 이중 축척 위젯(.vfr-scale) — maplibre 컨트롤 컨테이너를
   // 거치지 않고 지도 컨테이너에 직접 절대배치(left:10px)해 2D와 픽셀 단위로 정렬
   const _sc3d = new DualScale3D();
+  window._ml3dScale = _sc3d;          // 검사에서 축척 계산을 직접 확인한다
   const _sc3dEl = _sc3d.onAdd(_ml3d);
   _sc3dEl.style.cssText += ';position:absolute;left:10px;bottom:62px;z-index:850;margin:0;';
   _ml3d.getContainer().appendChild(_sc3dEl);
@@ -350,12 +351,21 @@ class DualScale3D {
   }
   onRemove() { if (this._map) this._map.off('move', this._upd); if (this._div) this._div.remove(); }
   _mpp() {
-    // 화면 하단(축척 위치) 부근에서 가로 100px에 해당하는 지상거리로 m/px 산출
-    // → 3D 틸트/원근에서도 실제 축척과 근사
-    const c = this._map.getContainer();
-    const y = Math.max(1, c.clientHeight - 60);
-    const p0 = this._map.unproject([20, y]), p1 = this._map.unproject([120, y]);
-    return (distance(p0.lat, p0.lng, p1.lat, p1.lng) * 1852) / 100;   // m/px
+    // 화면 하단(축척 위치) 줄의 m/px — 카메라 기하로 셈한다.
+    // 종전에는 unproject() 로 땅 위 두 점을 집었는데, 지형을 켜면 unproject 가
+    // GPU 에서 화면을 읽어 와야 해서(readPixels) 그릴 때마다 렌더링이 멈췄다.
+    // 카메라가 매 프레임 움직이는 추종·SIM 에서 3D 가 버벅거린 원인이 그것이다.
+    //   중심의 m/px = 78,271.5 × cos(위도) / 2^zoom   (512px 타일)
+    //   아래쪽 줄은 원근으로 가까워진다: × cos(a)·cos(φ) / cos(φ − a)
+    //     φ = 기울기, a = 그 줄이 중심선에서 아래로 벌어진 각
+    const m = this._map, H = m.getContainer().clientHeight || 1;
+    const mppC = 78271.51696 * Math.cos(m.getCenter().lat * D2R) / Math.pow(2, m.getZoom());
+    let fov = 36.87;
+    try { if (Number.isFinite(m.transform.fov)) fov = m.transform.fov; } catch (e) { _swallow(e); }
+    const f = (H / 2) / Math.tan(fov / 2 * D2R);
+    const a = Math.atan(Math.max(0, H / 2 - 60) / f);
+    const phi = Math.min(85, Math.max(0, m.getPitch())) * D2R;
+    return mppC * Math.cos(a) * Math.cos(phi) / Math.cos(phi - a);
   }
   _nice(maxM, unitM, unit, mpp) {
     const steps = [0.01,0.02,0.05,0.1,0.2,0.5,1,2,5,10,20,50,100,200,500,1000];
@@ -365,6 +375,10 @@ class DualScale3D {
     return { px: v * unitM / mpp, label: v + ' ' + unit };
   }
   _update() {
+    // 1인칭(SIM)은 지평선을 보는 그림이라 축척이 뜻이 없다 — 숨긴다
+    const hide = (typeof simModeOn !== 'undefined') && simModeOn;
+    if (this._div.style.display !== (hide ? 'none' : '')) this._div.style.display = hide ? 'none' : '';
+    if (hide) return;
     const MAXW = 120, mpp = this._mpp();
     if (!isFinite(mpp) || mpp <= 0) return;
     const maxM = MAXW * mpp;
@@ -377,10 +391,13 @@ class DualScale3D {
 
 function _update3dMarker() {
   if (!_ml3d || !_ml3dMarker || !_map3dShown()) return;
-  // 1인칭(SIM)에서는 눈이 곧 헬기 자리다 — 제 마커는 보이지 않아야 한다
-  const mEl = _ml3dMarker.getElement();
-  const hide = (typeof simModeOn !== 'undefined') && simModeOn;
-  if (mEl && mEl.style.visibility !== (hide ? 'hidden' : '')) mEl.style.visibility = hide ? 'hidden' : '';
+  // 1인칭(SIM)에서는 눈이 곧 헬기 자리다 — 제 마커는 지도에서 아예 뗀다.
+  // 숨기기만 하면 maplibre 가 지형에 가렸는지 보려고 GPU 에서 화면을 읽어 와
+  // (readPixels) 매 프레임 렌더링이 멈칫한다.
+  const sim = (typeof simModeOn !== 'undefined') && simModeOn;
+  const onMap = !!_ml3dMarker.getElement().isConnected;
+  if (sim) { if (onMap) _ml3dMarker.remove(); return; }
+  if (!onMap) _ml3dMarker.addTo(_ml3d);
   _ml3dMarker.setLngLat([S.lon, S.lat]);
   // Rotate the inner wrapper (outer element's transform is owned by maplibre)
   // rotationAlignment:'viewport'(화면 기준)이므로 카메라 방위를 빼야
