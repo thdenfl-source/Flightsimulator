@@ -29,9 +29,6 @@ const JOY_ACTIONS = [
     run: () => toggleHoverPosition() },
   { id: 'hovpage', grp: '운항', label: 'HOVER PAGE (호버 화면)', kind: 'press',
     run: () => toggleHoverPage() },
-  // SIM 1인칭에서 누르고 있는 동안 4방향 햇이 트림 대신 '시선' 이 된다
-  { id: 'lookMod', grp: '운항', label: '시야 둘러보기 (누르는 동안 햇 = 시선)', kind: 'hold',
-    on: () => simLookHold(true), off: () => simLookHold(false) },
 
   { id: 'trimF',  grp: '트림',   label: '트림 ▲ (전/증속)', kind: 'hold',
     on: () => startTrimHold('F'), off: () => stopTrimHold() },
@@ -86,8 +83,8 @@ const JOY_HAT_MAP  = [['N'], ['N', 'E'], ['E'], ['E', 'S'], ['S'], ['S', 'W'], [
 // ── 햇으로 볼지 말지 ──
 // 8방향 햇은 '정해진 값만' 낸다(±1/7 · ±3/7 · ±5/7 · ±1, 쉬는 자리는 1 밖).
 // 반면 아날로그 축은 그 사이를 연속으로 지나간다. 그래서 '격자값이 한 번
-// 나왔다' 만으로는 갈라낼 수 없다 — 사이클릭을 천천히 움직이면 1/7 을 그냥
-// 스쳐 지나가고, 그러면 조종간이 햇으로 잘못 잡혀 아예 듣지 않게 된다.
+// 나왔다' 만으로는 갈라낼 수 없다 — 스틱을 천천히 움직이면 1/7 을 그냥
+// 스쳐 지나가고, 그러면 그 축이 햇으로 잘못 잡혀 ± 배정이 듣지 않게 된다.
 // 그래서 격자에서 벗어난 값이 한 번이라도 나오면 그 축은 영영 햇이 아니다.
 const JOY_HAT_ODD = [1 / 7, 3 / 7, 5 / 7];
 const JOY_LATTICE = [0, 1 / 7, 3 / 7, 5 / 7, 1];   // 0 은 '쉬는 자리' 로 허용
@@ -134,20 +131,6 @@ let joyBinds = {};
 try { joyBinds = JSON.parse(localStorage.getItem('joyBinds') || 'null') || {}; } catch (e) { joyBinds = {}; }
 let joyBindsSaved = false;
 try { joyBindsSaved = localStorage.getItem('joyBinds') !== null; } catch (e) { _swallow(e); }
-// '시야 둘러보기' 는 B0 이 기본이다. 한 번만 잡아 두고(그 뒤로 사용자가 바꾸면
-// 그 값이 이긴다), 이미 배정해 쓰던 장치라면 지금 바로 B0 에 옮겨 둔다.
-// 처음 쓰는 장치는 연결 후 첫 폴링에서 B0 이 비어 있을 때 잡는다(표준 패드의
-// 기본 배치를 먼저 깔아야 하므로).
-const _joyHadSaved = joyBindsSaved;   // 이번에 켜기 전부터 배정을 쓰던 장치인가
-let joyLookDefaultDone = false;
-try { joyLookDefaultDone = localStorage.getItem('joyLookB0') !== null; } catch (e) { _swallow(e); }
-function joyLookDefault(force) {
-  if (joyLookDefaultDone) return;
-  const has = Object.keys(joyBinds).some(c => joyBinds[c] === 'lookMod');
-  if (!has && (force || !joyBinds.b0)) { joyBinds.b0 = 'lookMod'; joySave(); }
-  joyLookDefaultDone = true;
-  try { localStorage.setItem('joyLookB0', '1'); } catch (e) { _swallow(e); }
-}
 
 let joyPadName = '';          // 연결된 장치 이름(설정 화면 표시용)
 let joyActiveIdx = -1;        // 지금 쓰고 있는 패드 번호(여러 대가 올라올 때)
@@ -158,12 +141,6 @@ const _joyNeutral = {};       // padIndex → 축 중립값 배열
 const _joyHat = {};           // padIndex → { 축번호: true } 햇으로 판정된 축
 const _joyNoHat = {};         // padIndex → { 축번호: true } 햇이 아님이 드러난 축
 const _joyOdd = {};           // padIndex → { 축번호: {7배값: true} } 본 격자값들
-// SIM 조종간으로 배정해 둔 축인가 — 그런 축은 햇으로 보지 않는다
-function _joyAxUsed(i) {
-  try {
-    return Object.keys(joyAxes).some(k => joyAxes[k] && joyAxes[k].i === i);
-  } catch (e) { return false; }
-}
 let _joyRaf = null;
 
 function joySave() {
@@ -302,116 +279,6 @@ document.addEventListener('keyup', e => {
   _joyEdge(code, false, (typeof performance !== 'undefined') ? performance.now() : 0);
 });
 
-// ══ 아날로그 축 배정(SIM 모드 조종간) ══
-// 버튼과 달리 '얼마나 밀었는가' 가 그대로 쓰인다. 기종마다 축 번호가 달라
-// 설정 화면에서 해당 축을 한 번 움직여 잡는다. 중립은 연결 시점 값을 쓴다.
-const JOY_AX_ROLES = [
-  { id: 'roll',  label: '사이클릭 좌우 (롤)' },
-  { id: 'pitch', label: '사이클릭 전후 (피치)' },
-  { id: 'yaw',   label: '페달 (요)' },
-  { id: 'coll',  label: '컬렉티브 (상승·강하)' },
-];
-const JOY_AX_DEAD = 0.08;          // 중립 근처 떨림 무시
-let joyAxes = {};
-try { joyAxes = JSON.parse(localStorage.getItem('joyAxes') || 'null') || {}; } catch (e) { joyAxes = {}; }
-let joyAxSaved = false;
-try { joyAxSaved = localStorage.getItem('joyAxes') !== null; } catch (e) { _swallow(e); }
-// 흔한 조종간 배치 — 축 0 좌우(롤) · 1 전후(피치) · 2 스로틀(컬렉티브) · 5 비틀기(요).
-// 아직 아무것도 배정하지 않은 장치에만 한 번 넣어 준다(바꾸면 그 값이 이긴다).
-// 피치와 컬렉티브는 반전이 기본이다 — 조종간을 앞으로 밀면 축 값이 늘어나는
-// 기종이 흔한데, 그건 '기수 내림' 이 아니라 반대로 읽힌다. 스로틀도 아래로
-// 내릴수록 값이 커지는 배선이 많다.
-const JOY_AX_DEFAULT = { roll: 0, pitch: 1, coll: 2, yaw: 5 };
-const JOY_AX_DEF_INV = { pitch: true, coll: true };
-function joyAxApplyDefault(p, neu) {
-  if (joyAxSaved || Object.keys(joyAxes).length) return;
-  const n = (p.axes || []).length;
-  if (n <= Math.max.apply(null, Object.values(JOY_AX_DEFAULT))) return;
-  Object.keys(JOY_AX_DEFAULT).forEach(k => {
-    const i = JOY_AX_DEFAULT[k];
-    // 스로틀은 보통 아래에 세워 둔 채 꽂는다 — 그러면 '레버식' 으로 본다
-    const rest = Number.isFinite(neu[i]) ? neu[i] : 0;
-    joyAxes[k] = { i, inv: !!JOY_AX_DEF_INV[k],
-                   abs: (k === 'coll') && Math.abs(rest) > 0.5 };
-  });
-  joyAxSave();
-}
-let joyAxCapture = null;           // 축 배정 대기 중인 역할 id
-
-function joyAxSave() {
-  try { localStorage.setItem('joyAxes', JSON.stringify(joyAxes)); joyAxSaved = true; }
-  catch (e) { _swallow(e); }
-}
-function joyAxBeginCapture(role) { joyAxCapture = role; }
-function joyAxCancelCapture() { joyAxCapture = null; }
-function joyAxClear(role) { delete joyAxes[role]; joyAxSave(); }
-function joyAxInvert(role) {
-  const a = joyAxes[role];
-  if (!a) return;
-  a.inv = !a.inv; joyAxSave();
-}
-function joyAxLabel(role) {
-  const a = joyAxes[role];
-  if (!a) return '없음';
-  return `축 ${a.i}${a.inv ? ' · 반전' : ''}${a.abs ? ' · 레버식' : ''}`;
-}
-// 지금 쓰고 있는 패드에서 그 역할의 값(-1…1)을 읽는다. 배정이 없으면 0.
-function joyAxVal(role) {
-  const a = joyAxes[role];
-  if (!a || !joyOn) return 0;
-  const pads = joyPads();
-  if (!pads.length) return 0;
-  const p = pads.find(q => q.index === joyActiveIdx) || pads[0];
-  const v = (p.axes || [])[a.i];
-  if (!Number.isFinite(v)) return 0;
-  const neu = (_joyNeutral[p.index] || [])[a.i];
-  let d = v - (Number.isFinite(neu) ? neu : 0);
-  if (a.inv) d = -d;
-  if (Math.abs(d) < JOY_AX_DEAD) return 0;
-  // 중립 밖의 나머지 구간을 -1…1 로 편다(문턱에서 값이 튀지 않게)
-  const k = (Math.abs(d) - JOY_AX_DEAD) / (1 - JOY_AX_DEAD);
-  return Math.max(-1, Math.min(1, Math.sign(d) * k));
-}
-// 레버식(절대값) 축 — 중립을 빼지 않고 자리 그대로 -1…1 로 읽는다.
-// 스로틀·컬렉티브처럼 민 자리에 서 있는 레버에 쓴다.
-function joyAxRaw(role) {
-  const a = joyAxes[role];
-  if (!a || !joyOn) return -1;
-  const pads = joyPads();
-  if (!pads.length) return -1;
-  const p = pads.find(q => q.index === joyActiveIdx) || pads[0];
-  const v = (p.axes || [])[a.i];
-  if (!Number.isFinite(v)) return -1;
-  return Math.max(-1, Math.min(1, a.inv ? -v : v));
-}
-function joyAxToggleAbs(role) {
-  const a = joyAxes[role];
-  if (!a) return;
-  a.abs = !a.abs; joyAxSave();
-}
-
-// 폴링 중 축 배정 — 가장 크게 움직인 축을 그 역할로 잡는다
-function _joyAxCaptureStep(p, neu) {
-  let best = -1, bestD = 0.45;      // 이만큼은 움직여야 '고른 것' 으로 본다
-  (p.axes || []).forEach((v, i) => {
-    if (!Number.isFinite(v)) return;
-    if ((_joyHat[p.index] || {})[i]) return;        // 햇은 조종간이 아니다
-    const d = Math.abs(v - (Number.isFinite(neu[i]) ? neu[i] : 0));
-    if (d > bestD) { bestD = d; best = i; }
-  });
-  if (best < 0) return;
-  const v = p.axes[best] - (Number.isFinite(neu[best]) ? neu[best] : 0);
-  // 민 방향이 '+' 가 되도록 맞춰 둔다(밀었더니 반대로 가는 일이 없게)
-  const inv = v < 0;
-  // 쉬는 자리가 가운데가 아니면 '세워 두는 레버'(스로틀·컬렉티브)로 본다 —
-  // 그런 축은 자리 자체가 값이므로 중립을 빼지 않고 그대로 쓴다.
-  const rest = Number.isFinite(neu[best]) ? neu[best] : 0;
-  const abs = (joyAxCapture === 'coll') && Math.abs(rest) > 0.5;
-  joyAxes[joyAxCapture] = { i: best, inv, abs };
-  joyAxSave();
-  joyAxCapture = null;
-}
-
 // 한 프레임분 폴링. 테스트에서 직접 부를 수 있게 시각을 인자로 받는다.
 function joyPoll(now) {
   // 눌려 있는 키의 연속 동작(repeat)도 여기서 돈다 — 장치가 없어도 듣는다
@@ -436,15 +303,12 @@ function joyPoll(now) {
   const p = sel;
   const neu = _joyNeutral[p.index];
 
-  if (joyAxCapture) _joyAxCaptureStep(p, neu);
   (p.buttons || []).forEach((b, i) => {
     const v = (typeof b === 'object') ? (b.value != null ? b.value : (b.pressed ? 1 : 0)) : b;
     const code = 'b' + i;
     const on = _joyDown[code] ? (v > JOY_OFF) : (v >= JOY_ON);
     _joyEdge(code, on, now);
   });
-  joyAxApplyDefault(p, neu);
-  if (!joyLookDefaultDone) joyLookDefault(_joyHadSaved);
   const hat = _joyHat[p.index] || (_joyHat[p.index] = {});
   const no  = _joyNoHat[p.index] || (_joyNoHat[p.index] = {});
   const odd = _joyOdd[p.index] || (_joyOdd[p.index] = {});
@@ -459,11 +323,8 @@ function joyPoll(now) {
     //   ② 격자(0·±1/7·±3/7·±5/7·±1) 밖의 값이 한 번이라도 오면 영영 아니다.
     //   ③ 격자만 지키면서 ±1/7·±3/7·±5/7 이 나오면 햇이다(한 번이면 충분하다 —
     //      ②가 아날로그 축을 이미 걸러 냈으므로).
-    // SIM 조종간으로 배정한 축은 아예 보지 않는다 — 그 축은 사람이 이미
-    // "이건 조종간" 이라고 말한 것이다.
     const wasHat = hat[i];
-    if (_joyAxUsed(i)) { no[i] = true; }
-    else if (!hat[i] && !no[i]) {
+    if (!hat[i] && !no[i]) {
       if (joyIsHatValue(v)) hat[i] = true;                   // ① 1 밖 — 확정
       else if (joyLatticeHit(v) > JOY_LAT_TOL) no[i] = true; // ② 격자 밖 — 영영 아님
       else if (joyIsOddValue(v)) {                           // ③ 햇에서만 나오는 값

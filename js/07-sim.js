@@ -289,15 +289,10 @@ function simStep(ts){
     for(let _sub=0;_sub<_n;_sub++){
     const dt=_tot/_n;
     if(dt>0&&dt<0.5){
-      // SIM 모드: 조종간 입력을 먼저 자세·속도에 반영한다(아래 운동식은 그대로 쓴다)
-      try { simFly(dt); } catch(e) { _swallow(e); }
       // smooth bank toward target — GSPD 중에는 ADI 자세 변화 없음(수평 유지)
       const bt = gspdOn ? 0 : bankTarget;
       const bankDiff=bt-S.bnk;
-      if (simModeOn) {
-        // 조종간이 이미 자세를 정했다 — 여기서 다시 손대지 않는다
-        _rollRate = 0;
-      } else if ((hdgSelOn || navApOn) && !gspdOn) {
+      if ((hdgSelOn || navApOn) && !gspdOn) {
         // AFCS 선회: 롤 각가속도 제한(사다리꼴 프로파일).
         // 목표 롤율은 남은 뱅크차로 감속거리를 계산해 정하므로 오버슛 없이 수렴한다.
         const want = Math.sign(bankDiff) *
@@ -364,11 +359,8 @@ function simStep(ts){
           // helicopter only starts drifting once it is no longer in hover.
           const wt = normA(windDir + 180) * D2R;
           const wEff = effectiveWindSpd();
-          // SIM 모드의 옆미끄럼(저속에서 뱅크를 주면 옆으로 간다)도 함께 더한다
-          const lat = simModeOn ? simLat : 0;
-          const ch = Math.cos(S.hdg * D2R), sh = Math.sin(S.hdg * D2R);
-          gsN = S.spd * ch - lat * sh + wEff * Math.cos(wt);
-          gsE = S.spd * sh + lat * ch + wEff * Math.sin(wt);
+          gsN = S.spd * Math.cos(S.hdg * D2R) + wEff * Math.cos(wt);
+          gsE = S.spd * Math.sin(S.hdg * D2R) + wEff * Math.sin(wt);
         }
         const sc = 1852/3600 * dt / 111320;
         S.lat += gsN * sc;
@@ -376,7 +368,7 @@ function simStep(ts){
         // Altitude update — hold modes override manual VS while engaged
         // G/S 를 잡고 있으면 고도는 강하선이 정한다(ALT·CRHT 보다 앞선다).
         try { gsCaptureCheck(); } catch(e) { _swallow(e); }
-        const _gs = (gsOn && !simModeOn) ? gsDeviation() : null;
+        const _gs = gsOn ? gsDeviation() : null;
         if (_gs) {
           // 강하선 고도로 수렴시킨다. 기본 강하율은 지상속도와 강하각으로 정해지고
           // (3°·120kt ≈ 640fpm), 벗어난 만큼만 더 얹어 부드럽게 되돌아온다.
@@ -388,7 +380,7 @@ function simStep(ts){
           const step = vs / 60 * dt;
           S.alt = Math.max(0, Math.min(45000, S.alt + step));
           S.vs = vs;
-        } else if (altHoldOn && !simModeOn) {
+        } else if (altHoldOn) {
           // ALT hold: converge S.alt → selAlt at the pilot-set selVS rate.
           // Sign of climb/descent is determined automatically from the
           // current altitude relative to the target.
@@ -400,7 +392,7 @@ function simStep(ts){
             S.alt = Math.max(0, Math.min(45000, S.alt + step));
             S.vs  = Math.sign(diff) * rate;
           }
-        } else if (crhtOn && !simModeOn) {
+        } else if (crhtOn) {
           // CRHT hold: always 500 fpm — rate is NOT user-configurable.
           const diff = selCrht - S.alt;
           if (Math.abs(diff) < 0.5) { S.alt = selCrht; S.vs = 0; }
@@ -411,25 +403,12 @@ function simStep(ts){
           }
         } else if (S.vs !== 0) {
           S.alt = Math.max(0, Math.min(45000, S.alt + S.vs / 60 * dt));
-          // SIM 모드에서는 지면이 바닥이다(해수면이 아니라)
-          if (simModeOn) {
-            try {
-              const g = simGroundFt();     // 발밑 높이를 '아는 때' 만 바닥으로 삼는다
-              if (S.alt < g) { S.alt = g; S.vs = 0; }
-            } catch (e) { _swallow(e); }
-          }
         }
 
         // Coordinated turn: bank angle drives heading change (g·tan(bank)/V).
         if (Math.abs(S.bnk) > 0.5 && !gspdOn && !gspdCoasting) {
-          const V_ms = Math.max(10, Math.abs(S.spd)) * 0.5144;
-          let turnRate = 9.81 * Math.tan(S.bnk * D2R) / V_ms / D2R;  // °/s
-          // SIM 모드의 저속에서는 뱅크가 선회가 아니라 옆걸음으로 쓰인다
-          // 저속일수록 선회 몫이 급히 줄어든다(제곱) — 그 자리에서 도는 것이 아니라
-          // 옆으로 미끄러지는 것이 헬기의 저속 거동이다.
-          if (simModeOn) {
-            try { const f = simTurnFrac(); turnRate *= f * f; } catch(e) { _swallow(e); }
-          }
+          const V_ms = Math.max(10, S.spd) * 0.5144;
+          const turnRate = 9.81 * Math.tan(S.bnk * D2R) / V_ms / D2R;  // °/s
           S.hdg = normA(S.hdg + turnRate * dt);
         }
 
@@ -441,7 +420,7 @@ function simStep(ts){
         // base motion model, but the readout reflects only what is being
         // commanded, not transient wind effects.
         if (hoverPageOn && !gspdOn && !gspdCoasting) {
-          gspdActLat = simModeOn ? simLat : 0;
+          gspdActLat = 0;
           gspdActFwd = S.spd;
         }
 
