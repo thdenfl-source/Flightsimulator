@@ -182,7 +182,9 @@ function simEnterView() {
 }
 function simExitView() {
   const v = _simView; _simView = null;
-  try { _apply3dRoll(); } catch (e) { _swallow(e); }    // 기울여 둔 화면을 되돌린다
+  try { _apply3dRoll(); } catch (e) { _swallow(e); }
+  try { _ml3dSimCameraOff(); } catch (e) { _swallow(e); }   // 1인칭 카메라(롤·90° 너머)를 되돌린다
+  try { _update3dMarker(); } catch (e) { _swallow(e); }     // 제 마커를 다시 보인다
   if (!v) return;
   if (v.side) { try { selectPanel(v.side, v.was, true); } catch (e) { _swallow(e); } }
   if (v.overlay) { try { if (_view3dOn) toggle3dMap(); } catch (e) { _swallow(e); } }

@@ -12,7 +12,7 @@
 |---|---|---|
 | leaflet.js · leaflet.css · images/ | 1.9.4 | 2D 지도 |
 | leaflet-velocity.min.js · .css | 2.1.0 | 바람 입자 레이어 |
-| maplibre-gl.js · .css | 4.7.1 | 3D 지형 |
+| maplibre-gl.js · .css | 5.24.0 | 3D 지형 (카메라 180° · 롤 · 하늘) |
 | jszip.min.js | 3.10.1 | AIRAC ZIP 가져오기 |
 | pdf.min.js · pdf.worker.min.js | 3.11.174 | 차트 PDF 뷰어 |
 
