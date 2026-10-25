@@ -735,10 +735,9 @@ export async function run(page, t) {
   t.eq(view.before, 'map', '켜기 전에는 2D 지도였다');
   t.ok(view.high.zoom < view.low.zoom - 1,
     `고도가 높아지면 시야가 멀어진다 (1,000ft z${view.low.zoom.toFixed(1)} → 9,000ft z${view.high.zoom.toFixed(1)})`);
-  t.ok(view.down.pitch < view.low.pitch - 5,
-    `기수를 숙이면 카메라가 더 아래를 본다 (${view.low.pitch.toFixed(0)}° → ${view.down.pitch.toFixed(0)}°)`);
-  t.ok(view.up.pitch > view.low.pitch + 5,
-    `기수를 들면 더 멀리 본다 (${view.up.pitch.toFixed(0)}°)`);
+  // 기수를 숙이거나 들어도 카메라 앵글은 그대로다(자세는 지평선으로 보여 준다)
+  t.ok(Math.abs(view.down.pitch - view.low.pitch) < 0.5 && Math.abs(view.up.pitch - view.low.pitch) < 0.5,
+    `기수를 숙이고 들어도 카메라 앵글은 그대로다 (${view.low.pitch.toFixed(0)}° · ${view.down.pitch.toFixed(0)}° · ${view.up.pitch.toFixed(0)}°)`);
   t.eq(view.turn.bearing, 250, `기수를 돌리면 시야도 돈다 (${view.turn.bearing}°)`);
   t.ok(/rotate\(30/.test(view.rolled.tf),
     `좌로 기울이면 화면이 반대로 돈다 (${view.rolled.tf})`);
@@ -792,9 +791,9 @@ export async function run(page, t) {
     `기울임은 뱅크만큼만 돈다 (${JSON.stringify(rollZoom.on)} · ${rollZoom.b.tf})`);
   t.eq(rollZoom.after, '', '모드를 끄면 되돌아온다');
 
-  // ── 기수를 들면 하늘을 본다 ──
-  // 지도 엔진은 85° 위로 기울지 못한다. 그 위로는 시선을 앞으로 보내면 '전진'
-  // 으로 보이므로, 카메라는 85° 에 두고 지평선을 화면 아래로 내려 하늘을 편다.
+  // ── 자세가 바뀌어도 3D 화면의 앵글은 수평 자세 그대로다 ──
+  // 기수를 30° 들거나 숙여도 카메라는 기울지 않는다. 자세는 지평선을 화면에서
+  // 위아래로 옮겨 보여 준다(위로 들면 하늘, 숙이면 지면이 더 보인다).
   const lookUp = await page.evaluate(`(() => {
     (${SETUP.toString()})();
     toggleSimMode(false);
@@ -808,28 +807,31 @@ export async function run(page, t) {
       const c = _ml3d.getCenter();
       const el = document.getElementById('map3d');
       return { cam: _ml3d.getPitch(), ahead: distance(S.lat, S.lon, c.lat, c.lng),
-               sky: _sky3dShift(), bg: el.parentElement.style.background };
+               sky: _sky3dShift(), bg: el.parentElement.style.background,
+               tf: el.style.transform };
     };
-    const lvl = read(0), up8 = read(8), up16 = read(16), up20 = read(20),
-          up30 = read(30), up40 = read(40), dn = read(-20);
+    const lvl = read(0), up8 = read(8), up30 = read(30), up40 = read(40),
+          dn30 = read(-30), dn10 = read(-10);
     toggleSimMode(false);
-    return { lvl, up8, up16, up20, up30, up40, dn };
+    return { lvl, up8, up30, up40, dn30, dn10 };
   })()`);
-  t.ok(lookUp.up8.cam > lookUp.lvl.cam + 6,
-    `기수 8° 를 들면 그만큼 위를 본다 (${lookUp.lvl.cam.toFixed(0)}° → ${lookUp.up8.cam.toFixed(0)}°)`);
-  t.ok(lookUp.up16.cam > lookUp.up8.cam + 5,
-    `16° 까지도 각도로 따라간다 (${lookUp.up16.cam.toFixed(0)}°)`);
-  t.ok(lookUp.up40.cam > 84 && lookUp.up40.cam <= 85.5,
-    `엔진 한계(85°)에서 멈추되 그 위로는 시선을 앞으로 보내지 않는다 (${lookUp.up40.cam.toFixed(1)}°)`);
-  t.ok(Math.abs(lookUp.up40.ahead - lookUp.up30.ahead) < 0.0005,
-    `한계 위에서는 시선이 앞으로 나가지 않는다 — '전진' 으로 보이지 않게 ` +
-    `(30° ${lookUp.up30.ahead.toFixed(4)} · 40° ${lookUp.up40.ahead.toFixed(4)} NM)`);
-  t.ok(lookUp.up20.sky < 1 && lookUp.up30.sky > 5 && lookUp.up40.sky > lookUp.up30.sky + 10,
-    `한계를 넘으면 지평선이 내려와 하늘이 넓어진다 (30° ${lookUp.up30.sky.toFixed(0)}px → 40° ${lookUp.up40.sky.toFixed(0)}px)`);
-  t.ok(/linear-gradient/.test(lookUp.up40.bg) && !/linear-gradient/.test(lookUp.lvl.bg),
-    '하늘색 바탕은 위를 볼 때만 깔린다');
-  t.ok(lookUp.dn.sky === 0 && lookUp.dn.cam < lookUp.lvl.cam - 10,
-    `숙이면 아래를 보고 하늘은 없다 (${lookUp.dn.cam.toFixed(0)}°)`);
+  t.ok(Math.abs(lookUp.lvl.cam - 65) < 0.5,
+    `수평 자세의 앵글은 65° 다 (${lookUp.lvl.cam.toFixed(1)}°)`);
+  t.ok(Math.abs(lookUp.up30.cam - lookUp.lvl.cam) < 0.5
+    && Math.abs(lookUp.dn30.cam - lookUp.lvl.cam) < 0.5,
+    `기수 30° 여도 카메라는 수평 자세의 앵글 그대로다 (위 ${lookUp.up30.cam.toFixed(1)}° · 아래 ${lookUp.dn30.cam.toFixed(1)}°)`);
+  t.ok(Math.abs(lookUp.up30.ahead - lookUp.lvl.ahead) < 0.0005
+    && Math.abs(lookUp.dn30.ahead - lookUp.lvl.ahead) < 0.0005,
+    `시선이 가리키는 곳도 그대로다 — 앞으로 나가지 않는다`);
+  t.ok(lookUp.up8.sky > 5 && lookUp.up30.sky > lookUp.up8.sky + 10,
+    `위로 들면 지평선이 내려와 하늘이 넓어진다 (8° ${lookUp.up8.sky.toFixed(0)}px → 30° ${lookUp.up30.sky.toFixed(0)}px)`);
+  t.ok(lookUp.dn30.sky < -10 && lookUp.dn10.sky < 0,
+    `숙이면 지평선이 올라가 지면이 더 보인다 (${lookUp.dn30.sky.toFixed(0)}px)`);
+  t.ok(Math.abs(lookUp.lvl.sky) < 1, '수평 자세에서는 지평선이 제자리다');
+  // 브라우저는 색을 rgb 로 적으므로 바탕 문자열 자체가 아니라 '깔렸는가' 를 본다
+  t.ok(/linear-gradient/.test(lookUp.up30.bg) && /linear-gradient/.test(lookUp.dn30.bg)
+       && lookUp.up30.bg !== lookUp.dn30.bg && !/linear-gradient/.test(lookUp.lvl.bg),
+    `위로 들면 하늘, 숙이면 지면 바탕이 깔린다 (위 ${lookUp.up30.bg.slice(0, 24)}… · 아래 ${lookUp.dn30.bg.slice(0, 24)}…)`);
 
   // ── 1인칭: 눈이 헬기 자리에 있다 ──
   // 뒤에서 따라가는 3인칭이면 헬기가 화면 안(아래쪽 1/4 즈음)에 보인다.
