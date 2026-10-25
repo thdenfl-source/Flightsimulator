@@ -904,7 +904,8 @@ const SIM_EYE_MIN_M = 8;      // 땅에 있어도 이 정도 눈높이는 둔다
 //   · 방위   = 기수(방향지시계)
 //   · 기울기 = 90° + 기수 자세(자세계) — 수평 비행이면 지평선이 화면 한가운데,
 //              기수를 들면 90° 를 넘어 하늘을, 숙이면 땅을 본다
-//   · 롤     = 뱅크(자세계) — maplibre 의 롤은 반대 방향이라 부호를 바꾼다
+//   · 롤     = 뱅크(자세계) — 오른쪽으로 기울이면 지평선의 오른쪽이 올라간다
+//              (PFD 의 ADI 와 같은 쪽). maplibre 의 롤 + 가 바로 그 방향이다.
 function _ml3dSimCamera() {
   if (!_ml3d || typeof _ml3d.calculateCameraOptionsFromCameraLngLatAltRotation !== 'function') return;
   // 카메라가 헬기 자리에 있어야 하므로 화면 중심을 지면에 묶지 않는다
@@ -926,7 +927,7 @@ function _ml3dSimCamera() {
   const camAlt = drawnM + aglM;
   const pitch = Math.max(0, Math.min(180, 90 + S.pit));
   const o = _ml3d.calculateCameraOptionsFromCameraLngLatAltRotation(
-    [S.lon, S.lat], camAlt, S.hdg, pitch, -S.bnk);
+    [S.lon, S.lat], camAlt, S.hdg, pitch, S.bnk);
   _ml3d.jumpTo(o);
 }
 // SIM 모드에서 나올 때 — 지면 묶기와 롤을 되돌린다

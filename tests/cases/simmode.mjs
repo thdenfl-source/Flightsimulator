@@ -705,8 +705,8 @@ export async function run(page, t) {
   t.ok(both.moved > 0.05, `3D 카메라도 함께 날아간다 (${both.moved.toFixed(2)}NM)`);
   t.ok(both.offAc < 2, `카메라는 늘 헬기 자리에 있다 (${both.offAc.toFixed(2)}m)`);
   t.eq(both.c1.bearing, both.hdg, `방위는 기수를 따른다 (${both.c1.bearing}° · 기수 ${both.hdg}°)`);
-  t.ok(Math.abs(both.c1.roll + both.bnk) < 0.5,
-    `카메라가 뱅크만큼 기운다 (롤 ${both.c1.roll.toFixed(1)}° · 뱅크 ${both.bnk.toFixed(1)}°)`);
+  t.ok(Math.abs(both.c1.roll - both.bnk) < 0.5,
+    `카메라가 뱅크만큼, 같은 쪽으로 기운다 (롤 ${both.c1.roll.toFixed(1)}° · 뱅크 ${both.bnk.toFixed(1)}°)`);
   t.eq(both.c1.tf, '', '화면을 돌리는 흉내는 쓰지 않는다(카메라가 직접 기운다)');
 
   // ── 바깥 그림이 계기를 따른다 ──
@@ -744,8 +744,8 @@ export async function run(page, t) {
   t.ok(Math.abs(view.up.pitch - 100) < 0.5,
     `기수를 10° 들면 지평선 위(하늘)를 본다 (${view.up.pitch.toFixed(1)}° — 종전 엔진은 85° 가 끝이었다)`);
   t.eq(view.turn.bearing, 250, `기수를 돌리면 시야도 돈다 (${view.turn.bearing}°)`);
-  t.ok(Math.abs(view.rolled.roll - 30) < 0.5,
-    `좌로 30° 기울이면 카메라도 그만큼 기운다 (롤 ${view.rolled.roll.toFixed(1)}°)`);
+  t.ok(Math.abs(view.rolled.roll + 30) < 0.5,
+    `좌로 30° 기울이면 카메라도 왼쪽으로 30° 기운다 (롤 ${view.rolled.roll.toFixed(1)}°)`);
   t.ok(Math.abs(view.level.roll) < 0.5, '수평으로 돌아오면 기울임도 풀린다');
   t.eq(view.after.sel, 'map', '끄면 지도 창이 2D 로 되돌아온다');
   t.ok(Math.abs(view.after.roll) < 0.5 && view.after.pitch <= 85.5,
@@ -777,11 +777,25 @@ export async function run(page, t) {
     };
     const lvl = read(0), up10 = read(10), up20 = read(20), up40 = read(40),
           dn20 = read(-20), bank45 = read(0, 45);
-    const marker = _ml3dMarker ? _ml3dMarker.getElement().style.visibility : 'none';
+    // 정면 먼 곳의 왼쪽·오른쪽 점 — 오른쪽 뱅크면 오른쪽이 화면에서 위로(작은 y) 간다
+    const side = (bnk) => {
+      S.pit = 0; S.bnk = bnk; _applyFollow();
+      const far = destPoint(S.lat, S.lon, S.hdg, 40);
+      const L = destPoint(far[0], far[1], S.hdg - 90, 6), R = destPoint(far[0], far[1], S.hdg + 90, 6);
+      return { L: _ml3d.project([L[1], L[0]]).y, R: _ml3d.project([R[1], R[0]]).y };
+    };
+    const right30 = side(30), left30 = side(-30);
+    // PFD 의 ADI 가 같은 뱅크에서 어느 쪽으로 도는지(캔버스 회전각의 부호)
+    let adi = null;
+    const proto = CanvasRenderingContext2D.prototype, orig = proto.rotate;
+    S.bnk = 30;
+    proto.rotate = function (a) { if (adi === null) adi = a; return orig.call(this, a); };
+    drawPFD(); proto.rotate = orig;
+    const marker = _ml3dMarker ? _ml3dMarker.getElement().isConnected : null;
     toggleSimMode(false);
     _update3dMarker();
-    const markerAfter = _ml3dMarker ? _ml3dMarker.getElement().style.visibility : 'none';
-    return { H, lvl, up10, up20, up40, dn20, bank45, marker, markerAfter };
+    const markerAfter = _ml3dMarker ? _ml3dMarker.getElement().isConnected : null;
+    return { H, lvl, up10, up20, up40, dn20, bank45, marker, markerAfter, right30, left30, adi };
   })()`);
   const fr = (r) => (r.horizonY / lookUp.H).toFixed(2);
   t.ok(Math.abs(lookUp.lvl.horizonY - lookUp.H / 2) < lookUp.H * 0.08,
@@ -798,8 +812,73 @@ export async function run(page, t) {
     `(최대 ${Math.max(...[lookUp.lvl, lookUp.up10, lookUp.up20, lookUp.up40, lookUp.dn20].map(r => r.offAc)).toFixed(2)}m)`);
   t.ok(Math.abs(lookUp.bank45.c.alt - lookUp.lvl.c.alt) < 0.5 && lookUp.bank45.c.tf === '',
     `기울여도 확대되지 않는다 — 카메라 높이 그대로, 화면 배율 없음`);
-  t.eq(lookUp.marker, 'hidden', '1인칭에서는 제 마커가 보이지 않는다(눈이 곧 헬기 자리)');
-  t.eq(lookUp.markerAfter, '', '끄면 마커가 다시 보인다');
+  t.ok(lookUp.right30.R < lookUp.right30.L - 20,
+    `오른쪽 뱅크면 지평선의 오른쪽이 올라간다 (왼쪽 y ${lookUp.right30.L.toFixed(0)} · 오른쪽 ${lookUp.right30.R.toFixed(0)})`);
+  t.ok(lookUp.left30.L < lookUp.left30.R - 20,
+    `왼쪽 뱅크면 왼쪽이 올라간다 (왼쪽 y ${lookUp.left30.L.toFixed(0)} · 오른쪽 ${lookUp.left30.R.toFixed(0)})`);
+  // ADI 는 캔버스를 rotate(−뱅크) 로 돌린다 — 음수(반시계)면 지평선 오른쪽이 올라간다
+  t.ok(lookUp.adi < 0,
+    `PFD 의 ADI 도 같은 쪽으로 기운다 (회전 ${lookUp.adi === null ? '없음' : lookUp.adi.toFixed(2)}rad · 오른쪽 뱅크 30°)`);
+  t.eq(lookUp.marker, false, '1인칭에서는 제 마커를 지도에서 뗀다(눈이 곧 헬기 자리)');
+  t.eq(lookUp.markerAfter, true, '끄면 마커가 다시 붙는다');
+
+  // ── 카메라가 움직여도 GPU 에서 화면을 읽어 오지 않는다(버벅거림) ──
+  // readPixels 는 GPU 가 그리기를 다 끝낼 때까지 기다리게 한다. 종전에는 3D 축척이
+  // 매 프레임 unproject()(지형을 켜면 readPixels)를 불렀고, 숨긴 마커도 지형에
+  // 가렸는지 보려고 readPixels 를 불렀다 — 그래서 SIM 에서 3D 가 버벅거렸다.
+  const stall = await page.evaluate(`(async () => {
+    (${SETUP.toString()})();
+    const wait = ms => new Promise(r => setTimeout(r, ms));
+    toggleSimMode(false);
+    toggleTriple(true);
+    selectPanel('left', 'pfd', true); selectPanel('mid', 'map', true);
+    selectPanel('right', 'cdu', true);
+    toggleSimMode(true);
+    await wait(400);
+    S.running = false;
+    let reads = 0;
+    const hook = (P) => { if (!P) return null; const o = P.readPixels;
+      P.readPixels = function (...a) { reads++; return o.apply(this, a); }; return () => { P.readPixels = o; }; };
+    const u1 = hook(window.WebGLRenderingContext && WebGLRenderingContext.prototype);
+    const u2 = hook(window.WebGL2RenderingContext && WebGL2RenderingContext.prototype);
+    const t0 = performance.now();
+    for (let i = 0; i < 12; i++) { S.hdg = 90 + i; S.bnk = (i % 3) * 10; S.pit = (i % 4) * 3; updateAcOnMap(); }
+    const per = (performance.now() - t0) / 12;
+    await wait(400);                         // 마커 가림 검사는 잠시 뒤에 돈다
+    const sim = reads;
+    toggleSimMode(false);
+    u1 && u1(); u2 && u2();
+    return { sim, per };
+  })()`);
+  t.eq(stall.sim, 0, `SIM 에서 카메라를 움직여도 GPU 화면 읽기가 없다 (${stall.sim}회 — 종전에는 매 프레임)`);
+
+  // 3D 축척은 카메라 기하로 셈한다 — 땅 위 두 점을 집던 종전 값과 맞아야 한다
+  const scale = await page.evaluate(`(async () => {
+    (${SETUP.toString()})();
+    const wait = ms => new Promise(r => setTimeout(r, ms));
+    toggleSimMode(false);
+    if (!_view3dOn) toggle3dMap();
+    await wait(300);
+    const m = _ml3d, sc = window._ml3dScale;
+    const byUnproject = () => {
+      const y = Math.max(1, m.getContainer().clientHeight - 60);
+      const p0 = m.unproject([20, y]), p1 = m.unproject([120, y]);
+      return distance(p0.lat, p0.lng, p1.lat, p1.lng) * 1852 / 100;
+    };
+    const ter = m.getTerrain(); m.setTerrain(null);   // 평평한 땅에서 비교
+    const out = {};
+    for (const pt of [0, 45, 70]) {
+      m.jumpTo({ center: [127, 37.5], zoom: 12, pitch: pt, bearing: 0, roll: 0 });
+      out['p' + pt] = { calc: sc._mpp(), ref: byUnproject() };
+    }
+    m.setTerrain(ter);
+    if (_view3dOn) toggle3dMap();
+    return out;
+  })()`);
+  for (const k of ['p0', 'p45', 'p70']) {
+    const r = scale[k], err = Math.abs(r.calc / r.ref - 1);
+    t.ok(err < 0.06, `3D 축척(${k.slice(1)}°)이 실제 땅 위 거리와 맞는다 (${r.calc.toFixed(2)} · 실측 ${r.ref.toFixed(2)} m/px)`);
+  }
 
   // ── 땅 위에서는 고도계만큼, 앉아 있으면 눈높이만큼 떠 있다 ──
   // 지면 위 높이(AGL)는 비행 모델의 땅에서 재고, 카메라는 '화면에 그려진 땅' 위에
