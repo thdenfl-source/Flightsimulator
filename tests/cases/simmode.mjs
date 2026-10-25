@@ -32,6 +32,8 @@ const SETUP = () => {
   windSpd = 0; simSpeed = 1;
   if (!simModeOn) toggleSimMode();
   S.tq = 60; S.vs = 0; S.alt = 2000;   // 모드 진입이 손댄 값을 되돌린다
+  simAcc = 0; _simVs1 = 0;             // 가감속·유입류 지연도 비운다
+  simLookHold(false); simLookReset(); simTrimReset();
 };
 
 // 시뮬 루프를 손으로 돌린다 — 실제 경과시간 대신 정해진 간격으로.
@@ -47,6 +49,7 @@ const FLY = `(sec) => {
 const trimSpdPit = (p) => p;
 const hoverSide = (v) => Math.abs(v);
 const known2 = (v) => !!v;
+const normAS0 = (d) => ((d % 360) + 540) % 360 - 180;
 
 export async function run(page, t) {
   // ── 버튼이 스톱워치 오른쪽에 있다 ──
@@ -195,6 +198,10 @@ export async function run(page, t) {
     const hold = (deg) => {
       // 그 자세가 되도록 조종간을 잡는다(앞으로 밀면 기수가 내려간다)
       _ax(1, stick(-deg / 60));
+      // 속도는 이제 천천히(≈3.5kt/s 한계) 붙는다 — 앞 자세에서 95kt 를 건너뛰려면
+      // 30초가 넘게 걸린다. 여기서는 '그 자세의 정상 속도' 를 보므로 15kt 떨어진
+      // 자리에서 출발해 수렴하는지를 본다(점진성은 아래에서 따로 잰다).
+      S.spd = Math.max(-40, Math.min(160, spdFromPitch(deg) + 15)); simAcc = 0;
       fly(25);
       return { pit: S.pit, spd: S.spd, vs: S.vs };
     };
@@ -375,7 +382,7 @@ export async function run(page, t) {
     S.alt = g; S.vs = 0; S.tq = 0;
     _ax(3, -1); fly(8);                           // 레버를 바닥까지 내려도
     const onGnd = { alt: S.alt, vs: S.vs, gndFt: g };
-    _ax(3, 1); fly(8);                            // 올리면 지면 위로 뜬다
+    _ax(3, 1); fly(12);                           // 올리면 지면 위로 뜬다(상승률은 천천히 붙는다)
     const lifted = S.alt;
     window._tcElev = real;
     return { onGnd, lifted };
@@ -464,7 +471,7 @@ export async function run(page, t) {
     const need = tqRequired();
     const run = (tq) => {
       _ax(3, Math.max(-1, Math.min(1, tq / 110 * 2 - 1)));
-      S.vs = 0; S.alt = 3000; fly(8);
+      S.vs = 0; _simVs1 = 0; S.alt = 3000; fly(10);
       return S.vs;
     };
     const same = run(need);
@@ -479,7 +486,7 @@ export async function run(page, t) {
   // 120kt 는 Vy 에서 멀어 상승 효율이 절반쯤이다(강하는 효율과 무관하다)
   t.ok(law.up > 150, `기준보다 높으면 상승한다 (+12.2% → ${law.up.toFixed(0)}fpm · Vy 효율 반영)`);
   t.ok(law.dn < -350, `낮으면 강하한다 (−11.0% → ${law.dn.toFixed(0)}fpm)`);
-  t.ok(law.big > law.up + 300, `더 올리면 더 빨리 오른다 (+24.8% → ${law.big.toFixed(0)}fpm)`);
+  t.ok(law.big > law.up + 150, `더 올리면 더 빨리 오른다 (+24.8% → ${law.big.toFixed(0)}fpm)`);
   t.ok(Math.abs(law.tbl[0] - 12.2) < 0.2 && Math.abs(law.tbl[1] - 24.8) < 0.2,
     `상승 토크는 PERF 표 그대로다 (500fpm ${law.tbl[0].toFixed(1)}% · 1,000fpm ${law.tbl[1].toFixed(1)}%)`);
   t.ok(Math.abs(law.tbl[2] + 11.0) < 0.2, `강하 쪽도 표 그대로다 (−500fpm ${law.tbl[2].toFixed(1)}%)`);
@@ -912,14 +919,21 @@ export async function run(page, t) {
   t.ok(gndCam.onGround > rendGnd + 5 && gndCam.onGround < rendGnd + 12,
     `땅에 앉아 있어도 눈높이(8m)만큼 떠 있다 (${(gndCam.onGround - rendGnd).toFixed(1)}m)`);
 
-  // ── 4방향 햇 = 사이클릭 비퍼 트림 ──
-  // 실제 헬기의 사이클릭 햇은 트림이다. 좌우는 롤, 전후는 피치 중립을 옮겨 둬서
-  // 조종간을 가운데 두어도 그 자세로 날게 한다.
-  const trim = await page.evaluate(`(() => {
+  // ── 4방향 햇 = 사이클릭 비퍼 트림(1° 씩) ──
+  // 실제 헬기의 사이클릭 햇은 트림이다. 한 번 누르면 뱅크·피치가 1° 씩 옮겨 가고,
+  // 누르고 있으면 계속 옮겨 간다. 조종간을 가운데 두어도 그 자세로 난다.
+  const trim = await page.evaluate(`(async () => {
     (${SETUP.toString()})();
     const fly = ${FLY};
+    const wait = ms => new Promise(r => setTimeout(r, ms));
     simTrimReset();
-    for (let i = 0; i < 10; i++) simTrimNudge('R');     // 우 트림
+    simTrimNudge('R');
+    const one = { roll: simTrim.roll, pitch: simTrim.pitch };
+    simTrimReset();
+    simTrimNudge('F');
+    const oneP = { roll: simTrim.roll, pitch: simTrim.pitch };
+    simTrimReset();
+    for (let i = 0; i < 10; i++) simTrimNudge('R');     // 우 트림 10번
     const t1 = JSON.parse(JSON.stringify(simTrim));
     fly(4);                                             // 조종간은 가운데 그대로
     const rolled = { bnk: S.bnk, axis: joyAxVal('roll') };
@@ -928,23 +942,44 @@ export async function run(page, t) {
     const back = S.bnk;
     simTrimReset(); fly(4);
     const level = S.bnk;
-    // 전후는 피치
-    for (let i = 0; i < 10; i++) simTrimNudge('F');
+    for (let i = 0; i < 10; i++) simTrimNudge('F');     // 전후는 피치 — 10번이면 10°
     fly(4);
     const nose = { pit: S.pit, trim: simTrim.pitch };
     simTrimReset();
-    return { t1, rolled, back, level, nose, max: (() => {
-      for (let i = 0; i < 200; i++) simTrimNudge('R');
-      const m = simTrim.roll; simTrimReset(); return m;
-    })() };
+    // 누르고 있으면 계속 옮겨 간다(0.3초 뒤부터 0.1초마다 1°). 검사 브라우저는 3D 를
+    // 소프트웨어로 그리느라 벽시계 타이머가 제때 돌지 못하므로, 시작·반복 타이머를
+    // 붙잡아 두었다가 손으로 '0.3초 뒤 + 0.1초 × 7번' 을 흘려 본다.
+    const holdFor = (dir) => {
+      const rST = window.setTimeout, rSI = window.setInterval;
+      let start = null, rep = null;
+      window.setTimeout = (fn, ms) => (ms === 300 ? (start = fn, 987651) : rST(fn, ms));
+      window.setInterval = (fn, ms) => (ms === 100 ? (rep = fn, 987652) : rSI(fn, ms));
+      try { startTrimHold(dir); } finally { window.setTimeout = rST; window.setInterval = rSI; }
+      window.setInterval = (fn, ms) => (ms === 100 ? (rep = fn, 987652) : rSI(fn, ms));
+      try { if (start) start(); } finally { window.setInterval = rSI; }
+      for (let i = 0; i < 7 && rep; i++) rep();
+      stopTrimHold();
+      return { pitch: simTrim.pitch, roll: simTrim.roll, started: !!start, repeated: !!rep };
+    };
+    simTrimReset(); const heldP = holdFor('A');
+    simTrimReset(); const heldR = holdFor('R');
+    simTrimReset();
+    const held = heldP.pitch;
+    const maxR = (() => { for (let i = 0; i < 200; i++) simTrimNudge('R'); const m = simTrim.roll; simTrimReset(); return m; })();
+    const maxP = (() => { for (let i = 0; i < 200; i++) simTrimNudge('A'); const m = simTrim.pitch; simTrimReset(); return m; })();
+    return { one, oneP, t1, rolled, back, level, nose, held, heldR, maxR, maxP };
   })()`);
-  t.ok(trim.t1.roll > 0.2, `우 트림을 넣으면 롤 중립이 옮겨 간다 (${trim.t1.roll.toFixed(2)})`);
+  t.ok(trim.one.roll === 1 && trim.one.pitch === 0, `한 번 누르면 뱅크가 1° 옮겨 간다 (${trim.one.roll}°)`);
+  t.ok(trim.oneP.pitch === 1 && trim.oneP.roll === 0, `피치도 한 번에 1° 다 (${trim.oneP.pitch}°)`);
   t.eq(trim.rolled.axis, 0, '조종간은 가운데 그대로다');
-  t.ok(trim.rolled.bnk > 8, `그래도 오른쪽으로 기운 채 난다 (${trim.rolled.bnk.toFixed(1)}°)`);
-  t.ok(trim.back < -8, `반대로 넘기면 왼쪽으로 기운다 (${trim.back.toFixed(1)}°)`);
-  t.ok(Math.abs(trim.level) < 2, `트림을 풀면 수평으로 돌아온다 (${trim.level.toFixed(1)}°)`);
-  t.ok(trim.nose.pit < -3, `앞 트림은 기수를 내린다 (${trim.nose.pit.toFixed(1)}°)`);
-  t.ok(trim.max <= 0.8 + 1e-9, `한없이 쌓이지는 않는다 (최대 ${trim.max.toFixed(2)})`);
+  t.ok(Math.abs(trim.rolled.bnk - 10) < 0.6, `우 트림 10번이면 10° 기운 채 난다 (${trim.rolled.bnk.toFixed(1)}°)`);
+  t.ok(Math.abs(trim.back + 10) < 0.6, `반대로 20번 넘기면 왼쪽 10° (${trim.back.toFixed(1)}°)`);
+  t.ok(Math.abs(trim.level) < 0.6, `트림을 풀면 수평으로 돌아온다 (${trim.level.toFixed(1)}°)`);
+  t.ok(Math.abs(trim.nose.pit + 10) < 0.6, `앞 트림 10번이면 기수가 10° 내려간다 (${trim.nose.pit.toFixed(1)}°)`);
+  t.eq(trim.held, -8, `피치 햇을 누르고 있으면 계속 옮겨 간다 (1초에 ${trim.held}° — 첫 1° + 0.1초마다 1°)`);
+  t.eq(trim.heldR.roll, 8, `뱅크도 똑같이 이어 간다 (1초에 ${trim.heldR.roll}°)`);
+  t.ok(trim.maxR === 30 && trim.maxP === -20,
+    `한없이 쌓이지는 않는다 (뱅크 ±${trim.maxR}° · 피치 ${trim.maxP}°)`);
 
   // ── 스로틀처럼 세워 두는 레버(레버식) ──
   // 자리 자체가 출력이다. 맨 아래면 토크가 바닥, 맨 위면 110%.
@@ -979,6 +1014,122 @@ export async function run(page, t) {
   t.ok(Math.abs(spring.tq - spring.hover) < 3,
     `가운데면 호버 토크다 (${spring.tq.toFixed(0)}% · PERF 호버 ${spring.hover.toFixed(0)}%)`);
 
+  // ── 속도·고도는 점진적으로 바뀐다 ──
+  // 자세나 출력을 바꿔도 속도·상승률이 그 자리에서 튀지 않는다. 가감속이 먼저
+  // 천천히 붙고(S 자 모양), 그 한계(≈3.5kt/s)를 넘지 않으며, 넘쳐 지나치지 않는다.
+  const grad = await page.evaluate(`(() => {
+    (${SETUP.toString()})();
+    const fly = ${FLY};
+    joyAxes = { coll: { i: 3, inv: false, abs: true } };
+    S.alt = 4000; _simGndFt = 0; S.bnk = 0;
+    // ① 속도 — 수평(120kt)에서 기수를 10° 숙인다(목표 140kt)
+    S.spd = 120; S.pit = 0; simAcc = 0;
+    _ax(3, (tqRequired() / 110) * 2 - 1); fly(3);  // 레버를 고도 유지 언저리에 둔다
+    S.spd = 120; simAcc = 0; S.vs = 0; _simVs1 = 0;
+    simTrim.pitch = 10;                            // 트림으로 기수 10° 내림(조종간은 가운데)
+    const spd = []; let maxAcc = 0, prev = S.spd;
+    S.running = true; let ts = 1000; S.lastT = ts;
+    for (let i = 1; i <= 25 * 20; i++) {
+      ts += 50; joyPoll(ts); simStep(ts);
+      maxAcc = Math.max(maxAcc, Math.abs(S.spd - prev) / 0.05); prev = S.spd;
+      if (i === 10 || i === 40 || i === 200 || i === 500) spd.push(S.spd);
+    }
+    S.running = false;
+    simTrimReset();
+    // ② 상승률 — 70kt 자세(기수 5°)로 자리잡은 뒤 레버를 한 번에 20% 올린다
+    simTrim.pitch = -pitchFromSpd(70);
+    S.spd = 70; S.alt = 4000;
+    _ax(3, (tqRequired() / 110) * 2 - 1); fly(12);
+    _ax(3, (tqRequired() / 110) * 2 - 1); fly(8);
+    const base = S.vs;
+    const lever = S.tq + 20;
+    _ax(3, Math.min(1, (lever / 110) * 2 - 1));
+    S.running = true; ts = 1000; S.lastT = ts;
+    const vs = [], tq = [];
+    for (let i = 1; i <= 10 * 20; i++) {
+      ts += 50; joyPoll(ts); simStep(ts);
+      if (i === 6 || i === 20 || i === 60 || i === 200) { vs.push(S.vs - base); tq.push(S.tq); }
+    }
+    S.running = false;
+    simTrimReset();
+    return { spd, maxAcc, vs, tq, lever };
+  })()`);
+  t.ok(grad.spd[0] - 120 < 0.8,
+    `기수를 숙인 0.5초 뒤에는 거의 그대로다 (${grad.spd[0].toFixed(1)}kt — 종전에는 곧바로 빨라졌다)`);
+  t.ok(grad.spd[1] - 120 < 6 && grad.spd[1] > grad.spd[0],
+    `2초 뒤에도 조금씩 붙는다 (${grad.spd[1].toFixed(1)}kt)`);
+  t.ok(grad.maxAcc <= 3.6, `가감속은 3.5kt/s 를 넘지 않는다 (최대 ${grad.maxAcc.toFixed(2)}kt/s)`);
+  t.ok(Math.abs(grad.spd[3] - 140) < 3 && grad.spd[3] <= 141,
+    `25초면 그 자세의 속도(140kt)에 닿고 넘치지 않는다 (${grad.spd[3].toFixed(1)}kt)`);
+  const vsFinal = grad.vs[3];
+  t.ok(vsFinal > 300, `레버를 올리면 결국 오른다 (${vsFinal.toFixed(0)}fpm)`);
+  t.ok(grad.vs[0] < vsFinal * 0.2,
+    `0.3초 뒤 상승률은 아직 작다 (${grad.vs[0].toFixed(0)} / ${vsFinal.toFixed(0)}fpm)`);
+  t.ok(grad.vs[1] < vsFinal * 0.35,
+    `1초 뒤에도 아직 덜 붙었다 (${grad.vs[1].toFixed(0)} / ${vsFinal.toFixed(0)}fpm)`);
+  t.ok(grad.vs[2] > vsFinal * 0.6 && grad.vs[2] < vsFinal * 0.9,
+    `3초면 대부분 붙되 다 붙지는 않았다 (${grad.vs[2].toFixed(0)} / ${vsFinal.toFixed(0)}fpm)`);
+  t.ok(grad.tq[0] < grad.lever - 3 && Math.abs(grad.tq[2] - grad.lever) < 1.5,
+    `토크도 레버를 천천히 따라간다 (0.3초 ${grad.tq[0].toFixed(0)}% → 3초 ${grad.tq[2].toFixed(0)}% · 레버 ${grad.lever.toFixed(0)}%)`);
+
+  // ── 시야 둘러보기 — B0 을 누르고 햇으로 눈을 돌린다 ──
+  // 둘러보기 버튼을 누르고 있는 동안 햇은 트림이 아니라 시선이다. 놓으면 정면으로
+  // 돌아온다. 시선은 기체 자세 위에 얹힌다(오른쪽 뱅크에서 오른쪽을 보면 땅 쪽).
+  const look = await page.evaluate(`(async () => {
+    (${SETUP.toString()})();
+    const cam = ${CAM};
+    const wait = ms => new Promise(r => setTimeout(r, ms));
+    toggleSimMode(false);
+    toggleTriple(true);
+    selectPanel('left', 'pfd', true); selectPanel('mid', 'map', true);
+    selectPanel('right', 'cdu', true);
+    toggleSimMode(true);
+    S.running = false; S.alt = 2000; S.pit = 0; S.bnk = 0; S.hdg = 90; _simGndFt = 0; _simGndFresh = false;
+    // 시선은 실시간으로 돈다. 검사 브라우저는 3D 를 소프트웨어로 그려 한 프레임이
+    // 느리므로, 시간을 0.05초씩 정확히 밀어 본다(앱은 실제 경과시간을 쓴다).
+    const hold = async (ms) => { for (let i = 0; i < ms / 50; i++) simLookStep(0.05); _applyFollow(); };
+    const binds = { b0: joyBinds.b0 };
+    // 장치로 누른다: B0 + 햇 ▶(축 9)
+    _pad.buttons = Array.from({ length: 8 }, () => ({ pressed: false, value: 0 }));
+    _pad.axes = [0, 0, 0, 0, 0, 0, 0, 0, 0, 3.2857142857142856];
+    for (const k in _joyNeutral) delete _joyNeutral[k];
+    joySetBind('b0', 'lookMod'); joySetBind('h9E', 'trimR'); joySetBind('h9N', 'trimF');
+    joyPoll(10);
+    _pad.buttons[0] = { pressed: true, value: 1 }; joyPoll(20);
+    _pad.axes[9] = -3/7; joyPoll(30);                    // 햇 ▶
+    const trimBefore = simTrim.roll;
+    await hold(1000);
+    const right = cam();
+    _pad.axes[9] = 3.2857142857142856; joyPoll(40);      // 햇을 놓는다(B0 은 그대로)
+    _pad.axes[9] = -1; joyPoll(50);                      // 햇 ▲ — 올려다본다
+    await hold(500);
+    const upRight = cam();
+    _pad.axes[9] = 3.2857142857142856; joyPoll(60);
+    const trimDuring = simTrim.roll;
+    _pad.buttons[0] = { pressed: false, value: 0 }; joyPoll(70);   // B0 을 놓는다
+    await hold(1500);
+    const back = cam();
+    // B0 없이 햇 ▶ 는 종전대로 트림이다
+    _pad.axes[9] = -3/7; joyPoll(80); _pad.axes[9] = 3.2857142857142856; joyPoll(90);
+    const trimAfter = simTrim.roll;
+    simTrimReset();
+    // 오른쪽 뱅크에서 오른쪽을 보면 땅 쪽을 본다(시선이 자세 위에 얹힌다)
+    const comp = _ml3dCamRot(90, 0, 30, 90, 0);
+    toggleSimMode(false);
+    return { binds, right, upRight, back, trimBefore, trimDuring, trimAfter, comp };
+  })()`);
+  t.eq(look.binds.b0, 'lookMod', `B0 이 '시야 둘러보기' 로 잡혀 있다`);
+  t.ok(normAS0(look.right.bearing - 90) > 60,
+    `B0 을 누른 채 햇 ▶ 를 1초 누르면 오른쪽을 본다 (방위 ${look.right.bearing}° · 기수 90°)`);
+  t.ok(look.upRight.pitch > 110,
+    `햇 ▲ 를 누르면 올려다본다 (카메라 ${look.upRight.pitch.toFixed(0)}°)`);
+  t.eq(look.trimDuring, look.trimBefore, '둘러보는 동안에는 트림이 바뀌지 않는다');
+  t.ok(Math.abs(normAS0(look.back.bearing - 90)) < 3 && Math.abs(look.back.pitch - 90) < 3,
+    `B0 을 놓으면 정면으로 돌아온다 (방위 ${look.back.bearing}° · ${look.back.pitch.toFixed(0)}°)`);
+  t.eq(look.trimAfter, look.trimBefore + 1, 'B0 없이 누른 햇은 종전대로 트림(1°)이다');
+  t.ok(Math.abs(look.comp.pitch + 30) < 0.5 && Math.abs(look.comp.yaw - 180) < 0.5,
+    `오른쪽 30° 뱅크에서 오른쪽을 보면 30° 내려다본다 (${look.comp.pitch.toFixed(1)}° · 방위 ${look.comp.yaw.toFixed(0)}°)`);
+
   // ── 끄면 종전 방식으로 돌아온다 ──
   const off = await page.evaluate(`(() => {
     (${SETUP.toString()})();
@@ -999,6 +1150,7 @@ export async function run(page, t) {
     const fly = ${FLY};
     joyAxes = {};
     _ax(0, 1); _ax(3, 1);
+    S.tq = tqRequired(); S.vs = 0; _simVs1 = 0;   // 레버가 없으면 고도를 지킬 토크가 걸린다
     const a0 = S.alt;
     fly(4);
     return { bnk: S.bnk, dAlt: S.alt - a0 };

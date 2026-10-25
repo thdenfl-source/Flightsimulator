@@ -36,12 +36,24 @@ function simTurnFrac() {
 }
 const SIM_SPD_MAX   = 160;     // 최대 대기속도(kt)
 const SIM_SPD_BACK  = -40;     // 후방 비행 한계(kt) — 헬기는 뒤로도 난다
-const SIM_SPD_K     = 0.22;    // 자세에 맞는 속도로 수렴하는 빠르기(1/s · 시정수 ≈4.5초)
+// ── 공력적 지연 ──
+// 자세나 출력을 바꿔도 속도·고도는 곧바로 따라오지 않는다. 로터 원판이 기울어
+// 힘이 생기고, 그 힘이 기체 무게를 밀어 움직이기까지 시간이 걸린다.
+//   속도: 가감속(simAcc)이 먼저 천천히 붙고, 그 가감속으로 속도가 바뀐다.
+//         가감속의 한계는 약 3.5kt/s(≈0.18g). 감쇠를 임계로 맞춰 넘치지 않는다.
+//   고도: 토크 → 유입류 → 상승률로 두 번 걸러 천천히 붙는다.
+const SPD_TAU      = 5.0;     // 속도가 자세에 맞는 값으로 다가가는 시정수(s)
+const SPD_ACC_MAX  = 3.5;     // 낼 수 있는 최대 가감속(kt/s)
+const SPD_JERK_TAU = 1.2;     // 가감속이 붙는 데 걸리는 시간(s) — 로터 기울기·기체 관성
+const VS_TAU1      = 0.5;     // 토크가 바뀐 뒤 유입류가 바뀌는 시간(s)
+const VS_TAU2      = 1.5;     // 그 힘이 상승률로 옮겨 가는 시간(s)
+const TQ_TAU       = 0.5;     // 토크가 레버를 따라가는 시간(s) — 엔진·로터 관성
+let simAcc = 0;               // 지금의 가감속(kt/s)
+let _simVs1 = 0;              // 상승률로 가기 전 단계(fpm)
 // ── 위치에너지 ↔ 운동에너지 ──
 // 올라가는 동안에는 그만큼 속도를 내주고, 내려가는 동안에는 속도를 얻는다.
 // 그래서 기수를 숙인 채 컬렉티브를 내리면 고도가 빠지면서 속도가 붙는다.
 const SIM_CLIMB_KT  = 25;      // 1,000fpm 당 주고받는 속도(kt)
-const SIM_VS_RATE   = 900;     // 상승률이 따라가는 속도(fpm/s)
 
 // 토크(TQ) 상수와 tqRequired()·tqShown() 는 01-state.js 에 있다 —
 // PFD 가 이 파일보다 먼저 그려질 수 있어 TDZ 를 피한다.
@@ -51,19 +63,67 @@ const SIM_VS_RATE   = 900;     // 상승률이 따라가는 속도(fpm/s)
 // ── 사이클릭 비퍼 트림(4방향 햇) ──
 // 실제 헬기의 사이클릭 햇은 '트림' 이다 — 조금씩 중립을 옮겨 두면 손을 놓아도
 // 그 자세로 난다. SIM 모드에서 좌우는 롤, 전후는 피치 트림으로 쓴다.
-const SIM_TRIM_STEP = 0.03;    // 한 번 누를 때 옮기는 양(조종간 전체폭의 3%)
-const SIM_TRIM_MAX  = 0.8;     // 트림만으로 갈 수 있는 한계
-let simTrim = { roll: 0, pitch: 0 };
+// 한 번 누르면 1° — 뱅크도 피치도 같다. 누르고 있으면 0.1초마다 1° 씩 이어진다.
+// 값은 '자세 각도(°)' 로 들고 있다가 조종간 몫으로 바꿔 더한다.
+const SIM_TRIM_STEP_DEG  = 1;      // 한 번에 옮기는 각도(°)
+const SIM_TRIM_MAX_ROLL  = 30;     // 트림만으로 갈 수 있는 뱅크(°)
+const SIM_TRIM_MAX_PITCH = 20;     // 트림만으로 갈 수 있는 기수 자세(°)
+let simTrim = { roll: 0, pitch: 0 };   // roll: 오른쪽 + · pitch: 기수 내림 +
 function simTrimNudge(dir) {
-  const k = SIM_TRIM_STEP;
+  const k = SIM_TRIM_STEP_DEG;
   if (dir === 'R') simTrim.roll += k;
   else if (dir === 'L') simTrim.roll -= k;
   else if (dir === 'F') simTrim.pitch += k;      // 앞으로 = 기수 내림
   else if (dir === 'A') simTrim.pitch -= k;
-  simTrim.roll = Math.max(-SIM_TRIM_MAX, Math.min(SIM_TRIM_MAX, simTrim.roll));
-  simTrim.pitch = Math.max(-SIM_TRIM_MAX, Math.min(SIM_TRIM_MAX, simTrim.pitch));
+  simTrim.roll = Math.max(-SIM_TRIM_MAX_ROLL, Math.min(SIM_TRIM_MAX_ROLL, simTrim.roll));
+  simTrim.pitch = Math.max(-SIM_TRIM_MAX_PITCH, Math.min(SIM_TRIM_MAX_PITCH, simTrim.pitch));
 }
 function simTrimReset() { simTrim = { roll: 0, pitch: 0 }; }
+
+// ── 시야 둘러보기(눈 돌리기) ──
+// 정해 둔 버튼(기본 B0)을 누르고 있는 동안에는 4방향 햇이 트림 대신 '시선' 이
+// 된다 — 좌우·위아래로 고개를 돌려 바깥을 훑어볼 수 있다. 버튼을 놓으면 시선이
+// 정면으로 부드럽게 돌아온다. 시선은 기체 자세 위에 얹힌다(오른쪽 뱅크에서
+// 오른쪽을 보면 땅 쪽을 보게 된다 — 05-gps.js 의 카메라가 그렇게 합친다).
+const LOOK_YAW_RATE   = 90;     // 햇을 누르고 있을 때 좌우로 도는 빠르기(°/s)
+const LOOK_PIT_RATE   = 60;     // 위아래로 도는 빠르기(°/s)
+const LOOK_YAW_MAX    = 150;    // 어깨 너머까지(°)
+const LOOK_PIT_UP     = 60;     // 올려다볼 수 있는 한계(°)
+const LOOK_PIT_DN     = 70;     // 내려다볼 수 있는 한계(°)
+const LOOK_RETURN_TAU = 0.35;   // 놓았을 때 정면으로 돌아오는 시간(s)
+let simLook = { yaw: 0, pitch: 0 };   // yaw: 오른쪽 + · pitch: 위 +
+let simLookHeld = false;              // 둘러보기 버튼을 누르고 있는가
+let simLookDir = null;                // 지금 누르고 있는 햇 방향(F·A·L·R)
+let _simLookT = 0;
+function simLookReset() { simLook = { yaw: 0, pitch: 0 }; simLookDir = null; _simLookT = 0; }
+function simLookHold(on) {
+  simLookHeld = !!on;
+  if (!simLookHeld) simLookDir = null;
+}
+// 카메라를 놓을 때마다 부른다(실시간 dt — 일시정지 중에도 둘러볼 수 있게).
+// dt 를 주면 그만큼만 진행한다(검사에서 시간을 정확히 밀어 볼 때).
+function simLookStep(dtGiven) {
+  const now = performance.now();
+  const dt = (dtGiven != null) ? dtGiven
+           : (_simLookT ? Math.min(0.25, (now - _simLookT) / 1000) : 0);
+  _simLookT = now;
+  if (!(dt > 0)) return simLook;
+  if (simLookHeld) {
+    if (simLookDir === 'R') simLook.yaw += LOOK_YAW_RATE * dt;
+    else if (simLookDir === 'L') simLook.yaw -= LOOK_YAW_RATE * dt;
+    else if (simLookDir === 'F') simLook.pitch += LOOK_PIT_RATE * dt;   // 햇 ▲ = 올려다본다
+    else if (simLookDir === 'A') simLook.pitch -= LOOK_PIT_RATE * dt;
+    simLook.yaw = Math.max(-LOOK_YAW_MAX, Math.min(LOOK_YAW_MAX, simLook.yaw));
+    simLook.pitch = Math.max(-LOOK_PIT_DN, Math.min(LOOK_PIT_UP, simLook.pitch));
+  } else {
+    const k = Math.min(1, dt / LOOK_RETURN_TAU);
+    simLook.yaw -= simLook.yaw * k;
+    simLook.pitch -= simLook.pitch * k;
+    if (Math.abs(simLook.yaw) < 0.05) simLook.yaw = 0;
+    if (Math.abs(simLook.pitch) < 0.05) simLook.pitch = 0;
+  }
+  return simLook;
+}
 
 function simModeAxes() {
   const ax = r => { try { return joyAxVal(r); } catch (e) { return 0; } };
@@ -109,7 +169,7 @@ function simTerrainFt(lat, lon) {
 function simGroundFt() { return _simGndFresh ? _simGndFt : 0; }
 
 function simStartGround() {
-  S.vs = 0; S.spd = 0; simLat = 0;
+  S.vs = 0; S.spd = 0; simLat = 0; simAcc = 0; _simVs1 = 0;
   S.pit = 0; S.bnk = 0; bankTarget = 0;
   S.tq = 0;                      // 레버를 내려 둔 상태에서 올리며 뜬다
   S.alt = simTerrainFt();        // 지면 높이 = AGL 0
@@ -140,6 +200,8 @@ function toggleSimMode(on, opt) {
     // 손을 떼면 그 자리에서 날던 대로 — 지금 자세를 그대로 이어받는다
     bankTarget = S.bnk;
     simTrimReset();
+    simAcc = 0; _simVs1 = S.vs || 0;      // 지금 날던 대로 이어 간다
+    simLookReset();
     // 지금 날고 있는 상태를 유지할 만큼의 토크로 레버를 맞춰 둔다(진입 충격 방지)
     let add = (S.vs || 0) / TQ_PER_FPM;
     try { if (typeof perfTqForVs === 'function') add = perfTqForVs(S.vs || 0); } catch (e) { _swallow(e); }
@@ -151,7 +213,8 @@ function toggleSimMode(on, opt) {
   } else {
     simExitView();
     // 손을 뗀 자리에서 수평으로 돌려 놓는다(기울어진 채 남지 않게)
-    bankTarget = 0; S.vs = 0; simLat = 0;
+    bankTarget = 0; S.vs = 0; simLat = 0; simAcc = 0; _simVs1 = 0;
+    simLookReset();
     selHdg = ((Math.round(S.hdg) + 359) % 360) + 1;
   }
   updateSimModeBtn();
@@ -217,8 +280,8 @@ function simFly(dt) {
 
   // 조종간 값에 트림을 더한다 — 가운데 두어도 트림 자세를 지킨다
   const cl = v => Math.max(-1, Math.min(1, v));
-  const roll = cl(a.roll + simTrim.roll);
-  const pitch = cl(a.pitch + simTrim.pitch);
+  const roll = cl(a.roll + simTrim.roll / SIM_BANK_MAX);
+  const pitch = cl(a.pitch + simTrim.pitch / SIM_PITCH_MAX);
 
   // ── 사이클릭 좌우 → 뱅크 ──
   const bTgt = roll * SIM_BANK_MAX;
@@ -244,8 +307,15 @@ function simFly(dt) {
   // 올라가는 중에는 그만큼 출력을 쓰므로 같은 자세에서도 느려진다.
   let sTgt = spdFromPitch(S.pit) - (S.vs / 1000) * SIM_CLIMB_KT;
   sTgt = Math.max(SIM_SPD_BACK, Math.min(SIM_SPD_MAX, sTgt));
-  if (onGnd) sTgt = 0;                       // 땅 위에서는 서 있는다
-  S.spd += (sTgt - S.spd) * Math.min(1, (onGnd ? 1.2 : SIM_SPD_K) * dt);
+  if (onGnd) {
+    // 땅 위에서는 서 있는다 — 바퀴(스키드)가 잡으므로 금방 선다
+    simAcc = Math.max(-15, Math.min(15, -S.spd * 1.2));
+  } else {
+    // 가고 싶은 가감속 → 실제 가감속은 그쪽으로 천천히 붙는다
+    const aDes = Math.max(-SPD_ACC_MAX, Math.min(SPD_ACC_MAX, (sTgt - S.spd) / SPD_TAU));
+    simAcc += (aDes - simAcc) * Math.min(1, dt / SPD_JERK_TAU);
+  }
+  S.spd = Math.max(SIM_SPD_BACK, Math.min(SIM_SPD_MAX, S.spd + simAcc * dt));
 
   // ── 저속에서는 뱅크가 옆걸음이 된다 ──
   // 제자리에서 오른쪽으로 기울이면 기수는 그대로 둔 채 오른쪽으로 간다.
@@ -277,7 +347,8 @@ function simFly(dt) {
     tTgt = hoverTqRef() + a.coll * TQ_SPAN;
   }
   tTgt = Math.max(0, Math.min(TQ_MAX, tTgt));
-  const dT = tTgt - S.tq;
+  // 레버를 따라 천천히 붙되(TQ_TAU), 한 번에 TQ_RATE 보다 빨리 변하지는 않는다
+  const dT = (tTgt - S.tq) * Math.min(1, dt / TQ_TAU);
   S.tq += Math.sign(dT) * Math.min(Math.abs(dT), TQ_RATE * dt);
 
   // ── 남는 토크 → 상승·강하 ──
@@ -294,10 +365,10 @@ function simFly(dt) {
   // 가장 잘 오르고, 그보다 빠르거나 느릴수록 덜 오른다(PERF 의 Vy 를 쓴다).
   if (vRaw > 0) vRaw *= simClimbEff();
   const vTgt = Math.max(-2000, Math.min(2000, vRaw));
-  const dV = vTgt - S.vs;
-  S.vs += Math.sign(dV) * Math.min(Math.abs(dV), SIM_VS_RATE * dt);
+  _simVs1 += (vTgt - _simVs1) * Math.min(1, dt / VS_TAU1);
+  S.vs += (_simVs1 - S.vs) * Math.min(1, dt / VS_TAU2);
   // 땅 아래로는 내려가지 않는다 — 바닥은 해수면이 아니라 '발밑의 지면' 이다
-  if (S.alt <= gnd + 0.5 && S.vs < 0) { S.vs = 0; S.alt = gnd; }
+  if (S.alt <= gnd + 0.5 && S.vs < 0) { S.vs = 0; S.alt = gnd; if (_simVs1 < 0) _simVs1 = 0; }
 
 }
 

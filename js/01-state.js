@@ -476,8 +476,13 @@ let _trimGuard = null;
 function startTrimHold(dir) {
   stopTrimHold();                       // 중복 시작 방지(이전 홀드가 남아 있으면 정리)
   _trimGuard = setTimeout(stopTrimHold, 20000);   // 런어웨이 방지(최대 20초)
+  // SIM 모드에서 '둘러보기' 버튼을 누르고 있으면 햇은 트림이 아니라 시선이다
+  if (simModeOn && typeof simLookHeld !== 'undefined' && simLookHeld) {
+    simLookDir = dir;
+    return;
+  }
   // SIM 모드에서는 사이클릭의 '비퍼 트림' 그대로다 — 좌우는 롤, 전후는 피치를
-  // 조금씩 옮겨 둔다(조종간을 가운데 두어도 그 자세로 날게 된다).
+  // 1° 씩 옮겨 둔다(조종간을 가운데 두어도 그 자세로 날게 된다).
   if (simModeOn) {
     simTrimNudge(dir);
     trimHoldTimer = setTimeout(() => {
@@ -505,6 +510,7 @@ function startTrimHold(dir) {
   }
 }
 function stopTrimHold() {
+  try { if (typeof simLookDir !== 'undefined') simLookDir = null; } catch (e) { _swallow(e); }
   if (trimHoldTimer) { clearTimeout(trimHoldTimer); trimHoldTimer = null; }
   if (trimHoldInt)   { clearInterval(trimHoldInt);  trimHoldInt   = null; }
   if (_trimGuard)    { clearTimeout(_trimGuard);    _trimGuard    = null; }

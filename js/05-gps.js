@@ -925,10 +925,32 @@ function _ml3dSimCamera() {
   const drawnM = Number.isFinite(rendM) ? rendM : physM * MAP3D_EXAG;
   const aglM = Math.max(SIM_EYE_MIN_M, S.alt * 0.3048 - physM);
   const camAlt = drawnM + aglM;
-  const pitch = Math.max(0, Math.min(180, 90 + S.pit));
+  // 시선(둘러보기)을 기체 자세 위에 얹는다
+  let look = { yaw: 0, pitch: 0 };
+  try { if (typeof simLookStep === 'function') look = simLookStep(); } catch (e) { _swallow(e); }
+  const r = _ml3dCamRot(S.hdg, S.pit, S.bnk, look.yaw, look.pitch);
+  const pitch = Math.max(0, Math.min(180, 90 + r.pitch));
   const o = _ml3d.calculateCameraOptionsFromCameraLngLatAltRotation(
-    [S.lon, S.lat], camAlt, S.hdg, pitch, S.bnk);
+    [S.lon, S.lat], camAlt, r.yaw, pitch, r.roll);
   _ml3d.jumpTo(o);
+}
+// 기체 자세(방위·피치·뱅크) 위에 고개 돌림(좌우·위아래)을 얹은 카메라 방향.
+// 그냥 더하면 안 된다 — 오른쪽 뱅크에서 오른쪽을 보면 시선은 땅 쪽으로 내려가야
+// 하는데, 각도를 더하기만 하면 화면이 기울 뿐 내려다보지 않는다. 그래서
+// 회전을 곱으로 합친 뒤 방위·피치·롤을 다시 꺼낸다(NED 좌표, ZYX 순서).
+//   기체 R = Rz(방위)·Ry(피치)·Rx(뱅크),  고개 H = Rz(좌우)·Ry(위아래),  카메라 = R·H
+function _ml3dCamRot(hdg, pit, bnk, lookYaw, lookPit) {
+  if (!lookYaw && !lookPit) return { yaw: hdg, pitch: pit, roll: bnk };
+  const rz = (a) => { const c = Math.cos(a), s = Math.sin(a); return [[c, -s, 0], [s, c, 0], [0, 0, 1]]; };
+  const ry = (a) => { const c = Math.cos(a), s = Math.sin(a); return [[c, 0, s], [0, 1, 0], [-s, 0, c]]; };
+  const rx = (a) => { const c = Math.cos(a), s = Math.sin(a); return [[1, 0, 0], [0, c, -s], [0, s, c]]; };
+  const mul = (A, B) => A.map((row, i) => B[0].map((_, j) => row[0] * B[0][j] + row[1] * B[1][j] + row[2] * B[2][j]));
+  const C = mul(mul(mul(rz(hdg * D2R), ry(pit * D2R)), rx(bnk * D2R)),
+                mul(rz(lookYaw * D2R), ry(lookPit * D2R)));
+  const p = Math.asin(Math.max(-1, Math.min(1, -C[2][0])));
+  return { yaw: normA(Math.atan2(C[1][0], C[0][0]) / D2R),
+           pitch: p / D2R,
+           roll: Math.atan2(C[2][1], C[2][2]) / D2R };
 }
 // SIM 모드에서 나올 때 — 지면 묶기와 롤을 되돌린다
 function _ml3dSimCameraOff() {

@@ -29,6 +29,9 @@ const JOY_ACTIONS = [
     run: () => toggleHoverPosition() },
   { id: 'hovpage', grp: '운항', label: 'HOVER PAGE (호버 화면)', kind: 'press',
     run: () => toggleHoverPage() },
+  // SIM 1인칭에서 누르고 있는 동안 4방향 햇이 트림 대신 '시선' 이 된다
+  { id: 'lookMod', grp: '운항', label: '시야 둘러보기 (누르는 동안 햇 = 시선)', kind: 'hold',
+    on: () => simLookHold(true), off: () => simLookHold(false) },
 
   { id: 'trimF',  grp: '트림',   label: '트림 ▲ (전/증속)', kind: 'hold',
     on: () => startTrimHold('F'), off: () => stopTrimHold() },
@@ -131,6 +134,20 @@ let joyBinds = {};
 try { joyBinds = JSON.parse(localStorage.getItem('joyBinds') || 'null') || {}; } catch (e) { joyBinds = {}; }
 let joyBindsSaved = false;
 try { joyBindsSaved = localStorage.getItem('joyBinds') !== null; } catch (e) { _swallow(e); }
+// '시야 둘러보기' 는 B0 이 기본이다. 한 번만 잡아 두고(그 뒤로 사용자가 바꾸면
+// 그 값이 이긴다), 이미 배정해 쓰던 장치라면 지금 바로 B0 에 옮겨 둔다.
+// 처음 쓰는 장치는 연결 후 첫 폴링에서 B0 이 비어 있을 때 잡는다(표준 패드의
+// 기본 배치를 먼저 깔아야 하므로).
+const _joyHadSaved = joyBindsSaved;   // 이번에 켜기 전부터 배정을 쓰던 장치인가
+let joyLookDefaultDone = false;
+try { joyLookDefaultDone = localStorage.getItem('joyLookB0') !== null; } catch (e) { _swallow(e); }
+function joyLookDefault(force) {
+  if (joyLookDefaultDone) return;
+  const has = Object.keys(joyBinds).some(c => joyBinds[c] === 'lookMod');
+  if (!has && (force || !joyBinds.b0)) { joyBinds.b0 = 'lookMod'; joySave(); }
+  joyLookDefaultDone = true;
+  try { localStorage.setItem('joyLookB0', '1'); } catch (e) { _swallow(e); }
+}
 
 let joyPadName = '';          // 연결된 장치 이름(설정 화면 표시용)
 let joyActiveIdx = -1;        // 지금 쓰고 있는 패드 번호(여러 대가 올라올 때)
@@ -427,6 +444,7 @@ function joyPoll(now) {
     _joyEdge(code, on, now);
   });
   joyAxApplyDefault(p, neu);
+  if (!joyLookDefaultDone) joyLookDefault(_joyHadSaved);
   const hat = _joyHat[p.index] || (_joyHat[p.index] = {});
   const no  = _joyNoHat[p.index] || (_joyNoHat[p.index] = {});
   const odd = _joyOdd[p.index] || (_joyOdd[p.index] = {});
