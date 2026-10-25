@@ -834,6 +834,9 @@ const FOLLOW_FWD_FRAC = 0.25; // fraction of screen height the aircraft sits abo
 // 한 번 북쪽으로 맞춘다 — toggleMapOrient 참고)
 function _apply3dBearing() {
   if (!mapHdgUp || !_ml3d || !_ml3dReady || !_map3dShown()) return;
+  // SIM 1인칭은 카메라가 방위까지 직접 쥔다 — 여기서 따로 돌리면 먼 시선점을
+  // 축으로 카메라가 휘둘린다
+  if (simModeOn) return;
   if (Math.abs(normAS(_ml3d.getBearing() - S.hdg)) < 0.3) return;
   _ml3d.easeTo({ bearing: S.hdg, duration: 0, easing: t => t });
 }
@@ -872,42 +875,16 @@ function _follow3d() {
     // N↑ 에서는 bearing 을 넣지 않는다(사용자가 손으로 돌려 둔 각도를 지운다).
     if (mapHdgUp) opt.bearing = S.hdg;
     // ── SIM 모드: 조종석에서 내다보는 1인칭 ──
-    // 뒤에서 따라가는 3인칭이 아니라 '눈이 헬기 자리에 있는' 그림이어야 한다.
-    // 이 maplibre 에는 카메라를 직접 놓는 길(FreeCamera)이 없으므로, 화면 중심을
-    // 기수 앞쪽으로 꼭 그만큼 밀어 카메라가 헬기 자리에 오게 한다.
-    //   · 카메라 높이 = 고도계(S.alt)
-    //   · 그 높이를 만드는 zoom: 카메라높이 = 1.5 × 화면높이(px) × cos(기울기) × m/px
-    //   · 중심은 카메라 바로 아래에서 앞으로 (카메라높이 × tan(기울기)) 만큼
+    // 카메라를 헬기 자리·고도에 그대로 놓고, 방위·자세·뱅크를 그대로 준다.
+    // (maplibre 5 는 카메라를 180° 까지 들고 롤도 받는다 — 그래서 기수를 들면
+    //  정말로 하늘을 보고, 기울이면 지평선이 그대로 기운다. 화면을 돌리거나
+    //  밀어 흉내 내던 종전 방식은 더 쓰지 않는다.)
     if (simModeOn) {
-      opt.bearing = S.hdg;
-      // 지도 엔진은 85° 까지만 기울인다(그 위는 지평선 너머라 그릴 것이 없다).
-      // 기수를 더 들면 각도 대신 '더 먼 곳' 을 보게 해서 시야가 계속 따라오게 한다.
-      const want = SIM_CAM_PITCH + S.pit * SIM_CAM_PIT_K;
-      const pitchDeg = Math.max(SIM_CAM_PIT_MIN, Math.min(SIM_CAM_PIT_MAX, want));
-      opt.pitch = pitchDeg;
-      // 눈높이 — 화면에 보이는 땅은 실제 표고의 MAP3D_EXAG 배로 부풀려져 있다.
-      // 카메라는 '부풀린 지면 + 지면 위 높이(AGL)' 에 놓아야 땅에 파묻히지 않는다.
-      let gndM = 0;
-      try { gndM = simTerrainFt() * 0.3048; } catch (e) { _swallow(e); }
-      const aglM = Math.max(SIM_EYE_MIN_M, S.alt * 0.3048 - gndM);
-      const eye = gndM * MAP3D_EXAG + aglM;                          // 눈높이(m)
-      const pr = pitchDeg * D2R;
-      // 화면 높이와 시야각으로 'm/px' 를 정하면 그 zoom 이 곧 카메라 높이가 된다
-      const halfFov = _ml3dHalfFovTan();
-      const mpp = eye / (H / 2 / halfFov * Math.cos(pr));
-      // maplibre 는 512px 타일을 쓴다 — zoom 0 에서 78,271.5 m/px.
-      const z2 = Math.log2(78271.51696 * Math.cos(S.lat * D2R) / mpp);
-      // 카메라는 고도계 높이에 그대로 둔다. 화면을 늘 같은 배율로 키워 둔 것은
-      // 기울일 자리를 만들기 위함일 뿐이라, 그만큼 시야각이 좁아질 뿐 눈높이는
-      // 변하지 않는다(여기서 zoom 을 건드리면 눈높이가 어긋난다).
-      opt.zoom = Math.max(1, Math.min(22, z2));
-      // 엔진 한계(85°) 위를 볼 때는 시선을 앞으로 보내지 않는다 — 그러면 '전진'
-      // 으로 보인다. 대신 아래의 _sky3dShift 가 지평선을 화면 아래로 내린다.
-      const aheadNm = (eye * Math.tan(pr)) / 1852;
-      const c = destPoint(S.lat, S.lon, S.hdg, aheadNm);
-      opt.center = [c[1], c[0]];
-      opt.offset = [0, 0];
+      _ml3dSimCamera();
+      _apply3dRoll();
+      return;
     }
+    opt.roll = 0;                 // SIM 에서 나온 뒤 기울어진 채 남지 않게
     _ml3d.easeTo(opt);
     _apply3dRoll();
   }
@@ -919,66 +896,53 @@ function _follow3d() {
 // 수평 비행에서의 카메라 각도. 지도 엔진은 85° 까지만 기울일 수 있어(그 위는
 // 지평선 너머라 그릴 것이 없다) 기준을 낮춰 두어야 기수를 들었을 때 위를 볼
 // 여유가 생긴다. 78° 로 두면 기수 6° 에서 벌써 끝에 닿았다.
-const SIM_CAM_PITCH  = 65;    // 수평 비행에서의 카메라 각도(°)
-const SIM_CAM_PIT_MIN = 20;   // 기수를 숙일 때(아래를 볼 때) 한계
-const SIM_CAM_PIT_MAX = 85;   // 지도 엔진의 한계
 const SIM_EYE_MIN_M = 8;      // 땅에 있어도 이 정도 눈높이는 둔다(m)
-// 카메라-중심 거리는 1/(2·tan(fov/2)) × 화면높이 다. maplibre 기본 fov 는
-// 36.87° 이며, 혹시 바뀌어도 지도에서 직접 읽어 쓴다.
-function _ml3dHalfFovTan() {
-  let fov = 36.87;
-  try { if (_ml3d && _ml3d.transform && Number.isFinite(_ml3d.transform.fov)) fov = _ml3d.transform.fov; }
+
+// ── 1인칭 카메라(SIM 모드) ──
+//   · 자리   = 헬기 위경도
+//   · 높이   = 화면에 그려진 지면(지형 과장비 반영) + 지면 위 높이(AGL)
+//   · 방위   = 기수(방향지시계)
+//   · 기울기 = 90° + 기수 자세(자세계) — 수평 비행이면 지평선이 화면 한가운데,
+//              기수를 들면 90° 를 넘어 하늘을, 숙이면 땅을 본다
+//   · 롤     = 뱅크(자세계) — maplibre 의 롤은 반대 방향이라 부호를 바꾼다
+function _ml3dSimCamera() {
+  if (!_ml3d || typeof _ml3d.calculateCameraOptionsFromCameraLngLatAltRotation !== 'function') return;
+  // 카메라가 헬기 자리에 있어야 하므로 화면 중심을 지면에 묶지 않는다
+  try { if (_ml3d.getCenterClampedToGround && _ml3d.getCenterClampedToGround()) _ml3d.setCenterClampedToGround(false); }
   catch (e) { _swallow(e); }
-  return Math.tan(fov / 2 * D2R);
+  // 높이는 두 가지를 따로 본다.
+  //   · 지면 위 높이(AGL) — 비행 모델의 땅(착지 판정과 같은 값)에서 잰다
+  //   · 화면에 그려진 땅  — 지도가 실제로 그린 지형(과장비가 곱해져 있다)
+  // 카메라는 '그려진 땅 + AGL' 에 놓는다. 그래야 지형 타일이 아직 안 왔든
+  // 왔든, 화면 속 땅에서 늘 고도계만큼 떠 있다(파묻히지도 붕 뜨지도 않는다).
+  let rendM = null;
+  try { rendM = _ml3d.queryTerrainElevation([S.lon, S.lat]); } catch (e) { rendM = null; }
+  let physM = null;
+  try { if (typeof _simGndFresh !== 'undefined' && _simGndFresh) physM = simGroundFt() * 0.3048; }
+  catch (e) { physM = null; }
+  if (physM === null) physM = Number.isFinite(rendM) ? rendM / MAP3D_EXAG : 0;
+  const drawnM = Number.isFinite(rendM) ? rendM : physM * MAP3D_EXAG;
+  const aglM = Math.max(SIM_EYE_MIN_M, S.alt * 0.3048 - physM);
+  const camAlt = drawnM + aglM;
+  const pitch = Math.max(0, Math.min(180, 90 + S.pit));
+  const o = _ml3d.calculateCameraOptionsFromCameraLngLatAltRotation(
+    [S.lon, S.lat], camAlt, S.hdg, pitch, -S.bnk);
+  _ml3d.jumpTo(o);
 }
-const SIM_CAM_PIT_K = 1.0;    // 기수 1° 당 카메라 각도 변화(+20° 까지 각도로, 그 위는 거리로)
-// 돌리면 모서리가 비므로 화면을 그만큼 키워 덮는데, 그 배율을 뱅크에 따라
-// 바꾸면 기울일 때마다 지도가 확대·축소되어 보인다. 그래서 배율은 '최대 뱅크를
-// 덮을 만큼' 으로 늘 같게 두고, 그만큼 카메라를 멀리 둬서(zoom 보정) 땅의
-// 축척은 그대로 유지한다 — 기울여도 확대되지 않는다.
-const SIM_ROLL_MAX_DEG = 45;      // 사이클릭 최대 뱅크(14-simmode.js 와 같은 값)
-function _ml3dRollCover() {
-  const el = document.getElementById('map3d');
-  const w = (el && el.clientWidth) || 1, h = (el && el.clientHeight) || 1;
-  const a = SIM_ROLL_MAX_DEG * D2R, c = Math.cos(a), si = Math.sin(a);
-  return Math.max((w * c + h * si) / w, (w * si + h * c) / h);
+// SIM 모드에서 나올 때 — 지면 묶기와 롤을 되돌린다
+function _ml3dSimCameraOff() {
+  if (!_ml3d) return;
+  try { if (_ml3d.setCenterClampedToGround) _ml3d.setCenterClampedToGround(true); } catch (e) { _swallow(e); }
+  try { _ml3d.jumpTo({ roll: 0, pitch: Math.min(_ml3d.getPitch(), _ml3dPitch) }); } catch (e) { _swallow(e); }
 }
-// 엔진 한계(85°) 위를 보려면 지평선이 화면 아래로 내려와야 한다. 카메라를 더
-// 들 수 없으니, 그만큼 지도 그림을 아래로 내리고 위에는 하늘을 깐다.
-// 반환: 지도 그림을 내릴 픽셀 수(0 이면 그대로).
-const SIM_SKY_MAX_DEG = 140;      // 가상 자세의 상한
-const SIM_SKY_BG = 'linear-gradient(#0d2a5c, #3d7fc4 72%, #a9d2f2)';
-function _sky3dShift() {
-  const el = document.getElementById('map3d');
-  if (!el || !simModeOn) return 0;
-  const H = el.clientHeight || 600;
-  const V = Math.max(SIM_CAM_PIT_MIN, Math.min(SIM_SKY_MAX_DEG, SIM_CAM_PITCH + S.pit * SIM_CAM_PIT_K));
-  const P = Math.max(SIM_CAM_PIT_MIN, Math.min(SIM_CAM_PIT_MAX, V));   // 실제로 그리는 각도
-  if (V <= P) return 0;
-  // 가상 각도 V 의 지평선은 화면 중심에서 (V−90°) 만큼 아래, 실제 P 의 지평선은 (P−90°)
-  const k = (H / 2) * (Math.tan((V - 90) * D2R) - Math.tan((P - 90) * D2R)) / _ml3dHalfFovTan();
-  return Math.max(0, Math.min(H * 0.6, k));
-}
-// 하늘색 바탕은 지도 뒤쪽(지도가 내려간 위쪽)에만 깐다
-function _sky3dBg(on) {
-  const el = document.getElementById('map3d');
-  const par = el && el.parentElement;
-  if (!par) return;
-  if (par.dataset.bg0 === undefined) par.dataset.bg0 = par.style.background || '';
-  par.style.background = on ? SIM_SKY_BG : par.dataset.bg0;
-}
+// 종전에는 뱅크·기수 자세를 화면을 돌리고 밀어 흉내 냈다. 이제 카메라가 직접
+// 하므로 그 흔적만 지운다(예전 상태가 남아 있을 수 있으므로 한 번 더 본다).
 function _apply3dRoll() {
   const el = document.getElementById('map3d');
   if (!el) return;
-  if (!simModeOn) {
-    if (el.style.transform) { el.style.transform = ''; el.style.transformOrigin = ''; }
-    _sky3dBg(false);
-    return;
-  }
-  const sky = _sky3dShift();
-  el.style.transformOrigin = '50% 50%';
-  el.style.transform = `translateY(${sky.toFixed(1)}px) rotate(${(-S.bnk).toFixed(2)}deg) scale(${_ml3dRollCover().toFixed(3)})`;
-  _sky3dBg(sky > 0.5);
+  if (el.style.transform) { el.style.transform = ''; el.style.transformOrigin = ''; }
+  const par = el.parentElement;
+  if (par && par.dataset.bg0 !== undefined) { par.style.background = par.dataset.bg0; delete par.dataset.bg0; }
 }
 function _follow2d() {
   {

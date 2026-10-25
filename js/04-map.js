@@ -251,7 +251,9 @@ function _init3dMap() {
       zoom: 11,
       pitch: 55,
       bearing: 0,
-      maxPitch: 85,
+      // SIM 모드 1인칭은 기수를 들면 하늘을 봐야 하므로 90° 너머까지 연다
+      // (평소 3D 추종·기울기 버튼은 종전대로 85° 안에서 쓴다)
+      maxPitch: 180,
       attributionControl: false
     });
   } catch (e) {
@@ -375,6 +377,10 @@ class DualScale3D {
 
 function _update3dMarker() {
   if (!_ml3d || !_ml3dMarker || !_map3dShown()) return;
+  // 1인칭(SIM)에서는 눈이 곧 헬기 자리다 — 제 마커는 보이지 않아야 한다
+  const mEl = _ml3dMarker.getElement();
+  const hide = (typeof simModeOn !== 'undefined') && simModeOn;
+  if (mEl && mEl.style.visibility !== (hide ? 'hidden' : '')) mEl.style.visibility = hide ? 'hidden' : '';
   _ml3dMarker.setLngLat([S.lon, S.lat]);
   // Rotate the inner wrapper (outer element's transform is owned by maplibre)
   // rotationAlignment:'viewport'(화면 기준)이므로 카메라 방위를 빼야

@@ -664,15 +664,27 @@ export async function run(page, t) {
   })()`);
   t.ok(inv < -30, `반전으로 잡아 두면 반대로 선다 (${inv.toFixed(1)}°)`);
 
+  // 3D 카메라를 그대로 읽는다 — 자리·높이·방위·기울기·롤.
+  // (maplibre 5 는 카메라를 헬기 자리에 직접 놓으므로 화면을 돌리거나 미는
+  //  흉내가 없다. 그래서 카메라 값을 곧바로 잰다.)
+  const CAM = `() => {
+    const tr = _ml3d.transform, ll = tr.getCameraLngLat();
+    return { lat: ll.lat, lon: ll.lng, alt: tr.getCameraAltitude(),
+             pitch: _ml3d.getPitch(), roll: _ml3d.getRoll(),
+             bearing: Math.round(normA(_ml3d.getBearing())) % 360,
+             tf: document.getElementById('map3d').style.transform };
+  }`;
+
   // ── PFD 와 지도가 함께 움직인다 ──
   // 같은 상태(S)를 두 화면이 읽으므로, 조종한 결과가 둘 다에 나타나야 한다.
   const both = await page.evaluate(`(() => {
     (${SETUP.toString()})();
     const fly = ${FLY};
+    const cam = ${CAM};
     toggleSimMode(false);
     selectPanel('left', 'pfd', true); selectPanel('mid', 'map', true);
     toggleSimMode(true);                 // 켜면 지도 창이 3D 로 바뀐다
-    const c0 = (_ml3d ? _ml3d.getCenter() : leafMap.getCenter());
+    const c0 = cam();
     // PFD 캔버스에 그려진 뱅크 지시(ADI 회전각)를 가로채 본다
     let drawn = null;
     const proto = CanvasRenderingContext2D.prototype, orig = proto.rotate;
@@ -680,207 +692,146 @@ export async function run(page, t) {
     proto.rotate = function (a) { if (drawn === null) drawn = a; return orig.call(this, a); };
     drawPFD();
     proto.rotate = orig;
-    const c1 = (_ml3d ? _ml3d.getCenter() : leafMap.getCenter());
-    const el = document.getElementById('map3d');
-    return { bnk: S.bnk, drawn, three: midSel,
-             tf: el.style.transform, pitch: _ml3d ? _ml3d.getPitch() : null,
-             bearing: _ml3d ? Math.round(normA(_ml3d.getBearing())) % 360 : null,
+    const c1 = cam();
+    return { bnk: S.bnk, drawn, three: midSel, c1,
              hdg: Math.round(S.hdg) % 360,
-             moved: Math.hypot(c1.lat - c0.lat, c1.lng - c0.lng),
-             nearAc: Math.hypot(c1.lat - S.lat, c1.lng - S.lon) };
+             moved: distance(c0.lat, c0.lon, c1.lat, c1.lon),
+             offAc: distance(c1.lat, c1.lon, S.lat, S.lon) * 1852 };
   })()`);
   t.ok(Math.abs(both.bnk) > 40, `조종한 뱅크가 상태에 들어 있다 (${both.bnk.toFixed(0)}°)`);
   t.ok(both.drawn !== null && Math.abs(both.drawn) > 0.3,
     `PFD 가 그 뱅크로 그려진다 (${both.drawn === null ? '없음' : both.drawn.toFixed(2)}rad)`);
   t.eq(both.three, 'm3d', 'SIM 을 켜면 지도 창이 3D 로 바뀐다');
-  t.ok(both.moved > 0.002, `3D 지도도 함께 따라 움직인다 (${both.moved.toFixed(4)}°)`);
-  t.ok(both.nearAc < 0.25, `지도 중심이 항공기를 따라온다 (${both.nearAc.toFixed(3)}°)`);
-  t.eq(both.bearing, both.hdg, `방위는 기수를 따른다 (${both.bearing}° · 기수 ${both.hdg}°)`);
-  t.ok(/rotate\(-?\d/.test(both.tf || ''),
-    `뱅크만큼 화면이 기운다 (${both.tf || '없음'})`);
+  t.ok(both.moved > 0.05, `3D 카메라도 함께 날아간다 (${both.moved.toFixed(2)}NM)`);
+  t.ok(both.offAc < 2, `카메라는 늘 헬기 자리에 있다 (${both.offAc.toFixed(2)}m)`);
+  t.eq(both.c1.bearing, both.hdg, `방위는 기수를 따른다 (${both.c1.bearing}° · 기수 ${both.hdg}°)`);
+  t.ok(Math.abs(both.c1.roll + both.bnk) < 0.5,
+    `카메라가 뱅크만큼 기운다 (롤 ${both.c1.roll.toFixed(1)}° · 뱅크 ${both.bnk.toFixed(1)}°)`);
+  t.eq(both.c1.tf, '', '화면을 돌리는 흉내는 쓰지 않는다(카메라가 직접 기운다)');
 
   // ── 바깥 그림이 계기를 따른다 ──
-  // 고도계(높이) · 방향지시계(방위) · 자세계(카메라 각도와 기울기).
+  // 고도계(높이) · 방향지시계(방위) · 자세계(기울기·롤).
   const view = await page.evaluate(`(() => {
     (${SETUP.toString()})();
-    const fly = ${FLY};
+    const cam = ${CAM};
     toggleSimMode(false);
     toggleTriple(true);
     selectPanel('left', 'pfd', true); selectPanel('mid', 'map', true);
     selectPanel('right', 'cdu', true);
     const before = midSel;
     toggleSimMode(true);
-    const el = document.getElementById('map3d');
-    const read = () => ({ pitch: _ml3d.getPitch(), zoom: _ml3d.getZoom(),
-                          bearing: Math.round(normA(_ml3d.getBearing())) % 360,
-                          tf: el.style.transform });
-    S.alt = 1000; S.pit = 0; S.bnk = 0; S.hdg = 90;
-    _applyFollow(); const low = read();
-    S.alt = 9000;
-    _applyFollow(); const high = read();
-    S.alt = 1000; S.pit = -10;              // 기수를 숙이면 더 아래를 본다
-    _applyFollow(); const down = read();
-    S.pit = 10;
-    _applyFollow(); const up = read();
-    S.pit = 0; S.hdg = 250;
-    _applyFollow(); const turn = read();
-    S.bnk = -30;
-    _applyFollow(); const rolled = read();
-    S.bnk = 0;
-    _applyFollow(); const levelTf = el.style.transform;
+    _simGndFt = 0; _simGndFresh = false;     // 지형을 모르는 바다 위로 둔다
+    const at = (alt, pit, hdg, bnk) => {
+      S.alt = alt; S.pit = pit; S.hdg = hdg; S.bnk = bnk; _applyFollow(); return cam();
+    };
+    const low = at(1000, 0, 90, 0), high = at(9000, 0, 90, 0);
+    const down = at(1000, -10, 90, 0), up = at(1000, 10, 90, 0);
+    const turn = at(1000, 0, 250, 0), rolled = at(1000, 0, 250, -30);
+    const level = at(1000, 0, 250, 0);
     toggleSimMode(false);
-    const after = { sel: midSel, tf: el.style.transform };
-    return { before, low, high, down, up, turn, rolled, levelTf, after };
+    const after = { sel: midSel, roll: _ml3d.getRoll(), pitch: _ml3d.getPitch(),
+                    clamp: _ml3d.getCenterClampedToGround(), tf: document.getElementById('map3d').style.transform };
+    return { before, low, high, down, up, turn, rolled, level, after };
   })()`);
   t.eq(view.before, 'map', '켜기 전에는 2D 지도였다');
-  t.ok(view.high.zoom < view.low.zoom - 1,
-    `고도가 높아지면 시야가 멀어진다 (1,000ft z${view.low.zoom.toFixed(1)} → 9,000ft z${view.high.zoom.toFixed(1)})`);
-  t.ok(view.down.pitch < view.low.pitch - 5,
-    `기수를 숙이면 카메라가 더 아래를 본다 (${view.low.pitch.toFixed(0)}° → ${view.down.pitch.toFixed(0)}°)`);
-  t.ok(view.up.pitch > view.low.pitch + 5,
-    `기수를 들면 더 멀리 본다 (${view.up.pitch.toFixed(0)}°)`);
+  t.ok(Math.abs(view.low.alt - 1000 * 0.3048) < 1.5 && Math.abs(view.high.alt - 9000 * 0.3048) < 1.5,
+    `카메라 높이가 고도계와 같다 (1,000ft → ${(view.low.alt / 0.3048).toFixed(0)}ft · ` +
+    `9,000ft → ${(view.high.alt / 0.3048).toFixed(0)}ft)`);
+  t.ok(Math.abs(view.low.pitch - 90) < 0.5,
+    `수평 자세에서는 지평선을 정면으로 본다 (${view.low.pitch.toFixed(1)}°)`);
+  t.ok(Math.abs(view.down.pitch - 80) < 0.5,
+    `기수를 10° 숙이면 그만큼 아래를 본다 (${view.down.pitch.toFixed(1)}°)`);
+  t.ok(Math.abs(view.up.pitch - 100) < 0.5,
+    `기수를 10° 들면 지평선 위(하늘)를 본다 (${view.up.pitch.toFixed(1)}° — 종전 엔진은 85° 가 끝이었다)`);
   t.eq(view.turn.bearing, 250, `기수를 돌리면 시야도 돈다 (${view.turn.bearing}°)`);
-  t.ok(/rotate\(30/.test(view.rolled.tf),
-    `좌로 기울이면 화면이 반대로 돈다 (${view.rolled.tf})`);
-  t.ok(/scale\([1-9][0-9.]*\)/.test(view.rolled.tf),
-    '돌려서 비는 모서리를 덮을 만큼 키운다');
-  t.ok(/rotate\(-?0(\.0+)?deg\)/.test(view.levelTf),
-    `수평으로 돌아오면 기울임도 풀린다 (${view.levelTf})`);
+  t.ok(Math.abs(view.rolled.roll - 30) < 0.5,
+    `좌로 30° 기울이면 카메라도 그만큼 기운다 (롤 ${view.rolled.roll.toFixed(1)}°)`);
+  t.ok(Math.abs(view.level.roll) < 0.5, '수평으로 돌아오면 기울임도 풀린다');
   t.eq(view.after.sel, 'map', '끄면 지도 창이 2D 로 되돌아온다');
+  t.ok(Math.abs(view.after.roll) < 0.5 && view.after.pitch <= 85.5,
+    `끄면 롤과 90° 너머 기울기도 되돌아온다 (롤 ${view.after.roll.toFixed(1)}° · ${view.after.pitch.toFixed(0)}°)`);
+  t.eq(view.after.clamp, true, '끄면 지도 중심을 다시 지면에 묶는다(평소 3D 추종용)');
 
-  // ── 기울여도 지도가 확대되지 않는다 ──
-  // 돌리면 모서리가 비어 그만큼 화면을 키워 덮는데, 그 배율을 뱅크마다 바꾸면
-  // 기울일 때마다 지도가 확대·축소돼 보인다. 배율은 늘 같게 두고 카메라로
-  // 보정하므로, 화면에 보이는 '1픽셀당 몇 m' 가 뱅크와 상관없이 같아야 한다.
-  const rollZoom = await page.evaluate(`(() => {
-    (${SETUP.toString()})();
-    toggleSimMode(false);
-    toggleTriple(true);
-    selectPanel('left', 'pfd', true); selectPanel('mid', 'map', true);
-    selectPanel('right', 'cdu', true);
-    toggleSimMode(true);
-    S.alt = 2000; S.pit = 0; S.hdg = 90; _simGndFt = 0;
-    const el = document.getElementById('map3d');
-    // 템플릿 문자열 안에서는 정규식 escape 가 한 겹 벗겨지므로 글자로 끊어 읽는다
-    const between = (tf, head) => {
-      const i = (tf || '').indexOf(head);
-      if (i < 0) return null;
-      const j = tf.indexOf(')', i);
-      return tf.slice(i + head.length, j);
-    };
-    const scaleOf = (tf) => { const v = between(tf, 'scale('); return v ? +v : 1; };
-    const read = (bnk) => {
-      S.bnk = bnk; _applyFollow(); _apply3dRoll();
-      const mpp = 78271.51696 * Math.cos(S.lat * D2R) / Math.pow(2, _ml3d.getZoom());
-      const k = scaleOf(el.style.transform);
-      const r = between(el.style.transform, 'rotate(');
-      return { mpp, k, eff: mpp / k, rot: r ? r.replace('deg', '') : null,
-               tf: el.style.transform };
-    };
-    const a = read(0), b = read(30), c = read(-45);
-    const on = { sim: simModeOn, follow: followMode, has3d: !!_ml3d };
-    toggleSimMode(false);
-    return { a, b, c, on, after: el.style.transform };
-  })()`);
-  t.ok(Math.abs(rollZoom.b.eff / rollZoom.a.eff - 1) < 0.02,
-    `30° 기울여도 보이는 축척이 같다 (${rollZoom.a.eff.toFixed(2)} → ${rollZoom.b.eff.toFixed(2)} m/px)`);
-  t.ok(Math.abs(rollZoom.c.eff / rollZoom.a.eff - 1) < 0.02,
-    `45° 에서도 같다 (${rollZoom.c.eff.toFixed(2)} m/px — 종전에는 여기서 1.4배로 확대됐다)`);
-  t.ok(Math.abs(rollZoom.a.k - rollZoom.b.k) < 0.001 && rollZoom.a.k > 1,
-    `화면 배율은 뱅크와 상관없이 늘 같다 (${rollZoom.a.k.toFixed(3)})`);
-  t.eq(rollZoom.b.rot, '-30',
-    `기울임은 뱅크만큼만 돈다 (${JSON.stringify(rollZoom.on)} · ${rollZoom.b.tf})`);
-  t.eq(rollZoom.after, '', '모드를 끄면 되돌아온다');
-
-  // ── 기수를 들면 하늘을 본다 ──
-  // 지도 엔진은 85° 위로 기울지 못한다. 그 위로는 시선을 앞으로 보내면 '전진'
-  // 으로 보이므로, 카메라는 85° 에 두고 지평선을 화면 아래로 내려 하늘을 편다.
+  // ── 기수를 들면 하늘을 본다 — 앞으로 나가지 않는다 ──
+  // 종전 엔진(maplibre 4)은 카메라를 85° 위로 들 수 없어, 기수를 더 들면 시선을
+  // 앞으로 보내 흉내 냈다 — 그래서 하늘 대신 '전진' 하는 그림이 됐다.
+  // 이제는 카메라가 정말로 들린다. 정면 먼 곳(지평선)이 화면 어디에 찍히는지,
+  // 그리고 카메라 자리가 그대로인지를 본다.
   const lookUp = await page.evaluate(`(() => {
     (${SETUP.toString()})();
+    const cam = ${CAM};
     toggleSimMode(false);
     toggleTriple(true);
     selectPanel('left', 'pfd', true); selectPanel('mid', 'map', true);
     selectPanel('right', 'cdu', true);
     toggleSimMode(true);
-    S.alt = 2000; S.bnk = 0; S.hdg = 90; _simGndFt = 0;
-    const read = (pit) => {
-      S.pit = pit; _applyFollow(); _apply3dRoll();
-      const c = _ml3d.getCenter();
-      const el = document.getElementById('map3d');
-      return { cam: _ml3d.getPitch(), ahead: distance(S.lat, S.lon, c.lat, c.lng),
-               sky: _sky3dShift(), bg: el.parentElement.style.background };
+    _simGndFt = 0; _simGndFresh = false;
+    S.alt = 2000; S.bnk = 0; S.hdg = 90;
+    const H = _ml3d.getContainer().clientHeight;
+    const read = (pit, bnk) => {
+      S.pit = pit; S.bnk = bnk || 0; _applyFollow();
+      const far = destPoint(S.lat, S.lon, S.hdg, 40);           // 정면 40NM — 지평선 근처
+      const c = cam();
+      return { horizonY: _ml3d.project([far[1], far[0]]).y, c,
+               offAc: distance(c.lat, c.lon, S.lat, S.lon) * 1852 };
     };
-    const lvl = read(0), up8 = read(8), up16 = read(16), up20 = read(20),
-          up30 = read(30), up40 = read(40), dn = read(-20);
+    const lvl = read(0), up10 = read(10), up20 = read(20), up40 = read(40),
+          dn20 = read(-20), bank45 = read(0, 45);
+    const marker = _ml3dMarker ? _ml3dMarker.getElement().style.visibility : 'none';
     toggleSimMode(false);
-    return { lvl, up8, up16, up20, up30, up40, dn };
+    _update3dMarker();
+    const markerAfter = _ml3dMarker ? _ml3dMarker.getElement().style.visibility : 'none';
+    return { H, lvl, up10, up20, up40, dn20, bank45, marker, markerAfter };
   })()`);
-  t.ok(lookUp.up8.cam > lookUp.lvl.cam + 6,
-    `기수 8° 를 들면 그만큼 위를 본다 (${lookUp.lvl.cam.toFixed(0)}° → ${lookUp.up8.cam.toFixed(0)}°)`);
-  t.ok(lookUp.up16.cam > lookUp.up8.cam + 5,
-    `16° 까지도 각도로 따라간다 (${lookUp.up16.cam.toFixed(0)}°)`);
-  t.ok(lookUp.up40.cam > 84 && lookUp.up40.cam <= 85.5,
-    `엔진 한계(85°)에서 멈추되 그 위로는 시선을 앞으로 보내지 않는다 (${lookUp.up40.cam.toFixed(1)}°)`);
-  t.ok(Math.abs(lookUp.up40.ahead - lookUp.up30.ahead) < 0.0005,
-    `한계 위에서는 시선이 앞으로 나가지 않는다 — '전진' 으로 보이지 않게 ` +
-    `(30° ${lookUp.up30.ahead.toFixed(4)} · 40° ${lookUp.up40.ahead.toFixed(4)} NM)`);
-  t.ok(lookUp.up20.sky < 1 && lookUp.up30.sky > 5 && lookUp.up40.sky > lookUp.up30.sky + 10,
-    `한계를 넘으면 지평선이 내려와 하늘이 넓어진다 (30° ${lookUp.up30.sky.toFixed(0)}px → 40° ${lookUp.up40.sky.toFixed(0)}px)`);
-  t.ok(/linear-gradient/.test(lookUp.up40.bg) && !/linear-gradient/.test(lookUp.lvl.bg),
-    '하늘색 바탕은 위를 볼 때만 깔린다');
-  t.ok(lookUp.dn.sky === 0 && lookUp.dn.cam < lookUp.lvl.cam - 10,
-    `숙이면 아래를 보고 하늘은 없다 (${lookUp.dn.cam.toFixed(0)}°)`);
+  const fr = (r) => (r.horizonY / lookUp.H).toFixed(2);
+  t.ok(Math.abs(lookUp.lvl.horizonY - lookUp.H / 2) < lookUp.H * 0.08,
+    `수평 자세에서 지평선은 화면 한가운데다 (높이의 ${fr(lookUp.lvl)})`);
+  t.ok(lookUp.up10.horizonY > lookUp.lvl.horizonY + lookUp.H * 0.1
+       && lookUp.up20.horizonY > lookUp.up10.horizonY + lookUp.H * 0.1,
+    `기수를 들수록 지평선이 내려가 하늘이 넓어진다 (0° ${fr(lookUp.lvl)} → 10° ${fr(lookUp.up10)} → 20° ${fr(lookUp.up20)})`);
+  t.ok(lookUp.up40.c.pitch > 125,
+    `40° 들면 하늘을 올려다본다 (카메라 ${lookUp.up40.c.pitch.toFixed(0)}°)`);
+  t.ok(lookUp.dn20.horizonY < lookUp.lvl.horizonY - lookUp.H * 0.1,
+    `숙이면 지평선이 올라가 땅이 넓어진다 (${fr(lookUp.dn20)})`);
+  t.ok([lookUp.lvl, lookUp.up10, lookUp.up20, lookUp.up40, lookUp.dn20].every(r => r.offAc < 2),
+    `어느 자세에서도 카메라는 헬기 자리 그대로다 — '전진' 하지 않는다 ` +
+    `(최대 ${Math.max(...[lookUp.lvl, lookUp.up10, lookUp.up20, lookUp.up40, lookUp.dn20].map(r => r.offAc)).toFixed(2)}m)`);
+  t.ok(Math.abs(lookUp.bank45.c.alt - lookUp.lvl.c.alt) < 0.5 && lookUp.bank45.c.tf === '',
+    `기울여도 확대되지 않는다 — 카메라 높이 그대로, 화면 배율 없음`);
+  t.eq(lookUp.marker, 'hidden', '1인칭에서는 제 마커가 보이지 않는다(눈이 곧 헬기 자리)');
+  t.eq(lookUp.markerAfter, '', '끄면 마커가 다시 보인다');
 
-  // ── 1인칭: 눈이 헬기 자리에 있다 ──
-  // 뒤에서 따라가는 3인칭이면 헬기가 화면 안(아래쪽 1/4 즈음)에 보인다.
-  // 1인칭이면 헬기는 화면 아래 끝(또는 그 밖)이고, 화면에 보이는 것은 '앞' 이다.
-  // 카메라 높이가 고도계와 맞는지는 지도 축척에서 거꾸로 셈해 확인한다.
-  const fpv = await page.evaluate(`(() => {
+  // ── 땅 위에서는 고도계만큼, 앉아 있으면 눈높이만큼 떠 있다 ──
+  // 지면 위 높이(AGL)는 비행 모델의 땅에서 재고, 카메라는 '화면에 그려진 땅' 위에
+  // 그만큼 놓는다. 그려진 땅은 표고를 부풀려 그린다(과장비). 지형 타일이 아직
+  // 안 왔으면 그려진 땅은 우리 DEM 값을 부풀린 높이로 본다.
+  const gndCam = await page.evaluate(`(() => {
     (${SETUP.toString()})();
-    toggleSimMode(false);
-    toggleTriple(true);
-    selectPanel('left', 'pfd', true); selectPanel('mid', 'map', true);
-    selectPanel('right', 'cdu', true);
-    toggleSimMode(true);
-    S.hdg = 90; S.pit = 0; S.bnk = 0; S.alt = 1000;
-    _applyFollow();
-    const el = _ml3d.getContainer();
-    const H = el.clientHeight, W = el.clientWidth;
-    const pAc = _ml3d.project([S.lon, S.lat]);          // 헬기가 화면 어디에 찍히나
-    // 지도 중심은 기수 앞쪽이어야 한다
-    const c = _ml3d.getCenter();
-    const ahead = distance(S.lat, S.lon, c.lat, c.lng) * 1852;   // m
-    const brgToC = normAS(bearing(S.lat, S.lon, c.lat, c.lng) - S.hdg);
-    // zoom 에서 카메라 높이를 거꾸로 셈한다(512px 타일)
-    const mpp = 78271.51696 * Math.cos(S.lat * D2R) / Math.pow(2, _ml3d.getZoom());
-    const pr = _ml3d.getPitch() * D2R;
-    const eye = (H / 2 / _ml3dHalfFovTan()) * Math.cos(pr) * mpp;
-    S.alt = 4000; _applyFollow();
-    const mpp2 = 78271.51696 * Math.cos(S.lat * D2R) / Math.pow(2, _ml3d.getZoom());
-    const eye2 = (H / 2 / _ml3dHalfFovTan()) * Math.cos(_ml3d.getPitch() * D2R) * mpp2;
-    toggleSimMode(false);
-    const cover = _ml3dRollCover();
-    return { H, W, acX: pAc.x, acY: pAc.y, ahead, brgToC, cover,
-             visBottom: H / 2 + H / (2 * cover),
-             eyeFt: eye / 0.3048, eyeFt2: eye2 / 0.3048,
-             tanPitch: Math.tan(pr) };
+    const cam = ${CAM};
+    const realElev = window._tcElev, realQ = _ml3d.queryTerrainElevation;
+    window._tcElev = () => 305;                 // 비행 모델: 1,000ft 산 위
+    simTerrainFt();
+    const run = (q, alt) => {
+      _ml3d.queryTerrainElevation = q;
+      S.alt = alt; S.pit = 0; S.bnk = 0; _applyFollow(); return cam().alt;
+    };
+    // ① 지도가 그 산을 이미 그렸다(그려진 땅 = 305 × 과장비)
+    const drawnKnown = run(() => 305 * MAP3D_EXAG, 1500);
+    // ② 아직 못 그렸다 — 우리 DEM 을 부풀린 높이를 그려진 땅으로 본다
+    const drawnUnknown = run(() => null, 1500);
+    // ③ 땅에 앉음(AGL 0)
+    const onGround = run(() => 305 * MAP3D_EXAG, simTerrainFt());
+    _ml3d.queryTerrainElevation = realQ;
+    window._tcElev = realElev;
+    return { drawnKnown, drawnUnknown, onGround, exag: MAP3D_EXAG };
   })()`);
-  // 화면은 기울일 자리를 만들려고 늘 같은 배율로 키워 두므로, '보이는 아래 끝' 은
-  // 캔버스 한가운데에서 아래로 (높이/2 ÷ 배율) 만큼 내려간 자리다.
-  t.ok(fpv.acY >= fpv.visBottom - 12,
-    `헬기는 보이는 화면 아래 끝에 있다 — 눈이 그 자리다 ` +
-    `(y ${fpv.acY.toFixed(0)} · 아래 끝 ${fpv.visBottom.toFixed(0)} / 캔버스 ${fpv.H})`);
-  t.ok(Math.abs(fpv.acX - fpv.W / 2) < 8,
-    `좌우로는 한가운데다 (x ${fpv.acX.toFixed(0)} / 폭 ${fpv.W})`);
-  t.ok(Math.abs(fpv.brgToC) < 2,
-    `보는 곳은 기수 정면이다 (기수에서 ${fpv.brgToC.toFixed(1)}°)`);
-  t.ok(Math.abs(fpv.eyeFt - 1000) < 60,
-    `카메라 높이가 고도계와 같다 (${fpv.eyeFt.toFixed(0)}ft · 고도 1,000ft)`);
-  t.ok(Math.abs(fpv.eyeFt2 - 4000) < 240,
-    `고도를 올리면 눈높이도 따라 오른다 (${fpv.eyeFt2.toFixed(0)}ft · 고도 4,000ft)`);
-  t.ok(Math.abs(fpv.ahead - 1000 * 0.3048 * fpv.tanPitch) < 60,
-    `중심은 눈 아래에서 앞으로 꼭 그만큼 밀려 있다 (${fpv.ahead.toFixed(0)}m)`);
-  t.eq(view.after.tf, '', '화면 기울임도 남지 않는다');
+  const rendGnd = 305 * gndCam.exag, agl500 = 500 * 0.3048;
+  t.ok(Math.abs(gndCam.drawnKnown - (rendGnd + agl500)) < 2,
+    `산 위 AGL 500ft — 그려진 땅(${rendGnd.toFixed(0)}m) 위로 ${agl500.toFixed(0)}m (${gndCam.drawnKnown.toFixed(0)}m)`);
+  t.ok(Math.abs(gndCam.drawnUnknown - (rendGnd + agl500)) < 2,
+    `지형 타일이 아직 없어도 같은 자리에 놓인다 (${gndCam.drawnUnknown.toFixed(0)}m)`);
+  t.ok(gndCam.onGround > rendGnd + 5 && gndCam.onGround < rendGnd + 12,
+    `땅에 앉아 있어도 눈높이(8m)만큼 떠 있다 (${(gndCam.onGround - rendGnd).toFixed(1)}m)`);
 
   // ── 4방향 햇 = 사이클릭 비퍼 트림 ──
   // 실제 헬기의 사이클릭 햇은 트림이다. 좌우는 롤, 전후는 피치 중립을 옮겨 둬서
