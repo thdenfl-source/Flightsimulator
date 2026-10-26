@@ -510,7 +510,8 @@ function simStep(ts){
   if (shipVisible && shipMarker && shipSpd > 0 && S.lastT !== null) {
     const sdt = (ts - S.lastT) / 1000 * simSpeed;   // 배가 항공기와 같은 시간을 흐르게
     if (sdt > 0 && sdt < 0.5 * simSpeed) {
-      const [nLat, nLon] = destPoint(shipLat, shipLon, shipHdg, shipSpd * sdt / 3600);
+      shipVarStep(sdt);                               // 난이도만큼 속도가 흔들린다
+      const [nLat, nLon] = destPoint(shipLat, shipLon, shipHdg, shipSpdNow() * sdt / 3600);
       shipLat = nLat; shipLon = nLon;
       if (!shipDragging) shipMarker.setLatLng([shipLat, shipLon]);
       const slast = shipTrail[shipTrail.length - 1];
