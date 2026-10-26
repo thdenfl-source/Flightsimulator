@@ -1568,6 +1568,12 @@ body.solo-mode .solo-panel-visible {
   cursor: pointer; letter-spacing: 0.5px; transition: background 0.1s;
 }
 .ship-tab.ship-tab-active { background: #0d2040; border-color: #7ab8f5; color: #7ab8f5; }
+/* 난이도 — 상·중·하를 색으로 가른다 */
+.ship-lvl { font-size: 11px; padding: 4px 0 3px; line-height: 1.2; }
+.ship-lvl small { display: block; font-size: 6.5px; font-weight: normal; letter-spacing: 0; opacity: 0.85; }
+.ship-lvl.ship-tab-active[data-lvl="HI"]  { background: #3a0f0f; border-color: #ff6b6b; color: #ff8a8a; }
+.ship-lvl.ship-tab-active[data-lvl="MID"] { background: #3a2a00; border-color: #ffb74d; color: #ffcc66; }
+.ship-lvl.ship-tab-active[data-lvl="LO"]  { background: #0d2a14; border-color: #4ade80; color: #6ee79a; }
 .ship-num {
   background: radial-gradient(circle at 35% 35%, #3c3c3c, #111);
   border: 0.7px solid #555; border-radius: 50%; color: #fff;
@@ -1754,7 +1760,14 @@ body.night-mode::after {
             테두리 선을 탭하면 공역 정보가 뜨고, 접근/진입 시 경보는 종전과 동일합니다.</li>
         <li><b>심볼 탭</b>: FIX·항로 경유점·<b>VOR</b>·<b>공항</b>·<b>비행계획 웨이포인트</b> 어느 것을 탭해도 좌표 확인·복사가 가능합니다.
             VOR은 <b>NAV1/NAV2 튜닝</b>, 공항은 <b>METAR/TAF</b>·<b>공항 정보</b>가 함께 나옵니다.<br><b>비행계획 웨이포인트</b>는 몇 번째인지·HOLD·VNAV 여부를 보여 주고, <b>ℹ 정보</b> 를 누르면 CDU 의 그 <b>웨이포인트 카드</b>로 바로 갑니다(이미 플랜에 있으므로 「플랜 추가」는 없습니다). 종전에는 지도에서 누르는 즉시 활성 웨이포인트가 됐습니다 — 이제 활성 지정은 카드의 <b>Direct To</b> 입니다.</li>
-        <li><b>SHIP</b>: 버튼을 누르면 「배 표시 / 설정창」 선택. 선박 속도·침로를 입력해 이동시킬 수 있습니다.</li>
+        <li><b>SHIP</b>: 버튼을 누르면 「배 표시 / 설정창」 선택. 선박 속도·침로를 입력해 이동시킬 수 있습니다.<br>
+            설정창 맨 아래 <b>난이도</b>로 배 속도의 흔들림을 고릅니다 —
+            <b>상 ±2kt</b> · <b>중 ±1kt</b> · <b>하 변화 없음</b>(설정 속도 그대로).
+            실제 배처럼 설정 속도 둘레로 빨라졌다 느려졌다 하므로, <b>GSPD</b> 로 배 위에 따라붙으려면
+            HOVER PAGE 의 SHIP 위치를 보며 속도를 계속 고쳐 잡아야 합니다.
+            흔들림은 15~40초마다 바뀌고 <b>초당 0.1kt</b> 씩 천천히 옮겨 갑니다(갑자기 튀지 않습니다).
+            설정창에는 <b>설정 속도와 흔들림 폭</b>만 나오고 지금 실제 속도는 나오지 않습니다.
+            서 있는 배(0kt)는 흔들리지 않습니다. 고른 난이도는 기억해 둡니다.</li>
         <li><b>🔒 잠금</b>: 화면 터치를 차단(비행 중 오조작 방지). 해제는 하단 버튼을 <b>1.2초 길게</b> 누르기.</li>
         <li>우하단 <b>REC</b>(항적 기록, GPX/KML 저장) · <b>FDR</b>(항적 리플레이).</li>
       </ul>
@@ -2444,6 +2457,15 @@ body.night-mode::after {
           <div style="text-align:center;">
             <div style="color:#555;font-size:6px;letter-spacing:0.5px;">COURSE</div>
             <div id="ship-stat-crs" style="color:#00ffff;font-size:11px;font-weight:bold;">000°</div>
+          </div>
+        </div>
+        <!-- 난이도 — 배 속도가 설정값 둘레로 흔들리는 폭 -->
+        <div style="border-top:1px solid #1e1e1e;margin-top:7px;padding-top:6px;">
+          <div style="color:#555;font-size:6px;letter-spacing:0.5px;text-align:center;margin-bottom:4px;">난이도 · 속도 변화</div>
+          <div style="display:flex;gap:4px;">
+            <button id="ship-lvl-hi" class="ship-tab ship-lvl" data-lvl="HI" data-act="shipSetLvl" data-arg='["HI"]'>상<small>±2kt</small></button>
+            <button id="ship-lvl-mid" class="ship-tab ship-lvl" data-lvl="MID" data-act="shipSetLvl" data-arg='["MID"]'>중<small>±1kt</small></button>
+            <button id="ship-lvl-lo" class="ship-tab ship-lvl ship-tab-active" data-lvl="LO" data-act="shipSetLvl" data-arg='["LO"]'>하<small>변화 없음</small></button>
           </div>
         </div>
       </div>

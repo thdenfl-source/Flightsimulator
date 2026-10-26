@@ -267,6 +267,52 @@ let shipHdg = 0, shipSpd = 0;
 let shipMarker = null, shipVisible = false, shipDragging = false;
 let shipInputMode = 'SPD', shipInput = '';
 
+// ── 난이도(상·중·하) — 배 속도의 흔들림 ──
+// 실제 배는 설정 속도를 그대로 지키지 못하고 너울·조타로 조금씩 빨라졌다
+// 느려졌다 한다. GSPD 로 배 위에 따라붙는 훈련에서는 이 흔들림이 곧 난이도다.
+//   하: 흔들림 없음(설정 속도 그대로) · 중: ±1kt · 상: ±2kt
+// 흔들림은 갑자기 튀지 않는다 — 15~40초마다 새 목표를 골라 0.1kt/s 로 천천히
+// 다가간다. 그래야 배가 멀어지거나 다가오는 것을 보고 GSPD 를 고쳐 잡을 틈이 있다.
+const SHIP_LVL_KT = { HI: 2, MID: 1, LO: 0 };
+const SHIP_LVL_LBL = { HI: '상', MID: '중', LO: '하' };
+const SHIP_VAR_RATE = 0.1;          // 배가 속도를 바꾸는 빠르기(kt/s)
+let shipLvl = 'LO';
+try { const v = localStorage.getItem('shipLvl'); if (v && SHIP_LVL_KT[v] !== undefined) shipLvl = v; } catch (e) { _swallow(e); }
+let shipVar = 0;                    // 지금 설정 속도에 얹힌 흔들림(kt)
+let shipVarTgt = 0;                 // 다가가는 목표 흔들림(kt)
+let shipVarNext = 0;                // 다음 목표를 고르기까지 남은 시간(시뮬 초)
+
+// 지금 배가 실제로 내는 속도(kt). 서 있는 배(0kt)는 흔들지 않는다.
+function shipSpdNow() { return shipSpd > 0 ? Math.max(0, shipSpd + shipVar) : 0; }
+
+// 흔들림을 dt(시뮬 초)만큼 진행한다. 검사에서 난수를 고정할 수 있게 rnd 를 받는다.
+function shipVarStep(dt, rnd) {
+  const A = SHIP_LVL_KT[shipLvl] || 0;
+  if (!A) { shipVar = shipVarTgt = shipVarNext = 0; return; }
+  rnd = rnd || Math.random;
+  shipVarNext -= dt;
+  if (shipVarNext <= 0) {
+    // 크기는 폭의 절반~전부, 방향은 무작위 — '상' 이 '중' 처럼 느껴지지 않게
+    shipVarTgt = (rnd() < 0.5 ? -1 : 1) * A * (0.5 + 0.5 * rnd());
+    shipVarNext = 15 + 25 * rnd();
+  }
+  const d = shipVarTgt - shipVar, m = SHIP_VAR_RATE * dt;
+  shipVar = Math.abs(d) <= m ? shipVarTgt : shipVar + Math.sign(d) * m;
+  shipVar = Math.max(-A, Math.min(A, shipVar));
+}
+
+function shipSetLvl(lvl) {
+  if (SHIP_LVL_KT[lvl] === undefined) return;
+  shipLvl = lvl;
+  try { localStorage.setItem('shipLvl', lvl); } catch (e) { _swallow(e); }
+  // 폭이 줄면 그 안으로 들이고, 새 목표는 곧바로 다시 고른다(하는 즉시 0)
+  const A = SHIP_LVL_KT[lvl];
+  shipVar = Math.max(-A, Math.min(A, shipVar));
+  shipVarTgt = shipVar; shipVarNext = 0;
+  if (!A) shipVar = shipVarTgt = 0;
+  updateShipStatus();
+}
+
 function shipIcon() {
   return L.divIcon({
     html: `<div data-act="openShipPanel" style="transform:rotate(${shipHdg}deg);transform-origin:12px 20px;line-height:0;cursor:pointer;"><svg width="24" height="40" viewBox="0 0 24 40" xmlns="http://www.w3.org/2000/svg"><path d="M12 1 Q20 7 21 17 L21 33 Q21 39 12 39 Q3 39 3 33 L3 17 Q4 7 12 1Z" fill="#1a5fa8" stroke="#7ab8f5" stroke-width="1.5"/><rect x="8" y="16" width="8" height="10" rx="2" fill="#2277bb" stroke="#7ab8f5" stroke-width="0.7"/><circle cx="12" cy="5" r="2.5" fill="#7ab8f5" opacity="0.9"/><line x1="12" y1="1" x2="12" y2="39" stroke="#88ccff" stroke-width="0.5" stroke-dasharray="2,3" opacity="0.4"/></svg></div>`,
@@ -292,6 +338,7 @@ function shipToggleOn() {
   } else {
     const c = leafMap.getCenter();
     shipLat = c.lat; shipLon = c.lng;
+    shipVar = shipVarTgt = shipVarNext = 0;   // 새로 띄운 배는 설정 속도에서 시작
     shipTrail = []; updateShipTrail();
     shipVisible = true;
     createShipMarker();
@@ -365,8 +412,14 @@ function updateShipDisplay() {
 }
 
 function updateShipStatus() {
-  document.getElementById('ship-stat-spd').textContent = shipSpd + 'kt';
+  // 설정 속도와 흔들림 폭만 보여 준다 — 지금 실제 속도를 띄우면 훈련이 되지 않는다
+  const A = SHIP_LVL_KT[shipLvl] || 0;
+  document.getElementById('ship-stat-spd').textContent = shipSpd + 'kt' + (A ? ' ±' + A : '');
   document.getElementById('ship-stat-crs').textContent = fmtA(toMag(shipHdg)) + '°';
+  Object.keys(SHIP_LVL_KT).forEach(k => {
+    const b = document.getElementById('ship-lvl-' + k.toLowerCase());
+    if (b) b.classList.toggle('ship-tab-active', k === shipLvl);
+  });
 }
 
 function shipKey(k) {

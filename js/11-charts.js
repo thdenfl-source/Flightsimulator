@@ -2156,6 +2156,7 @@ appRegister({
   setRnp,
   setSolo,
   shipKey,
+  shipSetLvl,
   shipSetMode,
   shipToggleOn,
   shipTogglePanel,
