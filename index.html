@@ -1684,7 +1684,10 @@ body.night-mode::after {
             화면 가득 띄웁니다. 계기비행 연습처럼 PFD 만 크게 보거나, 지도·CDU 를 넓게 볼 때 쓰십시오.
             버튼을 <b>한 번 더 누르면</b>(또는 떠 있는 <b>✥ HALF</b> · 상단 막대의 <b>✕</b>)
             <b>들어가기 전 배치 그대로</b> 돌아옵니다. 단독 중에는 <b>상단 막대</b>에서 다른 창으로 바로 넘어갈 수 있습니다.</li>
-        <li>PFD 하단 FCP에서 <b>IAS·HDG·CRS·VS·ALT·CRHT</b>를 ▲▼/◀▶로 조절.</li>
+        <li>PFD 하단 FCP에서 <b>IAS·HDG·CRS·VS·ALT·CRHT</b>를 ▲▼/◀▶로 조절.
+            <b>CRHT ▲▼</b> 는 10ft 씩 옮기며, 지금 고도로 걸어 끝자리가 남아 있으면(예: 1,237ft)
+            먼저 <b>10ft 단위</b>로 맞춥니다(▲ 1,240 · ▼ 1,230).
+            스톱워치는 FCP <b>2행</b>(BRG 오른쪽), ALT·CRHT·G/S 버튼은 <b>1행</b>(CRHT ▲▼ 오른쪽)에 있습니다.</li>
         <li><b>HDG ◀▶</b>는 기수를 즉시 돌리지 않고 <b>선택 헤딩(HSI 청록 벅)</b>만 옮깁니다.
             AFCS가 <b>표준선회(360°/2분 = 3°/s)</b>로 선회하며, 뱅크각은 <b>속도의 16%</b>로 자동 산출됩니다
             (100kt → 16°). 목표에 가까워지면 자동 롤아웃하고, 수동 뱅크 트림을 쓰면 해제됩니다.</li>
@@ -2037,7 +2040,7 @@ body.night-mode::after {
     <canvas id="pfd"></canvas>
     <div class="ctrl-bar">
 
-      <!-- 1행: SPD / HDG / CRS / VS / ALT / 스톱워치 -->
+      <!-- 1행: SPD / HDG / CRS / VS / ALT / CRHT / ALT 유지(ALT·CRHT·G/S) -->
       <div class="ctrl-sub-row">
 
         <div class="ctrl-group">
@@ -2090,21 +2093,19 @@ body.night-mode::after {
 
         <div class="ctrl-div"></div>
 
-        <div class="sw-group">
-          <div class="sw-display clock-mode" id="sw-display">--:--:--</div>
-          <div class="sw-btns" id="sw-btns-sw" style="display:none;">
-            <button class="sw-btn" id="sw-toggle" data-act="swToggle">GO</button>
-            <button class="sw-btn" data-act="swReset">RESET</button>
-            <button class="sw-btn sw-btn-time" data-act="swSetMode" data-arg='["clock"]'>TIME</button>
-          </div>
-          <div class="sw-btns" id="sw-btns-clock">
-            <button class="sw-btn sw-btn-time" data-act="swSetMode" data-arg='["sw"]'>STOP WATCH</button>
+        <div class="alt-hold-group">
+          <div class="ctrl-lbl">ALT</div>
+          <div class="alt-hold-btns">
+            <button class="alt-hold-btn" id="alt-hold-btn" data-act="toggleAltHold">ALT</button>
+            <button class="crht-btn"     id="crht-btn"     data-act="toggleCrht">CRHT</button>
+            <button class="gs-btn"       id="gs-btn"       data-act="toggleGs"
+                    title="G/S — ILS 강하선 추종. 무장(ARM)해 두면 강하선에 닿는 순간 잡아(CAPT) 고도를 맡습니다.">G/S</button>
           </div>
         </div>
 
       </div><!-- end ctrl-sub-row 1 -->
 
-      <!-- 2행: WDIR / WSPD / AP(OBS·NAV) / BRG -->
+      <!-- 2행: WDIR / WSPD / AP(OBS·NAV) / BRG / 스톱워치 / HOVER -->
       <div class="ctrl-sub-row" style="border-top:1px solid #1e1e1e;">
 
         <div class="ctrl-group">
@@ -2154,13 +2155,15 @@ body.night-mode::after {
 
         <div class="ctrl-div"></div>
 
-        <div class="alt-hold-group">
-          <div class="ctrl-lbl">ALT</div>
-          <div class="alt-hold-btns">
-            <button class="alt-hold-btn" id="alt-hold-btn" data-act="toggleAltHold">ALT</button>
-            <button class="crht-btn"     id="crht-btn"     data-act="toggleCrht">CRHT</button>
-            <button class="gs-btn"       id="gs-btn"       data-act="toggleGs"
-                    title="G/S — ILS 강하선 추종. 무장(ARM)해 두면 강하선에 닿는 순간 잡아(CAPT) 고도를 맡습니다.">G/S</button>
+        <div class="sw-group">
+          <div class="sw-display clock-mode" id="sw-display">--:--:--</div>
+          <div class="sw-btns" id="sw-btns-sw" style="display:none;">
+            <button class="sw-btn" id="sw-toggle" data-act="swToggle">GO</button>
+            <button class="sw-btn" data-act="swReset">RESET</button>
+            <button class="sw-btn sw-btn-time" data-act="swSetMode" data-arg='["clock"]'>TIME</button>
+          </div>
+          <div class="sw-btns" id="sw-btns-clock">
+            <button class="sw-btn sw-btn-time" data-act="swSetMode" data-arg='["sw"]'>STOP WATCH</button>
           </div>
         </div>
 
