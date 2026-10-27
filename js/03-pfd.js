@@ -171,7 +171,9 @@ function drawFMA(x, y, w) {
 
 // ────────────────────────────────────────
 // CRHT ALTITUDE DISPLAY  (bottom-right of PFD)
-// Mini altitude tape centred on selCrht, showing current S.alt on it.
+// Mini altitude tape centred on selCrht, showing the current RADAR altitude on it
+// (전파고도 — 지형 자료로 잰 지면 위 높이 AGL, 05-gps.js radarAltFt).
+// 기압고도(ALT 테이프)와 달리 산 위에서는 그만큼 낮게, 바다 위에서는 같게 읽힌다.
 // ────────────────────────────────────────
 function drawCrhtDisplay(x, y, w, h) {
   ctx.save(); ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
@@ -186,6 +188,8 @@ function drawCrhtDisplay(x, y, w, h) {
   const pp100  = tapeH / 20;
   const on     = crhtOn;
   const tickColor = on ? '#44ff88' : '#555';
+  let ra = S.alt;
+  try { ra = radarAltFt(); } catch (e) { _swallow(e); }
 
   // Tape ticks centred on target (within moving-scale region only)
   const ccv = A_CV(), cMin = unitAlt === 'm' ? 50 : 100, cMaj = unitAlt === 'm' ? 100 : 500;
@@ -207,7 +211,7 @@ function drawCrhtDisplay(x, y, w, h) {
   }
 
   // Current altitude marker (triangle on left edge)
-  const altY = cy - (S.alt - target) * pp100 / 100;
+  const altY = cy - (ra - target) * pp100 / 100;
   if (altY >= tapeY + 3 && altY <= tapeY + tapeH - 3) {
     ctx.fillStyle = on ? '#00cfff' : '#555';
     ctx.beginPath();
@@ -227,7 +231,12 @@ function drawCrhtDisplay(x, y, w, h) {
   ctx.fillStyle   = on ? '#44ff88' : '#555';
   ctx.font        = `bold ${Math.max(10, w * 0.16)}px Helvetica Neue, Arial, sans-serif`;
   ctx.textAlign   = 'center';
-  ctx.fillText(Math.round(S.alt * ccv), x + w / 2, cy + 5);
+  ctx.fillText(Math.round(ra * ccv), x + w / 2 + 5, cy + 5);
+  // 이 값이 전파고도임을 적어 둔다
+  ctx.font      = `bold ${Math.max(7, w * 0.10)}px Helvetica Neue, Arial, sans-serif`;
+  ctx.textAlign = 'left';
+  ctx.fillStyle = on ? '#44ff88' : '#666';
+  ctx.fillText('RA', x + 3, cy + 4);
 
   // ── CRHT setting + change-rate box (top header) — same style as ALT header ──
   ctx.fillStyle = '#000';
@@ -249,7 +258,7 @@ function drawCrhtDisplay(x, y, w, h) {
   // Line 2: VS change rate (500 fpm during convergence)
   let vsStr = '---';
   if (on) {
-    const d = selCrht - S.alt;
+    const d = selCrht - ra;
     vsStr = Math.abs(d) < 1 ? '0' : (d > 0 ? '+' : '−') + '500';
   }
   ctx.font      = `${Math.max(8, w * 0.13)}px Helvetica Neue, Arial, sans-serif`;
@@ -567,20 +576,31 @@ function drawAltTape(x, y, w, h) {
 // ────────────────────────────────────────
 // VSI (Vertical Speed Indicator)
 // ────────────────────────────────────────
+const VSI_UP = 3000, VSI_DN = 4000;   // 승강계가 읽는 최대 상승·강하율(fpm)
+const VSI_KNEE = 1000;                // 이 아래(±1,000fpm)는 반 칸에 넓게 — 그 위는 좁힌다
+// 승강률(fpm) → 눈금 위 자리(가운데 0 · 위 끝 +1 · 아래 끝 −1). 끝을 넘으면 끝에 붙는다.
+function vsiFrac(fpm) {
+  const mx = fpm >= 0 ? VSI_UP : VSI_DN, a = Math.min(Math.abs(fpm), mx);
+  const f = a <= VSI_KNEE ? 0.5 * a / VSI_KNEE : 0.5 + 0.5 * (a - VSI_KNEE) / (mx - VSI_KNEE);
+  return Math.sign(fpm) * f;
+}
 function drawVSI(x, y, w, h) {
   ctx.save(); ctx.beginPath(); ctx.rect(x,y,w,h); ctx.clip();
   ctx.fillStyle='#0d0d0d'; ctx.fillRect(x,y,w,h);
   // 고도 단위가 m이면 수직속도는 m/s로 표시(눈금도 라운드 m/s 기준)
+  // 위로 3,000fpm · 아래로 4,000fpm 까지 읽는다(VSI_UP · VSI_DN). 눈금은 1,000fpm 까지를
+  // 반 칸에 넓게 두고 그 위는 좁힌다 — 자주 쓰는 작은 상승률을 잘 읽고, 큰 강하도 담는다.
   const met = unitAlt === 'm';
-  const vsRange = met ? 10 : 2000;              // 표시 단위 최대치 (m/s | fpm)
-  const vsStep  = met ? 2.5 : 500;              // 눈금 간격
-  const vsMaj   = met ? 5   : 1000;             // 큰 눈금
   const vsD     = fpm => met ? fpm * 0.00508 : fpm;   // fpm → 표시 단위
-  const cy=y+h/2, ppm=(h*0.44)/vsRange;
+  const upMax   = vsD(VSI_UP), dnMax = vsD(VSI_DN);   // 표시 단위 최대치 (m/s | fpm)
+  const vsStep  = met ? 2.5 : 500;            // 눈금 간격
+  const vsMaj   = met ? 5   : 1000;           // 큰 눈금
+  const cy=y+h/2, half=h*0.44;
+  const vY = v => cy - vsiFrac(met ? v / 0.00508 : v) * half;   // 표시 단위 → 화면 y
 
   // scale ticks
-  for(let v=-vsRange;v<=vsRange+1e-6;v+=vsStep){
-    const ty=cy-v*ppm;
+  for(let v=-Math.floor(dnMax/vsStep+1e-6)*vsStep;v<=upMax+1e-6;v+=vsStep){
+    const ty=vY(v);
     if(ty<y+2||ty>y+h-2) continue;
     const maj=Math.abs(v)>1e-6 && Math.abs(v%vsMaj)<1e-6;
     ctx.strokeStyle=maj?'#888':'#444'; ctx.lineWidth=maj?1.5:0.8;
@@ -596,9 +616,9 @@ function drawVSI(x, y, w, h) {
   ctx.strokeStyle='#555'; ctx.lineWidth=1;
   ctx.beginPath(); ctx.moveTo(x,cy); ctx.lineTo(x+w*0.65,cy); ctx.stroke();
 
-  // pointer triangle
-  const vs=Math.max(-vsRange,Math.min(vsRange,vsD(S.vs)));
-  const py=Math.max(y+8,Math.min(y+h-24,cy-vs*ppm));
+  // pointer triangle — 값 칸에는 실제 값을, 지시침은 눈금 끝까지만
+  const vs=vsD(S.vs);
+  const py=Math.max(y+8,Math.min(y+h-24,vY(vs)));
   const pc=S.vs>50?'#00cc44':S.vs<-50?'#ff6644':'#aaa';
   ctx.fillStyle=pc;
   ctx.beginPath(); ctx.moveTo(x+w,py); ctx.lineTo(x+w-9,py-5); ctx.lineTo(x+w-9,py+5); ctx.closePath(); ctx.fill();

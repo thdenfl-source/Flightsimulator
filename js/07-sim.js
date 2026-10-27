@@ -399,8 +399,9 @@ function simStep(ts){
           }
         } else if (crhtOn) {
           // CRHT hold: always 500 fpm — rate is NOT user-configurable.
-          const diff = selCrht - S.alt;
-          if (Math.abs(diff) < 0.5) { S.alt = selCrht; S.vs = 0; }
+          // 전파고도(AGL)를 지킨다 — 땅이 오르면 따라 오르고, 바다 위면 기압고도와 같다
+          const diff = selCrht - radarAltFt();
+          if (Math.abs(diff) < 0.5) { S.alt = selCrht + radarGroundFt(); S.vs = 0; }
           else {
             const step = Math.sign(diff) * Math.min(Math.abs(diff), 500 / 60 * dt);
             S.alt = Math.max(0, Math.min(45000, S.alt + step));

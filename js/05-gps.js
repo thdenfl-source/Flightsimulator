@@ -419,6 +419,24 @@ async function _tcFetch(key, x, y) {
   } catch(e) { _TC.tiles[key] = null; }
   delete _TC.pend[key];
 }
+// 그 자리 지형 높이(ft) — 지형 자료(T-CUT 과 같은 DEM). 바다는 해수면(0)이다
+// (자료의 바다 밑 수심은 0 으로 편다). 아직 모르면 null.
+function terrainFtAt(lat, lon) {
+  let m = null;
+  try { m = _tcElev(lat, lon); } catch (e) { m = null; }
+  if (m == null) return null;
+  return Math.max(0, m) / 0.3048;
+}
+// ── 전파고도(RA, ft) ──
+// 기압고도가 아니라 발밑 지면에서 잰 높이(AGL)다 — 지형 자료로 그 자리 땅 높이를 뺀다.
+// 지형을 아직 모르면 해수면에서 잰다(바다 위와 같다). PFD 오른쪽 아래 CRHT 창이 이
+// 값이고, CRHT 는 이 높이를 지킨다.
+function radarGroundFt() {
+  const g = terrainFtAt(S.lat, S.lon);
+  return g === null ? 0 : g;
+}
+function radarAltFt() { return Math.max(0, S.alt - radarGroundFt()); }
+
 // ── VNAV (수직항법) : 타깃 WP까지 거리 기준 입력 각도의 강하/상승선 ──
 let vnavActive = false, vnavTgtAlt = 0, vnavAngle = -3;   // angle: 음수=강하
 // FT_PER_NM 은 01-state.js 에 있다(DME 경사거리와 같은 값을 쓴다)
