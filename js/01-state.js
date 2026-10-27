@@ -95,7 +95,7 @@ let _spdPrev = 80;  // previous-frame IAS for trend computation
 
 // ── AFCS Altitude Hold Modes ──
 // altHoldOn : converges S.alt → selAlt  at selVS fpm (pilot-set rate)
-// crhtOn    : converges S.alt → selCrht at  500 fpm   (fixed, mutually exclusive with altHoldOn)
+// crhtOn    : converges RA(AGL) → selCrht at  500 fpm   (fixed, mutually exclusive with altHoldOn)
 // Default: ALT hold engaged on startup, holding the initial 500 ft.
 let altHoldOn = true;
 
@@ -373,10 +373,11 @@ function toggleAltHold() {
 function toggleCrht() {
   crhtOn = !crhtOn;
   if (crhtOn) {
-    // Engage CRHT mode and snap the target to the current altitude.
+    // Engage CRHT mode and snap the target to the current RADAR altitude (AGL).
     // From here the pilot can trim selCrht in 10 ft steps via the
     // CRHT +/- buttons; convergence runs at the fixed 500 fpm rate.
-    selCrht   = Math.round(S.alt);
+    // CRHT 는 전파고도(지면 위 높이 — 05-gps.js radarAltFt)를 지킨다.
+    selCrht   = Math.round(radarAltFt());
     altHoldOn = false;
   } else {
     S.vs = 0;  // prevent unintended climb/descent after disengagement
