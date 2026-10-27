@@ -213,4 +213,32 @@ export async function run(page, t) {
 
   await ctx1.close();
   await ctx2.close();
+
+  // ── FCP — ALT 유지 버튼(ALT·CRHT·G/S)은 1행 CRHT ▲▼ 오른쪽, 스톱워치는 2행 BRG 오른쪽 ──
+  const fcp = await page.evaluate(() => {
+    const row = el => el.closest('.ctrl-sub-row');
+    const after = (a, b) => !!(b.compareDocumentPosition(a) & Node.DOCUMENT_POSITION_FOLLOWING);
+    const rows = [...document.querySelectorAll('#pfd-wrap .ctrl-sub-row')];
+    const grp = document.querySelector('.alt-hold-group'), crht = document.getElementById('crht-up');
+    const sw = document.getElementById('sw-display'), brg = document.getElementById('brg1-tog');
+    return { grpRow: rows.indexOf(row(grp)), crhtRow: rows.indexOf(row(crht)), grpAfter: after(grp, crht),
+             swRow: rows.indexOf(row(sw)), brgRow: rows.indexOf(row(brg)), swAfter: after(sw, brg) };
+  });
+  t.ok(fcp.grpRow === 0 && fcp.crhtRow === 0 && fcp.grpAfter,
+    `ALT·CRHT·G/S 버튼은 1행 CRHT ▲▼ 오른쪽에 있다 (${fcp.grpRow + 1}행)`);
+  t.ok(fcp.swRow === 1 && fcp.brgRow === 1 && fcp.swAfter,
+    `스톱워치는 2행 BRG 오른쪽에 있다 (${fcp.swRow + 1}행)`);
+
+  // ── CRHT 기준은 10ft 단위로 맞춘다 ──
+  // 지금 고도로 걸면 1,237 처럼 끝자리가 남는다. ▲ 는 위의 10 단위, ▼ 는 아래의 10 단위로.
+  const crs = await page.evaluate(() => {
+    const keep = { crht: crhtOn, alt: altHoldOn, sel: selCrht };
+    const go = (from, d) => { selCrht = from; applyDelta('crht', d); return selCrht; };
+    const out = { up: go(1237, 10), dn: go(1237, -10), up0: go(1240, 10), dn0: go(1240, -10), low: go(4, -10) };
+    crhtOn = keep.crht; altHoldOn = keep.alt; selCrht = keep.sel; updateHoverBtns();
+    return out;
+  });
+  t.ok(crs.up === 1240 && crs.dn === 1230, `끝자리가 있으면 10 단위로 맞춘다 (1,237 ▲ ${crs.up} · ▼ ${crs.dn})`);
+  t.ok(crs.up0 === 1250 && crs.dn0 === 1230, `10 단위면 10ft 씩 옮긴다 (1,240 ▲ ${crs.up0} · ▼ ${crs.dn0})`);
+  t.eq(crs.low, 0, '0ft 아래로는 내려가지 않는다');
 }

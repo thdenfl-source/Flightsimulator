@@ -50,13 +50,18 @@ function applyDelta(field, d){
       crhtOn    = false;
       updateHoverBtns();
       break;
-    case 'crht':
+    case 'crht': {
       // CRHT +/- adjusts selCrht in fine 10 ft steps. Auto-engages CRHT hold.
-      selCrht   = Math.max(0, Math.min(45000, selCrht + d));
+      // 기준이 10 단위가 아니면(지금 고도로 걸면 1,237 처럼) 먼저 10 단위로 맞춘다 —
+      // ▲ 는 위의 10 단위(1,240), ▼ 는 아래의 10 단위(1,230)로 간다.
+      const st = Math.abs(d) || 10;
+      const next = d > 0 ? Math.floor(selCrht / st) * st + st : Math.ceil(selCrht / st) * st - st;
+      selCrht   = Math.max(0, Math.min(45000, next));
       crhtOn    = true;
       altHoldOn = false;
       updateHoverBtns();
       break;
+    }
     case 'wdir': windDir = normA(windDir + d); break;
     case 'wspd': windSpd = Math.max(0, Math.min(150, windSpd + d));    break;
   }
