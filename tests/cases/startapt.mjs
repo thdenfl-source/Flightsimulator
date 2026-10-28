@@ -55,8 +55,15 @@ export async function run(page, t) {
   t.eq(picked.sel, 100, '고도 유지 기준도 그 지면 높이다 — 날아오르려면 ALT ▲');
   t.eq(picked.gps, false, '고른 뒤에도 GPS 는 꺼진 채다');
 
-  await tab.reload(); await ready(tab); await tab.waitForTimeout(800);
-  const again = await tab.evaluate(() => !!document.querySelector('.start-apt'));
+  // 같은 탭(세션)에서는 다시 묻지 않는다 — 고르면 sessionStorage 에 적어 두고, 새로고침(자동
+  // 리로드 포함)은 그것을 보고 묻지 않는다. 검사 브라우저는 file:// 이라 새로고침하면
+  // sessionStorage 를 비우므로(https 에서는 이어진다) 새로고침 대신 시작 셈을 다시 불러 본다.
+  t.eq(picked.flag, '1', '고르면 이 탭(세션)에 적어 둔다');
+  const again = await tab.evaluate(async () => {
+    _startPosInit(true);                                  // 새로고침해 상태를 되살린 것처럼
+    await new Promise(r => setTimeout(r, 600));
+    return !!document.querySelector('.start-apt');
+  });
   t.eq(again, false, '같은 탭에서 새로고침하면 다시 묻지 않는다');
   await tab.close();
 
@@ -69,7 +76,31 @@ export async function run(page, t) {
   const skip = await tab2.evaluate(() => ({ dlg: !!document.querySelector('.start-apt'), lat: S.lat, lon: S.lon }));
   t.ok(!skip.dlg && Math.abs(skip.lat - 37.3895) < 1e-6 && Math.abs(skip.lon - 126.6550) < 1e-6,
     '건너뛰면 송도에서 그대로 시작한다');
+  // 지난번 상태(6시간 안의 스냅숏)를 적어 둔다 — 브라우저를 다시 열 때 되살릴 것
+  const snap = await tab2.evaluate(() => {
+    const a = AIRPORTS.find(x => x.ident === 'RKPC');
+    S.lat = a.lat; S.lon = a.lon; saveSession();
+    return { snap: localStorage.getItem('flightSession'), lat: a.lat, lon: a.lon };
+  });
   await tab2.close();
+
+  // 브라우저를 다시 열면(지난 상태가 남아 있어 되살려도) 다시 묻는다 — 종전에는 묻지 않았다
+  const tab3 = await browser.newPage({ viewport: { width: 1400, height: 900 } });
+  await tab3.addInitScript(s => {
+    try { if (!sessionStorage.getItem('__seeded')) { localStorage.setItem('flightSession', s); sessionStorage.setItem('__seeded', '1'); } }
+    catch (e) { /* 없으면 그만 */ }
+  }, snap.snap);
+  await tab3.goto(url); await ready(tab3);
+  await tab3.waitForSelector('.start-apt', { timeout: 5000 }).catch(() => {});
+  const re = await tab3.evaluate(() => ({ dlg: !!document.querySelector('.start-apt'),
+    skip: (document.querySelector('.start-apt-skip') || {}).textContent || '' }));
+  t.ok(re.dlg, '브라우저를 다시 열면 지난 상태가 남아 있어도 출발 공항을 다시 묻는다');
+  await tab3.click('.start-apt-skip').catch(() => {});
+  await tab3.waitForTimeout(200);
+  const re2 = await tab3.evaluate(() => ({ dlg: !!document.querySelector('.start-apt'), lat: S.lat, lon: S.lon }));
+  t.ok(/이어서/.test(re.skip) && !re2.dlg && Math.abs(re2.lat - snap.lat) < 1e-6 && Math.abs(re2.lon - snap.lon) < 1e-6,
+    `그때 건너뛰면 지난 자리에서 이어 간다 (${re.skip})`);
+  await tab3.close();
 
   // ── 지도의 내 헬기 = 흰수리 평면도 ──
   const icon = await page.evaluate(() => {

@@ -4187,8 +4187,10 @@ switchMode('HOME');
 // 시작할 때 GPS(기기 위치)는 쓰지 않는다 — GPS 는 꺼진 채 시작하고, 필요하면 지도의 GPS
 // 버튼으로 켠다. 처음 열면 출발 공항을 고르는 창을 띄운다 —
 // 지도의 ICAO 공항 목록이다. 고르면 그 공항 지면에 멈춰 세운다(acPlaceOnGround). 고르지
-// 않으면 송도에서 시작한다. 같은 탭에서 새로고침하면 다시 묻지 않고(sessionStorage),
-// 자동 리로드로 상태를 되살린 경우에도 묻지 않는다(그 자리 그대로 이어 간다).
+// 않으면 송도에서 시작한다. 같은 탭에서 새로고침하면(자동 리로드 포함) 다시 묻지 않는다
+// (sessionStorage). 브라우저를 새로 열면 묻는다 — 지난번 상태가 남아 있어 되살렸더라도
+// (localStorage 의 스냅숏은 6시간 남는다) 묻고, 건너뛰면 되살린 자리에서 이어 간다.
+// (종전에는 되살린 상태가 있으면 묻지 않아, 브라우저를 다시 열면 창이 뜨지 않았다)
 function _startPosInit(restored) {
   const SONGDO = { lat: 37.3895, lon: 126.6550 };
   if (!restored) {
@@ -4198,8 +4200,8 @@ function _startPosInit(restored) {
   }
   let asked = false;
   try { asked = sessionStorage.getItem('vfrStartApt') === '1'; } catch (e) { asked = false; }
-  if (restored || asked) return;
-  setTimeout(openStartAirportPicker, 250);   // 화면이 다 그려진 뒤에 묻는다
+  if (asked) return;
+  setTimeout(() => openStartAirportPicker(restored), 250);   // 화면이 다 그려진 뒤에 묻는다
 }
 // 그 자리 지면에 멈춰 세운다 — 지형 자료(terrainFtAt · T-CUT 과 같은 DEM)로 땅 높이를 잡고,
 // 고도 유지 기준(selAlt)도 그 높이로 둔다. 자료가 아직 없으면 받아지는 대로 다시 맞춘다
@@ -4235,8 +4237,9 @@ function startAirportSet(icao) {
   try { uiToast(`${a.ident} ${a.name} 에서 시작합니다 — 지면에 세웠습니다`); } catch (e) { _swallow(e); }
   return true;
 }
-// 출발 공항 고르기 창 — ICAO · 이름으로 걸러 찾을 수 있다. 닫으면(건너뛰기) 그 자리 그대로.
-function openStartAirportPicker() {
+// 출발 공항 고르기 창 — ICAO · 이름으로 걸러 찾을 수 있다. 닫으면(건너뛰기) 그 자리 그대로
+// (되살린 상태가 있으면 그 자리에서 이어서, 아니면 송도).
+function openStartAirportPicker(resume) {
   if (document.querySelector('.start-apt')) return;
   const back = document.createElement('div');
   back.className = 'ui-dlg-back';
@@ -4249,7 +4252,7 @@ function openStartAirportPicker() {
     <input class="ui-dlg-in start-apt-q" type="text" placeholder="ICAO 또는 이름 (예: RKSI · 김포)" autocomplete="off">
     <div class="start-apt-list">${AIRPORTS.map(a =>
       `<button type="button" class="start-apt-btn" data-icao="${a.ident}"><b>${a.ident}</b> ${a.name}</button>`).join('')}</div>
-    <div class="ui-dlg-btns"><button type="button" class="start-apt-skip">건너뛰기(송도)</button></div>`;
+    <div class="ui-dlg-btns"><button type="button" class="start-apt-skip">${resume ? '건너뛰기(지난 자리에서 이어서)' : '건너뛰기(송도)'}</button></div>`;
   const close = () => {
     try { sessionStorage.setItem('vfrStartApt', '1'); } catch (e) { _swallow(e); }
     document.removeEventListener('keydown', onKey, true);
