@@ -85,9 +85,20 @@ const HDG_ROLLOUT_DEG = 6;         // 남은 각도가 이 이하면 뱅크를 �
 function stdRateBank(spd) {        // 표준선회 뱅크각(°) — 속도의 16%, 최대 30°
   return Math.max(2, Math.min(30, Math.abs(spd) * 0.16));
 }
+// ── 방향 기준(MAS): MG(Slaved) / DG ──
+// MG — 방향 자이로를 지구 자기장(플럭스 밸브)에 늘 맞춘다: 계기 헤딩 = 실제 기수.
+// DG — 자이로만으로 방향을 정한다: 지구 자전 등으로 1시간에 약 6° 씩 어긋나므로
+//      조종사가 −/+ 로 1° 씩 맞춘다(자기 나침반과 견주어).
+// HSI·HDG 표시·HDG 유지는 계기 헤딩(hdgInd)을 쓰고, 지도·3D·GPS 항법(NAV)은 실제 기수를 쓴다.
+// 그래서 DG 오차가 있으면 HDG 로 나는 동안 실제 기수가 그만큼 비껴 간다.
+const DG_DRIFT = 6;      // DG 편류(°/h) — 북반구 지구 자전처럼 계기 헤딩이 줄어드는 쪽
+let hdgRef = 'MG';       // 'MG' | 'DG'
+let dgErr  = 0;          // 계기 헤딩 − 실제 기수(°, MG 이면 0)
+function hdgInd() { return normA(S.hdg + dgErr); }
 // 리셋·GPS·나침반·FDR 리플레이처럼 기수를 외부에서 직접 바꾸는 경로에서 호출한다.
 // 동기화하지 않으면 시뮬레이션으로 돌아오는 순간 AFCS가 옛 HDG bug로 선회해 버린다.
-function syncHdgBug() { selHdg = ((Math.round(S.hdg) + 359) % 360) + 1; }
+// HDG bug 는 HSI 카드 위에 있으므로 계기 헤딩에 맞춘다.
+function syncHdgBug() { selHdg = ((Math.round(hdgInd()) + 359) % 360) + 1; }
 let selVS   = 1000; // VS preselect (fpm, magnitude) — used by ALT hold mode
                     // CRHT hold mode ignores this and always converges at 500 fpm
 let spdTrend = 0;   // 6-second speed trend (knots, smoothed)
@@ -363,6 +374,9 @@ function toggleGspd() {
 function toggleAltHold() {
   altHoldOn = !altHoldOn;
   if (altHoldOn) {
+    // ALT 버튼은 '지금 고도를 지킨다' — 누른 순간의 고도가 기준이다.
+    // 다른 고도로 가려면(ALT.A) ALT ▲▼ 로 기준을 옮긴다(07-sim.js applyDelta 'alt').
+    selAlt = Math.round(S.alt);
     crhtOn = false;  // mutually exclusive
   } else {
     S.vs = 0;  // prevent unintended climb/descent after disengagement
@@ -568,7 +582,7 @@ function toggleNavAp() {
   if (!navApOn) {
     if (holdOn) holdExit();          // NAV 해제 시 홀딩도 해제
     bankTarget = 0;
-    selHdg = ((Math.round(S.hdg) + 359) % 360) + 1;   // 현재 헤딩 유지로 복귀
+    selHdg = ((Math.round(hdgInd()) + 359) % 360) + 1;   // 현재 헤딩 유지로 복귀
     hdgSelOn = true; rollApOn = true;
   }
   try { updateApInhibit(); } catch(e) { _swallow(e); }

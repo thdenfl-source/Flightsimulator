@@ -30,6 +30,10 @@ export function buildEnv() {
 export async function openApp(browser, { cdu = false } = {}) {
   const { url } = buildEnv();
   const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
+  // 출발 공항 고르기 창(09-cdu.js)은 이미 고른 것으로 두고 연다 — 그 창은 cases/startapt.mjs 가 본다
+  await page.addInitScript(() => {
+    try { sessionStorage.setItem('vfrStartApt', '1'); } catch (e) { /* 없으면 그만 */ }
+  });
   const errors = [];
   page.on('pageerror', e => errors.push(e.message));
   page.errors = errors;

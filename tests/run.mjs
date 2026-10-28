@@ -36,8 +36,11 @@ import * as joystick from './cases/joystick.mjs';
 import * as geosearch from './cases/geosearch.mjs';
 import * as ship from './cases/ship.mjs';
 import * as ralt from './cases/ralt.mjs';
+import * as startapt from './cases/startapt.mjs';
+import * as altcap from './cases/altcap.mjs';
+import * as hdgref from './cases/hdgref.mjs';
 
-const SUITES = [smoke, actions, coords, chartcal, hold, nav, gspd, dialog, chartview, procdata, simspd, tascalc, brg, fpwpt, maprot, map3d, dmearc, dme, fporder, wptcrs, brglbl, directto, crssync, locsta, susp, layout, gslope, joystick, geosearch, ship, ralt];
+const SUITES = [smoke, actions, coords, chartcal, hold, nav, gspd, dialog, chartview, procdata, simspd, tascalc, brg, fpwpt, maprot, map3d, dmearc, dme, fporder, wptcrs, brglbl, directto, crssync, locsta, susp, layout, gslope, joystick, geosearch, ship, ralt, startapt, altcap, hdgref];
 const filter = process.argv.slice(2);
 
 function makeT() {

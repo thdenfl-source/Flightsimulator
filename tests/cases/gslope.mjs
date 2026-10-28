@@ -170,6 +170,7 @@ export async function run(page, t) {
     S.lat = p[0]; S.lon = p[1];
     S.alt = ELEV + 6 * FT_NM * Math.tan(ANG * Math.PI / 180);
     S.spd = 120; gspdOn = false; altHoldOn = true; crhtOn = false;
+    selAlt = S.alt;                       // 지금 고도를 지키는 ALT(다른 고도로 가는 중이면 FMA 가 ALT.A)
     // 스트립은 PFD 왼쪽 절반의 맨 윗줄에 있다. 승강계에도 'G/S' 머리글이 있으므로
     // 가로 위치로 갈라야 한다 — 승강계는 오른쪽 끝이다.
     const half = document.getElementById('pfd').width * 0.6;

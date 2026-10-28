@@ -623,22 +623,36 @@ async function toggleWind() {
   }
 }
 
+// 2D 지도의 내 헬기 — 흰수리 평면도(위에서 본 모습). 1.8px = 1m 로 그려 전장 20m 가 36px 다.
+// 기준점(가운데 20,20)은 전장의 한가운데. 기수가 위(북)이고 기수 방향만큼 돌린다.
+//   흰 동체 · 붉은 엔진 덮개 · 노랑 → 파랑 꼬리 · 연료탱크 · 왼쪽 수평안정판 · 오른쪽 꼬리로터 · 주로터 4엽
+const AC_ICON_SVG = `<svg width="40" height="40" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
+  <circle cx="20" cy="14.7" r="12.7" fill="none" stroke="#ffffff" stroke-width="0.5" stroke-dasharray="1.6 1.4" opacity="0.6"/>
+  <ellipse cx="16.76" cy="19.5" rx="0.95" ry="2.8" fill="#f4f5f6" stroke="#111" stroke-width="0.45"/>
+  <ellipse cx="23.24" cy="19.5" rx="0.95" ry="2.8" fill="#f4f5f6" stroke="#111" stroke-width="0.45"/>
+  <path d="M20 2.9 L20.9 3.8 L21.4 4.9 L22.1 7 L22.34 8.8 L22.38 10.1 L22.38 20.7 L22.2 22.2 L21.8 23.6 L21.44 25
+           L21.08 27.2 L20.81 29.9 L20.6 32.6 L20.47 35.1 L20 36.65 L19.53 35.1 L19.4 32.6 L19.19 29.9 L18.92 27.2
+           L18.56 25 L18.2 23.6 L17.8 22.2 L17.62 20.7 L17.62 10.1 L17.66 8.8 L17.9 7 L18.6 4.9 L19.1 3.8 Z"
+        fill="#f4f5f6" stroke="#111" stroke-width="0.6" stroke-linejoin="round"/>
+  <path d="M18.5 8.1 Q20 7.3 21.5 8.1 L21.6 22.9 L18.4 22.9 Z" fill="#d9262c"/>
+  <rect x="17.85" y="13.5" width="0.75" height="8.1" rx="0.35" fill="#3b3f45"/>
+  <rect x="21.4" y="13.5" width="0.75" height="8.1" rx="0.35" fill="#3b3f45"/>
+  <path d="M18 22.9 L22 22.9 L21.17 26.7 L18.83 26.7 Z" fill="#f2c21b"/>
+  <path d="M18.83 26.7 L21.17 26.7 L21.08 27.2 L20.81 29.9 L20.6 32.6 L20.47 35.1 L20 36.65 L19.53 35.1 L19.4 32.6
+           L19.19 29.9 L18.92 27.2 Z" fill="#233f94"/>
+  <path d="M18.3 6.6 L21.7 6.6 L22.1 8.3 L17.9 8.3 Z" fill="#2a3846"/>
+  <ellipse cx="20" cy="3.7" rx="0.8" ry="0.75" fill="#33363a"/>
+  <path d="M19.64 32.6 L15.95 32.9 L16 34.2 L19.64 34.4 Z" fill="#d9262c" stroke="#111" stroke-width="0.35"/>
+  <line x1="20.8" y1="32.8" x2="20.8" y2="38" stroke="#3b3f45" stroke-width="0.9" stroke-linecap="round"/>
+  <g stroke="#3b3f45" stroke-width="1.15" stroke-linecap="round" opacity="0.9">
+    <line x1="11" y1="5.7" x2="29" y2="23.7"/><line x1="29" y1="5.7" x2="11" y2="23.7"/>
+  </g>
+  <circle cx="20" cy="14.7" r="1.2" fill="#2b2e33"/>
+</svg>`;
 function makeAircraftIcon(hdg) {
   return L.divIcon({
-    html:`<div class="ac-marker" style="transform:rotate(${hdg}deg);transform-origin:12px 12px;">
-      <svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-        <!-- Main rotor disk -->
-        <circle cx="12" cy="12" r="9" fill="none" stroke="#00ff88" stroke-width="0.7" stroke-dasharray="2 1.5" opacity="0.55"/>
-        <!-- Fuselage (forward of mast) -->
-        <ellipse cx="12" cy="11" rx="2.8" ry="4.4" fill="#00ff88" stroke="#003322" stroke-width="0.7"/>
-        <!-- Cockpit dot at nose -->
-        <circle cx="12" cy="8" r="1" fill="#003322"/>
-        <!-- Tail boom -->
-        <rect x="11.3" y="14" width="1.4" height="7" fill="#00ff88" stroke="#003322" stroke-width="0.5"/>
-        <!-- Tail rotor -->
-        <line x1="9" y1="21" x2="15" y2="21" stroke="#00ff88" stroke-width="1.6" stroke-linecap="round"/>
-      </svg></div>`,
-    iconSize:[24,24],iconAnchor:[12,12],className:'',
+    html:`<div class="ac-marker" style="transform:rotate(${hdg}deg);transform-origin:20px 20px;filter:drop-shadow(0 0 1px rgba(0,0,0,0.9));">${AC_ICON_SVG}</div>`,
+    iconSize:[40,40],iconAnchor:[20,20],className:'',
   });
 }
 
