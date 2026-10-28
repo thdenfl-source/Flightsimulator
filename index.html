@@ -1823,6 +1823,10 @@ body.night-mode::after {
       <h3>4. PFD · HOVER PAGE</h3>
       <ul>
         <li><b>NAV SRC</b>: <b>FMS / NAV1 / NAV2</b>. NAV1·NAV2는 CDU에서 튜닝한 VOR을 따라갑니다.</li>
+        <li><b>접근절차 자동 튜닝</b> — 비행계획에서 접근절차를 불러오면(＋ ADD APPROACH) <b>NAV1 은 그 공항의 VOR</b>,
+            <b>NAV2 는 그 활주로의 LOC</b> 주파수로 저절로 맞춥니다(알림으로 보여 줍니다). VOR 은 절차 경로에 든 VOR →
+            비행장 자료의 VOR(공항 25NM 안 — 주파수가 같은 먼 국은 잡지 않습니다) → 공항에서 가장 가까운 VOR(30NM 안) 순으로,
+            LOC 는 절차 이름의 활주로(RWY 36R) → 같은 방향 → 그 공항의 다른 LOC 순으로 고릅니다. 맞출 국이 없으면 그대로 둡니다.</li>
         <li><b>RNP</b>: NAV SRC 바로 아래. <b>4 / 2 / 1 / 0.3</b> NM — CDI 최대편위(스케일)를 정합니다.</li>
         <li><b>MG (Slaved) / DG</b> — 방향 기준(MAS). <b>3D 창</b>과 <b>지도 창</b>(툴바 아래 오른쪽)에 같은 버튼이 있고,
             누를 때마다 바뀝니다(두 창이 함께).
