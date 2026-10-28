@@ -509,6 +509,35 @@ html, body {
 #map3d.panel-3d .vfr-scale { bottom: 10px; }
 /* When 3D is on, hide the 2D Leaflet map so its panes never paint through */
 #map-wrap.map3d-on #map { visibility: hidden; }
+/* MG(Slaved)/DG — 방향 기준(07-sim.js toggleHdgRef). 3D 창·지도 창(툴바 아래 오른쪽)에 같은 버튼.
+   누를 때마다 바뀌고, DG 일 때만 −/+(HSI 1°)가 살아 있고 자기 나침반(COMP)이 보인다 */
+.hdgref { position: absolute; right: 8px; z-index: 900; width: 86px;
+          display: flex; flex-direction: column; gap: 3px; }
+.hdgref .sim-btn { flex: none; }
+.hdgref .hdgref-btn { padding: 5px 4px; }
+.hdgref.dg .hdgref-btn { color: #ffb000; border-color: #ffb000; }
+.hdgref-adj { display: flex; gap: 3px; }
+.hdgref-adj .sim-btn { flex: 1; padding: 3px 0; font-size: 15px; line-height: 1; }
+.hdgref-adj .sim-btn:disabled { opacity: 0.35; cursor: default; }
+.hdgref-comp { display: none; padding: 2px 0; border-radius: 3px; text-align: center;
+               background: rgba(0,0,0,0.75); color: #ffb000;
+               font: bold 10px 'Helvetica Neue', Arial, sans-serif; }
+.hdgref.dg .hdgref-comp { display: block; }
+#hdgref-3d { top: 8px; }
+#map-wrap #hdgref-3d { top: 48px; }   /* 2D 위에 겹쳐 쓸 때는 지도 툴바 아래로 */
+#hdgref-map { top: 48px; }
+/* 3D 를 지도 위에 겹쳐 쓰면 3D 쪽 버튼만 둔다 */
+#map-wrap.map3d-on #hdgref-map { display: none; }
+/* 출발 공항 고르기(09-cdu.js openStartAirportPicker) */
+.ui-dlg.start-apt { width: min(560px, 94vw); max-width: min(560px, 94vw); }
+.start-apt-sub { font-size: 12px; color: #9aa4ae; }
+.start-apt-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 6px;
+                  max-height: min(52vh, 420px); overflow-y: auto; margin: 0 18px 12px; }
+.start-apt-btn { padding: 8px 6px; background: #10161d; border: 1px solid #2c3a48; color: #d6dde4;
+                 border-radius: 6px; text-align: left; cursor: pointer; font-size: 13px; }
+.start-apt-btn b { color: #7fd4ff; margin-right: 4px; }
+.start-apt-btn:hover, .start-apt-btn:focus { border-color: #4aa8ff; background: #14212e; }
+.start-apt-skip { padding: 7px 12px; }
 #layer-btn-3d { background: rgba(0,10,30,0.82); border: 1px solid #333; color: #aaa; }
 #layer-btn-3d.active { background: rgba(0,30,80,0.92); border-color: #4488ff; color: #88ccff; box-shadow: 0 0 8px rgba(68,136,255,0.4); }
 #follow-btn.active { background: rgba(60,30,0,0.92); border-color: #ffaa00; color: #ffcc44; box-shadow: 0 0 8px rgba(255,170,0,0.4); }
@@ -1671,7 +1700,15 @@ body.night-mode::after {
 
       <h3>2. 기본 비행 (시뮬레이션)</h3>
       <ul>
+        <li><b>시작</b> — 처음 열면 <b>출발 공항을 고르는 창</b>이 뜹니다. 지도의 ICAO 공항 목록이며,
+            ICAO·이름으로 걸러 찾을 수 있습니다(Enter = 맨 위). 고르면 그 공항 <b>지면에 멈춰</b> 서고
+            (고도 유지 기준도 지면 높이 — 날아오르려면 <b>ALT ▲</b>), 건너뛰면 송도에서 시작합니다.
+            같은 탭에서 새로고침하면 다시 묻지 않습니다. <b>GPS 는 꺼진 채 시작</b>합니다(기기 위치를 묻지
+            않습니다) — 실비행에 쓰려면 지도의 GPS 버튼으로 켭니다.</li>
         <li>MAP 하단 <b>▶ FLY</b>로 시작(다시 누르면 PAUSE), <b>RESET</b> 초기화, <b>CLR</b> 비행계획 삭제.</li>
+        <li><b>ALT</b>(FCP ALT 유지 버튼): 누른 순간의 고도를 지킵니다. <b>ALT ▲▼</b> 로 기준을 옮기면 그 고도로
+            가고, 가는 동안 FMA 가 <b>ALT.A</b>, 닿으면 다시 <b>ALT</b> 입니다.</li>
+        <li><b>지도의 내 헬기</b>는 흰수리 평면도(위에서 본 모습)로, 기수 방향으로 돕니다.</li>
         <li><b>3D 창</b>: 각 창의 탭에 <b>3D</b> 가 있습니다. 한 창을 <b>MAP</b>, 다른 창을 <b>3D</b> 로 두면
             <b>2D 지도와 3D 지도를 나란히</b> 볼 수 있습니다(3분할이면 가운데 2D · 우측 3D 처럼).
             3D 지도는 한 벌을 옮겨 쓰므로 타일을 두 배로 받지 않습니다. 3D 창을 쓰는 동안에는
@@ -1786,6 +1823,17 @@ body.night-mode::after {
       <ul>
         <li><b>NAV SRC</b>: <b>FMS / NAV1 / NAV2</b>. NAV1·NAV2는 CDU에서 튜닝한 VOR을 따라갑니다.</li>
         <li><b>RNP</b>: NAV SRC 바로 아래. <b>4 / 2 / 1 / 0.3</b> NM — CDI 최대편위(스케일)를 정합니다.</li>
+        <li><b>MG (Slaved) / DG</b> — 방향 기준(MAS). <b>3D 창</b>과 <b>지도 창</b>(툴바 아래 오른쪽)에 같은 버튼이 있고,
+            누를 때마다 바뀝니다(두 창이 함께).
+            <b>MG (Slaved)</b> — 방향 자이로를 <b>지구 자기장</b>에 늘 맞춥니다: HSI 가 지도와 꼭 맞습니다(처음 상태).
+            <b>DG</b> — <b>방향 자이로만</b>으로 방향을 정합니다: 지구 자전 등으로 <b>1시간에 약 6°</b> 씩 HSI 가 어긋나고
+            (비행 중에만 · 배속이면 그만큼 빨리), 버튼 아래 <b>− / +</b> 로 HSI 를 <b>왼쪽 / 오른쪽 1°</b> 씩 맞춥니다.
+            이때 버튼 아래에 <b>COMP</b>(자기 나침반) 값이 보이니 그것과 견주어 맞추십시오.
+            DG 이면 PFD 의 HDG 칸 왼쪽에 호박색 <b>DG</b> 가 뜹니다.<br>
+            <b>HSI · HDG 칸 · HDG 유지(HDG 상위모드)</b>는 이 계기 헤딩을 따르므로, 오차가 쌓인 채 HDG 로 날면
+            <b>실제 기수는 그만큼 비껴</b> 갑니다(예: 오차 −6° 면 HDG 090 으로 날아도 실제로는 096).
+            <b>지도 · 3D · NAV(GPS 항법)</b>는 실제 기수를 쓰므로 그대로 맞습니다.
+            <b>MG</b> 로 돌아오면 곧 다시 자기 헤딩에 맞습니다.</li>
         <li><b>SUSP</b>(SIM SPD 오른쪽): 버튼에는 <b>On</b> 만 적히고, 켜지면 <b>NAV 버튼과 같은 녹색</b>으로 바뀝니다. <b>시퀀싱 보류</b> — 켜져 있으면 활성 웨이포인트를 지나도
             <b>다음으로 넘어가지 않고</b> 그 구간의 코스를 계속 따라갑니다. <b>마지막 지점이어도 NAV 가
             풀리지 않아</b>, 홀딩이나 미스드어프로치를 계속 수행할 수 있습니다.
@@ -2298,6 +2346,15 @@ body.night-mode::after {
     <div id="map-wrap" class="page-content tcut-off">
       <div id="map"></div>
       <div id="map3d">
+        <!-- MG(Slaved)/DG — 방향 기준. 지도 창의 같은 버튼과 같다(07-sim.js) -->
+        <div class="hdgref" id="hdgref-3d">
+          <button class="sim-btn hdgref-btn" data-act="toggleHdgRef" title="방향 기준 — MG(Slaved): 자이로를 지구 자기장에 맞춘다 · DG: 방향 자이로만(1시간에 약 6° 어긋난다 → −/+ 로 맞춘다)">MG (Slaved)</button>
+          <div class="hdgref-adj">
+            <button class="sim-btn" data-act="dgAdjust" data-arg='[-1]' title="DG — HSI 를 왼쪽으로 1°" disabled>−</button>
+            <button class="sim-btn" data-act="dgAdjust" data-arg='[1]' title="DG — HSI 를 오른쪽으로 1°" disabled>+</button>
+          </div>
+          <div class="hdgref-comp" title="자기 나침반(스탠바이) — DG 를 맞출 때 견준다"></div>
+        </div>
         <div id="tilt-ctrl">
           <button data-act="tiltAdj" data-arg='[-5]' title="Tilt up">▲</button>
           <button data-act="tiltAdj" data-arg='[5]'  title="Tilt down">▼</button>
@@ -2320,6 +2377,15 @@ body.night-mode::after {
         <button id="map-ruler-btn" data-act="toggleRuler" title="거리·방위 측정">📏</button>
         <button id="map-full-btn" data-act="toggleMapFull" title="전체화면/분할 전환">FULL</button>
       </div>
+        <!-- MG(Slaved)/DG — 방향 기준. 3D 창의 같은 버튼과 같다(07-sim.js) -->
+        <div class="hdgref" id="hdgref-map">
+          <button class="sim-btn hdgref-btn" data-act="toggleHdgRef" title="방향 기준 — MG(Slaved): 자이로를 지구 자기장에 맞춘다 · DG: 방향 자이로만(1시간에 약 6° 어긋난다 → −/+ 로 맞춘다)">MG (Slaved)</button>
+          <div class="hdgref-adj">
+            <button class="sim-btn" data-act="dgAdjust" data-arg='[-1]' title="DG — HSI 를 왼쪽으로 1°" disabled>−</button>
+            <button class="sim-btn" data-act="dgAdjust" data-arg='[1]' title="DG — HSI 를 오른쪽으로 1°" disabled>+</button>
+          </div>
+          <div class="hdgref-comp" title="자기 나침반(스탠바이) — DG 를 맞출 때 견준다"></div>
+        </div>
       <div id="geo-panel">
         <div id="geo-panel-hdr">주소 · 지명 검색
           <span id="geo-close" data-act="closeGeoSearch" title="닫기">✕</span></div>
