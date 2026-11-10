@@ -1343,3 +1343,76 @@ function clockRender() {
 setInterval(clockRender, 1000);
 clockRender();   // 기본 모드가 시계이므로 즉시 1회 표시
 
+
+// ── PFD 엔진 계기(TGT · NG · TQ · NP/NR)용 토크 ──
+// 절차 훈련에는 컬렉티브가 없으므로, 지금 비행 상태(속도·뱅크·상승률)에서 들 법한 토크를
+// 거꾸로 셈해 보여 준다(계기가 비어 보이지 않게). 셈법은 shinesong(종합 시뮬레이터)과 같다.
+// NR 경고 띠 — 녹 88~110 · 황 84~88/110~114 · 적 84 미만/114 초과
+const NR_HIGH = 110, NR_HIGH_RED = 114, NR_LOW_YEL = 88, NR_LOW_RED = 84;
+const TQ_HOVER   = 60;         // PERF 를 못 읽을 때 쓰는 호버 토크(%)
+const TQ_MAX     = 140;        // 계기 최대 눈금
+// 계기 구간 — 0~100% 녹색(연속 사용) · 100~113% 노랑(주의) · 113~140% 빨강(오버토크)
+const TQ_LIMIT   = 100;
+const TQ_RED     = 113;
+const TQ_PER_FPM = 55;         // PERF 를 못 읽을 때 — 남는 토크 1% 당 상승률(fpm)
+// ── 필요 동력 곡선(U 자) ── 호버 동력 H 를 유도 몫과 그 밖(형상·꼬리로터·보기)으로 나눈다.
+//   유도 몫  = H·PW_IND · (vi/vi0) · n²  — 앞으로 날수록 내리흐름이 줄어 덜 든다 · 선회는 하중배수² 로 는다
+//   그 밖    = H·(1−PW_IND) · n
+//   유해 항력 = PW_PAR · V³
+const PW_IND  = 0.70;
+const PW_VI0  = 25;
+const PW_PAR  = 1.874e-5;
+// 지면효과 — 바퀴 높이 10ft 까지 IGE, 53ft 위는 OGE(그 사이 고르게)
+const IGE_FULL_FT = 10, IGE_NONE_FT = 53;
+const IGE_CURVE = [[0, -12], [3, -10], [5, -5], [10, 0]];
+// 제자리 호버에 필요한 토크 — CDU PERF 의 IGE·OGE 호버 토크(09-cdu.js perfHoverTq)
+function hoverTqRef() {
+  let p = null;
+  try { p = (typeof perfHoverTq === 'function') ? perfHoverTq() : null; } catch (e) { _swallow(e); }
+  if (!p || !Number.isFinite(p.oge)) return TQ_HOVER;
+  const ige = Number.isFinite(p.ige) ? p.ige : p.oge;
+  let agl = 1000;
+  try { agl = (typeof radarAltFt === 'function') ? radarAltFt() : S.alt; } catch (e) { agl = S.alt; }
+  if (agl < IGE_FULL_FT) {
+    const c = IGE_CURVE;
+    if (agl <= c[0][0]) return ige + c[0][1];
+    for (let i = 1; i < c.length; i++) {
+      if (agl <= c[i][0]) {
+        const f = (agl - c[i - 1][0]) / (c[i][0] - c[i - 1][0]);
+        return ige + c[i - 1][1] + (c[i][1] - c[i - 1][1]) * f;
+      }
+    }
+  }
+  const k = Math.max(0, Math.min(1, (agl - IGE_FULL_FT) / (IGE_NONE_FT - IGE_FULL_FT)));
+  return ige + (p.oge - ige) * k;
+}
+// 운동량 이론의 유도속도 비(vi/vi0)
+function pwViRatio(V, vi0) { const v = V / vi0; return Math.sqrt(Math.sqrt(v ** 4 / 4 + 1) - v * v / 2); }
+// 그 속도·뱅크로 수평 비행할 때 필요한 토크(%) — 계기의 Vy 선도 이것으로 긋는다
+function tqRequiredAt(spd, bnk) {
+  const H = hoverTqRef(), V = Math.abs(spd);
+  const n = 1 / Math.cos(Math.min(60, Math.abs(bnk)) * D2R);
+  const r = pwViRatio(V, PW_VI0 * Math.sqrt(Math.max(0.3, H / 77)));
+  return H * (PW_IND * r * n * n + (1 - PW_IND) * n) + PW_PAR * V * V * V;
+}
+function tqRequired() { return tqRequiredAt(S.spd, S.bnk); }
+// 그날의 MTA(최대 가용 토크, %) — CDU PERF 의 MTA(30). 못 읽으면 계기 끝(선을 긋지 않는다)
+function mtaNow(altFt = S.alt) {
+  let v = null;
+  try { v = (typeof perfMta === 'function') ? perfMta(altFt) : null; } catch (e) { _swallow(e); }
+  return Number.isFinite(v) ? Math.min(TQ_MAX, v) : TQ_MAX;
+}
+// Vy 로 수평 비행할 때 필요한 토크(%)
+function tqAtVy() {
+  let vy = null;
+  try { vy = (typeof perfVy === 'function') ? perfVy() : null; } catch (e) { _swallow(e); }
+  return Number.isFinite(vy) ? tqRequiredAt(vy, 0) : null;
+}
+// 계기에 보일 토크 — 수평 비행 토크 + 상승·강하 몫(PERF 표)
+function tqShown() {
+  let add = (S.vs || 0) / TQ_PER_FPM;
+  try { if (typeof perfTqForVs === 'function') add = perfTqForVs(S.vs || 0); } catch (e) { _swallow(e); }
+  return Math.max(0, Math.min(TQ_MAX, tqRequired() + add));
+}
+function tqOver() { return tqShown() > TQ_RED; }
+function tqBand(v = tqShown()) { return v > TQ_RED ? 'red' : v > TQ_LIMIT ? 'yellow' : 'green'; }
