@@ -1403,11 +1403,25 @@ function act(name, ...args) {
 
     // --- Modularized Render Functions ---
     
+    // ── Weather 묶음 ── 홈 첫 줄의 날씨 버튼 넷(Windy · 저고도 날씨 · CCTV · METAR/TAF)은
+    // 홈에서 'Weather' 버튼 하나로 묶고, 누르면 Weather 화면에 넷이 나와 종전 그대로 동작한다.
+    const WX_IDS = ['weather', 'directTo', 'cctv', 'metar'];
+    const wxGroupBtn = { id: 'wxgrp', text: 'Weather', icon: homeButtons.find(b => b.id === 'weather').icon };
+
     function renderHomeScreen(container, footer, title) {
         title.innerText = "Home";
-        
+        container.innerHTML = homeGridHtml([wxGroupBtn].concat(homeButtons.filter(b => !WX_IDS.includes(b.id))));
+        footer.innerHTML = cduFooter('', `<div class="nav-btn" data-act="openUbikais"><span>🛰</span>UBIKAIS</div>`);
+    }
+    function renderWeatherScreen(container, footer, title) {
+        title.innerText = "Weather";
+        container.innerHTML = homeGridHtml(WX_IDS.map(id => homeButtons.find(b => b.id === id)));
+        footer.innerHTML = cduFooter("switchMode('HOME')");
+    }
+
+    function homeGridHtml(list) {
         let gridHtml = `<div class="home-grid">`;
-        homeButtons.forEach(btn => {
+        list.forEach(btn => {
             const links = {
                 'weather': "https://www.windy.com",
                 'notam': "https://aim.koca.go.kr/xNotam/index.do?type=search2&language=ko_KR",
@@ -1420,7 +1434,7 @@ function act(name, ...args) {
                 'wildfire': "https://fd.forest.go.kr/ffas/"
             };
 
-            let isActiveBtn = ['weather', 'charts', 'notam', 'metar', 'directTo', 'map', 'fpl', 'serv', 'sys', 'perf', 'util', 'proc', 'cctv', 'vnav', 'check', 'afld', 'skyvector', 'tide', 'eravail', 'wildfire'].includes(btn.id);
+            let isActiveBtn = ['wxgrp', 'weather', 'charts', 'notam', 'metar', 'directTo', 'map', 'fpl', 'serv', 'sys', 'perf', 'util', 'proc', 'cctv', 'vnav', 'check', 'afld', 'skyvector', 'tide', 'eravail', 'wildfire'].includes(btn.id);
             let boxClass = isActiveBtn ? 'icon-box func-active' : 'icon-box';
 
             if (links[btn.id]) {
@@ -1430,7 +1444,8 @@ function act(name, ...args) {
                         <div class="icon-label">${btn.text}</div>
                     </a>`;
             } else {
-                let clickAction = btn.id === 'sys' ? `data-act="switchMode" data-arg='["TRACKPOINT"]'` :
+                let clickAction = btn.id === 'wxgrp' ? `data-act="switchMode" data-arg='["WEATHER"]'` :
+                                  btn.id === 'sys' ? `data-act="switchMode" data-arg='["TRACKPOINT"]'` :
                                   btn.id === 'perf' ? `data-act="switchMode" data-arg='["PERF"]'` :
                                   btn.id === 'fpl'  ? `data-act="openFlightPlan"` :
                                   btn.id === 'proc' ? `data-act="openProc"` :
@@ -1449,8 +1464,7 @@ function act(name, ...args) {
             }
         });
         gridHtml += `</div>`;
-        container.innerHTML = gridHtml;
-        footer.innerHTML = cduFooter('', `<div class="nav-btn" data-act="openUbikais"><span>🛰</span>UBIKAIS</div>`);
+        return gridHtml;
     }
 
     const UBIKAIS_URL = 'https://ubikais.fois.go.kr:8030/common/login?systemId=sysUbikais';
@@ -3639,6 +3653,7 @@ function act(name, ...args) {
 
         switch(currentMode) {
             case 'HOME': renderHomeScreen(container, footer, title); break;
+            case 'WEATHER': renderWeatherScreen(container, footer, title); break;
             case 'PERF': renderPerfScreen(container, footer, title); break;
             case 'PERF_INPUT': renderPerfInputScreen(container, footer, title); break;
             case 'AUDIO': renderAudioScreen(container, footer, title); break;
@@ -3812,7 +3827,7 @@ function act(name, ...args) {
             item('독도/울릉도', 'https://www.ulleung.go.kr/live/index.do', '울릉군 실시간 CCTV') +
             item('한라산', 'https://www.jeju.go.kr/tool/halla/cctv.html', '한라산 실시간 CCTV') +
             `</div>`;
-        footer.innerHTML = cduFooter("switchMode('HOME')");
+        footer.innerHTML = cduFooter("switchMode('WEATHER')");
     }
     function renderAirfieldScreen(container, footer, title) {
         title.innerText = '비행장 정보';
