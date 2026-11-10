@@ -128,4 +128,33 @@ export async function runDegenerate(page, t) {
   t.ok(wx.hrefs.some(h => /windy\.com/.test(h)) && wx.hrefs.some(h => /lamis/.test(h)) && wx.hrefs.some(h => /metar/.test(h)),
     'Windy · 저고도 날씨 · METAR/TAF 는 종전 사이트로 열린다');
   t.ok(wx.cctv === 'CCTV' && wx.back === 'Weather', `CCTV 가 열리고 Back 은 Weather 로 돌아온다 (${wx.cctv} → ${wx.back})`);
+
+  // ── CDU 홈의 Aircraft Systems — 누르면 계통 버튼 아홉 개, 각각 제 화면(준비 중) · Back 은 Aircraft Systems 로 ──
+  const sys = await page.evaluate(async () => {
+    const wait = ms => new Promise(r => setTimeout(r, ms));
+    selectPanel('right', 'cdu', true); await wait(150);
+    CDU_ACT.switchMode('HOME'); await wait(80);
+    const labels = () => [...document.querySelectorAll('#mainContentArea .icon-label')].map(e => e.textContent.trim());
+    const title = () => document.getElementById('modeTitle').textContent.trim();
+    const home = labels();
+    document.querySelector('#mainContentArea [data-act="switchMode"][data-arg=\'["ACSYS"]\']').click(); await wait(80);
+    const sTitle = title(), sLabels = labels();
+    const pages = [];
+    for (const el of [...document.querySelectorAll('#mainContentArea [data-act="acSysOpen"]')].map(e => e.dataset.arg)) {
+      CDU_ACT.switchMode('ACSYS'); await wait(30);
+      document.querySelector(`#mainContentArea [data-act="acSysOpen"][data-arg='${el}']`).click(); await wait(30);
+      pages.push(title());
+    }
+    [...document.querySelectorAll('#footerNav .nav-btn')].pop().click(); await wait(80);   // Back
+    const back = title();
+    CDU_ACT.switchMode('HOME'); await wait(50);
+    return { home, sTitle, sLabels, pages, back };
+  });
+  t.eq(sys.home[1], 'AircraftSystems', `CDU 홈 둘째 버튼이 Aircraft Systems 다 (${sys.home.slice(0, 3).join(' · ')})`);
+  t.ok(sys.sTitle === 'Aircraft Systems' &&
+       sys.sLabels.join('|') === 'AFCS|AircraftStatus|Electrical|Engines|Fuel|HOCAS|SystemTests|Video|Maintenance',
+    `누르면 계통 버튼 아홉 개 (${sys.sLabels.join(' · ')})`);
+  t.ok(sys.pages.join('|') === 'AFCS|Aircraft Status|Electrical|Engines|Fuel|HOCAS|System Tests|Video|Maintenance',
+    `각 버튼이 제 화면을 연다 (${sys.pages.join(' · ')})`);
+  t.eq(sys.back, 'Aircraft Systems', '계통 화면의 Back 은 Aircraft Systems 로 돌아온다');
 }
