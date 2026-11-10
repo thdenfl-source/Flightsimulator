@@ -184,8 +184,8 @@ function init(){
 
   // ── PFD canvas tap-to-edit ──
   // FMA row (top of AI)  : middle cell → HDG preselect, right cell → IAS preselect
-  // ALT header box (top of ALT tape, right column top half) → selAlt
-  // CRHT header box (top of CRHT display, right column bottom half) → selCrht
+  // ALT header box (top of ALT tape) → selAlt
+  // CRHT header box (top of CRHT display, right of HSI) → selCrht
   async function onPfdTap(clientX, clientY) {
     const rect = cvs.getBoundingClientRect();
     const scX  = cvs.width  / rect.width;
@@ -198,23 +198,16 @@ function init(){
     const CTRL_H = ctrlEl ? ctrlEl.offsetHeight : 80;
     const W      = cvs.width;
     const H      = cvs.height;
-    const usableH = H - CTRL_H;
-    const tapW   = Math.max(56, Math.min(76, W * 0.082));
-    const vsiW   = Math.max(28, Math.min(38, W * 0.046));
-    const aiX    = tapW;
-    const aiW    = W - tapW * 2 - vsiW;
-    const aiH    = Math.floor(usableH * 0.52);
+    const L      = pfdLayout(W, H, CTRL_H);       // drawPFD 와 같은 배치(03-pfd.js)
+    const aiX    = L.ai.x, aiW = L.ai.w;
 
     // Right-column header box (where selAlt / selCrht + VS are shown)
     const HEAD_H   = 26;
-    const altX     = W - tapW - vsiW;
-    const altRight = W - vsiW;                  // ALT tape right edge (top half)
-    const crhtRight = W;                        // CRHT display right edge (bottom half — full width incl. former VSI column)
 
     // — ALT tape header (top half, x in [altX, altRight]) —
     // Header is sub-divided: top half ≈ selAlt, bottom half ≈ selVS
-    if (py >= 0 && py <= HEAD_H && px >= altX && px <= altRight) {
-      if (py < HEAD_H * 0.5) {
+    if (py >= L.alt.y && py <= L.alt.y + HEAD_H && px >= L.alt.x && px <= L.alt.x + L.alt.w) {
+      if (py < L.alt.y + HEAD_H * 0.5) {
         const v = await uiPrompt('ALT preselect (ft):', selAlt, { numeric: true });
         if (v !== null) { const n = parseInt(v, 10); if (!isNaN(n) && n >= 0) selAlt = n; }
       } else {
@@ -226,7 +219,7 @@ function init(){
     // — CRHT display header (bottom half, x in [altX, crhtRight]) —
     // Tap for a free-form CRHT target entry (alternative to the
     // 10 ft step CRHT +/- buttons in the ctrl-bar's first row).
-    if (py >= aiH && py <= aiH + HEAD_H && px >= altX && px <= crhtRight) {
+    if (py >= L.crht.y && py <= L.crht.y + HEAD_H && px >= L.crht.x && px <= L.crht.x + L.crht.w) {
       const v = await uiPrompt('CRHT preselect (ft):', selCrht, { numeric: true });
       if (v !== null) { const n = parseInt(v, 10); if (!isNaN(n) && n >= 0) selCrht = n; }
       return;
@@ -1050,6 +1043,8 @@ function act(name, ...args) {
     // 있었다. IIFE로 감싸 밖으로 내보내는 이름을 calculatePerformance 하나로 줄인다.
     // (perfData·perfResults는 화면 렌더에서 읽고 쓰므로 바깥에 남긴다)
     let calculatePerformance;
+    // PFD 엔진 계기(03-pfd.js · 01-state.js tqShown)가 쓰는 성능 접근자 — 아래 IIFE 안에서 채운다
+    let perfTqForVs, perfVsForTq, perfHoverTq, perfVy, perfMta, perfWeightLb;
     (function () {
     // Vy Tables
     const vyTemps = [-32, -20, -10, 0, 10, 20, 30, 40];
@@ -1158,6 +1153,27 @@ function act(name, ...args) {
         return interpolate1D(aFrac, 0, 1, val0, val1);
     }
 
+    // MTA(30) 표 — 고도(ft)·온도(°C) 에서 쓸 수 있는 최대 토크(%).
+    // strict 이면 표 밖(고고도·고온)은 null — PERF 화면은 N/A 로 적는다.
+    // 아니면 그 줄의 마지막 칸(표가 끝나는 온도)으로 붙든다 — 비행 모델용.
+    function mta30At(alt, temp, strict) {
+        const cAlt = Math.max(0, Math.min(14000, alt));
+        const cTemp = Math.max(-34, Math.min(40, temp));
+        const altIdx = cAlt / 1000, a0 = Math.floor(altIdx), a1 = Math.ceil(altIdx);
+        const tempIdx = (cTemp + 34) / 2, t0 = Math.floor(tempIdx), t1 = Math.ceil(tempIdx);
+        const cell = (r, c) => {
+            const row = mta30_data[r];
+            if (!row) return null;
+            if (c < row.length) return row[c];
+            return strict ? null : row[row.length - 1];
+        };
+        const v00 = cell(a0, t0), v01 = cell(a0, t1), v10 = cell(a1, t0), v11 = cell(a1, t1);
+        if (v00 == null || v01 == null || v10 == null || v11 == null) return null;
+        const r0 = interpolate1D(tempIdx - t0, 0, 1, v00, v01);
+        const r1 = interpolate1D(tempIdx - t0, 0, 1, v10, v11);
+        return interpolate1D(altIdx - a0, 0, 1, r0, r1);
+    }
+
     calculatePerformance = function() {
         let alt = parseFloat(perfData.alt) || 0;
         let temp = parseFloat(perfData.temp) || 0;
@@ -1171,29 +1187,8 @@ function act(name, ...args) {
         let cTemp = Math.max(-34, Math.min(40, temp));
 
         // 1. MTA
-        let altIdx = cAlt / 1000;
-        let alt0 = Math.floor(altIdx);
-        let alt1 = Math.ceil(altIdx);
-        let altFrac = altIdx - alt0;
-
-        let tempIdx = (cTemp + 34) / 2;
-        let temp0 = Math.floor(tempIdx);
-        let temp1 = Math.ceil(tempIdx);
-        let tempFrac = tempIdx - temp0;
-
-        function getMtaVal(r, c) {
-            if(r >= mta30_data.length || c >= mta30_data[r].length) return null;
-            return mta30_data[r][c];
-        }
-
-        let mta00 = getMtaVal(alt0, temp0); let mta01 = getMtaVal(alt0, temp1);
-        let mta10 = getMtaVal(alt1, temp0); let mta11 = getMtaVal(alt1, temp1);
-
-        if (mta00 && mta01 && mta10 && mta11) {
-            let mta0 = interpolate1D(tempFrac, 0, 1, mta00, mta01);
-            let mta1 = interpolate1D(tempFrac, 0, 1, mta10, mta11);
-            let mta30 = interpolate1D(altFrac, 0, 1, mta0, mta1);
-
+        const mta30 = mta30At(cAlt, cTemp, true);
+        if (mta30 != null) {
             perfResults.mta30 = mta30.toFixed(1);
             perfResults.mta10 = (mta30 + 7).toFixed(1); 
             perfResults.mta25 = (mta30 + 11).toFixed(1); 
@@ -1247,6 +1242,71 @@ function act(name, ...args) {
         } else {
             perfResults.vsTq = "0.0";
         }
+    };
+
+    // ── PFD 엔진 계기용: 성능표를 그대로 쓰는 토크 ↔ 상승률 변환 ──
+    // PERF 화면이 보여 주는 바로 그 표(상승·강하 토크 증분)로 계기 토크를 셈한다.
+    perfTqForVs = function (vsFpm) {
+        const wt = parseFloat(perfData.weight) || 16000;
+        const a = Math.abs(vsFpm);
+        if (!(a > 0)) return 0;
+        const d = interpolate2D(vsRates, vsWeights, vsFpm > 0 ? climbData : descentData, a, wt);
+        return vsFpm > 0 ? d : -d;
+    };
+    // 위의 역 — 남는 토크가 얼마면 몇 fpm 인가(표가 단조라 이분법으로 되짚는다)
+    perfVsForTq = function (dTq) {
+        if (!(Math.abs(dTq) > 0.01)) return 0;
+        let lo = 0, hi = Math.sign(dTq) * 3000;
+        for (let i = 0; i < 40; i++) {
+            const mid = (lo + hi) / 2;
+            if (Math.abs(perfTqForVs(mid)) < Math.abs(dTq)) lo = mid; else hi = mid;
+        }
+        return (lo + hi) / 2;
+    };
+    // 최대상승속도 Vy(kt) — 같은 토크로 가장 잘 오르는 속도
+    // (계기·비행 모델이 매 프레임 부르므로 입력이 그대로면 다시 셈하지 않는다)
+    let _vyKey = '', _vyVal = null;
+    perfVy = function () {
+        const key = perfData.temp + '/' + perfData.weight;
+        if (key === _vyKey) return _vyVal;
+        calculatePerformance();
+        const v = parseFloat(perfResults.vy);
+        _vyKey = key;
+        _vyVal = Number.isFinite(v) ? v : null;
+        return _vyVal;
+    };
+    // 그날의 MTA(%) — PERF 의 MTA(30) 표. PERF 에 넣은 고도·온도가 그날의 기준이고,
+    // 다른 고도에서는 그 온도에서 표준 기온감률(2°C/1000ft)로 셈한 온도를 쓴다.
+    // 그래서 PERF 고도에서는 PERF 화면의 MTA(30) 와 같고, 올라갈수록 줄어든다.
+    // 고도를 주지 않으면 PERF 고도에서의 값이다.
+    const MTA_LAPSE = 2;          // °C / 1000ft
+    let _mtaKey = '', _mtaVal = null;
+    perfMta = function (altFt) {
+        const a0 = parseFloat(perfData.alt) || 0;
+        const t0 = parseFloat(perfData.temp);
+        const tRef = Number.isFinite(t0) ? t0 : 15;
+        const alt = Number.isFinite(altFt) ? Math.max(0, altFt) : a0;
+        const key = a0 + '/' + tRef + '/' + Math.round(alt / 10);
+        if (key === _mtaKey) return _mtaVal;
+        _mtaKey = key;
+        _mtaVal = mta30At(alt, tRef - MTA_LAPSE * (alt - a0) / 1000, false);
+        return _mtaVal;
+    };
+    // PERF 의 총중량(lb)
+    perfWeightLb = function () { return parseFloat(perfData.weight) || 16000; };
+    // 제자리 호버에 필요한 토크(%) — 지면효과 안(IGE)·밖(OGE)
+    // 매 프레임 불리므로(계기·비행 모델) 입력이 그대로면 셈을 다시 하지 않는다.
+    let _hovCache = null, _hovKey = '';
+    perfHoverTq = function () {
+        const key = perfData.alt + '/' + perfData.temp + '/' + perfData.weight;
+        if (_hovCache && key === _hovKey) return _hovCache;
+        calculatePerformance();
+        const oge = parseFloat(perfResults.oge), ige = parseFloat(perfResults.ige);
+        _hovKey = key;
+        _hovCache = { oge: Number.isFinite(oge) ? oge : null,
+                      ige: Number.isFinite(ige) ? ige : null,
+                      wt: parseFloat(perfData.weight) || 16000 };
+        return _hovCache;
     };
     })();
 
@@ -4175,6 +4235,13 @@ switchMode('HOME');
     window.tpMapHide         = tpMapHide;          // 지도 포인트 팝업(#cdu-wrap 밖)
     window.tpMapAddFpl       = tpMapAddFpl;
     window.tpMapDirect       = tpMapDirect;
+    // PFD 엔진 계기(TQ · MTA · Vy 선)가 PERF 자료를 그대로 쓰도록 내보낸다
+    window.perfHoverTq       = (...a) => perfHoverTq(...a);
+    window.perfTqForVs       = (...a) => perfTqForVs(...a);
+    window.perfVsForTq       = (...a) => perfVsForTq(...a);
+    window.perfVy            = (...a) => perfVy(...a);
+    window.perfMta           = (...a) => perfMta(...a);
+    window.perfWeightLb      = (...a) => perfWeightLb(...a);
     // 상태 변수: 밖에서 '현재 값'을 읽으므로 접근자로 공개(스냅샷이면 갱신이 안 됨)
     Object.defineProperties(window, {
       currentMode:    { get: () => currentMode,    configurable: true },

@@ -212,8 +212,9 @@ export async function run(page, t) {
     const proto = CanvasRenderingContext2D.prototype, orig = proto.fillText, seen = [];
     proto.fillText = function (x, ...a) { seen.push(String(x)); return orig.call(this, x, ...a); };
     try { drawPFD(); } finally { proto.fillText = orig; }
-    const i = seen.indexOf('NAV1 ');
-    return i < 0 ? '' : seen.slice(i, i + 4).join('').replace(/\s+/g, ' ').trim();
+    // 오른쪽 아래 NAV 칸: 소스 · 식별자 / 방위 · 거리 순으로 그린다
+    const i = seen.indexOf('NAV1');
+    return i < 0 ? '' : seen.slice(i, i + 4).join(' ').replace(/\s+/g, ' ').trim();
   });
   t.ok(/^NAV1 IYAN\s+\d{3}°\s+[\d.]+ NM$/.test(pfd),
     `PFD NAV1 줄에 로컬라이저 명칭·방위·거리가 나온다 (${pfd || '없음'})`);

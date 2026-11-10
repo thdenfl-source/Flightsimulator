@@ -211,6 +211,27 @@ export async function run(page, t) {
     `겹친 배치를 되살려도 그릴 때 바로잡는다 (${dup.c})`);
   t.eq(dup.d, 'pfd·map·m3d', `2D 와 3D 지도는 나란히 둘 수 있다 (${dup.d})`);
 
+  // ── PFD 배치(shinesong 과 같은 실기형): CRHT·NAV 칸은 고도계+승강계 칸과 같은 x·폭 ──
+  const al = await two.evaluate(() => [1400, 1000, 700, 560].map(W => {
+    const L = pfdLayout(W, 900, 300);
+    return Math.abs(L.crht.x - L.alt.x) < 0.5 && Math.abs(L.crht.w - (L.alt.w + L.vsi.w)) < 0.5 &&
+           Math.abs(L.navs.x - L.alt.x) < 0.5 && Math.abs(L.hsi.x + L.hsi.w - L.crht.x) < 0.5;
+  }));
+  t.ok(al.every(Boolean), `CRHT·NAV 칸이 고도계 칸과 세로로 맞는다 (${al.join(' ')})`);
+
+  // ── 엔진 계기 토크 — PERF 표로 셈한다(호버 > 70kt 순항 · 상승하면 는다) ──
+  const tq = await two.evaluate(() => {
+    const keep = { spd: S.spd, vs: S.vs, bnk: S.bnk, alt: S.alt };
+    S.alt = 1000; S.bnk = 0; S.vs = 0;
+    S.spd = 0;  const hov = tqShown();
+    S.spd = 70; const cruise = tqShown();
+    S.vs = 1000; const climb = tqShown();
+    Object.assign(S, keep);
+    return { hov, cruise, climb, mta: mtaNow(), vy: tqAtVy() };
+  });
+  t.ok(tq.hov > tq.cruise && tq.climb > tq.cruise + 5 && Number.isFinite(tq.vy) && tq.mta > 90 && tq.mta <= 140,
+    `엔진 계기 토크가 비행 상태를 따른다 (호버 ${tq.hov.toFixed(0)} · 70kt ${tq.cruise.toFixed(0)} · +1000fpm ${tq.climb.toFixed(0)} · MTA ${tq.mta.toFixed(0)} · Vy선 ${tq.vy.toFixed(0)}%)`);
+
   await ctx1.close();
   await ctx2.close();
 

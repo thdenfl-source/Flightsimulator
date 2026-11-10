@@ -49,7 +49,7 @@ export async function run(page, t) {
   });
   // 파란 화소는 우측 NAV1/NAV2 줄에도 있으므로 절대량이 아니라 "켤 때만 생기는
   // 몫" 을 본다. 그게 곧 나침반의 BRG1 니들이다.
-  t.ok(px.on - px.off > 300,
+  t.ok(px.on - px.off > 150,
     `FMS 소스에서도 BRG1 이 그려진다 (켤 때만 생기는 파란 화소 ${px.on - px.off}개)`);
   t.eq(px.back, px.on, '껐다 켜면 그대로 돌아온다');
 
