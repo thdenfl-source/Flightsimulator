@@ -1407,16 +1407,49 @@ function act(name, ...args) {
     // 홈에서 'Weather' 버튼 하나로 묶고, 누르면 Weather 화면에 넷이 나와 종전 그대로 동작한다.
     const WX_IDS = ['weather', 'directTo', 'cctv', 'metar'];
     const wxGroupBtn = { id: 'wxgrp', text: 'Weather', icon: homeButtons.find(b => b.id === 'weather').icon };
+    // ── Aircraft Systems 묶음 ── 홈의 'Aircraft Systems' 를 누르면 계통 화면 아홉 개로 가는 버튼이 나온다.
+    // 각 화면은 아직 비어 있다(기능은 차차 넣는다) — renderAcSysPage 가 제목만 띄우고 Back 은 Aircraft Systems 로.
+    const acSysGroupBtn = { id: 'acsys', text: 'Aircraft<br>Systems', icon: '<svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="16" fill="none" stroke="#00e5ff" stroke-width="6"/><g stroke="#00e5ff" stroke-width="9" stroke-linecap="round"><line x1="50" y1="14" x2="50" y2="24"/><line x1="50" y1="76" x2="50" y2="86"/><line x1="14" y1="50" x2="24" y2="50"/><line x1="76" y1="50" x2="86" y2="50"/><line x1="25" y1="25" x2="32" y2="32"/><line x1="68" y1="68" x2="75" y2="75"/><line x1="75" y1="25" x2="68" y2="32"/><line x1="32" y1="68" x2="25" y2="75"/></g></svg>' };
+    const AC_SYS_BTNS = [
+        { id: 'asys_afcs', text: 'AFCS', icon: '<svg viewBox="0 0 100 100"><rect x="14" y="26" width="72" height="48" rx="8" fill="none" stroke="#00e5ff" stroke-width="5"/><text x="50" y="62" text-anchor="middle" font-family="Arial" font-weight="bold" font-size="30" fill="#00e5ff">AP</text></svg>' },
+        { id: 'asys_status', text: 'Aircraft<br>Status', icon: '<svg viewBox="0 0 100 100"><rect x="24" y="18" width="52" height="66" rx="5" fill="none" stroke="#00e5ff" stroke-width="5"/><rect x="38" y="12" width="24" height="12" rx="3" fill="#00e5ff"/><polyline points="34,52 46,64 68,40" fill="none" stroke="#22dd55" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/></svg>' },
+        { id: 'asys_elec', text: 'Electrical', icon: '<svg viewBox="0 0 100 100"><polygon points="56,10 24,56 46,56 40,90 76,42 54,42" fill="#ffcc00"/></svg>' },
+        { id: 'asys_eng', text: 'Engines', icon: '<svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="34" fill="none" stroke="#00e5ff" stroke-width="5"/><circle cx="50" cy="50" r="8" fill="#00e5ff"/><g stroke="#00e5ff" stroke-width="6" stroke-linecap="round"><path d="M50 42 Q58 28 50 18" fill="none"/><path d="M58 50 Q72 58 82 50" fill="none"/><path d="M50 58 Q42 72 50 82" fill="none"/><path d="M42 50 Q28 42 18 50" fill="none"/></g></svg>' },
+        { id: 'asys_fuel', text: 'Fuel', icon: '<svg viewBox="0 0 100 100"><rect x="20" y="22" width="40" height="62" rx="4" fill="none" stroke="#00e5ff" stroke-width="5"/><rect x="27" y="30" width="26" height="16" fill="#00e5ff"/><path d="M60 40 L74 48 L74 76 Q74 84 66 80 L66 60" fill="none" stroke="#00e5ff" stroke-width="5" stroke-linejoin="round"/></svg>' },
+        { id: 'asys_hocas', text: 'HOCAS', icon: '<svg viewBox="0 0 100 100"><rect x="28" y="74" width="44" height="12" rx="4" fill="#00e5ff"/><line x1="50" y1="74" x2="50" y2="40" stroke="#00e5ff" stroke-width="7" stroke-linecap="round"/><rect x="38" y="14" width="24" height="32" rx="10" fill="none" stroke="#00e5ff" stroke-width="5"/><circle cx="50" cy="24" r="4" fill="#ff5252"/></svg>' },
+        { id: 'asys_tests', text: 'System<br>Tests', icon: '<svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="34" fill="none" stroke="#00e5ff" stroke-width="5"/><text x="50" y="58" text-anchor="middle" font-family="Arial" font-weight="bold" font-size="22" fill="#00e5ff">TEST</text></svg>' },
+        { id: 'asys_video', text: 'Video', icon: '<svg viewBox="0 0 100 100"><rect x="12" y="24" width="76" height="52" rx="6" fill="none" stroke="#00e5ff" stroke-width="5"/><polygon points="42,36 64,50 42,64" fill="#00e5ff"/></svg>' },
+        { id: 'asys_maint', text: 'Maintenance', icon: '<svg viewBox="0 0 100 100"><path d="M64 14 A20 20 0 0 0 46 40 L16 70 A8 8 0 0 0 30 84 L60 54 A20 20 0 0 0 86 36 L74 46 L62 42 L58 30 Z" fill="none" stroke="#00e5ff" stroke-width="5" stroke-linejoin="round"/></svg>' }
+    ];
+    let _acSysPage = 'asys_afcs';
 
     function renderHomeScreen(container, footer, title) {
         title.innerText = "Home";
-        container.innerHTML = homeGridHtml([wxGroupBtn].concat(homeButtons.filter(b => !WX_IDS.includes(b.id))));
+        container.innerHTML = homeGridHtml([wxGroupBtn, acSysGroupBtn].concat(homeButtons.filter(b => !WX_IDS.includes(b.id))));
         footer.innerHTML = cduFooter('', `<div class="nav-btn" data-act="openUbikais"><span>🛰</span>UBIKAIS</div>`);
     }
     function renderWeatherScreen(container, footer, title) {
         title.innerText = "Weather";
         container.innerHTML = homeGridHtml(WX_IDS.map(id => homeButtons.find(b => b.id === id)));
         footer.innerHTML = cduFooter("switchMode('HOME')");
+    }
+
+    function renderAcSysScreen(container, footer, title) {
+        title.innerText = "Aircraft Systems";
+        container.innerHTML = homeGridHtml(AC_SYS_BTNS);
+        footer.innerHTML = cduFooter("switchMode('HOME')");
+    }
+    function acSysOpen(id) { _acSysPage = id; switchMode('ACSYS_PAGE'); }
+    // 계통 화면(아직 비어 있음) — 제목·아이콘과 '준비 중' 만
+    function renderAcSysPage(container, footer, title) {
+        const b = AC_SYS_BTNS.find(x => x.id === _acSysPage) || AC_SYS_BTNS[0];
+        const name = b.text.replace(/<br>/g, ' ');
+        title.innerText = name;
+        container.innerHTML = `<div class="acsys-page" data-page="${b.id}" style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:14px;color:#567;">` +
+            `<div style="width:84px;height:84px;opacity:.55">${b.icon}</div>` +
+            `<div style="color:#00cfff;font-size:16px;font-weight:bold;letter-spacing:1px;">${name.toUpperCase()}</div>` +
+            `<div style="font-size:12px;">준비 중 — 이 계통 화면은 차차 갖춥니다</div></div>`;
+        footer.innerHTML = cduFooter("switchMode('ACSYS')");
     }
 
     function homeGridHtml(list) {
@@ -1434,7 +1467,7 @@ function act(name, ...args) {
                 'wildfire': "https://fd.forest.go.kr/ffas/"
             };
 
-            let isActiveBtn = ['wxgrp', 'weather', 'charts', 'notam', 'metar', 'directTo', 'map', 'fpl', 'serv', 'sys', 'perf', 'util', 'proc', 'cctv', 'vnav', 'check', 'afld', 'skyvector', 'tide', 'eravail', 'wildfire'].includes(btn.id);
+            let isActiveBtn = btn.id.startsWith('asys_') || ['wxgrp', 'acsys', 'weather', 'charts', 'notam', 'metar', 'directTo', 'map', 'fpl', 'serv', 'sys', 'perf', 'util', 'proc', 'cctv', 'vnav', 'check', 'afld', 'skyvector', 'tide', 'eravail', 'wildfire'].includes(btn.id);
             let boxClass = isActiveBtn ? 'icon-box func-active' : 'icon-box';
 
             if (links[btn.id]) {
@@ -1445,6 +1478,8 @@ function act(name, ...args) {
                     </a>`;
             } else {
                 let clickAction = btn.id === 'wxgrp' ? `data-act="switchMode" data-arg='["WEATHER"]'` :
+                                  btn.id === 'acsys' ? `data-act="switchMode" data-arg='["ACSYS"]'` :
+                                  btn.id.startsWith('asys_') ? `data-act="acSysOpen" data-arg='["${btn.id}"]'` :
                                   btn.id === 'sys' ? `data-act="switchMode" data-arg='["TRACKPOINT"]'` :
                                   btn.id === 'perf' ? `data-act="switchMode" data-arg='["PERF"]'` :
                                   btn.id === 'fpl'  ? `data-act="openFlightPlan"` :
@@ -3654,6 +3689,8 @@ function act(name, ...args) {
         switch(currentMode) {
             case 'HOME': renderHomeScreen(container, footer, title); break;
             case 'WEATHER': renderWeatherScreen(container, footer, title); break;
+            case 'ACSYS': renderAcSysScreen(container, footer, title); break;
+            case 'ACSYS_PAGE': renderAcSysPage(container, footer, title); break;
             case 'PERF': renderPerfScreen(container, footer, title); break;
             case 'PERF_INPUT': renderPerfInputScreen(container, footer, title); break;
             case 'AUDIO': renderAudioScreen(container, footer, title); break;
@@ -4184,6 +4221,7 @@ switchMode('HOME');
       openNavSel,
       openProc: () => { if (_soloActive) setSolo('plan'); else goCduPage('plan'); fpGo('IFR'); },
       openUbikais,
+      acSysOpen,
       pickNavVor,
       prefetchTiles,
       pwaInstall,
