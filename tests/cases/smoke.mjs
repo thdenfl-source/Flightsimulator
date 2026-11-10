@@ -102,4 +102,30 @@ export async function runDegenerate(page, t) {
   });
   t.eq(thrown.length, 0, `접힌 캔버스 5종에서 drawPFD 예외 없음${thrown.length ? ': ' + thrown.join(' | ') : ''}`);
   t.eq(page.errors.length, 0, '접힌 캔버스 렌더 중 페이지 오류 없음');
+
+  // ── CDU 홈의 Weather 버튼 — 누르면 Windy · 저고도 날씨 · CCTV · METAR/TAF 넷이 나온다 ──
+  const wx = await page.evaluate(async () => {
+    const wait = ms => new Promise(r => setTimeout(r, ms));
+    selectPanel('right', 'cdu', true); await wait(150);
+    CDU_ACT.switchMode('HOME'); await wait(80);
+    const labels = () => [...document.querySelectorAll('#mainContentArea .icon-label')].map(e => e.textContent.trim());
+    const title = () => document.getElementById('modeTitle').textContent.trim();
+    const home = labels();
+    document.querySelector('#mainContentArea [data-act="switchMode"][data-arg=\'["WEATHER"]\']').click(); await wait(80);
+    const wxTitle = title(), wxLabels = labels();
+    const hrefs = [...document.querySelectorAll('#mainContentArea a.home-icon-wrapper')].map(a => a.getAttribute('href'));
+    document.querySelector('#mainContentArea [data-arg=\'["CCTV"]\']').click(); await wait(80);
+    const cctv = title();
+    [...document.querySelectorAll('#footerNav .nav-btn')].pop().click(); await wait(80);   // Back 은 늘 맨 오른쪽
+    const back = title();
+    CDU_ACT.switchMode('HOME'); await wait(50);
+    return { home, wxTitle, wxLabels, hrefs, cctv, back };
+  });
+  t.eq(wx.home[0], 'Weather', `CDU 홈 첫 버튼이 Weather 다 (${wx.home.slice(0, 4).join(' · ')})`);
+  t.ok(!wx.home.some(l => /Windy|CCTV|METAR/.test(l)), '날씨 버튼 넷은 홈에서 Weather 안으로 들어갔다');
+  t.ok(wx.wxTitle === 'Weather' && wx.wxLabels.join('|') === 'Windy|저고도날씨|CCTV|METAR/TAF',
+    `Weather 를 누르면 넷이 나온다 (${wx.wxTitle}: ${wx.wxLabels.join(' · ')})`);
+  t.ok(wx.hrefs.some(h => /windy\.com/.test(h)) && wx.hrefs.some(h => /lamis/.test(h)) && wx.hrefs.some(h => /metar/.test(h)),
+    'Windy · 저고도 날씨 · METAR/TAF 는 종전 사이트로 열린다');
+  t.ok(wx.cctv === 'CCTV' && wx.back === 'Weather', `CCTV 가 열리고 Back 은 Weather 로 돌아온다 (${wx.cctv} → ${wx.back})`);
 }
