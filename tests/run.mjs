@@ -30,6 +30,9 @@ import * as directto from './cases/directto.mjs';
 import * as crssync from './cases/crssync.mjs';
 import * as locsta from './cases/locsta.mjs';
 import * as susp from './cases/susp.mjs';
+import * as fcpsimple from './cases/fcpsimple.mjs';
+import * as pfdsk from './cases/pfdsk.mjs';
+import * as stopwatch from './cases/stopwatch.mjs';
 import * as layout from './cases/layout.mjs';
 import * as gslope from './cases/gslope.mjs';
 import * as joystick from './cases/joystick.mjs';
@@ -41,7 +44,7 @@ import * as altcap from './cases/altcap.mjs';
 import * as hdgref from './cases/hdgref.mjs';
 import * as apptune from './cases/apptune.mjs';
 
-const SUITES = [smoke, actions, coords, chartcal, hold, nav, gspd, dialog, chartview, procdata, simspd, tascalc, brg, fpwpt, maprot, map3d, dmearc, dme, fporder, wptcrs, brglbl, directto, crssync, locsta, susp, layout, gslope, joystick, geosearch, ship, ralt, startapt, altcap, hdgref, apptune];
+const SUITES = [smoke, actions, coords, chartcal, hold, nav, gspd, dialog, chartview, procdata, simspd, tascalc, brg, fpwpt, maprot, map3d, dmearc, dme, fporder, wptcrs, brglbl, directto, crssync, locsta, susp, layout, gslope, joystick, geosearch, ship, ralt, startapt, altcap, hdgref, apptune, fcpsimple, pfdsk, stopwatch];
 const filter = process.argv.slice(2);
 
 function makeT() {

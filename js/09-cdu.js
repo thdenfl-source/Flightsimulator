@@ -192,6 +192,8 @@ function init(){
     const scY  = cvs.height / rect.height;
     const px   = (clientX - rect.left) * scX;
     const py   = (clientY - rect.top)  * scY;
+    // 스톱워치 버튼(HSI 오른쪽 아래 — 03-pfd.js drawStopwatch)
+    try { if (typeof swHitTest === 'function' && swHitTest(px, py)) return; } catch (e) { _swallow(e); }
 
     // Mirror drawPFD geometry
     const ctrlEl = document.querySelector('.ctrl-bar');
