@@ -1617,6 +1617,34 @@ body.solo-mode .solo-panel-visible {
         .icon-box:active { transform: scale(0.92); }
         .icon-box svg { width: 70%; height: 70%; }
         .icon-label { font-size: 8px; color: #eee; text-align: center; font-weight: bold; line-height: 1.1; pointer-events: none; min-height: 18px; display: flex; align-items: flex-start; justify-content: center; }
+        /* ── CDU 버튼 디자인(실기 CDU 사진 · 크기·글씨 90 %) — 회색 바탕 위 검은 사각 버튼 · 밝은 테두리 · 아이콘 위 · 글자는 버튼 안 아래 ── */
+        #mainContentArea:has(> .home-grid), #mainContentArea:has(> .acsys-page > .home-grid) {
+            background: radial-gradient(ellipse at 30% 20%, #8a8c8e 0%, #6f7173 45%, #5d5f61 100%); }
+        .home-grid { gap: 7px 6px; padding: 6px 2px; }
+        .home-icon-wrapper { width: 21%; height: 67px; box-sizing: border-box; justify-content: space-between; padding: 5.4px 2.7px 4.5px;
+            background: linear-gradient(to bottom, #20262c 0%, #07090b 55%, #000 100%); border: 2px solid #d4d8db; border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.12); transition: transform 0.05s, border-color 0.1s; }
+        .home-icon-wrapper:active { transform: scale(0.95); border-color: #2fe0e0; }
+        .home-icon-wrapper .icon-box, .home-icon-wrapper .icon-box.func-active { width: 100%; height: 34px; margin: 0; border: none !important;
+            background: none !important; box-shadow: none; border-radius: 0; overflow: visible; }
+        .home-icon-wrapper .icon-box:active { transform: none; }
+        .home-icon-wrapper .icon-box svg { width: auto; height: 100%; max-width: 80%; }
+        .home-icon-wrapper .icon-label { font-size: 9px; line-height: 1.05; color: #fff; min-height: 0; align-items: center;
+            font-family: 'Helvetica Neue', Arial, sans-serif; text-shadow: 0 1px 1px #000; }
+        /* Waypoint Info — 사진처럼 3칸씩(마지막 줄 Create Waypoint · Airport INFO 는 가운데) */
+        .wpt-grid { gap: 9px 8px; padding-top: 10px; }
+        .wpt-grid .home-icon-wrapper { width: 29%; }
+        /* Aircraft Systems — 사진의 자리: 4칸 격자 두 줄(빈칸 하나) · 아래 한 줄은 바닥에 */
+        #mainContentArea:has(> .acsys-grid) { display: flex; flex-direction: column; }
+        .acsys-grid { display: grid; grid-template-columns: repeat(4, 21%); justify-content: center; gap: 7px 6px; }
+        .acsys-grid .home-icon-wrapper { width: 100%; }
+        .acsys-grid.acsys-bot { margin-top: auto; }
+        .acsys-empty { height: 67px; }
+        .acsys-iconly .icon-box, .acsys-iconly .icon-box.func-active { height: 100%; }
+        .acsys-iconly .icon-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+        .acsys-txtbtn { justify-content: center; gap: 4px; }
+        .acsys-txt { font: bold 9px/1.1 'Helvetica Neue', Arial, sans-serif; color: #fff; text-align: center; text-shadow: 0 1px 1px #000; pointer-events: none; }
+        .acsys-txtbtn .acsys-sub { color: #2fe0ff; font-size: 11px; font-weight: bold; }
         
         /* PERF Page Styles */
         .perf-row { display: flex; justify-content: space-between; margin-bottom: 12px; align-items: center; }
@@ -2019,10 +2047,12 @@ body.night-mode::after {
 
       <h3>5. CDU 홈 (20개 기능)</h3>
       <ul>
+        <li><b>배열</b>(4칸씩): MAP · Aircraft Systems · PERF · Charts / Flight Plan · PROC · VNAV · Waypoint Info / NOTAM · Track &amp; Point · Services · Utilities / SkyVector · Tide forecast · ER availability · Wildfire status / Weather · Checklist.
+          <b>Waypoint Info</b>를 누르면 실기처럼 3칸씩 <b>Airport · INT · VOR / NDB · VRP · User Waypoint / Create Waypoint · Airport INFO</b>가 나옵니다. <b>Airport INFO</b>는 비행장 정보(Back 은 Waypoint Info 로), <b>Create Waypoint</b>는 Flight Plan 의 <b>Add WPT</b> 와 같은 ADD WAYPOINT 화면을 엽니다. <b>Airport</b> · <b>INT</b> · <b>VOR</b> · <b>NDB</b>는 ICAO 비행장(28곳) · Fix(146곳) · VOR(41곳) · ADF/NDB(113곳) 목록을 보입니다(지금 자리에서 방위·거리, <b>거리순/이름순</b> 버튼). 줄을 누르면 그 시설을 Flight Plan 끝에 넣고 Flight Plan 을 엽니다. 나머지는 차차 갖춥니다(지금은 준비 중 화면).</li>
         <li><b>기상</b>: 홈의 <b>Weather</b> 버튼을 누르면 <b>Windy · 저고도 날씨 · CCTV · METAR/TAF</b> 네 버튼이 나옵니다(CCTV 의 Back 은 Weather 로). Tide forecast 는 홈에 그대로 있습니다.</li>
-        <li><b>Aircraft Systems</b>(홈 둘째 버튼): 누르면 <b>AFCS · Aircraft Status · Electrical · Engines · Fuel · HOCAS · System Tests · Video · Maintenance</b>
-            아홉 버튼이 나옵니다. 각 계통 화면은 차차 갖추며(지금은 '준비 중'), Back 은 Aircraft Systems 로 돌아옵니다.</li>
-        <li><b>정보</b>: CCTV · Charts · NOTAM · <b>INFO</b>(비행장) · Services · SkyVector · ER availability · Wildfire status</li>
+        <li><b>Aircraft Systems</b>(홈 둘째 버튼): 누르면 <b>AFCS · Aircraft Status · Electrical · Engines · Fuel · RA Self Test · HOCAS · System Tests · Lighting Config · Video · Maintenance</b>
+            버튼이 나옵니다(실기 사진의 배치 — 계통 화면은 아직 준비 중). Back 은 Aircraft Systems 로 돌아옵니다.</li>
+        <li><b>정보</b>: CCTV · Charts · NOTAM · <b>Airport INFO</b>(Waypoint Info 안 — 비행장) · Services · SkyVector · ER availability · Wildfire status</li>
         <li><b>항법</b>: Flight Plan · PROC · <b>VNAV</b> · Track &amp; Point · MAP</li>
         <li><b>운영</b>: PERF · Checklist · Utilities · Setting</li>
         <li>하단 공통 버튼: <b>Home · Full/Half · Setting · Back</b> (홈 화면에는 <b>UBIKAIS</b> 바로가기)</li>
@@ -2562,6 +2592,7 @@ body.night-mode::after {
   <script src="js/11-charts.js"></script>
   <script src="js/12-joystick.js"></script>
   <script src="js/13-joyhid.js"></script>
+  <script src="js/20-navaids.js"></script>
 
 <input type="file" id="zipFileInput" accept=".zip,application/zip,application/x-zip-compressed,application/octet-stream" style="display:none" onchange="handleZipFile(this.files[0]); this.value='';"></body>
 </html>

@@ -1,6 +1,11 @@
 // 스모크 — 페이지 로드 오류, 주요 화면 렌더, 죽은 버튼(참조 불가 핸들러) 검출
 export const name = '스모크';
 
+import { readFileSync } from 'node:fs';
+const _navSrc = readFileSync(new URL('../../js/20-navaids.js', import.meta.url), 'utf8');
+const _navPart = k => (_navSrc.split('const NAVAID_' + k)[1] || '').split('];')[0];
+const NAV_N = { vor: (_navPart('VOR').match(/"id":/g) || []).length, ndb: (_navPart('NDB').match(/"id":/g) || []).length, int: (_navPart('INT').match(/"id":/g) || []).length };
+const APT_N = (readFileSync(new URL('../../js/04-map.js', import.meta.url), 'utf8').split('const AIRPORTS_KR')[1].split('];')[0].match(/icao:/g) || []).length;
 export async function run(page, t) {
   t.eq(page.errors.length, 0, `로드 시 페이지 오류 없음${page.errors.length ? ': ' + page.errors.join(' | ') : ''}`);
 
@@ -121,7 +126,56 @@ export async function runDegenerate(page, t) {
     CDU_ACT.switchMode('HOME'); await wait(50);
     return { home, wxTitle, wxLabels, hrefs, cctv, back };
   });
-  t.eq(wx.home[0], 'Weather', `CDU 홈 첫 버튼이 Weather 다 (${wx.home.slice(0, 4).join(' · ')})`);
+  t.eq(wx.home.join('|'),
+    'MAP|AircraftSystems|PERF|Charts|Flight Plan|PROC|VNAV|WaypointInfo|NOTAM|Track &Point|Services|Utilities|SkyVector|Tideforecast|ERavailability|Wildfirestatus|Weather|Checklist',
+    `CDU 홈 배열 — 4칸씩 MAP… / Flight Plan… / NOTAM… / SkyVector… / Weather · Checklist (${wx.home.join(' · ')})`);
+  // Waypoint Info — 누르면 INFO, INFO 의 Back 은 Waypoint Info 로
+  const wpt = await page.evaluate(async () => {
+    const wait = ms => new Promise(r => setTimeout(r, ms));
+    const title = () => document.getElementById('modeTitle').textContent.trim();
+    CDU_ACT.switchMode('HOME'); await wait(50);
+    document.querySelector('#mainContentArea [data-arg=\'["WPTINFO"]\']').click(); await wait(60);
+    const t1 = title(), labels = [...document.querySelectorAll('#mainContentArea .icon-label')].map(e => e.textContent.trim());
+    document.querySelector('#mainContentArea [data-arg=\'["AIRFIELD"]\']').click(); await wait(60);
+    const t2 = title();
+    [...document.querySelectorAll('#footerNav .nav-btn')].pop().click(); await wait(60);
+    const t3 = title();
+    document.querySelector('#mainContentArea [data-act="wptOpen"][data-arg=\'["wpt_vrp"]\']').click(); await wait(60);
+    const t4 = title(); [...document.querySelectorAll('#footerNav .nav-btn')].pop().click(); await wait(60);
+    const t5 = title();
+    document.querySelector('#mainContentArea [data-act="wptOpen"][data-arg=\'["wpt_create"]\']').click(); await wait(80);
+    const fpw = document.getElementById('fp-wrap');
+    const add = { title: document.getElementById('fp-mode-title').textContent.trim(), shown: !!fpw && !fpw.classList.contains('page-hidden') && fpw.offsetParent !== null };
+    try { fpGo('LIST'); } catch (e) {}
+    // VOR · NDB 목록 — GPX 자료, 거리순 · 누르면 Flight Plan 끝에
+    const keep = JSON.stringify({ wps: S.wps, awp: S.awp });
+    S.wps = []; S.awp = -1; S.lat = 36.7; S.lon = 127.5;
+    const nav = {};
+    for (const k of ['vor', 'ndb', 'apt', 'int']) {
+      CDU_ACT.switchMode('WPTINFO'); await wait(40);
+      document.querySelector(`#mainContentArea [data-act="wptOpen"][data-arg='["wpt_${k}"]']`).click(); await wait(60);
+      const rows = [...document.querySelectorAll('#mainContentArea .nav-row')];
+      nav[k] = { title: title(), n: rows.length, first: rows[0] && rows[0].querySelector('b').textContent };
+      rows[0].click(); await wait(80);
+      nav[k].wp = S.wps.length && S.wps[S.wps.length - 1].ident;
+      nav[k].fp = document.getElementById('fp-mode-title').textContent.trim();
+    }
+    const k0 = JSON.parse(keep); S.wps = k0.wps; S.awp = k0.awp; try { updateWpMarkers(); fpGo('LIST'); } catch (e) {}
+    CDU_ACT.switchMode('HOME'); await wait(50);
+    return { t1, labels, t2, t3, t4, t5, add, nav };
+  });
+  t.ok(wpt.t1 === 'Waypoint Info' && wpt.labels.join('|') === 'Airport|INT|VOR|NDB|VRP|UserWaypoint|CreateWaypoint|AirportINFO' && wpt.t2 === '비행장 정보' && wpt.t3 === 'Waypoint Info',
+    `Waypoint Info → Airport·INT·VOR·NDB·VRP·User·Create·Airport INFO, Airport INFO 의 Back 은 Waypoint Info 로 (${wpt.t1} · ${wpt.labels.join(',')} · ${wpt.t2} → ${wpt.t3})`);
+  t.ok(wpt.add.title === 'ADD WAYPOINT' && wpt.add.shown, `Create Waypoint 는 Flight Plan 의 ADD WAYPOINT 화면을 연다 (${wpt.add.title} · ${wpt.add.shown})`);
+  t.ok(wpt.nav.vor.title === 'VOR' && wpt.nav.vor.n === NAV_N.vor && wpt.nav.vor.first === 'CHJ' && wpt.nav.vor.wp === 'CHJ',
+    `VOR 목록 — ${wpt.nav.vor.n}곳, 거리순 첫째 ${wpt.nav.vor.first}(청주 근처), 누르면 Flight Plan 에 ${wpt.nav.vor.wp} (${wpt.nav.vor.fp})`);
+  t.ok(wpt.nav.int.title === 'INT' && wpt.nav.int.n === NAV_N.int && wpt.nav.int.wp === wpt.nav.int.first && wpt.nav.int.first === 'VASLI',
+    `INT 목록 — Fix ${wpt.nav.int.n}곳, 거리순 첫째 ${wpt.nav.int.first}(청주 근처), 누르면 Flight Plan 에 ${wpt.nav.int.wp}`);
+  t.ok(wpt.nav.apt.title === 'Airport' && wpt.nav.apt.n === APT_N && wpt.nav.apt.first === 'RKTU' && wpt.nav.apt.wp === 'RKTU',
+    `Airport 목록 — ICAO 비행장 ${wpt.nav.apt.n}곳, 거리순 첫째 ${wpt.nav.apt.first}(청주), 누르면 Flight Plan 에 ${wpt.nav.apt.wp}`);
+  t.ok(wpt.nav.ndb.title === 'NDB' && wpt.nav.ndb.n === NAV_N.ndb && wpt.nav.ndb.wp === wpt.nav.ndb.first,
+    `NDB 목록 — ${wpt.nav.ndb.n}곳, 첫째 ${wpt.nav.ndb.first} 를 누르면 Flight Plan 에 ${wpt.nav.ndb.wp}`);
+  t.ok(wpt.t4 === 'VRP' && wpt.t5 === 'Waypoint Info', `VRP 등은 제 화면(준비 중) · Back 은 Waypoint Info 로 (${wpt.t4} → ${wpt.t5})`);
   t.ok(!wx.home.some(l => /Windy|CCTV|METAR/.test(l)), '날씨 버튼 넷은 홈에서 Weather 안으로 들어갔다');
   t.ok(wx.wxTitle === 'Weather' && wx.wxLabels.join('|') === 'Windy|저고도날씨|CCTV|METAR/TAF',
     `Weather 를 누르면 넷이 나온다 (${wx.wxTitle}: ${wx.wxLabels.join(' · ')})`);
@@ -129,7 +183,7 @@ export async function runDegenerate(page, t) {
     'Windy · 저고도 날씨 · METAR/TAF 는 종전 사이트로 열린다');
   t.ok(wx.cctv === 'CCTV' && wx.back === 'Weather', `CCTV 가 열리고 Back 은 Weather 로 돌아온다 (${wx.cctv} → ${wx.back})`);
 
-  // ── CDU 홈의 Aircraft Systems — 누르면 계통 버튼 아홉 개, 각각 제 화면(준비 중) · Back 은 Aircraft Systems 로 ──
+  // ── CDU 홈의 Aircraft Systems — 누르면 사진처럼 계통 버튼 열한 개(위 두 줄 · 아래 한 줄), 각각 제 화면(준비 중) · Back 은 Aircraft Systems 로 ──
   const sys = await page.evaluate(async () => {
     const wait = ms => new Promise(r => setTimeout(r, ms));
     selectPanel('right', 'cdu', true); await wait(150);
@@ -138,7 +192,8 @@ export async function runDegenerate(page, t) {
     const title = () => document.getElementById('modeTitle').textContent.trim();
     const home = labels();
     document.querySelector('#mainContentArea [data-act="switchMode"][data-arg=\'["ACSYS"]\']').click(); await wait(80);
-    const sTitle = title(), sLabels = labels();
+    const sTitle = title(), sLabels = [...document.querySelectorAll('#mainContentArea [data-act="acSysOpen"]')].map(e => [...e.children].filter(c => !c.querySelector('svg')).map(c => c.textContent).join('').replace(/\s+/g, ''));
+    const grids = [...document.querySelectorAll('#mainContentArea .acsys-grid')].map(g => g.children.length);
     const pages = [];
     for (const el of [...document.querySelectorAll('#mainContentArea [data-act="acSysOpen"]')].map(e => e.dataset.arg)) {
       CDU_ACT.switchMode('ACSYS'); await wait(30);
@@ -148,13 +203,14 @@ export async function runDegenerate(page, t) {
     [...document.querySelectorAll('#footerNav .nav-btn')].pop().click(); await wait(80);   // Back
     const back = title();
     CDU_ACT.switchMode('HOME'); await wait(50);
-    return { home, sTitle, sLabels, pages, back };
+    return { home, sTitle, sLabels, pages, back, grids };
   });
   t.eq(sys.home[1], 'AircraftSystems', `CDU 홈 둘째 버튼이 Aircraft Systems 다 (${sys.home.slice(0, 3).join(' · ')})`);
   t.ok(sys.sTitle === 'Aircraft Systems' &&
-       sys.sLabels.join('|') === 'AFCS|AircraftStatus|Electrical|Engines|Fuel|HOCAS|SystemTests|Video|Maintenance',
-    `누르면 계통 버튼 아홉 개 (${sys.sLabels.join(' · ')})`);
-  t.ok(sys.pages.join('|') === 'AFCS|Aircraft Status|Electrical|Engines|Fuel|HOCAS|System Tests|Video|Maintenance',
+       sys.sLabels.join('|') === 'AFCS|AircraftStatus|Electrical|Engines|Fuel|RASelfTestAllow|HOCAS|SystemTests|LightingConfig|Video|Maintenance',
+    `누르면 계통 버튼 열한 개 (${sys.sLabels.join(' · ')})`);
+  t.ok(sys.grids.join(',') === '8,4', `사진의 자리 — 위 두 줄 4칸(빈칸 하나) · 아래 한 줄 4칸 (${sys.grids.join(',')})`);
+  t.ok(sys.pages.join('|') === 'AFCS|Aircraft Status|Electrical|Engines|Fuel|RA Self Test|HOCAS|System Tests|Lighting Config|Video|Maintenance',
     `각 버튼이 제 화면을 연다 (${sys.pages.join(' · ')})`);
   t.eq(sys.back, 'Aircraft Systems', '계통 화면의 Back 은 Aircraft Systems 로 돌아온다');
 }
