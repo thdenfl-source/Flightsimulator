@@ -235,20 +235,15 @@ export async function run(page, t) {
   await ctx1.close();
   await ctx2.close();
 
-  // ── FCP — ALT 유지 버튼(ALT·CRHT·G/S)은 1행 CRHT ▲▼ 오른쪽, 스톱워치는 2행 BRG 오른쪽 ──
+  // ── FCP — 옛 FCP 줄은 없앴고 실기 AFCS 패널 하나(ALT · G/S 버튼은 패널에), 스톱워치는 PFD 안(HSI 오른쪽 아래) ──
   const fcp = await page.evaluate(() => {
-    const row = el => el.closest('.ctrl-sub-row');
-    const after = (a, b) => !!(b.compareDocumentPosition(a) & Node.DOCUMENT_POSITION_FOLLOWING);
-    const rows = [...document.querySelectorAll('#pfd-wrap .ctrl-sub-row')];
-    const grp = document.querySelector('.alt-hold-group'), crht = document.getElementById('crht-up');
-    const sw = document.getElementById('sw-display'), brg = document.getElementById('brg1-tog');
-    return { grpRow: rows.indexOf(row(grp)), crhtRow: rows.indexOf(row(crht)), grpAfter: after(grp, crht),
-             swRow: rows.indexOf(row(sw)), brgRow: rows.indexOf(row(brg)), swAfter: after(sw, brg) };
+    const p = document.getElementById('fcp-simple');
+    return { panel: !!p, alt: !!(p && p.querySelector('#fks-alt')), gs: !!(p && p.querySelector('#fks-gs')),
+             rows: document.querySelectorAll('#pfd-wrap .ctrl-sub-row').length, swDom: !!document.getElementById('sw-display'),
+             swPfd: typeof drawStopwatch === 'function' && _swHit.length > 0 };
   });
-  t.ok(fcp.grpRow === 0 && fcp.crhtRow === 0 && fcp.grpAfter,
-    `ALT·CRHT·G/S 버튼은 1행 CRHT ▲▼ 오른쪽에 있다 (${fcp.grpRow + 1}행)`);
-  t.ok(fcp.swRow === 1 && fcp.brgRow === 1 && fcp.swAfter,
-    `스톱워치는 2행 BRG 오른쪽에 있다 (${fcp.swRow + 1}행)`);
+  t.ok(fcp.panel && fcp.alt && fcp.gs && fcp.rows === 0, 'FCP 는 실기 AFCS 패널 하나 — ALT · G/S 버튼이 패널에 있다(옛 FCP 줄 없음)');
+  t.ok(!fcp.swDom && fcp.swPfd, '스톱워치는 FCP 가 아니라 PFD 안(HSI 오른쪽 아래)에 있다');
 
   // ── CRHT 기준은 10ft 단위로 맞춘다 ──
   // 지금 고도로 걸면 1,237 처럼 끝자리가 남는다. ▲ 는 위의 10 단위, ▼ 는 아래의 10 단위로.

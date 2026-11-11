@@ -698,14 +698,13 @@ function updateBrgLines() {
   // 지도 시현은 #1BDP·#2BDP 가 정한다 — 선과 이름표가 함께 켜지고 함께 꺼진다.
   // (BRG1·BRG2 버튼은 계기의 니들, 여기 토글은 지도에 그릴지 말지)
   // BRG1: 항법시설(VOR/ILS) — HSI BRG1 패널과 같은 국을 쓴다(brg1Station)
-  const b1 = (brg1Visible && brg1LblOn) ? brg1Station() : null;
+  const b1 = brg1LblOn ? brgTarget(1) : null;   // 소프트키 Bearing1 이 고른 국
   _setBrgLine(brg1Line, _brg1Ref, !!b1, b1?.lat, b1?.lon, 'BRG1',
     b1 ? bearing(S.lat, S.lon, b1.lat, b1.lon) : 0,
     b1 ? dmeDist(b1.lat, b1.lon, b1.elev) : 0, '#44aaff');   // DME 는 경사거리
   // BRG2: FMS 활성 웨이포인트 — HSI BRG2 패널과 동일
-  const wpOk = S.awp >= 0 && S.awp < S.wps.length;
-  const wp = wpOk ? S.wps[S.awp] : null;
-  _setBrgLine(brg2Line, _brg2Ref, brg2Visible && brg2LblOn && wpOk, wp?.lat, wp?.lon, 'BRG2',
+  const wp = brg2LblOn ? brgTarget(2) : null;    // 소프트키 Bearing2 가 고른 국(처음은 FMS 활성 지점)
+  _setBrgLine(brg2Line, _brg2Ref, !!wp, wp?.lat, wp?.lon, 'BRG2',
     wp ? bearing(S.lat, S.lon, wp.lat, wp.lon) : 0,
     wp ? distance(S.lat, S.lon, wp.lat, wp.lon) : 0, '#00cc44');
 }

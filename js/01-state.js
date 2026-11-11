@@ -137,6 +137,9 @@ function toggleBrg2Lbl() {
 let gsArmed = false, gsOn = false;
 function gsAvailable() { return !!gsDeviation(); }
 function updateGsBtn() {
+  // FCP 패널의 G/S 버튼(07-sim.js) — 잡으면 녹색, 무장이면 호박색
+  const f = document.getElementById('fks-gs');
+  if (f) { f.classList.toggle('on', gsOn); f.classList.toggle('armed', gsArmed && !gsOn); }
   const b = document.getElementById('gs-btn');
   if (!b) return;
   b.classList.toggle('on', gsOn);
@@ -177,7 +180,19 @@ function gsCaptureCheck() {
 let suspOn = false;
 function navSuspAuto() { return !!(typeof holdOn !== 'undefined' && holdOn); }
 function navSuspended() { return suspOn || navSuspAuto(); }
+// PFD 소프트키의 OBS 칸이 SUSP 로 바뀌는 때 — 다음 지점으로 넘어갈지 정해야 하는 자리(FCP 의 SUSP 버튼은 없앴다)
+//   · 이미 보류 중(손으로 켬 · 홀딩으로 저절로)
+//   · NAV(FMS)로 날며 활성 지점에 홀딩이 걸려 있다
+//   · NAV(FMS)로 날며 활성 지점이 비행계획의 마지막 — 계기접근 끝(MAPt)에서 미스드어프로치로 이어 갈지
+function suspSoftkey() {
+  if (navSuspended()) return true;
+  if (!navApOn || navSrc !== 'FMS' || obsOn) return false;
+  const wp = (S.awp >= 0 && S.awp < S.wps.length) ? S.wps[S.awp] : null;
+  if (!wp) return false;
+  return !!wp.hold || S.awp === S.wps.length - 1;
+}
 function updateSuspBtn() {
+  try { if (typeof pfdSkRender === 'function') pfdSkRender(); } catch (e) { _swallow(e); }
   const b = document.getElementById('susp-btn');
   if (!b) return;
   const auto = navSuspAuto() && !suspOn;
@@ -216,16 +231,47 @@ function toggleSusp() {
   try { updateNav(); } catch(e) { _swallow(e); }
 }
 
+// ── BRG 바늘의 국(소프트키 PFD Settings → Bearing1 · Bearing2) ── OFF → NAV1 → NAV2 → FMS
+// null 이면 처음 그대로(BRG1 은 튜닝된 VOR/ILS 를 스스로, BRG2 는 FMS 활성 지점)
+let brg1Src = null, brg2Src = null;
+function brgTarget(n) {
+  if (!(n === 1 ? brg1Visible : brg2Visible)) return null;
+  const src = (n === 1 ? brg1Src : brg2Src) || (n === 1 ? 'AUTO' : 'FMS');
+  if (src === 'AUTO') return brg1Station();
+  if (src === 'FMS') {
+    const wp = (S.awp >= 0 && S.awp < S.wps.length) ? S.wps[S.awp] : null;
+    return wp ? { lat: wp.lat, lon: wp.lon, id: wp.ident, src: 'FMS', elev: 0 } : null;
+  }
+  const r = navRadios[src];
+  return (r && r.lat != null && r.lon != null) ? { lat: r.lat, lon: r.lon, id: r.id, src, elev: r.elev || 0 } : null;
+}
+function brgSrcLabel(n) {
+  if (!(n === 1 ? brg1Visible : brg2Visible)) return 'OFF';
+  const src = n === 1 ? brg1Src : brg2Src;
+  if (src) return src;
+  if (n === 2) return 'FMS';
+  const st = brg1Station(); return st ? st.src : 'NAV1';
+}
+function brgSrcCycle(n) {
+  const order = ['OFF', 'NAV1', 'NAV2', 'FMS'];
+  const next = order[(order.indexOf(brgSrcLabel(n)) + 1) % order.length];
+  const vis = next !== 'OFF';
+  // 지도 BRG 선·방위·거리(옛 #1BDP · #2BDP)도 소프트키로 고른 국을 따른다 — 처음(고르기 전)은 지도에 없음, OFF 면 없음
+  if (n === 1) { brg1Src = vis ? next : brg1Src; brg1LblOn = vis; if (brg1Visible !== vis) toggleBrg1(); }
+  else { brg2Src = vis ? next : brg2Src; brg2LblOn = vis; if (brg2Visible !== vis) toggleBrg2(); }
+  if (typeof updateBrgLines === 'function') updateBrgLines();
+  try { drawPFD(); } catch (e) { _swallow(e); }
+}
 function toggleBrg1() {
   brg1Visible = !brg1Visible;
-  const btn = document.getElementById('brg1-tog');
-  btn.classList.toggle('brg1-on', brg1Visible);
+  const btn = document.getElementById('brg1-tog');   // FCP 버튼은 없앴다(소프트키 Bearing1) — 있으면만
+  if (btn) btn.classList.toggle('brg1-on', brg1Visible);
   if (typeof updateBrgLines === 'function') updateBrgLines();   // 지도 BRG 라인 즉시 반영
 }
 function toggleBrg2() {
   brg2Visible = !brg2Visible;
   const btn = document.getElementById('brg2-tog');
-  btn.classList.toggle('brg2-on', brg2Visible);
+  if (btn) btn.classList.toggle('brg2-on', brg2Visible);
   if (typeof updateBrgLines === 'function') updateBrgLines();
 }
 
@@ -272,7 +318,7 @@ function hoverEligible() { return S.spd < 80; }
 // 두되(GSPD 를 끄면 그대로 이어서 동작) 조향 불가 상태임을 눈에 보이게 한다.
 function updateApInhibit() {
   const inh = !!(typeof gspdOn !== 'undefined' && (gspdOn || gspdCoasting));
-  [['nav-ap-btn', 'NAV'], ['obs-btn', 'OBS'], ['icpt-btn', '인터셉트 각도']].forEach(([id, nm]) => {
+  [['nav-ap-btn', 'NAV'], ['obs-btn', 'OBS'], ['fks-navd', 'NAVD CPL'], ['icpt-btn', '인터셉트 각도']].forEach(([id, nm]) => {
     const el = document.getElementById(id);
     if (!el) return;
     el.classList.toggle('ap-inh', inh);
@@ -285,15 +331,12 @@ function updateHoverBtns() {
   const gb  = document.getElementById('gspd-btn');
   const cb  = document.getElementById('crht-btn');
   const ahb = document.getElementById('alt-hold-btn');
-  if (!hb || !gb) return;
   // ALT hold button
   if (ahb) ahb.classList.toggle('on', altHoldOn);
-  // HOVER PAGE: pressable when below 80kt OR already on (so user can turn off)
-  hb.disabled = !(hoverEligible() || hoverPageOn);
-  hb.classList.toggle('on', hoverPageOn);
+  // HOVER PAGE: pressable when below 80kt OR already on — FCP 버튼은 없앴고 소프트키 Hover Display 가 따른다
+  if (hb) { hb.disabled = !(hoverEligible() || hoverPageOn); hb.classList.toggle('on', hoverPageOn); }
   // GSPD: always enabled (mode-independent of HOVER PAGE)
-  gb.disabled = false;
-  gb.classList.toggle('on', gspdOn);
+  if (gb) { gb.disabled = false; gb.classList.toggle('on', gspdOn); }
   updateApInhibit();
   // CRHT: always enabled
   if (cb) cb.classList.toggle('on', crhtOn);
@@ -564,6 +607,7 @@ function updateCrsButtons() {
   const enabled = obsOn || navSrc !== 'FMS';
   ['crs-dn', 'crs-up'].forEach(id => {
     const el = document.getElementById(id);
+    if (!el) return;   // FCP 1행의 CRS ▲▼ 는 없앴다(FCP 패널 CRS 노브)
     el.disabled = !enabled;
     el.style.opacity = enabled ? '1' : '0.3';
   });
@@ -571,14 +615,14 @@ function updateCrsButtons() {
 
 function toggleObs() {
   obsOn = !obsOn;
-  document.getElementById('obs-btn').classList.toggle('on', obsOn);
+  { const b = document.getElementById('obs-btn'); if (b) b.classList.toggle('on', obsOn); }   // FCP OBS 는 없앴다(소프트키 OBS)
   updateCrsButtons();
   try { updateApInhibit(); } catch(e) { _swallow(e); }
 }
 
 function toggleNavAp() {
   navApOn = !navApOn;
-  document.getElementById('nav-ap-btn').classList.toggle('on', navApOn);
+  { const b = document.getElementById('nav-ap-btn'); if (b) b.classList.toggle('on', navApOn); }   // FCP NAV 는 없앴다(FCP 패널 NAVD CPL)
   if (!navApOn) {
     if (holdOn) holdExit();          // NAV 해제 시 홀딩도 해제
     bankTarget = 0;
@@ -1273,23 +1317,10 @@ function swElapsedMs() {
 function swAddMs(ms) {
   if (SW.running && ms > 0) SW.accMs += ms;
 }
-function swToggle() {
-  if (SW.running) {
-    SW.running = false;
-    document.getElementById('sw-toggle').textContent = 'GO';
-    document.getElementById('sw-toggle').classList.remove('run');
-  } else {
-    SW.running = true;
-    document.getElementById('sw-toggle').textContent = 'STP';
-    document.getElementById('sw-toggle').classList.add('run');
-  }
-}
-function swReset() {
-  SW.running = false; SW.accMs = 0;
-  document.getElementById('sw-toggle').textContent = 'GO';
-  document.getElementById('sw-toggle').classList.remove('run');
-  document.getElementById('sw-display').textContent = '00:00.0';
-}
+// 스톱워치는 PFD 안(HSI 오른쪽 아래)에 그린다(03-pfd.js drawStopwatch). FCP 칸은 없앴다.
+function _swRedraw() { try { if (typeof drawPFD === 'function') drawPFD(); } catch (e) { _swallow(e); } }
+function swToggle() { SW.running = !SW.running; _swRedraw(); }
+function swReset() { SW.running = false; SW.accMs = 0; _swRedraw(); }
 
 // ── NAV source / ICAO / RNP ──
 function setNavSrc(src) {
@@ -1317,31 +1348,20 @@ function setRnp(val) {
 }
 // 스톱워치 ↔ 현재 시각 통합 위젯 (TIME/STOP WATCH 버튼으로 전환)
 let _swMode = 'clock';   // 'sw' | 'clock' — 기본은 현재 시각 표시
-function swSetMode(m) {
-  _swMode = m;
-  document.getElementById('sw-btns-sw').style.display    = m === 'sw' ? 'flex' : 'none';
-  document.getElementById('sw-btns-clock').style.display = m === 'clock' ? 'flex' : 'none';
-  document.getElementById('sw-display').classList.toggle('clock-mode', m === 'clock');
-  m === 'clock' ? clockRender() : swRender();
-}
-function swRender() {
-  if (_swMode !== 'sw') return;   // 시계 모드에서는 스톱워치 표시 생략(카운트는 내부 유지)
-  const ms  = swElapsedMs();
-  const m   = Math.floor(ms / 60000);
-  const s   = Math.floor((ms % 60000) / 1000);
-  const t   = Math.floor((ms % 1000) / 100);
-  document.getElementById('sw-display').textContent =
-    String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0') + '.' + t;
-}
-// 현재 시각(로컬) — 1초 주기 갱신(시계 모드일 때만 표시)
-function clockRender() {
-  if (_swMode !== 'clock') return;
+function swSetMode(m) { _swMode = m; _swRedraw(); }
+// 지금 보일 글자 — 스톱워치 mm:ss.t · 시계 hh:mm:ss(로컬)
+function swText() {
+  if (_swMode === 'sw') {
+    const ms = swElapsedMs(), m = Math.floor(ms / 60000), s = Math.floor((ms % 60000) / 1000), t = Math.floor((ms % 1000) / 100);
+    return String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0') + '.' + t;
+  }
   const d = new Date(), p2 = n => String(n).padStart(2, '0');
-  document.getElementById('sw-display').textContent =
-    `${p2(d.getHours())}:${p2(d.getMinutes())}:${p2(d.getSeconds())}`;
+  return `${p2(d.getHours())}:${p2(d.getMinutes())}:${p2(d.getSeconds())}`;
 }
+function swRender() { /* 프레임마다 drawPFD 가 swText() 를 그린다 */ }
+// 시계는 1초마다 — 시뮬이 멈춰 있어도 PFD 의 시각이 흐르게
+function clockRender() { if (_swMode === 'clock' && !S.running) _swRedraw(); }
 setInterval(clockRender, 1000);
-clockRender();   // 기본 모드가 시계이므로 즉시 1회 표시
 
 
 // ── PFD 엔진 계기(TGT · NG · TQ · NP/NR)용 토크 ──

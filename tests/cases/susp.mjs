@@ -35,16 +35,19 @@ export async function run(page, t) {
   // ── SUSP 를 켜면 넘어가지 않는다 ──
   await setup();
   const held = await page.evaluate(async () => {
-    document.getElementById('susp-btn').click();
-    const on = suspOn;
+    // B 는 마지막 지점이 아니고 홀딩도 없다 — OBS 칸은 OBS 그대로
+    pfdSkGo('TOP'); const obsLbl = document.getElementById('sk-5').firstElementChild.textContent.trim();
+    toggleSusp();    // (손으로 걸어 둔 보류 — 걸리면 칸이 SUSP 로 바뀐다)
+    const on = suspOn; pfdSkRender(); const suspLbl = document.getElementById('sk-5').firstElementChild.textContent.trim();
     const t0 = performance.now();
     for (let i = 0; i < 200 / 0.3; i++) simStep(t0 + i * 300);
     return { on, awp: S.wps[S.awp].ident, navApOn,
              dN: (S.lat - 37.2) * 60,
              xtk: courseXtk(activeCourseLine()),
-             cls: document.getElementById('susp-btn').className };
+             cls: document.getElementById('sk-5').className, obsLbl, suspLbl };
   });
-  t.eq(held.on, true, '버튼을 누르면 SUSP 가 켜진다');
+  t.ok(held.obsLbl === 'OBS' && held.suspLbl === 'SUSP', `넘어갈 일만 남은 평범한 구간은 OBS, 보류가 걸리면 소프트키가 SUSP (${held.obsLbl} → ${held.suspLbl})`);
+  t.eq(held.on, true, 'SUSP 가 켜진다');
   t.eq(held.awp, 'BBB', `지나가도 활성 웨이포인트가 그대로다 (${held.awp})`);
   t.ok(held.dN > 1, `실제로 그 지점을 지나쳤다 (북쪽으로 ${held.dN.toFixed(1)}NM)`);
   t.eq(held.navApOn, true, '마지막 지점이 아니어도 NAV 가 풀리지 않는다');
@@ -52,78 +55,23 @@ export async function run(page, t) {
     `지나온 구간의 코스를 그대로 따라간다 (편차 ${held.xtk.toFixed(2)}NM)`);
   t.ok(/\bon\b/.test(held.cls), `버튼이 켜진 모양이다 (${held.cls})`);
 
-  // ── 이름표는 위에, 버튼에는 ON/OFF 만 ──
-  const ui = await page.evaluate(async () => {
-    const b = document.getElementById('susp-btn');
-    const grp = b.closest('.susp-group');
-    const lbl = grp && grp.querySelector('.ctrl-lbl');
-    const spd = document.getElementById('simspd-1').closest('.simspd-group');
-    const spdLbl = spd && spd.querySelector('.ctrl-lbl');
-    const box = e => e.getBoundingClientRect();
-    // 켜진 SUSP 와 켜진 NAV 의 실제 색을 나란히 잰다.
-    // 색은 0.15초에 걸쳐 바뀐다 — 바꾸자마자 읽으면 옛 색이 나온다.
-    // 켜진 색을 재려면 두 버튼이 '정말로' 켜져 있어야 한다. class 만 붙여 두면
-    // 시뮬 루프가 상태대로 다시 칠해 버리므로, 시뮬을 멈추고 상태를 켠 뒤 잰다.
-    const nav = document.getElementById('nav-ap-btn');
-    const wasRunning = S.running; S.running = false;
-    const navWasOn = navApOn, suspWasOn = suspOn;
-    if (!navApOn) toggleNavAp();
-    if (!navSuspended()) toggleSusp();
-    updateSuspBtn();
-    const cs = e => ({ border: getComputedStyle(e).borderTopColor,
-                       text: getComputedStyle(e).color });
-    // 색은 0.15초에 걸쳐 바뀌므로 바꾸자마자 읽으면 옛 색이 나온다. 고정 시간으로
-    // 기다리면 느린 기계에서 덜 바뀐 채로 읽히므로, 녹색이 될 때까지(최대 3초) 기다린다.
-    // 시뮬 루프가 매 프레임 class 를 다시 칠하므로 기다리는 동안 계속 켜 둔다.
-    const green = e => /^rgb\(0, 2[0-9][0-9], /.test(cs(e).border);
-    for (let i = 0; i < 60; i++) {
-      nav.classList.add('on'); updateSuspBtn();
-      if (green(nav) && green(b)) break;
-      await new Promise(r => setTimeout(r, 50));
-    }
-    const onCol = cs(b), navCol = cs(nav);
-    if (navApOn !== navWasOn) toggleNavAp();
-    if (suspOn !== suspWasOn) { toggleSusp(); updateSuspBtn(); }
-    S.running = wasRunning;
-    return { lbl: lbl ? lbl.textContent.trim() : null,
-             spdLbl: spdLbl ? spdLbl.textContent.trim() : null,
-             txt: b.textContent.trim(), onCol, navCol,
-             lblAbove: lbl ? box(lbl).bottom <= box(b).top + 1 : false,
-             spdAbove: spdLbl ? box(spdLbl).bottom <= box(document.getElementById('simspd-1')).top + 1 : false,
-             rightOfSpd: box(b).left > box(document.getElementById('simspd-8')).left,
-             // ×1 ×2 / ×4 ×8 두 줄인가
-             twoRows: box(document.getElementById('simspd-4')).top > box(document.getElementById('simspd-1')).top + 3,
-             sameCol: Math.abs(box(document.getElementById('simspd-1')).left -
-                               box(document.getElementById('simspd-4')).left) < 2 };
-  });
-  t.eq(ui.lbl, 'SUSP', `버튼 위에 SUSP 이름표가 따로 선다 (${ui.lbl})`);
-  t.eq(ui.spdLbl, 'SIM SPD', `배속 이름표도 제 버튼 위에 있다 (${ui.spdLbl})`);
-  t.ok(ui.lblAbove && ui.spdAbove, '두 이름표가 각각 자기 버튼 위에 있다');
-  t.eq(ui.txt, 'On', `버튼 글자는 늘 On 이다 (${ui.txt})`);
-  // 켜짐은 AP 의 NAV·OBS 버튼과 같은 녹색으로 보인다 — 실제로 칠해진 색을 잰다
-  t.ok(/^rgb\(0, 2[0-9][0-9], /.test(ui.onCol.border) && ui.onCol.border === ui.navCol.border,
-    `켜지면 NAV 버튼과 같은 녹색이다 (${ui.onCol.border} · NAV ${ui.navCol.border})`);
-  t.eq(ui.onCol.text, ui.navCol.text, `글자색도 같다 (${ui.onCol.text})`);
-  t.ok(ui.twoRows && ui.sameCol, '배속은 ×1 ×2 / ×4 ×8 두 줄이다');
-  t.eq(ui.rightOfSpd, true, 'SUSP 는 배속 오른쪽에 있다');
+  // ── FCP 의 SUSP 버튼은 없앴다 — 소프트키 OBS 칸이 SUSP 로 바뀐다 ──
+  const ui = await page.evaluate(() => ({ gone: !document.getElementById('susp-btn'),
+    bar: getComputedStyle(document.querySelector('#sk-5 i')).backgroundColor }));
+  t.ok(ui.gone, 'FCP 의 SUSP 버튼은 없다');
+  t.eq(ui.bar, 'rgb(34, 224, 34)', '손으로 켠 SUSP 는 칸 아래 녹색 바');
 
   // ── 풀면 그때 다음 지점으로 넘어간다 ──
   const rel = await page.evaluate(async () => {
-    document.getElementById('susp-btn').click();
+    pfdSkGo('TOP'); document.getElementById('sk-5').click();
     const t0 = performance.now();
     for (let i = 0; i < 120 / 0.3; i++) simStep(t0 + i * 300);
     return { on: suspOn, awp: S.wps[S.awp].ident };
   });
   t.eq(rel.on, false, '한 번 더 누르면 풀린다');
-  const off = await page.evaluate(async () => {
-    const b = document.getElementById('susp-btn');
-    await new Promise(r => setTimeout(r, 300));   // 색 전환이 끝나기를 기다린다
-    return { txt: b.textContent.trim(), cls: b.className,
-             border: getComputedStyle(b).borderTopColor };
-  });
-  t.eq(off.txt, 'On', '꺼져도 글자는 On 그대로다 — 켜짐은 색으로 보인다');
-  t.ok(!/\b(on|auto)\b/.test(off.cls) && !/rgb\(0, 2/.test(off.border),
-    `꺼지면 녹색이 빠진다 (${off.border})`);
+  const off = await page.evaluate(() => { pfdSkRender(); const b = document.getElementById('sk-5');
+    return { cls: b.className, lbl: b.firstElementChild.textContent.trim() }; });
+  t.ok(!/\b(on|auto)\b/.test(off.cls), `풀면 바가 꺼진다 (${off.cls})`);
   t.eq(rel.awp, 'CCC', `풀고 나면 다음 지점으로 넘어간다 (${rel.awp})`);
 
   // ── 마지막 지점에서도 NAV 가 풀리지 않는다 ──
@@ -135,6 +83,9 @@ export async function run(page, t) {
     S.awp = 1; S.fwp = 0; obsOn = false; navSrc = 'FMS'; holdExit();
     S.lat = 37.15; S.lon = 127.0; S.hdg = 360; S.spd = 120; S.bnk = 0;
     windSpd = 0; navApOn = true; hdgSelOn = false; S.running = true; S.lastT = null;
+    suspOn = false; pfdSkGo('TOP'); updateSuspBtn();
+    const lastLbl = document.getElementById('sk-5').firstElementChild.textContent.trim();   // 마지막 지점(MAPt) — 미스드어프로치로 이어 갈지
+    navApOn = false; pfdSkRender(); const noNavLbl = document.getElementById('sk-5').firstElementChild.textContent.trim(); navApOn = true;
     suspOn = true; updateSuspBtn();
     const t0 = performance.now();
     for (let i = 0; i < 200 / 0.3; i++) simStep(t0 + i * 300);
@@ -146,8 +97,9 @@ export async function run(page, t) {
     S.lastT = null;
     const t1 = performance.now();
     for (let i = 0; i < 200 / 0.3; i++) simStep(t1 + i * 300);
-    return { withSusp, off: { navApOn, hdgSelOn } };
+    return { withSusp, off: { navApOn, hdgSelOn }, lastLbl, noNavLbl };
   });
+  t.ok(last.lastLbl === 'SUSP' && last.noNavLbl === 'OBS', `NAV 로 마지막 지점(접근 끝)을 향하면 OBS 칸이 SUSP — NAV 가 아니면 OBS (${last.lastLbl} · ${last.noNavLbl})`);
   t.eq(last.withSusp.navApOn, true, 'SUSP 중에는 마지막 지점을 지나도 NAV 가 살아 있다');
   t.ok(last.withSusp.dN > 1 && Math.abs(last.withSusp.xtk) < 0.1,
     `그 코스를 연장해 계속 난다 (${last.withSusp.dN.toFixed(1)}NM 지나 편차 ` +
@@ -170,10 +122,11 @@ export async function run(page, t) {
     await new Promise(r => setTimeout(r, 20));
     const inHold = { holdOn, susp: navSuspended(), manual: suspOn,
                      awp: S.wps[S.awp].ident,
-                     cls: document.getElementById('susp-btn').className,
-                     txt: document.getElementById('susp-btn').textContent.trim() };
+                     cls: (pfdSkGo('TOP'), document.getElementById('sk-5').className),
+                     txt: document.getElementById('sk-5').firstElementChild.textContent.trim(),
+                     bar: getComputedStyle(document.querySelector('#sk-5 i')).backgroundColor };
     // 눌러서 풀면 홀딩을 그만두고 다음 지점으로 간다
-    document.getElementById('susp-btn').click();
+    document.getElementById('sk-5').click();
     const t1 = performance.now();
     for (let i = 0; i < 200 / 0.3; i++) simStep(t1 + i * 300);
     return { inHold, after: { holdOn, susp: navSuspended(),
@@ -182,8 +135,8 @@ export async function run(page, t) {
   t.eq(auto.inHold.holdOn, true, '홀딩 지점에 닿으면 홀딩이 걸린다');
   t.ok(auto.inHold.susp && !auto.inHold.manual,
     '홀딩이면 SUSP 가 저절로 걸린다(손으로 켠 것은 아니다)');
-  t.ok(/auto/.test(auto.inHold.cls), `버튼이 '자동' 으로 보인다 (${auto.inHold.cls})`);
-  t.eq(auto.inHold.txt, 'On자동', `저절로 걸린 것은 On 옆에 '자동' 이 붙는다 (${auto.inHold.txt})`);
+  t.ok(/\bon\b/.test(auto.inHold.cls) && auto.inHold.txt === 'SUSP' && auto.inHold.bar === 'rgb(34, 224, 34)',
+    `홀딩으로 저절로 걸린 SUSP 도 녹색 바 (${auto.inHold.txt} · ${auto.inHold.cls} · ${auto.inHold.bar})`);
   t.eq(auto.inHold.awp, 'FIX', '홀딩 중에는 그 지점에 머문다');
   t.eq(auto.after.holdOn, false, 'SUSP 를 누르면 홀딩을 그만둔다');
   t.eq(auto.after.susp, false, '보류도 함께 풀린다');

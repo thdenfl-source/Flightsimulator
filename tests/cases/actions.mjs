@@ -80,9 +80,8 @@ export async function run(page, t) {
 
   // ── 동적: 대표 버튼을 실제로 눌러 상태가 바뀌는가 ──
   const cases = [
-    ['#obs-btn',      () => obsOn,      'OBS'],
-    ['#nav-ap-btn',   () => navApOn,    'NAV'],
-    ['#brg1-tog',     () => brg1Visible, 'BRG1'],
+    ['#fks-navd',     () => navApOn,    'NAVD CPL'],
+    ['#fks-gs',       () => gsArmed || gsOn, 'G/S'],
     ['#fix-btn',      () => document.getElementById('fix-panel').classList.contains('open'), 'FIX 패널'],
     ['#aspc-btn',     () => document.getElementById('aspc-panel').classList.contains('open'), '공역 패널'],
   ];

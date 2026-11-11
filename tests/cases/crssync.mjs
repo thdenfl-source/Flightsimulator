@@ -19,7 +19,7 @@ export async function run(page, t) {
     S.crs = toTrue(300);                       // 엉뚱한 코스로 틀어 두고
     updateNav();
     const beforeXtk = courseXtk(activeCourseLine());
-    document.getElementById('crs-lbl-btn').click();
+    document.querySelector('#fcp-simple [data-k="crs"] .fks-push').click();   // SIMPLE 패널 CRS 노브 PUSH(옛 FCP CRS 이름 버튼)
     const L = activeCourseLine();
     // 지도에 그려지는 선에서도 같은지 — 그림과 숫자가 따로 놀면 안 된다
     updateCrsLine();
@@ -58,7 +58,7 @@ export async function run(page, t) {
   const near = await page.evaluate(([W]) => {
     const p = destPoint(W[0], W[1], 40, 5);
     S.lat = p[0]; S.lon = p[1]; S.crs = toTrue(200); updateNav();
-    document.getElementById('crs-lbl-btn').click();
+    document.querySelector('#fcp-simple [data-k="crs"] .fks-push').click();   // SIMPLE 패널 CRS 노브 PUSH(옛 FCP CRS 이름 버튼)
     return { xtk: courseXtk(activeCourseLine()),
              crsM: Math.round(toMag(S.crs)),
              brgM: Math.round(toMag(bearing(S.lat, S.lon, W[0], W[1]))) };
@@ -74,7 +74,7 @@ export async function run(page, t) {
     vorObsCrs = toTrue(10);
     updateNav();
     const before = courseXtk(activeCourseLine());
-    document.getElementById('crs-lbl-btn').click();
+    document.querySelector('#fcp-simple [data-k="crs"] .fks-push').click();   // SIMPLE 패널 CRS 노브 PUSH(옛 FCP CRS 이름 버튼)
     const L = activeCourseLine();
     return { before, xtk: courseXtk(L),
              dist: distance(S.lat, S.lon, navLat, navLon),

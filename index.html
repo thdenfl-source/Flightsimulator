@@ -205,6 +205,51 @@ html, body {
   border-top: 1px solid #2a2a2a;
   z-index: 20;
 }
+/* ── PFD 소프트키(터치바, 07-sim.js) — 실기 PFD 아래 12칸 · 켜진 칸은 아래 녹색 바 ── */
+#pfd-sk { display: grid; grid-template-columns: repeat(12, 1fr); gap: 2px; padding: 3px 4px; background: #111418; border-bottom: 1px solid #2a2f35; }
+.pfd-sk { position: relative; min-width: 0; height: 34px; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  background: linear-gradient(#5b6168, #33383e 55%, #262a2f); border: 1px solid #0b0c0e; border-radius: 3px; cursor: pointer;
+  color: #fff; font: bold 9px/1.05 'Helvetica Neue', Arial, sans-serif; text-align: center; user-select: none; -webkit-user-select: none; overflow: hidden; }
+.pfd-sk span { pointer-events: none; }
+.pfd-sk em { font-style: normal; color: #00e5ff; font-size: 9px; pointer-events: none; }
+.pfd-sk i { position: absolute; left: 22%; right: 22%; bottom: 2px; height: 3px; border-radius: 1px; background: transparent; pointer-events: none; }
+.pfd-sk.on i { background: #22e022; }
+.pfd-sk:active { background: linear-gradient(#2a6a8a, #1a3a52); }
+.pfd-sk.none { cursor: default; }
+.pfd-sk.none:active { background: linear-gradient(#5b6168, #33383e 55%, #262a2f); }
+.pfd-sk.dim, .pfd-sk.off { color: #7d848b; }
+.pfd-sk.off { pointer-events: none; }
+/* ── FCP(07-sim.js) — 실기 AFCS 조작 패널 모양 + 오른쪽 사용자 기능 영역. 옛 FCP 줄은 모두 없앴다 ──
+   폭이 모자라면 오른쪽 영역(fks-x)이 아래 줄로 내려간다 */
+#fcp-simple { display: flex; flex-wrap: wrap; align-items: stretch; justify-content: center; gap: 8px; padding: 6px 10px 6px;
+  background: linear-gradient(#1a1d21, #0e1013); border-top: 1px solid #3a3f46; }
+.fks-l { display: grid; grid-template-columns: repeat(6, minmax(44px, 62px)); row-gap: 4px; column-gap: 4px; }
+.fks-r { display: grid; grid-template-columns: repeat(2, minmax(44px, 62px)); row-gap: 4px; column-gap: 4px; }
+.fks-div { width: 2px; background: #9aa3ad; margin: 4px 2px; border-radius: 1px; }
+.fks-main { display: flex; gap: 8px; align-items: stretch; }
+.fks-x { display: flex; gap: 8px; align-items: stretch; }
+.fks-xw { display: flex; flex-direction: column; justify-content: space-between; gap: 4px; }
+.fks-xr { display: flex; flex-direction: column; justify-content: space-between; gap: 6px; }
+.fks-xr1, .fks-xr2 { display: flex; align-items: center; justify-content: center; gap: 10px; }
+.fks-cell { display: flex; flex-direction: column; align-items: center; gap: 2px; user-select: none; -webkit-user-select: none; }
+.fks-lbl { color: #e8edf2; font: bold 10px 'Helvetica Neue', Arial, sans-serif; letter-spacing: .3px; white-space: nowrap; height: 12px; }
+.fks-knob { position: relative; width: 38px; height: 38px; border-radius: 50%; touch-action: none;
+  background: radial-gradient(circle at 40% 35%, #4a5058, #1c1f23 70%); border: 2px solid #8d969f; box-shadow: 0 0 0 3px #22262b, 0 2px 4px #000; }
+.fks-cell.on .fks-knob { border-color: #22e022; box-shadow: 0 0 0 3px #123a12, 0 0 6px #22e022; }
+.fks-dn, .fks-up { position: absolute; top: 0; bottom: 0; width: 50%; display: flex; align-items: center; color: #cfd6dc; font-size: 15px; cursor: pointer; }
+.fks-dn { left: 0; justify-content: flex-start; padding-left: 3px; border-radius: 19px 0 0 19px; }
+.fks-up { right: 0; justify-content: flex-end; padding-right: 3px; border-radius: 0 19px 19px 0; }
+.fks-dn:active, .fks-up:active { background: rgba(0, 200, 255, 0.22); }
+.fks-push { position: absolute; left: 50%; top: 50%; width: 16px; height: 16px; margin: -8px 0 0 -8px; border-radius: 50%; z-index: 1;
+  background: radial-gradient(circle at 40% 35%, #8b939b, #3a3f45); border: 1px solid #0a0a0a; cursor: pointer; }
+.fks-push:active { background: #00b4e6; }
+.fks-sq { width: 40px; height: 30px; margin-top: 4px; border: 2px solid #8d969f; border-radius: 3px; background: linear-gradient(#26292d, #121417); cursor: pointer; }
+.fks-sq.framed { box-shadow: 0 0 0 3px #1a1d21, 0 0 0 4px #6b737b; }
+.fks-sq:active { background: #00b4e6; }
+.fks-sq.armed { border-color: #ffb000; box-shadow: 0 0 6px #ffb000; }   /* G/S 무장 */
+.fks-sq.on { border-color: #22e022; background: linear-gradient(#1d4a1d, #0f2a0f); box-shadow: 0 0 6px #22e022; }
+.fks-none { opacity: .45; cursor: default; pointer-events: none; }
+.fks-val { color: #00e5ff; font: bold 9px 'Helvetica Neue', Arial, sans-serif; height: 11px; }
 .ctrl-sub-row {
   display: flex;
   justify-content: center;
@@ -1790,11 +1835,8 @@ body.night-mode::after {
             주파수만 넣으면 <b>지금 자리에서 가장 가까운 국</b>이 잡히고, 특정 국을 확실히 잡으려면 이름으로 고르십시오.<br>
             NAV 주파수 입력창에서는 <b>ENTER 든 XFER 든</b> 넣은 값이 곧바로 활성이 됩니다 — NAV 에는 대기(STBY)가
             없기 때문입니다(COM 은 종전대로 XFER 로 활성↔대기를 맞바꿉니다).</li>
-        <li><b>지도 BRG 시현</b>(<b>#1BDP · #2BDP</b>): PFD 의 BRG1·BRG2 버튼 <b>아래</b>에 있습니다.
-            켜야만 지도에 그 니들의 <b>선과 방위·거리 글자</b>가 나타납니다 — <b>기본은 미시현</b>이고
-            선·글자가 <b>함께</b> 켜지고 <b>함께</b> 꺼집니다. <b>BRG1·BRG2</b> 버튼은 계기(HSI)의 니들,
-            <b>#1BDP·#2BDP</b> 는 지도 시현입니다 — 계기로만 보고 지도는 깨끗하게 둘 수 있습니다.
-            니들 자체를 끄면 지도에서도 함께 사라집니다.</li>
+        <li><b>BRG 니들 · 지도 BRG 시현</b>(PFD 소프트키 <b>PFD Settings → Bearing1 · Bearing2</b> — FCP 의 BRG1 · BRG2 · #1BDP · #2BDP 버튼은 없앴습니다):
+            누를 때마다 <b>OFF → NAV1 → NAV2 → FMS</b>. 고른 국을 HSI 니들이 가리키고 지도에도 선과 방위·거리 글자가 함께 나옵니다. 처음(고르기 전)은 니들만, OFF 면 함께 사라집니다.</li>
         <li><b>DME 아크(Y 절차)</b>: 접근절차의 아크 구간은 <b>기준국에서 지정된 거리를 유지하며</b> 돕니다.
             지도에 그려지는 원호와 <b>NAV 오토파일럿이 나는 길이 같습니다</b> — 종전에는 두 픽스를 잇는
             직선으로 날아 원호 안쪽을 가로질렀습니다(11NM 아크에서 약 0.3NM). CDI 편차도 이 구간에서는
@@ -1822,12 +1864,19 @@ body.night-mode::after {
 
       <h3>4. PFD · HOVER PAGE</h3>
       <ul>
-        <li><b>NAV SRC</b>: <b>FMS / NAV1 / NAV2</b>. NAV1·NAV2는 CDU에서 튜닝한 VOR을 따라갑니다.</li>
+        <li><b>FCP</b>(실기 AFCS 조작 패널 모양 — 옛 FCP 의 줄들은 없앴습니다): 왼쪽 IAS · HDG · VS · ALT.A · <b>ALT</b> · CR.HT / <b>G/S</b> · <b>NAVD CPL</b>(NAV) · T-DOWN · T.D.HOV · H.HT(이 셋은 자리만) | BARO · UPLIM / CRS · DH.
+          노브는 왼쪽(‹) · 오른쪽(›)을 누르면 돌고(누르고 있으면 계속), 가운데를 누르면 PUSH — IAS · HDG · CRS 는 현재값 맞춤, CR.HT 는 CRHT 유지, BARO 는 STD(29.92 inHg = 1013.25 hPa).
+          <b>UPLIM 오른쪽 구분선 뒤</b>는 사용자 기능 — WIND DIR · WIND SPD 노브 · RNP · SIM SPD · FORCE TRIM · GSPD(윗줄) · COLLECTIVE TRIM · 4-WAY TRIM · ANTI-TORQUE PEDAL(아랫줄). PFD 창이 좁으면 아래 줄로 내려갑니다.</li>
+        <li><b>PFD 소프트키</b>(PFD 바로 아래 12칸 — KUH-1CG FLM 그림 5~8): Map Range − · + · PFD Map Settings ▸ · Traffic Map · PFD Settings ▸ · <b>OBS</b>(넘어갈지 정할 자리 — 홀딩 지점 · 비행계획 마지막 지점 · 보류 중 — 에서는 <b>SUSP</b>, 걸려 있으면 녹색 바) ·
+          <b>Active NAV</b>(VOR1 → VOR2 → FMS) · Sensors ▸ · <b>Hover Display</b> · <b>Hover Position</b> · CAS. PFD Settings ▸ <b>Bearing1 · Bearing2</b>(OFF → NAV1 → NAV2 → FMS — HSI 니들과 지도 BRG 선) · Other ▸ Altitude Units ▸ <b>IN · HPA</b>.
+          Back 은 한 단계 위로, 45초 동안 누르지 않으면 최상위로. 아직 고른 상태만 기억하는 칸: Traffic · Terrain · WX · Detail · Map Layout · Meters · RA · CAS.</li>
+        <li><b>스톱워치</b>(PFD HSI 오른쪽 아래 — FCP 의 STOP WATCH 는 없앴습니다): 평소 현재 시각, <b>STOP WATCH</b> 를 누르면 <b>GO/STP · RST · TIME</b>.</li>
+        <li><b>NAV SRC</b>(PFD 소프트키 <b>Active NAV</b>): VOR1(NAV1) → VOR2(NAV2) → FMS. NAV1·NAV2는 CDU에서 튜닝한 VOR을 따라갑니다.</li>
         <li><b>접근절차 자동 튜닝</b> — 비행계획에서 접근절차를 불러오면(＋ ADD APPROACH) <b>NAV1 은 그 공항의 VOR</b>,
             <b>NAV2 는 그 활주로의 LOC</b> 주파수로 저절로 맞춥니다(알림으로 보여 줍니다). VOR 은 절차 경로에 든 VOR →
             비행장 자료의 VOR(공항 25NM 안 — 주파수가 같은 먼 국은 잡지 않습니다) → 공항에서 가장 가까운 VOR(30NM 안) 순으로,
             LOC 는 절차 이름의 활주로(RWY 36R) → 같은 방향 → 그 공항의 다른 LOC 순으로 고릅니다. 맞출 국이 없으면 그대로 둡니다.</li>
-        <li><b>RNP</b>: NAV SRC 바로 아래. <b>4 / 2 / 1 / 0.3</b> NM — CDI 최대편위(스케일)를 정합니다.</li>
+        <li><b>RNP</b>: FCP 오른쪽 영역. <b>4 / 2 / 1 / 0.3</b> NM — CDI 최대편위(스케일)를 정합니다.</li>
         <li><b>MG (Slaved) / DG</b> — 방향 기준(MAS). <b>3D 창</b>과 <b>지도 창</b>(툴바 아래 오른쪽)에 같은 버튼이 있고,
             누를 때마다 바뀝니다(두 창이 함께).
             <b>MG (Slaved)</b> — 방향 자이로를 <b>지구 자기장</b>에 늘 맞춥니다: HSI 가 지도와 꼭 맞습니다(처음 상태).
@@ -1839,7 +1888,7 @@ body.night-mode::after {
             <b>실제 기수는 그만큼 비껴</b> 갑니다(예: 오차 −6° 면 HDG 090 으로 날아도 실제로는 096).
             <b>지도 · 3D · NAV(GPS 항법)</b>는 실제 기수를 쓰므로 그대로 맞습니다.
             <b>MG</b> 로 돌아오면 곧 다시 자기 헤딩에 맞습니다.</li>
-        <li><b>SUSP</b>(SIM SPD 오른쪽): 버튼에는 <b>On</b> 만 적히고, 켜지면 <b>NAV 버튼과 같은 녹색</b>으로 바뀝니다. <b>시퀀싱 보류</b> — 켜져 있으면 활성 웨이포인트를 지나도
+        <li><b>SUSP</b>(PFD 소프트키 — 넘어갈지 정할 자리에서 OBS 칸이 SUSP 로 바뀝니다): 걸려 있으면 녹색 바. <b>시퀀싱 보류</b> — 켜져 있으면 활성 웨이포인트를 지나도
             <b>다음으로 넘어가지 않고</b> 그 구간의 코스를 계속 따라갑니다. <b>마지막 지점이어도 NAV 가
             풀리지 않아</b>, 홀딩이나 미스드어프로치를 계속 수행할 수 있습니다.
             비행계획에 <b>홀딩이 걸리면 저절로 켜지고</b>(버튼에 「자동」 표시), 그만하고 다음 절차로 가려면
@@ -1950,7 +1999,7 @@ body.night-mode::after {
             범위를 벗어난 값(방위 0~360, 거리 0.1~400NM)은 알리고 <b>원래 값을 그대로 둡니다</b>.
             웨이포인트 카드의 <b>VNAV 고도 · 오프셋</b>, <b>홀딩 설정</b>의 <b>INBD CRS · 시간/거리</b>도 같은 방식입니다.
             홀딩 시간은 이제 <b>아무 값이나</b>(10~600초) 넣을 수 있습니다 — 종전에는 30·60·90·120·150·180초만 골랐습니다.</li>
-        <li><b>HOVER PAGE</b>(80kt 미만): 호버 속도·위치 지시. 좌측 HOVER 그룹의 <b>HOVER PAGE / HOVER POS</b> 사각 버튼으로 켜고,
+        <li><b>HOVER PAGE</b>(80kt 미만): 호버 속도·위치 지시. PFD 소프트키 <b>Hover Display / Hover Position</b> 으로 켜고,
             기준 속도는 트림 옆 원형 <b>GSPD</b> 버튼으로 잡습니다(실제 조종간 배치에 맞춘 위치).</li>
         <li>HOVER PAGE에는 <b>SHIP</b>(청록)과 <b>비행계획 활성 웨이포인트</b>(빨강 삼각형)가 함께 표시됩니다.
             반경 50 ft 이내면 실제 축척 위치에, 밖이면 방향 니들과 점선으로 나타납니다.</li>
@@ -2109,157 +2158,13 @@ body.night-mode::after {
     <canvas id="pfd"></canvas>
     <div class="ctrl-bar">
 
-      <!-- 1행: SPD / HDG / CRS / VS / ALT / CRHT / ALT 유지(ALT·CRHT·G/S) -->
-      <div class="ctrl-sub-row">
-
-        <div class="ctrl-group">
-          <div class="ctrl-lbl ctrl-lbl-btn" id="ias-lbl-btn" data-act="fcpSync" data-arg='["ias"]'>IAS</div>
-          <div class="ctrl-row">
-            <button class="cbtn" id="spd-dn">▼</button>
-            <button class="cbtn" id="spd-up">▲</button>
-          </div>
-        </div>
-
-        <div class="ctrl-group">
-          <div class="ctrl-lbl ctrl-lbl-btn" id="hdg-lbl-btn" data-act="fcpSync" data-arg='["hdg"]'>HDG</div>
-          <div class="ctrl-row">
-            <button class="cbtn" id="hdg-dn">◄</button>
-            <button class="cbtn" id="hdg-up">►</button>
-          </div>
-        </div>
-
-        <div class="ctrl-group">
-          <div class="ctrl-lbl ctrl-lbl-btn" id="crs-lbl-btn" data-act="fcpSync" data-arg='["crs"]'>CRS</div>
-          <div class="ctrl-row">
-            <button class="cbtn" id="crs-dn">◄</button>
-            <button class="cbtn" id="crs-up">►</button>
-          </div>
-        </div>
-
-        <div class="ctrl-group">
-          <div class="ctrl-lbl">VS</div>
-          <div class="ctrl-row">
-            <button class="cbtn" id="vs-dn">▼</button>
-            <button class="cbtn" id="vs-up">▲</button>
-          </div>
-        </div>
-
-        <div class="ctrl-group">
-          <div class="ctrl-lbl">ALT</div>
-          <div class="ctrl-row">
-            <button class="cbtn" id="alt-dn">▼</button>
-            <button class="cbtn" id="alt-up">▲</button>
-          </div>
-        </div>
-
-        <div class="ctrl-group">
-          <div class="ctrl-lbl">CRHT</div>
-          <div class="ctrl-row">
-            <button class="cbtn" id="crht-dn">▼</button>
-            <button class="cbtn" id="crht-up">▲</button>
-          </div>
-        </div>
-
-        <div class="ctrl-div"></div>
-
-        <div class="alt-hold-group">
-          <div class="ctrl-lbl">ALT</div>
-          <div class="alt-hold-btns">
-            <button class="alt-hold-btn" id="alt-hold-btn" data-act="toggleAltHold">ALT</button>
-            <button class="crht-btn"     id="crht-btn"     data-act="toggleCrht">CRHT</button>
-            <button class="gs-btn"       id="gs-btn"       data-act="toggleGs"
-                    title="G/S — ILS 강하선 추종. 무장(ARM)해 두면 강하선에 닿는 순간 잡아(CAPT) 고도를 맡습니다.">G/S</button>
-          </div>
-        </div>
-
-      </div><!-- end ctrl-sub-row 1 -->
-
-      <!-- 2행: WDIR / WSPD / AP(OBS·NAV) / BRG / 스톱워치 / HOVER -->
-      <div class="ctrl-sub-row" style="border-top:1px solid #1e1e1e;">
-
-        <div class="ctrl-group">
-          <div class="ctrl-lbl">WDIR</div>
-          <div class="ctrl-row">
-            <button class="cbtn" id="wdir-dn">◄</button>
-            <button class="cbtn" id="wdir-up">►</button>
-          </div>
-        </div>
-
-        <div class="ctrl-group">
-          <div class="ctrl-lbl">WSPD</div>
-          <div class="ctrl-row">
-            <button class="cbtn" id="wspd-dn">▼</button>
-            <button class="cbtn" id="wspd-up">▲</button>
-          </div>
-        </div>
-
-        <div class="ctrl-div"></div>
-
-        <div class="ctrl-group">
-          <div class="ctrl-lbl">AP</div>
-          <div style="display:flex;gap:4px;align-items:center;">
-            <button class="obs-btn" id="obs-btn" data-act="toggleObs">OBS</button>
-            <button class="obs-btn" id="nav-ap-btn" data-act="toggleNavAp">NAV</button>
-            <button class="obs-btn" id="icpt-btn" data-act="cycleIntercept"
-                    title="인터셉트 각도 (30/45/60°)">45°</button>
-          </div>
-        </div>
-
-        <div class="ctrl-div"></div>
-
-        <div class="brg-tog-group">
-          <div class="ctrl-lbl">BRG</div>
-          <div class="brg-tog-btns">
-            <button class="brg-tog-btn brg1-on" id="brg1-tog" data-act="toggleBrg1">BRG1</button>
-            <button class="brg-tog-btn brg2-on" id="brg2-tog" data-act="toggleBrg2">BRG2</button>
-          </div>
-          <!-- 이름표(방위·거리) 시현 — 기본은 끔. 니들만 필요할 때가 있다 -->
-          <div class="brg-tog-btns">
-            <button class="brg-tog-btn brg-bdp" id="brg1-bdp" data-act="toggleBrg1Lbl"
-                    title="BRG1 선·방위·거리를 지도에 시현">#1BDP</button>
-            <button class="brg-tog-btn brg-bdp" id="brg2-bdp" data-act="toggleBrg2Lbl"
-                    title="BRG2 선·방위·거리를 지도에 시현">#2BDP</button>
-          </div>
-        </div>
-
-        <div class="ctrl-div"></div>
-
-        <div class="sw-group">
-          <div class="sw-display clock-mode" id="sw-display">--:--:--</div>
-          <div class="sw-btns" id="sw-btns-sw" style="display:none;">
-            <button class="sw-btn" id="sw-toggle" data-act="swToggle">GO</button>
-            <button class="sw-btn" data-act="swReset">RESET</button>
-            <button class="sw-btn sw-btn-time" data-act="swSetMode" data-arg='["clock"]'>TIME</button>
-          </div>
-          <div class="sw-btns" id="sw-btns-clock">
-            <button class="sw-btn sw-btn-time" data-act="swSetMode" data-arg='["sw"]'>STOP WATCH</button>
-          </div>
-        </div>
-
-        <div class="ctrl-div"></div>
-
-        <div class="hover-group">
-          <div class="ctrl-lbl">HOVER</div>
-          <div class="hover-btns">
-            <button class="hover-btn"     id="hover-btn"     data-act="toggleHoverPage" disabled>HOVER PAGE</button>
-            <button class="hover-pos-btn" id="hover-pos-btn" data-act="toggleHoverPosition" title="Hover Position">HOVER POS</button>
-          </div>
-        </div>
-
-      </div><!-- end ctrl-sub-row 2 -->
-
+      <!-- 옛 FCP 1·2행(IAS · HDG · CRS · VS · ALT · CRHT ▲▼ · ALT/CRHT/G/S · WDIR · WSPD · AP · BRG · 스톱워치 · HOVER)은 없앴다 —
+           FCP 패널(07-sim.js)과 PFD 소프트키 · PFD 안 스톱워치가 대신한다 -->
       <!-- 3행: NAV SOURCE / RNP -->
       <div class="ctrl-sub-row" style="border-top:1px solid #1e1e1e;">
 
         <div class="nav-src-group">
-          <div class="ctrl-lbl">NAV SRC</div>
-          <div class="nav-src-btns">
-            <button class="nav-src-btn active" id="nav-fms" data-act="setNavSrc" data-arg='["FMS"]'>FMS</button>
-            <button class="nav-src-btn" id="nav-nav1" data-act="setNavSrc" data-arg='["NAV1"]'>NAV1</button>
-            <button class="nav-src-btn" id="nav-nav2" data-act="setNavSrc" data-arg='["NAV2"]'>NAV2</button>
-          </div>
-          <div class="nav-icao-lbl" id="nav-icao-lbl" style="visibility:hidden">----</div>
-          <!-- RNP 는 NAV SRC 아래로 — 비행 중 바꿀 일이 드문 설정이다 -->
+          <!-- NAV SRC(FMS · NAV1 · NAV2)는 PFD 소프트키 Active NAV 로 옮겼다 — 여기는 RNP 만 -->
           <div class="ctrl-lbl rnp-lbl">RNP</div>
           <div class="rnp-btns">
             <button class="rnp-btn" id="rnp-4" data-act="setRnp" data-arg='[4]'>4</button>
@@ -2283,12 +2188,7 @@ body.night-mode::after {
           </div>
         </div>
 
-        <!-- SUSP — 배속과는 상관없는 기능이라 이름표를 따로 세운다 -->
-        <div class="susp-group">
-          <div class="ctrl-lbl">SUSP</div>
-          <button class="susp-btn" id="susp-btn" data-act="toggleSusp"
-                  title="SUSPEND — 다음 웨이포인트로 자동으로 넘어가지 않고 지금 구간을 계속 유지합니다. 홀딩·미스드어프로치에서 자동으로 켜집니다.">On</button>
-        </div>
+        <!-- SUSP 는 PFD 소프트키 OBS 칸으로 옮겼다(넘어갈지 정할 자리에서 OBS → SUSP) -->
 
         <div class="ctrl-div"></div>
 

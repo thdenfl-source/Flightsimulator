@@ -115,14 +115,14 @@ export async function run(page, t) {
     };
     place(8, 600);
     gsArmed = false; gsOn = false; updateGsBtn();
-    document.getElementById('gs-btn').click();      // 무장
-    const armed = { gsArmed, gsOn, cls: document.getElementById('gs-btn').className };
+    document.getElementById('fks-gs').click();      // 무장
+    const armed = { gsArmed, gsOn, cls: document.getElementById('fks-gs').className };
     gsCaptureCheck();
     const stillArmed = gsOn;                        // 아직 멀리 있으니 잡히면 안 된다
     place(8, 0);                                    // 강하선에 닿았다
     gsCaptureCheck();
     return { armed, stillArmed, capt: gsOn, armedAfter: gsArmed,
-             cls: document.getElementById('gs-btn').className };
+             cls: document.getElementById('fks-gs').className };
   }, [GP, CRS, ELEV, ANG, FT_NM]);
   t.ok(cap.armed.gsArmed && !cap.armed.gsOn, '누르면 먼저 무장(ARM)된다');
   t.ok(/armed/.test(cap.armed.cls), `버튼이 무장 모양이다 (${cap.armed.cls})`);

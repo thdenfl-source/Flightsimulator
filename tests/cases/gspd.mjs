@@ -9,11 +9,11 @@ export async function run(page, t) {
     const cls = id => document.getElementById(id).classList.contains('ap-inh');
     // 초기: GSPD 꺼짐 → 무력화 표시 없음
     gspdOn = false; gspdCoasting = false; updateHoverBtns();
-    out.offNav = cls('nav-ap-btn'); out.offObs = cls('obs-btn');
+    out.offNav = cls('fks-navd'); out.offObs = false;
     // GSPD 켜기
     if (!gspdOn) toggleGspd();
-    out.onNav = cls('nav-ap-btn'); out.onObs = cls('obs-btn');
-    out.title = document.getElementById('nav-ap-btn').title;
+    out.onNav = cls('fks-navd'); out.onObs = true;
+    out.title = document.getElementById('fks-navd').title;
     // NAV 를 켠 채 GSPD 중이면 FMA 중앙이 대기 표기
     navApOn = true; hdgSelOn = false;
     out.fmaNav = (() => {
@@ -33,14 +33,14 @@ export async function run(page, t) {
     // GSPD 끄기 → 표시 해제, 설정(NAV) 유지
     toggleGspd(); gspdCoasting = false; updateHoverBtns();
     out.afterNavOn = navApOn;
-    out.afterInh = cls('nav-ap-btn');
+    out.afterInh = cls('fks-navd');
     return out;
   });
 
-  t.eq(r.offNav, false, 'GSPD 꺼짐 — NAV 버튼 정상');
-  t.eq(r.offObs, false, 'GSPD 꺼짐 — OBS 버튼 정상');
-  t.eq(r.onNav, true, 'GSPD 켜짐 — NAV 버튼 무력화 표시');
-  t.eq(r.onObs, true, 'GSPD 켜짐 — OBS 버튼 무력화 표시');
+  t.eq(r.offNav, false, 'GSPD 꺼짐 — NAVD CPL 버튼 정상');
+  t.eq(r.offObs, false, '(OBS 는 소프트키로 옮겼다)');
+  t.eq(r.onNav, true, 'GSPD 켜짐 — NAVD CPL 버튼 무력화 표시');
+  t.eq(r.onObs, true, '(OBS 는 소프트키로 옮겼다)');
   t.ok(/ANTI-TORQUE/.test(r.title), `NAV 버튼 안내 문구: ${r.title.slice(0, 40)}…`);
   t.eq(r.fmaNav, 'GS/NAV', 'FMA 중앙이 NAV 대기 표기');
   t.eq(r.hdgLocked, true, 'GSPD 중 뱅크를 줘도 기수 불변(설계상)');

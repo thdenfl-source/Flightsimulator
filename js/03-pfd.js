@@ -99,6 +99,7 @@ function drawPFD() {
   ctx.beginPath(); ctx.moveTo(0, L.aiH); ctx.lineTo(W, L.aiH); ctx.stroke();
   ctx.beginPath(); ctx.moveTo(L.hsi.x + 0.5, L.aiH); ctx.lineTo(L.hsi.x + 0.5, L.usableH); ctx.stroke();
   ctx.beginPath(); ctx.moveTo(L.crht.x + 0.5, L.aiH); ctx.lineTo(L.crht.x + 0.5, L.usableH); ctx.stroke();
+  drawStopwatch(L.hsi.x, L.hsi.y, L.hsi.w, L.hsi.h, W / 2);
 }
 
 // ── FMS · NAV1 · NAV2 목적지(명칭·방위·거리) ── 오른쪽 아래, CRHT 계기 밑 칸(높이 1/3).
@@ -183,15 +184,17 @@ function drawRaBox(x, y, w, h) {
   else { ctx.fillStyle = '#7fd4ff'; ctx.fillText(String(Math.round(ra * A_CV())) + (unitAlt === 'm' ? 'M' : 'FT'), x + w - 3, y + h / 2 + 1); }
   ctx.restore();
 }
-// 기압 설정 — METAR 의 QNH(없으면 표준 1013)
+// 기압 설정 — METAR 의 QNH(없으면 표준 1013.25 hPa = 29.92 inHg)
 function drawBaroBox(x, y, w, h) {
   if (!(w > 10) || !(h > 8)) return;
-  const q = (typeof window._qnhHpa === 'number' && Number.isFinite(window._qnhHpa)) ? window._qnhHpa : 1013;
+  const q = (typeof window._qnhHpa === 'number' && Number.isFinite(window._qnhHpa)) ? window._qnhHpa : 1013.25;   // 표준 29.92 inHg
   ctx.save(); _pfdSmallBox(x, y, w, h);
   ctx.textBaseline = 'middle';
   ctx.font = `bold ${Math.max(10, h * 0.55)}px Helvetica Neue, Arial, sans-serif`;
   ctx.fillStyle = '#7fd4ff'; ctx.textAlign = 'center';
-  ctx.fillText(String(Math.round(q)) + ' HPA', x + w / 2, y + h / 2 + 1);
+  // UNITS 소프트키 — IN(inHg) · HPA
+  const inHg = typeof pfdBaroUnit !== 'undefined' && pfdBaroUnit === 'IN';
+  ctx.fillText(inHg ? (q / 33.8639).toFixed(2) + ' IN' : String(Math.round(q)) + ' HPA', x + w / 2, y + h / 2 + 1);
   ctx.restore();
 }
 
@@ -1310,7 +1313,7 @@ function drawHSI(x, y, w, h, cxC) {
   ctx.restore();
 
   // ── BRG1 needle (VOR/ILS → 파란 단선, 머리 화살촉·꼬리 선) ──
-  const _b1st = brg1Visible ? brg1Station() : null;
+  const _b1st = brgTarget(1);   // 소프트키 Bearing1 이 고른 국(처음은 튜닝된 VOR/ILS)
   if (_b1st) {
     const brg1 = bearing(S.lat, S.lon, _b1st.lat, _b1st.lon);
     ctx.save(); ctx.rotate((brg1 - Hi) * D2R);
@@ -1323,8 +1326,9 @@ function drawHSI(x, y, w, h, cxC) {
   }
 
   // ── BRG2 needle (FMS active WP → 녹색 복선, 머리 화살촉·꼬리 선) ──
-  if (brg2Visible && S.awp >= 0 && S.awp < S.wps.length) {
-    const brg2fms = bearing(S.lat, S.lon, S.wps[S.awp].lat, S.wps[S.awp].lon);
+  const _b2st = brgTarget(2);   // 소프트키 Bearing2 가 고른 국(처음은 FMS 활성 지점)
+  if (_b2st) {
+    const brg2fms = bearing(S.lat, S.lon, _b2st.lat, _b2st.lon);
     ctx.save(); ctx.rotate((brg2fms - Hi) * D2R);
     const C2 = '#00cc44', g = 5.5;
     ctx.strokeStyle = C2; ctx.lineWidth = 2;
@@ -1652,4 +1656,61 @@ function drawHsiHoverPage(x, y, w, h, cx, cy, rFull) {
   ctx.restore();
 }
 
+// HSI 오른쪽 아래 칸의 자리 — 스톱워치(이 저장소에는 HOCAS · 메시지 시현창이 없어 칸을 혼자 쓴다)
+function hsiRightCol(x, y, w, h, cxC) {
+  const G = hsiGeom(x, y, w, h, cxC);
+  const sideW = Math.max(60, G.rightW);
+  const fs = Math.max(8, Math.min(11, sideW * 0.10));
+  const width = Math.max(80, Math.min(sideW - 8, 150));
+  const left = Math.min(x + w - 6 - width, G.cx + G.r + 4 + (sideW - width) / 2);
+  const swH = Math.round(fs * 3.6 + 8);
+  return { G, sideW, fs, left, width, swH, swY: y + h - 6 - swH };
+}
+// ── 스톱워치(HSI 오른쪽 아래) ── FCP 의 STOP WATCH 를 옮겼다
+// 시계 모드: 현재 시각 + [STOP WATCH] · 스톱워치 모드: 경과 시간 + [GO/STP] [RST] [TIME]. 칸을 누르면 그 동작(_swHit · onPfdTap)
+let _swHit = [];
+function drawStopwatch(x, y, w, h, cxC) {
+  if (!(w >= 40) || !(h >= 40)) return;
+  const RC = hsiRightCol(x, y, w, h, cxC);
+  const bx = RC.left, bw = RC.width, by = RC.swY, bh = RC.swH, fs = RC.fs;
+  const sw = typeof _swMode !== 'undefined' && _swMode === 'sw';
+  const run = sw && typeof SW !== 'undefined' && SW.running;
+  ctx.save();
+  ctx.fillStyle = 'rgba(0,0,0,0.72)'; ctx.fillRect(bx, by, bw, bh);
+  ctx.strokeStyle = '#446688'; ctx.lineWidth = 1; ctx.strokeRect(bx + 0.5, by + 0.5, bw - 1, bh - 1);
+  // 윗줄 — 이름표 · 시각
+  ctx.textBaseline = 'alphabetic';
+  ctx.font = `bold ${fs * 0.8}px Helvetica Neue, Arial, sans-serif`;
+  ctx.fillStyle = '#8ac6ff'; ctx.textAlign = 'left';
+  ctx.fillText(sw ? 'SW' : 'TIME', bx + 4, by + fs * 1.45);
+  ctx.font = `bold ${fs * 1.25}px Helvetica Neue, Arial, sans-serif`;
+  ctx.fillStyle = sw ? (run ? '#22e022' : '#ffffff') : '#ffffff'; ctx.textAlign = 'right';
+  ctx.fillText(typeof swText === 'function' ? swText() : '', bx + bw - 4, by + fs * 1.55);
+  // 아랫줄 — 버튼
+  const btns = sw ? [[run ? 'STP' : 'GO', 'swToggle', run], ['RST', 'swReset', false], ['TIME', 'swSetMode:clock', false]]
+                  : [['STOP WATCH', 'swSetMode:sw', false]];
+  const gy = by + fs * 2.0, gh = bh - fs * 2.0 - 4, gap = 3, gw = (bw - 8 - gap * (btns.length - 1)) / btns.length;
+  const hits = [];
+  btns.forEach(([t, act, on], i) => {
+    const gx = bx + 4 + i * (gw + gap);
+    ctx.fillStyle = on ? '#14451a' : '#1c232b'; ctx.fillRect(gx, gy, gw, gh);
+    ctx.strokeStyle = on ? '#22e022' : '#5a6672'; ctx.strokeRect(gx + 0.5, gy + 0.5, gw - 1, gh - 1);
+    ctx.fillStyle = on ? '#7fffb0' : '#cfd6dc'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.font = `bold ${Math.min(fs * 0.85, gw / Math.max(3, t.length) * 1.6)}px Helvetica Neue, Arial, sans-serif`;
+    ctx.fillText(t, gx + gw / 2, gy + gh / 2 + 1);
+    hits.push({ x: gx, y: gy, w: gw, h: gh, act });
+  });
+  ctx.restore();
+  // 본 PFD 캔버스에서만 누름 자리를 기억한다(3D 에 겹친 계기는 그림만)
+  if (!cvs.dataset.noFcp) _swHit = hits;
+}
+// PFD 를 누른 자리(캔버스 px)가 스톱워치 버튼이면 그 동작 — 09-cdu.js onPfdTap 이 먼저 묻는다
+function swHitTest(px, py) {
+  const b = _swHit.find(r => px >= r.x && px <= r.x + r.w && py >= r.y && py <= r.y + r.h);
+  if (!b) return false;
+  if (b.act === 'swToggle') swToggle();
+  else if (b.act === 'swReset') swReset();
+  else if (b.act.startsWith('swSetMode:')) swSetMode(b.act.split(':')[1]);
+  return true;
+}
 
