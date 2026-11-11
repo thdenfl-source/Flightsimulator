@@ -1350,7 +1350,7 @@ function act(name, ...args) {
         { id: 'util', text: 'Utilities', icon: '<svg viewBox="0 0 100 100"><path d="M62 22 C75 22, 84 32, 80 44 L48 76 C44 88, 28 88, 22 78 C16 68, 22 54, 34 52 L66 20" fill="none" stroke="#9e9e9e" stroke-width="8" stroke-linecap="round"/><circle cx="34" cy="66" r="8" fill="none" stroke="#9e9e9e" stroke-width="5"/><line x1="72" y1="22" x2="82" y2="12" stroke="#9e9e9e" stroke-width="6" stroke-linecap="round"/></svg>' },
         /* AS-565 Performance — orange trend line */
         /* INFO — 비행장 정보 (control tower + freq) */
-        { id: 'afld', text: 'INFO', icon: '<svg viewBox="0 0 100 100"><rect x="42" y="30" width="16" height="52" fill="#00e5ff"/><polygon points="34,30 66,30 58,18 42,18" fill="#00e5ff"/><circle cx="50" cy="12" r="4" fill="#ff5252"/><path d="M62 20 a14 14 0 0 1 10 10" fill="none" stroke="#ffca28" stroke-width="4"/><path d="M38 20 a14 14 0 0 0 -10 10" fill="none" stroke="#ffca28" stroke-width="4"/><rect x="30" y="82" width="40" height="6" fill="#00e5ff"/></svg>' },
+        { id: 'afld', text: 'Airport<br>INFO', icon: '<svg viewBox="0 0 100 100"><rect x="42" y="30" width="16" height="52" fill="#00e5ff"/><polygon points="34,30 66,30 58,18 42,18" fill="#00e5ff"/><circle cx="50" cy="12" r="4" fill="#ff5252"/><path d="M62 20 a14 14 0 0 1 10 10" fill="none" stroke="#ffca28" stroke-width="4"/><path d="M38 20 a14 14 0 0 0 -10 10" fill="none" stroke="#ffca28" stroke-width="4"/><rect x="30" y="82" width="40" height="6" fill="#00e5ff"/></svg>' },
         /* Row 5 */
         /* SkyVector — 항공 차트 (지구+경위선) */
         { id: 'skyvector', text: 'SkyVector', icon: '<svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="34" fill="none" stroke="#00e5ff" stroke-width="4"/><ellipse cx="50" cy="50" rx="14" ry="34" fill="none" stroke="#00e5ff" stroke-width="3"/><line x1="16" y1="50" x2="84" y2="50" stroke="#00e5ff" stroke-width="3"/><line x1="50" y1="16" x2="50" y2="84" stroke="#00e5ff" stroke-width="3"/></svg>' },
@@ -1411,23 +1411,106 @@ function act(name, ...args) {
     const wxGroupBtn = { id: 'wxgrp', text: 'Weather', icon: homeButtons.find(b => b.id === 'weather').icon };
     // ── Aircraft Systems 묶음 ── 홈의 'Aircraft Systems' 를 누르면 계통 화면 아홉 개로 가는 버튼이 나온다.
     // 각 화면은 아직 비어 있다(기능은 차차 넣는다) — renderAcSysPage 가 제목만 띄우고 Back 은 Aircraft Systems 로.
-    const acSysGroupBtn = { id: 'acsys', text: 'Aircraft<br>Systems', icon: '<svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="16" fill="none" stroke="#00e5ff" stroke-width="6"/><g stroke="#00e5ff" stroke-width="9" stroke-linecap="round"><line x1="50" y1="14" x2="50" y2="24"/><line x1="50" y1="76" x2="50" y2="86"/><line x1="14" y1="50" x2="24" y2="50"/><line x1="76" y1="50" x2="86" y2="50"/><line x1="25" y1="25" x2="32" y2="32"/><line x1="68" y1="68" x2="75" y2="75"/><line x1="75" y1="25" x2="68" y2="32"/><line x1="32" y1="68" x2="25" y2="75"/></g></svg>' };
+    const acSysGroupBtn = { id: 'acsys', text: 'Aircraft<br>Systems', icon: '<svg viewBox="0 16 100 60"><defs><linearGradient id="ag-acs" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f4f6f8"/><stop offset=".55" stop-color="#aab3bc"/><stop offset="1" stop-color="#5d6772"/></linearGradient></defs><g transform="rotate(-10 50 48)"><path d="M74 40 L84 37 Q92 34 94 26 L99 28 Q97 40 86 46 L86 52 L74 56 Z" fill="url(#ag-acs)" stroke="#3e464e" stroke-width="1.6" stroke-linejoin="round"/><path d="M14 38 Q9 48 14 58 L76 58 L76 38 Z" fill="url(#ag-acs)" stroke="#3e464e" stroke-width="1.8" stroke-linejoin="round"/><ellipse cx="14" cy="48" rx="4" ry="10" fill="#d3d9de" stroke="#3e464e" stroke-width="1.4"/><rect x="19" y="41" width="55" height="15" rx="1.5" fill="#15191e" stroke="#3e464e" stroke-width="1.2"/><rect x="21.0" y="43" width="4" height="11" rx=".8" fill="#2fd23a"/><rect x="26.2" y="43" width="4" height="11" rx=".8" fill="#2fd23a"/><rect x="31.4" y="43" width="4" height="11" rx=".8" fill="#2fd23a"/><rect x="36.6" y="43" width="4" height="11" rx=".8" fill="#2fd23a"/><rect x="41.8" y="43" width="4" height="11" rx=".8" fill="#2fd23a"/><rect x="47.0" y="43" width="4" height="11" rx=".8" fill="#2fd23a"/><rect x="52.2" y="43" width="4" height="11" rx=".8" fill="#2fd23a"/><rect x="57.4" y="43" width="4" height="11" rx=".8" fill="#2fd23a"/><rect x="62.6" y="43" width="4" height="11" rx=".8" fill="#2fd23a"/><rect x="67.8" y="43" width="4" height="11" rx=".8" fill="#2fd23a"/></g></svg>' };
+    // 아이콘은 실기 CDU 사진을 본떴다 — 색 있는 작은 그림(그라데이션 id 는 ag- 로 시작해 겹치지 않게)
     const AC_SYS_BTNS = [
-        { id: 'asys_afcs', text: 'AFCS', icon: '<svg viewBox="0 0 100 100"><rect x="14" y="26" width="72" height="48" rx="8" fill="none" stroke="#00e5ff" stroke-width="5"/><text x="50" y="62" text-anchor="middle" font-family="Arial" font-weight="bold" font-size="30" fill="#00e5ff">AP</text></svg>' },
-        { id: 'asys_status', text: 'Aircraft<br>Status', icon: '<svg viewBox="0 0 100 100"><rect x="24" y="18" width="52" height="66" rx="5" fill="none" stroke="#00e5ff" stroke-width="5"/><rect x="38" y="12" width="24" height="12" rx="3" fill="#00e5ff"/><polyline points="34,52 46,64 68,40" fill="none" stroke="#22dd55" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/></svg>' },
-        { id: 'asys_elec', text: 'Electrical', icon: '<svg viewBox="0 0 100 100"><polygon points="56,10 24,56 46,56 40,90 76,42 54,42" fill="#ffcc00"/></svg>' },
-        { id: 'asys_eng', text: 'Engines', icon: '<svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="34" fill="none" stroke="#00e5ff" stroke-width="5"/><circle cx="50" cy="50" r="8" fill="#00e5ff"/><g stroke="#00e5ff" stroke-width="6" stroke-linecap="round"><path d="M50 42 Q58 28 50 18" fill="none"/><path d="M58 50 Q72 58 82 50" fill="none"/><path d="M50 58 Q42 72 50 82" fill="none"/><path d="M42 50 Q28 42 18 50" fill="none"/></g></svg>' },
-        { id: 'asys_fuel', text: 'Fuel', icon: '<svg viewBox="0 0 100 100"><rect x="20" y="22" width="40" height="62" rx="4" fill="none" stroke="#00e5ff" stroke-width="5"/><rect x="27" y="30" width="26" height="16" fill="#00e5ff"/><path d="M60 40 L74 48 L74 76 Q74 84 66 80 L66 60" fill="none" stroke="#00e5ff" stroke-width="5" stroke-linejoin="round"/></svg>' },
-        { id: 'asys_hocas', text: 'HOCAS', icon: '<svg viewBox="0 0 100 100"><rect x="28" y="74" width="44" height="12" rx="4" fill="#00e5ff"/><line x1="50" y1="74" x2="50" y2="40" stroke="#00e5ff" stroke-width="7" stroke-linecap="round"/><rect x="38" y="14" width="24" height="32" rx="10" fill="none" stroke="#00e5ff" stroke-width="5"/><circle cx="50" cy="24" r="4" fill="#ff5252"/></svg>' },
-        { id: 'asys_tests', text: 'System<br>Tests', icon: '<svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="34" fill="none" stroke="#00e5ff" stroke-width="5"/><text x="50" y="58" text-anchor="middle" font-family="Arial" font-weight="bold" font-size="22" fill="#00e5ff">TEST</text></svg>' },
-        { id: 'asys_video', text: 'Video', icon: '<svg viewBox="0 0 100 100"><rect x="12" y="24" width="76" height="52" rx="6" fill="none" stroke="#00e5ff" stroke-width="5"/><polygon points="42,36 64,50 42,64" fill="#00e5ff"/></svg>' },
-        { id: 'asys_maint', text: 'Maintenance', icon: '<svg viewBox="0 0 100 100"><path d="M64 14 A20 20 0 0 0 46 40 L16 70 A8 8 0 0 0 30 84 L60 54 A20 20 0 0 0 86 36 L74 46 L62 42 L58 30 Z" fill="none" stroke="#00e5ff" stroke-width="5" stroke-linejoin="round"/></svg>' }
+        { id: 'asys_afcs', text: 'AFCS', icon: '<svg viewBox="0 0 100 100"><defs><linearGradient id="ag-afh" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#d8dde3"/><stop offset="1" stop-color="#7d8894"/></linearGradient><linearGradient id="ag-afc" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2d4f8a"/><stop offset="1" stop-color="#14264a"/></linearGradient></defs><path d="M22 34 Q50 4 78 34 Z" fill="url(#ag-afc)"/><rect x="18" y="32" width="64" height="7" rx="3" fill="#0e1c38"/><circle cx="50" cy="22" r="5" fill="#f2c94c"/><rect x="26" y="38" width="48" height="36" rx="9" fill="url(#ag-afh)" stroke="#4a5562" stroke-width="2"/><rect x="31" y="44" width="38" height="12" rx="6" fill="#1b2633"/><circle cx="41" cy="50" r="4" fill="#3fe3ff"/><circle cx="59" cy="50" r="4" fill="#3fe3ff"/><g stroke="#4a5562" stroke-width="2.5"><line x1="40" y1="63" x2="40" y2="69"/><line x1="46" y1="63" x2="46" y2="69"/><line x1="52" y1="63" x2="52" y2="69"/><line x1="58" y1="63" x2="58" y2="69"/></g><rect x="20" y="48" width="6" height="14" rx="2" fill="#7d8894"/><rect x="74" y="48" width="6" height="14" rx="2" fill="#7d8894"/><path d="M30 74 L70 74 L76 96 L24 96 Z" fill="url(#ag-afc)"/><rect x="44" y="78" width="12" height="8" rx="2" fill="#f2c94c"/></svg>' },
+        { id: 'asys_status', text: 'Aircraft<br>Status', icon: '<svg viewBox="0 0 100 100"><g stroke="#b9c2cb" stroke-width="4" stroke-linecap="round"><line x1="18" y1="14" x2="82" y2="62"/><line x1="82" y1="14" x2="18" y2="62"/></g><ellipse cx="50" cy="40" rx="11" ry="17" fill="#c7cfd7" stroke="#6b7682" stroke-width="2"/><ellipse cx="50" cy="34" rx="6" ry="7" fill="#46596b"/><rect x="47" y="56" width="6" height="30" rx="3" fill="#aab3bc"/><rect x="40" y="82" width="20" height="5" rx="2" fill="#aab3bc"/><circle cx="50" cy="38" r="3" fill="#6b7682"/><polyline points="4,52 26,52 32,40 38,64 44,30 50,70 56,46 62,52 96,52" fill="none" stroke="#2bff6a" stroke-width="3.5" stroke-linejoin="round" stroke-linecap="round"/></svg>' },
+        { id: 'asys_elec', text: 'Electrical', iconOnly: true, icon: '<svg viewBox="0 0 100 100"><defs><linearGradient id="ag-bat" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7fd3ff"/><stop offset=".55" stop-color="#2b8fd6"/><stop offset="1" stop-color="#155a96"/></linearGradient></defs><rect x="24" y="22" width="12" height="9" rx="2" fill="#c9d1d8"/><rect x="64" y="22" width="12" height="9" rx="2" fill="#c9d1d8"/><rect x="12" y="30" width="76" height="50" rx="6" fill="url(#ag-bat)" stroke="#0c3d66" stroke-width="2"/><rect x="16" y="33" width="68" height="8" rx="3" fill="#ffffff" opacity=".25"/><text x="50" y="66" text-anchor="middle" font-family="Arial" font-weight="bold" font-size="22" fill="#ffffff">+/-</text></svg>' },
+        { id: 'asys_eng', text: 'Engines', icon: '<svg viewBox="0 0 100 100"><defs><linearGradient id="ag-eng" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f1f3f5"/><stop offset=".5" stop-color="#a7b0b9"/><stop offset="1" stop-color="#5d6772"/></linearGradient><radialGradient id="ag-fan" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#6f7882"/><stop offset="1" stop-color="#262c33"/></radialGradient></defs><path d="M30 26 L82 32 Q92 50 82 68 L30 74 Z" fill="url(#ag-eng)" stroke="#4a535c" stroke-width="2"/><rect x="82" y="40" width="10" height="20" rx="3" fill="#7d8790"/><ellipse cx="30" cy="50" rx="16" ry="24" fill="url(#ag-eng)" stroke="#4a535c" stroke-width="2"/><ellipse cx="30" cy="50" rx="11" ry="18" fill="url(#ag-fan)"/><g stroke="#b9c2cb" stroke-width="2"><line x1="30" y1="33" x2="30" y2="67"/><line x1="20" y1="42" x2="40" y2="58"/><line x1="20" y1="58" x2="40" y2="42"/></g><circle cx="30" cy="50" r="3.5" fill="#d7dde3"/><line x1="50" y1="30" x2="50" y2="70" stroke="#6b7480" stroke-width="1.5"/></svg>' },
+        { id: 'asys_fuel', text: 'Fuel', icon: '<svg viewBox="0 0 100 100"><defs><linearGradient id="ag-fu" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#2f9e3c"/><stop offset=".45" stop-color="#7ee07f"/><stop offset="1" stop-color="#1f7a2b"/></linearGradient></defs><rect x="22" y="16" width="44" height="74" rx="8" fill="url(#ag-fu)" stroke="#145a1e" stroke-width="2"/><rect x="29" y="24" width="30" height="20" rx="3" fill="#e9f7ea" stroke="#145a1e" stroke-width="1.5"/><rect x="18" y="86" width="52" height="8" rx="2" fill="#4f5a64"/><path d="M66 34 Q82 34 82 50 L82 74 Q82 80 76 80" fill="none" stroke="#3d4650" stroke-width="5" stroke-linecap="round"/><path d="M70 26 L82 22 L84 30 L74 34 Z" fill="#c9d1d8" stroke="#3d4650" stroke-width="1.5"/></svg>' },
+        { id: 'asys_ratest', text: 'RA Self<br>Test', textIcon: true, sub: 'Allow' },
+        { id: 'asys_hocas', text: 'HOCAS', icon: '<svg viewBox="0 0 100 100"><defs><linearGradient id="ag-ho" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#5e6770"/><stop offset=".45" stop-color="#d9dee3"/><stop offset="1" stop-color="#4b535b"/></linearGradient></defs><path d="M38 10 Q50 4 64 10 L70 36 Q72 46 62 50 L44 50 Q34 46 36 36 Z" fill="url(#ag-ho)" stroke="#2e353c" stroke-width="2"/><circle cx="46" cy="18" r="4" fill="#2e353c"/><circle cx="58" cy="18" r="3.5" fill="#2e353c"/><rect x="42" y="26" width="7" height="7" rx="1.5" fill="#2e353c"/><rect x="66" y="22" width="8" height="5" rx="2" fill="#2e353c"/><path d="M30 34 L38 32 L40 42 L32 44 Z" fill="#2e353c"/><rect x="45" y="50" width="12" height="26" fill="url(#ag-ho)" stroke="#2e353c" stroke-width="1.5"/><path d="M34 76 L68 76 L74 92 L28 92 Z" fill="#3a4148"/><path d="M26 70 Q16 72 18 84" fill="none" stroke="#2e353c" stroke-width="4" stroke-linecap="round"/></svg>' },
+        { id: 'asys_tests', text: 'System<br>Tests', icon: '<svg viewBox="0 0 100 100"><g fill="none" stroke="#25c8ff" stroke-width="5" stroke-linecap="round"><path d="M26 12 L26 36 Q26 56 44 56 Q62 56 62 36 L62 12"/><path d="M44 56 L44 70 Q44 88 62 88 Q78 88 78 72 L78 62"/></g><circle cx="78" cy="56" r="9" fill="#25c8ff" stroke="#0b6f96" stroke-width="2"/><circle cx="78" cy="56" r="4" fill="#bdf0ff"/><rect x="20" y="8" width="12" height="7" rx="3" fill="#0b6f96"/><rect x="56" y="8" width="12" height="7" rx="3" fill="#0b6f96"/></svg>' },
+        { id: 'asys_light', text: 'Lighting<br>Config', icon: '<svg viewBox="0 0 100 100"><defs><linearGradient id="ag-sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4fb3ff"/><stop offset="1" stop-color="#bfe6ff"/></linearGradient></defs><rect x="30" y="24" width="62" height="46" rx="4" fill="#20262c" stroke="#9aa4ae" stroke-width="2"/><rect x="34" y="28" width="54" height="38" fill="url(#ag-sky)"/><path d="M34 66 L50 46 L60 56 L70 44 L88 66 Z" fill="#3fae4f"/><circle cx="78" cy="36" r="5" fill="#ffd84a"/><rect x="56" y="70" width="10" height="8" fill="#6b747d"/><rect x="48" y="78" width="26" height="4" rx="2" fill="#6b747d"/><path d="M8 82 L34 56 A12 12 0 0 1 48 38 L40 48 L44 54 L52 50 A12 12 0 0 1 38 62 L14 88 Q8 90 8 82 Z" fill="#d7dde3" stroke="#4a535c" stroke-width="2" stroke-linejoin="round"/></svg>' },
+        { id: 'asys_video', text: 'Video', icon: '<svg viewBox="0 0 100 100"><defs><linearGradient id="ag-cam" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#eef1f4"/><stop offset=".55" stop-color="#a5aeb7"/><stop offset="1" stop-color="#5f6973"/></linearGradient></defs><rect x="14" y="30" width="56" height="40" rx="8" fill="url(#ag-cam)" stroke="#3e464e" stroke-width="2"/><path d="M70 42 L90 30 L90 70 L70 58 Z" fill="url(#ag-cam)" stroke="#3e464e" stroke-width="2"/><rect x="22" y="38" width="22" height="14" rx="3" fill="#2b333b"/><circle cx="58" cy="40" r="4" fill="#e53935"/><rect x="24" y="22" width="30" height="8" rx="3" fill="#7d8790"/></svg>' },
+        { id: 'asys_maint', text: 'Maintenance', icon: '<svg viewBox="0 0 100 100"><path d="M74 10 A16 16 0 0 0 60 32 L18 74 A7 7 0 0 0 28 84 L70 42 A16 16 0 0 0 92 28 L82 36 L72 32 L70 22 Z" fill="#c4ccd3" stroke="#4a535c" stroke-width="2" stroke-linejoin="round"/><g transform="rotate(45 50 50)"><rect x="46" y="4" width="8" height="46" rx="2" fill="#d7dde3" stroke="#4a535c" stroke-width="1.5"/><rect x="40" y="50" width="20" height="40" rx="7" fill="#35c24a" stroke="#1d6f29" stroke-width="2"/><rect x="44" y="56" width="4" height="28" rx="2" fill="#9ff0a6" opacity=".7"/></g></svg>' }
     ];
+    // 사진의 자리 — 위 두 줄(빈칸은 null) · 아래 한 줄은 바닥에 붙인다
+    const AC_SYS_TOP = ['asys_afcs', 'asys_status', 'asys_elec', 'asys_eng', 'asys_fuel', 'asys_ratest', null, 'asys_hocas'];
+    const AC_SYS_BOT = ['asys_tests', 'asys_light', 'asys_video', 'asys_maint'];
     let _acSysPage = 'asys_afcs';
 
+    // Waypoint Info — 하위 화면 묶음(지금은 INFO · 차차 더한다). 그림은 실기 CDU 사진(자홍 마름모 · 하늘색 육각 · 삼각)
+    const wptInfoBtn = { id: 'wptinfo', text: 'Waypoint<br>Info', icon: '<svg viewBox="2 26 96 48"><g transform="rotate(-30 22 50)"><rect x="8" y="36" width="28" height="28" rx="6" fill="#e020d0"/><rect x="19" y="40" width="6" height="20" rx="2" fill="#fff"/></g><polygon points="50,36 62,36 68,50 62,64 50,64 44,50" fill="#00d8ff"/><circle cx="56" cy="50" r="6" fill="#000"/><polygon points="80,36 94,62 66,62" fill="#00d8ff"/></svg>' };
+    // Waypoint Info 하위 — 실기 CDU 사진의 자리(3칸씩): Airport · INT · VOR / NDB · VRP · User Waypoint / Create Waypoint · Airport INFO
+    // Airport INFO(비행장 정보) 말고는 아직 '준비 중' 화면(renderWptPage)
+    const WPT_SUB_BTNS = [
+        { id: 'wpt_apt', text: 'Airport', icon: '<svg viewBox="0 0 100 100"><g fill="#c0158f"><rect x="45" y="10" width="10" height="16"/><rect x="45" y="74" width="10" height="16"/><rect x="10" y="45" width="16" height="10"/><rect x="74" y="45" width="16" height="10"/></g><circle cx="50" cy="50" r="28" fill="#c0158f"/><g stroke="#fff" stroke-width="5" stroke-linecap="round"><line x1="32" y1="56" x2="68" y2="44"/><line x1="40" y1="44" x2="44" y2="54"/></g></svg>' },
+        { id: 'wpt_int', text: 'INT', icon: '<svg viewBox="0 0 100 100"><polygon points="50,14 88,84 12,84" fill="#2ab4f0"/></svg>' },
+        { id: 'wpt_vor', text: 'VOR', icon: '<svg viewBox="0 0 100 100"><polygon points="30,16 70,16 82,38 62,72 38,72 18,38" fill="#2ab4f0"/><polygon points="40,36 60,36 64,48 56,60 44,60 36,48" fill="#000"/><circle cx="50" cy="48" r="4" fill="#2ab4f0"/></svg>' },
+        { id: 'wpt_ndb', text: 'NDB', icon: '<svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="12" fill="none" stroke="#c0158f" stroke-width="6"/><circle cx="50" cy="50" r="4" fill="#c0158f"/><g fill="#c0158f">' + Array.from({ length: 12 }, (_, i) => { const a = i * Math.PI / 6; return `<circle cx="${(50 + 30 * Math.cos(a)).toFixed(1)}" cy="${(50 + 30 * Math.sin(a)).toFixed(1)}" r="4.5"/>`; }).join('') + '</g></svg>' },
+        { id: 'wpt_vrp', text: 'VRP', icon: '<svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="34" fill="none" stroke="#f08c1e" stroke-width="7" stroke-dasharray="14 9"/><polygon points="50,30 68,64 32,64" fill="#f08c1e"/></svg>' },
+        { id: 'wpt_user', text: 'User<br>Waypoint', icon: '<svg viewBox="0 0 100 100"><rect x="26" y="20" width="48" height="48" fill="#f08c1e"/></svg>' },
+        { id: 'wpt_create', text: 'Create<br>Waypoint', icon: '<svg viewBox="0 0 100 100"><rect x="24" y="16" width="46" height="46" fill="#f08c1e"/><g stroke="#ffe000" stroke-width="3"><path d="M20 24 V12 H32"/><path d="M62 12 H74 V24"/><path d="M20 54 V66 H32"/></g><polygon points="52,26 56,36 67,37 59,44 61,55 52,49 43,55 45,44 37,37 48,36" fill="#fff" stroke="#333" stroke-width="1.5"/><line x1="58" y1="46" x2="86" y2="72" stroke="#111" stroke-width="4" stroke-linecap="round"/><line x1="58" y1="46" x2="86" y2="72" stroke="#888" stroke-width="1.5"/></svg>' }
+    ];
+    const WPT_INFO_IDS = ['wpt_apt', 'wpt_int', 'wpt_vor', 'wpt_ndb', 'wpt_vrp', 'wpt_user', 'wpt_create', 'afld'];
+    let _wptPage = 'wpt_apt';
+    function wptOpen(id) {
+        // Create Waypoint — Flight Plan 의 Add WPT 와 같은 화면(ADD WAYPOINT)을 연다
+        if (id === 'wpt_create') { try { openFlightPlan(); fpGo('ADD'); } catch (e) { _swallow(e); } return; }
+        // VOR · NDB — GPX 에서 만든 목록(20-navaids.js)을 보이고, 고르면 Flight Plan 에 넣는다
+        // Airport — ICAO 이름이 있는 비행장(04-map.js AIRPORTS_KR)도 같은 목록으로
+        // INT — Fix.gpx 의 교차점(20-navaids.js NAVAID_INT)
+        if (id === 'wpt_vor' || id === 'wpt_ndb' || id === 'wpt_apt' || id === 'wpt_int') { _navKind = { wpt_vor: 'VOR', wpt_ndb: 'NDB', wpt_apt: 'APT', wpt_int: 'INT' }[id]; switchMode('NAVLIST'); return; }
+        _wptPage = id; switchMode('WPT_PAGE');
+    }
+    let _navKind = 'VOR', _navSort = 'DIST';
+    // 목록 자료 — VOR · NDB 는 20-navaids.js, Airport 는 AIRPORTS_KR(ICAO · 이름 · 좌표)
+    function _navSrc(kind) {
+        if (kind === 'APT') return (typeof AIRPORTS_KR !== 'undefined' ? AIRPORTS_KR : []).map(a => ({ id: a.icao, name: a.name, freq: '', lat: a.lat, lon: a.lon }));
+        if (kind === 'VOR') return typeof NAVAID_VOR !== 'undefined' ? NAVAID_VOR : [];
+        if (kind === 'INT') return typeof NAVAID_INT !== 'undefined' ? NAVAID_INT : [];
+        return typeof NAVAID_NDB !== 'undefined' ? NAVAID_NDB : [];
+    }
+    function _navList() {
+        const L = _navSrc(_navKind);
+        return L.map((n, i) => ({ n, i, d: distance(S.lat, S.lon, n.lat, n.lon), b: bearing(S.lat, S.lon, n.lat, n.lon) }));
+    }
+    function navSortToggle() { _navSort = _navSort === 'DIST' ? 'NAME' : 'DIST'; switchMode('NAVLIST'); }
+    // 목록에서 고른 시설을 Flight Plan 끝에 넣고 Flight Plan 을 보인다
+    function navaidAdd(kind, i) {
+        const L = _navSrc(kind), n = L && L[i];
+        if (!n) return;
+        try { pushWP({ ident: n.id, lat: n.lat, lon: n.lon, name: n.name, navaid: kind, freq: n.freq || '' }); } catch (e) { _swallow(e); }
+        try { openFlightPlan(); } catch (e) { _swallow(e); }
+    }
+    function renderNavList(container, footer, title) {
+        title.innerText = _navKind === 'APT' ? 'Airport' : _navKind;
+        const rows = _navList().sort((a, b) => _navSort === 'DIST' ? a.d - b.d : a.n.id.localeCompare(b.n.id));
+        const col = (_navKind === 'VOR' || _navKind === 'INT') ? '#2ab4f0' : _navKind === 'APT' ? '#e040c8' : '#d23aa8';
+        const html = rows.map(r => {
+            const sub = r.n.name !== r.n.id ? r.n.name : '';
+            return `<div class="nav-row" data-act="navaidAdd" data-arg='["${_navKind}", ${r.i}]' style="display:grid;grid-template-columns:1fr 62px 70px;align-items:center;gap:6px;padding:8px 10px;margin-bottom:5px;border:1px solid #234;border-radius:6px;cursor:pointer;">` +
+                `<span><b style="color:${col};font-size:13px;">${r.n.id}</b>${sub ? ` <span style="color:#9fb4c8;font-size:10px;">${sub}</span>` : ''}</span>` +
+                `<span style="color:#7fe0c0;font-size:10px;text-align:right;">${r.n.freq || ''}</span>` +
+                `<span style="color:#fff;font-size:11px;text-align:right;">${fmtA(toMag(r.b))}° ${r.d < 100 ? r.d.toFixed(1) : Math.round(r.d)}NM</span></div>`;
+        }).join('');
+        container.innerHTML = `<div style="padding:8px 6px;overflow-y:auto;height:100%;">` +
+            `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;gap:8px;">` +
+            `<div style="color:#9fb4c8;font-size:10px;">${rows.length}곳 · 누르면 Flight Plan 끝에 넣습니다 · 방위/거리는 지금 자리에서</div>` +
+            `<div data-act="navSortToggle" style="cursor:pointer;padding:6px 10px;border-radius:6px;font-weight:bold;font-size:11px;border:1px solid #4a90d9;color:#7ab8f5;white-space:nowrap;">${_navSort === 'DIST' ? '거리순' : '이름순'}</div></div>` +
+            html + `</div>`;
+        footer.innerHTML = cduFooter("switchMode('WPTINFO')");
+    }
+    function renderWptPage(container, footer, title) {
+        const b = WPT_SUB_BTNS.find(x => x.id === _wptPage) || WPT_SUB_BTNS[0];
+        const name = b.text.replace(/<br>/g, ' ');
+        title.innerText = name;
+        container.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:14px;color:#567;">` +
+            `<div style="width:84px;height:84px;opacity:.7">${b.icon}</div>` +
+            `<div style="color:#00cfff;font-size:16px;font-weight:bold;letter-spacing:1px;">${name.toUpperCase()}</div>` +
+            `<div style="font-size:12px;">준비 중 — 이 화면은 차차 갖춥니다</div></div>`;
+        footer.innerHTML = cduFooter("switchMode('WPTINFO')");
+    }
+    // 홈 배열(사용자 지정) — 4칸씩: MAP·Aircraft Systems·PERF·Charts / Flight Plan·PROC·VNAV·Waypoint Info /
+    // NOTAM·Track & Point·Services·Utilities / SkyVector·Tide·ER·Wildfire / Weather·Checklist
+    const HOME_ORDER = ['map', 'acsys', 'perf', 'charts', 'fpl', 'proc', 'vnav', 'wptinfo',
+                        'notam', 'sys', 'serv', 'util', 'skyvector', 'tide', 'eravail', 'wildfire', 'wxgrp', 'check'];
     function renderHomeScreen(container, footer, title) {
         title.innerText = "Home";
-        container.innerHTML = homeGridHtml([wxGroupBtn, acSysGroupBtn].concat(homeButtons.filter(b => !WX_IDS.includes(b.id))));
+        const all = [wxGroupBtn, acSysGroupBtn, wptInfoBtn].concat(homeButtons);
+        container.innerHTML = homeGridHtml(HOME_ORDER.map(id => all.find(b => b.id === id)).filter(Boolean));
         footer.innerHTML = cduFooter('', `<div class="nav-btn" data-act="openUbikais"><span>🛰</span>UBIKAIS</div>`);
     }
     function renderWeatherScreen(container, footer, title) {
@@ -1436,19 +1519,47 @@ function act(name, ...args) {
         footer.innerHTML = cduFooter("switchMode('HOME')");
     }
 
-    function renderAcSysScreen(container, footer, title) {
-        title.innerText = "Aircraft Systems";
-        container.innerHTML = homeGridHtml(AC_SYS_BTNS);
+    function renderWptInfoScreen(container, footer, title) {
+        title.innerText = "Waypoint Info";
+        const all = WPT_SUB_BTNS.concat(homeButtons);
+        container.innerHTML = homeGridHtml(WPT_INFO_IDS.map(id => all.find(b => b.id === id)).filter(Boolean)).replace('class="home-grid"', 'class="home-grid wpt-grid"');
         footer.innerHTML = cduFooter("switchMode('HOME')");
     }
-    function acSysOpen(id) { _acSysPage = id; switchMode('ACSYS_PAGE'); }
+    function renderAcSysScreen(container, footer, title) {
+        title.innerText = "Aircraft Systems";
+        const cell = id => {
+            const b = id && AC_SYS_BTNS.find(x => x.id === id);
+            if (!b) return '<div class="acsys-empty"></div>';
+            const act = `data-act="acSysOpen" data-arg='["${b.id}"]'`;
+            if (b.textIcon) return `<div class="home-icon-wrapper acsys-txtbtn" ${act}><div class="acsys-txt">${b.text}</div><div class="icon-label acsys-sub">${b.sub || ''}</div></div>`;
+            return `<div class="home-icon-wrapper${b.iconOnly ? ' acsys-iconly' : ''}" ${act}><div class="icon-box func-active">${b.icon}</div><div class="icon-label">${b.text}</div></div>`;
+        };
+        container.innerHTML = `<div class="home-grid acsys-grid">${AC_SYS_TOP.map(cell).join('')}</div>` +
+            `<div class="home-grid acsys-grid acsys-bot">${AC_SYS_BOT.map(cell).join('')}</div>`;
+        footer.innerHTML = cduFooter("switchMode('HOME')");
+    }
+    // 계통 버튼은 SYSTEM 창(18-system.js)의 화면도 고른다
+    function acSysOpen(id) {
+        _acSysPage = id;
+        try { if (typeof sysPageSet === 'function') sysPageSet(id); } catch (e) { _swallow(e); }
+        switchMode('ACSYS_PAGE');
+    }
     // 계통 화면(아직 비어 있음) — 제목·아이콘과 '준비 중' 만
     function renderAcSysPage(container, footer, title) {
         const b = AC_SYS_BTNS.find(x => x.id === _acSysPage) || AC_SYS_BTNS[0];
         const name = b.text.replace(/<br>/g, ' ');
+        const pic = b.icon || `<div style="color:#00cfff;font:bold 18px Arial;text-align:center;padding-top:22px">${b.text}</div>`;
         title.innerText = name;
+        // 갖춘 계통(18-system.js sysCduHtml — Fuel · Electrical)은 제 칸을, 나머지는 아직 '준비 중'
+        const own = (typeof sysCduHtml === 'function') ? sysCduHtml(b.id) : '';
+        if (own) {
+            container.innerHTML = `<div class="acsys-page" data-page="${b.id}">${own}</div>`;
+            footer.innerHTML = cduFooter("switchMode('ACSYS')");
+            try { _fuelCduRefresh(); } catch (e) { _swallow(e); }
+            return;
+        }
         container.innerHTML = `<div class="acsys-page" data-page="${b.id}" style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:14px;color:#567;">` +
-            `<div style="width:84px;height:84px;opacity:.55">${b.icon}</div>` +
+            `<div style="width:84px;height:84px;opacity:.55">${pic}</div>` +
             `<div style="color:#00cfff;font-size:16px;font-weight:bold;letter-spacing:1px;">${name.toUpperCase()}</div>` +
             `<div style="font-size:12px;">준비 중 — 이 계통 화면은 차차 갖춥니다</div></div>`;
         footer.innerHTML = cduFooter("switchMode('ACSYS')");
@@ -1469,7 +1580,7 @@ function act(name, ...args) {
                 'wildfire': "https://fd.forest.go.kr/ffas/"
             };
 
-            let isActiveBtn = btn.id.startsWith('asys_') || ['wxgrp', 'acsys', 'weather', 'charts', 'notam', 'metar', 'directTo', 'map', 'fpl', 'serv', 'sys', 'perf', 'util', 'proc', 'cctv', 'vnav', 'check', 'afld', 'skyvector', 'tide', 'eravail', 'wildfire'].includes(btn.id);
+            let isActiveBtn = btn.id.startsWith('asys_') || btn.id.startsWith('wpt_') || ['wxgrp', 'acsys', 'wptinfo', 'weather', 'charts', 'notam', 'metar', 'directTo', 'map', 'fpl', 'serv', 'sys', 'perf', 'util', 'proc', 'cctv', 'vnav', 'check', 'afld', 'skyvector', 'tide', 'eravail', 'wildfire'].includes(btn.id);
             let boxClass = isActiveBtn ? 'icon-box func-active' : 'icon-box';
 
             if (links[btn.id]) {
@@ -1481,6 +1592,8 @@ function act(name, ...args) {
             } else {
                 let clickAction = btn.id === 'wxgrp' ? `data-act="switchMode" data-arg='["WEATHER"]'` :
                                   btn.id === 'acsys' ? `data-act="switchMode" data-arg='["ACSYS"]'` :
+                                  btn.id === 'wptinfo' ? `data-act="switchMode" data-arg='["WPTINFO"]'` :
+                                  btn.id.startsWith('wpt_') ? `data-act="wptOpen" data-arg='["${btn.id}"]'` :
                                   btn.id.startsWith('asys_') ? `data-act="acSysOpen" data-arg='["${btn.id}"]'` :
                                   btn.id === 'sys' ? `data-act="switchMode" data-arg='["TRACKPOINT"]'` :
                                   btn.id === 'perf' ? `data-act="switchMode" data-arg='["PERF"]'` :
@@ -3692,6 +3805,9 @@ function act(name, ...args) {
             case 'HOME': renderHomeScreen(container, footer, title); break;
             case 'WEATHER': renderWeatherScreen(container, footer, title); break;
             case 'ACSYS': renderAcSysScreen(container, footer, title); break;
+            case 'WPTINFO': renderWptInfoScreen(container, footer, title); break;
+            case 'WPT_PAGE': renderWptPage(container, footer, title); break;
+            case 'NAVLIST': renderNavList(container, footer, title); break;
             case 'ACSYS_PAGE': renderAcSysPage(container, footer, title); break;
             case 'PERF': renderPerfScreen(container, footer, title); break;
             case 'PERF_INPUT': renderPerfInputScreen(container, footer, title); break;
@@ -3894,7 +4010,7 @@ function act(name, ...args) {
               ${allBtn}
             </div>
             ${rows}</div>`;
-        footer.innerHTML = cduFooter("switchMode('HOME')");
+        footer.innerHTML = cduFooter("switchMode('WPTINFO')");
     }
     function renderAirfieldDetailScreen(container, footer, title) {
         const list = (typeof AIRFIELD_INFO !== 'undefined' ? AIRFIELD_INFO : []);
@@ -4223,7 +4339,7 @@ switchMode('HOME');
       openNavSel,
       openProc: () => { if (_soloActive) setSolo('plan'); else goCduPage('plan'); fpGo('IFR'); },
       openUbikais,
-      acSysOpen,
+      acSysOpen, wptOpen, navaidAdd, navSortToggle,
       pickNavVor,
       prefetchTiles,
       pwaInstall,
