@@ -1,7 +1,7 @@
-// 시작 — GPS 는 꺼진 채 · 출발 공항 고르기 · 지도의 흰수리 심볼
+// 시작 — GPS 는 꺼진 채 · 출발 공항 고르기 · 지도의 흰수리 심볼 · 3D 창의 FLY 버튼
 //
 // 다른 검사는 출발 공항 창을 이미 고른 것으로 두고 연다(lib/env.mjs). 여기서는 새 탭으로
-// 처음 여는 것처럼 열어 그 창을 본다.
+// 처음 여는 것처럼 열어(비밀번호 잠금만 풀어 두고) 그 창을 본다.
 export const name = '출발 공항·지도 심볼';
 
 const ready = p => p.waitForFunction(
@@ -14,6 +14,7 @@ export async function run(page, t) {
   // ── 처음 열면: GPS 는 꺼져 있고(기기 위치를 묻지 않는다) 출발 공항을 고르는 창이 뜬다 ──
   const tab = await browser.newPage({ viewport: { width: 1400, height: 900 } });
   await tab.addInitScript(() => {
+    try { sessionStorage.setItem('vfrUnlocked', '1'); } catch (e) { /* 없으면 그만 */ }
     window.__geoCalls = 0;
     try {
       const g = navigator.geolocation;
@@ -37,8 +38,7 @@ export async function run(page, t) {
     `출발 공항 창이 뜬다 — 지도의 ICAO 공항 ${first.n}곳`);
   t.ok(Math.abs(first.lat - 37.3895) < 1e-6, '고르기 전에는 송도(기본 위치)다');
 
-  // 이름으로 걸러 고른다(Enter = 맨 위). 지형 자료는 검사에서 내려받지 않는다 — 그 공항 땅을 100ft 로 둔다
-  await tab.evaluate(() => { _tcElev = () => 100 * 0.3048; S.alt = 500; S.spd = 80; });
+  // 이름으로 걸러 고른다(Enter = 맨 위)
   await tab.fill('.start-apt-q', '김포');
   const shown = await tab.evaluate(() =>
     [...document.querySelectorAll('.start-apt-btn')].filter(b => b.style.display !== 'none').map(b => b.dataset.icao));
@@ -47,12 +47,11 @@ export async function run(page, t) {
   const picked = await tab.evaluate(() => {
     const a = AIRPORTS.find(x => x.ident === 'RKSS');
     return { dlg: !!document.querySelector('.start-apt'), d: distance(S.lat, S.lon, a.lat, a.lon),
-             alt: S.alt, sel: selAlt, spd: S.spd, gps: gpsMode, flag: sessionStorage.getItem('vfrStartApt') };
+             agl: S.alt - simGroundFt(), spd: S.spd, gps: gpsMode, flag: sessionStorage.getItem('vfrStartApt') };
   });
   t.eq(JSON.stringify(shown), '["RKSS"]', `ICAO · 이름으로 걸러 찾는다 (김포 → ${shown.join(',')})`);
   t.ok(!picked.dlg && picked.d < 0.01, `고르면 그 공항에서 시작한다 (RKSS 에서 ${picked.d.toFixed(3)}NM)`);
-  t.ok(picked.alt === 100 && picked.spd === 0, `지면에 멈춰 선다 (${picked.alt}ft · ${picked.spd}kt)`);
-  t.eq(picked.sel, 100, '고도 유지 기준도 그 지면 높이다 — 날아오르려면 ALT ▲');
+  t.ok(Math.abs(picked.agl) < 1 && picked.spd === 0, `지면에 멈춰 선다 (AGL ${picked.agl.toFixed(1)}ft · ${picked.spd}kt)`);
   t.eq(picked.gps, false, '고른 뒤에도 GPS 는 꺼진 채다');
 
   // 같은 탭(세션)에서는 다시 묻지 않는다 — 고르면 sessionStorage 에 적어 두고, 새로고침(자동
@@ -69,6 +68,7 @@ export async function run(page, t) {
 
   // 건너뛰면 송도 그대로
   const tab2 = await browser.newPage({ viewport: { width: 1400, height: 900 } });
+  await tab2.addInitScript(() => { try { sessionStorage.setItem('vfrUnlocked', '1'); } catch (e) { /* 없으면 그만 */ } });
   await tab2.goto(url); await ready(tab2);
   await tab2.waitForSelector('.start-apt', { timeout: 5000 }).catch(() => {});
   await tab2.click('.start-apt-skip').catch(() => {});
@@ -87,12 +87,12 @@ export async function run(page, t) {
   // 브라우저를 다시 열면(지난 상태가 남아 있어 되살려도) 다시 묻는다 — 종전에는 묻지 않았다
   const tab3 = await browser.newPage({ viewport: { width: 1400, height: 900 } });
   await tab3.addInitScript(s => {
-    try { if (!sessionStorage.getItem('__seeded')) { localStorage.setItem('flightSession', s); sessionStorage.setItem('__seeded', '1'); } }
+    try { sessionStorage.setItem('vfrUnlocked', '1'); if (!sessionStorage.getItem('__seeded')) { localStorage.setItem('flightSession', s); sessionStorage.setItem('__seeded', '1'); } }
     catch (e) { /* 없으면 그만 */ }
   }, snap.snap);
   await tab3.goto(url); await ready(tab3);
   await tab3.waitForSelector('.start-apt', { timeout: 5000 }).catch(() => {});
-  const re = await tab3.evaluate(() => ({ dlg: !!document.querySelector('.start-apt'),
+  const re = await tab3.evaluate(() => ({ dlg: !!document.querySelector('.start-apt'), lat: S.lat, lon: S.lon,
     skip: (document.querySelector('.start-apt-skip') || {}).textContent || '' }));
   t.ok(re.dlg, '브라우저를 다시 열면 지난 상태가 남아 있어도 출발 공항을 다시 묻는다');
   await tab3.click('.start-apt-skip').catch(() => {});
@@ -113,4 +113,26 @@ export async function run(page, t) {
   t.ok(icon.has, '지도 심볼이 흰수리 도색이다(흰 동체 · 붉은 덮개 · 노랑 · 파랑 꼬리)');
   t.ok(/rotate\(75deg\)/.test(icon.rot), `기수 방향으로 돌아 있다 (${icon.rot})`);
   t.ok(icon.w >= 36, `전장 20m 를 36px 로 그린다 (${icon.w}px 칸)`);
+
+  // ── 3D 창의 FLY / PAUSE — 지도 창의 같은 버튼과 같다 ──
+  const fly = await page.evaluate(async () => {
+    const w = ms => new Promise(r => setTimeout(r, ms));
+    if (!_view3dOn) toggle3dMap();
+    await w(200);
+    const b = document.getElementById('fly3d-btn'), m = document.getElementById('map-fly-btn');
+    const out = { inside: !!(b && b.closest('#map3d')), shown: b ? getComputedStyle(b).display !== 'none' : false };
+    const was = S.running;
+    if (S.running) toggleSim();
+    b.click(); out.on = { run: S.running, txt: b.textContent, map: m.textContent, cls: b.classList.contains('on') };
+    b.click(); out.off = { run: S.running, txt: b.textContent, map: m.textContent };
+    m.click(); out.sync = b.textContent; m.click();
+    if (S.running !== was) toggleSim();
+    if (_view3dOn) toggle3dMap();
+    return out;
+  });
+  t.ok(fly.inside && fly.shown, '3D 창 안에 FLY 버튼이 있다(EXT 아래)');
+  t.ok(fly.on.run && fly.on.cls && /PAUSE/.test(fly.on.txt) && fly.on.map === fly.on.txt,
+    `누르면 날고 PAUSE 로 바뀐다 — 지도 창 버튼도 같이 (${fly.on.txt})`);
+  t.ok(!fly.off.run && /FLY/.test(fly.off.txt) && fly.off.map === fly.off.txt, '다시 누르면 멈춘다');
+  t.ok(/PAUSE/.test(fly.sync), '지도 창 버튼으로 바꿔도 3D 창 버튼이 따라간다');
 }

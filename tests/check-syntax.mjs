@@ -26,7 +26,7 @@ blocks.forEach((code, i) => {
 const srcs = [...html.matchAll(/<script[^>]*\ssrc="(?!https?:)([^"]+)"/g)]
   .map(m => m[1]).filter(rel => !/^\.?\/?vendor\//.test(rel));
 srcs.forEach(rel => {
-  const f = path.join(ROOT, rel.replace(/^\.\//, ''));
+  const f = path.join(ROOT, rel.replace(/^\.\//, '').replace(/\?.*$/, ''));   // ?v= 꼬리표는 떼고
   if (!fs.existsSync(f)) { failed++; console.error(`✗ 없는 스크립트: ${rel}`); return; }
   try { execFileSync(process.execPath, ['--check', f], { stdio: 'pipe' }); }
   catch (e) { failed++; console.error(`✗ ${rel} 문법 오류\n${e.stderr?.toString() || e.message}`); }

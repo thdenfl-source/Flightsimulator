@@ -55,7 +55,10 @@ export async function run(page, t) {
     o.inSimple = el(0).offsetParent !== null && el(0).nextElementSibling !== null;
     return o;
   });
-  t.eq(r.top, 'Map Range −|Map Range +|PFD Map Settings|Traffic Map|PFD Settings|OBS|Active NAV|Sensors|Hover Display|Hover Position|CAS|', '최상위 12칸 — 그림 5 의 순서');
+  // 맨 오른쪽 SIM 은 shinesong 판에만 — 절차 훈련판(js/00-edition.js · Flightsimulator)에서는 빈칸
+  const simEd = await page.evaluate(() => typeof SIM_ENABLED === 'undefined' || SIM_ENABLED);
+  t.eq(r.top, 'Map Range −|Map Range +|PFD Map Settings|Traffic Map|PFD Settings|OBS|Active NAV|Sensors|Hover Display|Hover Position|CAS|' + (simEd ? 'SIM' : ''),
+    '최상위 12칸 — 그림 5 의 순서 · 맨 오른쪽 SIM(절차 훈련판은 빈칸)');
   t.ok(r.bar, 'PFD 바로 아래(FCP 맨 위 한 줄)');
   t.ok(r.obs && r.obsBar === 'rgb(34, 224, 34)', `OBS — 지금 FCP 의 OBS · 켜지면 녹색 바${r.obsDim ? '(FMS 라 회색)' : ''}`);
   t.eq(r.nav, 'VOR1>VOR2>FMS>VOR1', 'Active NAV — VOR1 → VOR2 → FMS → VOR1(그림 5)');

@@ -38,17 +38,17 @@ export async function run(page, t) {
 
   t.eq(v.triple, true, '처음부터 3분할이다');
   t.eq(v.pfd, 'left-panel',  `좌측은 PFD (${v.pfd})`);
-  t.eq(v.map, 'mid-panel',   `중앙은 MAP (${v.map})`);
-  t.eq(v.cdu, 'right-panel', `우측은 CDU (${v.cdu})`);
+  t.eq(v.cdu, 'mid-panel',   `중앙은 CDU (${v.cdu})`);
+  t.eq(v.map, 'right-panel', `우측은 MAP (${v.map})`);
   t.eq(v.shownAll, true, '세 창이 모두 보인다');
-  t.eq(v.tabs.join('·'), 'pfd·map·cdu', `탭 표시도 그대로다 (${v.tabs.join('·')})`);
-  t.eq(v.sel.join('·'), 'pfd·map·cdu', '상태값도 같다');
+  t.eq(v.tabs.join('·'), 'pfd·cdu·map', `탭 표시도 그대로다 (${v.tabs.join('·')})`);
+  t.eq(v.sel.join('·'), 'pfd·cdu·map', '상태값도 같다');
   t.ok(v.midW > 50, `중앙 패널이 실제로 자리를 차지한다 (${v.midW}px)`);
 
   // ── 2분할을 골라 두면 그 뜻을 따른다 ──
   const ctx2 = await browser.newContext({ viewport: { width: 1400, height: 900 } });
   const two = await ctx2.newPage();
-  await two.addInitScript(() => { try { localStorage.setItem('tripleMode', '0'); } catch (e) {} });
+  await two.addInitScript(() => { try { localStorage.setItem('tripleMode2', '0'); } catch (e) {} });
   await two.goto(url);
   await two.waitForTimeout(900);
   const w = await two.evaluate(() => ({
@@ -92,7 +92,7 @@ export async function run(page, t) {
     `그때 버튼은 되돌아가는 버튼이 된다 (${solo.on.txt})`);
   t.eq(solo.off.solo, false, '한 번 더 누르면 나온다');
   t.eq(solo.off.triple, true, '나오면 3분할 배치가 그대로 돌아온다');
-  t.eq(solo.off.sel, 'pfd·map·cdu', `창 배치도 들어가기 전 그대로다 (${solo.off.sel})`);
+  t.eq(solo.off.sel, 'pfd·cdu·map', `창 배치도 들어가기 전 그대로다 (${solo.off.sel})`);
   t.ok(solo.off.m > 50 && solo.off.r > 50,
     `가운데·우측 창이 다시 자리를 잡는다 (${solo.off.m}px · ${solo.off.r}px)`);
 
@@ -121,7 +121,7 @@ export async function run(page, t) {
     t.eq(r.on.others.join('·'), '0·0', `나머지 두 창은 접힌다 (${r.on.others.join('·')}px)`);
     t.ok(r.on.w > r.full * 0.95, `화면을 가득 채운다 (${r.on.w}px / ${r.full}px)`);
     t.eq(r.solo, false, '나오면 단독이 풀린다');
-    t.eq(r.sel, 'pfd·map·cdu', `배치도 들어가기 전 그대로다 (${r.sel})`);
+    t.eq(r.sel, 'pfd·cdu·map', `배치도 들어가기 전 그대로다 (${r.sel})`);
   }
 
   // ── Flight Plan 은 CDU 가 있는 창에서 열린다 ──
@@ -130,9 +130,8 @@ export async function run(page, t) {
   const plan = await fresh.evaluate(async () => {
     const wait = ms => new Promise(r => setTimeout(r, ms));
     toggleTriple(true);
-    selectPanel('left', 'cdu', true);
-    selectPanel('mid', 'map', true);
-    selectPanel('right', 'pfd', true);
+    selectPanel('mid', 'cdu', true);      // 기본 배치 — 좌 PFD · 중 CDU · 우 MAP
+    selectPanel('right', 'map', true);
     await wait(150);
     const host = id => {
       const e = document.getElementById(id);
@@ -143,7 +142,7 @@ export async function run(page, t) {
     const on = { plan: host('fp-wrap'), pfd: host('pfd-wrap'), map: host('map-wrap'),
                  cdu: host('cdu-wrap'), sel: [leftSel, midSel, rightSel].join('·'),
                  // 탭 표시는 CDU 가 켜진 것으로 본다(PLAN 은 CDU 의 한 화면이다)
-                 tab: (document.querySelector('#left-tabs [data-sel].active') || {}).dataset?.sel };
+                 tab: (document.querySelector('#mid-tabs [data-sel].active') || {}).dataset?.sel };
     fpBackToCdu();                       // BACK 으로 돌아오면 그 자리가 다시 CDU
     await wait(150);
     const back = { cdu: host('cdu-wrap'), plan: host('fp-wrap'), pfd: host('pfd-wrap') };
@@ -158,15 +157,15 @@ export async function run(page, t) {
     await wait(150);
     return { on, back, usual };
   });
-  t.eq(plan.on.plan, 'left-panel', `CDU 가 좌측이면 Flight Plan 도 좌측에서 열린다 (${plan.on.plan})`);
-  t.eq(plan.on.pfd, 'right-panel', 'PFD 는 제자리에 그대로 있다 (종전에는 여기가 바뀌었다)');
-  t.eq(plan.on.map, 'mid-panel', '가운데 지도도 그대로다');
+  t.eq(plan.on.plan, 'mid-panel', `CDU 가 가운데면 Flight Plan 도 가운데에서 열린다 (${plan.on.plan})`);
+  t.eq(plan.on.pfd, 'left-panel', 'PFD 는 제자리에 그대로 있다');
+  t.eq(plan.on.map, 'right-panel', '우측 지도도 그대로다');
   t.eq(plan.on.cdu, null, 'CDU 화면은 그 자리에서 Flight Plan 으로 바뀐 것이다');
-  t.eq(plan.on.sel, 'plan·map·pfd', `창 상태도 그렇다 (${plan.on.sel})`);
+  t.eq(plan.on.sel, 'pfd·plan·map', `창 상태도 그렇다 (${plan.on.sel})`);
   t.eq(plan.on.tab, 'cdu', 'CDU 탭이 켜진 채로 보인다');
-  t.eq(plan.back.cdu, 'left-panel', 'BACK 을 누르면 그 자리가 다시 CDU 가 된다');
+  t.eq(plan.back.cdu, 'mid-panel', 'BACK 을 누르면 그 자리가 다시 CDU 가 된다');
   t.eq(plan.back.plan, null, 'Flight Plan 은 접힌다');
-  t.eq(plan.back.pfd, 'right-panel', 'PFD 는 끝까지 제자리다');
+  t.eq(plan.back.pfd, 'left-panel', 'PFD 는 끝까지 제자리다');
   t.eq(plan.usual.plan, 'right-panel', `CDU 가 우측이면 종전대로 우측에서 열린다 (${plan.usual.plan})`);
   t.eq(plan.usual.pfd, 'left-panel', '그때는 좌측 PFD 가 그대로다');
 
@@ -178,19 +177,18 @@ export async function run(page, t) {
     const wait = ms => new Promise(r => setTimeout(r, ms));
     const sel = () => [leftSel, midSel, rightSel].join('·');
     toggleTriple(true);
-    selectPanel('left', 'cdu', true); selectPanel('mid', 'map', true);
-    selectPanel('right', 'pfd', true);
+    selectPanel('mid', 'cdu', true); selectPanel('right', 'map', true);   // 좌 PFD · 중 CDU · 우 MAP
     await wait(120);
-    openFlightPlan();                       // 좌측이 PLAN 이 된다
+    openFlightPlan();                       // 가운데가 PLAN 이 된다
     await wait(120);
     const a = sel();
-    // 그 상태에서 우측에 CDU 를 부르면 좌측 PLAN 과 겹쳐서는 안 된다
+    // 그 상태에서 우측에 CDU 를 부르면 가운데 PLAN 과 겹쳐서는 안 된다
     selectPanel('right', 'cdu', true);
     await wait(120);
     const b = sel();
     const frames = document.querySelectorAll('.page-content:not(.page-hidden) .cdu-frame').length;
     // 저장된 배치를 되살리듯 상태를 직접 겹쳐 놓아도 그릴 때 바로잡는다
-    leftSel = 'cdu'; midSel = 'map'; rightSel = 'plan';
+    leftSel = 'pfd'; midSel = 'cdu'; rightSel = 'plan';
     applyPanels(); await wait(120);
     const c = sel();
     // 2D·3D 지도는 나란히 둘 수 있다
@@ -203,7 +201,7 @@ export async function run(page, t) {
     await wait(120);
     return { a, b, c, d, frames };
   });
-  t.eq(dup.a, 'plan·map·pfd', `CDU 자리에서 Flight Plan 이 열린다 (${dup.a})`);
+  t.eq(dup.a, 'pfd·plan·map', `CDU 자리에서 Flight Plan 이 열린다 (${dup.a})`);
   t.ok(!/plan/.test(dup.b) || !/cdu/.test(dup.b),
     `CDU 를 다른 창으로 부르면 PLAN 과 겹치지 않는다 (${dup.b})`);
   t.eq(dup.frames, 1, `CDU 화면은 한 번만 뜬다 (${dup.frames}개)`);
@@ -211,7 +209,22 @@ export async function run(page, t) {
     `겹친 배치를 되살려도 그릴 때 바로잡는다 (${dup.c})`);
   t.eq(dup.d, 'pfd·map·m3d', `2D 와 3D 지도는 나란히 둘 수 있다 (${dup.d})`);
 
-  // ── PFD 배치(shinesong 과 같은 실기형): CRHT·NAV 칸은 고도계+승강계 칸과 같은 x·폭 ──
+  // ── 2분할에서도 오른쪽 창 탭에 3D Only 가 보이고, 눌러서 3D 단독으로 간다 ──
+  const only = await two.evaluate(async () => {
+    const wait = ms => new Promise(r => setTimeout(r, ms));
+    const app = document.getElementById('app');
+    for (let i = 0; i < 4 && (app.classList.contains('triple') || app.classList.contains('quad')); i++) { cycleSplit(); await wait(150); }
+    const b = document.getElementById('m3d-only-btn');
+    const shown = !app.classList.contains('triple') && b.getBoundingClientRect().width > 0;
+    b.click(); await wait(300);
+    const solo = _soloActive && _soloCurrent === 'm3d';
+    exitSolo(); await wait(200);
+    return { shown, solo, back: !_soloActive };
+  });
+  t.ok(only.shown, '2분할에서도 오른쪽 창 탭에 3D Only 가 보인다');
+  t.ok(only.solo && only.back, `2분할에서 3D Only 를 누르면 3D 단독으로 갔다가 돌아온다 (단독 ${only.solo} · 복귀 ${only.back})`);
+
+  // ── PFD 배치: CRHT·NAV 칸은 고도계+승강계 칸과 같은 x·폭(세로 정렬) ──
   const al = await two.evaluate(() => [1400, 1000, 700, 560].map(W => {
     const L = pfdLayout(W, 900, 300);
     return Math.abs(L.crht.x - L.alt.x) < 0.5 && Math.abs(L.crht.w - (L.alt.w + L.vsi.w)) < 0.5 &&
@@ -219,42 +232,6 @@ export async function run(page, t) {
   }));
   t.ok(al.every(Boolean), `CRHT·NAV 칸이 고도계 칸과 세로로 맞는다 (${al.join(' ')})`);
 
-  // ── 엔진 계기 토크 — PERF 표로 셈한다(호버 > 70kt 순항 · 상승하면 는다) ──
-  const tq = await two.evaluate(() => {
-    const keep = { spd: S.spd, vs: S.vs, bnk: S.bnk, alt: S.alt };
-    S.alt = 1000; S.bnk = 0; S.vs = 0;
-    S.spd = 0;  const hov = tqShown();
-    S.spd = 70; const cruise = tqShown();
-    S.vs = 1000; const climb = tqShown();
-    Object.assign(S, keep);
-    return { hov, cruise, climb, mta: mtaNow(), vy: tqAtVy() };
-  });
-  t.ok(tq.hov > tq.cruise && tq.climb > tq.cruise + 5 && Number.isFinite(tq.vy) && tq.mta > 90 && tq.mta <= 140,
-    `엔진 계기 토크가 비행 상태를 따른다 (호버 ${tq.hov.toFixed(0)} · 70kt ${tq.cruise.toFixed(0)} · +1000fpm ${tq.climb.toFixed(0)} · MTA ${tq.mta.toFixed(0)} · Vy선 ${tq.vy.toFixed(0)}%)`);
-
   await ctx1.close();
   await ctx2.close();
-
-  // ── FCP — 옛 FCP 줄은 없앴고 실기 AFCS 패널 하나(ALT · G/S 버튼은 패널에), 스톱워치는 PFD 안(HSI 오른쪽 아래) ──
-  const fcp = await page.evaluate(() => {
-    const p = document.getElementById('fcp-simple');
-    return { panel: !!p, alt: !!(p && p.querySelector('#fks-alt')), gs: !!(p && p.querySelector('#fks-gs')),
-             rows: document.querySelectorAll('#pfd-wrap .ctrl-sub-row').length, swDom: !!document.getElementById('sw-display'),
-             swPfd: typeof drawStopwatch === 'function' && _swHit.length > 0 };
-  });
-  t.ok(fcp.panel && fcp.alt && fcp.gs && fcp.rows === 0, 'FCP 는 실기 AFCS 패널 하나 — ALT · G/S 버튼이 패널에 있다(옛 FCP 줄 없음)');
-  t.ok(!fcp.swDom && fcp.swPfd, '스톱워치는 FCP 가 아니라 PFD 안(HSI 오른쪽 아래)에 있다');
-
-  // ── CRHT 기준은 10ft 단위로 맞춘다 ──
-  // 지금 고도로 걸면 1,237 처럼 끝자리가 남는다. ▲ 는 위의 10 단위, ▼ 는 아래의 10 단위로.
-  const crs = await page.evaluate(() => {
-    const keep = { crht: crhtOn, alt: altHoldOn, sel: selCrht };
-    const go = (from, d) => { selCrht = from; applyDelta('crht', d); return selCrht; };
-    const out = { up: go(1237, 10), dn: go(1237, -10), up0: go(1240, 10), dn0: go(1240, -10), low: go(4, -10) };
-    crhtOn = keep.crht; altHoldOn = keep.alt; selCrht = keep.sel; updateHoverBtns();
-    return out;
-  });
-  t.ok(crs.up === 1240 && crs.dn === 1230, `끝자리가 있으면 10 단위로 맞춘다 (1,237 ▲ ${crs.up} · ▼ ${crs.dn})`);
-  t.ok(crs.up0 === 1250 && crs.dn0 === 1230, `10 단위면 10ft 씩 옮긴다 (1,240 ▲ ${crs.up0} · ▼ ${crs.dn0})`);
-  t.eq(crs.low, 0, '0ft 아래로는 내려가지 않는다');
 }

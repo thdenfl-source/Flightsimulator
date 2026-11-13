@@ -10,6 +10,8 @@ import { fileURLToPath } from 'node:url';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 export const ROOT = path.resolve(HERE, '..', '..');
+// 판(js/00-edition.js) — Flightsimulator 저장소(경로에 'flightsimulator')면 절차 훈련판으로 띄운다. EDITION=proc|full 로 바꿀 수 있다
+export const EDITION = process.env.EDITION || (/flightsimulator/i.test(ROOT) ? 'proc' : 'full');
 
 export function buildEnv() {
   const vendor = path.join(ROOT, 'vendor');
@@ -17,22 +19,24 @@ export function buildEnv() {
     throw new Error('vendor/leaflet.js 가 없습니다 — 저장소가 온전한지 확인하세요.');
   }
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'vfrsim-test-'));
-  for (const d of ['vendor', 'js']) {
+  for (const d of ['vendor', 'js', 'sounds']) {
     const src = path.join(ROOT, d);
     if (fs.existsSync(src)) fs.cpSync(src, path.join(dir, d), { recursive: true });
   }
   const file = path.join(dir, 'index.html');
   fs.copyFileSync(path.join(ROOT, 'index.html'), file);
-  return { dir, file, url: 'file://' + file };
+  return { dir, file, url: 'file://' + file + (EDITION === 'proc' ? '?edition=proc' : '') };
 }
 
 // 페이지를 띄우고 도움말 오버레이를 닫은 상태로 반환
 export async function openApp(browser, { cdu = false } = {}) {
   const { url } = buildEnv();
   const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
-  // 출발 공항 고르기 창(09-cdu.js)은 이미 고른 것으로 두고 연다 — 그 창은 cases/startapt.mjs 가 본다
+  // 시작 잠금(js/00-gate.js)은 풀어 둔 채로 연다 — 잠금 자체는 cases/lock.mjs 가 본다
+  // 출발 공항 고르기 창(09-cdu.js)도 이미 고른 것으로 둔다 — 그 창은 cases/startapt.mjs 가 본다
   await page.addInitScript(() => {
-    try { sessionStorage.setItem('vfrStartApt', '1'); } catch (e) { /* 없으면 그만 */ }
+    try { sessionStorage.setItem('vfrUnlocked', '1'); sessionStorage.setItem('vfrStartApt', '1'); }
+    catch (e) { /* 없으면 그만 */ }
   });
   const errors = [];
   page.on('pageerror', e => errors.push(e.message));

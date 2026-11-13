@@ -1,6 +1,6 @@
 // VFR Flight Sim — Service Worker
 // 버전을 올리면 캐시가 갱신됩니다
-const CACHE = 'vfr-flight-v436';
+const CACHE = 'vfr-flight-v590';
 const CORE  = [
   './index.html',
   './manifest.json',
@@ -25,7 +25,11 @@ const CORE  = [
   './js/data/loc-stations.js',
   './js/data/enr-routes.js',
   './js/data/airspace.js',
+  './js/data/runways.js',
   // 앱 코드 — index.html 에서 분리한 조각들(로드 순서 = 실행 순서)
+  './js/00-edition.js',
+  './js/00-popout.js',
+  './js/00-gate.js',
   './js/00-ui.js',
   './js/01-state.js',
   './js/02-math.js',
@@ -40,7 +44,19 @@ const CORE  = [
   './js/11-charts.js',
   './js/12-joystick.js',
   './js/13-joyhid.js',
+  './js/14-simmode.js',
+  './js/15-heli3d.js',
+  './js/16-sound.js',
+  './js/17-upper.js',
+  './js/18-system.js',
+  './js/19-lower.js',
   './js/20-navaids.js',
+  './js/21-c5000.js',
+  './js/22-npx138.js',
+  './js/23-afcs.js',
+  // 로터 소리(16-sound.js) — 되풀이용 WAV
+  './sounds/heli-ground.wav',
+  './sounds/heli-flight.wav',
 ];
 
 // 설치 시 핵심 파일 캐시 (HTTP 캐시 우회로 항상 최신본 저장)
@@ -84,12 +100,16 @@ self.addEventListener('fetch', e => {
     return;
   }
 
-  // Esri 위성 타일: 캐시 우선
+  // Esri 위성 타일: 캐시 우선. 받은 타일(2D 지도의 opaque 응답 포함)만 넣는다 —
+  // 3D 는 없는 타일을 404 로 받아 위 단계 사진으로 메우므로(04-map.js) 404·오류는 넣지 않는다.
   if (url.includes('arcgisonline.com')) {
     e.respondWith(
       caches.open('vfr-sat-tiles').then(c =>
         c.match(e.request).then(cached => {
-          const fresh = fetch(e.request).then(res => { c.put(e.request, res.clone()); return res; });
+          const fresh = fetch(e.request).then(res => {
+            if (res && (res.ok || res.type === 'opaque')) c.put(e.request, res.clone());
+            return res;
+          });
           return cached || fresh;
         })
       )
@@ -128,6 +148,6 @@ self.addEventListener('fetch', e => {
         caches.open(CACHE).then(c => c.put(e.request, clone));
         return res;
       })
-      .catch(() => caches.match(e.request).then(r => r || caches.match('./index.html')))
+      .catch(() => caches.match(e.request, { ignoreSearch: true }).then(r => r || caches.match('./index.html')))
   );
 });

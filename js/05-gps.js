@@ -420,18 +420,26 @@ async function _tcFetch(key, x, y) {
   delete _TC.pend[key];
 }
 // 그 자리 지형 높이(ft) — 지형 자료(T-CUT 과 같은 DEM). 바다는 해수면(0)이다
-// (자료의 바다 밑 수심은 0 으로 편다). 아직 모르면 null.
+// (자료의 바다 밑 수심·해안 잔물결은 3D 와 같은 규칙으로 편다 — seaFlatM). 아직 모르면 null.
 function terrainFtAt(lat, lon) {
   let m = null;
   try { m = _tcElev(lat, lon); } catch (e) { m = null; }
   if (m == null) return null;
-  return Math.max(0, m) / 0.3048;
+  m = (typeof seaFlatM === 'function') ? seaFlatM(m) : Math.max(0, m);
+  // 활주로는 공항표고로 평평하다 — 3D 지형·SIM 의 땅과 같은 규칙(04-map.js rwyFlatM)
+  if (typeof rwyFlatM === 'function') m = rwyFlatM(lat, lon, m);
+  return m / 0.3048;
 }
 // ── 전파고도(RA, ft) ──
-// 기압고도가 아니라 발밑 지면에서 잰 높이(AGL)다 — 지형 자료로 그 자리 땅 높이를 뺀다.
-// 지형을 아직 모르면 해수면에서 잰다(바다 위와 같다). PFD 오른쪽 아래 CRHT 창이 이
-// 값이고, CRHT 는 이 높이를 지킨다.
+// 기압고도가 아니라 발밑 지면에서 잰 높이(AGL)다 — 지형 자료로 그 자리 땅 높이를 빼고,
+// SIM 에서 함정 갑판 위면 갑판에서 잰다(전파가 갑판에서 돌아온다). 지형을 아직 모르면
+// 해수면에서 잰다(바다 위와 같다). PFD 오른쪽 아래 CRHT 창이 이 값이고, CRHT 는 이
+// 높이를 지킨다.
 function radarGroundFt() {
+  try {
+    if (typeof simModeOn !== 'undefined' && simModeOn && typeof _simGndFresh !== 'undefined' && _simGndFresh)
+      return simFloorFt();
+  } catch (e) { _swallow(e); }
   const g = terrainFtAt(S.lat, S.lon);
   return g === null ? 0 : g;
 }
@@ -799,7 +807,10 @@ function _update3dTrail() {
     geometry: { type: 'LineString', coordinates: S.trail.map(t => [t[1], t[0]]) }
   });
 }
-function updateShipTrail(){ shipTrailLine.setLatLngs(shipTrail.map(t=>[t[0],t[1]])); }
+function updateShipTrail(){
+  shipTrailLine.setLatLngs(shipTrail.map(t=>[t[0],t[1]]));
+  if (typeof updateShip3dTrail === 'function') updateShip3dTrail();   // 3D 지도의 함정 항적(09-cdu.js)
+}
 // ── 1인칭 Follow Mode ────────────────────────────────────────────────────
 // When active: 2D map centres on aircraft every frame;
 //              3D map additionally tracks heading and scales zoom with altitude.
@@ -851,6 +862,9 @@ const FOLLOW_FWD_FRAC = 0.25; // fraction of screen height the aircraft sits abo
 // 한 번 북쪽으로 맞춘다 — toggleMapOrient 참고)
 function _apply3dBearing() {
   if (!mapHdgUp || !_ml3d || !_ml3dReady || !_map3dShown()) return;
+  // SIM 1인칭은 카메라가 방위까지 직접 쥔다 — 여기서 따로 돌리면 먼 시선점을
+  // 축으로 카메라가 휘둘린다
+  if (simModeOn) return;
   if (Math.abs(normAS(_ml3d.getBearing() - S.hdg)) < 0.3) return;
   _ml3d.easeTo({ bearing: S.hdg, duration: 0, easing: t => t });
 }
@@ -888,8 +902,247 @@ function _follow3d() {
     // N↑ 를 골라 놔도 3D 만 늘 기수 위로 돌아, 버튼이 3D 에서는 없는 것과 같았다.
     // N↑ 에서는 bearing 을 넣지 않는다(사용자가 손으로 돌려 둔 각도를 지운다).
     if (mapHdgUp) opt.bearing = S.hdg;
+    // ── SIM 모드: 조종석에서 내다보는 1인칭 ──
+    // 카메라를 헬기 자리·고도에 그대로 놓고, 방위·자세·뱅크를 그대로 준다.
+    // (maplibre 5 는 카메라를 180° 까지 들고 롤도 받는다 — 그래서 기수를 들면
+    //  정말로 하늘을 보고, 기울이면 지평선이 그대로 기운다. 화면을 돌리거나
+    //  밀어 흉내 내던 종전 방식은 더 쓰지 않는다.)
+    if (simModeOn) {
+      try { syncChinView(); } catch (e) { _swallow(e); }   // 아래 좌·우 CHIN 창(04-map.js)
+      _ml3dSimCamera();
+      _apply3dRoll();
+      return;
+    }
+    opt.roll = 0;                 // SIM 에서 나온 뒤 기울어진 채 남지 않게
     _ml3d.easeTo(opt);
+    _apply3dRoll();
   }
+}
+
+// 뱅크(자세계)는 카메라로 줄 수 없다(이 maplibre 는 roll 을 받지 않는다).
+// 그래서 2D 의 HDG↑ 와 같은 방법을 쓴다 — 화면을 반대로 돌리고, 돌려서 비는
+// 모서리는 그만큼 키워 덮는다. 축척이 조금 커지지만 시야가 깨지지 않는다.
+// 수평 비행에서의 카메라 각도. 지도 엔진은 85° 까지만 기울일 수 있어(그 위는
+// 지평선 너머라 그릴 것이 없다) 기준을 낮춰 두어야 기수를 들었을 때 위를 볼
+// 여유가 생긴다. 78° 로 두면 기수 6° 에서 벌써 끝에 닿았다.
+const SIM_EYE_MIN_M = 3;      // 조종석 눈높이(m) — 기체 높이 위에 늘 더한다(땅에서 뜨는 순간부터 오르는 게 보이게)
+// 눈높이의 바닥 — 지면, 함정 위에서는 갑판(지면 위 m). 갑판 끝을 넘는 순간 바닥이
+// 한 번에 7m 바뀌므로 시선이 덜컥 뛰지 않게 잠깐(0.4초)에 걸쳐 따라간다.
+let _simEyeFloor = null, _simEyeT = 0;
+function _simEyeFloorM(physM) {
+  let tgt = 0;
+  try { if (typeof simFloorFt === 'function') tgt = Math.max(0, simFloorFt() * 0.3048 - physM); }
+  catch (e) { _swallow(e); }
+  const now = performance.now();
+  const dt = _simEyeT ? Math.min(0.25, (now - _simEyeT) / 1000) : 0;
+  _simEyeT = now;
+  if (_simEyeFloor === null || !(dt > 0)) _simEyeFloor = (_simEyeFloor === null) ? tgt : _simEyeFloor;
+  else _simEyeFloor += (tgt - _simEyeFloor) * Math.min(1, dt / 0.4);
+  return _simEyeFloor;
+}
+
+// ── 3D 화면 속 기체의 높이(m, 그려진 높이) ──
+// 그려진 땅은 지형을 과장해(×MAP3D_EXAG) 그리고, 지형 타일이 더 자세한 것으로 바뀔
+// 때마다 높이가 조금씩 달라진다. '그려진 땅 + AGL' 에 그대로 놓으면 산 위를 지날 때
+// 그 기복(과장된 몫)과 타일이 바뀌는 순간의 튐이 기체·카메라에 그대로 실려 위아래로
+// 튄다. 그래서 '고도(MSL) + (그려진 땅 − 실제 땅)' 에 놓되, 괄호 안은 천천히
+// (VIS_TERR_TAU) 따라가게 거른다. 땅 가까이(AGL VIS_NEAR_M 아래)에서는 그려진 땅에
+// 그대로 앉도록 점점 정확한 값(그려진 땅 + AGL)으로 바꾸고, 그려진 땅 아래로는 내려가지
+// 않는다. 1인칭 카메라와 흰수리 모형(15-heli3d.js)이 같은 값을 쓴다.
+const VIS_TERR_TAU = 1.5;     // 지형 몫을 따라가는 시간(s)
+const VIS_NEAR_M   = 40;      // 이 높이(AGL, m) 아래에서는 점점 그려진 땅에 맞춘다
+let _visOff = null, _visT = 0, _visAt = null;
+function simVisAlt(map) {
+  map = map || _ml3d;
+  let rendM = null;
+  try { rendM = map.queryTerrainElevation([S.lon, S.lat]); } catch (e) { rendM = null; }
+  let physM = null;
+  try {
+    if (typeof simModeOn !== 'undefined' && simModeOn && typeof _simGndFresh !== 'undefined' && _simGndFresh)
+      physM = simGroundFt() * 0.3048;
+  } catch (e) { physM = null; }
+  // 바다는 해수면이 바닥이다 — 지형 자료에는 바다 밑 수심이 들어 있다(simTerrainFt 와 같다)
+  if (physM === null) physM = Number.isFinite(rendM) ? Math.max(0, rendM / MAP3D_EXAG) : 0;
+  const drawnM = Number.isFinite(rendM) ? rendM : physM * MAP3D_EXAG;
+  const altM = S.alt * 0.3048, agl = Math.max(0, altM - physM);
+  const tgt = drawnM - physM;
+  const now = performance.now();
+  const dt = _visT ? (now - _visT) / 1000 : 0;
+  _visT = now;
+  // 처음이거나, 오래 쉬었거나, 멀리 옮겨 왔으면(배치·리셋) 곧바로 맞춘다
+  const moved = !_visAt || Math.abs(_visAt[0] - S.lat) + Math.abs(_visAt[1] - S.lon) > 0.01;
+  if (_visOff === null || moved || dt > 2) _visOff = tgt;
+  else _visOff += (tgt - _visOff) * Math.min(1, dt / VIS_TERR_TAU);
+  _visAt = [S.lat, S.lon];
+  const exact = drawnM + agl, smooth = altM + _visOff;
+  const w = Math.max(0, Math.min(1, agl / VIS_NEAR_M));
+  return { alt: Math.max(drawnM, exact + (smooth - exact) * w), agl, drawn: drawnM, phys: physM };
+}
+
+// ── 1인칭 카메라(SIM 모드) ──
+//   · 자리   = 헬기 위경도
+//   · 높이   = 화면 속 기체 높이(simVisAlt — 그려진 지면 + AGL, 지형 기복은 걸러서)
+//   · 방위   = 기수(방향지시계)
+//   · 기울기 = 90° + 기수 자세(자세계) — 수평 비행이면 지평선이 화면 한가운데,
+//              기수를 들면 90° 를 넘어 하늘을, 숙이면 땅을 본다
+//   · 롤     = 뱅크(자세계) — 오른쪽으로 기울이면 지평선의 오른쪽이 올라간다
+//              (PFD 의 ADI 와 같은 쪽). maplibre 의 롤 + 가 바로 그 방향이다.
+const SIM_VIEW_DOWN = 5;   // 1인칭 기본 시선을 기체 자세보다 숙이는 각(°) — 기수 그림은 화면 같은 자리에 둔다
+// 그 숙임은 저속(접근·함정 이착함 — 발밑 갑판을 보려고)에서만 다 준다. 속도가 붙을수록 줄여
+// 순항(120kt)에서는 0° — 수평 자세면 지평선이 화면 한가운데에 와서, 외부 시점(EXT)에서
+// 본 기체 자세와 조종석에서 본 목측이 같아진다(종전에는 120kt 에서도 5° 숙여 기수를 숙인 듯 보였다).
+const SIM_VIEW_DOWN_KT0 = 40, SIM_VIEW_DOWN_KT1 = 120;
+function simViewDown() {
+  const v = Math.abs(Number(S.spd) || 0);
+  const k = Math.max(0, Math.min(1, (SIM_VIEW_DOWN_KT1 - v) / (SIM_VIEW_DOWN_KT1 - SIM_VIEW_DOWN_KT0)));
+  return SIM_VIEW_DOWN * k;
+}
+function _ml3dSimCamera() {
+  if (!_ml3d || typeof _ml3d.calculateCameraOptionsFromCameraLngLatAltRotation !== 'function') return;
+  // 1인칭 ⇄ 외부 시점이 바뀌는 중 — 두 카메라 자리 사이를 옮긴다(15-heli3d.js simCamTx)
+  if (typeof simCamTx !== 'undefined' && simCamTx && typeof heli3dExtPose === 'function') {
+    const cp = _simCockpitPose(), ep = heli3dExtPose();
+    if (cp && ep) {
+      const k = simCamTxK(), w = simCamTx.toExt ? k : 1 - k;      // w: 외부 시점 쪽 몫
+      const L = (a, b) => a + (b - a) * w, A = (a, b) => normA(a + normAS(b - a) * w);
+      try { _ml3d.jumpTo(_ml3dCamOptions(L(cp.lon, ep.lon), L(cp.lat, ep.lat), L(cp.alt, ep.alt), A(cp.bearing, ep.bearing),
+                                         L(cp.pitch, ep.pitch), L(cp.roll, ep.roll), L(cp.dist, ep.dist))); } catch (e) { _swallow(e); }
+      try { if (typeof heli3dNoseSync === 'function') heli3dNoseSync(null); } catch (e) { _swallow(e); }
+      return;
+    }
+  }
+  // 외부 시점 — 뒤에서 따라가며 내 헬기(15-heli3d.js 의 모형)를 본다
+  if (typeof simExtView !== 'undefined' && simExtView) { heli3dExtCamera(); return; }
+  // 카메라가 헬기 자리에 있어야 하므로 화면 중심을 지면에 묶지 않는다
+  try { if (_ml3d.getCenterClampedToGround && _ml3d.getCenterClampedToGround()) _ml3d.setCenterClampedToGround(false); }
+  catch (e) { _swallow(e); }
+  // 꼭 수평으로 볼 때(카메라 피치 90°) 화질이 떨어지지 않게(04-map.js) — 화질을 바꾸면
+  // 바탕을 새로 얹으므로 그때마다 다시 건다(이미 걸려 있으면 그냥 지나간다)
+  try { _map3dLodGuard(_ml3d); } catch (e) { _swallow(e); }
+  // 높이는 두 가지를 따로 본다.
+  //   · 지면 위 높이(AGL) — 비행 모델의 땅(착지 판정과 같은 값)에서 잰다
+  //   · 화면에 그려진 땅  — 지도가 실제로 그린 지형(과장비가 곱해져 있다)
+  // 카메라는 '그려진 땅 + AGL' 에 놓는다(simVisAlt). 그래야 지형 타일이 아직 안 왔든
+  // 왔든, 화면 속 땅에서 늘 고도계만큼 떠 있다(파묻히지도 붕 뜨지도 않는다). 다만
+  // 공중에서는 지형의 기복·타일 바뀜이 카메라를 흔들지 않게 걸러서 따라간다.
+  const vis = simVisAlt();
+  const drawnM = vis.drawn;
+  // 종전에는 '땅 + 8m' 아래로 내려가지 않아 26ft 까지 떠도 화면이 그대로였다 — 이제 기체 높이 + 눈높이
+  const camAlt = Math.max(vis.alt, drawnM + _simEyeFloorM(vis.phys)) + SIM_EYE_MIN_M;
+  const aglM = camAlt - drawnM;
+  // 시선(둘러보기)을 기체 자세 위에 얹는다
+  let look = { yaw: 0, pitch: 0 };
+  try { if (typeof simLookStep === 'function') look = simLookStep(); } catch (e) { _swallow(e); }
+  // 기본 시선은 기체 자세보다 simViewDown()(저속 5° → 120kt 0°) 아래 — 함정 이착함 때 발밑 갑판이 잘 보이게
+  const r = _ml3dCamRot(S.hdg, S.pit, S.bnk, look.yaw, look.pitch - simViewDown());
+  const pitch = Math.max(0, Math.min(180, 90 + r.pitch));
+  // 화면 아래 가운데의 내 헬기 기수(15-heli3d.js) — 고개를 돌리면 비켜 간다
+  try { if (typeof heli3dNoseSync === 'function') heli3dNoseSync(look); } catch (e) { _swallow(e); }
+  // 화면 중심까지의 거리 — 낮게 날수록 가깝게(눈높이 × 20, 200m…10km)
+  const dist = Math.max(200, Math.min(10000, aglM * 20));
+  let o;
+  try { o = _ml3dCamOptions(S.lon, S.lat, camAlt, r.yaw, pitch, r.roll, dist); }
+  catch (e) {
+    _swallow(e);
+    o = _ml3d.calculateCameraOptionsFromCameraLngLatAltRotation([S.lon, S.lat], camAlt, r.yaw, pitch, r.roll);
+  }
+  _ml3d.jumpTo(o);
+  _simEye = { lon: S.lon, lat: S.lat, alt: camAlt, agl: aglM };
+  _ml3dChinCamera();
+}
+// ── CHIN 창의 카메라(SIM 1인칭) ──
+// 눈 자리는 정면 시야와 같다(_ml3dSimCamera 가 잰 자리). 기체 바닥에 난 창이므로
+// 기체 자세를 따라 돌고(고개 돌리기는 따르지 않는다), 좌우로 벌려 앞아래를 본다.
+// 정면 시야(±18°)와 계기판에 가린 틈을 건너 그 아래를 보여 준다.
+const CHIN_YAW   = 15;    // 좌우로 벌린 각(°)
+const CHIN_PITCH = -50;   // 기체 기준으로 내려다보는 각(°)
+let _simEye = null;       // 마지막으로 놓은 눈 자리 { lon, lat, alt(m, 그려진 높이), agl(m) }
+let _chinCamT = 0;
+function _ml3dChinCamera(force) {
+  if (typeof _chinMaps === 'undefined' || !_chinMaps.length || !_simEye) return;
+  // 화질에 따라 덜 자주 그린다(04-map.js MAP3D_QUALITY.chinHz)
+  const hz = (typeof map3dQuality !== 'undefined') ? MAP3D_QUALITY[map3dQuality].chinHz : 0;
+  const now = performance.now();
+  if (!force && hz && now - _chinCamT < 1000 / hz - 2) return;
+  _chinCamT = now;
+  const eye = _simEye;
+  _chinMaps.forEach(c => {
+    const m = c.map;
+    if (!m || !m.transform || !(m.transform.height > 0)) return;
+    const r = _ml3dCamRot(S.hdg, S.pit, S.bnk, c.side * CHIN_YAW, CHIN_PITCH);
+    const pitch = Math.max(0, Math.min(180, 90 + r.pitch));
+    // 화면 중심은 내려다보는 땅 — 지평선 아래로 보는 각이 얕으면 멀리(최대 10km)
+    const down = Math.max(5, -r.pitch);
+    const dist = Math.max(30, Math.min(10000, eye.agl / Math.sin(down * D2R)));
+    try { m.jumpTo(_ml3dCamOptions(eye.lon, eye.lat, eye.alt, r.yaw, pitch, r.roll, dist, m)); }
+    catch (e) { _swallow(e); }
+  });
+}
+// 카메라를 '이 자리 · 이 높이 · 이 방향' 에 놓는 지도 카메라 값.
+// maplibre 의 calculateCameraOptionsFromCameraLngLatAltRotation 과 같은 셈이다. 다만
+// 거의 수평으로 볼 때 그 함수는 화면 중심을 10km 밖에 두어(줌 ≈ 13) 가까운 클립면이
+// 130m 쯤 된다 — 그보다 가까운 것(내려앉은 함정의 갑판·함교, 발밑 지면)이 잘려
+// 보이지 않는다. 중심까지의 거리(dist, m)를 직접 정해 가까운 것도 그리게 한다.
+// map 을 주면 그 지도(CHIN 창)의 화면 크기로 줌을 셈한다.
+function _ml3dCamOptions(lon, lat, alt, bearing, pitch, roll, dist, map) {
+  const MC = maplibregl.MercatorCoordinate;
+  const cam = MC.fromLngLat([lon, lat], alt);
+  const pr = pitch * D2R, br = bearing * D2R;
+  const dx = Math.sin(pr) * Math.sin(br), dy = -Math.sin(pr) * Math.cos(br);
+  // 메르카토르 축척은 위도마다 달라 중심 자리에서 다시 재며 몇 번 맞춘다
+  let mpu = 1 / cam.meterInMercatorCoordinateUnits(), u = 0, c = cam;
+  for (let i = 0; i < 4; i++) {
+    u = dist / mpu;
+    c = new MC(cam.x + dx * u, cam.y + dy * u, 0);
+    mpu = 1 / c.meterInMercatorCoordinateUnits();
+  }
+  const tr = (map || _ml3d).transform;
+  const fov = Number.isFinite(tr.fovInRadians) ? tr.fovInRadians : tr.fov * D2R;
+  const zoom = Math.log2(tr.height / 2 / Math.tan(fov / 2) / u / (tr.tileSize || 512));
+  const ll = c.toLngLat();
+  return { center: [ll.lng, ll.lat], elevation: alt - dist * Math.cos(pr), zoom, bearing, pitch, roll };
+}
+// 기체 자세(방위·피치·뱅크) 위에 고개 돌림(좌우·위아래)을 얹은 카메라 방향.
+// 그냥 더하면 안 된다 — 오른쪽 뱅크에서 오른쪽을 보면 시선은 땅 쪽으로 내려가야
+// 하는데, 각도를 더하기만 하면 화면이 기울 뿐 내려다보지 않는다. 그래서
+// 회전을 곱으로 합친 뒤 방위·피치·롤을 다시 꺼낸다(NED 좌표, ZYX 순서).
+//   기체 R = Rz(방위)·Ry(피치)·Rx(뱅크),  고개 H = Rz(좌우)·Ry(위아래),  카메라 = R·H
+function _ml3dCamRot(hdg, pit, bnk, lookYaw, lookPit) {
+  if (!lookYaw && !lookPit) return { yaw: hdg, pitch: pit, roll: bnk };
+  const rz = (a) => { const c = Math.cos(a), s = Math.sin(a); return [[c, -s, 0], [s, c, 0], [0, 0, 1]]; };
+  const ry = (a) => { const c = Math.cos(a), s = Math.sin(a); return [[c, 0, s], [0, 1, 0], [-s, 0, c]]; };
+  const rx = (a) => { const c = Math.cos(a), s = Math.sin(a); return [[1, 0, 0], [0, c, -s], [0, s, c]]; };
+  const mul = (A, B) => A.map((row, i) => B[0].map((_, j) => row[0] * B[0][j] + row[1] * B[1][j] + row[2] * B[2][j]));
+  const C = mul(mul(mul(rz(hdg * D2R), ry(pit * D2R)), rx(bnk * D2R)),
+                mul(rz(lookYaw * D2R), ry(lookPit * D2R)));
+  const p = Math.asin(Math.max(-1, Math.min(1, -C[2][0])));
+  return { yaw: normA(Math.atan2(C[1][0], C[0][0]) / D2R),
+           pitch: p / D2R,
+           roll: Math.atan2(C[2][1], C[2][2]) / D2R };
+}
+// SIM 모드에서 나올 때 — 지면 묶기와 롤을 되돌린다
+// 1인칭 카메라 자리·방향(시점 전환 효과가 쓴다 — 둘러보기는 가운데로 본다)
+function _simCockpitPose() {
+  const vis = simVisAlt();
+  const camAlt = Math.max(vis.alt, vis.drawn + _simEyeFloorM(vis.phys)) + SIM_EYE_MIN_M;
+  const r = _ml3dCamRot(S.hdg, S.pit, S.bnk, 0, -simViewDown());
+  const pitch = Math.max(0, Math.min(180, 90 + r.pitch));
+  const dist = Math.max(200, Math.min(10000, (camAlt - vis.drawn) * 20));
+  return { lon: S.lon, lat: S.lat, alt: camAlt, bearing: r.yaw, pitch, roll: r.roll, dist };
+}
+function _ml3dSimCameraOff() {
+  if (!_ml3d) return;
+  try { if (_ml3d.setCenterClampedToGround) _ml3d.setCenterClampedToGround(true); } catch (e) { _swallow(e); }
+  try { _ml3d.jumpTo({ roll: 0, pitch: Math.min(_ml3d.getPitch(), _ml3dPitch) }); } catch (e) { _swallow(e); }
+}
+// 종전에는 뱅크·기수 자세를 화면을 돌리고 밀어 흉내 냈다. 이제 카메라가 직접
+// 하므로 그 흔적만 지운다(예전 상태가 남아 있을 수 있으므로 한 번 더 본다).
+function _apply3dRoll() {
+  const el = document.getElementById('map3d');
+  if (!el) return;
+  if (el.style.transform) { el.style.transform = ''; el.style.transformOrigin = ''; }
+  const par = el.parentElement;
+  if (par && par.dataset.bg0 !== undefined) { par.style.background = par.dataset.bg0; delete par.dataset.bg0; }
 }
 function _follow2d() {
   {

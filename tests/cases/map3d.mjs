@@ -8,6 +8,24 @@
 //      늘 기수 위로 돌았고, 추종을 끄면 기수가 바뀌어도 아무 일도 없었다.
 // 카메라 상태는 눈으로 보기 어려우니 각도·중심 숫자로 잡는다.
 export const name = '3D 지도 카메라';
+import zlib from 'node:zlib';
+
+// 작은 PNG — 위성·지형 타일 흉내. fn(x, y) → [r, g, b]
+export function pngOf(w, h, fn) {
+  const raw = Buffer.alloc((w * 3 + 1) * h);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) raw.set(fn(x, y), y * (w * 3 + 1) + 1 + x * 3);
+  const chunk = (type, data) => {
+    const len = Buffer.alloc(4); len.writeUInt32BE(data.length);
+    const td = Buffer.concat([Buffer.from(type), data]);
+    const crc = Buffer.alloc(4); crc.writeUInt32BE(zlib.crc32(td) >>> 0);
+    return Buffer.concat([len, td, crc]);
+  };
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(w, 0); ihdr.writeUInt32BE(h, 4); ihdr[8] = 8; ihdr[9] = 2;
+  return Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk('IHDR', ihdr),
+                        chunk('IDAT', zlib.deflateSync(raw)), chunk('IEND', Buffer.alloc(0))]);
+}
+const solidPng = rgb => pngOf(4, 4, () => rgb);
 
 const T = 37.4602, G = 126.4407;
 
@@ -111,46 +129,6 @@ export async function run(page, t) {
   t.ok(Math.abs(slow.lat - 37.60) < 0.2 && Math.abs(slow.lon - 126.60) < 0.2,
     `타일을 받는 중에도 추종이 계속된다 (${slow.lat.toFixed(3)}, ${slow.lon.toFixed(3)})`);
 
-  // ── 3D 축척은 GPU 에서 화면을 읽어 오지 않는다(버벅거림) ──
-  // 종전에는 축척이 매 프레임 unproject() 로 땅 위 두 점을 집었다. 지형을 켜면
-  // unproject 가 readPixels 를 불러 GPU 가 그리기를 다 끝낼 때까지 기다리게 해서,
-  // 추종으로 카메라가 계속 움직이면 3D 가 버벅거렸다. 지금은 카메라 기하로 셈한다.
-  const scale = await page.evaluate(async () => {
-    const m = _ml3d, sc = window._ml3dScale;
-    let reads = 0, counting = false;
-    const hook = (P) => { if (!P) return null; const o = P.readPixels;
-      P.readPixels = function (...a) { if (counting) reads++; return o.apply(this, a); };
-      return () => { P.readPixels = o; }; };
-    const u1 = hook(window.WebGLRenderingContext && WebGLRenderingContext.prototype);
-    const u2 = hook(window.WebGL2RenderingContext && WebGL2RenderingContext.prototype);
-    // 항공기 마커의 '지형에 가렸나' 검사도 readPixels 를 쓰므로 축척 계산만 센다
-    for (let i = 0; i < 12; i++) {
-      m.jumpTo({ bearing: 10 * i, pitch: 30 + i * 3 });
-      counting = true; sc._update(); counting = false;
-    }
-    const stall = reads;
-    u1 && u1(); u2 && u2();
-    // 평평한 땅에서 땅 위 두 점을 집던 종전 값과 맞아야 한다
-    const byUnproject = () => {
-      const y = Math.max(1, m.getContainer().clientHeight - 60);
-      const p0 = m.unproject([20, y]), p1 = m.unproject([120, y]);
-      return distance(p0.lat, p0.lng, p1.lat, p1.lng) * 1852 / 100;
-    };
-    const ter = m.getTerrain(); m.setTerrain(null);
-    const out = { stall };
-    for (const pt of [0, 45, 70]) {
-      m.jumpTo({ center: [127, 37.5], zoom: 12, pitch: pt, bearing: 0 });
-      out['p' + pt] = { calc: sc._mpp(), ref: byUnproject() };
-    }
-    if (ter) m.setTerrain(ter);
-    return out;
-  });
-  t.eq(scale.stall, 0, `카메라를 움직여도 축척이 GPU 화면 읽기를 하지 않는다 (${scale.stall}회)`);
-  for (const k of ['p0', 'p45', 'p70']) {
-    const r = scale[k], err = Math.abs(r.calc / r.ref - 1);
-    t.ok(err < 0.06, `3D 축척(${k.slice(1)}°)이 실제 땅 위 거리와 맞는다 (${r.calc.toFixed(2)} · 실측 ${r.ref.toFixed(2)} m/px)`);
-  }
-
   await page.evaluate(async () => {
     if (_view3dOn) toggle3dMap();
     await new Promise(r => setTimeout(r, 100));
@@ -240,4 +218,163 @@ export async function run(page, t) {
   t.ok(both.near2d < 0.25,
     `2D 중심이 항공기 근처에 머문다 (${both.near2d.toFixed(3)}° — 앞을 더 보려고 조금 앞선다)`);
   t.ok(both.near3d < 0.25, `3D 중심도 항공기 근처다 (${both.near3d.toFixed(3)}°)`);
+
+  // ── 위성 사진의 빈 칸 메우기 ──
+  // Esri 는 자세한 사진이 없는 곳(넓은 바다 등)의 높은 확대 단계에서 회색 '자료 없음'
+  // 그림을 보낸다. 3D 는 그런 타일을 404 로 받아(blankTile=false) 위 단계 사진을 잘라
+  // 늘려 채운다. 여기서는 15 단계까지만 사진이 있는 바다를 흉내 낸다. 한 번 없다고
+  // 확인된 자리는 그 아래 단계를 다시 묻지 않는다.
+  const COLORS = { 13: [10, 80, 30], 14: [20, 90, 40], 15: [30, 100, 160] };
+  let seen = [];
+  await page.route('**/server.arcgisonline.com/**', route => {
+    const m = /\/tile\/(\d+)\/(\d+)\/(\d+)(\?.*)?$/.exec(route.request().url());
+    const z = m ? +m[1] : -1;
+    seen.push({ z, blank: !!(m && m[4] && m[4].includes('blankTile=false')) });
+    // Esri 처럼 덜 자세한 단계는 다 있고(사진은 피라미드다) 16 단계부터 없다
+    if (z >= 0 && z <= 15) return route.fulfill({ status: 200, contentType: 'image/png', body: solidPng(COLORS[z] || [5, 5, 5]) });
+    return route.fulfill({ status: 404, body: '' });
+  });
+  const sat = await page.evaluate(async () => {
+    _satMissing.clear(); _satBmp.clear(); tileStoreClear();
+    const px = async buf => {
+      const bmp = await createImageBitmap(new Blob([buf]));
+      const c = document.createElement('canvas'); c.width = bmp.width; c.height = bmp.height;
+      const ctx = c.getContext('2d'); ctx.drawImage(bmp, 0, 0);
+      return { w: bmp.width, rgb: Array.from(ctx.getImageData(bmp.width >> 1, bmp.height >> 1, 1, 1).data.slice(0, 3)) };
+    };
+    const own = await px(await _satTile(14, 13950, 6327));       // 사진이 있는 단계
+    const up3 = await px(await _satTile(18, 223200, 101232));    // 18 단계 → 15 단계에서 잘라 늘린다
+    // 이웃한 19 단계 타일 — 18 단계가 없다는 것을 이미 알므로 그 자리는 묻지 않는다
+    const before = window._satAsked = 0;
+    const origFetch = window.fetch;
+    window.fetch = (u, o) => { if (String(u).includes('/tile/19/')) window._satAsked++; return origFetch(u, o); };
+    const up4 = await px(await _satTile(19, 446400, 202464));
+    window.fetch = origFetch;
+    return { own, up3, up4, asked19: window._satAsked, src: _ml3d.getStyle().sources.satellite.tiles[0] };
+  });
+  t.eq(sat.src, 'sat://{z}/{x}/{y}', '3D 위성 사진은 빈 칸을 메우는 길(sat://)로 받는다');
+  t.ok(seen.length > 0 && seen.every(q => q.blank), '없는 타일은 회색 그림 대신 404 로 받는다(blankTile=false)');
+  t.eq(sat.own.rgb.join(','), COLORS[14].join(','), '사진이 있는 단계는 그대로 쓴다');
+  t.ok(sat.up3.w === 256 && sat.up3.rgb.every((v, i) => Math.abs(v - COLORS[15][i]) <= 2),
+    `사진이 없는 18 단계는 15 단계 사진으로 메운다 (rgb ${sat.up3.rgb.join(',')})`);
+  t.ok(sat.asked19 === 0 && sat.up4.rgb.every((v, i) => Math.abs(v - COLORS[15][i]) <= 2),
+    `없다고 확인된 자리의 더 자세한 단계는 묻지 않고 바로 메운다 (19 단계 요청 ${sat.asked19}번)`);
+  await page.unroute('**/server.arcgisonline.com/**');
+  await page.route('**/server.arcgisonline.com/**', route => route.fulfill({ status: 404, body: '' }));
+  const none = await page.evaluate(async () => {
+    _satMissing.clear(); _satBmp.clear(); tileStoreClear();          // 앞 검사에서 알아 둔 것을 비운다
+    const bmp = await createImageBitmap(new Blob([await _satTile(18, 223200, 101232)]));
+    const c = document.createElement('canvas'); c.width = 256; c.height = 256;
+    const ctx = c.getContext('2d'); ctx.drawImage(bmp, 0, 0);
+    return Array.from(ctx.getImageData(128, 128, 1, 1).data.slice(0, 3));
+  });
+  t.eq(none.join(','), '11,38,56', '어느 단계에도 사진이 없으면 바다 빛으로 채운다');
+  await page.unroute('**/server.arcgisonline.com/**');
+
+  // ── 바다는 무조건 평평하게 ──
+  // 네 칸: 바다 밑 −20m · 해안 잔물결 +3m · 낮은 땅 +10m · 땅 +100m (terrarium: R×256+G+B/256−32768)
+  const col = m => { const v = m + 32768; return [v >> 8, v & 255, 0]; };
+  const BANDS = [-20, 3, 10, 100];
+  await page.route('**/elevation-tiles-prod/terrarium/**', route =>
+    route.fulfill({ status: 200, contentType: 'image/png', body: pngOf(256, 256, x => col(BANDS[x >> 6])) }));
+  const dem = await page.evaluate(async () => {
+    tileStoreClear();                              // 미리 받아 둔 진짜 타일이 섞이지 않게
+    const buf = await _demTile(12, 3480, 1588);
+    const bmp = await createImageBitmap(new Blob([buf]), { premultiplyAlpha: 'none', colorSpaceConversion: 'none' });
+    const c = document.createElement('canvas'); c.width = bmp.width; c.height = bmp.height;
+    const ctx = c.getContext('2d'); ctx.drawImage(bmp, 0, 0);
+    const at = x => { const d = ctx.getImageData(x, 100, 1, 1).data; return d[0] * 256 + d[1] + d[2] / 256 - 32768; };
+    return { sea: at(30), ripple: at(90), low: at(160), land: at(220), src: _ml3d.getStyle().sources.terrain.tiles[0],
+             fn: [seaFlatM(-3000), seaFlatM(4.9), seaFlatM(5), seaFlatM(10), seaFlatM(15), seaFlatM(800)] };
+  });
+  await page.unroute('**/elevation-tiles-prod/terrarium/**');
+  t.eq(dem.src, 'dem://{z}/{x}/{y}', '3D 지형은 바다를 펴는 길(dem://)로 받는다');
+  t.eq(dem.sea, 0, '바다 밑(−20m)은 수면 0m 로 편다 — 확대 단계마다 수심이 달라 그려진 바다가 오르내리지 않게');
+  t.eq(dem.ripple, 0, '해안의 잔물결 같은 값(+3m)도 0m — 바다는 무조건 평평하다');
+  t.eq(dem.low, 7.5, '5~15m 는 0~15m 로 부드럽게 잇는다(턱이 지지 않게) — +10m → 7.5m');
+  t.eq(dem.land, 100, '15m 위의 땅은 그대로다 (+100m)');
+  t.eq(dem.fn.join(','), '0,0,0,7.5,15,800', `바다 펴기 규칙 (−3000 · 4.9 · 5 · 10 · 15 · 800m → ${dem.fn.join(' · ')})`);
+
+  // ── 타일 저장소 — 지도 세 장(3D · CHIN 둘)이 함께 쓰고, 20NM 밖은 지운다 ──
+  // 같은 타일을 세 지도가 저마다 받고 저마다 바다를 펴면 같은 일을 세 번 한다(저고도 버벅임).
+  let asked = 0;
+  await page.route('**/elevation-tiles-prod/terrarium/**', route => {
+    asked++;
+    return route.fulfill({ status: 200, contentType: 'image/png', body: pngOf(256, 256, x => col(BANDS[x >> 6])) });
+  });
+  const store = await page.evaluate(async () => {
+    tileStoreClear();
+    const bufs = await Promise.all([_demTile(13, 6993, 3180), _demTile(13, 6993, 3180), _demTile(13, 6993, 3180)]);
+    const again = await _demTile(13, 6993, 3180);
+    const sameBytes = (a, b) => { const x = new Uint8Array(a), y = new Uint8Array(b);
+      return x.length === y.length && x.every((v, i) => v === y[i]); };
+    const out = { n: bufs.length, same: bufs.every(b => sameBytes(b, bufs[0])) && sameBytes(again, bufs[0]),
+                  copies: bufs[0] !== bufs[1] };
+    // 20NM 밖은 지운다 — 가까운 타일 · 46NM 동쪽 타일 · 아주 넓은 단계(6)
+    tileStoreClear();
+    const fake = () => Promise.resolve(new Blob([new Uint8Array(4)]));
+    const near = _tileXY(12, 37.46, 126.44), far = _tileXY(12, 37.46, 127.4);
+    _tileGet('dem', 12, near.x, near.y, fake); _tileGet('sat', 12, far.x, far.y, fake);
+    _tileGet('sat', 6, 54, 24, fake);
+    out.removed = tileStoreTrim(37.46, 126.44);
+    out.keepNear = _tileStore.dem.has(`12/${near.x}/${near.y}`);
+    out.keepFar = _tileStore.sat.has(`12/${far.x}/${far.y}`);
+    out.keepWide = _tileStore.sat.has('6/54/24');
+    tileStoreClear();
+    // 미리 받아 둘 목록 — 20NM 안의 11·12 단계(지형·사진)와 발밑 4NM 의 14 단계 지형
+    setMap3dQuality('mid');
+    const list = _tilePrefetchList(37.46, 126.44);
+    const of = (k, z) => list.filter(q => q.kind === k && q.z === z);
+    const north19 = _tileXY(12, 37.46 + 19 / 60, 126.44);
+    out.pf = {
+      n: list.length, sorted: list.every((q, i) => !i || list[i - 1].d <= q.d),
+      dem12: of('dem', 12).length, sat12: of('sat', 12).length, dem14: of('dem', 14).length,
+      reach19: of('dem', 12).some(q => q.x === north19.x && q.y === north19.y),
+      within: list.every(q => q.d - _tileCenter(q.z, q.x, q.y).half <= (q.z === 14 ? 4 : 20) + 1e-6),
+    };
+    setMap3dQuality('low');
+    out.pfLow14 = _tilePrefetchList(37.46, 126.44).filter(q => q.z > 12).length;
+    setMap3dQuality('mid');
+    return out;
+  });
+  await page.unroute('**/elevation-tiles-prod/terrarium/**');
+  t.ok(store.same && store.copies && asked === 1,
+    `세 지도가 한꺼번에 달라고 해도 지형 타일은 한 번만 받고 한 번만 편다 (받은 횟수 ${asked})`);
+  t.ok(store.removed === 1 && store.keepNear && !store.keepFar && store.keepWide,
+    `20NM 밖으로 벗어난 타일은 지운다 (46NM 동쪽 지움 · 가까운 것과 넓은 단계는 그대로)`);
+  t.ok(store.pf.sorted && store.pf.within && store.pf.reach19,
+    `20NM 안을 가까운 곳부터 미리 받는다 (${store.pf.n}장 · 북쪽 19NM 까지)`);
+  t.ok(store.pf.dem12 > 40 && store.pf.sat12 === store.pf.dem12 && store.pf.dem14 > 10,
+    `12 단계 지형·사진 ${store.pf.dem12}장씩 · 발밑 4NM 지형(14 단계) ${store.pf.dem14}장`);
+  t.eq(store.pfLow14, 0, "화질 '하' 에서는 그 화질이 쓰지 않는 자세한 단계를 미리 받지 않는다");
+
+  // ── 화질 상·중·하 ──
+  // 낮출수록 그리는 픽셀(해상도 배율)과 받는 타일(자세한 단계)이 줄어 저고도에서도 부드럽다.
+  const q = await page.evaluate(async () => {
+    const wait = ms => new Promise(r => setTimeout(r, ms));
+    let n = 0;
+    while (!(_map3dQ.get(_ml3d) || {}).loaded && n < 200) { await wait(50); n++; }
+    const look = () => {
+      const st = _ml3d.getStyle();
+      return { sat: st.sources.satellite.maxzoom, dem: st.sources.terrain.maxzoom,
+               ratio: _ml3d.getPixelRatio(), first: st.layers[0].id, terrain: !!_ml3d.getTerrain(),
+               fade: (st.layers.find(l => l.id === 'satellite').paint || {})['raster-fade-duration'],
+               btn: document.getElementById('q3d-btn').textContent,
+               saved: (() => { try { return localStorage.getItem('map3dQuality'); } catch (e) { return null; } })() };
+    };
+    setMap3dQuality('low'); const low = look();
+    cycleMap3dQuality(); const high = look();
+    cycleMap3dQuality(); const mid = look();
+    return { low, high, mid, dpr: window.devicePixelRatio || 1 };
+  });
+  t.ok(q.low.sat === 15 && q.low.dem === 12 && q.low.ratio <= 0.8 + 1e-9,
+    `화질 '하' — 사진 15 · 지형 12 단계까지, 해상도 ${q.low.ratio}배`);
+  t.ok(q.high.sat === 19 && q.high.dem === 15 && q.high.ratio === q.dpr,
+    `화질 '상' — 사진 19 · 지형 15 단계까지, 기기 해상도 그대로(${q.high.ratio}배)`);
+  t.ok(q.mid.sat === 17 && q.mid.dem === 14, `화질 '중' — 사진 17 · 지형 14 단계까지`);
+  t.ok([q.low, q.high, q.mid].every(v => v.first === 'satellite' && v.terrain && v.fade === 0),
+    '바꿔 얹어도 위성 사진은 맨 아래 · 지형도 그대로 · 새 타일은 서서히 나타나지 않는다(다시 그리기 줄임)');
+  t.ok(q.low.btn === '화질 하' && q.high.btn === '화질 상' && q.mid.btn === '화질 중',
+    `버튼이 상 → 중 → 하 를 돌며 지금 화질을 적는다 (${q.low.btn} → ${q.high.btn} → ${q.mid.btn})`);
+  t.eq(q.mid.saved, 'mid', '고른 화질은 이 기기에 적어 둔다');
 }

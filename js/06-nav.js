@@ -1140,6 +1140,7 @@ function parseDegrees(str) {
 //   · GPS 모드에서는 옮기지 않는다 — 위치는 수신기가 정한다.
 //   · 비행 중(FLY)이면 되묻는다 — 날고 있는 기체를 말없이 순간이동시키지 않는다.
 //   · 옮기면 항적을 지운다. 안 지우면 옛 자리에서 새 자리까지 선이 하나 그어진다.
+//   · 그 자리 지면(AGL 0)에 멈춰 세운다(지형 표고 — 14-simmode.js acPlaceOnGround).
 async function _fpOriginMoveAircraft(wp) {
   if (!wp || typeof gpsMode !== 'undefined' && gpsMode) return;
   const d = distance(S.lat, S.lon, wp.lat, wp.lon);
@@ -1154,9 +1155,11 @@ async function _fpOriginMoveAircraft(wp) {
   S.lat = wp.lat; S.lon = wp.lon;
   S.trail = []; try { updateTrail(); } catch(e) { _swallow(e); }
   S.lastT = null;                              // 옮긴 만큼을 속도로 적분하지 않게
+  // 출발지에서는 땅에 서 있다 — 고도를 그 자리 지면(AGL 0)에 맞추고 멈춰 세운다
+  try { if (typeof acPlaceOnGround === 'function') acPlaceOnGround(); } catch(e) { _swallow(e); }
   try { leafMap.setView([S.lat, S.lon], leafMap.getZoom(), { animate: false }); } catch(e) { _swallow(e); }
   try { updateAcOnMap(); updateNav(); updateCenterCoord(); } catch(e) { _swallow(e); }
-  uiToast(`항공기를 출발지 ${wp.ident || ''} 로 옮겼습니다.`);
+  uiToast(`항공기를 출발지 ${wp.ident || ''} 지면에 세웠습니다.`);
 }
 
 function pushWP(wp, phase){
