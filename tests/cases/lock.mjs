@@ -79,6 +79,7 @@ export async function run(page, t) {
                                           solo: _soloActive, cur: _soloCurrent, mode: sessionStorage.getItem('vfrStartMode'),
                                           lay: !!document.querySelector('#simlay.show'), sim: simModeOn,
                                           btns: [...document.querySelectorAll('#simlay .simlay-btn')].map(b => b.dataset.scr).join(','),
+                                          lbl3d: (document.querySelector('#simlay [data-scr="m3d"] b') || {}).textContent,
                                           simple: document.body.classList.contains('simple-mode'),
                                           sbar: [...document.querySelectorAll('#simple-bar [data-scr]')].map(b => b.textContent).join(','),
                                           pfdIn: !!document.getElementById('pfd-wrap') && document.getElementById('pfd-wrap').parentElement.id }));
@@ -97,11 +98,11 @@ export async function run(page, t) {
     'Cockpit Mode 를 고르면 3D 조종석(3D 를 화면 가득)으로 바로 열린다');
   t.ok(mc.end.reload.solo && mc.end.reload.cur === 'm3d', '같은 탭에서 새로고침해도 Cockpit Mode 로 열린다');
   t.ok(!mp.end.locked && !mp.end.solo && mp.end.mode === 'pc' && !mp.end.lay, 'PC 모드를 고르면 지금처럼(분할) 열린다');
-  if (simEd) t.ok(!ms.end.locked && ms.end.mode === 'sim' && ms.end.lay && ms.end.sim && ms.end.btns === 'pfd,m3d,map,cdu,ovhd,lcon,sysp',
+  if (simEd) t.ok(!ms.end.locked && ms.end.mode === 'sim' && ms.end.lay && ms.end.sim && ms.end.btns === 'pfd,m3d,map,cdu,ovhd,lcon,sysp' && ms.end.lbl3d === 'COCKPIT MODE',
     `SIM Mode 를 고르면 SIM 조종이 켜지고 창 배치판(화면마다 새 창 버튼)이 뜬다 (${ms.end.btns})`);
   else t.ok(await page.evaluate(() => { const b = document.getElementById('gate-mode-sim'); return !b || getComputedStyle(b).display === 'none'; }),
     '절차 훈련판 — 화면 고르기에 SIM Mode 가 없다');
-  t.ok(!mq.end.locked && mq.end.mode === 'simple' && mq.end.simple && mq.end.sbar === 'PFD,3D,MAP,CDU,UPPER,LOWER,SYSTEM' && mq.end.pfdIn === 'simple-host',
+  t.ok(!mq.end.locked && mq.end.mode === 'simple' && mq.end.simple && mq.end.sbar === 'PFD,COCKPIT,MAP,CDU,UPPER,LOWER,SYSTEM' && mq.end.pfdIn === 'simple-host',
     `Simple Mode 를 고르면 위 막대(창 이름 일곱)와 PFD 하나만 화면 가득 (${mq.end.sbar} · ${mq.end.pfdIn})`);
 
   // 비밀번호 글자는 앱 파일 어디에도 없다(SHA-256 값만 둔다)

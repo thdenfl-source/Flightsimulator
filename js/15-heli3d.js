@@ -795,6 +795,10 @@ function _ckPopEl(k) {
       '<button class="sim-btn" data-act="toggleConsolePop" data-arg="[null]" title="닫기">✕</button></div><div id="ck-pop-host"></div>';
   }
   if (p.parentElement !== Ly) Ly.appendChild(p);
+  if (!document.getElementById('ck-pop-map')) {
+    const m = document.createElement('canvas'); m.id = 'ck-pop-map';
+    document.getElementById('ck-pop-host').appendChild(m);
+  }
   const t = document.getElementById('ck-pop-title');
   if (t && t.textContent !== CKPIT_POP[k]) t.textContent = CKPIT_POP[k];
   p.dataset.k = k;
@@ -1067,8 +1071,30 @@ function ckMapDraw(g, x, y, w, h) {
   g.fillText('MAP', x + 6, y + fs * 1.2);
   g.restore();
 }
+// PFD 팝아웃 — FCP(오른쪽 칸) 아래 남는 자리에 움직이는 지도(기수 위). 비행 중 내 위치 · 방향을 한눈에
+function ckPopMapSync() {
+  const m = document.getElementById('ck-pop-map');
+  if (!m) return;
+  const host = document.getElementById('ck-pop-host'), pw = document.getElementById('pfd-wrap');
+  const bar = pw && pw.querySelector('.ctrl-bar');
+  const on = ckConPop === 'pfd' && _ck3dVisible() && !!host && !!bar && pw.parentElement === host && pw.classList.contains('fcp-side');
+  let st = null;
+  if (on) {
+    const top = bar.offsetHeight + 2, h = host.clientHeight - top;
+    if (h > 80) st = { left: bar.offsetLeft, top, width: bar.offsetWidth, height: h };
+  }
+  if (m.classList.contains('show') !== !!st) m.classList.toggle('show', !!st);
+  if (!st) return;
+  if (m.parentElement !== host) host.appendChild(m);
+  for (const k of ['left', 'top', 'width', 'height']) { const v = st[k] + 'px'; if (m.style[k] !== v) m.style[k] = v; }
+  const dpr = Math.min(2, window.devicePixelRatio || 1), W = Math.round(st.width * dpr), H = Math.round(st.height * dpr);
+  if (m.width !== W || m.height !== H) { m.width = W; m.height = H; }
+  const g = m.getContext('2d'); g.setTransform(1, 0, 0, 1, 0, 0);
+  try { ckMapDraw(g, 0, 0, W, H); } catch (e) { _swallow(e); }
+}
 setInterval(() => {
   try { ckpitDraw(); _ckWipeSync(); } catch (e) { _swallow(e); }
+  try { ckPopMapSync(); } catch (e) { _swallow(e); }
   // Cockpit Mode — 비행이 멈춰 있으면 지도가 카메라를 다시 놓지 않는다(updateAcOnMap 이 안 불린다). 여기서 조종석 시야를 붙든다
   try { if (ckCamOn() && !S.running && typeof _follow3d === 'function' && _ml3d) _follow3d(); } catch (e) { _swallow(e); }
 }, 100);
