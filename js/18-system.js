@@ -9,13 +9,25 @@
 const SYS_W = 1000, SYS_H = 630;
 const SYS_PAGES = {
   asys_afcs: 'AFCS', asys_status: 'Aircraft Status', asys_elec: 'Electrical', asys_eng: 'Engines',
-  asys_fuel: 'Fuel', asys_ratest: 'RA Self Test', asys_hocas: 'HOCAS', asys_tests: 'System Tests', asys_light: 'Lighting Config', asys_video: 'Video', asys_maint: 'Maintenance',
+  asys_fuel: 'Fuel', map: 'Map', asys_ratest: 'RA Self Test', asys_hocas: 'HOCAS', asys_tests: 'System Tests', asys_light: 'Lighting Config', asys_video: 'Video', asys_maint: 'Maintenance',
 };
 let sysPage = 'asys_fuel';
 function sysPageSet(id) {
   if (!SYS_PAGES[id]) return;
+  const wasMap = sysPage === 'map';
   sysPage = id;
+  // Map 화면 — 큰 칸에 2D 지도(#map-wrap)를 옮겨 넣는다(07-sim.js applyPanels 가 #sysp-map 을 그릇으로 쓴다)
+  if (wasMap !== (id === 'map')) { try { applyPanels(); } catch (e) { _swallow(e); } }
   try { sysDraw(); } catch (e) { _swallow(e); }
+}
+// SYSTEM 창의 Map 화면이 지도를 담고 있나 — 지도가 다른 창에 보이지 않을 때만(07-sim.js applyPanels)
+function sysMapSlot() {
+  if (sysPage !== 'map') return null;
+  const w = document.getElementById('sysp-wrap');
+  if (!w) return null;
+  let slot = document.getElementById('sysp-map');
+  if (!slot) { slot = document.createElement('div'); slot.id = 'sysp-map'; w.appendChild(slot); }
+  return slot;
 }
 
 // ── 연료(lbs) ──
@@ -265,7 +277,23 @@ function sysDraw() {
   g.fillStyle = '#000'; g.fillRect(605 - tw / 2, 33, tw, 14);
   g.strokeStyle = '#ccc'; g.lineWidth = 1; g.strokeRect(605 - tw / 2 + 0.5, 33.5, tw - 1, 13);
   g.fillStyle = '#fff'; g.textAlign = 'center'; g.fillText(name, 605, 44);
-  if (sysPage === 'asys_fuel') _sysFuelPage(g, F);
+  // Map 화면 — 큰 칸(청록 테두리 안)에 2D 지도를 얹는다
+  const slot = document.getElementById('sysp-map');
+  if (slot) {
+    const on = sysPage === 'map';
+    slot.style.display = on ? 'block' : 'none';
+    if (on) {
+      const ox = (W - SYS_W * k) / 2, oy = (H - SYS_H * k) / 2;
+      const st = { left: ox + 227 * k, top: oy + 49 * k, width: 766 * k, height: 574 * k };
+      const css = Object.entries(st).map(([a, v]) => `${a}:${v.toFixed(1)}px`).join(';');
+      if (slot.dataset.css !== css) {
+        slot.dataset.css = css; Object.entries(st).forEach(([a, v]) => { slot.style[a] = v.toFixed(1) + 'px'; });
+        try { if (typeof leafMap !== 'undefined') setTimeout(() => leafMap.invalidateSize(), 30); } catch (e) { _swallow(e); }
+      }
+    }
+  }
+  if (sysPage === 'map') { /* 지도는 #sysp-map 이 그린다 */ }
+  else if (sysPage === 'asys_fuel') _sysFuelPage(g, F);
   else if (sysPage === 'asys_elec') _sysElecPage(g, F);
   else if (sysPage === 'asys_afcs') _sysAfcsPage(g);
   else if (sysPage === 'asys_eng') _sysEnginePage(g, F);
