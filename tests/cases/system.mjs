@@ -116,7 +116,7 @@ export async function run(page, t) {
       return seen;
     };
     const o = {};
-    sysPageSet('asys_afcs'); const a0 = texts();
+    aseOn = false; sysPageSet('asys_afcs'); const a0 = texts();   // (AFCS 가 걸리지 않은 화면 — ASE 는 AFCAU 로 곧 다시 켜진다)
     o.afcsIdle = ['SEMA1 OK', 'SEMA2 OK', 'TRIM OK', 'AFCS MAINTENANCE MODE', 'NOM DEF'].every(x => a0.includes(x)) && a0.filter(x => x === 'OFF').length === 6;
     // 시험 — 하부 콘솔 AFCAU 의 P FLT TST 를 누르면 시작한다. 시간을 앞당겨 단계를 본다
     afcsPfltOk = () => true;                     // 땅 위 · 유압 정상 조건은 'AFCS 연동' 검사가 본다
@@ -197,4 +197,27 @@ export async function run(page, t) {
   t.ok(x.on && !x.autoSmall && !x.off, 'AUX XFER ON 은 조금만 비어도 늘 보내고, AUTO 는 쉬며, OFF 는 안 보낸다');
   t.ok(x.tpOff && x.tpOn, 'Fuel 화면 — EXT AUX TP1 · TP2 는 AUTO 에서 쉬면 안 보이고, ON(이송)이면 녹색으로 보인다');
   t.ok(x.heat === 4 && x.ai1 === 11 && x.ai2 === 18, `MTA — HEATER −4% · ENG ANTI ICE 하나 −7% · 둘 −14% (${x.heat} · ${x.ai1} · ${x.ai2})`);
+
+  // ── NR — 엔진 상태대로: FLY 하나라도 100 · 두 엔진 IDLE 53 · 한 엔진 IDLE(다른 쪽 OFF) 47 · 둘 다 OFF 0 ──
+  // ── EMERG PUMP — 엔진이 꺼져 있어도 APU + APU GEN(AC 전원)이면 #1 유압 3020psi ──
+  const nh = await page.evaluate(() => {
+    const nr = () => { _nrNs = null; return Math.round(engParams().nr); };
+    const o = {};
+    const set = (a, b) => { ovhdSet('pcd1', a); ovhdSet('pcd2', b); return nr(); };
+    o.fly = set('FLY', 'OFF'); o.idle2 = set('IDLE', 'IDLE'); o.idle1 = set('IDLE', 'OFF'); o.off = set('OFF', 'OFF');
+    o.hydOff = hydPsi();
+    ovhdSet('emergPump', 'ON'); o.noAc = hydPsi()[1];                                // 배터리만 — AC 가 없어 펌프가 돌지 않는다
+    ovhdSet('apuContr', 'ON'); _apuOnT = performance.now() - APU_START_MS - 1; ovhdSet('apuGen', 'APU GEN');
+    o.emer = hydPsi(); o.ac = elecState().ac;
+    ovhdSet('emergPump', 'AUTO'); o.auto = hydPsi()[1];
+    ovhdSet('apuContr', 'OFF'); ovhdSet('apuGen', 'OFF'); ovhdSet('emergPump', 'AUTO');
+    o.back = set('FLY', 'FLY');
+    return o;
+  });
+  t.ok(nh.fly === 100 && nh.idle2 === 53 && nh.idle1 === 47 && nh.off === 0,
+    `NR — 한 엔진 FLY ${nh.fly}% · 두 엔진 IDLE ${nh.idle2}% · 한 엔진 IDLE ${nh.idle1}% · 둘 다 OFF ${nh.off}%`);
+  t.ok(nh.hydOff[1] === 0 && nh.hydOff[2] === 0 && nh.noAc === 0, '엔진이 꺼져 로터가 서면 유압 1 · 2 가 0 — EMERG PUMP 만 켜도 AC 전원이 없으면 0');
+  t.ok(nh.ac && nh.emer[1] === 3020 && nh.emer[2] === 0 && nh.auto === 0,
+    `APU + APU GEN(AC 전원)에서 EMERG PUMP ON → #1 유압 ${nh.emer[1]}psi(#2 는 ${nh.emer[2]}) · AUTO 로 두면 0`);
+  t.ok(nh.back === 100, '두 엔진 FLY 로 되돌리면 100%');
 }

@@ -147,7 +147,8 @@ function updateRotorBtns() {
   } catch (e) { _swallow(e); }
 }
 // ── ASE(수리온 계열 자동 안정 장치) ──
-// 3D 창의 ASE 버튼으로 켜고 끈다. 기능은 하나씩 더해 간다.
+// 하부 콘솔 AFCAU 로 켜진다(23-afcs.js afcsGuard) — AP 가 살아 있고 AUTO TRIM(YAW · ROLL · PITCH) · TRIM FEEL(COL · CYC)이
+// 모두 켜져 있으면(세 축 모두 SAS 가 아니면) 안정화 · HOVER FOLLOW 가 돈다(종전의 3D 창 ASE 버튼은 없앴다).
 //  HOVER FOLLOW — 40kt 이내에서 조종간을 트림에 맞서 쥐고(against trim) 자세를 초당 2° 이내로
 //                 천천히 움직이거나 붙잡고 있으면, 트림 기준이 그 자세를 따라온다(trim follow).
 //                 그래서 조종간을 놓아도 그 자세가 남는다. 빠르게(2°/s 넘게) 움직이는 동안은 따라오지 않는다.
@@ -545,11 +546,15 @@ function cycleSimEng() {
   _simEngBtn = _simEngBtn === 2 ? 1 : _simEngBtn === 1 ? 0 : 2;
   simEngApply();
 }
+// 엔진 상태 이름 — AEO · OEI · ENGn TRNG · ENG OFF · ENG IDLE (3D 창의 ENG 버튼은 없앴다 — 상부 콘솔 TQS · 레버로 정한다)
+function engStateLabel() {
+  return simEng === 2 ? 'ENG AEO' : simEng === 1 ? (simEngTrng ? `ENG${simEngFail} TRNG` : 'ENG OEI')
+       : (simEngSt[1] === 'OFF' && simEngSt[2] === 'OFF') ? 'ENG OFF' : 'ENG IDLE';
+}
 function updateEngBtn() {
   try {
     const b = document.getElementById('eng-3d'); if (!b) return;
-    b.textContent = simEng === 2 ? 'ENG AEO' : simEng === 1 ? (simEngTrng ? `ENG${simEngFail} TRNG` : 'ENG OEI')
-                  : (simEngSt[1] === 'OFF' && simEngSt[2] === 'OFF') ? 'ENG OFF' : 'ENG IDLE';
+    b.textContent = engStateLabel();
     b.classList.toggle('warn', simEng === 1); b.classList.toggle('fail', simEng === 0);
   } catch (e) { _swallow(e); }
 }
@@ -1763,7 +1768,13 @@ function simFly(dt) {
   _simNrGov += (govLag - _simNrGov) * Math.min(1, dt / (govLag < _simNrGov ? NR_TAU_DN : NR_TAU_UP));
   const nr0 = simNr;
   simNr += (nrTgt - simNr) * Math.min(1, dt / (nrTgt < simNr ? (avail < AUTO_ENG_TQ && U > AUTO_LREF ? AUTO_NR_TAU_DN : NR_TAU_DN) : NR_TAU_UP));
-  if (onGnd && simNr < 100 && U === 0) simNr = Math.min(100, simNr + 20 * dt);
+  // 땅 위에서는 엔진 상태대로 — FLY 가 하나라도 있으면 100 · 두 엔진 IDLE 53 · 한 엔진 IDLE 47 · 둘 다 OFF 0(03-pfd.js engNrTarget)
+  // (엔진이 FLY 가 아니면 레버 위치와 상관없다 — 땅 위의 로터는 바람으로 돌지 않는다)
+  if (onGnd) {
+    const g = engNrTarget(simEngSt);
+    if (g >= 100) { if (U === 0 && simNr < 100) simNr = Math.min(100, simNr + 20 * dt); }
+    else simNr = nr0 < g ? Math.min(g, nr0 + NR_SPOOL_UP * dt) : Math.max(g, nr0 - NR_SPOOL_DN * dt);   // 위 로터 운동은 버리고 엔진대로
+  }
   // 처지는 NR 의 운동에너지는 레버가 요구하는 만큼(U)까지 잠깐 양력이 된다 — 오르는 NR 은 그만큼 받아들인다
   // 오토로테이션(엔진 가용 AUTO_ENG_TQ 미만)에서 로터에 담긴 에너지는 호버 동력 1초 남짓이다 — 레버를 당겨 쓰는 쿠션은
   // 강하를 멈출 만큼이지 떠오를 만큼은 아니다(AUTO_NR_E 배)

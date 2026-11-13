@@ -9,6 +9,7 @@
 //   RCU AHRS 1 · 2 → 'BOTH ON AHRS1 · 2'(황) · BACKUP(또는 AHRS 둘 다 CUT) → 세 축 SAS · 'AHRS BACKUP'
 //   RCU ADC  1 · 2 → 'BOTH ON ADC1 · 2'(황)  · BACKUP → 대기 자료를 쓰는 ALT · IAS · VS · GA 풀림 · 'ADC BACKUP'
 //   위 가운데 하나라도 걸리면(AP 하나는 살아 있고) 'AFCS DEGRADED'(황)
+//   세 축이 모두 살아 있으면(SAS 가 아니면) ASE(안정화 · HOVER FOLLOW — 14-simmode.js aseOn)가 돈다
 //   DC 전원 없음 → 'AFCS FAIL'(적) · FMA 세 칸 모두 꺼짐
 // FMA(03-pfd.js drawFMA)는 afcsAxes() 로 SAS 칸을 그리고, 모드가 바뀌면 10초 동안 귀퉁이 상자를 깜빡인다.
 
@@ -65,7 +66,11 @@ function afcsGuard() {
   }
   if (pit || A.adcBk) rel(() => simIasOn, simIasRelease);
   if (mid || pit) rel(() => gspdOn, toggleGspd);
-  if (A.fail || A.apOff || A.ahrsBk) rel(() => aseOn, toggleAse);
+  // ASE(안정화 · HOVER FOLLOW — 14-simmode.js) — AFCAU 의 AP · AUTO TRIM · TRIM FEEL 이 모두 켜져 있으면 돈다(버튼은 없앴다)
+  try {
+    const want = !A.fail && !A.sas[0] && !A.sas[1] && !A.sas[2];
+    if (typeof aseOn !== 'undefined' && aseOn !== want) { aseOn = want; if (!want) aseFollowing = false; try { updateAseBtns(); } catch (e) { _swallow(e); } }
+  } catch (e) { _swallow(e); }
   if (did) { try { updateHoverBtns(); updateApInhibit(); } catch (e) { _swallow(e); } }
 }
 setInterval(afcsGuard, 250);

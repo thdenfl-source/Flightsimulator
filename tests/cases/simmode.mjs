@@ -390,6 +390,7 @@ async function part1(page, t) {
     (${SETUP.toString()})();
     const fly = ${FLY};
     S.spd = 0; S.hdg = 90; S.alt = 2000;          // 동쪽을 보고 제자리
+    aseOn = false;                                // (ASE HOVER FOLLOW 가 당긴 자세를 트림으로 잡지 않게 — 맨 조종으로 본다)
     const lon0 = S.lon;
     _ax(1, -1); fly(25);                          // 끝까지 당겨 둔다
     const r = { spd: S.spd, lon: S.lon, pit: S.pit };
@@ -2458,7 +2459,16 @@ async function part5(page, t) {
       return { held, rel: S.bnk, trim: simTrim.roll };
     };
     const o = { on: go(true, 0), off: go(false, 0), fast: go(true, 80) };
-    o.btn = (() => { aseOn = false; toggleAse(); const b = document.querySelector('#ase-3d .ase-main').classList.contains('on'); toggleAse(); return b; })();
+    // ASE 는 하부 콘솔 AFCAU 로 켜진다 — AP · AUTO TRIM · TRIM FEEL 이 모두 켜져 있으면 ON, 하나라도 끄면 OFF(3D 창 버튼은 없앴다)
+    o.btn = (() => {
+      const r = [];
+      afcsGuard(); r.push(aseOn);
+      ovhdSet('atYaw', 'IN'); afcsGuard(); r.push(!aseOn); ovhdSet('atYaw', 'OUT');
+      ovhdSet('tfCyc', 'IN'); afcsGuard(); r.push(!aseOn); ovhdSet('tfCyc', 'OUT');
+      ovhdSet('ap1', 'IN'); ovhdSet('ap2', 'IN'); afcsGuard(); r.push(!aseOn); ovhdSet('ap1', 'OUT'); ovhdSet('ap2', 'OUT');
+      afcsGuard(); r.push(aseOn); r.push(!document.getElementById('ase-3d'));
+      return r.every(Boolean);
+    })();
     aseOn = false; simTrimReset();
     return o;
   })()`);
@@ -2466,7 +2476,7 @@ async function part5(page, t) {
     `ASE HOVER FOLLOW — 호버에서 조종간으로 8° 잡고 있다 놓으면 그 자세가 남는다 (${ase.on.held.bnk.toFixed(1)} → ${ase.on.rel.toFixed(1)}° · 트림 ${ase.on.trim.toFixed(1)}°)`);
   t.ok(Math.abs(ase.off.rel) < 1, `ASE 를 끄면 놓았을 때 트림 자세로 돌아간다 (${ase.off.rel.toFixed(1)}°)`);
   t.ok(Math.abs(ase.fast.rel) < 1 && !ase.fast.held.hf, `40kt 넘으면 따라오지 않는다 (80kt · ${ase.fast.rel.toFixed(1)}°)`);
-  t.ok(ase.btn, '3D 창의 ASE 버튼으로 켜고 끈다');
+  t.ok(ase.btn, 'ASE 는 AFCAU 의 AP · AUTO TRIM · TRIM FEEL 이 모두 켜져 있으면 켜지고, 하나라도 끄면 꺼진다(3D 창 ASE 버튼은 없다)');
 
   // 블로우 백 — 20kt 언저리에서 기수가 들린다(회전익 특성)
   const bb = await page.evaluate(`(() => {
