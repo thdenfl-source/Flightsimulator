@@ -700,8 +700,9 @@ function heli3dNoseSync(look) {
 // 앞유리 틀)을 겹쳐 그린다. 3D 창의 '조종석' 버튼으로 켜고 끈다(이 기기에 적어 둔다). 외부 시점(EXT)·시점이
 // 바뀌는 동안은 숨기고, 시야를 둘러보면(B0 + 햇) 기수처럼 함께 움직인다(heli3dNoseSync).
 // 바닥 쪽은 비워 두어 땅이 보이고, CHIN 창은 패널 아래(발밑) 좌·우로 줄여 내린다. MFD 넷은 살아 있는 화면이다 —
-// 1 = PFD(03-pfd.js drawPfdTo) · 2 = Engines(18-system.js sysDrawTo) · 3 = 움직이는 지도(기수 위 · ckMapDraw) ·
-// 4 = CDU Aircraft Systems 에서 고른 SYSTEM 화면(sysPage — Map 이면 그 큰 칸에 지도).
+// 모니터 번호는 왼쪽부터 1 · 3 · 4 · 2 번이다(실기 배치):
+// 1 · 2 = PFD(03-pfd.js drawPfdTo) · 3 = 움직이는 지도(기수 위 · ckMapDraw) ·
+// 4 = CDU Aircraft Systems 에서 고른 SYSTEM 화면(18-system.js sysDrawTo · sysPage — Map 이면 그 큰 칸에 지도).
 // 스크린을 뺀 틀·구조는 반투명이라 그 너머 바깥이 비쳐 보인다(index.html #sim-ckpit svg).
 // 그림 좌표는 1600×900(화면을 가득 채워 늘린다).
 const CKPIT_PREF = 'ckpitOv';
@@ -709,10 +710,10 @@ let ckpitOn = false;
 try { ckpitOn = localStorage.getItem(CKPIT_PREF) === '1'; } catch (e) { _swallow(e); }
 // MFD 화면 자리(그림 좌표) — 테두리 안쪽
 const CKPIT_SCR = [
-  { k: 'pfd', x: 229, y: 580, w: 242, h: 146 },
-  { k: 'asys_eng', x: 527, y: 580, w: 242, h: 146 },
-  { k: 'map', x: 831, y: 580, w: 242, h: 146 },
-  { k: 'sys', x: 1129, y: 580, w: 242, h: 146 },
+  { k: 'pfd', x: 229, y: 580, w: 242, h: 146 },    // 1번
+  { k: 'map', x: 527, y: 580, w: 242, h: 146 },    // 3번
+  { k: 'sys', x: 831, y: 580, w: 242, h: 146 },    // 4번
+  { k: 'pfd', x: 1129, y: 580, w: 242, h: 146 },   // 2번(부조종사 PFD)
 ];
 function _ckpitSvg() {
   const bez = CKPIT_SCR.map(s => {

@@ -326,7 +326,7 @@ export async function run(page, t) {
   t.ok(!ck.offBtn && ck.simBtn && !ck.offPanel, '조종석 버튼은 SIM 에서만 보이고, 처음에는 꺼져 있다');
   t.ok(ck.on.panel && !ck.on.nose && ck.on.label === '조종석 ON' && ck.on.lit.length === 4 && ck.on.lit.every(n => n > 20),
     `켜면 패널이 겹치고 기수는 감춘다 — MFD 넷이 그려진다 (${ck.on.lit.join('/')})`);
-  t.ok(ck.kinds === 'pfd,asys_eng,map,sys' && ck.pgKeep, `MFD — 1 PFD · 2 엔진 · 3 지도 · 4 CDU 가 고른 SYSTEM 화면(${ck.kinds})`);
+  t.ok(ck.kinds === 'pfd,map,sys,pfd' && ck.pgKeep, `MFD(왼쪽부터 1·3·4·2번) — 1 PFD · 3 지도 · 4 CDU 가 고른 SYSTEM 화면 · 2 PFD (${ck.kinds})`);
   t.ok(ck.op > 0.2 && ck.op < 0.7, `스크린을 뺀 틀·구조는 반투명이다 (불투명도 ${ck.op})`);
   t.ok(Math.abs(ck.on.chinTop - 0.89) < 0.02, `CHIN 창은 패널 아래(발밑)로 내려간다 (${(ck.on.chinTop * 100).toFixed(0)}%)`);
   t.ok(!ck.ext && ck.back, '외부 시점에서는 숨기고, 조종석으로 돌아오면 다시 보인다');
