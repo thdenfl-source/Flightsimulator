@@ -56,7 +56,7 @@ function c5Lines() {
   if (!c5.on || !_c5Pwr()) return { l: ['', ''], cur: null };
   const p = c5.page;
   if (c5.msg && performance.now() < c5.msgT) return { l: c5.msg, cur: null };
-  if (p === 'PWR_WARN') return { l: ['!!! USE CAUTION !!!', 'TURNING SYSTEM OFF'], cur: null };
+  if (p === 'PWR_WARN') return { l: _c5Blank ? ['', ''] : ['!!! USE CAUTION !!!', 'TURNING SYSTEM OFF'], cur: null };
   if (p === 'DIM') return { l: ['←UP   CHANGE DISPLAY', '←DOWN  BRIGHTNESS ' + c5.dim], cur: null };
   if (p === 'NUM') { const o = homeLine(1 - c5.line); const l = ['', '']; l[c5.line] = `${c5.line + 1} CHAN=${_c5rpad(c5.num, 3).replace(/ /g, '.')} <ENTER>`; l[1 - c5.line] = o; return { l, cur: [c5.line, 7, 3] }; }
   if (p === 'MODE') return { l: ['PRESS ENTER BUTTON', 'FOR ' + C5_MODES[c5.modeSel] + (C5_MODES[c5.modeSel].length > 11 ? '' : ' MODE')], cur: null };
@@ -203,19 +203,32 @@ function c5Vol(i, d) {
   _c5Save(); c5Render();
 }
 // PUSH ON — 꺼져 있으면 1초 누르면 켜진다 · 켜져 있으면 누르는 동안 경고, 2초 넘게 누르면 꺼진다
-let _c5PwrT = null, _c5PwrPrev = 'HOME';
+// 끄기: 켜진 채로 PUSH ON 을 누르면 삑 소리와 함께 '!!! USE CAUTION !!! / TURNING SYSTEM OFF' 가
+//        0.3초 간격으로 다섯 번 깜빡인 뒤 꺼진다(손을 떼도 멈추지 않는다). 켜기는 1초 누르기 그대로.
+const C5_OFF_BLINK = 300, C5_OFF_N = 5;
+let _c5PwrT = null, _c5OffT = null, _c5Blank = false, _c5Ac = null;
+function _c5Beep(ms = 120, hz = 2000) {
+  try {
+    const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
+    _c5Ac = _c5Ac || new AC(); if (_c5Ac.state === 'suspended') _c5Ac.resume();
+    const o = _c5Ac.createOscillator(), g = _c5Ac.createGain(), t = _c5Ac.currentTime;
+    o.type = 'square'; o.frequency.value = hz; g.gain.setValueAtTime(0.06, t); g.gain.setValueAtTime(0, t + ms / 1000);
+    o.connect(g); g.connect(_c5Ac.destination); o.start(t); o.stop(t + ms / 1000 + 0.02);
+  } catch (e) { _swallow(e); }
+}
 function c5PwrDown() {
-  if (!_c5Pwr()) return;
-  const t0 = performance.now();
+  if (!_c5Pwr() || _c5OffT) return;
   if (!c5.on) { _c5PwrT = setTimeout(() => { c5.on = true; c5.page = 'HOME'; _c5flash('WULFSBERG C-5000', 'SELF TEST OK', 1200); _c5Save(); c5Render(); }, 1000); return; }
-  _c5PwrPrev = c5.page; c5.page = 'PWR_WARN'; c5Render();
-  _c5PwrT = setTimeout(() => { c5.on = false; c5.page = 'OFF'; _c5Save(); c5Render(); }, 2000);
-  return t0;
+  c5.msg = null; c5.page = 'PWR_WARN';
+  let k = 0;
+  const step = () => {
+    if (k >= C5_OFF_N * 2) { _c5OffT = null; _c5Blank = false; c5.on = false; c5.page = 'OFF'; _c5Save(); c5Render(); return; }
+    _c5Blank = k % 2 === 1; if (!_c5Blank) _c5Beep();
+    k++; c5Render(); _c5OffT = setTimeout(step, C5_OFF_BLINK);
+  };
+  step();
 }
-function c5PwrUp() {
-  clearTimeout(_c5PwrT); _c5PwrT = null;
-  if (c5.on && c5.page === 'PWR_WARN') { c5.page = _c5PwrPrev === 'PWR_WARN' ? 'HOME' : _c5PwrPrev; c5Render(); }
-}
+function c5PwrUp() { clearTimeout(_c5PwrT); _c5PwrT = null; }
 
 // ── 그리기 ──
 function c5Render() {

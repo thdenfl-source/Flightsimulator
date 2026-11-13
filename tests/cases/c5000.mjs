@@ -65,11 +65,14 @@ export async function run(page, t) {
   await knob('vol', 'inner', -1); await knob('vol', 'outer', 1);
   const v = await page.evaluate(() => c5.r.map(r => r.vol));
   t.ok(v[0] === 5 && v[1] === 7, `VOL — 안 = RT1 −, 바깥 = RT2 + (${v.join('/')})`);
-  // PUSH ON — 켜진 채로 길게 누르면 경고 뒤 꺼지고, 1초 누르면 다시 켜진다
-  const b = await page.locator('[data-c5k="vol"]').boundingBox();
-  await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2); await page.mouse.down(); await page.waitForTimeout(200);
-  L = await lcd(); const warn = L.join('|'); await page.waitForTimeout(2000); await page.mouse.up();
-  const off = await page.evaluate(() => c5.on);
+  // PUSH ON — 켜진 채로 누르면 경고가 0.3초 간격으로 다섯 번 깜빡인 뒤 꺼지고, 1초 누르면 다시 켜진다
+  await page.evaluate(() => { window._c5beeps = 0; const f = _c5Beep; _c5Beep = (...a) => { window._c5beeps++; return f(...a); }; });
+  await knob('vol', 'push', 1, 100); L = await lcd(); const warn = L.join('|');
+  await page.waitForTimeout(350); L = await lcd(); const blank = L.join('').trim() === '';
+  const mid = await page.evaluate(() => c5.on);
+  await page.waitForTimeout(2900);
+  const off = await page.evaluate(() => c5.on), beeps = await page.evaluate(() => window._c5beeps);
   await knob('vol', 'push', 1, 1150); const on2 = await page.evaluate(() => c5.on);
-  t.ok(/USE CAUTION/.test(warn) && /TURNING SYSTEM OFF/.test(warn) && off === false && on2 === true, `PUSH ON — 경고 뒤 꺼지고 다시 켜진다 (${off} → ${on2})`);
+  t.ok(/USE CAUTION/.test(warn) && /TURNING SYSTEM OFF/.test(warn) && blank && mid === true && off === false && beeps === 5 && on2 === true,
+    `PUSH ON — 경고 다섯 번 깜빡임(삑 ${beeps}회) 뒤 꺼지고 다시 켜진다 (깜빡 ${blank} · ${mid} → ${off} → ${on2})`);
 }
