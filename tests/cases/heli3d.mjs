@@ -414,6 +414,14 @@ export async function run(page, t) {
     return { par: ov && ov.parentElement.id, wrap: document.getElementById('cdu-wrap').parentElement.id, btn: document.getElementById('cduov-btn').classList.contains('on'),
              right: slot.left > lc.left + lc.width / 2 && slot.left < lc.right + 30 };
   });
+  // 작은 CDU 의 아이콘은 제 칸 안에 작게(조종석 틀 그림의 반투명 · 가득 채우기가 CDU 아이콘에 번지지 않는다)
+  const ico = await page.evaluate(() => {
+    const slot = document.getElementById('ck-mini-cdu').getBoundingClientRect();
+    const svgs = [...document.querySelectorAll('#ck-mini-cdu .home-icon-wrapper svg')];
+    return { n: svgs.length, maxW: Math.max(0, ...svgs.map(e => e.getBoundingClientRect().width)) / slot.width,
+             op: svgs.length ? +getComputedStyle(svgs[0]).opacity : 1 };
+  });
+  t.ok(ico.n > 4 && ico.maxW < 0.25 && ico.op === 1, `작은 CDU 아이콘이 엉키지 않는다 (가장 큰 아이콘 너비 ${(ico.maxW * 100).toFixed(0)}% · 불투명도 ${ico.op})`);
   t.ok(cdu0.par === 'ck-mini-cdu' && cdu0.wrap === 'cdu-ov' && !cdu0.btn && cdu0.right,
     `CDU 가 하부 콘솔 바로 오른쪽 칸에 들어간다 (${cdu0.par})`);
   // 작은 CDU 를 실제로 누르면 팝아웃 — 그 안의 PERF 를 실제로 누르면 CDU 화면이 바뀐다
