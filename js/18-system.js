@@ -271,7 +271,7 @@ function sysDraw() {
 // 같은 계통 화면을 다른 캔버스에 그린다 — SIM 3D 조종석 패널의 MFD(15-heli3d.js) · 고른 화면(page)으로 잠깐 바꿔 그린다
 function sysDrawTo(c, page) {
   const p0 = sysPage;
-  if (page && SYS_PAGES[page] && page !== 'map') sysPage = page;
+  if (page && SYS_PAGES[page]) sysPage = page;   // Map 은 큰 칸 테두리까지만 그린다(지도는 부른 쪽이 얹는다)
   try { _sysPaint(c.getContext('2d'), c, c.width, c.height, 1, false); } finally { sysPage = p0; }
 }
 function _sysPaint(g, c, W, H, dpr, own) {
