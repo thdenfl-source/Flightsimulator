@@ -103,7 +103,7 @@ export async function run(page, t) {
     (${SIM_SETUP_SRC})();
     const st = () => { const p = engParams(); return { eng: simEng, fail: simEngFail, trng: simEngTrng,
       e1: Math.round(p.e1.ng), e2: Math.round(p.e2.ng), t1: Math.round(p.e1.tq), avail: simEngAvail() / mtaNow(),
-      btn: document.getElementById('eng-3d').textContent }; };
+      btn: engStateLabel() }; };
     const o = { aeo: st() };
     ovhdSet('trng1', 'TRNG'); o.t1 = st();
     ovhdSet('trng2', 'TRNG'); o.both = st();
@@ -142,7 +142,7 @@ export async function run(page, t) {
   const tq = await page.evaluate(`(() => {
     (${SIM_SETUP_SRC})();
     const st = () => { const p = engParams(); return { eng: simEng, s: simEngSt[1] + '/' + simEngSt[2], ng1: Math.round(p.e1.ng), ng2: Math.round(p.e2.ng),
-      btn: document.getElementById('eng-3d').textContent }; };
+      btn: engStateLabel() }; };
     const o = { aeo: st() };
     ovhdSet('pcd1', 'IDLE'); o.idle1 = st();
     ovhdSet('pcd1', 'OFF');  o.off1 = st();
@@ -184,4 +184,21 @@ export async function run(page, t) {
     return o;
   });
   t.ok(heal.start && !heal.broken && heal.fit && heal.rebuilt && heal.once, `상부 콘솔이 어긋나거나 비면 1초 안에 다시 맞추고 다시 만든다 (${JSON.stringify(heal)})`);
+
+  // ── NR(SIM · 땅 위) — 엔진 상태대로: 둘 다 OFF 면 로터가 선다 · 두 엔진 IDLE 53% · 한 엔진 IDLE 47% · FLY 100% ──
+  const gnr = await page.evaluate(`(() => {
+    (${SIM_SETUP_SRC})();
+    const fly = (sec) => { S.running = true; let ts = 1000; S.lastT = ts; for (let i = 0; i < sec * 20; i++) { ts += 50; joyPoll(ts); simStep(ts); } S.running = false; };
+    S.alt = 0; S.spd = 0; S.vs = 0; _ax(3, -1);                 // 바다 높이(땅) · 레버 맨 아래
+    const o = {};
+    const run = (a, b, sec) => { ovhdSet('pcd1', a); ovhdSet('pcd2', b); fly(sec); return Math.round(simNr); };
+    o.off = run('OFF', 'OFF', 20);
+    o.idle2 = run('IDLE', 'IDLE', 10);
+    o.idle1 = run('IDLE', 'OFF', 5);
+    o.fly = run('FLY', 'OFF', 8);
+    ovhdSet('pcd2', 'FLY'); toggleSimMode(false);
+    return o;
+  })()`);
+  t.ok(gnr.off === 0 && gnr.idle2 === 53 && gnr.idle1 === 47 && gnr.fly === 100,
+    `SIM 땅 위 NR — 둘 다 OFF ${gnr.off}% · 두 엔진 IDLE ${gnr.idle2}% · 한 엔진 IDLE ${gnr.idle1}% · 한 엔진 FLY ${gnr.fly}%`);
 }

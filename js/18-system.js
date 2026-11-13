@@ -802,10 +802,20 @@ function _sysElecPage(g) {
 
 // ── 공용 — 상부 콘솔 값 · 로터 · 바깥 기온 ──
 const _ov = (id, dflt) => { try { const v = typeof ovhdGet === 'function' ? ovhdGet(id) : undefined; return v === undefined ? dflt : v; } catch (e) { return dflt; } };
-function _sysRotor() { try { return engParams().nr > 50; } catch (e) { return true; } }
-// 유압 1 · 2(psi) — 주 기어박스(MGB)에 달린 펌프라 로터가 돌 때(NR 50% 넘게) 압력이 선다. 정상 범위 2600 ~ 3300(녹색 띠)
-const HYD_NORM = [2600, 3300];
-function hydPsi() { const rot = _sysRotor(); return { 1: rot ? 2960 : 0, 2: rot ? 3060 : 0 }; }
+function _sysRotor() { try { return engParams().nr > 40; } catch (e) { return true; } }
+// 유압 1 · 2(psi) — 주 기어박스(MGB)에 달린 펌프라 로터가 돌 때(NR 40% 넘게 — 한 엔진 IDLE 47% 에서도) 압력이 선다.
+// 정상 범위 2600 ~ 3300(녹색 띠).
+// EMERG PUMP(상부 콘솔 · 전기 펌프) ON + AC 전원(주 발전기 · APU GEN · GPU)이면 로터가 돌지 않아도 #1 유압에 3020psi —
+// 엔진이 꺼져 있어도 APU 를 켜고 APU GEN 을 올리면 쓸 수 있다
+const HYD_NORM = [2600, 3300], HYD_EMER_PSI = 3020;
+function hydEmerPump() {
+  if (_ov('emergPump', 'AUTO') !== 'ON') return false;
+  try { return !!elecState().ac; } catch (e) { return false; }
+}
+function hydPsi() {
+  const rot = _sysRotor(), emer = hydEmerPump();
+  return { 1: emer ? Math.max(rot ? 2960 : 0, HYD_EMER_PSI) : (rot ? 2960 : 0), 2: rot ? 3060 : 0 };
+}
 function hydNormal() { const h = hydPsi(); return [1, 2].every(n => h[n] >= HYD_NORM[0] && h[n] <= HYD_NORM[1]); }
 function _sysOatC() {
   let t0 = 15;
@@ -989,7 +999,8 @@ function _sysStatusPage(g, F) {
     g.fillStyle = '#fff'; g.textAlign = 'right'; g.font = _f(15, false); g.fillText('°C', x0 + 160, 380); g.font = _f(24); g.fillText(String(tc), x0 + 160, 412);
     _sysDial(g, cx, 515, 74, 0, 6, lit, [[0, 1.5, R], [1.5, 3, Y], [3, 6, G]], [1, 2, 3, 4, 5, 6]);
     g.fillStyle = '#fff'; g.textAlign = 'right'; g.font = _f(15, false); g.fillText('Liters', x0 + 160, 560); g.font = _f(24); g.fillText(lit.toFixed(1), x0 + 160, 592);
-    kv(x0 + 8, x0 + 164, 628, 'MRA PRESS WARN', 'Off'); kv(x0 + 8, x0 + 164, 650, 'TRA PRESS WARN', 'Off');
+    kv(x0 + 8, x0 + 164, 628, 'MRA PRESS WARN', psi < 1500 ? 'On' : 'Off', psi < 1500 ? R : null);
+    kv(x0 + 8, x0 + 164, 650, n === 1 ? 'EMER PUMP' : 'TRA PRESS WARN', n === 1 ? (hydEmerPump() ? 'On' : 'Off') : (psi < 1500 ? 'On' : 'Off'), n === 1 && hydEmerPump() ? G : (n === 2 && psi < 1500 ? R : null));
   });
   // 연료(FQMS 두 계통이 같은 값 → Delta 0)
   const M = fuelMainSplit();

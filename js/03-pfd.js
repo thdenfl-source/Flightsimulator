@@ -214,10 +214,28 @@ function drawBaroBox(x, y, w, h) {
 //   TQ  : 엔진마다(AEO 는 둘 다 지금 토크 · OEI 는 살아 있는 1번이 다 · IDLE 은 0)
 //   NR  : 로터 회전(SIM 의 simNr) · NP : 엔진이 로터를 돌리면 NR 과 같고, IDLE 이면 아래로 갈라진다(needle split)
 //   NG·TGT : 토크를 따라 오르는 자리 표시값
+// 엔진 상태로 정해지는 로터 회전(NR %) — 한 엔진이라도 FLY 면 100 · 두 엔진 IDLE 53 · 한 엔진 IDLE(다른 쪽 OFF) 47 · 둘 다 OFF 0
+// (SIM 땅 위 · SIM 이 아닐 때의 NR. SIM 으로 날고 있으면 14-simmode.js 의 로터 운동(오토로테이션)이 정한다)
+const NR_IDLE2 = 53, NR_IDLE1 = 47, NR_SPOOL_UP = 12, NR_SPOOL_DN = 6;   // 오르내리는 빠르기(%/s)
+function engNrTarget(st) {
+  st = st || (typeof simEngSt !== 'undefined' ? simEngSt : { 1: 'FLY', 2: 'FLY' });
+  const fly = [1, 2].some(n => st[n] === 'FLY'), idle = [1, 2].filter(n => st[n] === 'IDLE' || st[n] === 'TRNG').length;
+  return fly ? 100 : idle >= 2 ? NR_IDLE2 : idle === 1 ? NR_IDLE1 : 0;
+}
+let _nrNs = null, _nrNsT = 0;
+function _nrNoSim() {   // SIM 이 아닐 때 — 엔진 상태의 NR 로 천천히 따라간다
+  const now = performance.now(), tg = engNrTarget();
+  if (_nrNs === null) _nrNs = tg;
+  const dt = Math.min(1, Math.max(0, (now - _nrNsT) / 1000)); _nrNsT = now;
+  const r = (tg > _nrNs ? NR_SPOOL_UP : NR_SPOOL_DN) * dt;
+  _nrNs = tg > _nrNs ? Math.min(tg, _nrNs + r) : Math.max(tg, _nrNs - r);
+  return _nrNs;
+}
 function engParams() {
   let tq = 0, nr = 100, st = { 1: 'FLY', 2: 'FLY' };
   try { tq = tqShown(); } catch (e) { _swallow(e); }
   if (simModeOn) { try { nr = simNr; } catch (e) { _swallow(e); } }
+  else { try { nr = _nrNoSim(); } catch (e) { _swallow(e); } }
   // 엔진마다의 상태(14-simmode.js simEngSt — TQS · 연료/화재 레버 · TRAINING · ENG 버튼): FLY 는 돈다 · IDLE/TRNG 는 IDLE · OFF 는 0
   try { if (typeof simEngSt !== 'undefined') st = simEngSt; } catch (e) { _swallow(e); }
   const run = [st[1] === 'FLY', st[2] === 'FLY'];
