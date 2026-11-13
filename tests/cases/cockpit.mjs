@@ -11,7 +11,7 @@ export async function run(page, t) {
     S.alt = 1500; S.spd = 100;
     cockpitStart(); await w(1500);
     const vis = id => { const e = document.getElementById(id); return !!e && getComputedStyle(e).display !== 'none'; };
-    const o = { sim: simModeOn, solo: _soloActive && _soloCurrent, cam: _ckFirst(), ckcam: ckCamOn(), pitch: _ml3d ? _ml3d.getPitch() : 0, model: heli3dShown(),
+    const o = { hdgUp: mapHdgUp, follow: followMode, sim: simModeOn, solo: _soloActive && _soloCurrent, cam: _ckFirst(), ckcam: ckCamOn(), pitch: _ml3d ? _ml3d.getPitch() : 0, model: heli3dShown(),
                 panel: vis('sim-ckpit'), mfd: document.querySelectorAll('#sim-ckpit canvas.ck-scr').length,
                 ovhd: (document.getElementById('ovhd-wrap').parentElement || {}).id, lcon: (document.getElementById('lcon-wrap').parentElement || {}).id,
                 cdu: ((document.getElementById('cdu-ov') || {}).parentElement || {}).id, scale: document.getElementById('map3d').classList.contains('sim3d'),
@@ -30,6 +30,7 @@ export async function run(page, t) {
   const procEd = await page.evaluate(() => typeof SIM_ENABLED !== 'undefined' && !SIM_ENABLED);
   t.ok(A.solo === 'm3d' && A.cam && A.pitch > 80 && !A.model && A.scale,
     `Cockpit Mode — 3D 를 화면 가득 · 1인칭 조종석 시야(카메라 피치 ${Math.round(A.pitch)}°) · 제 헬기 모형 · 축척은 감춘다`);
+  t.ok(A.hdgUp && A.follow, 'Cockpit Mode 의 지도는 HDG↑ · 1인칭(헬기 따라가기)이 기본');
   if (procEd) t.ok(!A.sim && A.ckcam, '절차 훈련판 — SIM 없이(AFCS 로 나는 비행) 조종석 시야');
   else t.ok(A.sim, '종합판 — SIM 을 켠 채로 시작한다');
   t.ok(A.panel && A.mfd === 4 && A.ovhd === 'ck-mini-ovhd' && A.lcon === 'ck-mini-lcon' && A.cdu === 'ck-mini-cdu' && A.btns,
@@ -62,7 +63,7 @@ export async function run(page, t) {
     const mr = m.getBoundingClientRect(), br = bar.getBoundingClientRect();
     const mw = document.getElementById('map-wrap'), lm = leafMap.getSize();
     const o = { show: m.classList.contains('show'), below: mr.top >= br.bottom - 1 && Math.abs(mr.left - br.left) < 2 && mr.height > 80,
-                inSlot: mw.parentElement === m && !mw.classList.contains('page-hidden'), size: Math.abs(lm.x - mr.width) < 4 && Math.abs(lm.y - mr.height) < 4,
+                inSlot: mw.parentElement === m && !mw.classList.contains('page-hidden'), size: lm.x >= mr.width - 4 && lm.y >= mr.height - 4,   // (HDG↑ 이면 지도를 돌리려고 칸보다 크게 잡는다)
                 bars: getComputedStyle(document.getElementById('map-top-bar')).display === 'none' };
     toggleConsolePop('sysp'); await w(300); o.hide = !m.classList.contains('show') && mw.parentElement !== m;
     toggleConsolePop(null); exitSolo(); await w(300);
