@@ -307,12 +307,25 @@ function _sysPaint(g, c, W, H, dpr, own) {
       }
     }
   }
+  // HOIST CAM(24-sar.js) — Video 화면에서 Channel HOIST 면 큰 칸에 호이스트 붐에서 바로 아래를 보는 3D 지도를 얹는다
+  if (own) {
+    const camOn = sysPage === 'asys_video' && videoCfg.ch === 'HOIST';
+    const ox = (W - SYS_W * k) / 2, oy = (H - SYS_H * k) / 2;
+    try { if (typeof sarHoistCamSlot === 'function') sarHoistCamSlot(camOn, { left: ox + 227 * k, top: oy + 49 * k, width: 766 * k, height: 574 * k }); } catch (e) { _swallow(e); }
+  }
   if (sysPage === 'map') { /* 지도는 #sysp-map 이 그린다 */ }
   else if (sysPage === 'asys_fuel') _sysFuelPage(g, F);
   else if (sysPage === 'asys_elec') _sysElecPage(g, F);
   else if (sysPage === 'asys_afcs') _sysAfcsPage(g);
   else if (sysPage === 'asys_eng') _sysEnginePage(g, F);
   else if (sysPage === 'asys_status') _sysStatusPage(g, F);
+  else if (sysPage === 'asys_video' && videoCfg.ch === 'HOIST') {
+    // HOIST CAM — 큰 칸은 24-sar.js 의 지도가 덮는다(다른 캔버스에 그릴 때는 이름만)
+    g.fillStyle = '#4a6a7a'; g.textAlign = 'center'; g.font = 'bold 26px Helvetica Neue, Arial, sans-serif';
+    g.fillText('HOIST CAM', 610, 300);
+    g.font = '14px Helvetica Neue, Arial, sans-serif'; g.fillStyle = '#789';
+    g.fillText('호이스트 붐에서 바로 아래를 봅니다 — SYSTEM 창에 영상이 보입니다', 610, 330);
+  }
   else if (sysPage === 'asys_video') {
     g.fillStyle = '#4a6a7a'; g.textAlign = 'center'; g.font = 'bold 26px Helvetica Neue, Arial, sans-serif';
     g.fillText(`VIDEO — ${videoCfg.ch}`, 610, 300);
