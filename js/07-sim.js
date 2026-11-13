@@ -1365,7 +1365,9 @@ function updateSoloBtn() {
     b.textContent = on ? '✥ 분할' : `⛶ ${SOLO_NAMES[k]} 단독`;
     b.classList.toggle('active', on);
   });  const ob = document.getElementById('m3d-only-btn');
-  if (ob) { const on = _soloActive && _soloCurrent === 'm3d'; ob.textContent = on ? '✥ 분할' : '⛶ Cockpit Mode'; ob.classList.toggle('active', on); }
+  // Cockpit Mode 탭(오른쪽 창 · 가운데 · 아래 창 — 3D 탭 자리)
+  { const on = _soloActive && _soloCurrent === 'm3d';
+    document.querySelectorAll('.ck-mode-tab').forEach(b => { const t = on ? '✥ 분할' : '⛶ Cockpit Mode'; if (b.textContent !== t) b.textContent = t; b.classList.toggle('active', on); }); }
   try { if (typeof syncFcp3d === 'function') syncFcp3d(); } catch (e) { _swallow(e); }   // 3D 단독에서만 FCP L·R
   try { syncCduOverlay(); } catch (e) { _swallow(e); }   // 3D 단독에서만 CDU 겹치기
   try { syncMapOverlay(); } catch (e) { _swallow(e); }   // 3D 단독에서만 MAP 겹치기
@@ -1808,14 +1810,21 @@ function simLayoutShow() {
     el.innerHTML = `<div class="simlay-box"><div class="simlay-title">SIM Mode — 창 배치</div>` +
       `<div class="simlay-note">화면마다 눌러 새 창으로 띄운 뒤, 창을 모니터마다 끌어다 놓으십시오(한 번에 한 창).<br>` +
       `본 창은 시뮬을 돌리는 바탕입니다 — 닫거나 최소화하지 마십시오.</div>` +
-      `<div class="simlay-grid">` + SIM_LAYOUT_ORDER.map(k =>
-        `<button type="button" class="simlay-btn" data-act="popoutScreen" data-arg='["${k}"]' data-scr="${k}"><b>${names[k] || k}</b><span></span></button>`).join('') +
+      `<div class="simlay-grid">` + SIM_LAYOUT_ORDER.map(k => k === 'm3d'
+        // 3D 자리는 COCKPIT MODE — 3D 를 새 창에 띄우고 조종석 패널(MFD · 콘솔 · CDU)을 켠다(15-heli3d.js)
+        ? `<button type="button" class="simlay-btn" data-act="simLayoutCockpit" data-scr="m3d"><b>COCKPIT MODE</b><span></span></button>`
+        : `<button type="button" class="simlay-btn" data-act="popoutScreen" data-arg='["${k}"]' data-scr="${k}"><b>${names[k] || k}</b><span></span></button>`).join('') +
       `</div><div class="simlay-foot"><button type="button" class="simlay-sm" data-act="simLayoutAllBack">모두 본 창으로</button>` +
       `<button type="button" class="simlay-sm" data-act="simLayoutHide">닫기</button></div></div>`;
     document.body.appendChild(el);
   }
   el.classList.add('show');
   simLayoutSync();
+}
+function simLayoutCockpit() {
+  const open = (typeof popoutScreens === 'function') ? popoutScreens() : [];
+  if (!open.includes('m3d')) { try { if (typeof ckpitSet === 'function') ckpitSet(true); } catch (e) { _swallow(e); } }
+  try { popoutScreen('m3d'); } catch (e) { _swallow(e); }
 }
 function simLayoutHide() { const el = document.getElementById('simlay'); if (el) el.classList.remove('show'); }
 function simLayoutAllBack() { try { if (typeof popoutCloseAll === 'function') popoutCloseAll(); } catch (e) { _swallow(e); } simLayoutSync(); }
@@ -1835,14 +1844,22 @@ function simLayoutStart() {
 // (화면 버튼 등록은 19-lower.js — appRegister 는 09-cdu.js 에서 정의되어 이 파일보다 늦다)
 
 // ── Simple mode ── 시작 화면에서 'Simple Mode' 를 고르면 창 하나만 화면 가득 본다.
-// 위 막대에 쓸 수 있는 창(PFD · 3D · MAP · CDU · UPPER · LOWER · SYSTEM)이 다 있고, 누른 창 하나만 보인다.
+// 위 막대에 쓸 수 있는 창(PFD · COCKPIT · MAP · CDU · UPPER · LOWER · SYSTEM)이 다 있고, 누른 창 하나만 보인다.
 // 분할 패널(#app)은 감추고, 고른 화면 묶음을 그릇(#simple-host)에 옮긴다(applyPanels 의 hostOf).
-const SIMPLE_SCREENS = [['pfd', 'PFD'], ['m3d', '3D'], ['map', 'MAP'], ['cdu', 'CDU'], ['ovhd', 'UPPER'], ['lcon', 'LOWER'], ['sysp', 'SYSTEM']];
+const SIMPLE_SCREENS = [['pfd', 'PFD'], ['map', 'MAP'], ['cdu', 'CDU'], ['ovhd', 'UPPER'], ['lcon', 'LOWER'], ['sysp', 'SYSTEM']];
+// 위 막대의 두 번째 칸은 COCKPIT — Cockpit Mode(3D 조종석)로 들어가고, 끝내면(Split screen) 이 Simple 화면으로 돌아온다.
+// (3D 지도 자체는 MAP 의 '3D' 버튼으로 본다)
+let _ckFromSimple = null;
+function simpleCockpit() {
+  _ckFromSimple = window._simpleScr || 'pfd';
+  cockpitStart();
+}
 let simpleOn = false;
 function _simpleEnsure() {
   if (document.getElementById('simple-bar')) return;
   const bar = document.createElement('div'); bar.id = 'simple-bar';
-  bar.innerHTML = SIMPLE_SCREENS.map(([k, n]) => `<button type="button" data-act="simpleSet" data-arg='["${k}"]' data-scr="${k}">${n}</button>`).join('') +
+  bar.innerHTML = SIMPLE_SCREENS.map(([k, n]) => `<button type="button" data-act="simpleSet" data-arg='["${k}"]' data-scr="${k}">${n}</button>`)
+      .map((h, i) => i === 1 ? `<button type="button" data-act="simpleCockpit" data-scr="cockpit" title="Cockpit Mode — 3D 조종석(끝내면 이 화면으로 돌아온다)">COCKPIT</button>` + h : h).join('') +
     `<button type="button" class="simple-exit" data-act="simpleExit" title="Simple mode 끝내기 — 분할 화면(PC 모드)으로">PC 모드</button>`;
   const view = document.createElement('div'); view.id = 'simple-view';
   view.innerHTML = '<div id="simple-host"></div>';
@@ -1909,6 +1926,12 @@ function cockpitExit() {
   try { if (!simModeOn && typeof _ml3dSimCameraOff === 'function') _ml3dSimCameraOff(); } catch (e) { _swallow(e); }
   try { if (typeof heli3dNoseSync === 'function') heli3dNoseSync(null); } catch (e) { _swallow(e); }
   try { syncChinView(); } catch (e) { _swallow(e); }      // 축척 · 확대 버튼을 되살린다(#map3d.sim3d)
+  // Simple 화면의 COCKPIT 으로 들어왔으면 그 Simple 화면으로 돌아간다
+  if (_ckFromSimple) {
+    const k = _ckFromSimple; _ckFromSimple = null;
+    setTimeout(() => { try { simpleModeStart(k); sessionStorage.setItem('vfrStartMode', 'simple'); } catch (e) { _swallow(e); } }, 50);
+    return;
+  }
   try { sessionStorage.setItem('vfrStartMode', 'pc'); } catch (e) { _swallow(e); }
 }
 

@@ -25,8 +25,8 @@ export async function run(page, t) {
   });
   t.ok(lsys.a.join() === 'sysp,left-panel,true' && lsys.r !== 'sysp' && lsys.b[0] === 'pfd' && lsys.b[2] === false,
     `왼쪽 창 SYSTEM 탭 — PFD 자리에 SYSTEM, PFD 탭으로 돌아온다 (${lsys.a.join(' ')} · 우측 ${lsys.r} · ${lsys.b.join(' ')})`);
-  t.ok(tabs.M === 'CDU|MAP|3D|UPPER|LOWER|SYSTEM|⧉ POP UP|⟳', `CDU 창 탭: CDU · MAP · 3D · UPPER · LOWER · SYSTEM · POP UP · 새로고침 (+ 📌 Top) (${tabs.M})`);
-  t.ok(tabs.R === 'CDU|MAP|3D|UPPER|LOWER|SYSTEM|⛶ Cockpit Mode|⧉ POP UP', `MAP 창 탭: CDU · MAP · 3D · UPPER · LOWER · SYSTEM · Cockpit Mode · POP UP (+ 📌 Top) (${tabs.R})`);
+  t.ok(tabs.M === 'CDU|MAP|⛶ Cockpit Mode|UPPER|LOWER|SYSTEM|⧉ POP UP|⟳', `CDU 창 탭: CDU · MAP · Cockpit Mode(3D 자리) · UPPER · LOWER · SYSTEM · POP UP · 새로고침 (+ 📌 Top) (${tabs.M})`);
+  t.ok(tabs.R === 'CDU|MAP|UPPER|LOWER|SYSTEM|⛶ Cockpit Mode|⧉ POP UP', `MAP 창 탭: CDU · MAP · UPPER · LOWER · SYSTEM · Cockpit Mode · POP UP (+ 📌 Top) (${tabs.R})`);
   const two = await page.evaluate(() => { toggleTriple(false); const o = [leftSel, rightSel].join('·'); toggleTriple(true); return o; });
   t.eq(two, 'pfd·map', '2분할은 PFD · MAP');
   // 4분할 — 위에 PFD · 3D · MAP, 아래에 CDU
@@ -190,8 +190,8 @@ export async function run(page, t) {
     document.querySelector('#simple-bar [data-scr="lcon"]').click(); await wait(200);
     const lw = document.getElementById('lcon-wrap'); o.lcon = host('lcon-wrap'); o.lconW = lw.getBoundingClientRect().width;
     o.pfdBack = host('pfd-wrap'); o.on = [...document.querySelectorAll('#simple-bar .on')].map(b => b.dataset.scr).join();
-    // 3D 를 골라도 위 막대 버튼이 맨 위에 있어 눌린다 · 상태바(safe-area) 만큼 내려 둔다(iPad 홈 화면 앱)
-    document.querySelector('#simple-bar [data-scr="m3d"]').click(); await wait(300);
+    // 지도(MAP)를 골라도 위 막대 버튼이 맨 위에 있어 눌린다 · 상태바(safe-area) 만큼 내려 둔다(iPad 홈 화면 앱)
+    document.querySelector('#simple-bar [data-scr="map"]').click(); await wait(300);
     o.tap = [...document.querySelectorAll('#simple-bar button')].every(b => { const r = b.getBoundingClientRect(); const e = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return e === b || b.contains(e); });
     o.safe = [...document.styleSheets].some(ss => { try { return [...ss.cssRules].some(r => /#simple-bar/.test(r.selectorText || '') && /safe-area-inset-top/.test(r.cssText)); } catch (e) { return false; } });
     document.querySelector('#simple-bar [data-scr="sysp"]').click(); await wait(200); o.sysp = host('sysp-wrap'); o.lconBack = document.getElementById('lcon-wrap').classList.contains('page-hidden');   // 고르지 않은 창은 숨는다
@@ -206,7 +206,7 @@ export async function run(page, t) {
   t.ok(simp.pfd === 'simple-host' && simp.appHidden, `Simple mode — 분할 화면을 감추고 고른 창(PFD) 하나만 화면 가득`);
   t.ok(simp.lcon === 'simple-host' && simp.lconW > 500 && simp.pfdBack !== 'simple-host' && simp.on === 'lcon' && simp.sysp === 'simple-host' && simp.lconBack,
     `위 막대에서 다른 창(LOWER · SYSTEM)을 누르면 그 창 하나로 바뀐다 (LOWER 폭 ${Math.round(simp.lconW)}px)`);
-  t.ok(simp.tap && simp.safe, `3D 를 골라도 위 막대 버튼이 가려지지 않고 눌린다 · 상태바(safe-area) 아래로 (tap ${simp.tap} · safe ${simp.safe})`);
+  t.ok(simp.tap && simp.safe, `MAP 을 골라도 위 막대 버튼이 가려지지 않고 눌린다 · 상태바(safe-area) 아래로 (tap ${simp.tap} · safe ${simp.safe})`);
   t.ok(!simp.exit.simple && simp.exit.pfd === 'left-panel' && simp.exit.app, "'PC 모드' 를 누르면 분할 화면으로 돌아온다");
   t.ok(simp.ov[0] === 1.2 && simp.ov[1] === 30 && simp.ov[2] === 72 && simp.min === 0.6 && simp.max === 1.6,
     `3D 화면 계기 크기 −/+ — 60~160% (120% → 폭 ${simp.ov[1]}% · 높이 ${simp.ov[2]}%)`);

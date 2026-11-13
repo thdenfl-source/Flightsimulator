@@ -52,4 +52,37 @@ export async function run(page, t) {
   });
   t.ok(!I.sim && I.m0 && !I.m1 && I.m2 && I.m3 && I.c0 !== I.c1 && I.c2 === I.c0,
     `FCP IAS 를 누르면 AFCS 상태 띠의 IAS 가 꺼지고, 다시 누르면 켜진다 · 노브를 돌리면 다시 걸린다 (${I.c0} → ${I.c1} → ${I.c2})`);
+
+  // ── PFD 팝아웃 — FCP 아래 남는 칸에 움직이는 지도 ──
+  const pm = await page.evaluate(async () => {
+    const w = ms => new Promise(r => setTimeout(r, ms));
+    S.alt = 1500; S.spd = 100; cockpitStart(); await w(1000);
+    toggleConsolePop('pfd'); await w(600);
+    const m = document.getElementById('ck-pop-map'), bar = document.querySelector('#pfd-wrap .ctrl-bar');
+    const mr = m.getBoundingClientRect(), br = bar.getBoundingClientRect();
+    const d = m.getContext('2d').getImageData(0, 0, m.width, m.height).data; let lit = 0;
+    for (let i = 0; i < d.length; i += 64) if (d[i] + d[i + 1] + d[i + 2] > 60) lit++;
+    const o = { show: m.classList.contains('show'), below: mr.top >= br.bottom - 1 && Math.abs(mr.left - br.left) < 2 && mr.height > 80, lit };
+    toggleConsolePop('sysp'); await w(300); o.hide = !m.classList.contains('show');
+    toggleConsolePop(null); exitSolo(); await w(300);
+    try { if (simModeOn) toggleSimMode(false); } catch (e) { /* 절차 훈련판 */ }
+    S.alt = 0; S.spd = 0; S.running = false;
+    return o;
+  });
+  t.ok(pm.show && pm.below && pm.lit > 20 && pm.hide, `PFD 팝아웃 — FCP 아래 칸에 움직이는 지도(다른 화면으로 바꾸면 빠진다) (${JSON.stringify(pm)})`);
+  // ── Simple 모드 위 막대의 COCKPIT — Cockpit Mode 로 들어가고, 끝내면 그 Simple 화면으로 돌아온다 ──
+  const sc = await page.evaluate(async () => {
+    const w = ms => new Promise(r => setTimeout(r, ms));
+    simpleModeStart('map'); await w(300);
+    const names = [...document.querySelectorAll('#simple-bar [data-scr]')].map(b => b.textContent).join(',');
+    document.querySelector('#simple-bar [data-scr="cockpit"]').click(); await w(800);
+    const o = { names, ck: window._cockpitOn && _soloActive && _soloCurrent === 'm3d', simpleIn: simpleOn };
+    exitSolo(); await w(500);
+    o.back = { simple: simpleOn, scr: window._simpleScr, ck: window._cockpitOn };
+    simpleExit(); await w(200);
+    try { if (simModeOn) toggleSimMode(false); } catch (e) { /* 절차 훈련판 */ }
+    return o;
+  });
+  t.ok(sc.names === 'PFD,COCKPIT,MAP,CDU,UPPER,LOWER,SYSTEM' && sc.ck && !sc.simpleIn, `Simple 위 막대 — 3D 자리에 COCKPIT · 누르면 Cockpit Mode (${sc.names})`);
+  t.ok(sc.back.simple && sc.back.scr === 'map' && !sc.back.ck, 'Cockpit Mode 를 끝내면 들어오기 전 Simple 화면(MAP)으로 돌아온다');
 }
