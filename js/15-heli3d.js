@@ -682,8 +682,10 @@ function heli3dNoseSync(look) {
   if (!el) return;
   const want = (typeof simModeOn !== 'undefined') && simModeOn && !simExtView && !simCamTx &&
                !!_ml3d && (typeof _map3dShown !== 'function' || _map3dShown());
-  if (el.classList.contains('show') !== want) el.classList.toggle('show', want);
-  if (!want) return;
+  const ck = want && ckpitWanted();                       // 조종석 패널이 덮으면 기수는 감춘다(패널 아래에 가려 보이지 않는다)
+  const showNose = want && !ck;
+  if (el.classList.contains('show') !== showNose) el.classList.toggle('show', showNose);
+  if (!want) { ckpitSync(null); return; }
   const H = (_ml3d && _ml3d.getContainer().clientHeight) || 600;
   let fov = 36.87;
   try { if (Number.isFinite(_ml3d.transform.fov)) fov = _ml3d.transform.fov; } catch (e) { _swallow(e); }
@@ -691,7 +693,152 @@ function heli3dNoseSync(look) {
   const dx = -((look && look.yaw) || 0) * ppd, dy = ((look && look.pitch) || 0) * ppd;
   const tf = `translate(calc(-50% + ${dx.toFixed(1)}px), ${dy.toFixed(1)}px)`;
   if (el.style.transform !== tf) el.style.transform = tf;
+  ckpitSync(`translate(${dx.toFixed(1)}px, ${dy.toFixed(1)}px)`);
 }
+
+// ── 조종석 패널(1인칭 · SIM) ── 3D 화면 아래쪽에 흰수리 조종석(차양 · MFD 넷 · 가운데 콘솔 · 사이클릭 ·
+// 앞유리 틀)을 겹쳐 그린다. 3D 창의 '조종석' 버튼으로 켜고 끈다(이 기기에 적어 둔다). 외부 시점(EXT)·시점이
+// 바뀌는 동안은 숨기고, 시야를 둘러보면(B0 + 햇) 기수처럼 함께 움직인다(heli3dNoseSync).
+// 바닥 쪽은 비워 두어 땅이 보이고, CHIN 창은 패널 아래(발밑) 좌·우로 줄여 내린다. MFD 넷은 살아 있는 화면이다 —
+// 1 · 4 = PFD(03-pfd.js drawPfdTo) · 2 = Engines · 3 = Fuel(18-system.js sysDrawTo).
+// 그림 좌표는 1600×900(화면을 가득 채워 늘린다).
+const CKPIT_PREF = 'ckpitOv';
+let ckpitOn = false;
+try { ckpitOn = localStorage.getItem(CKPIT_PREF) === '1'; } catch (e) { _swallow(e); }
+// MFD 화면 자리(그림 좌표) — 테두리 안쪽
+const CKPIT_SCR = [
+  { k: 'pfd', x: 229, y: 580, w: 242, h: 146 },
+  { k: 'asys_eng', x: 527, y: 580, w: 242, h: 146 },
+  { k: 'asys_fuel', x: 831, y: 580, w: 242, h: 146 },
+  { k: 'pfd', x: 1129, y: 580, w: 242, h: 146 },
+];
+function _ckpitSvg() {
+  const bez = CKPIT_SCR.map(s => {
+    const x = s.x - 14, y = s.y - 12, w = s.w + 28, h = s.h + 40;
+    let keys = '';
+    for (let i = 0; i < 7; i++) keys += `<rect x="${(x + 22 + i * 34).toFixed(0)}" y="${y + h - 19}" width="22" height="9" rx="2" fill="#3a3e43"/>`;
+    for (let i = 0; i < 4; i++) keys += `<rect x="${x + 4}" y="${y + 22 + i * 30}" width="6" height="16" rx="1.5" fill="#33373c"/><rect x="${x + w - 10}" y="${y + 22 + i * 30}" width="6" height="16" rx="1.5" fill="#33373c"/>`;
+    return `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="7" fill="url(#ck-bez)" stroke="#0c0d0f" stroke-width="2"/>
+      <rect x="${s.x - 2}" y="${s.y - 2}" width="${s.w + 4}" height="${s.h + 4}" fill="#050607"/>${keys}`;
+  }).join('');
+  let knobs = '';
+  for (const x0 of [222, 1124]) for (let i = 0; i < 8; i++) {
+    const cx = x0 + 18 + i * 33;
+    knobs += `<circle cx="${cx}" cy="772" r="9" fill="#2c3035" stroke="#0e0f11" stroke-width="2"/><circle cx="${cx}" cy="772" r="3.5" fill="#55595e"/>`;
+  }
+  let pkeys = '';
+  for (let r = 0; r < 3; r++) for (let i = 0; i < 9; i++)
+    pkeys += `<rect x="${708 + i * 21}" y="${866 + r * 13}" width="15" height="8" rx="1.5" fill="#34383d"/>`;
+  return `<svg viewBox="0 0 1600 900" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="ck-hood" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#3a3d42"/><stop offset="0.35" stop-color="#202226"/><stop offset="1" stop-color="#121315"/></linearGradient>
+    <linearGradient id="ck-face" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#1a1c1f"/><stop offset="1" stop-color="#25282c"/></linearGradient>
+    <linearGradient id="ck-bez" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#2f3337"/><stop offset="1" stop-color="#1d2023"/></linearGradient>
+    <linearGradient id="ck-ped" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#2a2d31"/><stop offset="1" stop-color="#16181a"/></linearGradient>
+    <linearGradient id="ck-post" x1="0" x2="1" y1="0" y2="0"><stop offset="0" stop-color="#0f1012"/><stop offset="0.5" stop-color="#2b2e32"/><stop offset="1" stop-color="#0f1012"/></linearGradient>
+    <linearGradient id="ck-grip" x1="0" x2="1" y1="0" y2="0"><stop offset="0" stop-color="#16181a"/><stop offset="0.45" stop-color="#3b3f44"/><stop offset="1" stop-color="#121315"/></linearGradient>
+  </defs>
+  <!-- 앞유리 틀 — 위 띠 · 가운데 기둥 · 좌우 문 기둥 · 와이퍼 -->
+  <path d="M0 0 H1600 V20 Q800 36 0 20 Z" fill="#141518"/>
+  <path d="M786 0 H814 L820 520 H780 Z" fill="url(#ck-post)"/>
+  <path d="M0 150 L0 250 L196 600 L246 570 Z" fill="url(#ck-post)"/>
+  <path d="M1600 150 L1600 250 L1404 600 L1354 570 Z" fill="url(#ck-post)"/>
+  <path d="M742 512 L700 300" stroke="#16181a" stroke-width="7" stroke-linecap="round"/>
+  <path d="M858 512 L900 300" stroke="#16181a" stroke-width="7" stroke-linecap="round"/>
+  <!-- 계기판 앞면 -->
+  <path d="M168 556 H1432 L1446 792 Q800 812 154 792 Z" fill="url(#ck-face)" stroke="#0b0c0e" stroke-width="2"/>
+  ${bez}
+  ${knobs}
+  <!-- 차양(glareshield) — 가운데가 조금 솟은 덮개 -->
+  <path d="M140 618 C150 548 214 520 300 516 L690 512 C736 492 864 492 910 512 L1300 516 C1386 520 1450 548 1460 618 L1432 566 C1400 560 1340 562 1300 562 L300 562 C260 562 200 560 168 566 Z" fill="url(#ck-hood)" stroke="#0a0b0c" stroke-width="2"/>
+  <path d="M300 516 L690 512 C736 492 864 492 910 512 L1300 516" fill="none" stroke="#4a4e54" stroke-width="1.5" opacity="0.7"/>
+  <!-- 주의·경고등 · 대기 계기 -->
+  <rect x="566" y="530" width="64" height="20" rx="3" fill="#3a2a06" stroke="#0a0b0c"/><text x="598" y="544" font-size="10" font-family="Arial" font-weight="bold" fill="#8a6a1a" text-anchor="middle">CAUTION</text>
+  <rect x="970" y="530" width="64" height="20" rx="3" fill="#3a0c0c" stroke="#0a0b0c"/><text x="1002" y="544" font-size="10" font-family="Arial" font-weight="bold" fill="#8a2a2a" text-anchor="middle">WARNING</text>
+  <rect x="756" y="522" width="88" height="36" rx="4" fill="#0d0f11" stroke="#3a3e43" stroke-width="2"/>
+  <rect x="764" y="528" width="72" height="24" fill="#123a5a"/><rect x="764" y="540" width="72" height="12" fill="#5a3a1a"/><line x1="764" y1="540" x2="836" y2="540" stroke="#fff" stroke-width="1.2"/>
+  <!-- 가운데 콘솔(pedestal) -->
+  <path d="M686 796 L914 796 L968 900 L632 900 Z" fill="url(#ck-ped)" stroke="#0b0c0e" stroke-width="2"/>
+  <rect x="704" y="808" width="100" height="50" rx="3" fill="#0b0d0e" stroke="#3a3e43"/>
+  <rect x="710" y="813" width="88" height="40" fill="#0e3a3a"/>
+  <line x1="716" y1="822" x2="788" y2="822" stroke="#3ad1a0" stroke-width="2"/><line x1="716" y1="832" x2="770" y2="832" stroke="#3ad1a0" stroke-width="2"/><line x1="716" y1="842" x2="780" y2="842" stroke="#2fe0e0" stroke-width="2"/>
+  <rect x="816" y="808" width="82" height="50" rx="3" fill="#0b0d0e" stroke="#3a3e43"/><rect x="822" y="813" width="70" height="40" fill="#101a16"/>
+  ${pkeys}
+  <!-- 사이클릭(좌 · 우) -->
+  <g><path d="M418 900 C418 868 400 852 404 826" stroke="url(#ck-grip)" stroke-width="26" fill="none" stroke-linecap="round"/>
+     <path d="M372 808 C372 788 440 784 446 806 C450 822 436 834 404 834 C380 834 372 824 372 808 Z" fill="url(#ck-grip)" stroke="#0a0b0c" stroke-width="2"/>
+     <circle cx="430" cy="800" r="5" fill="#b01818"/><circle cx="398" cy="804" r="4" fill="#55595e"/></g>
+  <g><path d="M1182 900 C1182 868 1200 852 1196 826" stroke="url(#ck-grip)" stroke-width="26" fill="none" stroke-linecap="round"/>
+     <path d="M1228 808 C1228 788 1160 784 1154 806 C1150 822 1164 834 1196 834 C1220 834 1228 824 1228 808 Z" fill="url(#ck-grip)" stroke="#0a0b0c" stroke-width="2"/>
+     <circle cx="1170" cy="800" r="5" fill="#b01818"/><circle cx="1202" cy="804" r="4" fill="#55595e"/></g>
+</svg>`;
+}
+function _ckpitEl() {
+  let el = document.getElementById('sim-ckpit');
+  if (el) return el;
+  const d3 = document.getElementById('map3d');
+  if (!d3) return null;
+  el = document.createElement('div');
+  el.id = 'sim-ckpit'; el.setAttribute('aria-hidden', 'true');
+  el.innerHTML = _ckpitSvg() + CKPIT_SCR.map((s, i) =>
+    `<canvas class="ck-scr" data-i="${i}" data-no-fcp="1" style="left:${(s.x / 16).toFixed(3)}%;top:${(s.y / 9).toFixed(3)}%;width:${(s.w / 16).toFixed(3)}%;height:${(s.h / 9).toFixed(3)}%"></canvas>`).join('');
+  d3.appendChild(el);
+  return el;
+}
+// 지금 보여야 하나 — 기수와 같은 조건(SIM 1인칭 · 3D 가 떠 있음) + 버튼
+function ckpitWanted() {
+  return ckpitOn && (typeof simModeOn !== 'undefined') && simModeOn && !simExtView && !simCamTx &&
+         !!_ml3d && (typeof _map3dShown !== 'function' || _map3dShown());
+}
+// 보이기·감추기와 시야 둘러보기 이동(heli3dNoseSync 가 매 프레임 부른다)
+function ckpitSync(tf) {
+  const want = ckpitWanted();
+  const el = want ? _ckpitEl() : document.getElementById('sim-ckpit');
+  const b = document.getElementById('ckpit-btn');
+  if (b) {
+    const sim = (typeof simModeOn !== 'undefined') && simModeOn;
+    if (b.classList.contains('show') !== sim) b.classList.toggle('show', sim);
+    if (b.classList.contains('on') !== ckpitOn) { b.classList.toggle('on', ckpitOn); }
+    const t = ckpitOn ? '조종석 ON' : '조종석 OFF';
+    if (b.textContent !== t) b.textContent = t;
+  }
+  // CHIN 창은 패널 아래(발밑)로 줄여 내린다(index.html #map3d.ckpit-on + #chin-row) — 줄면 그 지도들을 다시 잰다
+  const d3 = document.getElementById('map3d');
+  if (d3 && d3.classList.contains('ckpit-on') !== want) {
+    d3.classList.toggle('ckpit-on', want);
+    setTimeout(() => { try { (typeof _chinMaps !== 'undefined' ? _chinMaps : []).forEach(m => m && m.resize && m.resize()); } catch (e) { _swallow(e); } }, 30);
+  }
+  if (!el) return;
+  if (el.classList.contains('show') !== want) { el.classList.toggle('show', want); if (want) ckpitDraw(); }
+  if (want && tf != null && el.style.transform !== tf) el.style.transform = tf;
+}
+// MFD 화면 그리기 — 1초에 열 번(PFD 창·계통 창과 따로 그린다)
+function ckpitDraw() {
+  const el = document.getElementById('sim-ckpit');
+  if (!el || !el.classList.contains('show')) return;
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  el.querySelectorAll('canvas.ck-scr').forEach(c => {
+    const s = CKPIT_SCR[+c.dataset.i];
+    const cw = c.clientWidth, ch = c.clientHeight;
+    if (!(cw > 4 && ch > 4)) return;
+    // 칸이 작으면 큰 크기로 그려 줄여 보인다(글자가 겹치지 않게 · 07-sim.js PFD_OV_MINW 와 같은 생각)
+    const k = Math.max(dpr, (s.k === 'pfd' ? 420 : 520) / cw);
+    const W = Math.round(cw * k), H = Math.round(ch * k);
+    if (c.width !== W || c.height !== H) { c.width = W; c.height = H; }
+    try {
+      if (s.k === 'pfd') { if (typeof drawPfdTo === 'function') drawPfdTo(c); }
+      else if (typeof sysDrawTo === 'function') sysDrawTo(c, s.k);
+    } catch (e) { _swallow(e); }
+  });
+}
+setInterval(() => { try { ckpitDraw(); } catch (e) { _swallow(e); } }, 100);
+function toggleCockpitView() {
+  ckpitOn = !ckpitOn;
+  try { localStorage.setItem(CKPIT_PREF, ckpitOn ? '1' : '0'); } catch (e) { _swallow(e); }
+  try { heli3dNoseSync(null); } catch (e) { _swallow(e); }
+  ckpitSync(null);
+}
+try { appRegister({ toggleCockpitView }); } catch (e) { _swallow(e); }
 
 // 화면 버튼(data-act) 연결 — 11-charts.js 보다 나중에 로드되므로 여기서 직접 등록한다
 try { appRegister({ toggleExtView, extCamHold, extCamDefault }); } catch (e) { _swallow(e); }

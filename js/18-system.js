@@ -266,7 +266,16 @@ function sysEnsure() {
 function sysDraw() {
   const E = sysEnsure();
   if (!E) return;
-  const { g, W, H, dpr } = E;
+  _sysPaint(E.g, E.c, E.W, E.H, E.dpr, true);
+}
+// 같은 계통 화면을 다른 캔버스에 그린다 — SIM 3D 조종석 패널의 MFD(15-heli3d.js) · 고른 화면(page)으로 잠깐 바꿔 그린다
+function sysDrawTo(c, page) {
+  const p0 = sysPage;
+  if (page && SYS_PAGES[page] && page !== 'map') sysPage = page;
+  try { _sysPaint(c.getContext('2d'), c, c.width, c.height, 1, false); } finally { sysPage = p0; }
+}
+function _sysPaint(g, c, W, H, dpr, own) {
+  const E = { c };
   g.setTransform(1, 0, 0, 1, 0, 0);
   g.fillStyle = '#000'; g.fillRect(0, 0, E.c.width, E.c.height);
   const k = Math.min(W / SYS_W, H / SYS_H);
@@ -284,7 +293,7 @@ function sysDraw() {
   g.strokeStyle = '#ccc'; g.lineWidth = 1; g.strokeRect(605 - tw / 2 + 0.5, 33.5, tw - 1, 13);
   g.fillStyle = '#fff'; g.textAlign = 'center'; g.fillText(name, 605, 44);
   // Map 화면 — 큰 칸(청록 테두리 안)에 2D 지도를 얹는다
-  const slot = document.getElementById('sysp-map');
+  const slot = own ? document.getElementById('sysp-map') : null;
   if (slot) {
     const on = sysPage === 'map';
     slot.style.display = on ? 'block' : 'none';
