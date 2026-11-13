@@ -370,4 +370,33 @@ export async function run(page, t) {
     'UpperC — 상부 콘솔로 바꿔 띄우고, 하부 콘솔은 조종석 자리로 돌아간다');
   t.ok(!con.close.show && con.close.u === 'ck-mini-ovhd', '다시 누르면 닫히고 콘솔은 조종석 자리로');
   t.ok(con.offMini.lHidden && !con.exit, '조종석을 끄면 작은 콘솔도 감추고, SIM 을 끄면 버튼도 숨는다');
+
+  // ── MFD 화면(PFD · SYSTEM · 지도)도 누르면 크게 띄운다 ──
+  const mfd = await page.evaluate(async () => {
+    const w = ms => new Promise(r => setTimeout(r, ms));
+    const par = id => (document.getElementById(id).parentElement || {}).id;
+    const out = {};
+    const solo0 = _soloActive && _soloCurrent === 'm3d';
+    if (!solo0) setSolo('m3d');
+    S.alt = 1000; S.spd = 80; toggleSimMode(true); S.alt = 1000; await w(300);
+    if (!ckpitOn) toggleCockpitView();
+    await w(300);
+    for (const [i, k, id] of [[0, 'pfd', 'pfd-wrap'], [1, 'sysp', 'sysp-wrap'], [2, 'map', 'map-wrap']]) {
+      document.querySelector(`#sim-ckpit canvas.ck-scr[data-i="${i}"]`).click(); await w(400);
+      const el = document.getElementById(id);
+      out[k] = { pop: ckConPop, par: par(id), h: el.clientHeight, title: document.getElementById('ck-pop-title').textContent };
+    }
+    out.pfdH = document.getElementById('pfd-wrap').clientHeight;
+    toggleConsolePop(null); await w(300);
+    out.close = { pop: ckConPop, show: document.getElementById('ck-pop').classList.contains('show') };
+    toggleCockpitView(); toggleSimMode(false); await w(100);
+    if (!solo0) exitSolo();
+    S.alt = 0; S.spd = 0; S.running = false;
+    await w(200);
+    return out;
+  });
+  for (const [k, title] of [['pfd', 'PFD'], ['sysp', 'SYSTEM'], ['map', 'MAP']])
+    t.ok(mfd[k].pop === k && mfd[k].par === 'ck-pop-host' && mfd[k].h > 200 && mfd[k].title === title,
+      `MFD 를 누르면 ${title} 창을 크게 띄운다 (높이 ${mfd[k].h}px)`);
+  t.ok(mfd.pfdH === 0 && !mfd.close.show && mfd.close.pop === null, '다른 화면으로 바꾸면 앞 화면은 감추고, ✕ 로 닫는다');
 }
