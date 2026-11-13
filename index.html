@@ -17,8 +17,8 @@
      CDN 을 쓰면 한 번이라도 못 받는 순간 앱이 통째로 죽는다 — 비행 중에는
      그럴 여지를 두지 않는다. -->
 <!-- 패널 새 창(다중 모니터) — 라이브러리가 거는 이벤트까지 받아 적어야 하므로 맨 먼저 -->
-<script src="js/00-edition.js?v=604"></script>
-<script src="js/00-popout.js?v=604"></script>
+<script src="js/00-edition.js?v=605"></script>
+<script src="js/00-popout.js?v=605"></script>
 <link rel="stylesheet" href="vendor/leaflet.css"/>
 <script src="vendor/leaflet.js"></script>
 <link rel="stylesheet" href="vendor/leaflet-velocity.min.css"/>
@@ -748,7 +748,7 @@ html, body {
 #map-wrap.tcut-off #map3d.chin-on.ckpit-on + #chin-row, #map3d.panel-3d.chin-on.ckpit-on + #chin-row { top: 89%; height: 11%; }
 #map3d.ckpit-on + #chin-row .chin-pane { width: 22%; border-radius: 8px 8px 30px 30px / 8px 8px 22px 22px; }
 #sim-ckpit.show { display: block; }
-#sim-ckpit svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; opacity: 0.45; }   /* 틀·구조는 반투명 — 스크린(canvas)만 또렷하다 */
+#sim-ckpit > svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; opacity: 0.45; }   /* 틀·구조는 반투명 — 스크린(canvas)만 또렷하다 */
 #sim-ckpit canvas.ck-scr { position: absolute; display: block; background: #000; }
 #ctl3d #lconc-btn, #ctl3d #upperc-btn { display: none; }
 #ctl3d #lconc-btn.show, #ctl3d #upperc-btn.show { display: block; }
@@ -762,6 +762,10 @@ html, body {
 /* 조종석 CDU(작은 칸 · 팝아웃) — #cdu-ov 를 칸에 꼭 맞춘다 */
 .ck-con > #cdu-ov.ck-in, #ck-pop-host > #cdu-ov.ck-in { position: absolute; inset: 0; width: auto; height: auto; min-height: 0;
                      aspect-ratio: auto; border: 0; border-radius: 0; box-shadow: none; z-index: auto; }
+/* 조종석 안 작은 CDU — CDU 를 제 크기(354×567)로 그린 뒤 통째로 줄인다(작은 칸에 맞춰 다시 배치하면 그림이 엉킨다).
+   줄이는 배율 --ckk 는 15-heli3d.js 가 칸 너비로 정한다. 작은 칸은 누르면 팝아웃이라 그대로 조작하지는 않는다 */
+.ck-con > #cdu-ov.ck-in { right: auto; bottom: auto; width: 354px; height: 567px; min-width: 0;
+                          transform: scale(var(--ckk, 0.25)); transform-origin: 0 0; }
 /* 팝아웃 층 — 3D 지도 바로 뒤, 3D 지도 칸에 꼭 맞춘다(15-heli3d.js _ckLayer) */
 #ck-layer { position: absolute; z-index: 960; pointer-events: none; }   /* 겹친 계기(#pfd-ov 950)보다 위 */
 .ck-con > #ovhd-wrap, .ck-con > #lcon-wrap, #ck-pop-host > .page-content:not(.page-hidden), #ck-pop-host > #pfd-wrap:not(.page-hidden) {
@@ -2367,7 +2371,7 @@ body.simple-mode #simple-view { display: flex; position: fixed; left: 0; right: 
     </div>
   </form>
 </div>
-<script src="js/00-gate.js?v=604"></script>
+<script src="js/00-gate.js?v=605"></script>
 <!-- ── 단일화면 선택 바 (기본 숨김) ── -->
 <!-- ── 시작 안내(사용법/키보드) 오버레이 ── -->
 <div id="help-overlay" style="display:none;">
@@ -3669,40 +3673,40 @@ body.simple-mode #simple-view { display: flex; position: fixed; left: 0; right: 
 <!-- 앱 코드 — 클래식 스크립트(모듈 아님)라 전역 스코프를 공유한다.
      순서가 곧 실행 순서이므로 임의로 바꾸지 말 것. -->
   <!-- AIP 데이터 — 코드보다 먼저 로드한다 -->
-  <script src="js/data/terminal-fixes.js?v=604"></script>
-  <script src="js/data/ifr-fixes.js?v=604"></script>
-  <script src="js/data/ifr-procedures.js?v=604"></script>
-  <script src="js/data/airfield-info.js?v=604"></script>
-  <script src="js/data/enr-vors.js?v=604"></script>
-  <script src="js/data/loc-stations.js?v=604"></script>
-  <script src="js/data/enr-routes.js?v=604"></script>
-  <script src="js/data/airspace.js?v=604"></script>
-  <script src="js/data/runways.js?v=604"></script>
+  <script src="js/data/terminal-fixes.js?v=605"></script>
+  <script src="js/data/ifr-fixes.js?v=605"></script>
+  <script src="js/data/ifr-procedures.js?v=605"></script>
+  <script src="js/data/airfield-info.js?v=605"></script>
+  <script src="js/data/enr-vors.js?v=605"></script>
+  <script src="js/data/loc-stations.js?v=605"></script>
+  <script src="js/data/enr-routes.js?v=605"></script>
+  <script src="js/data/airspace.js?v=605"></script>
+  <script src="js/data/runways.js?v=605"></script>
   <!-- 앱 코드 -->
-  <script src="js/00-ui.js?v=604"></script>
-  <script src="js/01-state.js?v=604"></script>
-  <script src="js/02-math.js?v=604"></script>
-  <script src="js/03-pfd.js?v=604"></script>
-  <script src="js/04-map.js?v=604"></script>
-  <script src="js/05-gps.js?v=604"></script>
-  <script src="js/06-nav.js?v=604"></script>
-  <script src="js/07-sim.js?v=604"></script>
-  <script src="js/08-ifrdb.js?v=604"></script>
-  <script src="js/09-cdu.js?v=604"></script>
-  <script src="js/10-tools.js?v=604"></script>
-  <script src="js/11-charts.js?v=604"></script>
-  <script src="js/12-joystick.js?v=604"></script>
-  <script src="js/13-joyhid.js?v=604"></script>
-  <script src="js/14-simmode.js?v=604"></script>
-  <script src="js/15-heli3d.js?v=604"></script>
-  <script src="js/16-sound.js?v=604"></script>
-  <script src="js/17-upper.js?v=604"></script>
-  <script src="js/18-system.js?v=604"></script>
-  <script src="js/19-lower.js?v=604"></script>
-  <script src="js/20-navaids.js?v=604"></script>
-  <script src="js/21-c5000.js?v=604"></script>
-  <script src="js/22-npx138.js?v=604"></script>
-  <script src="js/23-afcs.js?v=604"></script>
+  <script src="js/00-ui.js?v=605"></script>
+  <script src="js/01-state.js?v=605"></script>
+  <script src="js/02-math.js?v=605"></script>
+  <script src="js/03-pfd.js?v=605"></script>
+  <script src="js/04-map.js?v=605"></script>
+  <script src="js/05-gps.js?v=605"></script>
+  <script src="js/06-nav.js?v=605"></script>
+  <script src="js/07-sim.js?v=605"></script>
+  <script src="js/08-ifrdb.js?v=605"></script>
+  <script src="js/09-cdu.js?v=605"></script>
+  <script src="js/10-tools.js?v=605"></script>
+  <script src="js/11-charts.js?v=605"></script>
+  <script src="js/12-joystick.js?v=605"></script>
+  <script src="js/13-joyhid.js?v=605"></script>
+  <script src="js/14-simmode.js?v=605"></script>
+  <script src="js/15-heli3d.js?v=605"></script>
+  <script src="js/16-sound.js?v=605"></script>
+  <script src="js/17-upper.js?v=605"></script>
+  <script src="js/18-system.js?v=605"></script>
+  <script src="js/19-lower.js?v=605"></script>
+  <script src="js/20-navaids.js?v=605"></script>
+  <script src="js/21-c5000.js?v=605"></script>
+  <script src="js/22-npx138.js?v=605"></script>
+  <script src="js/23-afcs.js?v=605"></script>
 
 <input type="file" id="zipFileInput" accept=".zip,application/zip,application/x-zip-compressed,application/octet-stream" style="display:none" onchange="handleZipFile(this.files[0]); this.value='';"></body>
 </html>

@@ -920,6 +920,11 @@ function ckpitSync(tf) {
     try { syncCduOverlay(); } catch (e) { _swallow(e); } // CDU 도 하부 콘솔 오른쪽으로(3D 단독에서)
   }
   if (want && tf != null && el.style.transform !== tf) el.style.transform = tf;
+  // 작은 CDU 를 줄이는 배율(index.html .ck-con > #cdu-ov.ck-in) — 칸 너비 / CDU 제 너비(354)
+  if (want) {
+    const m = document.getElementById('ck-mini-cdu');
+    if (m && m.clientWidth > 0) { const k = (m.clientWidth / 354).toFixed(4); if (m.style.getPropertyValue('--ckk') !== k) { m.style.setProperty('--ckk', k); try { scaleCdu(); } catch (e) { _swallow(e); } } }
+  }
   if (ckConPop) { _ckLayer(); _ckPopFit(); }               // 창 크기가 바뀌어도 팝아웃을 3D 화면에 맞춘다
 }
 // MFD 화면 그리기 — 1초에 열 번(PFD 창·계통 창과 따로 그린다)
