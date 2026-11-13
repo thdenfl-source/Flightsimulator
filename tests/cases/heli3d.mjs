@@ -473,4 +473,25 @@ export async function run(page, t) {
   });
   t.ok(cdu1.solo === 'm3d' && cdu1.fp === 'cdu-ov', `Flight Plan 도 그 칸 안에서 열리고 3D 화면은 그대로다 (${cdu1.solo} · ${cdu1.fp})`);
   t.ok(!cdu1.off.par && cdu1.off.wrap !== 'cdu-ov', '조종석을 끄면 CDU 는 제자리로 돌아간다');
+
+  // ── 와이퍼 — 상부 콘솔 WINDSLD WIPER 를 따라 움직이고, WASH 는 와이퍼 전체에서 물이 나온다 ──
+  const wip = await page.evaluate(async () => {
+    const w = ms => new Promise(r => setTimeout(r, ms));
+    enterSolo('m3d'); await w(300);
+    S.alt = 1000; S.spd = 80; toggleSimMode(true); S.alt = 1000; await w(300);
+    if (!ckpitOn) toggleCockpitView();
+    await w(300);
+    const st = () => { const l = document.getElementById('ck-wipe-l'); return { anim: getComputedStyle(l).animationName, dur: getComputedStyle(l).animationDuration, water: getComputedStyle(document.querySelector('#ck-wipe-l .ck-water')).display }; };
+    const o = {};
+    for (const v of ['OFF', 'LOW', 'HI', 'WASH']) { ovhdSet('wiper', v); await w(150); o[v] = st(); }
+    ovhdSet('wiper', 'LOW'); await w(150);
+    const a = getComputedStyle(document.getElementById('ck-wipe-l')).transform; await w(400);
+    o.moves = getComputedStyle(document.getElementById('ck-wipe-l')).transform !== a;
+    ovhdSet('wiper', 'OFF'); toggleCockpitView(); toggleSimMode(false); exitSolo(); await w(200);
+    S.alt = 0; S.spd = 0; S.running = false;
+    return o;
+  });
+  t.ok(wip.OFF.anim === 'none' && wip.LOW.anim === 'ckWipeL' && wip.HI.anim === 'ckWipeL' && parseFloat(wip.HI.dur) < parseFloat(wip.LOW.dur) && wip.moves,
+    `와이퍼 — OFF 멈춤 · LOW ${wip.LOW.dur} · HI ${wip.HI.dur} 로 쓸어 움직인다`);
+  t.ok(wip.WASH.anim === 'ckWipeL' && wip.WASH.water !== 'none' && wip.LOW.water === 'none', `WASH — 와이퍼 전체에서 물이 나오며 쓸린다(다른 자리에서는 물이 없다)`);
 }
