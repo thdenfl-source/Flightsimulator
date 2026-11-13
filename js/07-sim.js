@@ -1906,7 +1906,8 @@ window._cockpitOn = false;
 function cockpitStart() {
   try { if (typeof simpleOn !== 'undefined' && simpleOn) simpleExit(); } catch (e) { _swallow(e); }
   window._cockpitOn = true;
-  try { if (!followMode) toggleFollow(); } catch (e) { _swallow(e); }          // 카메라가 헬기를 따라간다
+  try { if (!followMode) toggleFollow(); } catch (e) { _swallow(e); }          // 카메라가 헬기를 따라간다(지도도 1인칭)
+  try { if (!mapHdgUp) toggleMapOrient(); } catch (e) { _swallow(e); }         // 지도는 기수 위(HDG↑)
   try { if (!(_soloActive && _soloCurrent === 'm3d')) panelSolo('m3d'); } catch (e) { _swallow(e); }
   try { if (typeof ckpitSet === 'function') ckpitSet(true); } catch (e) { _swallow(e); }
   // 종합판(shinesong)은 SIM 을 켠 채로 시작한다 — 절차 훈련판(SIM_ENABLED 거짓)은 SIM 없이 AFCS 로 나는 조종석 시야

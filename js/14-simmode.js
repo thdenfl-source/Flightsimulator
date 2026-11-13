@@ -1055,11 +1055,9 @@ function _vStickBox() {
   box = document.createElement('div'); box.id = 'vstick';
   box.innerHTML =
     '<div class="vs-left"><div class="vs-track vs-ped" data-k="yaw"><div class="vs-knob"></div><span class="vs-lbl">PEDAL</span></div>' +
-    // 시야 조이스틱 — 앞 · 위 · 뒤 / 왼쪽 · 아래 · 오른쪽(누르고 있는 동안 돌아보고, 놓으면 정면으로)
-    '<div class="vs-look"><button type="button" data-look="C" title="정면">앞</button><button type="button" data-look="F" title="위를 본다">▲</button>' +
-    '<button type="button" data-look="B" title="뒤(어깨 너머)를 본다">뒤</button><button type="button" data-look="L" title="왼쪽을 본다">◀</button>' +
-    '<button type="button" data-look="A" title="아래를 본다">▼</button><button type="button" data-look="R" title="오른쪽을 본다">▶</button>' +
-    '<span class="vs-look-lbl">VIEW</span></div></div>' +
+    // 시야 조이스틱 — 사이클릭처럼 둥근 판: 끌어 간 쪽으로 고개를 돌린다(가장자리 좌우 = 어깨 너머 150° · 위아래 = 올려다보기/내려다보기).
+    // 놓으면 정면으로 돌아온다 · 가운데를 톡 누르면 바로 정면
+    '<div class="vs-look" data-look="1"><div class="vs-ring"></div><div class="vs-knob"></div><span class="vs-lbl">VIEW</span></div></div>' +
     '<div class="vs-cyc" data-k="cyc"><div class="vs-ring"></div><div class="vs-knob"></div><span class="vs-lbl">CYCLIC</span></div>';
   d3.appendChild(box);
   // 컬렉티브는 왼손 — 화면 왼쪽 아래 끝(L CHIN 창의 왼쪽 가장자리)에 따로 둔다
@@ -1094,17 +1092,26 @@ function _vStickBox() {
     };
     el.addEventListener('pointerup', end); el.addEventListener('pointercancel', end);
   });
-  // 시야 버튼 — 햇 둘러보기(simLook)와 같다. '앞' 은 바로 정면으로
-  box.querySelectorAll('[data-look]').forEach(bt => {
-    const d = bt.dataset.look;
-    bt.addEventListener('pointerdown', ev => {
-      ev.preventDefault(); ev.stopPropagation(); try { bt.setPointerCapture(ev.pointerId); } catch (e) { _swallow(e); }
-      if (d === 'C') { simLookReset(); return; }
-      bt.classList.add('held'); simLookHold(true); simLookDir = d;
-    });
-    const up = () => { if (!bt.classList.contains('held')) return; bt.classList.remove('held'); simLookHold(false); };
-    bt.addEventListener('pointerup', up); bt.addEventListener('pointercancel', up);
-  });
+  // 시야 판 — 햇 둘러보기(simLook)와 같은 시선을 손가락 자리로 바로 잡는다
+  const lk = box.querySelector('.vs-look');
+  if (lk) {
+    const knob = lk.querySelector('.vs-knob');
+    const place = (fx, fy) => { if (knob) { knob.style.left = `calc(${(50 + fx * 50).toFixed(1)}% - 11px)`; knob.style.top = `calc(${(50 - fy * 50).toFixed(1)}% - 11px)`; } };
+    const set = ev => {
+      const r = lk.getBoundingClientRect(), R = Math.min(r.width, r.height) / 2;
+      let fx = (ev.clientX - (r.left + r.width / 2)) / R, fy = -(ev.clientY - (r.top + r.height / 2)) / R;
+      const m = Math.hypot(fx, fy); if (m > 1) { fx /= m; fy /= m; }
+      simLookHold(true); simLookDir = null;
+      simLook.yaw = Math.abs(fx) < 0.06 ? 0 : fx * LOOK_YAW_MAX;
+      simLook.pitch = Math.abs(fy) < 0.06 ? 0 : (fy > 0 ? fy * LOOK_PIT_UP : fy * LOOK_PIT_DN);
+      place(fx, fy);
+    };
+    lk.addEventListener('pointerdown', ev => { ev.preventDefault(); ev.stopPropagation(); try { lk.setPointerCapture(ev.pointerId); } catch (e) { _swallow(e); } lk.classList.add('held'); set(ev); });
+    lk.addEventListener('pointermove', ev => { if (lk.classList.contains('held')) { ev.preventDefault(); set(ev); } });
+    const up = () => { if (!lk.classList.contains('held')) return; lk.classList.remove('held'); simLookHold(false); place(0, 0); };
+    lk.addEventListener('pointerup', up); lk.addEventListener('pointercancel', up);
+    place(0, 0);
+  }
   return box;
 }
 function vStickRender() {

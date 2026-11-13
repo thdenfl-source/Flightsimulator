@@ -512,24 +512,23 @@ export async function run(page, t) {
     if (!vStickOn) toggleVStick(); await w(300);
     const vs = document.getElementById('vstick'), ped = vs.querySelector('.vs-ped').getBoundingClientRect(), lk = vs.querySelector('.vs-look').getBoundingClientRect();
     o.below = lk.top >= ped.bottom - 1;
-    const btn = d => vs.querySelector(`[data-look="${d}"]`);
-    const hold = async (d, ms) => { const b = btn(d), r = b.getBoundingClientRect(), e = { bubbles: true, clientX: r.left + 4, clientY: r.top + 4, pointerId: 7 };
-      b.dispatchEvent(new PointerEvent('pointerdown', e)); for (let t = 0; t < ms; t += 50) { simLookStep(0.05); await w(5); }
-      const v = { yaw: simLook.yaw, pitch: simLook.pitch }; b.dispatchEvent(new PointerEvent('pointerup', e)); return v; };
-    simLookReset();
-    o.R = (await hold('R', 500)).yaw; simLookReset();
-    o.L = (await hold('L', 500)).yaw; simLookReset();
-    o.F = (await hold('F', 500)).pitch; simLookReset();
-    o.A = (await hold('A', 500)).pitch; simLookReset();
-    o.B = (await hold('B', 2000)).yaw;
-    simLookStep(1); o.ret = Math.abs(simLook.yaw) < Math.abs(o.B);              // 놓으면 정면으로 돌아간다
-    btn('C').dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerId: 8 })); o.C = simLook.yaw === 0 && simLook.pitch === 0;
+    // 둥근 시야 판 — 끌어 간 자리로 시선(오른쪽 끝 = 150° · 위 끝 = 60° 올려다보기) · 놓으면 정면으로
+    const pad = vs.querySelector('.vs-look'), pr = pad.getBoundingClientRect(), cx = pr.left + pr.width / 2, cy = pr.top + pr.height / 2, R = pr.width / 2;
+    o.round = Math.abs(pr.width - pr.height) < 2 && getComputedStyle(pad).borderRadius === '50%';
+    const at = (fx, fy) => { const e = { bubbles: true, clientX: cx + fx * R, clientY: cy - fy * R, pointerId: 7 }; pad.dispatchEvent(new PointerEvent('pointerdown', e)); return { yaw: simLook.yaw, pitch: simLook.pitch }; };
+    const rel = () => pad.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerId: 7 }));
+    o.R = at(1, 0).yaw; rel(); simLookReset();
+    o.L = at(-0.5, 0).yaw; rel(); simLookReset();
+    o.F = at(0, 1).pitch; rel(); simLookReset();
+    o.A = at(0, -1).pitch;
+    rel(); simLookStep(1); o.ret = Math.abs(simLook.pitch) < Math.abs(o.A);
+    simLookReset(); o.C = at(0, 0).yaw === 0; rel();
     toggleVStick(); toggleCockpitView(); toggleSimMode(false); exitSolo(); await w(200);
     S.alt = 0; S.spd = 0; S.running = false;
     return o;
   });
   t.ok(tv.btn && Math.abs(tv.a - 0.5) < 0.01 && Math.abs(tv.b - 0.4) < 0.01 && tv.lbl === '60%' && tv.min === 1,
     `조종석 투명도 — 조종석 ON 밑 −/+ 로 10% 씩(50% → 60% 는 불투명도 ${tv.a} → ${tv.b} · 0% 는 불투명)`);
-  t.ok(tv.below && tv.R > 30 && tv.L < -30 && tv.F > 20 && tv.A < -20 && tv.B > 140 && tv.ret && tv.C,
-    `화면 조종간 PEDAL 아래 시야 — ▶ ${Math.round(tv.R)}° · ◀ ${Math.round(tv.L)}° · ▲ ${Math.round(tv.F)}° · ▼ ${Math.round(tv.A)}° · 뒤 ${Math.round(tv.B)}° · 놓으면 정면 · 앞`);
+  t.ok(tv.below && tv.round && Math.round(tv.R) === 150 && Math.round(tv.L) === -75 && Math.round(tv.F) === 60 && Math.round(tv.A) === -70 && tv.ret && tv.C,
+    `화면 조종간 PEDAL 아래 둥근 시야 판 — 오른쪽 끝 ${Math.round(tv.R)}° · 왼쪽 반 ${Math.round(tv.L)}° · 위 ${Math.round(tv.F)}° · 아래 ${Math.round(tv.A)}° · 놓으면 정면 · 가운데 = 정면`);
 }
