@@ -278,17 +278,20 @@ function consoleBuild(key) {
     `<button id="${key}-zones" class="ov-zones-btn" type="button" title="터치 영역을 테두리로 보이기/감추기">ZONES</button>`;
   C.plates.forEach(p => p.items.forEach(it => { if (it.id) _ovhdPaint(it.id); }));
   _ovhdLampsPaint();
-  wrap.addEventListener('pointerdown', _ovhdDown);
-  wrap.addEventListener('pointerup', _ovhdUp);
-  wrap.addEventListener('pointercancel', _ovhdUp);
-  wrap.addEventListener('pointerleave', _ovhdUp);
-  wrap.addEventListener('wheel', _ovhdWheel, { passive: false });
   wrap.querySelector('.ov-reset-btn').addEventListener('click', () => ovhdReset(key));
   wrap.querySelector('.ov-zones-btn').addEventListener('click', () => {
     const on = wrap.classList.toggle('ov-zones');
     wrap.querySelector('.ov-zones-btn').classList.toggle('on', on);
   });
   const fit = () => consoleFit(key);
+  // 창 자체의 손 입력 · 크기 관찰은 한 번만 건다(자가 맞춤이 다시 만들 때 두 번 걸리면 한 번 눌러 두 번 바뀐다)
+  if (wrap._ovWired) { fit(); return; }
+  wrap._ovWired = true;
+  wrap.addEventListener('pointerdown', _ovhdDown);
+  wrap.addEventListener('pointerup', _ovhdUp);
+  wrap.addEventListener('pointercancel', _ovhdUp);
+  wrap.addEventListener('pointerleave', _ovhdUp);
+  wrap.addEventListener('wheel', _ovhdWheel, { passive: false });
   try { new ResizeObserver(fit).observe(wrap); } catch (e) { window.addEventListener('resize', fit); }
   fit();
 }
@@ -301,6 +304,22 @@ function consoleFit(key) {
   const k = Math.min(W / C.W, H / C.H);
   st.style.transform = `translate(${((W - C.W * k) / 2).toFixed(1)}px, ${((H - C.H * k) / 2).toFixed(1)}px) scale(${k.toFixed(4)})`;
 }
+// 자가 맞춤 — 콘솔 창이 보이는데 아직 안 만들어졌거나(검게 비어 누를 수 없음) 크기가 창과 어긋나 있으면 다시 맞춘다.
+// (창을 옮기는 사이 크기 관찰(ResizeObserver)이 놓치는 때가 있다 — 1초마다 가볍게 본다)
+setInterval(() => {
+  Object.keys(OVHD_CONSOLES).forEach(key => {
+    try {
+      const C = OVHD_CONSOLES[key], wrap = document.getElementById(C.wrap);
+      if (!wrap || !(wrap.clientWidth > 40) || !(wrap.clientHeight > 40)) return;
+      if (!document.getElementById(`${key}-stage`)) { delete wrap.dataset.built; consoleBuild(key); }
+      const st = document.getElementById(`${key}-stage`);
+      if (!st) return;
+      const r = st.getBoundingClientRect(), wr = wrap.getBoundingClientRect();
+      const k = Math.min(wr.width / C.W, wr.height / C.H);
+      if (!(r.width > 0) || Math.abs(r.width - C.W * k) > 2 || Math.abs(r.height - C.H * k) > 2) consoleFit(key);
+    } catch (e) { _swallow(e); }
+  });
+}, 1000);
 function ovhdBuild() { consoleBuild('ovhd'); }
 function ovhdFit() { consoleFit('ovhd'); }
 function _ovhdEl(id) { return document.querySelector(`.ov-stage [data-ov="${id}"]`); }

@@ -165,4 +165,23 @@ export async function run(page, t) {
   t.ok(tq.trngBlocked.eng === 1 && tq.trngBlocked.s === 'FLY/IDLE', '한쪽이 이미 IDLE 이면 TRAINING 은 걸리지 않는다');
   t.ok(tq.end.eng === 2, '모두 되돌리면 AEO');
   await page.evaluate(() => { selectPanel('right', 'map', true); localStorage.removeItem('ovhdState'); });
+
+  // ── 자가 맞춤 — 콘솔 무대가 어긋나거나(검게 비어 누를 수 없음) 사라져도 1초 안에 되살린다 ──
+  const heal = await page.evaluate(async () => {
+    const w = ms => new Promise(r => setTimeout(r, ms));
+    selectPanel('right', 'ovhd'); await w(400);
+    const st = () => document.getElementById('ovhd-stage');
+    const ok = () => { const s = st(), wr = document.getElementById('ovhd-wrap').getBoundingClientRect(); if (!s) return false; const r = s.getBoundingClientRect(); return r.width > wr.width * 0.9 || r.height > wr.height * 0.9; };
+    const o = { start: ok() };
+    st().style.transform = 'translate(0px, 0px) scale(0.001)'; o.broken = ok(); await w(1300); o.fit = ok();
+    st().remove(); await w(1300); o.rebuilt = ok() && !!document.querySelector('#ovhd-stage [data-ov]');
+    // 다시 만든 뒤에도 한 번 누르면 한 번만 바뀐다(손 입력이 두 번 걸리지 않는다)
+    const el = document.querySelector('#ovhd-stage [data-ov="pitotHeat"]') || document.querySelector('#ovhd-stage [data-ov]');
+    const id = el.dataset.ov, v0 = ovhdGet(id), r = el.getBoundingClientRect(), ev = { bubbles: true, clientX: r.left + r.width / 2, clientY: r.top + r.height * 0.25, pointerId: 1 };
+    el.dispatchEvent(new PointerEvent('pointerdown', ev)); el.dispatchEvent(new PointerEvent('pointerup', ev)); await w(50);
+    o.once = ovhdGet(id) !== v0; ovhdSet(id, v0);
+    selectPanel('right', 'map'); await w(200);
+    return o;
+  });
+  t.ok(heal.start && !heal.broken && heal.fit && heal.rebuilt && heal.once, `상부 콘솔이 어긋나거나 비면 1초 안에 다시 맞추고 다시 만든다 (${JSON.stringify(heal)})`);
 }

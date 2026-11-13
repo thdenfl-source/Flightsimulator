@@ -1045,6 +1045,16 @@ function ckMapDraw(g, x, y, w, h) {
   g.restore();
 }
 setInterval(() => { try { ckpitDraw(); } catch (e) { _swallow(e); } }, 100);
+// 3D 화면이 사라졌는데(SIM 끔 · 다른 창으로) 팝아웃이 남아 있으면 닫는다 — 빈 팝아웃 칸이 다른 창 위를 덮어
+// 검게 보이고 누를 수 없던 일을 막는다(1인칭 카메라가 멈추면 ckpitSync 가 불리지 않는다)
+setInterval(() => {
+  try {
+    const L = document.getElementById('ck-layer');
+    const vis = _ck3dVisible();
+    if (L && L.classList.contains('ck-off') !== !vis) L.classList.toggle('ck-off', !vis);
+    if (ckConPop && !vis) { ckConPop = null; _ckPopSync(); applyPanels(); try { syncCduOverlay(); } catch (e) { _swallow(e); } }
+  } catch (e) { _swallow(e); }
+}, 500);
 function toggleCockpitView() {
   ckpitOn = !ckpitOn;
   try { localStorage.setItem(CKPIT_PREF, ckpitOn ? '1' : '0'); } catch (e) { _swallow(e); }

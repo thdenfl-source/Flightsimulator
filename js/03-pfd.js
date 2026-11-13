@@ -398,6 +398,13 @@ function pfdMsgs() {
     const ng = P ? (n === 1 ? P.e1 : P.e2).ng : 100;
     if (ov('engAi' + n, 'OFF') === 'ON' || ng <= PFD_AI_NGR) out.push({ t: `${n} ENG A/I ON`, c: PFD_MSG_GREEN });
   });
+  // APU — CONTR ON 뒤 약 17초에 'APU ON', 그 뒤 APU/GPU 스위치 APU GEN 이면 'APU GEN'(18-system.js apuRunning)
+  try {
+    if (typeof apuRunning === 'function' && apuRunning()) {
+      out.push({ t: 'APU ON', c: PFD_MSG_GREEN });
+      if (ov('apuGen', 'OFF') === 'APU GEN') out.push({ t: 'APU GEN', c: PFD_MSG_GREEN });
+    }
+  } catch (e) { _swallow(e); }
   if (ov('noseLock', 'UNLOCK') === 'LOCK') out.push({ t: 'NLG LOCK', c: PFD_MSG_GREEN });
   if (ov('fltArmSw', 'OFF') === 'ARMED') out.push({ t: 'EMER FLOATS ARMED', c: PFD_MSG_GREEN });
   return out;
@@ -945,14 +952,22 @@ function drawAI(x, y, w, h) {
   // ── Flight Path Vector (FPV) ── — 3D 창의 FPV 버튼으로 켜고 끈다(07-sim.js toggleFpv)
   if (typeof fpvOn === 'undefined' || fpvOn) {
     const driftDeg = normAS(computeTrack() - S.hdg);
-    const fpaDeg = Math.atan2(-S.vs / 60, Math.max(5, S.spd) * 1.6878) / D2R;
+    // 비행경로각(오르면 +) — 수평선(cy + 피치)에서 그만큼 위. 예전에는 부호가 뒤집혀 오를 때 아래로 갔고 피치를 빼지 않아
+    // 저속 · 호버에서 크게 오르내리면 자세계 밖으로 나가 보이지 않았다
+    const fpaDeg = Math.atan2(S.vs / 60, Math.max(5, S.spd) * 1.6878) / D2R;
     const fpvX = cx + driftDeg * ppd;
-    const fpvY = cy - fpaDeg * ppd;
+    const fpvY = cy + (S.pit - fpaDeg) * ppd;
     const fr = Math.max(7, wS * 0.038);
-    if (fpvX > x + fr + 2 && fpvX < x + w - fr - 2 &&
-        fpvY > aiY + fr && fpvY < aiY + aiH - fr - 10) {
+    // 자세계 밖으로 나가면(저속 · 호버에서 오르내릴 때, 바람에 크게 밀릴 때) 가장자리에 붙여 점선으로 그린다
+    // — 예전에는 아예 그리지 않아 FPV ON 인데도 안 보이는 때가 있었다
+    const x0 = x + fr * 2.4 + 2, x1 = x + w - fr * 2.4 - 2, y0 = aiY + fr * 1.8 + 2, y1 = aiY + aiH - fr - 10;
+    const fx = Math.max(x0, Math.min(x1, fpvX)), fy = Math.max(y0, Math.min(y1, fpvY));
+    const clamped = Math.abs(fx - fpvX) > 0.5 || Math.abs(fy - fpvY) > 0.5;
+    if (x1 > x0 && y1 > y0) {
+      const fpvX = fx, fpvY = fy;
       ctx.save();
       ctx.strokeStyle = '#00ff88'; ctx.lineWidth = 2;
+      if (clamped) { ctx.setLineDash([4, 3]); ctx.globalAlpha = 0.85; }
       ctx.beginPath(); ctx.arc(fpvX, fpvY, fr, 0, Math.PI * 2); ctx.stroke();
       ctx.beginPath(); ctx.moveTo(fpvX - fr * 2.3, fpvY); ctx.lineTo(fpvX - fr, fpvY); ctx.stroke();
       ctx.beginPath(); ctx.moveTo(fpvX + fr, fpvY); ctx.lineTo(fpvX + fr * 2.3, fpvY); ctx.stroke();

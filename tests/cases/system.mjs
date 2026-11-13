@@ -79,7 +79,7 @@ export async function run(page, t) {
                  'BATT', 'BATT BUS', 'TRU 1', 'TRU 2', 'DC 1', 'DC 2', 'SEC 1', 'SEC 2', '115A', '60A', '28V', '25.0°C'].filter(x => !seen.includes(x));
     ovhdSet('gen2', 'OFF'); o.oneGen = pick(elecState());
     ovhdSet('tru1', 'OFF'); ovhdSet('tru2', 'OFF'); o.noTru = pick(elecState());
-    ovhdSet('apuContr', 'ON'); ovhdSet('apuGen', 'APU GEN'); o.apu = pick(elecState());          // GEN 1 이 살아 있다 → APU 는 대기
+    ovhdSet('apuContr', 'ON'); ovhdSet('apuGen', 'APU GEN'); _apuOnT = performance.now() - APU_START_MS - 1; o.apu = pick(elecState());   // APU 가 다 돈 뒤(17초)          // GEN 1 이 살아 있다 → APU 는 대기
     ovhdSet('gen1', 'OFF'); ovhdSet('tru1', 'ON'); ovhdSet('tru2', 'ON'); o.apuOnly = pick(elecState());   // 주 발전기 없음 → APU 가 맡는다
     ovhdSet('tru1', 'OFF'); ovhdSet('tru2', 'OFF');
     ovhdSet('apuContr', 'OFF'); o.noGen = pick(elecState());
