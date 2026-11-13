@@ -849,13 +849,20 @@ function _ckpitSvg() {
   <path d="M0 150 L0 250 L196 600 L246 570 Z" fill="url(#ck-post)"/>
   <path d="M1600 150 L1600 250 L1404 600 L1354 570 Z" fill="url(#ck-post)"/>
   <!-- 와이퍼 — 선(stroke)이 아니라 채운 도형(팔 + 블레이드)으로 그린다. 반투명 SVG 위의 가는 사선은 일부 브라우저(iPad Safari)에서
-       가운데가 끊겨 보였다 -->
-  <path d="M745.4 511.3 L703.4 299.3 L696.6 300.7 L738.6 512.7 Z" fill="#16181a"/>
-  <path d="M732.2 436.8 L704.9 299.0 L695.1 301.0 L722.4 438.8 Z" fill="#0d0e10"/>
-  <circle cx="742" cy="512" r="7" fill="#16181a"/>
-  <path d="M861.4 512.7 L903.4 300.7 L896.6 299.3 L854.6 511.3 Z" fill="#16181a"/>
-  <path d="M877.6 438.8 L904.9 301.0 L895.1 299.0 L867.8 436.8 Z" fill="#0d0e10"/>
-  <circle cx="858" cy="512" r="7" fill="#16181a"/>
+       가운데가 끊겨 보였다. 상부 콘솔 WINDSLD WIPER 스위치(LOW · HI · WASH)를 따라 밑동을 축으로 쓸어 움직인다(index.html ckWipe*).
+       WASH 는 와이퍼 전체(팔 · 블레이드)에서 물이 나온다(.ck-water) -->
+  <g id="ck-wipe-l" class="ck-wipe">
+    <g class="ck-water"><path class="ck-jet" d="M742 512 L700 300"/><circle class="ck-drop" cx="731.8" cy="490.8" r="3.2" style="animation-delay:0.12s"/><circle class="ck-drop" cx="727.6" cy="469.6" r="3.2" style="animation-delay:0.24s"/><circle class="ck-drop" cx="723.4" cy="448.4" r="3.2" style="animation-delay:0.36s"/><circle class="ck-drop" cx="719.2" cy="427.2" r="3.2" style="animation-delay:0.48s"/><circle class="ck-drop" cx="715.0" cy="406.0" r="3.2" style="animation-delay:0.00s"/><circle class="ck-drop" cx="710.8" cy="384.8" r="3.2" style="animation-delay:0.12s"/><circle class="ck-drop" cx="706.6" cy="363.6" r="3.2" style="animation-delay:0.24s"/><circle class="ck-drop" cx="702.4" cy="342.4" r="3.2" style="animation-delay:0.36s"/><circle class="ck-drop" cx="698.2" cy="321.2" r="3.2" style="animation-delay:0.48s"/><circle class="ck-drop" cx="743.8" cy="490.8" r="3.2" style="animation-delay:0.12s"/><circle class="ck-drop" cx="739.6" cy="469.6" r="3.2" style="animation-delay:0.24s"/><circle class="ck-drop" cx="735.4" cy="448.4" r="3.2" style="animation-delay:0.36s"/><circle class="ck-drop" cx="731.2" cy="427.2" r="3.2" style="animation-delay:0.48s"/><circle class="ck-drop" cx="727.0" cy="406.0" r="3.2" style="animation-delay:0.00s"/><circle class="ck-drop" cx="722.8" cy="384.8" r="3.2" style="animation-delay:0.12s"/><circle class="ck-drop" cx="718.6" cy="363.6" r="3.2" style="animation-delay:0.24s"/><circle class="ck-drop" cx="714.4" cy="342.4" r="3.2" style="animation-delay:0.36s"/><circle class="ck-drop" cx="710.2" cy="321.2" r="3.2" style="animation-delay:0.48s"/></g>
+    <path d="M745.4 511.3 L703.4 299.3 L696.6 300.7 L738.6 512.7 Z" fill="#16181a"/>
+    <path d="M732.2 436.8 L704.9 299.0 L695.1 301.0 L722.4 438.8 Z" fill="#0d0e10"/>
+    <circle cx="742" cy="512" r="7" fill="#16181a"/>
+  </g>
+  <g id="ck-wipe-r" class="ck-wipe">
+    <g class="ck-water"><path class="ck-jet" d="M858 512 L900 300"/><circle class="ck-drop" cx="856.2" cy="490.8" r="3.2" style="animation-delay:0.12s"/><circle class="ck-drop" cx="860.4" cy="469.6" r="3.2" style="animation-delay:0.24s"/><circle class="ck-drop" cx="864.6" cy="448.4" r="3.2" style="animation-delay:0.36s"/><circle class="ck-drop" cx="868.8" cy="427.2" r="3.2" style="animation-delay:0.48s"/><circle class="ck-drop" cx="873.0" cy="406.0" r="3.2" style="animation-delay:0.00s"/><circle class="ck-drop" cx="877.2" cy="384.8" r="3.2" style="animation-delay:0.12s"/><circle class="ck-drop" cx="881.4" cy="363.6" r="3.2" style="animation-delay:0.24s"/><circle class="ck-drop" cx="885.6" cy="342.4" r="3.2" style="animation-delay:0.36s"/><circle class="ck-drop" cx="889.8" cy="321.2" r="3.2" style="animation-delay:0.48s"/><circle class="ck-drop" cx="868.2" cy="490.8" r="3.2" style="animation-delay:0.12s"/><circle class="ck-drop" cx="872.4" cy="469.6" r="3.2" style="animation-delay:0.24s"/><circle class="ck-drop" cx="876.6" cy="448.4" r="3.2" style="animation-delay:0.36s"/><circle class="ck-drop" cx="880.8" cy="427.2" r="3.2" style="animation-delay:0.48s"/><circle class="ck-drop" cx="885.0" cy="406.0" r="3.2" style="animation-delay:0.00s"/><circle class="ck-drop" cx="889.2" cy="384.8" r="3.2" style="animation-delay:0.12s"/><circle class="ck-drop" cx="893.4" cy="363.6" r="3.2" style="animation-delay:0.24s"/><circle class="ck-drop" cx="897.6" cy="342.4" r="3.2" style="animation-delay:0.36s"/><circle class="ck-drop" cx="901.8" cy="321.2" r="3.2" style="animation-delay:0.48s"/></g>
+    <path d="M861.4 512.7 L903.4 300.7 L896.6 299.3 L854.6 511.3 Z" fill="#16181a"/>
+    <path d="M877.6 438.8 L904.9 301.0 L895.1 299.0 L867.8 436.8 Z" fill="#0d0e10"/>
+    <circle cx="858" cy="512" r="7" fill="#16181a"/>
+  </g>
   <!-- 계기판 앞면 -->
   <path d="M168 556 H1432 L1446 792 Q800 812 154 792 Z" fill="url(#ck-face)" stroke="#0b0c0e" stroke-width="2"/>
   ${bez}
@@ -926,6 +933,7 @@ function ckpitSync(tf) {
     try { syncCduOverlay(); } catch (e) { _swallow(e); } // CDU 도 하부 콘솔 오른쪽으로(3D 단독에서)
   }
   if (want && tf != null && el.style.transform !== tf) el.style.transform = tf;
+  if (want) _ckWipeSync();
   // 작은 CDU 를 줄이는 배율(index.html .ck-con > #cdu-ov.ck-in) — 칸 너비 / CDU 제 너비(354)
   if (want) {
     const m = document.getElementById('ck-mini-cdu');
@@ -1050,7 +1058,7 @@ function ckMapDraw(g, x, y, w, h) {
   g.fillText('MAP', x + 6, y + fs * 1.2);
   g.restore();
 }
-setInterval(() => { try { ckpitDraw(); } catch (e) { _swallow(e); } }, 100);
+setInterval(() => { try { ckpitDraw(); _ckWipeSync(); } catch (e) { _swallow(e); } }, 100);
 // 3D 화면이 사라졌는데(SIM 끔 · 다른 창으로) 팝아웃이 남아 있으면 닫는다 — 빈 팝아웃 칸이 다른 창 위를 덮어
 // 검게 보이고 누를 수 없던 일을 막는다(1인칭 카메라가 멈추면 ckpitSync 가 불리지 않는다)
 setInterval(() => {
@@ -1061,6 +1069,21 @@ setInterval(() => {
     if (ckConPop && !vis) { ckConPop = null; _ckPopSync(); applyPanels(); try { syncCduOverlay(); } catch (e) { _swallow(e); } }
   } catch (e) { _swallow(e); }
 }, 500);
+// 와이퍼 — 상부 콘솔 WINDSLD WIPER(17-upper.js 'wiper': WASH · OFF · LOW · HI)를 따라 움직인다.
+// 스위치를 돌리는 즉시(ovhdOn) · 조종석이 보일 때마다(ckpitSync) 맞춘다 — 시뮬이 멈춰 1인칭 카메라가 서 있어도 듣는다
+function _ckWipeSync() {
+  const el = document.getElementById('sim-ckpit');
+  if (!el) return;
+  let wp = 'OFF';
+  try { if (typeof ovhdGet === 'function') wp = ovhdGet('wiper') || 'OFF'; } catch (e) { _swallow(e); }
+  const cls = { LOW: 'wipe-low', HI: 'wipe-hi', WASH: 'wipe-wash' }[wp] || '';
+  if ((el.dataset.wipe || '') !== cls) {
+    ['wipe-low', 'wipe-hi', 'wipe-wash'].forEach(c => el.classList.toggle(c, c === cls));
+    el.dataset.wipe = cls;
+  }
+}
+// (17-upper.js 가 이 파일보다 늦게 읽혀 ovhdOn 은 아직 없다 — ovhdSet 이 내는 'ovhd' 알림을 듣는다)
+window.addEventListener('ovhd', e => { try { if (e.detail && e.detail.id === 'wiper') _ckWipeSync(); } catch (er) { _swallow(er); } });
 function toggleCockpitView() {
   ckpitOn = !ckpitOn;
   try { localStorage.setItem(CKPIT_PREF, ckpitOn ? '1' : '0'); } catch (e) { _swallow(e); }
