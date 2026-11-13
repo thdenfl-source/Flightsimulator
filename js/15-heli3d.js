@@ -779,6 +779,8 @@ function _ckPopOk(k) {
 //   ph: 'pop'(팝아웃) · 'mini'(조종석 안 — 콘솔만)
 function ckpitConsoleHost(k, ph) {
   if (k === 'cdu') return null;                           // CDU 는 07-sim.js syncCduOverlay 가 ckpitCduSlot 으로 옮긴다
+  // PFD 팝아웃 — FCP 아래 칸에 2D 지도(MAP 창 그대로 · 타일 그림이라 캔버스를 더 만들지 않는다)
+  if (ph === 'pop' && k === 'map' && ckConPop === 'pfd' && _ck3dVisible() && _ckPopOk('map')) { _ckPopEl('pfd'); return document.getElementById('ck-pop-mapslot'); }
   if (ph === 'pop') return ckConPop === k && CKPIT_POP[k] && _ck3dVisible() && _ckPopOk(k) ? _ckPopEl(k) : null;
   if (!CKPIT_CON[k]) return null;
   if (ph === 'mini') return ckpitWanted() ? document.getElementById('ck-mini-' + k) : null;
@@ -795,8 +797,8 @@ function _ckPopEl(k) {
       '<button class="sim-btn" data-act="toggleConsolePop" data-arg="[null]" title="닫기">✕</button></div><div id="ck-pop-host"></div>';
   }
   if (p.parentElement !== Ly) Ly.appendChild(p);
-  if (!document.getElementById('ck-pop-map')) {
-    const m = document.createElement('canvas'); m.id = 'ck-pop-map';
+  if (!document.getElementById('ck-pop-mapslot')) {
+    const m = document.createElement('div'); m.id = 'ck-pop-mapslot';
     document.getElementById('ck-pop-host').appendChild(m);
   }
   const t = document.getElementById('ck-pop-title');
@@ -826,7 +828,7 @@ function toggleConsolePop(k) {
   }
   ckConPop = (k && ckConPop !== k && CKPIT_POP[k]) ? k : null;
   // 2D 지도를 3D 화면에 겹쳐 둔 것(MAP ON · 07-sim.js)은 끄고 지도를 팝아웃으로 옮긴다
-  if (ckConPop === 'map') { try { if (typeof mapOvOn !== 'undefined' && mapOvOn) { mapOvOn = false; syncMapOverlay(); } } catch (e) { _swallow(e); } }
+  if (ckConPop === 'map' || ckConPop === 'pfd') { try { if (typeof mapOvOn !== 'undefined' && mapOvOn) { mapOvOn = false; syncMapOverlay(); } } catch (e) { _swallow(e); } }
   if (ckConPop) _ckPopEl(ckConPop);
   _ckPopSync();
   try { applyPanels(); } catch (e) { _swallow(e); }
@@ -1071,9 +1073,19 @@ function ckMapDraw(g, x, y, w, h) {
   g.fillText('MAP', x + 6, y + fs * 1.2);
   g.restore();
 }
-// PFD 팝아웃 — FCP(오른쪽 칸) 아래 남는 자리에 움직이는 지도(기수 위). 비행 중 내 위치 · 방향을 한눈에
+// PFD 팝아웃 — FCP(오른쪽 칸) 아래 남는 자리에 2D 지도(MAP 창 · 07-sim.js applyPanels 가 #map-wrap 을 이 칸에 넣는다).
+// 비행 중 내 위치 · 방향을 한눈에. (캔버스로 그리면 iPad Safari 의 캔버스 메모리 한도에 걸려 검게 비는 일이 있어 지도 창을 쓴다)
+let _ckMapSz = '', _ckMwSz = '';
 function ckPopMapSync() {
-  const m = document.getElementById('ck-pop-map');
+  // 지도 창(#map-wrap)이 팝아웃 · FCP 아래 칸으로 옮겨져 크기가 바뀌면 지도를 다시 맞춘다(안 하면 타일이 비어 검게 남는다)
+  try {
+    const mw = document.getElementById('map-wrap');
+    if (mw && ckConPop && mw.closest('#ck-pop-host')) {
+      const z = `${mw.clientWidth}x${mw.clientHeight}`;
+      if (z !== _ckMwSz && mw.clientWidth > 0) { _ckMwSz = z; leafMap.invalidateSize(); }
+    } else _ckMwSz = '';
+  } catch (e) { _swallow(e); }
+  const m = document.getElementById('ck-pop-mapslot');
   if (!m) return;
   const host = document.getElementById('ck-pop-host'), pw = document.getElementById('pfd-wrap');
   const bar = pw && pw.querySelector('.ctrl-bar');
@@ -1084,13 +1096,10 @@ function ckPopMapSync() {
     if (h > 80) st = { left: bar.offsetLeft, top, width: bar.offsetWidth, height: h };
   }
   if (m.classList.contains('show') !== !!st) m.classList.toggle('show', !!st);
-  if (!st) return;
-  if (m.parentElement !== host) host.appendChild(m);
+  if (!st) { _ckMapSz = ''; return; }
   for (const k of ['left', 'top', 'width', 'height']) { const v = st[k] + 'px'; if (m.style[k] !== v) m.style[k] = v; }
-  const dpr = Math.min(2, window.devicePixelRatio || 1), W = Math.round(st.width * dpr), H = Math.round(st.height * dpr);
-  if (m.width !== W || m.height !== H) { m.width = W; m.height = H; }
-  const g = m.getContext('2d'); g.setTransform(1, 0, 0, 1, 0, 0);
-  try { ckMapDraw(g, 0, 0, W, H); } catch (e) { _swallow(e); }
+  const sz = `${st.width}x${st.height}`;
+  if (sz !== _ckMapSz && m.querySelector('#map-wrap')) { _ckMapSz = sz; try { leafMap.invalidateSize(); } catch (e) { _swallow(e); } }
 }
 setInterval(() => {
   try { ckpitDraw(); _ckWipeSync(); } catch (e) { _swallow(e); }
