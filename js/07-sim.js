@@ -1621,22 +1621,27 @@ const CDU_OV_WRAP = { cdu: 'cdu-wrap', plan: 'fp-wrap' };
 // (Flight Plan · Home · BACK 등 setSolo) 3D 단독은 그대로 두고 이 칸 안에서 바꾼다.
 let cduOvPage = 'cdu';
 function cduOvAvail() { return _soloActive && _soloCurrent === 'm3d' && !!pfdOvHost(); }
-function cduOvActive() { return cduOvOn && cduOvAvail(); }
+// SIM 3D 조종석(15-heli3d.js)이 켜져 있으면 CDU 를 하부 콘솔 오른쪽 칸에 작게 둔다(CDU ON 이면 원래 겹친 칸이 먼저).
+// 작아도 같은 CDU 라 누르면 그 버튼이 그대로 듣는다.
+function _ckCduSlot() { try { return typeof ckpitCduSlot === 'function' ? ckpitCduSlot() : null; } catch (e) { return null; } }
+function cduOvActive() { return cduOvAvail() && (cduOvOn || !!_ckCduSlot()); }
 function syncCduOverlay() {
   const want = cduOvActive();
+  const inCk = want && !cduOvOn;
   if (!want) cduOvPage = 'cdu';
   const b = document.getElementById('cduov-btn');
   if (b) {
     b.textContent = cduOvOn ? 'CDU ON' : 'CDU OFF';
-    b.classList.toggle('on', want);
+    b.classList.toggle('on', want && !inCk);
     b.classList.toggle('dim', !cduOvAvail());
   }
   let box = document.getElementById('cdu-ov');
   if (want) {
-    const host = pfdOvHost();
+    const host = inCk ? _ckCduSlot() : pfdOvHost();
     if (!box) { box = document.createElement('div'); box.id = 'cdu-ov'; }
     if (box.parentElement !== host) host.appendChild(box);
     box.classList.add('show');
+    box.classList.toggle('ck-in', inCk);
   } else if (box) box.classList.remove('show');
   // 보여 줄 화면만 칸 안에, 나머지는 제자리로
   Object.keys(CDU_OV_WRAP).forEach(k => {
@@ -1666,7 +1671,7 @@ function _mapOvPlace(box) {
   const cdu = document.getElementById('cdu-ov');
   const ctl = document.getElementById('ctl3d');
   let edge = ctl ? ctl.getBoundingClientRect().left : hr.right - 104;
-  if (cdu && cdu.classList.contains('show')) edge = Math.min(edge, cdu.getBoundingClientRect().left);
+  if (cdu && cdu.classList.contains('show') && !cdu.classList.contains('ck-in')) edge = Math.min(edge, cdu.getBoundingClientRect().left);
   box.style.right = Math.max(8, Math.round(hr.right - edge + 8)) + 'px';
 }
 function syncMapOverlay() {

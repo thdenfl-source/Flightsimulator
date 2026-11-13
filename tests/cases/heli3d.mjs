@@ -399,4 +399,42 @@ export async function run(page, t) {
     t.ok(mfd[k].pop === k && mfd[k].par === 'ck-pop-host' && mfd[k].h > 200 && mfd[k].title === title,
       `MFD 를 누르면 ${title} 창을 크게 띄운다 (높이 ${mfd[k].h}px)`);
   t.ok(mfd.pfdH === 0 && !mfd.close.show && mfd.close.pop === null, '다른 화면으로 바꾸면 앞 화면은 감추고, ✕ 로 닫는다');
+
+  // ── CDU — 3D 단독 화면에서 하부 콘솔 오른쪽에 작게 두고, 누르면 그 버튼이 그대로 듣는다 ──
+  const cdu0 = await page.evaluate(async () => {
+    const w = ms => new Promise(r => setTimeout(r, ms));
+    enterSolo('m3d'); await w(400);
+    S.alt = 1000; S.spd = 80; toggleSimMode(true); S.alt = 1000; await w(300);
+    if (!ckpitOn) toggleCockpitView();
+    await w(500);
+    try { switchMode('HOME'); } catch (e) { /* 없으면 그만 */ }
+    await w(200);
+    const ov = document.getElementById('cdu-ov');
+    const slot = document.getElementById('ck-mini-cdu').getBoundingClientRect(), lc = document.getElementById('ck-mini-lcon').getBoundingClientRect();
+    return { par: ov && ov.parentElement.id, wrap: document.getElementById('cdu-wrap').parentElement.id, btn: document.getElementById('cduov-btn').classList.contains('on'),
+             right: slot.left > lc.left + lc.width / 2 && slot.left < lc.right + 30 };
+  });
+  t.ok(cdu0.par === 'ck-mini-cdu' && cdu0.wrap === 'cdu-ov' && !cdu0.btn && cdu0.right,
+    `CDU 가 하부 콘솔 바로 오른쪽 칸에 들어간다 (${cdu0.par})`);
+  // 작은 CDU 의 PERF 를 실제로 누른다(가려지지 않고 그 버튼이 받는다)
+  const perf = page.locator('#ck-mini-cdu [data-act="switchMode"][data-arg=\'["PERF"]\']').first();
+  const html0 = await page.evaluate(() => document.getElementById('cdu-wrap').innerHTML.length);
+  const pb = await perf.boundingBox();
+  const hit = await page.evaluate(([x, y]) => { const e = document.elementFromPoint(x, y); return !!(e && e.closest('#ck-mini-cdu')); }, [pb.x + pb.width / 2, pb.y + pb.height / 2]);
+  await page.mouse.click(pb.x + pb.width / 2, pb.y + pb.height / 2); await page.waitForTimeout(300);
+  const html1 = await page.evaluate(() => document.getElementById('cdu-wrap').innerHTML.length);
+  t.ok(hit && html1 !== html0, `작은 CDU 의 PERF 를 누르면 CDU 화면이 바뀐다 (가림 없음 ${hit} · ${html0} → ${html1} · ${JSON.stringify(pb)})`);
+  const cdu1 = await page.evaluate(async () => {
+    const w = ms => new Promise(r => setTimeout(r, ms));
+    openFlightPlan(); await w(300);
+    const out = { solo: _soloActive && _soloCurrent, fp: document.getElementById('fp-wrap').parentElement.id };
+    fpBackToCdu(); await w(200);
+    toggleCockpitView(); await w(300);
+    out.off = { par: (document.getElementById('cdu-ov') || {}).parentElement && document.getElementById('cdu-ov').classList.contains('show'), wrap: document.getElementById('cdu-wrap').parentElement.id };
+    toggleSimMode(false); exitSolo(); await w(200);
+    S.alt = 0; S.spd = 0; S.running = false;
+    return out;
+  });
+  t.ok(cdu1.solo === 'm3d' && cdu1.fp === 'cdu-ov', `Flight Plan 도 그 칸 안에서 열리고 3D 화면은 그대로다 (${cdu1.solo} · ${cdu1.fp})`);
+  t.ok(!cdu1.off.par && cdu1.off.wrap !== 'cdu-ov', '조종석을 끄면 CDU 는 제자리로 돌아간다');
 }
