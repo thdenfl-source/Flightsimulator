@@ -2450,6 +2450,7 @@ async function part5(page, t) {
     const DEAD = 0.08;
     const stick = (k) => (k === 0 ? 0 : Math.sign(k) * (Math.abs(k) * (1 - DEAD) + DEAD));
     joyAxes = { roll: { i: 0, inv: false }, pitch: { i: 1, inv: false } };
+    ['atYaw', 'atRoll', 'atPitch'].forEach(id => ovhdSet(id, 'OUT'));   // 시작할 때는 AUTO TRIM 이 꺼져 있다 — HOVER FOLLOW 를 보려면 켠다
     const go = (on, spd) => {
       S.alt = 1000; _simGndFt = 0; S.spd = spd; S.bnk = 0; simTrimReset(); aseOn = on;
       simTrim.pitch = -pitchFromSpd(spd); S.pit = pitchFromSpd(spd);
@@ -2459,11 +2460,12 @@ async function part5(page, t) {
       return { held, rel: S.bnk, trim: simTrim.roll };
     };
     const o = { on: go(true, 0), off: go(false, 0), fast: go(true, 80) };
-    // ASE 는 하부 콘솔 AFCAU 로 켜진다 — AP · AUTO TRIM · TRIM FEEL 이 모두 켜져 있으면 ON, 하나라도 끄면 OFF(3D 창 버튼은 없앴다)
+    ovhdSet('atRoll', 'IN'); o.noAt = go(true, 0); ovhdSet('atRoll', 'OUT');   // AUTO TRIM OFF — 안정화는 있어도 HOVER FOLLOW 는 없다
+    // ASE 는 하부 콘솔 AFCAU 로 켜진다 — AP · TRIM FEEL 이 모두 켜져 있으면 ON, 하나라도 끄면 OFF · AUTO TRIM 은 HOVER FOLLOW 만(3D 창 버튼은 없앴다)
     o.btn = (() => {
       const r = [];
       afcsGuard(); r.push(aseOn);
-      ovhdSet('atYaw', 'IN'); afcsGuard(); r.push(!aseOn); ovhdSet('atYaw', 'OUT');
+      ovhdSet('atYaw', 'IN'); afcsGuard(); r.push(aseOn); ovhdSet('atYaw', 'OUT');   // AUTO TRIM 은 ASE 를 끄지 않는다
       ovhdSet('tfCyc', 'IN'); afcsGuard(); r.push(!aseOn); ovhdSet('tfCyc', 'OUT');
       ovhdSet('ap1', 'IN'); ovhdSet('ap2', 'IN'); afcsGuard(); r.push(!aseOn); ovhdSet('ap1', 'OUT'); ovhdSet('ap2', 'OUT');
       afcsGuard(); r.push(aseOn); r.push(!document.getElementById('ase-3d'));
@@ -2476,7 +2478,9 @@ async function part5(page, t) {
     `ASE HOVER FOLLOW — 호버에서 조종간으로 8° 잡고 있다 놓으면 그 자세가 남는다 (${ase.on.held.bnk.toFixed(1)} → ${ase.on.rel.toFixed(1)}° · 트림 ${ase.on.trim.toFixed(1)}°)`);
   t.ok(Math.abs(ase.off.rel) < 1, `ASE 를 끄면 놓았을 때 트림 자세로 돌아간다 (${ase.off.rel.toFixed(1)}°)`);
   t.ok(Math.abs(ase.fast.rel) < 1 && !ase.fast.held.hf, `40kt 넘으면 따라오지 않는다 (80kt · ${ase.fast.rel.toFixed(1)}°)`);
-  t.ok(ase.btn, 'ASE 는 AFCAU 의 AP · AUTO TRIM · TRIM FEEL 이 모두 켜져 있으면 켜지고, 하나라도 끄면 꺼진다(3D 창 ASE 버튼은 없다)');
+  t.ok(ase.btn, 'ASE 는 AFCAU 의 AP · TRIM FEEL 이 모두 켜져 있으면 켜지고, 하나라도 끄면 꺼진다 — AUTO TRIM 은 ASE 를 끄지 않는다(3D 창 ASE 버튼은 없다)');
+  t.ok(!ase.noAt.held.hf && Math.abs(ase.noAt.rel) < 1,
+    `AUTO TRIM OFF 면 HOVER FOLLOW 가 없다 — 놓으면 트림 자세로 (${ase.noAt.rel.toFixed(1)}°)`);
 
   // 블로우 백 — 20kt 언저리에서 기수가 들린다(회전익 특성)
   const bb = await page.evaluate(`(() => {

@@ -35,7 +35,9 @@ export async function run(page, t) {
     o.cyc = hdg1 && fma() === 2 && !hdgSelOn;
     ovhdSet('tfCyc', 'OUT');
     // AUTO TRIM PITCH OFF — 피치 축만
-    ovhdSet('atPitch', 'IN'); o.pit = fma() === 1 && msgs().includes('AFCS DEGRADED'); ovhdSet('atPitch', 'OUT');
+    ovhdSet('atYaw', 'IN'); ovhdSet('atRoll', 'IN'); ovhdSet('atPitch', 'IN'); afcsGuard();
+    o.pit = fma() === 0 && !msgs().includes('AFCS DEGRADED') && aseOn;
+    ovhdSet('atYaw', 'OUT'); ovhdSet('atRoll', 'OUT'); ovhdSet('atPitch', 'OUT');
     // RCU AHRS 1 · BACKUP
     ovhdSet('ahrsSel', '1'); o.ahrs1 = msgs().includes('BOTH ON AHRS1') && fma() === 0;
     ovhdSet('ahrsSel', 'BACKUP'); o.ahrsBk = msgs().includes('AHRS BACKUP') && fma() === 3;
@@ -47,8 +49,8 @@ export async function run(page, t) {
     ovhdSet('adcSel', 'N');
     // FMA 깜빡이는 상자 — HDG 를 걸면 가운데 칸에 녹색, SAS 로 내려가면 황색
     drawPFD(); fcpSync('hdg'); drawPFD(); o.flashG = _fmaFlash[1] && _fmaFlash[1].col === '#00ff88';
-    ovhdSet('atRoll', 'IN'); drawPFD(); o.flashA = _fmaFlash[1] && _fmaFlash[1].col === '#ffb000';
-    ovhdSet('atRoll', 'OUT'); afcsGuard();
+    ovhdSet('tfCyc', 'IN'); drawPFD(); o.flashA = _fmaFlash[1] && _fmaFlash[1].col === '#ffb000';
+    ovhdSet('tfCyc', 'OUT'); afcsGuard();
     // P FLT TST — 공중 · 엔진이 돌면 시험하지 않는다
     // P FLT TST — 땅 위 · 유압 정상이면 엔진이 돌든 멎었든 시험한다
     const wow0 = fuelWow, hyd0 = hydPsi;
@@ -78,7 +80,7 @@ export async function run(page, t) {
   t.ok(R.back, 'AP 다시 켜면 메시지 · SAS 사라짐');
   t.ok(R.col, 'TRIM FEEL COL REL — 컬렉티브 칸 SAS · CR.HT 풀림 · AFCS DEGRADED');
   t.ok(R.cyc, 'TRIM FEEL CYC REL — 롤/요 · 피치 칸 SAS · HDG 풀림');
-  t.ok(R.pit, 'AUTO TRIM PITCH OFF — 피치 칸 SAS');
+  t.ok(R.pit, 'AUTO TRIM(YAW · ROLL · PITCH) OFF 는 SAS · AFCS DEGRADED 가 아니다 — ASE 안정화는 그대로(HOVER FOLLOW 만 맡는다)');
   t.ok(R.ahrs1 && R.ahrsBk, 'RCU AHRS 1 → BOTH ON AHRS1 · BACKUP → 세 칸 SAS · AHRS BACKUP');
   t.ok(R.adc2 && R.adcBk, 'RCU ADC 2 → BOTH ON ADC2 · BACKUP → ALT 풀림 · ADC BACKUP · AFCS DEGRADED');
   t.ok(R.flashG && R.flashA, 'FMA — 모드가 걸리면 녹색, SAS 로 내려가면 황색 귀퉁이 상자(10초)');

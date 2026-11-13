@@ -36,7 +36,8 @@ export async function run(page, t) {
   t.eq(first.geo, 0, '시작할 때 기기 위치(GPS)를 묻지 않는다');
   t.ok(first.dlg && first.n === first.all && first.icao,
     `출발 공항 창이 뜬다 — 지도의 ICAO 공항 ${first.n}곳`);
-  t.ok(Math.abs(first.lat - 37.3895) < 1e-6, '고르기 전에는 송도(기본 위치)다');
+  const def = await tab.evaluate(() => startRunwayOf(START_APT_DEF));
+  t.ok(Math.abs(first.lat - def.lat) < 1e-6 && Math.abs(first.lon - def.lon) < 1e-6, `고르기 전에는 김포 활주로 가운데(기본 위치)다`);
 
   // 이름으로 걸러 고른다(Enter = 맨 위)
   await tab.fill('.start-apt-q', '김포');
@@ -45,12 +46,21 @@ export async function run(page, t) {
   await tab.keyboard.press('Enter');
   await tab.waitForTimeout(300);
   const picked = await tab.evaluate(() => {
-    const a = AIRPORTS.find(x => x.ident === 'RKSS');
-    return { dlg: !!document.querySelector('.start-apt'), d: distance(S.lat, S.lon, a.lat, a.lon),
+    const a = startRunwayOf('RKSS');
+    const on = id => ovhdGet(id);
+    return { dlg: !!document.querySelector('.start-apt'), d: distance(S.lat, S.lon, a.lat, a.lon), rw: a.id,
+             hdgErr: Math.abs(((S.hdg - a.hdg + 540) % 360) - 180), hdg: S.hdg,
+             eng: ['pcd1', 'pcd2'].every(k => on(k) === 'FLY') && ['fuel1', 'fuel2'].every(k => on(k) === 'OPEN'),
+             elec: ['gen1', 'gen2', 'tru1', 'tru2', 'batt'].every(k => on(k) === 'ON') && pwrDc(),
+             avn: ['ap1', 'ap2', 'tfCol', 'tfCyc'].every(k => on(k) === 'OUT') && ['avcsPower', 'mpp0', 'mpp1', 'mpp2'].every(k => on(k) === 'IN') && c5.on,
+             at: ['atYaw', 'atRoll', 'atPitch'].every(k => on(k) === 'IN'), deg: pfdMsgs().some(m => m.t === 'AFCS DEGRADED'),
              agl: S.alt - simGroundFt(), spd: S.spd, gps: gpsMode, flag: sessionStorage.getItem('vfrStartApt') };
   });
   t.eq(JSON.stringify(shown), '["RKSS"]', `ICAO · 이름으로 걸러 찾는다 (김포 → ${shown.join(',')})`);
-  t.ok(!picked.dlg && picked.d < 0.01, `고르면 그 공항에서 시작한다 (RKSS 에서 ${picked.d.toFixed(3)}NM)`);
+  t.ok(!picked.dlg && picked.d < 0.01, `고르면 그 공항 활주로 가운데에서 시작한다 (RKSS RWY ${picked.rw} 가운데에서 ${picked.d.toFixed(3)}NM)`);
+  t.ok(picked.hdgErr < 0.5, `활주로 방향으로 선다 (RWY ${picked.rw} · HDG ${picked.hdg.toFixed(1)}°)`);
+  t.ok(picked.eng && picked.elec && picked.avn, '시동 · 전기 · 전자장비(AP · AVCS · RADAR/EGPWS/DMM · C-5000)가 모두 켜져 있다');
+  t.ok(picked.at && !picked.deg, 'AFCAU 의 AUTO TRIM 만 꺼져 있다 — AFCS DEGRADED 는 뜨지 않는다');
   t.ok(Math.abs(picked.agl) < 1 && picked.spd === 0, `지면에 멈춰 선다 (AGL ${picked.agl.toFixed(1)}ft · ${picked.spd}kt)`);
   t.eq(picked.gps, false, '고른 뒤에도 GPS 는 꺼진 채다');
 
@@ -73,9 +83,8 @@ export async function run(page, t) {
   await tab2.waitForSelector('.start-apt', { timeout: 5000 }).catch(() => {});
   await tab2.click('.start-apt-skip').catch(() => {});
   await tab2.waitForTimeout(200);
-  const skip = await tab2.evaluate(() => ({ dlg: !!document.querySelector('.start-apt'), lat: S.lat, lon: S.lon }));
-  t.ok(!skip.dlg && Math.abs(skip.lat - 37.3895) < 1e-6 && Math.abs(skip.lon - 126.6550) < 1e-6,
-    '건너뛰면 송도에서 그대로 시작한다');
+  const skip = await tab2.evaluate(() => { const r = startRunwayOf('RKSS'); return { dlg: !!document.querySelector('.start-apt'), d: distance(S.lat, S.lon, r.lat, r.lon), agl: S.alt - simGroundFt() }; });
+  t.ok(!skip.dlg && skip.d < 0.01 && Math.abs(skip.agl) < 1, `건너뛰면 김포 활주로 가운데 지면에서 시작한다 (${skip.d.toFixed(3)}NM · AGL ${skip.agl.toFixed(1)}ft)`);
   // 지난번 상태(6시간 안의 스냅숏)를 적어 둔다 — 브라우저를 다시 열 때 되살릴 것
   const snap = await tab2.evaluate(() => {
     const a = AIRPORTS.find(x => x.ident === 'RKPC');
