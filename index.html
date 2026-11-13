@@ -17,8 +17,8 @@
      CDN 을 쓰면 한 번이라도 못 받는 순간 앱이 통째로 죽는다 — 비행 중에는
      그럴 여지를 두지 않는다. -->
 <!-- 패널 새 창(다중 모니터) — 라이브러리가 거는 이벤트까지 받아 적어야 하므로 맨 먼저 -->
-<script src="js/00-edition.js?v=621"></script>
-<script src="js/00-popout.js?v=621"></script>
+<script src="js/00-edition.js?v=622"></script>
+<script src="js/00-popout.js?v=622"></script>
 <link rel="stylesheet" href="vendor/leaflet.css"/>
 <script src="vendor/leaflet.js"></script>
 <link rel="stylesheet" href="vendor/leaflet-velocity.min.css"/>
@@ -2116,6 +2116,28 @@ body.gate-open #gate-overlay { display: none; }
 #sysp-wrap { position: relative; overflow: hidden; background: #000; }
 #sysp-wrap canvas { display: block; }
 /* SYSTEM 창 Map 화면(18-system.js) — 큰 칸에 얹은 2D 지도 */
+/* SAR CONTROL(24-sar.js) — 함정 설정창과 같은 꼴 */
+#sar-panel { display: none; position: fixed; top: 70px; right: 130px; z-index: 1200; width: 214px; background: #111;
+  border: 1.5px solid #2a2a2a; border-radius: 10px; padding: 10px; font-family: Arial, sans-serif; color: #cde;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.85); }
+#sar-panel .sar-hd { color: #ff9a3c; font-size: 10px; font-weight: bold; text-align: center; letter-spacing: 1px;
+  border-bottom: 1px solid #222; padding-bottom: 6px; margin-bottom: 8px; position: relative; cursor: grab; user-select: none; touch-action: none; }
+#sar-panel .sar-x { position: absolute; right: -2px; top: -4px; background: none; border: 0; color: #888; font-size: 13px; cursor: pointer; }
+#sar-panel .sar-on { width: 100%; background: #1a1a1a; border: 1px solid #3a3a3a; color: #ccc; border-radius: 4px; padding: 6px 0; font-size: 11px; font-weight: bold; cursor: pointer; }
+#sar-panel .sar-on span { color: #888; } #sar-panel .sar-on.on { border-color: #33cc55; } #sar-panel .sar-on.on span { color: #4ade80; }
+#sar-panel .sar-lbl { color: #666; font-size: 8px; letter-spacing: .5px; margin: 8px 0 4px; }
+#sar-panel .sar-lbl b { font-size: 8px; }
+#sar-panel .sar-row { display: flex; gap: 4px; }
+#sar-panel .sar-row .ship-tab { font-size: 10px; padding: 6px 0; touch-action: none; }
+#sar-panel .sar-h { font-size: 12px !important; padding: 9px 0 !important; }
+#sar-panel .sar-st { margin: 8px 0; padding-top: 6px; border-top: 1px solid #1e1e1e; font-size: 10px; line-height: 16px; }
+#sar-panel .sar-st b { color: #fff; }
+#sar-panel .sar-bar { height: 6px; background: #222; border-radius: 3px; overflow: hidden; margin: 3px 0; }
+#sar-panel .sar-bar i { display: block; height: 100%; }
+/* HOIST CAM — SYSTEM 창 Video(HOIST) 큰 칸 */
+#sysp-hoist { position: absolute; z-index: 3; overflow: hidden; background: #000; }
+#sysp-hoist .hcam-map { position: absolute; inset: 0; }
+#sysp-hoist .hcam-hud { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 #sysp-map { display: none; position: absolute; z-index: 2; overflow: hidden; background: #000; }
 #sysp-map > #map-wrap { position: absolute; inset: 0; width: 100%; height: 100%; }
 #ovhd-stage, .ov-stage { position: absolute; left: 0; top: 0; transform-origin: 0 0; user-select: none; -webkit-user-select: none; touch-action: none;
@@ -2388,7 +2410,7 @@ body.simple-mode #simple-view { display: flex; position: fixed; left: 0; right: 
     </div>
   </form>
 </div>
-<script src="js/00-gate.js?v=621"></script>
+<script src="js/00-gate.js?v=622"></script>
 <!-- ── 단일화면 선택 바 (기본 숨김) ── -->
 <!-- ── 시작 안내(사용법/키보드) 오버레이 ── -->
 <div id="help-overlay" style="display:none;">
@@ -3313,6 +3335,8 @@ body.simple-mode #simple-view { display: flex; position: fixed; left: 0; right: 
           <div id="ctl3d-body">
             <!-- 3D 가 제 창(탭의 '3D')을 쓸 때의 SHIP — 메뉴·설정창을 이 창 안에서 연다 -->
             <button class="sim-btn" id="ship3d-btn" data-act="toggleShip3d">⛵ SHIP</button>
+            <!-- SAR — 요구조자(익수자 · 육상) · 호이스트 구조(24-sar.js) -->
+            <button class="sim-btn" id="sar3d-btn" data-act="toggleSarPanel" title="SAR — 요구조자 · 호이스트 구조 훈련">🛟 SAR</button>
           <!-- 3D 화질 — 상 → 중 → 하(낮출수록 부드럽다 · 04-map.js) -->
           <button class="sim-btn" id="q3d-btn" data-act="cycleMap3dQuality" title="3D 화질 — 누를 때마다 상 → 중 → 하. 낮출수록 저고도에서도 부드럽습니다">화질 중</button>
           <!-- SIM 1인칭에서만 보인다 — 아래 좌·우 CHIN 창을 끄고 켠다 -->
@@ -3516,6 +3540,7 @@ body.simple-mode #simple-view { display: flex; position: fixed; left: 0; right: 
         <button class="sim-btn" data-act="resetSim">⟳ RESET</button>
         <button class="sim-btn clr" data-act="clearFP">✕ CLR</button>
         <button class="sim-btn" id="map-ship-btn" data-act="toggleShip">⛵ SHIP</button>
+        <button class="sim-btn" id="map-sar-btn" data-act="toggleSarPanel" title="SAR — 요구조자 · 호이스트 구조 훈련">🛟 SAR</button>
         <button class="sim-btn" id="map-tcut-btn" data-act="toggleTcut">⛰ T-CUT</button>
         <button class="sim-btn" id="map-hold-btn" data-act="toggleHoldEntry">⟳ HOLD</button>
         <button class="sim-btn" id="inhib-btn" data-act="toggleInhibMenu">INHIB</button>
@@ -3689,40 +3714,41 @@ body.simple-mode #simple-view { display: flex; position: fixed; left: 0; right: 
 <!-- 앱 코드 — 클래식 스크립트(모듈 아님)라 전역 스코프를 공유한다.
      순서가 곧 실행 순서이므로 임의로 바꾸지 말 것. -->
   <!-- AIP 데이터 — 코드보다 먼저 로드한다 -->
-  <script src="js/data/terminal-fixes.js?v=621"></script>
-  <script src="js/data/ifr-fixes.js?v=621"></script>
-  <script src="js/data/ifr-procedures.js?v=621"></script>
-  <script src="js/data/airfield-info.js?v=621"></script>
-  <script src="js/data/enr-vors.js?v=621"></script>
-  <script src="js/data/loc-stations.js?v=621"></script>
-  <script src="js/data/enr-routes.js?v=621"></script>
-  <script src="js/data/airspace.js?v=621"></script>
-  <script src="js/data/runways.js?v=621"></script>
+  <script src="js/data/terminal-fixes.js?v=622"></script>
+  <script src="js/data/ifr-fixes.js?v=622"></script>
+  <script src="js/data/ifr-procedures.js?v=622"></script>
+  <script src="js/data/airfield-info.js?v=622"></script>
+  <script src="js/data/enr-vors.js?v=622"></script>
+  <script src="js/data/loc-stations.js?v=622"></script>
+  <script src="js/data/enr-routes.js?v=622"></script>
+  <script src="js/data/airspace.js?v=622"></script>
+  <script src="js/data/runways.js?v=622"></script>
   <!-- 앱 코드 -->
-  <script src="js/00-ui.js?v=621"></script>
-  <script src="js/01-state.js?v=621"></script>
-  <script src="js/02-math.js?v=621"></script>
-  <script src="js/03-pfd.js?v=621"></script>
-  <script src="js/04-map.js?v=621"></script>
-  <script src="js/05-gps.js?v=621"></script>
-  <script src="js/06-nav.js?v=621"></script>
-  <script src="js/07-sim.js?v=621"></script>
-  <script src="js/08-ifrdb.js?v=621"></script>
-  <script src="js/09-cdu.js?v=621"></script>
-  <script src="js/10-tools.js?v=621"></script>
-  <script src="js/11-charts.js?v=621"></script>
-  <script src="js/12-joystick.js?v=621"></script>
-  <script src="js/13-joyhid.js?v=621"></script>
-  <script src="js/14-simmode.js?v=621"></script>
-  <script src="js/15-heli3d.js?v=621"></script>
-  <script src="js/16-sound.js?v=621"></script>
-  <script src="js/17-upper.js?v=621"></script>
-  <script src="js/18-system.js?v=621"></script>
-  <script src="js/19-lower.js?v=621"></script>
-  <script src="js/20-navaids.js?v=621"></script>
-  <script src="js/21-c5000.js?v=621"></script>
-  <script src="js/22-npx138.js?v=621"></script>
-  <script src="js/23-afcs.js?v=621"></script>
+  <script src="js/00-ui.js?v=622"></script>
+  <script src="js/01-state.js?v=622"></script>
+  <script src="js/02-math.js?v=622"></script>
+  <script src="js/03-pfd.js?v=622"></script>
+  <script src="js/04-map.js?v=622"></script>
+  <script src="js/05-gps.js?v=622"></script>
+  <script src="js/06-nav.js?v=622"></script>
+  <script src="js/07-sim.js?v=622"></script>
+  <script src="js/08-ifrdb.js?v=622"></script>
+  <script src="js/09-cdu.js?v=622"></script>
+  <script src="js/10-tools.js?v=622"></script>
+  <script src="js/11-charts.js?v=622"></script>
+  <script src="js/12-joystick.js?v=622"></script>
+  <script src="js/13-joyhid.js?v=622"></script>
+  <script src="js/14-simmode.js?v=622"></script>
+  <script src="js/15-heli3d.js?v=622"></script>
+  <script src="js/16-sound.js?v=622"></script>
+  <script src="js/17-upper.js?v=622"></script>
+  <script src="js/18-system.js?v=622"></script>
+  <script src="js/19-lower.js?v=622"></script>
+  <script src="js/20-navaids.js?v=622"></script>
+  <script src="js/21-c5000.js?v=622"></script>
+  <script src="js/22-npx138.js?v=622"></script>
+  <script src="js/23-afcs.js?v=622"></script>
+  <script src="js/24-sar.js?v=622"></script>
 
 <input type="file" id="zipFileInput" accept=".zip,application/zip,application/x-zip-compressed,application/octet-stream" style="display:none" onchange="handleZipFile(this.files[0]); this.value='';"></body>
 </html>
