@@ -1003,10 +1003,7 @@ function applyPanels() {
   const scrHost = k => (window._scrHost && window._scrHost[k]) ? document.getElementById('po-host-' + k) : null;
   // Simple mode — 고른 화면 하나가 전체 화면 그릇(#simple-host)을 차지한다
   const simpleHost = k => (window._simpleScr === k) ? document.getElementById('simple-host') : null;
-  // Cockpit mode — 화면마다 제 칸(#ck-<k>)이 있는 세로 배치(조종석 느낌)
-  const ckHost = k => (window._cockpitOn && CK_SCREENS.includes(k)) ? document.getElementById('ck-' + k) : null;
-  // (Cockpit mode 에서는 제 칸이 없는 화면(2D 지도 · PLAN)은 감춘 분할 패널에 두지 않는다 — 지도는 SYSTEM 창 Map 화면으로)
-  const hostOf0 = k => window._cockpitOn ? ckHost(k) : simpleHost(k) || scrHost(k) || (leftSel === k ? L : (tripleMode && midSel === k ? M : (rightSel === k ? R : (quadMode && botSel === k ? B : null))));
+  const hostOf0 = k => simpleHost(k) || scrHost(k) || (leftSel === k ? L : (tripleMode && midSel === k ? M : (rightSel === k ? R : (quadMode && botSel === k ? B : null))));
   // SYSTEM 창의 Map 화면(18-system.js) — 지도가 다른 창에 없고 SYSTEM 창이 보이면 그 큰 칸이 지도 그릇
   const sysMapHost = () => { try { return (typeof sysMapSlot === 'function' && (ckC('sysp', 'pop') || hostOf0('sysp'))) ? sysMapSlot() : null; } catch (e) { return null; } };
   // SIM 3D 조종석(15-heli3d.js) — 콘솔 팝아웃(LowerC · UpperC)은 무엇보다 먼저, 조종석 안의 작은 콘솔은 다른 창에 없을 때만
@@ -1754,6 +1751,7 @@ function _refreshCduFooters() {
 }
 
 function exitSolo() {
+  try { if (window._cockpitOn) cockpitExit(); } catch (e) { _swallow(e); }   // Cockpit Mode 도 함께 끝난다
   _soloActive = false;
   _soloCurrent = null;
   document.getElementById('solo-bar').style.display = 'none';
@@ -1882,92 +1880,29 @@ function simpleExit() {
 }
 
 
-// ── Cockpit mode ── 시작 화면에서 'Cockpit Mode' 를 고르면 조종석처럼 쌓은 화면을 한 화면 가득 본다:
-//      3D 화면(넓게)        | CDU
-//      PFD · FCP            | SYSTEM(CDU 의 MAP 을 누르면 그 큰 칸에 지도 — 18-system.js Map 화면)
-//      UPPER CONSOLE        | LOWER CONSOLE
-// 칸을 두 번 누르면(더블클릭 · 두 번 톡) 그 칸이 화면을 가득 채우고, 다시 두 번 누르면 처음 배치로 돌아온다
-// (버튼 · 입력칸 위에서 두 번 누른 것은 그 조작으로 보고 넘긴다). 오른쪽 위 'PC 모드' 로 끝낸다.
-const CK_SCREENS = ['ovhd', 'm3d', 'pfd', 'sysp', 'cdu', 'lcon'];
-const CK_NAMES = { ovhd: 'UPPER', m3d: '3D', pfd: 'PFD · FCP', sysp: 'SYSTEM', cdu: 'CDU', lcon: 'LOWER' };
+// ── Cockpit Mode ── 시작 화면에서 'Cockpit Mode' 를 고르면 3D 조종석으로 바로 들어간다:
+//   3D 를 화면 가득(3D 단독) · 1인칭 조종석 시야 · 조종석 패널(MFD 넷 · 위아래 콘솔 · CDU — 15-heli3d.js)을 켠다.
+//   SIM 이 꺼져 있어도(절차 훈련판 · AFCS 로 나는 비행) 카메라가 조종석에 앉는다(05-gps.js _follow3d · ckCamOn).
+//   화면을 누르면 그 화면이 가운데에 크게 뜬다. 오른쪽 위 'Split screen' 으로 끝낸다(분할 화면).
+// (예전의 세로 칸 배치 Cockpit mode 와 '3D 단독 모드' 는 이것으로 합쳤다)
 window._cockpitOn = false;
-let _ckMax = null, _ckTap = null;
-function _cockpitEnsure() {
-  if (document.getElementById('ck-view')) return;
-  const v = document.createElement('div'); v.id = 'ck-view';
-  v.innerHTML = CK_SCREENS.map(k => `<div class="ck-cell" id="ck-${k}" data-ck="${k}"><span class="ck-tag">${CK_NAMES[k]}</span></div>`).join('') +
-    `<button type="button" id="ck-exit" data-act="cockpitExit" title="Cockpit Mode 끝내기 — 분할 화면(PC 모드)으로">PC 모드</button>`;
-  document.body.appendChild(v);
-  // 두 번 누르기 — 마우스 dblclick 과 터치 두 번 톡(350ms · 20px 안) 모두
-  const interactive = t => !!(t && t.closest && t.closest('button, input, select, textarea, a, [data-act], .ov-hit, .fks-knob, .nav-btn, .gtc-btn, .pfd-sk'));
-  v.addEventListener('dblclick', e => {
-    const c = e.target.closest && e.target.closest('.ck-cell');
-    if (!c || interactive(e.target)) return;
-    cockpitToggleMax(c.dataset.ck);
-  });
-  v.addEventListener('pointerup', e => {
-    if (e.pointerType === 'mouse') return;                 // 마우스는 dblclick 이 맡는다
-    const c = e.target.closest && e.target.closest('.ck-cell');
-    if (!c || interactive(e.target)) { _ckTap = null; return; }
-    const now = performance.now();
-    if (_ckTap && _ckTap.k === c.dataset.ck && now - _ckTap.t < 350 && Math.hypot(e.clientX - _ckTap.x, e.clientY - _ckTap.y) < 20) {
-      _ckTap = null; cockpitToggleMax(c.dataset.ck);
-    } else _ckTap = { k: c.dataset.ck, t: now, x: e.clientX, y: e.clientY };
-  });
-}
-// PFD 칸의 FCP — 한 줄 그대로 칸 폭(높이는 칸의 반)에 맞춰 줄인다(키우지는 않는다)
-function _ckFitFcp() {
-  const f = document.getElementById('fcp-simple'), cell = document.getElementById('ck-pfd');
-  if (!f) return;
-  if (!window._cockpitOn || !cell || !cell.contains(f)) { f.style.zoom = ''; return; }
-  f.style.zoom = 1;
-  const nw = f.scrollWidth, nh = f.scrollHeight;
-  if (!(nw > 0 && nh > 0 && cell.clientWidth > 0)) return;
-  const pw = (f.parentElement && f.parentElement.clientWidth) || cell.clientWidth;   // FCP 를 담은 칸(PFD 그릇)의 폭
-  const k = Math.min(1, (pw - 6) / nw, cell.clientHeight * 0.5 / nh);
-  f.style.zoom = k.toFixed(3);
-}
-function _cockpitKick() {
-  const kick = () => {
-    try { _ckFitFcp(); } catch (e) { _swallow(e); }
-    try { window.dispatchEvent(new Event('resize')); } catch (e) { _swallow(e); }
-    try { resizePFD(); drawPFD(); } catch (e) { _swallow(e); }
-    try { scaleCdu(); } catch (e) { _swallow(e); }
-    try { if (typeof sysDraw === 'function') sysDraw(); } catch (e) { _swallow(e); }
-    try { if (typeof ovhdShow === 'function') ovhdShow(); } catch (e) { _swallow(e); }
-    try { if (typeof lconShow === 'function') lconShow(); } catch (e) { _swallow(e); }
-    try { if (_ml3d) _ml3d.resize(); } catch (e) { _swallow(e); }
-  };
-  kick(); setTimeout(kick, 80); setTimeout(kick, 300);
-}
-window.addEventListener('resize', () => { if (window._cockpitOn) { try { _ckFitFcp(); resizePFD(); drawPFD(); } catch (e) { _swallow(e); } } });
 function cockpitStart() {
-  try { if (typeof _soloActive !== 'undefined' && _soloActive) exitSolo(); } catch (e) { _swallow(e); }
-  try { if (simpleOn) simpleExit(); } catch (e) { _swallow(e); }
-  _cockpitEnsure();
-  window._cockpitOn = true; _ckMax = null;
-  document.body.classList.add('cockpit-mode');
-  document.getElementById('ck-view').classList.remove('has-max');
-  document.querySelectorAll('#ck-view .ck-cell').forEach(c => c.classList.remove('ck-max'));
-  try { applyPanels(); } catch (e) { _swallow(e); }
-  _cockpitKick();
-}
-// 그 칸이 화면 가득 ⇄ 처음 배치
-function cockpitToggleMax(k) {
-  if (!window._cockpitOn || !CK_SCREENS.includes(k)) return;
-  _ckMax = _ckMax === k ? null : k;
-  const v = document.getElementById('ck-view');
-  v.classList.toggle('has-max', !!_ckMax);
-  v.querySelectorAll('.ck-cell').forEach(c => c.classList.toggle('ck-max', c.dataset.ck === _ckMax));
-  _cockpitKick();
+  try { if (typeof simpleOn !== 'undefined' && simpleOn) simpleExit(); } catch (e) { _swallow(e); }
+  window._cockpitOn = true;
+  try { if (!followMode) toggleFollow(); } catch (e) { _swallow(e); }          // 카메라가 헬기를 따라간다
+  try { if (!(_soloActive && _soloCurrent === 'm3d')) panelSolo('m3d'); } catch (e) { _swallow(e); }
+  try { if (typeof ckpitSet === 'function') ckpitSet(true); } catch (e) { _swallow(e); }
+  const kick = () => { try { if (_ml3d) { _ml3d.resize(); _follow3d(); } } catch (e) { _swallow(e); } };
+  kick(); setTimeout(kick, 200); setTimeout(kick, 800);
 }
 function cockpitExit() {
-  window._cockpitOn = false; _ckMax = null;
-  try { _ckFitFcp(); } catch (e) { _swallow(e); }
-  document.body.classList.remove('cockpit-mode');
-  try { applyPanels(); } catch (e) { _swallow(e); }
+  if (!window._cockpitOn) return;
+  window._cockpitOn = false;
+  // SIM 이 아니면 1인칭 카메라를 풀어 지도처럼 내려다보게 되돌린다
+  try { if (!simModeOn && typeof _ml3dSimCameraOff === 'function') _ml3dSimCameraOff(); } catch (e) { _swallow(e); }
+  try { if (typeof heli3dNoseSync === 'function') heli3dNoseSync(null); } catch (e) { _swallow(e); }
+  try { syncChinView(); } catch (e) { _swallow(e); }      // 축척 · 확대 버튼을 되살린다(#map3d.sim3d)
   try { sessionStorage.setItem('vfrStartMode', 'pc'); } catch (e) { _swallow(e); }
-  setTimeout(() => { try { window.dispatchEvent(new Event('resize')); resizePFD(); } catch (e) { _swallow(e); } }, 60);
 }
 
 

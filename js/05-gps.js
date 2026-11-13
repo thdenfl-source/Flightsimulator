@@ -864,7 +864,7 @@ function _apply3dBearing() {
   if (!mapHdgUp || !_ml3d || !_ml3dReady || !_map3dShown()) return;
   // SIM 1인칭은 카메라가 방위까지 직접 쥔다 — 여기서 따로 돌리면 먼 시선점을
   // 축으로 카메라가 휘둘린다
-  if (simModeOn) return;
+  if (simModeOn || (typeof ckCamOn === 'function' && ckCamOn())) return;
   if (Math.abs(normAS(_ml3d.getBearing() - S.hdg)) < 0.3) return;
   _ml3d.easeTo({ bearing: S.hdg, duration: 0, easing: t => t });
 }
@@ -907,7 +907,8 @@ function _follow3d() {
     // (maplibre 5 는 카메라를 180° 까지 들고 롤도 받는다 — 그래서 기수를 들면
     //  정말로 하늘을 보고, 기울이면 지평선이 그대로 기운다. 화면을 돌리거나
     //  밀어 흉내 내던 종전 방식은 더 쓰지 않는다.)
-    if (simModeOn) {
+    // Cockpit Mode(07-sim.js) — SIM 이 꺼져 있어도(AFCS 로 나는 비행 · 절차 훈련판) 같은 1인칭 조종석 시야
+    if (simModeOn || (typeof ckCamOn === 'function' && ckCamOn())) {
       try { syncChinView(); } catch (e) { _swallow(e); }   // 아래 좌·우 CHIN 창(04-map.js)
       _ml3dSimCamera();
       _apply3dRoll();

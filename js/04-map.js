@@ -772,7 +772,9 @@ function syncChinView() {
     if (br && br.classList.contains('on') !== chinR) br.classList.toggle('on', chinR);
   }
   // SIM 이면 축척·3D 확대/기울기 버튼을 감춘다(index.html #map3d.sim3d)
-  if (d3.classList.contains('sim3d') !== sim) d3.classList.toggle('sim3d', sim);
+  // (Cockpit Mode 의 조종석 시야도 같다 — 07-sim.js cockpitStart · 15-heli3d.js ckCamOn)
+  const fp = sim || (typeof ckCamOn === 'function' && ckCamOn());
+  if (d3.classList.contains('sim3d') !== fp) d3.classList.toggle('sim3d', fp);
   // 켜진 쪽 CHIN 창만 보인다
   const pl = document.getElementById('chin-l'), pr = document.getElementById('chin-r');
   if (pl) pl.style.visibility = chinL ? '' : 'hidden';

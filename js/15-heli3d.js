@@ -455,7 +455,18 @@ function heli3dPose(map) {
 function heli3dShown() {
   if (typeof _ml3d === 'undefined' || !_ml3d || !_ml3dReady) return false;
   if (typeof simModeOn !== 'undefined' && simModeOn) return !!simExtView || !!simCamTx;   // 시점이 바뀌는 동안에도 보인다
+  if (ckCamOn()) return false;                                                           // Cockpit Mode 조종석 시야 — 제 몸 안이다
   return true;
+}
+// Cockpit Mode(07-sim.js cockpitStart) — SIM 이 꺼져 있어도 3D 단독 화면에서 1인칭 조종석 시야(05-gps.js _follow3d)
+function ckCamOn() {
+  return !!window._cockpitOn && !(typeof simModeOn !== 'undefined' && simModeOn) &&
+         typeof _soloActive !== 'undefined' && _soloActive && _soloCurrent === 'm3d';
+}
+// 지금 1인칭 조종석 시야인가 — SIM 1인칭(외부 시점 · 전환 중 빼고) 또는 Cockpit Mode
+function _ckFirst() {
+  if (typeof simModeOn !== 'undefined' && simModeOn) return !simExtView && !simCamTx;
+  return ckCamOn();
 }
 
 const HELI3D_LAYER = {
@@ -680,8 +691,7 @@ function heli3dExtPose() {
 function heli3dNoseSync(look) {
   const el = document.getElementById('sim-nose');
   if (!el) return;
-  const want = (typeof simModeOn !== 'undefined') && simModeOn && !simExtView && !simCamTx &&
-               !!_ml3d && (typeof _map3dShown !== 'function' || _map3dShown());
+  const want = _ckFirst() && !!_ml3d && (typeof _map3dShown !== 'function' || _map3dShown());
   const ck = want && ckpitWanted();                       // 조종석 패널이 덮으면 기수는 감춘다(패널 아래에 가려 보이지 않는다)
   const showNose = want && !ck;
   if (el.classList.contains('show') !== showNose) el.classList.toggle('show', showNose);
@@ -754,7 +764,7 @@ function _ckPopFit() {
 // 콘솔 팝아웃 — LowerC · UpperC 버튼(또는 작은 콘솔을 누르면)으로 3D 화면 가운데에 크게 띄워 조작한다
 let ckConPop = null;          // 'lcon' | 'ovhd' | null
 function _ck3dVisible() {
-  return (typeof simModeOn !== 'undefined') && simModeOn && !!_ml3d && (typeof _map3dShown !== 'function' || _map3dShown());
+  return (((typeof simModeOn !== 'undefined') && simModeOn) || ckCamOn()) && !!_ml3d && (typeof _map3dShown !== 'function' || _map3dShown());
 }
 // 팝아웃으로 띄울 수 있는 화면 — 콘솔 둘 + MFD 를 누르면 그 화면(PFD · SYSTEM · 2D 지도)을 크게(실제 창 그대로라 조작된다)
 const CKPIT_POP = { ovhd: 'UPPER CONSOLE', lcon: 'LOWER CONSOLE', pfd: 'PFD', sysp: 'SYSTEM', map: 'MAP', cdu: 'CDU' };
@@ -797,7 +807,7 @@ function _ckPopSync() {
   const pw = document.getElementById('pfd-wrap'), side = on && ckConPop === 'pfd';
   if (pw && pw.classList.contains('fcp-side') !== side) { pw.classList.toggle('fcp-side', side); try { resizePFD(); } catch (e) { _swallow(e); } }
   if (p) { p.classList.toggle('show', on); if (on) { _ckLayer(); _ckPopFit(); } }
-  const sim = (typeof simModeOn !== 'undefined') && simModeOn;
+  const sim = ((typeof simModeOn !== 'undefined') && simModeOn) || ckCamOn();
   for (const [k, id] of [['lcon', 'lconc-btn'], ['ovhd', 'upperc-btn']]) {
     const b = document.getElementById(id);
     if (!b) continue;
@@ -902,8 +912,7 @@ function _ckpitEl() {
 }
 // 지금 보여야 하나 — 기수와 같은 조건(SIM 1인칭 · 3D 가 떠 있음) + 버튼
 function ckpitWanted() {
-  return ckpitOn && (typeof simModeOn !== 'undefined') && simModeOn && !simExtView && !simCamTx &&
-         !!_ml3d && (typeof _map3dShown !== 'function' || _map3dShown());
+  return ckpitOn && _ckFirst() && !!_ml3d && (typeof _map3dShown !== 'function' || _map3dShown());
 }
 // 보이기·감추기와 시야 둘러보기 이동(heli3dNoseSync 가 매 프레임 부른다)
 function ckpitSync(tf) {
@@ -913,7 +922,7 @@ function ckpitSync(tf) {
   const el = want ? _ckpitEl() : document.getElementById('sim-ckpit');
   const b = document.getElementById('ckpit-btn');
   if (b) {
-    const sim = (typeof simModeOn !== 'undefined') && simModeOn;
+    const sim = ((typeof simModeOn !== 'undefined') && simModeOn) || ckCamOn();
     if (b.classList.contains('show') !== sim) b.classList.toggle('show', sim);
     if (b.classList.contains('on') !== ckpitOn) { b.classList.toggle('on', ckpitOn); }
     const t = ckpitOn ? '조종석 ON' : '조종석 OFF';
@@ -1058,7 +1067,11 @@ function ckMapDraw(g, x, y, w, h) {
   g.fillText('MAP', x + 6, y + fs * 1.2);
   g.restore();
 }
-setInterval(() => { try { ckpitDraw(); _ckWipeSync(); } catch (e) { _swallow(e); } }, 100);
+setInterval(() => {
+  try { ckpitDraw(); _ckWipeSync(); } catch (e) { _swallow(e); }
+  // Cockpit Mode — 비행이 멈춰 있으면 지도가 카메라를 다시 놓지 않는다(updateAcOnMap 이 안 불린다). 여기서 조종석 시야를 붙든다
+  try { if (ckCamOn() && !S.running && typeof _follow3d === 'function' && _ml3d) _follow3d(); } catch (e) { _swallow(e); }
+}, 100);
 // 3D 화면이 사라졌는데(SIM 끔 · 다른 창으로) 팝아웃이 남아 있으면 닫는다 — 빈 팝아웃 칸이 다른 창 위를 덮어
 // 검게 보이고 누를 수 없던 일을 막는다(1인칭 카메라가 멈추면 ckpitSync 가 불리지 않는다)
 setInterval(() => {
@@ -1084,6 +1097,10 @@ function _ckWipeSync() {
 }
 // (17-upper.js 가 이 파일보다 늦게 읽혀 ovhdOn 은 아직 없다 — ovhdSet 이 내는 'ovhd' 알림을 듣는다)
 window.addEventListener('ovhd', e => { try { if (e.detail && e.detail.id === 'wiper') _ckWipeSync(); } catch (er) { _swallow(er); } });
+function ckpitSet(on) {
+  if (!!on === ckpitOn) { try { heli3dNoseSync(null); } catch (e) { _swallow(e); } ckpitSync(null); return; }
+  toggleCockpitView();
+}
 function toggleCockpitView() {
   ckpitOn = !ckpitOn;
   try { localStorage.setItem(CKPIT_PREF, ckpitOn ? '1' : '0'); } catch (e) { _swallow(e); }
