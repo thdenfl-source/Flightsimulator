@@ -5016,17 +5016,23 @@ switchMode('HOME');
 // ── 시작 위치 · 출발 공항 ──
 // 시작할 때 GPS(기기 위치)는 쓰지 않는다 — GPS 는 꺼진 채 시작하고, 필요하면 지도의 GPS
 // 버튼으로 켠다. 처음 열면(비밀번호 화면이 걷힌 뒤) 출발 공항을 고르는 창을 띄운다 —
-// 지도의 ICAO 공항 목록이다. 고르면 그 공항 지면에 멈춰 세운다(acPlaceOnGround). 고르지
-// 않으면 송도에서 시작한다. 같은 탭에서 새로고침하면(자동 리로드 포함) 다시 묻지 않는다
-// (sessionStorage). 브라우저를 새로 열면 묻는다 — 지난번 상태가 남아 있어 되살렸더라도
-// (localStorage 의 스냅숏은 6시간 남는다) 묻고, 건너뛰면 되살린 자리에서 이어 간다.
-// (종전에는 되살린 상태가 있으면 묻지 않아, 브라우저를 다시 열면 창이 뜨지 않았다)
+// 지도의 ICAO 공항 목록이다. 고르면 그 공항의 활주로 가운데 지면에 활주로 방향으로 세운다
+// (data/runways.js — 가장 긴 활주로 · 첫 번호 쪽 방향, 자료가 없으면 공항 기준점). 고르기
+// 전·건너뛰면 김포(START_APT_DEF) 활주로에서 시작한다. 같은 탭에서 새로고침하면(자동 리로드
+// 포함) 다시 묻지 않는다(sessionStorage). 브라우저를 새로 열면 묻는다 — 지난번 상태가 남아
+// 있어 되살렸더라도(localStorage 의 스냅숏은 6시간 남는다) 묻고, 건너뛰면 되살린 자리에서 이어 간다.
+// 공항에서 새로 시작하면 시동 · 전기 · 전자장비는 모두 켜고 AFCAU 의 AUTO TRIM(YAW · ROLL ·
+// PITCH)만 꺼 둔다(startStateApply) — AUTO TRIM 은 HOVER FOLLOW 만 맡는다(14-simmode.js).
+var START_APT_DEF = 'RKSS';   // var — init()(이 파일 앞쪽)이 먼저 부른다
+var _startPicked = false;          // 창에서 공항을 골랐으면 load 때 기본 공항으로 되돌리지 않는다
 function _startPosInit(restored) {
-  const SONGDO = { lat: 37.3895, lon: 126.6550 };
+  // init() 은 이 파일을 읽는 도중에 돈다 — 콘솔(17-upper) · SIM(14-simmode) · 무전기(21-c5000)가
+  // 아직 없으므로 자리만 먼저 옮기고, 스위치 · 지면 세우기는 모두 읽은 뒤(load) 다시 한다
   if (!restored) {
-    S.lat = SONGDO.lat; S.lon = SONGDO.lon;
-    try { leafMap.setView([S.lat, S.lon], 12, { animate: false }); } catch (e) { _swallow(e); }
-    try { updateAcOnMap(); } catch (e) { _swallow(e); }
+    startAirportSet(START_APT_DEF, { quiet: true });
+    const again = () => { if (!_startPicked) startAirportSet(START_APT_DEF, { quiet: true }); };
+    if (document.readyState === 'complete') setTimeout(again, 0);
+    else window.addEventListener('load', again, { once: true });
   }
   let asked = false;
   try { asked = sessionStorage.getItem('vfrStartApt') === '1'; } catch (e) { asked = false; }
@@ -5038,16 +5044,52 @@ function _startPosInit(restored) {
     openStartAirportPicker(restored);
   }, 250);
 }
-// 그 공항 지면에 세운다 — 출발 공항을 고를 때(지도의 ICAO 공항 목록 · AIRPORTS)
-function startAirportSet(icao) {
+// 그 공항의 활주로 가운데 · 방향 — { lat, lon, hdg(진방위), id } · 활주로 자료가 없으면 null
+function startRunwayOf(icao) {
+  const ap = (typeof RUNWAYS === 'undefined' ? [] : RUNWAYS).find(r => r.apt === icao);
+  if (!ap || !ap.rwys || !ap.rwys.length) return null;
+  let best = null;
+  for (const r of ap.rwys) {
+    const lat0 = (r.a[0] + r.b[0]) / 2, lon0 = (r.a[1] + r.b[1]) / 2;
+    const kx = 111320 * Math.cos(lat0 * Math.PI / 180), ky = 110540;
+    const dx = (r.b[1] - r.a[1]) * kx, dy = (r.b[0] - r.a[0]) * ky, L = Math.hypot(dx, dy);
+    if (!best || L > best.L) {
+      const hdg = ((Math.atan2(dx, dy) * 180 / Math.PI) + 360) % 360;   // a(첫 번호 쪽 시단) → b
+      best = { lat: lat0, lon: lon0, hdg, id: r.id.split('/')[0], L };
+    }
+  }
+  return best;
+}
+// 공항에서 새로 시작할 때의 스위치 — 시동(두 엔진 FLY · 연료 OPEN) · 전기(GEN · TRU · BATT) ·
+// 전자장비(AFCAU AP · AVCS · MPP RADAR/EGPWS/DMM · C-5000) 모두 켜고, AUTO TRIM 세 버튼만 OFF
+function startStateApply() {
+  if (typeof ovhdSet !== 'function') return;
+  const set = (id, v) => { try { if (ovhdGet(id) !== v) ovhdSet(id, v); } catch (e) { _swallow(e); } };
+  [['trng1', 'NORM'], ['trng2', 'NORM'], ['fire1', 'UNARMED'], ['fire2', 'UNARMED'],
+   ['fuel1', 'OPEN'], ['fuel2', 'OPEN'], ['pcd1', 'FLY'], ['pcd2', 'FLY'],
+   ['gen1', 'ON'], ['gen2', 'ON'], ['tru1', 'ON'], ['tru2', 'ON'], ['batt', 'ON'],
+   ['ahrs1Cut', 'OUT'], ['ahrs2Cut', 'OUT'],
+   ['ap1', 'OUT'], ['ap2', 'OUT'], ['tfCol', 'OUT'], ['tfCyc', 'OUT'],
+   ['atYaw', 'IN'], ['atRoll', 'IN'], ['atPitch', 'IN'],                  // AUTO TRIM 만 OFF
+   ['avcsPower', 'IN'], ['mpp0', 'IN'], ['mpp1', 'IN'], ['mpp2', 'IN']].forEach(([id, v]) => set(id, v));
+  try {
+    if (typeof c5 !== 'undefined' && !c5.on) { c5.on = true; c5.page = 'HOME'; _c5Save(); c5Render(); }
+  } catch (e) { _swallow(e); }
+  try { if (typeof simModeOn !== 'undefined' && simModeOn && typeof simEngApply === 'function') simEngApply(true); } catch (e) { _swallow(e); }
+}
+// 그 공항 활주로 가운데 지면에 활주로 방향으로 세운다 — 출발 공항을 고를 때(AIRPORTS)
+function startAirportSet(icao, opt = {}) {
   const a = AIRPORTS.find(x => x.ident === icao);
   if (!a) return false;
-  S.lat = a.lat; S.lon = a.lon; S.lastT = null;
+  const rw = startRunwayOf(icao);
+  S.lat = rw ? rw.lat : a.lat; S.lon = rw ? rw.lon : a.lon; S.lastT = null;
+  if (rw) S.hdg = rw.hdg;
   S.trail = []; try { updateTrail(); } catch (e) { _swallow(e); }
+  try { startStateApply(); } catch (e) { _swallow(e); }
   try { if (typeof acPlaceOnGround === 'function') acPlaceOnGround(); } catch (e) { _swallow(e); }
-  try { leafMap.setView([a.lat, a.lon], 13, { animate: false }); } catch (e) { _swallow(e); }
+  try { leafMap.setView([S.lat, S.lon], 13, { animate: false }); } catch (e) { _swallow(e); }
   try { updateAcOnMap(); updateNav(); updateCenterCoord(); } catch (e) { _swallow(e); }
-  try { uiToast(`${a.ident} ${a.name} 에서 시작합니다 — 지면에 세웠습니다`); } catch (e) { _swallow(e); }
+  if (!opt.quiet) try { uiToast(`${a.ident} ${a.name} ${rw ? 'RWY ' + rw.id + ' 가운데' : ''}에서 시작합니다 — 시동 · 전자장비 ON · AUTO TRIM OFF`); } catch (e) { _swallow(e); }
   return true;
 }
 // 출발 공항 고르기 창 — ICAO · 이름으로 걸러 찾을 수 있다. 닫으면(건너뛰기) 그 자리 그대로
@@ -5061,11 +5103,11 @@ function openStartAirportPicker(resume) {
   dlg.setAttribute('role', 'dialog');
   dlg.setAttribute('aria-modal', 'true');
   dlg.innerHTML = `
-    <div class="ui-dlg-msg"><b>출발 공항을 고르세요</b><br><span class="start-apt-sub">고른 공항의 지면에 멈춰 섭니다 · GPS 는 꺼진 채 시작합니다</span></div>
+    <div class="ui-dlg-msg"><b>출발 공항을 고르세요</b><br><span class="start-apt-sub">고른 공항 활주로 가운데에 활주로 방향으로 섭니다 · 시동 · 전자장비 ON · AUTO TRIM OFF · GPS 는 꺼진 채</span></div>
     <input class="ui-dlg-in start-apt-q" type="text" placeholder="ICAO 또는 이름 (예: RKSI · 김포)" autocomplete="off">
     <div class="start-apt-list">${AIRPORTS.map(a =>
       `<button type="button" class="start-apt-btn" data-icao="${a.ident}"><b>${a.ident}</b> ${a.name}</button>`).join('')}</div>
-    <div class="ui-dlg-btns"><button type="button" class="start-apt-skip">${resume ? '건너뛰기(지난 자리에서 이어서)' : '건너뛰기(송도)'}</button></div>`;
+    <div class="ui-dlg-btns"><button type="button" class="start-apt-skip">${resume ? '건너뛰기(지난 자리에서 이어서)' : '건너뛰기(김포)'}</button></div>`;
   const close = () => {
     try { sessionStorage.setItem('vfrStartApt', '1'); } catch (e) { _swallow(e); }
     document.removeEventListener('keydown', onKey, true);
@@ -5080,7 +5122,7 @@ function openStartAirportPicker(resume) {
   }
   dlg.addEventListener('click', ev => {
     const b = ev.target.closest('.start-apt-btn');
-    if (b) { close(); startAirportSet(b.dataset.icao); return; }
+    if (b) { close(); _startPicked = true; startAirportSet(b.dataset.icao); return; }
     if (ev.target.closest('.start-apt-skip')) close();
   });
   const q = dlg.querySelector('.start-apt-q');

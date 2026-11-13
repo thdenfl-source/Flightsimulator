@@ -163,6 +163,12 @@ function updateAseBtns() {
     if (hf) { hf.classList.toggle('avail', aseOn); hf.classList.toggle('on', aseOn && aseFollowing); }
   } catch (e) { _swallow(e); }
 }
+// AFCAU AUTO TRIM — HOVER FOLLOW 만 맡는다(롤 축 = YAW · ROLL, 피치 축 = PITCH 버튼이 켜져(OUT) 있어야)
+function aseAutoTrim(k) {
+  if (typeof ovhdGet !== 'function') return true;
+  const on = id => { try { return ovhdGet(id) !== 'IN'; } catch (e) { return true; } };
+  return k === 'pitch' ? on('atPitch') : (on('atRoll') && on('atYaw'));
+}
 function aseHoverFollow(a, onGnd, rollRate, pitRate) {
   const was = aseFollowing;
   aseFollowing = false;
@@ -173,7 +179,7 @@ function aseHoverFollow(a, onGnd, rollRate, pitRate) {
       ['pitch', a.pitch, pitRate, !simAfcsPitch(), -(S.pit - rcPitchOff(rcAxes(a)) - (simBb || 0)), SIM_TRIM_MAX_PITCH],
     ];
     for (const [k, stick, rate, free, att, max] of axes) {
-      if (!free || Math.abs(stick) <= SIM_TRIM_HOLD_DEAD || simTrimHeld[k] === null) continue;
+      if (!free || !aseAutoTrim(k) || Math.abs(stick) <= SIM_TRIM_HOLD_DEAD || simTrimHeld[k] === null) continue;
       if (Math.abs(rate) > ASE_HF_RATE) continue;
       // 쥐고 있는 동안은 종전 트림을 붙잡아 두므로(against trim) 자세는 그대로 — 기준만 지금 자세로 옮긴다
       simTrim[k] = Math.max(-max, Math.min(max, att));
