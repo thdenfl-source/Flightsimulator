@@ -230,9 +230,9 @@ function init(){
 
     // — FMA row (centre AI column, top) — HDG / IAS preselect entry —
     if (px < aiX || px > aiX + aiW) return;
-    const cellW  = Math.floor((aiW - FMA_MARGIN * 2 - FMA_GAP * 2) / 3);
-    const relX   = px - (aiX + FMA_MARGIN);
-    const boxIdx = Math.max(0, Math.min(2, Math.floor(relX / (cellW + FMA_GAP))));
+    const { cellW, x0: fx0, total: fTot } = fmaCells(aiX, aiW);   // 03-pfd.js — 세 칸은 가운데에 모여 있다
+    const relX   = px - fx0;
+    const boxIdx = (relX < 0 || relX > fTot) ? -1 : Math.max(0, Math.min(2, Math.floor(relX / (cellW + FMA_GAP))));
 
     const fmaTop = FMA_MARGIN;
     const fmaBtm = FMA_MARGIN + FMA_BOX_H;

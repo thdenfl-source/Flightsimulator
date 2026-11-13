@@ -537,13 +537,20 @@ function drawPfdTo(canvas) {
 const FMA_BOX_H  = 20;
 const FMA_MARGIN = 2;
 const FMA_GAP    = 3;
+// AFCS 상태 띠(FMA)의 세 칸 — 칸 폭은 자세계 폭을 셋으로 나눈 것의 절반, 세 칸을 묶어 가운데에 둔다
+// (그리기 drawFMA 와 PFD 누름 09-cdu.js onPfdTap 이 같은 자리를 쓴다)
+function fmaCells(x, w) {
+  const cellW = Math.floor((w - FMA_MARGIN * 2 - FMA_GAP * 2) / 3 / 2);
+  const total = cellW * 3 + FMA_GAP * 2;
+  return { cellW, x0: x + (w - total) / 2, total };
+}
 
 // ────────────────────────────────────────
 // FLIGHT MODE ANNUNCIATOR  (mode labels only)
 // ────────────────────────────────────────
 function drawFMA(x, y, w) {
   const MARGIN = FMA_MARGIN, GAP = FMA_GAP, BOX_H = FMA_BOX_H;
-  const cellW  = Math.floor((w - MARGIN * 2 - GAP * 2) / 3);
+  const { cellW, x0: FX0 } = fmaCells(x, w);
   const Y0     = y + MARGIN;
   // Determine active mode per axis.  Default ALT | HDG | IAS — each axis
   // gets its own distinct label, never duplicating ALT on two axes.
@@ -626,7 +633,7 @@ function drawFMA(x, y, w) {
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
 
   for (let i = 0; i < 3; i++) {
-    const bx = x + MARGIN + i * (cellW + GAP);
+    const bx = FX0 + i * (cellW + GAP);
     const on = active[i];
     ctx.strokeStyle = on ? '#446688' : '#1a1a1a';
     ctx.lineWidth   = 1;
@@ -654,7 +661,11 @@ function drawFMA(x, y, w) {
       ctx.font = mainF; ctx.textAlign = 'center';
     } else {
       ctx.fillStyle = modeColor(modes[i], on, i);
+      // 칸이 좁아졌으니 넘치는 글자(GS/NAV · TDOWN 등)는 칸에 맞춰 조금 줄인다
+      const f0 = ctx.font, mw = ctx.measureText(modes[i]).width, room = cellW - 4;
+      if (mw > room) { const px0 = parseFloat(f0.match(/(\d+(?:\.\d+)?)px/)[1]); ctx.font = f0.replace(/\d+(?:\.\d+)?px/, Math.max(6, px0 * room / mw).toFixed(1) + 'px'); }
       ctx.fillText(modes[i], bx + cellW / 2, ty);
+      ctx.font = f0;
     }
     // 모드가 바뀌어 걸리면 10초 동안 네 귀퉁이 상자가 깜빡인다 — 녹색(걸림) · 황색(SAS · 성능 저하)
     const key = modes[i] + '|' + (on ? 1 : 0) + armed[i], now = performance.now();
