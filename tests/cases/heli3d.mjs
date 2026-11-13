@@ -292,4 +292,38 @@ export async function run(page, t) {
     '→ 1인칭: 조종석으로 들어가는 동안은 헬기 모형이 보이고, 기수·CHIN 창은 아직 없다');
   t.ok(tx.back.d0 > 20 && tx.back.d1 < 2 && !tx.back.end.model && tx.back.end.nose && tx.back.end.chin > 0,
     `조종석에 들어서면(${tx.back.d1.toFixed(0)}m) 모형이 사라지고 기수·CHIN 창이 열린다 (전환 ${tx.ms}ms)`);
+
+  // ── 조종석 패널 — 1인칭에서 '조종석' 버튼으로 차양 · MFD 넷 · 콘솔을 겹친다(기수는 감춘다) ──
+  const ck = await page.evaluate(async () => {
+    const w = ms => new Promise(r => setTimeout(r, ms));
+    const btn = document.getElementById('ckpit-btn');
+    const vis = id => { const e = document.getElementById(id); return !!e && getComputedStyle(e).display !== 'none'; };
+    const out = { offBtn: vis('ckpit-btn') };
+    if (ckpitOn) toggleCockpitView();
+    S.alt = 1000; S.spd = 80; chinL = true; chinR = true; chinViewOn = true;
+    toggleSimMode(true); S.alt = 1000; await w(300);
+    out.simBtn = vis('ckpit-btn'); out.offPanel = vis('sim-ckpit');
+    btn.click(); await w(400);
+    const d3 = document.getElementById('map3d');
+    const row = document.getElementById('chin-row').getBoundingClientRect(), m = d3.getBoundingClientRect();
+    const lit = [...document.querySelectorAll('#sim-ckpit canvas.ck-scr')].map(c => {
+      const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data; let n = 0;
+      for (let i = 0; i < d.length; i += 64) if (d[i] + d[i + 1] + d[i + 2] > 60) n++;
+      return n;
+    });
+    out.on = { panel: vis('sim-ckpit'), nose: vis('sim-nose'), label: btn.textContent, lit, chinTop: (row.top - m.top) / m.height };
+    toggleExtView(true); await w(100); out.ext = vis('sim-ckpit');
+    toggleExtView(false); await w(SIM_CAM_TX_MS + 300); out.back = vis('sim-ckpit');
+    btn.click(); await w(100);
+    out.off = { panel: vis('sim-ckpit'), nose: vis('sim-nose'), label: btn.textContent };
+    toggleSimMode(false); await w(100); out.exit = vis('ckpit-btn');
+    S.alt = 0; S.spd = 0; S.running = false;
+    return out;
+  });
+  t.ok(!ck.offBtn && ck.simBtn && !ck.offPanel, '조종석 버튼은 SIM 에서만 보이고, 처음에는 꺼져 있다');
+  t.ok(ck.on.panel && !ck.on.nose && ck.on.label === '조종석 ON' && ck.on.lit.length === 4 && ck.on.lit.every(n => n > 20),
+    `켜면 패널이 겹치고 기수는 감춘다 — MFD 넷이 그려진다 (${ck.on.lit.join('/')})`);
+  t.ok(Math.abs(ck.on.chinTop - 0.89) < 0.02, `CHIN 창은 패널 아래(발밑)로 내려간다 (${(ck.on.chinTop * 100).toFixed(0)}%)`);
+  t.ok(!ck.ext && ck.back, '외부 시점에서는 숨기고, 조종석으로 돌아오면 다시 보인다');
+  t.ok(!ck.off.panel && ck.off.nose && ck.off.label === '조종석 OFF' && !ck.exit, '끄면 패널이 사라지고 기수가 돌아온다 · SIM 을 끄면 버튼도 숨는다');
 }
