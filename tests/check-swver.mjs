@@ -27,4 +27,15 @@ if (before && now === before) {
                 `  sw.js 의 CACHE 값을 올려 주세요 — 안 올리면 사용자에게 갱신이 가지 않습니다.`);
   process.exit(1);
 }
+// index.html 의 앱 스크립트 꼬리표(?v=)도 같은 번호여야 한다 — 배포 직후 새 index.html 이 옛 JS(브라우저 캐시)와
+// 섞이면 버튼이 옛 함수를 불러 아무 일도 없다(3D FCP 버튼이 그랬다).
+{
+  const num = (now.match(/(\d+)$/) || [])[1];
+  const tags = [...fs.readFileSync('index.html', 'utf8').matchAll(/<script src="js\/[^"]+?\?v=(\d+)"/g)].map(m => m[1]);
+  const plain = (fs.readFileSync('index.html', 'utf8').match(/<script src="js\/[^"?]+"/g) || []).length;
+  if (plain || tags.some(t => t !== num)) {
+    console.error(`✗ index.html 스크립트 꼬리표(?v=)가 캐시 버전(${num})과 다릅니다 — 꼬리표 없음 ${plain}개 · 다른 번호 ${tags.filter(t => t !== num).length}개`);
+    process.exit(1);
+  }
+}
 console.log(`✓ 캐시 버전 ${before || '(신규)'} → ${now}`);

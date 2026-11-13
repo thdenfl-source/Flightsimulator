@@ -197,6 +197,3 @@ function joyHidStatus() {
     if (hidDev && e.device === hidDev) joyHidDisconnect();
   });
 })();
-
-// PFD 소프트키 · FCP 패널(07-sim.js)의 동작 — appRegister 는 09-cdu.js 에 있어 그보다 뒤에 읽히는 이 파일에서 붙인다
-try { appRegister({ fcpsBaroStd, pfdSkNavCycle, pfdSkPress }); } catch (e) { _swallow(e); }

@@ -1,5 +1,5 @@
 // 방향 기준(MAS) — MG(Slaved) / DG
-// 3D 창·지도 창의 같은 버튼으로 바꾼다. MG 는 자이로를 지구 자기장에 맞춰 HSI = 실제 기수,
+// LOWER 창 AHRS 패널(AHRS 선택 · TG/MG DG · HIQ)과 3D 창 버튼으로 바꾼다(지도 창 버튼은 없앴다). MG 는 자이로를 지구 자기장에 맞춰 HSI = 실제 기수,
 // DG 는 방향 자이로만 — 1시간에 약 6° 어긋나고 −/+ 로 1° 씩 맞춘다.
 // HSI·HDG 표시·HDG 유지는 계기 헤딩을, 지도·3D·GPS 항법은 실제 기수를 쓴다.
 export const name = 'MG/DG 방향 기준';
@@ -10,9 +10,10 @@ const normAS = a => { a = ((a % 360) + 360) % 360; return a > 180 ? a - 360 : a;
 export async function run(page, t) {
   // ── 처음에는 MG(Slaved) — −/+ 는 죽어 있다 ──
   const start = await page.evaluate(() => {
-    const boxes = ['hdgref-3d', 'hdgref-map'].map(id => document.getElementById(id));
+    localStorage.removeItem('ovhdState'); ovhdReset('lcon');
+    const boxes = ['hdgref-3d'].map(id => document.getElementById(id));
     return {
-      has: boxes.every(Boolean),
+      has: boxes.every(Boolean) && !document.getElementById('hdgref-map'),
       in3d: !!(boxes[0] && boxes[0].closest('#map3d')),
       ref: hdgRef, err: dgErr,
       txt: boxes.map(b => b && b.querySelector('.hdgref-btn').textContent),
@@ -20,7 +21,7 @@ export async function run(page, t) {
       ind: Math.abs(normAS(hdgInd() - S.hdg)),
     };
   });
-  t.ok(start.has && start.in3d, '3D 창과 지도 창에 MG/DG 버튼이 있다');
+  t.ok(start.has && start.in3d, '3D 창에 MG/DG 버튼이 있고 지도 창 버튼은 없다');
   t.ok(start.ref === 'MG' && start.txt.every(s => s === 'MG (Slaved)'), `처음에는 MG (Slaved) 다 (${start.txt.join(' · ')})`);
   t.ok(start.dis, 'MG 에서는 −/+ 가 죽어 있다');
   t.ok(start.err === 0 && start.ind < 1e-9, 'MG — HSI 헤딩이 실제 기수와 같다');
@@ -28,36 +29,40 @@ export async function run(page, t) {
   // ── 누르면 DG — 두 창이 함께 바뀌고 −/+ 와 자기 나침반이 살아난다 ──
   const dg = await page.evaluate(() => {
     S.hdg = 90; syncHdgBug(); S.spd = 100; S.alt = 2000;
-    document.querySelector('#hdgref-map .hdgref-btn').click();
+    ovhdSet('ahrs1Dg', 'IN');                       // LOWER 창 AHRS 1 의 TG/MG DG 버튼
     updateDgCompass();
-    const b3 = document.getElementById('hdgref-3d'), bm = document.getElementById('hdgref-map');
+    const b3 = document.getElementById('hdgref-3d'), bm = b3;
     return {
       ref: hdgRef,
-      txt: [b3, bm].map(b => b.querySelector('.hdgref-btn').textContent),
-      live: [b3, bm].every(b => [...b.querySelectorAll('.hdgref-adj button')].every(x => !x.disabled)),
+      txt: [b3].map(b => b.querySelector('.hdgref-btn').textContent),
+      live: [b3].every(b => [...b.querySelectorAll('.hdgref-adj button')].every(x => !x.disabled)),
       comp: bm.querySelector('.hdgref-comp').textContent,
       compShown: getComputedStyle(bm.querySelector('.hdgref-comp')).display !== 'none',
       want: 'COMP ' + fmtA(toMag(S.hdg)) + '°',
     };
   });
-  t.ok(dg.ref === 'DG' && dg.txt.every(s => s === 'DG'), `누르면 DG — 3D 창 버튼도 같이 바뀐다 (${dg.txt.join(' · ')})`);
+  t.ok(dg.ref === 'DG' && dg.txt.every(s => s === 'DG'), `AHRS 패널 DG 버튼을 누르면 DG — 3D 창 버튼도 같이 바뀐다 (${dg.txt.join(' · ')})`);
   t.ok(dg.live, 'DG 에서는 −/+ 가 살아난다');
   t.ok(dg.compShown && dg.comp === dg.want, `맞출 때 견줄 자기 나침반을 보인다 (${dg.comp})`);
 
   // ── −/+ — HSI 를 1° 씩 ──
   const adj = await page.evaluate(() => {
     const h0 = hdgInd();
-    const [mm, mp] = document.querySelectorAll('#hdgref-map .hdgref-adj button');
-    const [dm] = document.querySelectorAll('#hdgref-3d .hdgref-adj button');
+    const [mm, mp] = document.querySelectorAll('#hdgref-3d .hdgref-adj button');
     mp.click(); const plus = normAS(hdgInd() - h0);
-    mm.click(); dm.click(); const minus = normAS(hdgInd() - h0);
+    mm.click(); mm.click(); const minus = normAS(hdgInd() - h0);
     const tru = S.hdg;
     mp.click();                                  // 제자리로
-    return { plus, minus, tru };
+    // AHRS 1 의 HIQ 노브 — 오른쪽 두 칸이면 +2°, 노브는 다시 가운데
+    ovhdSet('ahrs1Hiq', 7); const hiq = normAS(hdgInd() - h0), hiqBack = ovhdGet('ahrs1Hiq');
+    ovhdSet('ahrs1Hiq', 3); const hiq2 = normAS(hdgInd() - h0);
+    return { plus, minus, tru, hiq, hiqBack, hiq2 };
   });
   t.ok(Math.abs(adj.plus - 1) < 1e-9, `+ 를 누르면 HSI 가 오른쪽으로 1° (${adj.plus.toFixed(1)}°)`);
   t.ok(Math.abs(adj.minus + 1) < 1e-9, `− 를 누르면 왼쪽으로 1° (${adj.minus.toFixed(1)}°)`);
   t.ok(adj.tru === 90, '−/+ 는 HSI 만 옮기고 실제 기수는 그대로다');
+  t.ok(Math.abs(adj.hiq - 2) < 1e-9 && adj.hiqBack === 5 && Math.abs(adj.hiq2) < 1e-9,
+    `AHRS HIQ 노브 — 돌린 칸만큼 HSI 를 맞추고 노브는 가운데로 (${adj.hiq}° · 노브 ${adj.hiqBack} · 되돌리면 ${adj.hiq2}°)`);
 
   // ── DG 는 1시간에 약 6° 어긋난다(나는 동안만) ──
   const drift = await page.evaluate(() => {
@@ -113,11 +118,24 @@ export async function run(page, t) {
     const seen = [], orig = CanvasRenderingContext2D.prototype.fillText;
     CanvasRenderingContext2D.prototype.fillText = function (txt, ...a) { seen.push(String(txt)); return orig.call(this, txt, ...a); };
     try { drawPFD(); } finally { CanvasRenderingContext2D.prototype.fillText = orig; }
-    const bm = document.getElementById('hdgref-map');
-    return { ref: hdgRef, err: dgErr, txt: bm.querySelector('.hdgref-btn').textContent,
+    const bm = document.getElementById('hdgref-3d');
+    return { ref: hdgRef, err: dgErr, txt: bm.querySelector('.hdgref-btn').textContent, panel: ovhdGet('ahrs1Dg'),
              dis: [...bm.querySelectorAll('.hdgref-adj button')].every(x => x.disabled),
              comp: getComputedStyle(bm.querySelector('.hdgref-comp')).display, dg: seen.includes('DG') };
   });
   t.ok(mg.ref === 'MG' && mg.err === 0 && mg.txt === 'MG (Slaved)', 'MG 로 돌아오면 HSI 가 곧 실제 기수(자기 헤딩)에 다시 맞는다');
   t.ok(mg.dis && mg.comp === 'none' && !mg.dg, 'MG 에서는 −/+ · 나침반 · PFD 의 DG 가 사라진다');
+  t.eq(mg.panel, 'OUT', '3D 창 버튼으로 MG 로 바꾸면 AHRS 패널의 DG 버튼도 나온다');
+
+  // ── AHRS 선택 — 2 로 돌리면 AHRS 2 의 DG 버튼을 따른다 ──
+  const sel = await page.evaluate(() => {
+    const o = {};
+    ovhdSet('ahrs2Dg', 'IN'); o.a1 = hdgRef;            // 아직 AHRS 1(MG)을 쓴다
+    ovhdSet('ahrsSel', '2'); o.a2 = hdgRef;             // AHRS 2 로 → DG
+    ovhdSet('ahrsSel', 'N'); o.n = hdgRef;              // N(=AHRS 1) → MG
+    ovhdReset('lcon'); localStorage.removeItem('ovhdState');
+    return o;
+  });
+  t.ok(sel.a1 === 'MG' && sel.a2 === 'DG' && sel.n === 'MG',
+    `AHRS 선택 노브 — PFD 방향 기준은 고른 AHRS 의 DG 버튼을 따른다 (AHRS1 ${sel.a1} · AHRS2 ${sel.a2} · N ${sel.n})`);
 }

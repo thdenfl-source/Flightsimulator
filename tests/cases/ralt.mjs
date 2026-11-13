@@ -1,8 +1,8 @@
-// 전파고도(RA) · CRHT · 승강계 범위
+// 전파고도(RA) · CRHT · 승강계 범위 · 최대 상승률
 //
 // PFD 오른쪽 아래 CRHT 창은 전파고도다 — 기압고도가 아니라 지형 자료로 잰 지면 위
 // 높이(AGL)를 보이고, CRHT 는 그 높이를 지킨다. 승강계는 위로 3,000 · 아래로
-// 4,000fpm 까지 읽는다.
+// 4,000fpm 까지 읽고, SIM 에서는 토크를 100% 넘게 당기면 3,000fpm 까지 오른다.
 //
 // 지형 자료(타일)는 검사에서 받지 못하므로 그 자리 땅 높이(terrainFtAt)를 바꿔 끼워 본다.
 export const name = '전파고도·승강계';
@@ -13,6 +13,7 @@ export async function run(page, t) {
     const keep = terrainFtAt;
     const out = {};
     try {
+      if (simModeOn) toggleSimMode(false);
       S.lat = 37.0; S.lon = 126.0; S.alt = 3000; S.vs = 0; S.running = false;
       terrainFtAt = () => 1200;
       out.land = radarAltFt();
@@ -43,6 +44,7 @@ export async function run(page, t) {
     const keep = terrainFtAt;
     const out = {};
     try {
+      if (simModeOn) toggleSimMode(false);
       S.lat = 37.0; S.lon = 126.0; S.alt = 3000; S.vs = 0; S.spd = 0; S.bnk = 0; bankTarget = 0;
       altHoldOn = false; crhtOn = false; gspdOn = false; navApOn = false; hdgSelOn = false;
       terrainFtAt = () => 1200;
@@ -91,4 +93,18 @@ export async function run(page, t) {
   });
   t.ok(lag.now0 < 100 && lag.t15 > 400 && lag.t15 < 1000,
     `승강계는 바로 튀지 않고 1.5초에 약 40% 따라간다(시간상수 3초) (0 → 2000fpm: 곧바로 ${lag.now0.toFixed(0)} · 1.5초 ${lag.t15.toFixed(0)})`);
+
+  // ── SIM — 토크를 100% 넘게 당기면 3,000fpm 까지 오른다 ──
+  const climb = await page.evaluate(() => {
+    if (!simModeOn) toggleSimMode(true);
+    S.alt = 3000; S.spd = perfVy();
+    const out = { at100: simVsForTq(CLIMB_REF_TQ - tqRequired()), max: simVsForTq(200), lin10: simVsForTq(10),
+                  hover: null, cap: SIM_VS_UP_MAX };
+    S.spd = 0; out.hover = simVsForTq(CLIMB_REF_TQ - tqRequired());
+    toggleSimMode(false);
+    return out;
+  });
+  t.ok(Math.abs(climb.lin10 - 440) < 1 && climb.at100 > 2000, `남는 토크 10% = 440fpm 으로 오른다 (Vy · 100% 토크면 ${climb.at100.toFixed(0)}fpm)`);
+  t.ok(climb.cap === 3000 && Math.abs(climb.max - 3000) < 1, `더 당기면 3,000fpm 까지 오른다 (${climb.max.toFixed(0)}fpm)`);
+  t.ok(climb.hover > 0 && climb.hover < climb.at100, `제자리에서는 필요 동력이 커서 같은 토크로 덜 오른다 (100% 토크 ${climb.hover.toFixed(0)}fpm)`);
 }

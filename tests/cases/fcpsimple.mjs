@@ -1,5 +1,5 @@
 // FCP SIMPLE — 실기 AFCS 조작 패널 모양 FCP(07-sim.js) + UPLIM 오른쪽 사용자 기능 영역. 옛 FCP 줄은 모두 없앴다(SIMPLE/FULL 구분 없음).
-export const name = 'FCP 패널';
+export const name = 'FCP SIMPLE';
 
 export async function run(page, t) {
   const r = await page.evaluate(async () => {
@@ -15,11 +15,11 @@ export async function run(page, t) {
     // UPLIM 오른쪽 — 구분선 + 사용자 기능(바람 노브 · RNP · SIM SPD · 인터셉트 · 트림 · FORCE TRIM · G/A · GSPD · 페달)
     const x = document.querySelector('#fcp-simple .fks-x');
     o.xDiv = !!document.querySelector('#fcp-simple .fks-div2');
-    o.x = ['[data-k="wdir"]', '[data-k="wspd"]', '#rnp-1', '#simspd-8', '#coll-up', '#trim-pad', '#force-trim-btn', '#gspd-btn', '#ped-l']
+    o.x = ['[data-k="wdir"]', '[data-k="wspd"]', '#rnp-1', '#simspd-8', '#coll-up', '#trim-pad', '#force-trim-btn', '#ga-btn', '#gspd-btn', '#ped-l']
       .filter(sel => !x.querySelector(sel));
     o.noIcpt = !document.getElementById('icpt-btn');
     const r1 = x.querySelector('.fks-xr1'), r2 = x.querySelector('.fks-xr2');
-    o.rows = { up: ['#force-trim-btn', '#gspd-btn', '#rnp-1', '#simspd-1'].every(q => r1.querySelector(q)),
+    o.rows = { up: ['#force-trim-btn', '#ga-btn', '#gspd-btn', '#rnp-1', '#simspd-1'].every(q => r1.querySelector(q)),
                dn: ['#coll-up', '#trim-pad', '#ped-l'].every(q => r2.querySelector(q)) };
     const wd0 = windDir; turn('wdir', 'up'); o.wdir = (windDir - wd0 + 360) % 360; windDir = wd0;
     const ws0 = windSpd; turn('wspd', 'up'); o.wspd = windSpd - ws0; windSpd = ws0;
@@ -27,6 +27,7 @@ export async function run(page, t) {
     const hdg0 = selHdg; turn('hdg', 'up'); o.hdg = (selHdg - hdg0 + 360) % 360;
     const alt0 = selAlt; turn('alta', 'up'); o.alt = selAlt - alt0;
     const crht0 = selCrht; turn('crht', 'dn'); o.crht = selCrht - crht0;
+    const hht0 = selHht; turn('hht', 'up'); o.hht = selHht - hht0;
     window._qnhHpa = 1013; turn('baro', 'up'); o.baro = window._qnhHpa;
     document.querySelector('#fcp-simple [data-k="baro"] .fks-push').click(); o.std = window._qnhHpa;
     // IN 으로 볼 때 — STD 는 29.92, 돌리면 0.01 inHg 씩
@@ -46,11 +47,11 @@ export async function run(page, t) {
     return o;
   });
   t.ok(r.fullRows, '옛 FCP 줄 · SIMPLE/FULL 탭 · OBS/NAV · WDIR/WSPD ▲▼ · STOP WATCH 는 없다 — FCP 는 이 패널 하나');
-  t.ok(r.xDiv && r.x.length === 0, `UPLIM 오른쪽 구분선 + 바람 노브 · RNP · SIM SPD · 트림 · FORCE TRIM · GSPD · 페달 (빠짐: ${r.x.join(',') || '없음'})`);
-  t.ok(r.noIcpt && r.rows.up && r.rows.dn, '인터셉트 버튼은 없다 · 윗줄 RNP · SIM SPD · FORCE TRIM · GSPD / 아랫줄 COLLECTIVE TRIM · 4-WAY TRIM · 페달');
+  t.ok(r.xDiv && r.x.length === 0, `UPLIM 오른쪽 구분선 + 바람 노브 · RNP · SIM SPD · 트림 · FORCE TRIM · G/A · GSPD · 페달 (빠짐: ${r.x.join(',') || '없음'})`);
+  t.ok(r.noIcpt && r.rows.up && r.rows.dn, '인터셉트 버튼은 없다 · 윗줄 RNP · SIM SPD · FORCE TRIM · G/A · GSPD / 아랫줄 COLLECTIVE TRIM · 4-WAY TRIM · 페달');
   t.ok(r.wdir === 5 && r.wspd === 1, `WIND DIR 노브 +5° · WIND SPD 노브 +1kt (${r.wdir} · ${r.wspd})`);
-  t.eq(r.lbls, 'IAS,HDG,VS,ALT.A,ALT,CR.HT,G/S,NAVD CPL,T-DOWN,T.D.HOV,H.HT,BARO,UPLIM,CRS,DH', '사진의 배치(위 · 아래 · 오른쪽 BARO/UPLIM · CRS/DH) — 첫 빈칸은 G/S');
-  t.ok(r.hdg === 1 && r.alt === 100 && r.crht === -10, `노브를 돌리면 HDG +1 · ALT.A +100 · CR.HT −10 (${r.hdg} · ${r.alt} · ${r.crht})`);
+  t.eq(r.lbls, 'IAS,HDG,VS,ALT.A,ALT,CR.HT,NAVD CPL,T-DOWN,T.D.HOV,H.HT,BARO,UPLIM,CRS,DH', '사진의 배치(위 · 아래 · 오른쪽 BARO/UPLIM · CRS/DH)');
+  t.ok(r.hdg === 1 && r.alt === 100 && r.crht === -10 && r.hht === 10, `노브를 돌리면 HDG +1 · ALT.A +100 · CR.HT −10 · H.HT +10 (${r.hdg} · ${r.alt} · ${r.crht} · ${r.hht})`);
   t.ok(r.baro === 1014 && r.std === 1013.25, `BARO — 돌리면 1 hPa, 누르면 STD 1013.25 hPa (${r.baro} → ${r.std})`);
   t.ok(r.stdIn === '29.92' && r.pfdIn === '29.92 IN' && r.inStep === '29.93', `IN 으로 보면 STD 29.92 · PFD 29.92 IN · 돌리면 0.01 (${r.stdIn} · ${r.pfdIn} · ${r.inStep})`);
   t.ok(r.altBtn && r.altLit, 'ALT 버튼 — ALT 유지가 걸리고 녹색으로 켜진다');

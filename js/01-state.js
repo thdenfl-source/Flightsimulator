@@ -49,6 +49,7 @@ const S = {
   alt: 500,   // feet   (AFCS default 500 ft)
   pit: 0,     // pitch  — auto-derived from speed: (120−spd)×3/20
   bnk: 0,     // bank   — driven by HDG button; returns to 0 on release
+  tq: 60,     // torque(%) — SIM 모드의 컬렉티브 값. 남는 토크가 상승률이 된다
   crs: 360,
   brg: 0,     // BRG1: bearing to active (TO) WP
   xtk: 0,
@@ -70,6 +71,7 @@ let _simLoopRunning = false;  // guard against double-starting the rAF loop
 // ── AFCS Preselects ──
 let selSpd  = 80;   // IAS preselect (kt)
 let selAlt  = 500;  // ALT preselect (ft) — target for ALT hold mode
+let selHht = 50;   // HHT — T/D to H 가 내려가 멈출 호버 높이(전파고도 ft · FCP HHT ▲▼)
 let selCrht = 500;  // CRHT preselect (ft) — target for CRHT hold mode
 let selHdg  = 360;  // HDG preselect (°, 1-360)
 // ── HDG SEL: 선택 헤딩으로 표준선회(360°/2분 = 3°/s)로 선회 ──
@@ -103,6 +105,10 @@ let selVS   = 1000; // VS preselect (fpm, magnitude) — used by ALT hold mode
                     // CRHT hold mode ignores this and always converges at 500 fpm
 let spdTrend = 0;   // 6-second speed trend (knots, smoothed)
 let _spdPrev = 80;  // previous-frame IAS for trend computation
+// 내활·외활 볼(slip/skid) — 기체가 느끼는 옆 방향 힘(g, 오른쪽 +). 07-sim.js slipUpdate
+let slipBall = 0;
+let _slipHdg = null;   // 직전 단계의 기수(요율을 재는 데 쓴다)
+let _hdgJump = 0;      // 기체가 돈 것이 아닌 기수 맞춤(HDG 포착 순간 등) — 요율에서 뺀다
 
 // ── AFCS Altitude Hold Modes ──
 // altHoldOn : converges S.alt → selAlt  at selVS fpm (pilot-set rate)
@@ -137,9 +143,6 @@ function toggleBrg2Lbl() {
 let gsArmed = false, gsOn = false;
 function gsAvailable() { return !!gsDeviation(); }
 function updateGsBtn() {
-  // FCP 패널의 G/S 버튼(07-sim.js) — 잡으면 녹색, 무장이면 호박색
-  const f = document.getElementById('fks-gs');
-  if (f) { f.classList.toggle('on', gsOn); f.classList.toggle('armed', gsArmed && !gsOn); }
   const b = document.getElementById('gs-btn');
   if (!b) return;
   b.classList.toggle('on', gsOn);
@@ -148,27 +151,184 @@ function updateGsBtn() {
              : gsArmed ? 'G/S<span class="gs-sub">ARM</span>' : 'G/S';
   if (b.innerHTML !== want) b.innerHTML = want;
 }
+// SIM 모드(조종간 직접 조종) — 법칙은 14-simmode.js. 선언만 여기 둔다:
+// 시뮬 루프(07-sim.js)가 그 파일보다 먼저 실행될 수 있어 TDZ 를 피한다.
+let simModeOn = false;
+// NR 경고 — 자동회전 비행 RPM 수정표의 띠: 녹 88~110 · 황 84~88/110~114 · 적 84 미만/114 초과(PFD 엔진 계기 · 14-simmode.js)
+const NR_HIGH = 110, NR_HIGH_RED = 114, NR_LOW_YEL = 88, NR_LOW_RED = 84;
+// SIM 모드의 IAS 상위모드 — 걸면 기수 자세를 선택 속도(selSpd)를 내는 자세로 잡는다
+// (14-simmode.js). 평소(SIM 밖)에는 속도가 늘 IAS 로 나므로 쓰지 않는다.
+let simIasOn = false;
+// SIM 모드의 옆방향 속도(kt · 오른쪽이 +). 저속에서 뱅크를 주면 선회 대신
+// 옆으로 미끄러지는 헬기 특성을 담는다(14-simmode.js 가 채운다).
+let simLat = 0;
+
+// ── 토크(TQ) ──
+// 헬기의 컬렉티브는 '상승률 레버' 가 아니라 '출력 레버' 다. 올린 만큼 토크가
+// 오르고, 그 토크가 지금 필요한 만큼보다 남으면 그 차이가 상승률이 된다.
+// 그래서 같은 레버 위치라도 뱅크를 주거나 속도가 바뀌면 오르내림이 달라진다.
+const TQ_HOVER   = 60;         // 무풍·수평·제자리에서 필요한 토크(%)
+const TQ_SPAN    = 45;         // 컬렉티브 끝까지 = ±45%
+const TQ_MAX     = 140;        // 계기 최대 눈금 = 컬렉티브 맨 위
+// 계기 구간 — 0~100% 녹색(연속 사용) · 100~113% 노랑(주의) · 113~140% 빨강(오버토크)
+const TQ_LIMIT   = 100;        // 연속 사용 한계 — 여기까지 녹색
+const TQ_RED     = 113;        // 이 위는 빨강 — 오버토크
+const TQ_RATE    = 2000;        // 토크가 따라가는 최대 빠르기(%/s) — 종전 60 의 2배
+const TQ_PER_FPM = 55;         // 남는 토크 1% 당 상승률(fpm)
+// ── 필요 동력 곡선(U 자) ── 호버 동력 H 를 유도(induced) 몫과 그 밖(형상·꼬리로터·보기)으로 나눈다.
+//   유도 몫  = H·PW_IND · (vi/vi0) · n²   — 운동량 이론: 앞으로 날수록 내리흐름이 줄어 덜 든다(ETL).
+//                                            선회(하중배수 n = 1/cosφ)에는 추력² 로 는다.
+//   그 밖    = H·(1−PW_IND) · n
+//   유해 항력 = PW_PAR · V³               — 빨라질수록 세제곱으로 는다(최대 수평속도는 그날의 MTA 가 정한다)
+// 기준(H 77%)에서 호버 77% → 70kt 최소 약 48%(호버의 0.62) → 150kt 약 95% → 160kt 약 108%.
+const PW_IND  = 0.70;          // 호버 동력 가운데 유도 동력 몫
+const PW_VI0  = 25;            // 호버 유도속도(kt, H 77% 기준 — 무게가 늘면 √ 로 는다)
+const PW_PAR  = 1.874e-5;      // 유해 동력(% / kt³)
+const PW_ETL0 = 12, PW_ETL1 = 24;   // 회전익 특성 '속도·TQ 효율' — 이 사이(전이양력 지대)에서 유도 동력이 한꺼번에 준다
+
+// ── 제자리 호버에 필요한 토크 ──
+// CDU 의 PERF 화면이 고도·온도·중량으로 뽑아 주는 바로 그 값을 쓴다.
+// HOV(호버 파워) = PERF 의 IGE 호버 토크 — 바퀴 높이 10ft 에서 제자리에 서는 토크다.
+// 땅에 가까울수록 지면효과로 덜 든다(바퀴 높이 기준):
+//   3ft 이하 : HOV − 10%  — 이 토크면 바퀴가 떨어져 3ft 에 선다(그보다 적으면 바퀴가 땅에)
+//   5ft      : HOV − 5%
+//   10ft     : HOV
+//   10→53ft  : HOV → OGE — 로터 지름 즈음(≈53ft) 위는 지면효과가 없다
+// 그래서 레버를 HOV−10% 에 두면 3ft, HOV−5% 면 5ft, HOV 면 10ft 에서 호버링한다.
+// HOV−20% ~ HOV−10% 는 바퀴가 떨어지기 직전(LIGHT ON WHEELS)이다(simLightOnWheels).
+const IGE_FULL_FT = 10, IGE_NONE_FT = 53;
+// [바퀴 높이 ft, HOV 와의 차 %] — 땅(0ft)은 HOV−10 보다 조금 낮게 두어, HOV−10% 면 확실히
+// 바퀴가 떨어져 몇 초 안에 3ft 까지 오른다(같게 두면 땅에서 꼭 맞아 뜨지 않는다)
+const IGE_CURVE = [[0, -12], [3, -10], [5, -5], [10, 0]];
+const LOW_BAND  = [-20, -10];                      // LIGHT ON WHEELS 구간(HOV 와의 차 %)
+// HOV(호버 파워, %) — 바퀴 높이 10ft 의 IGE 호버 토크
+function hoverPowerTq() {
+  let p = null;
+  try { p = (typeof perfHoverTq === 'function') ? perfHoverTq() : null; } catch (e) { _swallow(e); }
+  if (!p || !Number.isFinite(p.oge)) return TQ_HOVER;
+  return Number.isFinite(p.ige) ? p.ige : p.oge;
+}
+function hoverTqRef() {
+  let p = null;
+  try { p = (typeof perfHoverTq === 'function') ? perfHoverTq() : null; } catch (e) { _swallow(e); }
+  if (!p || !Number.isFinite(p.oge)) return TQ_HOVER;          // PERF 를 못 읽으면 종전 값
+  const ige = Number.isFinite(p.ige) ? p.ige : p.oge;
+  let agl = 1000;
+  // 지면효과는 발밑 바닥에서 잰다(함정 위에서는 갑판 — simDeckFt)
+  try {
+    const g = (typeof simTerrainFt === 'function') ? simTerrainFt() : 0;
+    const d = (typeof simDeckFt === 'function') ? simDeckFt() : null;
+    agl = S.alt - (d == null ? g : Math.max(g, d));
+  }
+  catch (e) { agl = S.alt; }
+  if (agl < IGE_FULL_FT) {                                     // 지면효과 — 낮을수록 덜 든다
+    const c = IGE_CURVE;
+    if (agl <= c[0][0]) return ige + c[0][1];
+    for (let i = 1; i < c.length; i++) {
+      if (agl <= c[i][0]) {
+        const f = (agl - c[i - 1][0]) / (c[i][0] - c[i - 1][0]);
+        return ige + c[i - 1][1] + (c[i][1] - c[i - 1][1]) * f;
+      }
+    }
+  }
+  const k = Math.max(0, Math.min(1, (agl - IGE_FULL_FT) / (IGE_NONE_FT - IGE_FULL_FT)));
+  return ige + (p.oge - ige) * k;                              // IGE → OGE
+}
+
+// 지금 '수평 비행' 에 필요한 토크(%)
+// (SIM 은 대기속도 — 옆걸음과 바람까지 담는다. simAirspeed · 14-simmode.js)
+function tqRequired() { return tqRequiredAt((simModeOn && typeof simAirspeed === 'function') ? simAirspeed() : S.spd, S.bnk); }
+// 운동량 이론의 유도속도 비(vi/vi0) — 전진 속도 V(kt), 호버 유도속도 vi0(kt)
+function pwViRatio(V, vi0) { const v = V / vi0; return Math.sqrt(Math.sqrt(v ** 4 / 4 + 1) - v * v / 2); }
+// 그 '대기속도'·뱅크로 수평 비행할 때 필요한 토크(%) — 계기의 Vy 선도 이것으로 긋는다
+function tqRequiredAt(spd, bnk) {
+  const H = hoverTqRef(), V = Math.abs(spd);
+  const n = 1 / Math.cos(Math.min(60, Math.abs(bnk)) * D2R);
+  let r = pwViRatio(V, PW_VI0 * Math.sqrt(Math.max(0.3, H / 77)));
+  // 회전익 특성 '속도·TQ 효율' — 전이양력(ETL)은 12~24kt 에서 한꺼번에 나타난다(그 아래는 호버와 같다)
+  if ((typeof rcOn === 'function') && simModeOn && rcOn('spdTq'))
+    r = 1 + (r - 1) * Math.max(0, Math.min(1, (V - PW_ETL0) / (PW_ETL1 - PW_ETL0)));
+  return H * (PW_IND * r * n * n + (1 - PW_IND) * n) + PW_PAR * V * V * V;
+}
+// 그날의 MTA(최대 가용 토크, %) — CDU PERF 의 MTA(30)(09-cdu.js perfMta).
+// PERF 의 고도·온도를 기준으로 지금 고도에서 셈한다. PERF 를 못 읽으면 계기 끝.
+// 블리드 공기를 쓰는 장치가 켜지면 가용 토크(MTA)가 준다 — 상부 콘솔(17-upper.js)
+//   ECS HEATER(모드 노브 HEAT) — #1 · #2 엔진 모두 4% 씩 → 계기 MTA −4%
+//   ENG ANTI ICE NO1/NO2 — 켠 엔진마다 그 엔진에서 14% → 둘 다 켜면 −14%, 하나면 −7%(두 엔진 평균)
+const MTA_HEAT_PCT = 4, MTA_ENG_AI_PCT = 14;
+function mtaBleedPenalty() {
+  let p = 0;
+  try {
+    if (typeof ovhdGet !== 'function') return 0;
+    if (ovhdGet('ecsMode') === 'HEAT') p += MTA_HEAT_PCT;
+    const ai = (ovhdGet('engAi1') === 'ON' ? 1 : 0) + (ovhdGet('engAi2') === 'ON' ? 1 : 0);
+    p += MTA_ENG_AI_PCT * ai / 2;
+  } catch (e) { _swallow(e); }
+  return p;
+}
+function mtaNow(altFt = S.alt) {
+  let v = null;
+  try { v = (typeof perfMta === 'function') ? perfMta(altFt) : null; } catch (e) { _swallow(e); }
+  const base = Number.isFinite(v) ? Math.min(TQ_MAX, v) : TQ_MAX;
+  return Math.max(0, base - mtaBleedPenalty());
+}
+// Vy 로 수평 비행할 때 필요한 토크(%) — 이 선과 MTA 선 사이가 그날 오를 수 있는 여유다
+function tqAtVy() {
+  let vy = null;
+  try { vy = (typeof perfVy === 'function') ? perfVy() : null; } catch (e) { _swallow(e); }
+  return Number.isFinite(vy) ? tqRequiredAt(vy, 0) : null;
+}
+// 계기에 보일 토크. SIM 모드에서는 실제 레버 값, 평소에는 지금 비행 상태에서
+// 들 법한 값을 거꾸로 셈해 보여 준다(계기가 비어 보이지 않게).
+function tqShown() {
+  if (simModeOn) return S.tq;
+  let add = (S.vs || 0) / TQ_PER_FPM;
+  try { if (typeof perfTqForVs === 'function') add = perfTqForVs(S.vs || 0); } catch (e) { _swallow(e); }
+  return Math.max(0, Math.min(TQ_MAX, tqRequired() + add));
+}
+function tqOver() { return tqShown() > TQ_RED; }
+// 지금 토크가 든 구간 — 'green' · 'yellow' · 'red'
+function tqBand(v = tqShown()) { return v > TQ_RED ? 'red' : v > TQ_LIMIT ? 'yellow' : 'green'; }
+
 function toggleGs() {
-  if (gsArmed || gsOn) { gsArmed = false; gsOn = false; }
+  if (gsArmed || gsOn) { gsArmed = false; gsOn = false; gsAutoLatch(); }
   else {
-    gsArmed = true;
+    gsArmed = true; _gsLatch = false;
     // 이미 강하선 위에 있으면 곧바로 잡는다
     const g = gsDeviation();
     if (g && Math.abs(g.dev) < 0.15) { gsOn = true; gsArmed = false; }
   }
   updateGsBtn();
 }
+// ── G/S 자동 ── G/S 버튼은 없다. ILS(강하선이 있는 LOC)를 지금 NAV 소스로 맞추면 스스로 무장하고,
+// 강하각에 맞는 순간(편차 0.15° 안) 붙잡는다. 조종사가 ALT·CRHT·T/D to H·G/A 를 걸어 놓으면
+// 그 강하선에서 벗어날 때(편차 0.3° 밖)까지 다시 잡지 않는다 — 놓자마자 도로 붙잡지 않게.
+let _gsLatch = false;
+function gsAutoLatch() { _gsLatch = true; }
 // 매 프레임 — 무장 상태에서 강하선에 닿았는지 본다.
 // 위에서 내려오다 만나는 경우가 대부분이므로 '편차가 0 에 가까워졌을 때' 잡는다.
 function gsCaptureCheck() {
+  const g = gsDeviation();
   if (gsOn) {
-    // 신호를 잃으면(멀어짐·안테나 뒤로 지나감) 놓는다
-    if (!gsDeviation()) { gsOn = false; updateGsBtn(); }
+    // 신호를 잃으면(멀어짐·안테나 뒤로 지나감) 놓는다 · 조종사가 다른 고도 모드를 걸면 물러난다
+    if (!g) { gsOn = false; updateGsBtn(); }
+    else if (altHoldOn || crhtOn || (typeof tdOn !== 'undefined' && tdOn) || (typeof gaOn !== 'undefined' && gaOn)) {
+      gsOn = false; gsAutoLatch(); updateGsBtn();
+    }
     return;
   }
-  if (!gsArmed) return;
-  const g = gsDeviation();
-  if (g && Math.abs(g.dev) < 0.15) { gsOn = true; gsArmed = false; updateGsBtn(); }
+  // 자동 무장 — ILS 를 맞춰 강하선 신호가 들어오면
+  if (!g) { if (gsArmed) { gsArmed = false; updateGsBtn(); } _gsLatch = false; return; }
+  if (_gsLatch) { if (Math.abs(g.dev) > 0.3) _gsLatch = false; else return; }
+  if (!gsArmed) { gsArmed = true; updateGsBtn(); }
+  if (Math.abs(g.dev) < 0.15) {
+    // 아래로 내려가는 G/A·T/D to H 중에는 잡지 않는다(조종사가 고른 길이 우선)
+    if ((typeof gaOn !== 'undefined' && gaOn) || (typeof tdOn !== 'undefined' && tdOn)) return;
+    gsOn = true; gsArmed = false;
+    if (altHoldOn || crhtOn) { altHoldOn = false; crhtOn = false; try { updateHoverBtns(); } catch (e) { _swallow(e); } }
+    try { if (typeof vsModeOn !== 'undefined') vsModeOn = false; } catch (e) { _swallow(e); }
+    updateGsBtn();
+  }
 }
 
 // ── SUSP (시퀀싱 보류) ────────────────────────────────────────────
@@ -182,7 +342,7 @@ function navSuspAuto() { return !!(typeof holdOn !== 'undefined' && holdOn); }
 function navSuspended() { return suspOn || navSuspAuto(); }
 // PFD 소프트키의 OBS 칸이 SUSP 로 바뀌는 때 — 다음 지점으로 넘어갈지 정해야 하는 자리(FCP 의 SUSP 버튼은 없앴다)
 //   · 이미 보류 중(손으로 켬 · 홀딩으로 저절로)
-//   · NAV(FMS)로 날며 활성 지점에 홀딩이 걸려 있다
+//   · NAV(FMS)로 날며 활성 지점에 홀딩이 걸려 있다(홀딩 · 오비트처럼 그 자리를 돌 곳)
 //   · NAV(FMS)로 날며 활성 지점이 비행계획의 마지막 — 계기접근 끝(MAPt)에서 미스드어프로치로 이어 갈지
 function suspSoftkey() {
   if (navSuspended()) return true;
@@ -333,7 +493,7 @@ function updateHoverBtns() {
   const ahb = document.getElementById('alt-hold-btn');
   // ALT hold button
   if (ahb) ahb.classList.toggle('on', altHoldOn);
-  // HOVER PAGE: pressable when below 80kt OR already on — FCP 버튼은 없앴고 소프트키 Hover Display 가 따른다
+  // HOVER PAGE: pressable when below 80kt OR already on (so user can turn off) — FCP 버튼은 없앴고 소프트키 Hover Display 가 따른다
   if (hb) { hb.disabled = !(hoverEligible() || hoverPageOn); hb.classList.toggle('on', hoverPageOn); }
   // GSPD: always enabled (mode-independent of HOVER PAGE)
   if (gb) { gb.disabled = false; gb.classList.toggle('on', gspdOn); }
@@ -385,9 +545,12 @@ function toggleGspd() {
     // snaps the controlled state to (0, S.spd); the GSPD slew loop then
     // decelerates from there to refs=(0,0).
     if (!gspdCoasting) {
-      gspdActLat = 0;
-      gspdActFwd = S.spd;
+      // SIM 모드는 옆걸음도 이어 받는다. GSPD 는 땅에 대한 속도라, 대기속도에서 바람 몫을 뺀다
+      const w = (simModeOn && typeof simWindRel === 'function') ? simWindRel(!_simOnGnd) : { fwd: 0, lat: 0 };
+      gspdActLat = simModeOn ? simLat - w.lat : 0;
+      gspdActFwd = S.spd - w.fwd;
     }
+    simIasOn = false;   // SIM 의 IAS 도 기수 자세를 쓰는 모드다 — GSPD 가 넘겨 받는다
     // References default to 0,0; the slew loop will decelerate.
     gspdRefLat = 0;
     gspdRefFwd = 0;
@@ -400,7 +563,13 @@ function toggleGspd() {
     //   engagement, so the lateral/aft case decelerates gradually on
     //   re-engage exactly like the forward-only case (which survives a
     //   disengage via the base model).
-    if (Math.abs(gspdActLat) > 0.5 || gspdActFwd < 0) {
+    if (simModeOn) {
+      // SIM 모드는 옆·뒤로 가는 것도 그대로 몬다 — 타력 비행 없이 바로 넘겨 받고,
+      // 트림을 지금 속도에 맞춰 둬 조종간을 가운데 두면 그 속도로 계속 난다.
+      const w = (typeof simWindRel === 'function') ? simWindRel(!_simOnGnd) : { fwd: 0, lat: 0 };   // 땅 → 대기속도
+      S.spd = gspdActFwd + w.fwd; simLat = gspdActLat + w.lat; gspdCoasting = false;
+      try { simTrimHoldSpeed(); } catch (e) { _swallow(e); }
+    } else if (Math.abs(gspdActLat) > 0.5 || gspdActFwd < 0) {
       gspdCoasting = true;
     } else {
       S.spd = Math.max(0, gspdActFwd);
@@ -421,8 +590,10 @@ function toggleAltHold() {
     // 다른 고도로 가려면(ALT.A) ALT ▲▼ 로 기준을 옮긴다(07-sim.js applyDelta 'alt').
     selAlt = Math.round(S.alt);
     crhtOn = false;  // mutually exclusive
-  } else {
+    try { gaOn = false; vsModeOn = false; tdOn = false; updateGaBtn(); } catch (e) { /* 14-simmode 앞 */ }   // ALT 가 컬렉티브를 가져간다
+  } else if (!simModeOn) {
     S.vs = 0;  // prevent unintended climb/descent after disengagement
+    // (SIM 모드에서는 그 상승률에서 컬렉티브가 이어 받는다 — 계기가 튀지 않게)
   }
   updateHoverBtns();
 }
@@ -436,7 +607,8 @@ function toggleCrht() {
     // CRHT 는 전파고도(지면 위 높이 — 05-gps.js radarAltFt)를 지킨다.
     selCrht   = Math.round(radarAltFt());
     altHoldOn = false;
-  } else {
+    try { gaOn = false; vsModeOn = false; tdOn = false; updateGaBtn(); } catch (e) { /* 14-simmode 앞 */ }
+  } else if (!simModeOn) {
     S.vs = 0;  // prevent unintended climb/descent after disengagement
   }
   updateHoverBtns();
@@ -475,9 +647,60 @@ function gspdTrimNudge(dir) {
 let trimHoldTimer = null, trimHoldInt = null;
 let _trimNonGspdDir = null;
 let _trimGuard = null;
+// 지금 누르고 있는 트림 방향. 같은 방향이 이미 걸려 있으면 다시 걸지 않는다 —
+// 햇 한 번이 두 길로 들어오는 일이 있다(장치 프로그램이 햇을 방향키로도
+// 내보내는 경우 등). 그러면 1° 가 두 번 들어가 2° 가 되고, 뒤에 들어온 쪽이
+// 앞쪽의 반복 타이머를 끊어 누르고 있어도 이어지지 않았다.
+let _trimDir = null;
+// SIM 모드 자세 트림의 리듬 — 딸깍 한 번이 한 칸(뱅크 1° · 피치 0.5°), 0.5초 넘게
+// 누르고 있으면 그때부터 0.1초마다 한 칸씩 이어 간다. 홀드 문턱을 넉넉히 두어
+// 조금 길게 누른 딸깍이 두 칸으로 넘어가지 않게 한다.
+const SIM_TRIM_HOLD_MS = 500;
+const SIM_TRIM_REP_MS  = 100;
+// HDG 상위모드가 걸려 있으면 좌우 트림은 모드를 풀지 않고 HDG 기준(selHdg)을 1° 씩
+// 옮긴다 — FCP HDG 노브를 돌린 것과 같다. NAV·GSPD 가 잡고 있을 때는 해당 없음.
+function hdgTrimActive(dir) {
+  return (dir === 'L' || dir === 'R') && hdgSelOn && !navApOn && !gspdOn;
+}
+function hdgTrimNudge(dir) {
+  if (!hdgTrimActive(dir)) return;
+  applyDelta('hdg', dir === 'R' ? 1 : -1);
+}
 function startTrimHold(dir) {
+  if (_trimDir === dir) return;         // 같은 누름이 겹쳐 들어왔다 — 한 번으로 친다
   stopTrimHold();                       // 중복 시작 방지(이전 홀드가 남아 있으면 정리)
+  _trimDir = dir;
   _trimGuard = setTimeout(stopTrimHold, 20000);   // 런어웨이 방지(최대 20초)
+  // SIM 모드에서 '둘러보기' 버튼을 누르고 있으면 햇은 트림이 아니라 시선이다
+  if (simModeOn && typeof simLookHeld !== 'undefined' && simLookHeld) {
+    simLookDir = dir;
+    return;
+  }
+  // HDG 상위모드 — 딸깍 한 번이 1°, 0.5초 넘게 누르면 0.1초마다 1° 씩(SIM·일반 모드 같음)
+  if (hdgTrimActive(dir)) {
+    hdgTrimNudge(dir);
+    trimHoldTimer = setTimeout(() => {
+      trimHoldInt = setInterval(() => hdgTrimNudge(dir), SIM_TRIM_REP_MS);
+    }, SIM_TRIM_HOLD_MS - SIM_TRIM_REP_MS);
+    return;
+  }
+  // SIM 모드에서는 사이클릭의 '비퍼 트림' 그대로다 — 좌우는 롤 1°, 전후는 피치
+  // 0.5° 씩 옮겨 둔다(조종간을 가운데 두어도 그 자세로 날게 된다).
+  // GSPD 가 걸려 있으면 SIM 모드라도 아래의 GSPD 기준속도 트림으로 간다.
+  if (simModeOn && !gspdOn) {
+    // NAV 가 뱅크를 잡고 있으면 버튼으로만 푼다 — 그동안 좌우 트림은 쌓아 두지 않는다.
+    // (HDG 는 위에서 기준 헤딩을 옮기고 끝난다. 그 밖에 남은 횡축 모드가 있으면
+    //  손으로 넘겨 받는다 — 지금 뱅크를 이어 잡는다.)
+    if ((dir === 'L' || dir === 'R') && simAfcsLat()) {
+      if (navApOn) return;
+      simAfcsLatRelease();
+    }
+    simTrimNudge(dir);
+    trimHoldTimer = setTimeout(() => {
+      trimHoldInt = setInterval(() => simTrimNudge(dir, true), SIM_TRIM_REP_MS);
+    }, SIM_TRIM_HOLD_MS - SIM_TRIM_REP_MS);
+    return;
+  }
   if (gspdOn) {
     gspdTrim(dir);
     trimHoldTimer = setTimeout(() => {
@@ -487,7 +710,7 @@ function startTrimHold(dir) {
     _trimNonGspdDir = dir;
     if (dir === 'L' || dir === 'R') {
       bankTarget = Math.max(-60, Math.min(60, bankTarget + (dir === 'R' ? 1 : -1)));
-      rollApOn = false; hdgSelOn = false;   // 수동 뱅크 → HDG SEL 해제
+      rollApOn = false; hdgSelOn = false;   // 수동 뱅크 → 횡축 모드 해제(HDG 는 위에서 기준만 옮긴다)
     } else {
       const d = dir === 'F' ? 1 : -1;
       applyDelta('spd', d);
@@ -498,13 +721,23 @@ function startTrimHold(dir) {
   }
 }
 function stopTrimHold() {
+  try { if (typeof simLookDir !== 'undefined') simLookDir = null; } catch (e) { _swallow(e); }
   if (trimHoldTimer) { clearTimeout(trimHoldTimer); trimHoldTimer = null; }
   if (trimHoldInt)   { clearInterval(trimHoldInt);  trimHoldInt   = null; }
   if (_trimGuard)    { clearTimeout(_trimGuard);    _trimGuard    = null; }
   _trimNonGspdDir = null;
+  _trimDir = null;
+  try { if (typeof simTrimRelease === 'function') simTrimRelease(); } catch (e) { _swallow(e); }
 }
 
+// 화면의 FORCE TRIM 버튼 — 누르고 바로 놓은 것과 같다
+function forceTrimBtn() { forceTrim(); forceTrimRelease(); }
+function forceTrimRelease() {
+  try { if (typeof simFtrRelease === 'function') simFtrRelease(); } catch (e) { _swallow(e); }
+}
 function forceTrim() {
+  // SIM 모드 IAS — 조종간으로 옮겨 간 지금 속도를 새 기준으로 잡는다
+  if (simModeOn && simIasOn && !gspdOn) { selSpd = simIasClamp(S.spd); return; }
   if (!gspdOn) return;
   gspdRefLat = clampLat(Math.round(gspdActLat));
   gspdRefFwd = clampFwd(Math.round(gspdActFwd));
@@ -551,6 +784,9 @@ const WIND_LO = 30;  // S.spd at or below this → no wind effect
 const WIND_HI = 60;  // S.spd at or above this → full wind effect
 function windEffectFactor() {
   if (gspdOn || gspdCoasting) return 0;
+  // SIM 모드는 공중에 뜨면 늘 바람에 실린다(호버에서도) — 속도(S.spd·simLat)는 대기속도다.
+  // 바퀴가 땅·갑판에 붙어 있으면 밀리지 않는다(14-simmode.js 가 뜨고 앉을 때 바람 몫을 넘겨 준다).
+  if (simModeOn) return (typeof _simOnGnd !== 'undefined' && _simOnGnd) ? 0 : 1;
   if (S.spd <= WIND_LO) return 0;
   if (S.spd >= WIND_HI) return 1;
   return (S.spd - WIND_LO) / (WIND_HI - WIND_LO);
@@ -572,12 +808,26 @@ function computeTrack() {
 
 // 지상속도(kt) — 대기속도 벡터 + 유효 바람 벡터의 크기.
 // 선회 선행거리·VNAV TOD 등 "지면 기준" 계산은 모두 이 값을 쓴다.
+// ── 진대기속도(TAS) ── 계기속도(IAS)는 동압을 재므로, 공기가 옅은 높은 고도에서는 같은 IAS 로도
+// 실제로 더 빨리 난다: TAS = IAS × √(ρ₀/ρ). SIM 모드는 이 TAS 로 움직이고 돈다(위치·선회율·지상속도).
+// 밀도는 ISA 기압(고도)과 기온(METAR 지면온도 _oatSurfaceC 에서 2°C/1000ft 로 내려감)으로 셈한다.
+// SIM 밖(절차 훈련)은 종전대로 속도 값을 그대로 쓴다.
+function tasRatio(altFt = S.alt) {
+  const a = Math.max(0, altFt || 0);
+  const t0 = (typeof _oatSurfaceC === 'number' && Number.isFinite(_oatSurfaceC)) ? _oatSurfaceC : 15;
+  const tK = t0 - 2 * a / 1000 + 273.15;
+  const p = Math.pow(1 - 6.87535e-6 * a, 5.2558797);           // p / p₀
+  const rho = p * 288.15 / tK;                                   // ρ / ρ₀
+  return Math.sqrt(1 / Math.max(0.2, rho));
+}
+function tasKt(v = S.spd) { return simModeOn ? v * tasRatio() : v; }
 function groundSpdKt() {
   const wEff = effectiveWindSpd();
-  if (wEff <= 0) return S.spd;
+  const vT = tasKt(S.spd);
+  if (wEff <= 0) return vT;
   const wt = normA(windDir + 180) * D2R;
-  const gN = S.spd * Math.cos(S.hdg * D2R) + wEff * Math.cos(wt);
-  const gE = S.spd * Math.sin(S.hdg * D2R) + wEff * Math.sin(wt);
+  const gN = vT * Math.cos(S.hdg * D2R) + wEff * Math.cos(wt);
+  const gE = vT * Math.sin(S.hdg * D2R) + wEff * Math.sin(wt);
   return Math.sqrt(gN * gN + gE * gE);
 }
 
@@ -589,7 +839,7 @@ function groundSpdKt() {
 // 인바운드 선회를 마쳤을 때 코스 위에 놓이도록 바람 쪽으로 더 치우쳐 난다.
 function windCorrectedHdg(desiredTrack, mult) {
   const wEff = effectiveWindSpd();
-  const v = Math.max(20, S.spd);
+  const v = Math.max(20, tasKt(S.spd));
   if (wEff <= 0.1) return desiredTrack;
   const s = wEff * Math.sin((windDir - desiredTrack) * D2R) / v;
   let wca = Math.asin(Math.max(-1, Math.min(1, s))) / D2R;
@@ -607,7 +857,7 @@ function updateCrsButtons() {
   const enabled = obsOn || navSrc !== 'FMS';
   ['crs-dn', 'crs-up'].forEach(id => {
     const el = document.getElementById(id);
-    if (!el) return;   // FCP 1행의 CRS ▲▼ 는 없앴다(FCP 패널 CRS 노브)
+    if (!el) return;   // FCP 1행의 CRS ▲▼ 는 없앴다(SIMPLE 패널 CRS 노브)
     el.disabled = !enabled;
     el.style.opacity = enabled ? '1' : '0.3';
   });
@@ -622,7 +872,8 @@ function toggleObs() {
 
 function toggleNavAp() {
   navApOn = !navApOn;
-  { const b = document.getElementById('nav-ap-btn'); if (b) b.classList.toggle('on', navApOn); }   // FCP NAV 는 없앴다(FCP 패널 NAVD CPL)
+  _shipNavPhase = null;              // 함정 접근 차례는 걸 때마다 처음부터 고른다
+  { const b = document.getElementById('nav-ap-btn'); if (b) b.classList.toggle('on', navApOn); }   // FCP NAV 는 없앴다(SIMPLE 패널 NAVD CPL)
   if (!navApOn) {
     if (holdOn) holdExit();          // NAV 해제 시 홀딩도 해제
     bankTarget = 0;
@@ -659,9 +910,61 @@ const NAV_INTERCEPT_CHOICES = [30, 45, 60];
 let navInterceptDeg = 45;          // 인터셉트 각도(조종사 선택: 30/45/60)
 let _navDirectTo = false;          // 표적 직행 모드(FMA 표기에 사용)
 const VOR_FSD_DEG = 10;            // VOR CDI 최대편위 = 10°
+// ── 함정 TACAN(I-SHP) 접근 ── 함정은 움직이는 착륙장이다. 지상 VOR 처럼 '국 1.5NM 안은 혼동원추라 기수 유지'
+// 로 두면 마지막 접근에서 손을 놓고, 함정 앞·옆에 있으면 코스선(함정 침로)을 따라 함정에서 멀어진다.
+// 그래서 함정 뒤 코스선(침로의 반대쪽 · 접근로)으로 들어가 함정까지 따라가는 차례를 둔다:
+//   ABEAM — 함정 앞이면 먼저 함정 옆(내 쪽 SHIP_ABEAM_NM)을 지나 함정 위를 넘지 않는다
+//   GATE  — 함정 뒤 SHIP_GATE_NM 관문으로 곧장(닿을 때까지 — 도중에 꺾지 않는다)
+//   TRACK — 코스선 편위를 NM 로 보고(FMS 와 같은 인터셉트 · 롤아웃) 함정까지 따라간다 — 가까워져도 놓지 않는다
+//   OVER  — 함정 위(SHIP_OVER_NM)에 닿으면 함정 침로로 난다(1NM 넘게 벗어나면 다시 처음부터)
+const SHIP_GATE_NM = 2, SHIP_ABEAM_NM = 1.2, SHIP_OVER_NM = 0.15;
+let _shipNavPhase = null, _shipNavT = 0;
+function shipNavPhase() { return _shipNavPhase; }
+function _navShipTacan() {
+  if (navSrc === 'FMS') return false;
+  const r = (typeof navRadios === 'object' && navRadios) ? navRadios[navSrc] : null;
+  return !!(r && r.ship && navLat !== null && navLon !== null);
+}
+function _navShipBank(L) {
+  const crs = L.crs, d = distance(S.lat, S.lon, navLat, navLon);
+  const brgFromShip = bearing(navLat, navLon, S.lat, S.lon);
+  const along = d * Math.cos((brgFromShip - crs) * D2R);           // + = 함정 앞, − = 함정 뒤
+  const xtk = courseXtk(L);                                         // + = 코스 오른쪽
+  const IC = navInterceptDeg;
+  // 오래 쉬었다 다시 걸면(2초 넘게 불리지 않음) 처음부터 고른다
+  const now = (typeof performance !== 'undefined') ? performance.now() : Date.now();
+  if (now - _shipNavT > 2000) _shipNavPhase = null;
+  _shipNavT = now;
+  let ph = _shipNavPhase;
+  const astern = along < -0.5 && Math.abs(xtk) < -along * 0.6;     // 접근로 안쪽(뒤쪽 · 코스선 가까이)
+  if (!ph) ph = d < SHIP_OVER_NM ? 'OVER' : astern ? 'TRACK' : along > 0 ? 'ABEAM' : 'GATE';
+  if (ph === 'OVER' && d > 1) ph = astern ? 'TRACK' : along > 0 ? 'ABEAM' : 'GATE';
+  if (ph === 'TRACK' && d < SHIP_OVER_NM) ph = 'OVER';
+  if (ph === 'TRACK' && along > 0.5) ph = 'ABEAM';                  // 함정을 앞질렀다
+  if (ph === 'ABEAM' && along < 0) ph = 'GATE';                      // 함정 옆을 지났다
+  const side = xtk >= 0 ? 1 : -1;                                   // 내가 있는 쪽(코스 오른쪽 +)
+  const gate = destPoint(navLat, navLon, normA(crs + 180), SHIP_GATE_NM);
+  if (ph === 'GATE' && distance(S.lat, S.lon, gate[0], gate[1]) < 0.3) ph = 'TRACK';
+  _shipNavPhase = ph;
+  let desiredTrk;
+  _navDirectTo = ph === 'ABEAM' || ph === 'GATE';
+  if (ph === 'OVER') desiredTrk = crs;
+  else if (ph === 'ABEAM') {
+    const a = destPoint(navLat, navLon, normA(crs + 90 * side), SHIP_ABEAM_NM);
+    desiredTrk = bearing(S.lat, S.lon, a[0], a[1]);
+  } else if (ph === 'GATE') desiredTrk = bearing(S.lat, S.lon, gate[0], gate[1]);
+  else {
+    const rollOut = Math.max(0.15, navTurnRadiusNM() * (1 - Math.cos(IC * D2R)));
+    const ang = Math.min(IC, Math.abs(xtk) / rollOut * IC);
+    desiredTrk = normA(crs - Math.sign(xtk) * ang);
+  }
+  const hdgErr = normAS(windCorrectedHdg(desiredTrk) - S.hdg);
+  return Math.max(-25, Math.min(25, hdgErr * 2));
+}
 function navApBankTarget() {
   const L = activeCourseLine();
   if (!L) { _navDirectTo = false; return 0; }
+  if (_navShipTacan()) return _navShipBank(L);
   const crs = courseCrsHere(L);    // 현재 위치에서 본 코스 방위(대권 보정)
   const xtk = courseXtk(L);        // + = 코스 오른쪽
   const aXtk = Math.abs(xtk);
@@ -1041,7 +1344,35 @@ let navRadios = {
 // VOR 목록에서 먼저 찾고, 없으면 로컬라이저 목록에서 찾는다 — ILS 주파수를
 // 넣었는데 국을 못 찾아 NAV 가 조용히 아무 일도 하지 않는 일이 없도록.
 // LOC 는 방향을 가진 시설이라 접근 코스(crs)를 함께 돌려준다.
+// ── 함정 TACAN(I-SHP · 110X) ──
+// 움직이는 함정이 국이다 — 위치·거리 기준은 함정(shipLat/shipLon)을 따라 매 순간 옮겨 가고,
+// 접근 코스는 함정 침로(함미에서 함수 쪽으로 다가가는 로컬라이저 꼴)다. 함정을 띄우지 않았으면 신호가 없다.
+// 주파수 대신 고정 채널 '110X' 하나로 부른다(입력·버튼을 늘리지 않으려고).
+const SHIP_TACAN = { id: 'I-SHP', freq: '110X', name: '함정 TACAN' };
+function _shipTacan() {
+  const on = (typeof shipVisible !== 'undefined') && shipVisible && shipLat !== null;
+  return { id: SHIP_TACAN.id, name: SHIP_TACAN.name, freq: SHIP_TACAN.freq, ship: true, loc: true,
+           lat: on ? shipLat : null, lon: on ? shipLon : null, elev: 0,
+           crs: on ? toMag(shipHdg) : undefined };
+}
+function _isShipTacan(freq, id) {
+  return id === SHIP_TACAN.id || String(freq || '').toUpperCase() === SHIP_TACAN.freq;
+}
+// 매 프레임 — 함정 TACAN 을 잡고 있는 무선은 함정을 따라 국 위치·코스를 옮긴다
+function shipTacanSync() {
+  ['NAV1', 'NAV2'].forEach(k => {
+    const r = navRadios[k];
+    if (!r || !r.ship) return;
+    const t = _shipTacan();
+    r.lat = t.lat; r.lon = t.lon; r.crs = t.crs;
+    if (navSrc === k) {
+      navLat = r.lat; navLon = r.lon;
+      if (Number.isFinite(r.crs)) vorObsCrs = toTrue(r.crs);
+    }
+  });
+}
 function _resolveVor(freq, id) {
+  if (_isShipTacan(freq, id)) return _shipTacan();
   const vors = () => { try { return ENR_VORS || []; } catch(e) { return []; } };   // 로드 중 TDZ 대비
   const locs = () => { try { return (typeof LOC_STATIONS !== 'undefined' && LOC_STATIONS) || []; }
                        catch(e) { return []; } };
@@ -1087,12 +1418,12 @@ function setNavRadio(navId, freq, id) {
   // (버리지 않으면 _resolveVor가 ident를 먼저 맞춰 이전 국으로 되돌아가고 입력 주파수까지 덮어쓴다)
   if (freq != null && r.id) {
     const byId = _resolveVor(null, r.id);
-    if (!byId || Math.abs(parseFloat(byId.freq) - parseFloat(r.freq)) >= 0.001) r.id = '';
+    if (!byId || (byId.ship ? !_isShipTacan(r.freq, null) : Math.abs(parseFloat(byId.freq) - parseFloat(r.freq)) >= 0.001)) r.id = '';
   }
   const v = _resolveVor(r.freq, r.id);
   if (v) { r.lat = v.lat; r.lon = v.lon; r.id = v.id; r.freq = v.freq; r.elev = v.elev || 0;
-           r.loc = !!v.loc; r.crs = v.crs; }
-  else   { r.lat = null; r.lon = null; r.elev = 0; r.loc = false; r.crs = undefined; }
+           r.loc = !!v.loc; r.crs = v.crs; r.ship = !!v.ship; }
+  else   { r.lat = null; r.lon = null; r.elev = 0; r.loc = false; r.crs = undefined; r.ship = false; }
   if (navSrc === navId) applyNavRadioToPfd();
 }
 // 현재 navSrc(NAV1/NAV2)의 튜닝 VOR를 PFD 항법 상태로 반영
@@ -1292,9 +1623,33 @@ function courseCrsHere(L) {
 }
 let rnp     = 1.0;     // RNP value for FMS CDI scale
 
-// pitch is always derived from speed — helper
+// ── 자세 ↔ 속도 ──
+// 고도를 지키며 나는 헬기는 자세 하나가 곧 속도다(오르내릴 때 조금 어긋날 뿐이다):
+//   기수 내림 −10° 140kt · 수평 0° 120kt · 기수 4° 80kt · 기수 7.5° 호버(0kt)
+//   (숙일 때 1° 당 2kt — 빨라질수록 항력이 급히 늘어 덜 는다. 들 때 4° 까지 1° 당 10kt,
+//    그 뒤 호버까지는 1° 당 약 23kt — 호버 언저리에서는 자세를 조금만 바꿔도 속도가 크게 바뀐다)
+//   7.5° 보다 더 들면 뒤로 간다(같은 기울기로 이어 −40kt 에서 멎는다).
+// SIM 모드의 조종(14-simmode.js)과 AFCS 의 자동 자세가 같은 식을 쓴다.
+const PITCH_SPD = [[-10, 140], [0, 120], [5, 70], [7.5, 35], [8.5, 0]];   // 수평 비행 기준 · 호버 8.5°
+//   // [자세°(기수 올림 +), 속도 kt]
+function _pitchSeg(i) {
+  const a = PITCH_SPD[i], b = PITCH_SPD[i + 1];
+  return { p0: a[0], v0: a[1], k: (b[1] - a[1]) / (b[0] - a[0]) };   // kt / °
+}
+function spdFromPitch(pit) {
+  const n = PITCH_SPD.length;
+  let i = 0;
+  while (i < n - 2 && pit > PITCH_SPD[i + 1][0]) i++;      // 끝 구간 밖은 그 기울기로 잇는다
+  const g = _pitchSeg(i);
+  return g.v0 + (pit - g.p0) * g.k;
+}
+// 그 속도로 고도를 지키며 날 자세(위 식의 역)
 function pitchFromSpd(spd) {
-  return Math.max(-20, Math.min(20, (120 - spd) * (3 / 20)));
+  const n = PITCH_SPD.length;
+  let i = 0;
+  while (i < n - 2 && spd < PITCH_SPD[i + 1][1]) i++;
+  const g = _pitchSeg(i);
+  return Math.max(-60, Math.min(60, g.p0 + (spd - g.v0) / g.k));
 }
 
 // ══════════════════════════════════════════════════════
@@ -1317,7 +1672,7 @@ function swElapsedMs() {
 function swAddMs(ms) {
   if (SW.running && ms > 0) SW.accMs += ms;
 }
-// 스톱워치는 PFD 안(HSI 오른쪽 아래)에 그린다(03-pfd.js drawStopwatch). FCP 칸은 없앴다.
+// 스톱워치는 PFD 안(HSI 오른쪽 아래 — 메시지 시현창 · HOCAS 아래)에 그린다(03-pfd.js drawStopwatch). FCP 칸은 없앴다.
 function _swRedraw() { try { if (typeof drawPFD === 'function') drawPFD(); } catch (e) { _swallow(e); } }
 function swToggle() { SW.running = !SW.running; _swRedraw(); }
 function swReset() { SW.running = false; SW.accMs = 0; _swRedraw(); }
@@ -1363,76 +1718,3 @@ function swRender() { /* 프레임마다 drawPFD 가 swText() 를 그린다 */ }
 function clockRender() { if (_swMode === 'clock' && !S.running) _swRedraw(); }
 setInterval(clockRender, 1000);
 
-
-// ── PFD 엔진 계기(TGT · NG · TQ · NP/NR)용 토크 ──
-// 절차 훈련에는 컬렉티브가 없으므로, 지금 비행 상태(속도·뱅크·상승률)에서 들 법한 토크를
-// 거꾸로 셈해 보여 준다(계기가 비어 보이지 않게). 셈법은 shinesong(종합 시뮬레이터)과 같다.
-// NR 경고 띠 — 녹 88~110 · 황 84~88/110~114 · 적 84 미만/114 초과
-const NR_HIGH = 110, NR_HIGH_RED = 114, NR_LOW_YEL = 88, NR_LOW_RED = 84;
-const TQ_HOVER   = 60;         // PERF 를 못 읽을 때 쓰는 호버 토크(%)
-const TQ_MAX     = 140;        // 계기 최대 눈금
-// 계기 구간 — 0~100% 녹색(연속 사용) · 100~113% 노랑(주의) · 113~140% 빨강(오버토크)
-const TQ_LIMIT   = 100;
-const TQ_RED     = 113;
-const TQ_PER_FPM = 55;         // PERF 를 못 읽을 때 — 남는 토크 1% 당 상승률(fpm)
-// ── 필요 동력 곡선(U 자) ── 호버 동력 H 를 유도 몫과 그 밖(형상·꼬리로터·보기)으로 나눈다.
-//   유도 몫  = H·PW_IND · (vi/vi0) · n²  — 앞으로 날수록 내리흐름이 줄어 덜 든다 · 선회는 하중배수² 로 는다
-//   그 밖    = H·(1−PW_IND) · n
-//   유해 항력 = PW_PAR · V³
-const PW_IND  = 0.70;
-const PW_VI0  = 25;
-const PW_PAR  = 1.874e-5;
-// 지면효과 — 바퀴 높이 10ft 까지 IGE, 53ft 위는 OGE(그 사이 고르게)
-const IGE_FULL_FT = 10, IGE_NONE_FT = 53;
-const IGE_CURVE = [[0, -12], [3, -10], [5, -5], [10, 0]];
-// 제자리 호버에 필요한 토크 — CDU PERF 의 IGE·OGE 호버 토크(09-cdu.js perfHoverTq)
-function hoverTqRef() {
-  let p = null;
-  try { p = (typeof perfHoverTq === 'function') ? perfHoverTq() : null; } catch (e) { _swallow(e); }
-  if (!p || !Number.isFinite(p.oge)) return TQ_HOVER;
-  const ige = Number.isFinite(p.ige) ? p.ige : p.oge;
-  let agl = 1000;
-  try { agl = (typeof radarAltFt === 'function') ? radarAltFt() : S.alt; } catch (e) { agl = S.alt; }
-  if (agl < IGE_FULL_FT) {
-    const c = IGE_CURVE;
-    if (agl <= c[0][0]) return ige + c[0][1];
-    for (let i = 1; i < c.length; i++) {
-      if (agl <= c[i][0]) {
-        const f = (agl - c[i - 1][0]) / (c[i][0] - c[i - 1][0]);
-        return ige + c[i - 1][1] + (c[i][1] - c[i - 1][1]) * f;
-      }
-    }
-  }
-  const k = Math.max(0, Math.min(1, (agl - IGE_FULL_FT) / (IGE_NONE_FT - IGE_FULL_FT)));
-  return ige + (p.oge - ige) * k;
-}
-// 운동량 이론의 유도속도 비(vi/vi0)
-function pwViRatio(V, vi0) { const v = V / vi0; return Math.sqrt(Math.sqrt(v ** 4 / 4 + 1) - v * v / 2); }
-// 그 속도·뱅크로 수평 비행할 때 필요한 토크(%) — 계기의 Vy 선도 이것으로 긋는다
-function tqRequiredAt(spd, bnk) {
-  const H = hoverTqRef(), V = Math.abs(spd);
-  const n = 1 / Math.cos(Math.min(60, Math.abs(bnk)) * D2R);
-  const r = pwViRatio(V, PW_VI0 * Math.sqrt(Math.max(0.3, H / 77)));
-  return H * (PW_IND * r * n * n + (1 - PW_IND) * n) + PW_PAR * V * V * V;
-}
-function tqRequired() { return tqRequiredAt(S.spd, S.bnk); }
-// 그날의 MTA(최대 가용 토크, %) — CDU PERF 의 MTA(30). 못 읽으면 계기 끝(선을 긋지 않는다)
-function mtaNow(altFt = S.alt) {
-  let v = null;
-  try { v = (typeof perfMta === 'function') ? perfMta(altFt) : null; } catch (e) { _swallow(e); }
-  return Number.isFinite(v) ? Math.min(TQ_MAX, v) : TQ_MAX;
-}
-// Vy 로 수평 비행할 때 필요한 토크(%)
-function tqAtVy() {
-  let vy = null;
-  try { vy = (typeof perfVy === 'function') ? perfVy() : null; } catch (e) { _swallow(e); }
-  return Number.isFinite(vy) ? tqRequiredAt(vy, 0) : null;
-}
-// 계기에 보일 토크 — 수평 비행 토크 + 상승·강하 몫(PERF 표)
-function tqShown() {
-  let add = (S.vs || 0) / TQ_PER_FPM;
-  try { if (typeof perfTqForVs === 'function') add = perfTqForVs(S.vs || 0); } catch (e) { _swallow(e); }
-  return Math.max(0, Math.min(TQ_MAX, tqRequired() + add));
-}
-function tqOver() { return tqShown() > TQ_RED; }
-function tqBand(v = tqShown()) { return v > TQ_RED ? 'red' : v > TQ_LIMIT ? 'yellow' : 'green'; }

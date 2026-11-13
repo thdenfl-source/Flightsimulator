@@ -99,6 +99,7 @@ function drawPFD() {
   ctx.beginPath(); ctx.moveTo(0, L.aiH); ctx.lineTo(W, L.aiH); ctx.stroke();
   ctx.beginPath(); ctx.moveTo(L.hsi.x + 0.5, L.aiH); ctx.lineTo(L.hsi.x + 0.5, L.usableH); ctx.stroke();
   ctx.beginPath(); ctx.moveTo(L.crht.x + 0.5, L.aiH); ctx.lineTo(L.crht.x + 0.5, L.usableH); ctx.stroke();
+  if (hocasOn) drawHocas(L.hsi.x, L.hsi.y, L.hsi.w, L.hsi.h, W / 2);
   drawStopwatch(L.hsi.x, L.hsi.y, L.hsi.w, L.hsi.h, W / 2);
 }
 
@@ -201,14 +202,17 @@ function drawBaroBox(x, y, w, h) {
 // ── 엔진 파라미터 (TGT · NG · TQ · NP/NR) ──
 // 값의 셈(엔진 모델)은 차차 갖춘다 — 지금은 토크·NR·엔진 상태(AEO/OEI/IDLE)에서 그럴듯하게 이어 둔다.
 //   TQ  : 엔진마다(AEO 는 둘 다 지금 토크 · OEI 는 살아 있는 1번이 다 · IDLE 은 0)
-//   NR  : 로터 회전 · NP : 엔진이 로터를 돌리면 NR 과 같다(절차 훈련에서는 두 엔진 정상 · NR 100%)
+//   NR  : 로터 회전(SIM 의 simNr) · NP : 엔진이 로터를 돌리면 NR 과 같고, IDLE 이면 아래로 갈라진다(needle split)
 //   NG·TGT : 토크를 따라 오르는 자리 표시값
 function engParams() {
-  let tq = 0, nr = 100, eng = 2;
+  let tq = 0, nr = 100, st = { 1: 'FLY', 2: 'FLY' };
   try { tq = tqShown(); } catch (e) { _swallow(e); }
-  const run = [eng >= 1, eng >= 2];          // OEI 는 2번이 멎었다
-  const idle = eng === 0;
-  const one = (on) => {
+  if (simModeOn) { try { nr = simNr; } catch (e) { _swallow(e); } }
+  // 엔진마다의 상태(14-simmode.js simEngSt — TQS · 연료/화재 레버 · TRAINING · ENG 버튼): FLY 는 돈다 · IDLE/TRNG 는 IDLE · OFF 는 0
+  try { if (typeof simEngSt !== 'undefined') st = simEngSt; } catch (e) { _swallow(e); }
+  const run = [st[1] === 'FLY', st[2] === 'FLY'];
+  const idleOf = i => st[i + 1] === 'IDLE' || st[i + 1] === 'TRNG';
+  const one = (on, idle) => {
     const t = on ? tq : 0;
     // NP 는 거버너가 100% 를 지킨다 — NR 이 위로 넘치면(자동회전 · 레버 최하단) 바늘이 갈라져 NP 는 100 그대로,
     // 출력을 넘겨 당겨 NR 이 처지면(RPM LOW) 함께 처진다
@@ -216,7 +220,7 @@ function engParams() {
     if (idle) return { tq: 0, ng: 62, tgt: 450, np: Math.min(nr, 70) };
     return { tq: 0, ng: 0, tgt: 0, np: 0 };
   };
-  const e1 = one(run[0]), e2 = one(run[1]);
+  const e1 = one(run[0], idleOf(0)), e2 = one(run[1], idleOf(1));
   return { e1, e2, nr };
 }
 function _engBox(x, y, w, h, title) {
@@ -293,6 +297,227 @@ function drawNpNr(x, y, w, h, P) {
   });
 }
 
+// ── 스톱워치(HSI 오른쪽 아래 — 메시지 시현창 · HOCAS 창 아래, HOCAS 와 같은 폭) ── FCP 의 STOP WATCH 를 옮겼다
+// 시계 모드: 현재 시각 + [STOP WATCH] · 스톱워치 모드: 경과 시간 + [GO/STP] [RST] [TIME]. 칸을 누르면 그 동작(_swHit · onPfdTap)
+let _swHit = [];
+let _pfdMsgBottom = NaN;   // 메시지 시현창의 아래끝(drawHSI 가 그 프레임에 적는다) — HOCAS 가 그 아래로
+function drawStopwatch(x, y, w, h, cxC) {
+  if (!(w >= 40) || !(h >= 40)) return;
+  const RC = hsiRightCol(x, y, w, h, cxC);
+  const bx = RC.left, bw = RC.width, by = RC.swY, bh = RC.swH, fs = RC.fs;
+  const sw = typeof _swMode !== 'undefined' && _swMode === 'sw';
+  const run = sw && typeof SW !== 'undefined' && SW.running;
+  ctx.save();
+  ctx.fillStyle = 'rgba(0,0,0,0.72)'; ctx.fillRect(bx, by, bw, bh);
+  ctx.strokeStyle = '#446688'; ctx.lineWidth = 1; ctx.strokeRect(bx + 0.5, by + 0.5, bw - 1, bh - 1);
+  // 윗줄 — 이름표 · 시각
+  ctx.textBaseline = 'alphabetic';
+  // 칸이 좁으면(3D 에 겹친 작은 계기) 이름표를 빼고 시각만 — 글자가 겹치지 않게
+  const tTxt = typeof swText === 'function' ? swText() : '';
+  ctx.font = `bold ${fs * 1.25}px Helvetica Neue, Arial, sans-serif`;
+  const tW = ctx.measureText(tTxt).width;
+  ctx.font = `bold ${fs * 0.8}px Helvetica Neue, Arial, sans-serif`;
+  const lbl = sw ? 'SW' : 'TIME';
+  if (ctx.measureText(lbl).width + tW + 14 <= bw) {
+    ctx.fillStyle = '#8ac6ff'; ctx.textAlign = 'left';
+    ctx.fillText(lbl, bx + 4, by + fs * 1.45);
+  }
+  ctx.font = `bold ${fs * 1.25}px Helvetica Neue, Arial, sans-serif`;
+  ctx.fillStyle = sw ? (run ? '#22e022' : '#ffffff') : '#ffffff'; ctx.textAlign = 'right';
+  ctx.fillText(tTxt, bx + bw - 4, by + fs * 1.55);
+  // 아랫줄 — 버튼
+  const btns = sw ? [[run ? 'STP' : 'GO', 'swToggle', run], ['RST', 'swReset', false], ['TIME', 'swSetMode:clock', false]]
+                  : [['STOP WATCH', 'swSetMode:sw', false]];
+  const gy = by + fs * 2.0, gh = bh - fs * 2.0 - 4, gap = 3, gw = (bw - 8 - gap * (btns.length - 1)) / btns.length;
+  const hits = [];
+  btns.forEach(([t, act, on], i) => {
+    const gx = bx + 4 + i * (gw + gap);
+    ctx.fillStyle = on ? '#14451a' : '#1c232b'; ctx.fillRect(gx, gy, gw, gh);
+    ctx.strokeStyle = on ? '#22e022' : '#5a6672'; ctx.strokeRect(gx + 0.5, gy + 0.5, gw - 1, gh - 1);
+    ctx.fillStyle = on ? '#7fffb0' : '#cfd6dc'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.font = `bold ${Math.min(fs * 0.85, gw / Math.max(3, t.length) * 1.6)}px Helvetica Neue, Arial, sans-serif`;
+    ctx.fillText(t, gx + gw / 2, gy + gh / 2 + 1);
+    hits.push({ x: gx, y: gy, w: gw, h: gh, act });
+  });
+  ctx.restore();
+  // 본 PFD 캔버스에서만 누름 자리를 기억한다(3D 에 겹친 계기는 그림만)
+  if (!cvs.dataset.noFcp) _swHit = hits;
+}
+// PFD 를 누른 자리(캔버스 px)가 스톱워치 버튼이면 그 동작 — 09-cdu.js onPfdTap 이 먼저 묻는다
+function swHitTest(px, py) {
+  const b = _swHit.find(r => px >= r.x && px <= r.x + r.w && py >= r.y && py <= r.y + r.h);
+  if (!b) return false;
+  if (b.act === 'swToggle') swToggle();
+  else if (b.act === 'swReset') swReset();
+  else if (b.act.startsWith('swSetMode:')) swSetMode(b.act.split(':')[1]);
+  return true;
+}
+
+// ── PFD 메시지 시현창(HSI 오른쪽 위 바람 정보 아래) ──
+// UPPER · LOWER 콘솔 스위치와 엔진 상태를 따라 켜진다. 황색은 주의, 녹색은 상태 알림.
+//   PITOT OFF(황) — PITOT HEAT 가 OFF 일 때(AUTO · ON 이면 없음)
+//   1 · 2 GEN OFF(황) — 그 GEN 스위치 OFF(또는 엔진이 멎어 발전기가 버스에 없음)
+//   PARKING BRAKE SET(녹) — 파킹 브레이크 SET
+//   1 · 2 ENG A/I ON(녹) — 그 엔진 ANTI ICE 스위치 ON, 또는 NgR 87.5 % 이하면 늘
+//   NLG LOCK(녹) — NOSE WHEEL LOCK
+//   EMER FLOATS ARMED(녹) — 비상부주 FLOATS 스위치 ARMED
+const PFD_MSG_AMBER = '#ffb000', PFD_MSG_GREEN = '#22e022', PFD_AI_NGR = 87.5;
+function pfdMsgs() {
+  const ov = (id, d) => { try { const v = typeof ovhdGet === 'function' ? ovhdGet(id) : undefined; return v === undefined ? d : v; } catch (e) { return d; } };
+  let P = null;
+  try { P = engParams(); } catch (e) { _swallow(e); }
+  const out = [];
+  if (ov('pitotHeat', 'AUTO') === 'OFF') out.push({ t: 'PITOT OFF', c: PFD_MSG_AMBER });
+  // 1 · 2 GEN OFF(황) — 그 발전기가 버스에 없을 때(UPPER GEN 스위치 OFF, 또는 엔진이 멎어 발전하지 못함 — 18-system.js elecState)
+  let E = null;
+  try { if (typeof elecState === 'function') E = elecState(); } catch (e) { _swallow(e); }
+  [1, 2].forEach(n => {
+    const on = E ? E['gen' + n] : ov('gen' + n, 'ON') === 'ON';
+    if (!on) out.push({ t: `${n} GEN OFF`, c: PFD_MSG_AMBER });
+  });
+  // AFCS CAS(23-afcs.js afcsCas) — AFCS FAIL(적) · 1 · 2 APM OFF · AFCS DEGRADED · BOTH ON AHRS/ADC(황)
+  try { if (typeof afcsCas === 'function') out.unshift(...afcsCas()); } catch (e) { _swallow(e); }
+  // 연료 계통 CAS(18-system.js fuelCas) — 1 · 2 F/L PRES · FUEL IMBALANCE · FUEL 1 · 2 LOW(황) · FUEL XFEED(녹)
+  try { if (typeof fuelCas === 'function') fuelCas().forEach(m => out.push({ t: m.t, c: m.amber ? PFD_MSG_AMBER : PFD_MSG_GREEN })); } catch (e) { _swallow(e); }
+  // 하부 콘솔 레버 SET, 또는 SIM 스페이스 두 번(simParkBrakeOn). 걸린 채 활주 착륙하면 빨갛게(simParkWarnOn)
+  let park = ov('parkBrake', 'RELEASE') === 'SET', parkWarn = false;
+  try { if (typeof simParkBrakeOn === 'function' && simParkBrakeOn()) park = true; } catch (e) { _swallow(e); }
+  try { parkWarn = park && typeof simParkWarnOn === 'function' && simParkWarnOn(); } catch (e) { _swallow(e); }
+  if (park) out.push({ t: 'PARKING BRAKE SET', c: parkWarn ? '#ff3030' : PFD_MSG_GREEN });
+  [1, 2].forEach(n => {
+    const ng = P ? (n === 1 ? P.e1 : P.e2).ng : 100;
+    if (ov('engAi' + n, 'OFF') === 'ON' || ng <= PFD_AI_NGR) out.push({ t: `${n} ENG A/I ON`, c: PFD_MSG_GREEN });
+  });
+  if (ov('noseLock', 'UNLOCK') === 'LOCK') out.push({ t: 'NLG LOCK', c: PFD_MSG_GREEN });
+  if (ov('fltArmSw', 'OFF') === 'ARMED') out.push({ t: 'EMER FLOATS ARMED', c: PFD_MSG_GREEN });
+  return out;
+}
+
+// ── HOCAS 표시 ── FCP 의 HOCAS 버튼으로 켠다. HSI 왼쪽(바람 표시와 TAS 줄 사이)에
+// 사이클릭(전후·좌우)과 페달이 가운데(중립)인지, 한쪽으로 얼마나 치우쳤는지 보여 준다.
+//   ● 조종 장치(조이스틱·화면 조종간)가 지금 밀려 있는 자리 — 가운데면 초록, 치우치면 호박색
+//   ○ (SIM) 트림이 잡고 있는 자리 — 손을 놓으면 기체는 이 자세로 간다
+// 사이클릭은 위가 앞(밀기)·오른쪽이 오른쪽, 페달은 오른쪽이 오른 페달이다.
+let hocasOn = false;
+const HOCAS_DEAD = 0.05;          // 이 안이면 가운데(중립)로 본다
+// (켜기 · CTR · DEFAULT 는 CDU 의 Aircraft Systems → HOCAS 칸 — 18-system.js)
+function toggleHocas() {
+  hocasOn = !hocasOn;
+  try { drawPFD(); } catch (e) { _swallow(e); }
+  try { if (typeof _hocasCduRefresh === 'function') _hocasCduRefresh(); } catch (e) { _swallow(e); }
+}
+// CTR — 손을 뗀 지금 자리를 조종간·페달의 가운데로(12-joystick.js joyRecenter)
+function hocasCenter() {
+  let ok = false;
+  try { ok = typeof joyRecenter === 'function' && joyRecenter(); } catch (e) { _swallow(e); }
+  try { drawPFD(); } catch (e) { _swallow(e); }
+  try { if (typeof _hocasCduRefresh === 'function') _hocasCduRefresh(); } catch (e) { _swallow(e); }
+  return ok;
+}
+// DEFAULT — 저장한 가운데를 지우고 기본값으로(12-joystick.js joyNeutralDefault)
+function hocasDefault() {
+  let ok = false;
+  try { ok = typeof joyNeutralDefault === 'function' && joyNeutralDefault(); } catch (e) { _swallow(e); }
+  try { drawPFD(); } catch (e) { _swallow(e); }
+  try { if (typeof _hocasCduRefresh === 'function') _hocasCduRefresh(); } catch (e) { _swallow(e); }
+  return ok;
+}
+function hocasAxes() {
+  let a = { roll: 0, pitch: 0, yaw: 0 };
+  try { if (typeof simModeAxes === 'function') a = simModeAxes(); } catch (e) { _swallow(e); }
+  const trim = (simModeOn && typeof simTrimAct !== 'undefined')
+    ? { roll: simTrimAct.roll / SIM_BANK_MAX, pitch: simTrimAct.pitch / SIM_PITCH_MAX } : null;
+  // 컬렉티브 — SIM 에서는 레버가 요구하는 토크(%, 0…140 · AFCS 가 몰면 그 값), 아니면 레버 자리
+  let coll = null;
+  try {
+    const cfg = (typeof joyAxes === 'object' && joyAxes) ? joyAxes.coll : null;
+    const hov = () => { try { return hoverTqRef() / SIM_LEVER_TOP; } catch (e) { return null; } };
+    if (simModeOn && typeof simTqCmd === 'number') coll = { frac: simTqCmd / SIM_LEVER_TOP, tq: simTqCmd, hov: hov() };
+    else if (cfg) coll = { frac: cfg.abs ? (joyAxRaw('coll') + 1) / 2 : ((a.coll || 0) + 1) / 2, tq: null, hov: null };
+    // SIM 조종을 켜기 전(레버 배정도 없을 때)에도 막대가 비지 않게 — 지금 걸린 토크를 레버 자리로 보인다
+    // (종전에는 3D Only 에서 FLY 로 SIM 을 켠 뒤에야 컬렉티브가 나타났다)
+    else { const tq = Math.max(0, +S.tq || 0); coll = { frac: tq / SIM_LEVER_TOP, tq, hov: hov() }; }
+  } catch (e) { _swallow(e); }
+  return { roll: a.roll || 0, pitch: a.pitch || 0, yaw: a.yaw || 0, trim, coll };
+}
+// HSI 오른쪽 아래 칸의 자리 — HOCAS 창과 그 아래 스톱워치가 같은 왼쪽 · 폭으로 선다
+function hsiRightCol(x, y, w, h, cxC) {
+  const G = hsiGeom(x, y, w, h, cxC);
+  const sideW = Math.max(60, G.rightW);
+  const fs = Math.max(8, Math.min(11, sideW * 0.10));
+  const colW = 8, colGap = 6;                      // HOCAS 오른쪽에 컬렉티브 막대
+  const swH = Math.round(fs * 3.6 + 8);            // 스톱워치 칸 높이(시각 한 줄 + 버튼 한 줄)
+  const box0 = Math.min(sideW - 8 - colW - colGap, h * 0.40);
+  const bx = Math.min(x + w - 8 - box0 - colW - colGap, G.cx + G.r + 4 + (sideW - box0 - colW - colGap) / 2);
+  // 메시지 시현창(바람 아래)을 가리지 않게 — 그 아래 남는 높이에 맞춰 HOCAS 만 줄인다(왼쪽 끝은 그대로 · 스톱워치는 제 폭)
+  let box = box0;
+  if (Number.isFinite(_pfdMsgBottom)) {
+    const room = (y + h - 6 - swH - 4) - (_pfdMsgBottom + 4) - (fs * 4.8 + 18);
+    box = Math.max(30, Math.min(box0, room));
+  }
+  return { G, sideW, fs, colW, colGap, box, bx, left: bx - 4, width: box0 + colW + colGap + 8, swH, swY: y + h - 6 - swH };
+}
+function drawHocas(x, y, w, h, cxC) {
+  if (!(w >= 40) || !(h >= 40)) return;
+  // HSI 오른쪽 아래 — 왼쪽은 바람·TAS/OAT 등과 겹쳐 오른쪽 아래 빈자리로 옮겼다. 그 아래에는 스톱워치(drawStopwatch)
+  const RC = hsiRightCol(x, y, w, h, cxC);
+  const { G, sideW, fs, colW, colGap, box, bx } = RC;
+  const ax = hocasAxes();
+  const clamp = v => Math.max(-1, Math.min(1, v));
+  const col = v => Math.abs(v) <= HOCAS_DEAD ? '#00ff88' : '#ffb74d';
+  const by = RC.swY - 4 - (box + fs * 3.8 + 12);   // 바탕 아래끝이 스톱워치 칸 위에서 4px
+  ctx.save();
+  // 바탕
+  ctx.fillStyle = 'rgba(0,0,0,0.72)';
+  ctx.fillRect(bx - 4, by - fs - 6, box + colW + colGap + 8, box + fs * 4.8 + 18);
+  ctx.strokeStyle = '#446688'; ctx.lineWidth = 1;
+  ctx.strokeRect(bx - 4 + 0.5, by - fs - 6 + 0.5, box + colW + colGap + 7, box + fs * 4.8 + 17);
+  ctx.font = `bold ${fs}px Helvetica Neue, Arial, sans-serif`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+  ctx.fillStyle = '#8ac6ff';
+  ctx.fillText('HOCAS', bx + box / 2, by - 3);
+  // ── 사이클릭 ──
+  const c = box / 2, cx = bx + c, cy = by + c;
+  ctx.strokeStyle = '#555'; ctx.strokeRect(bx + 0.5, by + 0.5, box - 1, box - 1);
+  ctx.beginPath(); ctx.moveTo(cx, by); ctx.lineTo(cx, by + box); ctx.moveTo(bx, cy); ctx.lineTo(bx + box, cy); ctx.stroke();
+  // 가운데(중립) 칸
+  const dz = Math.max(3, HOCAS_DEAD * c);
+  ctx.strokeStyle = '#2f6f4f'; ctx.strokeRect(cx - dz, cy - dz, dz * 2, dz * 2);
+  if (ax.trim) {
+    ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.arc(cx + clamp(ax.trim.roll) * (c - 4), cy - clamp(ax.trim.pitch) * (c - 4), 4.5, 0, Math.PI * 2); ctx.stroke();
+  }
+  const dev = Math.max(Math.abs(ax.roll), Math.abs(ax.pitch));
+  ctx.fillStyle = col(dev);
+  ctx.beginPath(); ctx.arc(cx + clamp(ax.roll) * (c - 4), cy - clamp(ax.pitch) * (c - 4), 3.8, 0, Math.PI * 2); ctx.fill();
+  // 수치(% · 앞 F / 뒤 A · 좌 L / 우 R)
+  const pct = (v, p, n) => Math.abs(v) <= HOCAS_DEAD ? '0' : (v > 0 ? p : n) + Math.round(Math.abs(v) * 100);
+  ctx.font = `${fs * 0.95}px Helvetica Neue, Arial, sans-serif`;
+  ctx.fillStyle = col(dev);
+  ctx.fillText(`CYC ${pct(ax.pitch, 'F', 'A')} · ${pct(ax.roll, 'R', 'L')}`, cx, by + box + fs * 1.15);
+  // ── 페달 ──
+  const py = by + box + fs * 1.8, pw = box;
+  ctx.strokeStyle = '#555'; ctx.lineWidth = 1;
+  ctx.strokeRect(bx + 0.5, py + 0.5, pw - 1, 7);
+  ctx.beginPath(); ctx.moveTo(cx, py - 2); ctx.lineTo(cx, py + 10); ctx.stroke();
+  ctx.fillStyle = col(ax.yaw);
+  ctx.fillRect(cx + clamp(ax.yaw) * (pw / 2 - 3) - 3, py - 1, 6, 10);
+  ctx.fillText(`PED ${pct(ax.yaw, 'R', 'L')}`, cx, py + 8 + fs * 1.15);
+  // ── 컬렉티브 막대 ── 아래가 0 · 위가 끝(SIM 140%). 흰 눈금은 호버 토크, 아래 숫자는 레버가 요구하는 토크(%)
+  if (ax.coll) {
+    const kx = bx + box + colGap, f = Math.max(0, Math.min(1, ax.coll.frac));
+    ctx.strokeStyle = '#555'; ctx.strokeRect(kx + 0.5, by + 0.5, colW - 1, box - 1);
+    ctx.fillStyle = '#8ac6ff'; ctx.fillRect(kx + 1, by + box - 1 - f * (box - 2), colW - 2, f * (box - 2));
+    if (ax.coll.hov != null) {
+      const hy = by + box - 1 - Math.max(0, Math.min(1, ax.coll.hov)) * (box - 2);
+      ctx.strokeStyle = '#ffffff'; ctx.beginPath(); ctx.moveTo(kx - 2, hy); ctx.lineTo(kx + colW + 2, hy); ctx.stroke();
+    }
+    ctx.fillStyle = '#8ac6ff'; ctx.textAlign = 'center';
+    ctx.fillText(`COL ${Math.round(ax.coll.tq != null ? ax.coll.tq : f * 100)}%`, bx + (box + colGap + colW) / 2, py + 8 + fs * 1.15 + fs * 1.15);
+  }
+  ctx.restore();
+}
+
 // 같은 PFD 를 다른 캔버스에도 그린다 — 3D 화면에 겹쳐 띄우는 계기(07-sim.js pfdOverlayDraw).
 // 그리는 함수들이 전역 cvs·ctx 에 그리므로 잠깐 바꿔 끼웠다가 되돌린다(그리기는 상태를 남기지
 // 않으므로 한 프레임에 두 번 그려도 된다). 그 캔버스에는 data-no-fcp 를 달아 둔다.
@@ -330,8 +555,9 @@ function drawFMA(x, y, w) {
         ? (holdOn && _holdPhase !== 'TOFIX'
              ? 'HOLD ' + (_holdEntry ? _holdEntry[0] : '')     // D=직진 P=평행 T=눈물방울
              : (holdOn ? 'HOLD ARM' : (_navDirectTo ? 'NAV DIR' : 'NAV')))
-        : (hdgSelOn ? 'HDG SEL' : 'HDG'),
-      midOn = rollApOn || navApOn, right, rightOn;
+        : 'HDG',
+      // HDG 는 걸려 있는 동안만 켜진다(풀려 있으면 어둡게 — IAS·ALT 와 같다)
+      midOn = hdgSelOn || navApOn, right, rightOn;
 
   if (gspdOn) {
     // GSPD engaged: both yaw/roll (mid) and pitch (right) are driven by
@@ -348,7 +574,14 @@ function drawFMA(x, y, w) {
     left   = crhtOn ? 'CRHT' : (altHoldOn && Math.abs(selAlt - S.alt) > 20 ? 'ALT.A' : 'ALT');
     leftOn = altHoldOn || crhtOn;     // dim ALT if both collective holds off
     right  = 'IAS';
-    rightOn = true;
+    // SIM 모드에서는 IAS 를 건 동안만 켜진다(풀려 있으면 기수 자세는 조종간 몫)
+    rightOn = !simModeOn || simIasOn;
+    // G/A — 컬렉티브·피치 축이 GA, 끝나면 컬렉티브 VS(선택 상승률) · 피치 IAS
+    const ga = (typeof gaOn !== 'undefined') && simModeOn && gaOn, vsm = (typeof vsModeOn !== 'undefined') && simModeOn && vsModeOn;
+    const td = (typeof tdOn !== 'undefined') && simModeOn && tdOn;
+    if (td) { left = 'TDH'; leftOn = true; right = 'TDH'; rightOn = true; }   // T/D to H
+    else if (ga) { left = 'GA'; leftOn = true; right = 'GA'; rightOn = true; }
+    else if (vsm && !altHoldOn && !crhtOn) { left = 'VS ' + Math.round(selVS); leftOn = true; }
   }
 
   // ── G/S (ILS 강하선) ──
@@ -362,9 +595,24 @@ function drawFMA(x, y, w) {
   const modes  = [left,   mid,    right  ];
   const active = [leftOn, midOn,  rightOn];
   const armed  = [leftArm, '',    ''      ];
+  // AFCS 가용성(23-afcs.js afcsAxes) — AP1·AP2 모두 OFF · TRIM FEEL REL · AUTO TRIM OFF · AHRS BACKUP 이면
+  // 그 축이 기본 안정 증대(SAS)로 내려가 황색 SAS. AFCS FAIL(DC 전원 없음)이면 세 칸 모두 꺼진다.
+  try {
+    if (typeof afcsAxes === 'function') {
+      const A = afcsAxes();
+      for (let i = 0; i < 3; i++) {
+        if (A.fail) { active[i] = false; armed[i] = ''; }
+        else if (A.sas[i]) { modes[i] = 'SAS'; active[i] = true; armed[i] = ''; }
+      }
+    }
+  } catch (e) { _swallow(e); }
 
-  const modeColor = (lbl, on) => {
+  // T/D to H 중 45kt 밑 — 롤 축(HDG·NAV)이 성능이 줄었다는 주의(황색)
+  const midAmber = (typeof tdRollAmber === 'function') && tdRollAmber();
+  const modeColor = (lbl, on, i) => {
     if (!on) return '#3a3a3a';
+    if (lbl === 'SAS') return '#ffb000';     // 기본 안정 증대로 내려간 축 — 황색
+    if (i === 1 && midAmber) return '#ffcc00';
     // GS/NAV · GS/HDG = GSPD 가 축을 잡고 있어 NAV·HDG 가 조향하지 못하는 대기 상태.
     // 초록(정상 작동)과 구분되게 호박색으로 표시한다.
     // G/S 도 빗금이 있으므로 대기 상태(GS/NAV)보다 먼저 가려낸다.
@@ -397,7 +645,7 @@ function drawFMA(x, y, w) {
       const gap2 = 4, total = w1 + gap2 + w2;
       let px = bx + (cellW - total) / 2;
       ctx.textAlign = 'left';
-      ctx.font = mainF;  ctx.fillStyle = modeColor(modes[i], on);
+      ctx.font = mainF;  ctx.fillStyle = modeColor(modes[i], on, i);
       ctx.fillText(modes[i], px, ty);
       px += w1 + gap2;
       // 무장은 흰색 — 아직 잡지 않았다는 뜻이다
@@ -405,12 +653,32 @@ function drawFMA(x, y, w) {
       ctx.fillText(armed[i], px, ty);
       ctx.font = mainF; ctx.textAlign = 'center';
     } else {
-      ctx.fillStyle = modeColor(modes[i], on);
+      ctx.fillStyle = modeColor(modes[i], on, i);
       ctx.fillText(modes[i], bx + cellW / 2, ty);
     }
+    // 모드가 바뀌어 걸리면 10초 동안 네 귀퉁이 상자가 깜빡인다 — 녹색(걸림) · 황색(SAS · 성능 저하)
+    const key = modes[i] + '|' + (on ? 1 : 0) + armed[i], now = performance.now();
+    if (_fmaPrev[i] !== undefined && _fmaPrev[i] !== key && on) {
+      const c = modeColor(modes[i], on, i);
+      _fmaFlash[i] = { t: now, col: c === '#00ff88' || c === '#ff66ff' ? '#00ff88' : '#ffb000' };
+    }
+    _fmaPrev[i] = key;
+    const F = _fmaFlash[i];
+    if (F && on && now - F.t < FMA_FLASH_MS) {
+      if (Math.floor((now - F.t) / 500) % 2 === 0) {
+        const L = 6, x0 = bx + 1.5, y0 = Y0 + 1.5, x1 = bx + cellW - 1.5, y1 = Y0 + BOX_H - 1.5;
+        ctx.strokeStyle = F.col; ctx.lineWidth = 2; ctx.beginPath();
+        [[x0, y0, 1, 1], [x1, y0, -1, 1], [x0, y1, 1, -1], [x1, y1, -1, -1]].forEach(([cx, cy, dx, dy]) => {
+          ctx.moveTo(cx + dx * L, cy); ctx.lineTo(cx, cy); ctx.lineTo(cx, cy + dy * L);
+        });
+        ctx.stroke();
+      }
+    } else if (F) _fmaFlash[i] = null;
   }
   ctx.restore();
 }
+const FMA_FLASH_MS = 10000;
+const _fmaPrev = [], _fmaFlash = [null, null, null];
 
 // ────────────────────────────────────────
 // CRHT ALTITUDE DISPLAY  (bottom-right of PFD)
@@ -426,8 +694,9 @@ function drawCrhtDisplay(x, y, w, h) {
   const HEAD_H = 26;
   const tapeY  = y + HEAD_H;
   const tapeH  = h - HEAD_H;
-  const tdv    = false;          // (T/D to H 는 SIM 쪽 기능 — 여기서는 늘 CRHT)
-  const target = selCrht;
+  // T/D to H 중에는 같은 창이 HHT(내려가 멈출 호버 높이)를 보여 준다
+  const tdv    = (typeof tdOn !== 'undefined') && tdOn;
+  const target = tdv ? selHht : selCrht;
   const cy     = tapeY + tapeH / 2;
   const pp100  = tapeH / 20;
   const on     = crhtOn || tdv;
@@ -523,14 +792,15 @@ function drawCrhtDisplay(x, y, w, h) {
 // ── 내활·외활 볼(slip/skid) ── 롤 눈금 맨 위 지표 바로 위에 둔다.
 // 볼이 가운데 두 선 사이에 있으면 협조 비행이다. 낮은 날개 쪽으로 가면 내활(slip),
 // 선회 바깥쪽으로 가면 외활(skid) — 볼 쪽 페달을 밟으면 가운데로 돌아온다.
-// 절차 훈련(이 저장소)에는 옆미끄럼 모델이 없어 볼은 늘 가운데다. 관 끝이 SLIP_BALL_FS°.
+// 볼은 기체가 느끼는 옆 힘의 각(atan, slipBall 07-sim.js)만큼 구르고, 관 끝이 SLIP_BALL_FS°.
 const SLIP_ROOM     = 15;   // 볼 관이 차지하는 높이(롤 눈금을 이만큼 내려 그린다)
 const SLIP_BALL_FS  = 12;   // 볼이 관 끝에 닿는 옆 힘의 각(°)
 function drawSlipBall(cx, top, half) {
   const th = SLIP_ROOM - 4, r = th / 2, cy = top + r;
-  const sb = 0;                 // 절차 훈련은 늘 협조 비행(옆미끄럼 모델 없음) — 볼은 가운데
+  const sb = (gpsMode || _fdrPlaying) ? 0 : slipBall;
   const k = Math.max(-1, Math.min(1, Math.atan(sb) / D2R / SLIP_BALL_FS));
-  const skid = 0;
+  // 회전익 특성의 선회 외활 — 볼을 반 볼(반지름)만큼 바깥쪽으로(14-simmode.js simSkidHalf)
+  const skid = (typeof simSkidHalf !== 'undefined' && simModeOn && !gpsMode && !_fdrPlaying) ? simSkidHalf : 0;
   const bx = Math.max(cx - half + r, Math.min(cx + half - r, cx + k * (half - r) + skid * r));
   ctx.save();
   // 관(가로로 누운 캡슐)
@@ -669,6 +939,54 @@ function drawAI(x, y, w, h) {
       ctx.restore();
     }
   }
+  // LIGHT ON WHEELS — 땅에 붙은 채 바퀴가 떨어지기 직전(SIM · 14-simmode.js simLightOnWheels)
+  if (typeof simLightOnWheels === 'function' && simLightOnWheels()) {
+    const txt = 'LIGHT ON WHEELS';
+    ctx.font = `bold ${Math.max(10, wS * 0.032)}px Helvetica Neue, Arial, sans-serif`;
+    const tw = ctx.measureText(txt).width + 14, th = Math.max(16, wS * 0.045);
+    const ty = aiY + aiH - th - 14;
+    ctx.fillStyle = 'rgba(0,0,0,0.75)'; ctx.fillRect(cx - tw / 2, ty, tw, th);
+    ctx.strokeStyle = '#ffb000'; ctx.lineWidth = 1.5; ctx.strokeRect(cx - tw / 2, ty, tw, th);
+    ctx.fillStyle = '#ffb000'; ctx.textAlign = 'center';
+    ctx.fillText(txt, cx, ty + th * 0.72);
+  }
+  // EMER BRAKE — 비상 브레이크(SIM). 파킹 브레이크는 자세계에 띄우지 않고 메시지 시현창(pfdMsgs)에만 보인다
+  const emerBrk = typeof simEmerBrakeOn === 'function' && simEmerBrakeOn();
+  if (emerBrk) {
+    const txt = 'EMER BRAKE', col = '#ffb000';
+    ctx.font = `bold ${Math.max(10, wS * 0.032)}px Helvetica Neue, Arial, sans-serif`;
+    const tw = ctx.measureText(txt).width + 14, th = Math.max(16, wS * 0.045);
+    const ty = aiY + aiH - 2 * th - 22;
+    ctx.fillStyle = 'rgba(0,0,0,0.75)'; ctx.fillRect(cx - tw / 2, ty, tw, th);
+    ctx.strokeStyle = col; ctx.lineWidth = 1.5; ctx.strokeRect(cx - tw / 2, ty, tw, th);
+    ctx.fillStyle = col; ctx.textAlign = 'center';
+    ctx.fillText(txt, cx, ty + th * 0.72);
+  }
+  // SIM 경고(위쪽 가운데) — 엔진 · VRS · VNE
+  {
+    const warns = [];
+    try {
+      if (typeof simEng !== 'undefined' && simModeOn) {
+        if (simEng === 1) {
+          const left = Math.max(0, OEI_25_SEC - simOeiT);
+          warns.push([left > 0 ? `OEI 2.5MIN ${Math.floor(left / 60)}:${String(Math.floor(left % 60)).padStart(2, '0')}` : 'OEI CONT', '#ffb000']);
+          if (simEngTrng) warns.push([`ENG ${simEngFail} TRNG`, '#00e5ff']);   // 상부 콘솔 TRAINING 으로 든 OEI 훈련
+        } else if (simEng === 0) warns.push([simEngSt[1] === 'OFF' && simEngSt[2] === 'OFF' ? 'ENG OFF' : 'ENG IDLE', '#ff3030']);
+        if (simVrsOn()) warns.push(['VRS', '#ff3030']);
+        if (simOverVne()) warns.push(['VNE', '#ff3030']);
+      }
+    } catch (e) { _swallow(e); }
+    ctx.font = `bold ${Math.max(10, wS * 0.032)}px Helvetica Neue, Arial, sans-serif`;
+    const th = Math.max(16, wS * 0.045);
+    warns.forEach(([txt, col], i) => {
+      const tw = ctx.measureText(txt).width + 14, ty = aiY + 8 + i * (th + 4);
+      const blink = col === '#ff3030' && Math.floor(performance.now() / 400) % 2 === 0;
+      ctx.fillStyle = blink ? 'rgba(200,20,20,0.85)' : 'rgba(0,0,0,0.75)'; ctx.fillRect(cx - tw / 2, ty, tw, th);
+      ctx.strokeStyle = col; ctx.lineWidth = 1.5; ctx.strokeRect(cx - tw / 2, ty, tw, th);
+      ctx.fillStyle = blink ? '#ffffff' : col; ctx.textAlign = 'center';
+      ctx.fillText(txt, cx, ty + th * 0.72);
+    });
+  }
   ctx.restore();  // end inner clip (AI content area)
 
   // AFCS strip drawn last in outer clip — sky/horizon cannot overwrite it
@@ -754,6 +1072,15 @@ function drawTqGauge(x, y, w, h, vals) {
       ctx.fillText(mk.txt, x1 + 4, mk.ly + 2.5);
     });
 
+    // 레버 표식(SIM) — 레버가 MTA 를 넘겨 토크보다 위에 있으면 그 자리를 흰 삼각형으로
+    const cmd = (simModeOn && typeof simTqCmd === 'number') ? simTqCmd : null;
+    if (cmd != null && cmd > tq + 1) {
+      const cy = Math.round(vToY(cmd)) + 0.5;
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath(); ctx.moveTo(x0 - 1, cy); ctx.lineTo(x0 - 7, cy - 4); ctx.lineTo(x0 - 7, cy + 4);
+      ctx.closePath(); ctx.fill();
+    }
+
     // 구간 경계 — 연속 사용 한계(100%) 노란 선 · 오버토크(113%) 붉은 선
     [[TQ_LIMIT, '#ffcc00'], [TQ_RED, '#ff4444']].forEach(([v, c]) => {
       const ly = Math.round(vToY(v)) + 0.5;
@@ -767,6 +1094,26 @@ function drawTqGauge(x, y, w, h, vals) {
     ctx.font = 'bold 8px Helvetica, Arial';
     ctx.fillStyle = '#ff5555';
     ctx.fillText('OVER TQ', x + w / 2, y + h - 8);
+  }
+  // RPM LOW(SIM) — 레버를 MTA 넘게 당겨 로터 회전이 처졌다. 칸 가운데에 띄우고 바탕을 붉게 깜박인다(글자는 늘 보인다)
+  let rpmLow = false, rotorHigh = false;
+  try { rpmLow = (typeof simRpmLow === 'function') && simRpmLow(); rotorHigh = !rpmLow && (typeof simRotorHigh === 'function') && simRotorHigh(); } catch (e) { _swallow(e); }
+  if (rotorHigh) {                       // 오토로테이션에서 레버를 너무 내려 NR 이 넘쳤다 — 노랑
+    const cy = y + h * 0.55;
+    ctx.fillStyle = 'rgba(0,0,0,0.85)'; ctx.fillRect(x + 2, cy - 15, w - 4, 26);
+    ctx.font = 'bold 8px Helvetica, Arial'; ctx.fillStyle = '#ffb000';
+    ctx.fillText('NR HIGH', x + w / 2, cy - 4);
+    ctx.fillStyle = '#ffffff'; ctx.fillText('NR ' + simNr.toFixed(0) + '%', x + w / 2, cy + 7);
+  }
+  if (rpmLow) {
+    const cy = y + h * 0.55, blink = Math.floor(performance.now() / 400) % 2 === 0;
+    ctx.fillStyle = blink ? 'rgba(220,30,30,0.9)' : 'rgba(0,0,0,0.85)';
+    ctx.fillRect(x + 2, cy - 15, w - 4, 26);
+    ctx.font = 'bold 8px Helvetica, Arial';
+    ctx.fillStyle = blink ? '#ffffff' : '#ff5555';
+    ctx.fillText('RPM LOW', x + w / 2, cy - 4);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText('NR ' + simNr.toFixed(0) + '%', x + w / 2, cy + 7);
   }
   ctx.restore();
 }
@@ -826,6 +1173,18 @@ function drawSpeedTape(x, y, w, h) {
   ctx.textAlign='center'; ctx.fillText(Math.round(S.spd*scv),x+w/2,cy+6);
   ctx.fillStyle='#aaa'; ctx.font='bold 8px Helvetica Neue, Arial, sans-serif';
   ctx.fillText(S_LBL(),x+w/2,y+11);
+  // SIM 모드 IAS 상위모드 — 선택 속도 벅(청록, 오른쪽 가장자리)과 그 값(맨 위)
+  if (simModeOn && simIasOn && !gspdOn) {
+    const by = Math.max(y + 4, Math.min(y + h - 4, cy - (selSpd - S.spd) * ppk));
+    ctx.fillStyle = '#00e5ff';
+    ctx.beginPath();
+    ctx.moveTo(x + w, by - 6); ctx.lineTo(x + w - 7, by - 6); ctx.lineTo(x + w - 7, by - 2);
+    ctx.lineTo(x + w - 3, by); ctx.lineTo(x + w - 7, by + 2); ctx.lineTo(x + w - 7, by + 6);
+    ctx.lineTo(x + w, by + 6); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#000'; ctx.fillRect(x + 2, y + 14, w - 4, 14);
+    ctx.fillStyle = '#00e5ff'; ctx.font = 'bold 11px Helvetica Neue, Arial, sans-serif';
+    ctx.textAlign = 'center'; ctx.fillText(Math.round(selSpd * scv), x + w / 2, y + 25);
+  }
   // Speed trend vector (magenta, 6-second extrapolation)
   if (Math.abs(spdTrend) > 0.5) {
     const trendY = cy - spdTrend * ppk;
@@ -1129,6 +1488,22 @@ function drawHSI(x, y, w, h, cxC) {
     ctx.lineTo(wdX + ax + Math.sin(ba - 0.45)*hs, wdY + ay - Math.cos(ba - 0.45)*hs);
     ctx.closePath(); ctx.fillStyle = '#ffffff'; ctx.fill();
     ctx.restore();
+    // ── 메시지 시현창(바람 정보 아래) ── 콘솔 스위치 · 엔진 상태를 따른다(pfdMsgs)
+    const msgs = pfdMsgs();
+    _pfdMsgBottom = wdY + fs * 1.1 + 4;    // 바람 글자 아래끝(메시지가 없을 때)
+    if (msgs.length) {
+      ctx.save();
+      const mx0 = rightX, mw = Math.max(20, x + w - 4 - rightX);
+      let mfs = Math.max(7, Math.min(10, r * 0.085));
+      ctx.font = `bold ${mfs}px Helvetica Neue, Arial, sans-serif`;
+      const widest = Math.max(...msgs.map(m => ctx.measureText(m.t).width));
+      if (widest > mw - 4) { mfs = Math.max(6, mfs * (mw - 4) / widest); ctx.font = `bold ${mfs}px Helvetica Neue, Arial, sans-serif`; }
+      ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+      let my = wdY + fs * 1.1 + 6 + mfs * 1.25;
+      msgs.forEach(m => { ctx.fillStyle = m.c; ctx.fillText(m.t, mx0 + 2, my); my += mfs * 1.3; });
+      _pfdMsgBottom = my - mfs * 1.3 + mfs * 0.35;
+      ctx.restore();
+    }
   }
 
   // (FMS · NAV1 · NAV2 목적지 줄은 오른쪽 아래 칸으로 옮겼다 — drawNavSrcBox · HSI 와 겹치지 않게)
@@ -1136,7 +1511,7 @@ function drawHSI(x, y, w, h, cxC) {
   // ── 좌하단 2줄 정보: ①TAS·OAT ②GS·ISA ──
   {
     // TAS: altitude-corrected from displayed speed (~+2% per 1000 ft)
-    const tas = S.spd * (1 + 0.02 * S.alt / 1000);
+    const tas = simModeOn ? tasKt(S.spd) : S.spd * (1 + 0.02 * S.alt / 1000);   // SIM 은 실제로 움직이는 TAS 그대로
     // GS: TAS vector + (effective) wind vector. Wind is gated by the
     // speed-dependent effect factor — 0 in hover/low-speed, full at cruise.
     const wto = normA(windDir + 180) * D2R;
@@ -1656,61 +2031,4 @@ function drawHsiHoverPage(x, y, w, h, cx, cy, rFull) {
   ctx.restore();
 }
 
-// HSI 오른쪽 아래 칸의 자리 — 스톱워치(이 저장소에는 HOCAS · 메시지 시현창이 없어 칸을 혼자 쓴다)
-function hsiRightCol(x, y, w, h, cxC) {
-  const G = hsiGeom(x, y, w, h, cxC);
-  const sideW = Math.max(60, G.rightW);
-  const fs = Math.max(8, Math.min(11, sideW * 0.10));
-  const width = Math.max(80, Math.min(sideW - 8, 150));
-  const left = Math.min(x + w - 6 - width, G.cx + G.r + 4 + (sideW - width) / 2);
-  const swH = Math.round(fs * 3.6 + 8);
-  return { G, sideW, fs, left, width, swH, swY: y + h - 6 - swH };
-}
-// ── 스톱워치(HSI 오른쪽 아래) ── FCP 의 STOP WATCH 를 옮겼다
-// 시계 모드: 현재 시각 + [STOP WATCH] · 스톱워치 모드: 경과 시간 + [GO/STP] [RST] [TIME]. 칸을 누르면 그 동작(_swHit · onPfdTap)
-let _swHit = [];
-function drawStopwatch(x, y, w, h, cxC) {
-  if (!(w >= 40) || !(h >= 40)) return;
-  const RC = hsiRightCol(x, y, w, h, cxC);
-  const bx = RC.left, bw = RC.width, by = RC.swY, bh = RC.swH, fs = RC.fs;
-  const sw = typeof _swMode !== 'undefined' && _swMode === 'sw';
-  const run = sw && typeof SW !== 'undefined' && SW.running;
-  ctx.save();
-  ctx.fillStyle = 'rgba(0,0,0,0.72)'; ctx.fillRect(bx, by, bw, bh);
-  ctx.strokeStyle = '#446688'; ctx.lineWidth = 1; ctx.strokeRect(bx + 0.5, by + 0.5, bw - 1, bh - 1);
-  // 윗줄 — 이름표 · 시각
-  ctx.textBaseline = 'alphabetic';
-  ctx.font = `bold ${fs * 0.8}px Helvetica Neue, Arial, sans-serif`;
-  ctx.fillStyle = '#8ac6ff'; ctx.textAlign = 'left';
-  ctx.fillText(sw ? 'SW' : 'TIME', bx + 4, by + fs * 1.45);
-  ctx.font = `bold ${fs * 1.25}px Helvetica Neue, Arial, sans-serif`;
-  ctx.fillStyle = sw ? (run ? '#22e022' : '#ffffff') : '#ffffff'; ctx.textAlign = 'right';
-  ctx.fillText(typeof swText === 'function' ? swText() : '', bx + bw - 4, by + fs * 1.55);
-  // 아랫줄 — 버튼
-  const btns = sw ? [[run ? 'STP' : 'GO', 'swToggle', run], ['RST', 'swReset', false], ['TIME', 'swSetMode:clock', false]]
-                  : [['STOP WATCH', 'swSetMode:sw', false]];
-  const gy = by + fs * 2.0, gh = bh - fs * 2.0 - 4, gap = 3, gw = (bw - 8 - gap * (btns.length - 1)) / btns.length;
-  const hits = [];
-  btns.forEach(([t, act, on], i) => {
-    const gx = bx + 4 + i * (gw + gap);
-    ctx.fillStyle = on ? '#14451a' : '#1c232b'; ctx.fillRect(gx, gy, gw, gh);
-    ctx.strokeStyle = on ? '#22e022' : '#5a6672'; ctx.strokeRect(gx + 0.5, gy + 0.5, gw - 1, gh - 1);
-    ctx.fillStyle = on ? '#7fffb0' : '#cfd6dc'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.font = `bold ${Math.min(fs * 0.85, gw / Math.max(3, t.length) * 1.6)}px Helvetica Neue, Arial, sans-serif`;
-    ctx.fillText(t, gx + gw / 2, gy + gh / 2 + 1);
-    hits.push({ x: gx, y: gy, w: gw, h: gh, act });
-  });
-  ctx.restore();
-  // 본 PFD 캔버스에서만 누름 자리를 기억한다(3D 에 겹친 계기는 그림만)
-  if (!cvs.dataset.noFcp) _swHit = hits;
-}
-// PFD 를 누른 자리(캔버스 px)가 스톱워치 버튼이면 그 동작 — 09-cdu.js onPfdTap 이 먼저 묻는다
-function swHitTest(px, py) {
-  const b = _swHit.find(r => px >= r.x && px <= r.x + r.w && py >= r.y && py <= r.y + r.h);
-  if (!b) return false;
-  if (b.act === 'swToggle') swToggle();
-  else if (b.act === 'swReset') swReset();
-  else if (b.act.startsWith('swSetMode:')) swSetMode(b.act.split(':')[1]);
-  return true;
-}
 

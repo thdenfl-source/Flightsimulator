@@ -16,6 +16,9 @@
 <!-- 외부 라이브러리는 저장소 사본을 쓴다(vendor/README.md).
      CDN 을 쓰면 한 번이라도 못 받는 순간 앱이 통째로 죽는다 — 비행 중에는
      그럴 여지를 두지 않는다. -->
+<!-- 패널 새 창(다중 모니터) — 라이브러리가 거는 이벤트까지 받아 적어야 하므로 맨 먼저 -->
+<script src="js/00-edition.js?v=590"></script>
+<script src="js/00-popout.js?v=590"></script>
 <link rel="stylesheet" href="vendor/leaflet.css"/>
 <script src="vendor/leaflet.js"></script>
 <link rel="stylesheet" href="vendor/leaflet-velocity.min.css"/>
@@ -99,6 +102,41 @@ html, body {
 #app.triple #right-panel { flex: 1 1 0 !important; }
 @media (orientation: landscape) { #divider-2 { width: 2px; height: 100%; } }
 @media (orientation: portrait)  { #divider-2 { height: 2px; width: 100%; } }
+/* ── 패널 새 창(00-popout.js) — 새 창으로 옮긴 패널 자리의 구분선을 감추고 남은 패널이 나눠 갖는다 ── */
+.po-btn { flex: 0 0 auto !important; padding: 0 9px !important; color: #7ab8f5 !important; }   /* POP UP — 모니터마다 창 하나씩 띄울 때 */
+#app.po-left #panel-divider { display: none; }
+#app.po-mid #divider-2, #app.po-right #divider-2 { display: none; }
+#app.po-right:not(.triple) #panel-divider, #app.po-mid.po-right #panel-divider { display: none; }
+#app.po-any > #left-panel, #app.po-any > #mid-panel, #app.po-any > #right-panel { flex: 1 1 0 !important; }
+#app.po-any > #left-panel.po-a, #app.po-any > #mid-panel.po-a, #app.po-any > #right-panel.po-a { flex: 0 0 var(--po-a, 50%) !important; }   /* 둘 남으면 경계를 끌어 비율을 고른다 */
+/* 화면 배치 — 단독 화면 버튼은 탭에서 뺀다(기능은 남김) */
+#pfd-solo-btn, #m3d-solo-btn, #map-solo-btn, #cdu-solo-btn { display: none !important; }
+/* 3D Only 는 우측 창 탭에 — 2분할·3분할 어느 쪽이든 보인다 */
+/* Top(늘 위 창) 버튼 — 본 창에서 누르면 그 패널을 곧바로 늘 위 창으로, 새 창에서 누르면 새 창의 패널을 늘 위 창으로 */
+.po-top-btn { display: inline-block !important; flex: 0 0 auto !important; padding: 0 9px !important; color: #ffd200 !important; }
+.po-top-btn.on { background: #3a3000 !important; }
+/* ── 4분할 — 왼쪽 두 창(PFD · 3D)은 높이를 다 쓰고, 오른쪽 열을 위(MAP)·아래(CDU)로 나눈다 ──
+   비율은 --q1(1열 폭) · --q2(2열 폭) · --q3(3열 위 창 높이) — 경계 그립(.qgrip)을 끌어 바꾼다 */
+#bot-panel { display: none; flex-direction: column; overflow: hidden; }
+#bot-tabs { display: flex; background: #080808; border-bottom: 1px solid #1e1e1e; flex-shrink: 0; }
+#app.quad { display: grid !important; grid-template-columns: var(--q1, 36%) var(--q2, 32%) minmax(0, 1fr);
+            grid-template-rows: var(--q3, 55%) minmax(0, 1fr); gap: 2px; background: #2a2a2a; }
+#app.quad > #panel-divider, #app.quad > #divider-2 { display: none !important; }
+#app.quad > #left-panel  { grid-area: 1 / 1 / 3 / 2; min-width: 0; min-height: 0; }
+#app.quad > #mid-panel   { grid-area: 1 / 2 / 3 / 3; min-width: 0; min-height: 0; display: flex; }
+#app.quad > #right-panel { grid-area: 1 / 3 / 2 / 4; min-width: 0; min-height: 0; }
+#app.quad > #bot-panel   { grid-area: 2 / 3 / 3 / 4; display: flex; min-width: 0; min-height: 0; }
+.qgrip { display: none; position: absolute; z-index: 2001; touch-action: none; user-select: none;
+         background: rgba(15,20,28,0.92); border: 1px solid #4a90d9; border-radius: 6px; color: #7ab8f5;
+         font: bold 12px 'Helvetica Neue', Arial, sans-serif; align-items: center; justify-content: center; }
+#app.quad > .qgrip { display: flex; }
+.qgrip.v { width: 22px; height: 56px; transform: translate(-50%, -50%); top: 50%; cursor: col-resize; }
+.qgrip.v::before { content: '◀▶'; letter-spacing: -2px; }
+.qgrip.h { width: 56px; height: 22px; transform: translate(-50%, -50%); cursor: row-resize; }
+.qgrip.h::before { content: '▲▼'; }
+#qgrip-1 { left: var(--q1, 36%); }
+#qgrip-2 { left: calc(var(--q1, 36%) + var(--q2, 32%)); }
+#qgrip-3 { top: var(--q3, 55%); left: calc((var(--q1, 36%) + var(--q2, 32%) + 100%) / 2); }
 /* 분할 전환 버튼 */
 .split-tab { margin-left: auto; color: #7ab8f5 !important; }
 #left-panel {
@@ -246,7 +284,6 @@ html, body {
 .fks-sq { width: 40px; height: 30px; margin-top: 4px; border: 2px solid #8d969f; border-radius: 3px; background: linear-gradient(#26292d, #121417); cursor: pointer; }
 .fks-sq.framed { box-shadow: 0 0 0 3px #1a1d21, 0 0 0 4px #6b737b; }
 .fks-sq:active { background: #00b4e6; }
-.fks-sq.armed { border-color: #ffb000; box-shadow: 0 0 6px #ffb000; }   /* G/S 무장 */
 .fks-sq.on { border-color: #22e022; background: linear-gradient(#1d4a1d, #0f2a0f); box-shadow: 0 0 6px #22e022; }
 .fks-none { opacity: .45; cursor: default; pointer-events: none; }
 .fks-val { color: #00e5ff; font: bold 9px 'Helvetica Neue', Arial, sans-serif; height: 11px; }
@@ -296,6 +333,19 @@ html, body {
 /* 스톱워치 ↔ 현재 시각 전환 버튼 */
 .sw-btn-time { border-color: #2a4a6a; color: #7ab8f5; }
 .sw-btn-time:active { background: #1a2c44; }
+/* ── SIM 모드 버튼 ── ALT 유지 버튼 무리 오른쪽. 켜짐은 AFCS 계열과 구분되게 호박색. */
+.sim-mode-group { display: flex; flex-direction: column; align-items: center; gap: 2px; margin-left: 6px; }
+.sim-mode-btn {
+  background: #111; border: 1px solid #333; color: #555;
+  font-size: 11px; font-weight: bold; letter-spacing: 1px;
+  min-width: 44px; padding: 5px 10px; cursor: pointer; border-radius: 3px;
+  touch-action: manipulation; font-family: 'Helvetica Neue', Arial, sans-serif;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.sim-mode-btn.on {
+  background: #2a1a00; border-color: #ffb74d; color: #ffcc66;
+  box-shadow: 0 0 6px rgba(255,183,77,0.45);
+}
 .sw-display.clock-mode { color: #7ab8f5; }
 
 /* ── BRG Toggle ── */
@@ -411,21 +461,17 @@ html, body {
 .hover-btn.on     { background: #1a0e2e; border-color: #cc66ff; color: #cc66ff; }
 .hover-pos-btn.on { background: #2e2a0e; border-color: #ffcc00; color: #ffcc00;
                     box-shadow: 0 0 6px rgba(255,204,0,0.45); }
-/* G/S — 무장(ARM)은 호박색, 붙잡으면(CAPT) 승강계 지시침과 같은 자홍색 */
-.gs-btn {
-  background: #1a1a1a; border: 1px solid #333; color: #555;
-  font-size: 10px; font-weight: bold; padding: 3px 6px; cursor: pointer; border-radius: 2px;
-  touch-action: manipulation; white-space: nowrap; font-family: 'Helvetica Neue', Arial, sans-serif;
-  line-height: 1.1; transition: background 0.15s, border-color 0.15s, color 0.15s;
-}
-.gs-btn .gs-sub { display: block; font-size: 7px; letter-spacing: 0; opacity: 0.9; }
-.gs-btn.armed { background: #2a1c00; border-color: #ffaa00; color: #ffcc44; }
-.gs-btn.on    { background: #2a0e2a; border-color: #ff44ff; color: #ff88ff;
-                box-shadow: 0 0 6px rgba(255,68,255,0.45); }
 .crht-btn.on     { background: #0e2e1a; border-color: #44ff88; color: #44ff88;
                    box-shadow: 0 0 6px rgba(44,255,100,0.4); }
 .alt-hold-btn.on { background: #0e1a2e; border-color: #00cfff; color: #00cfff;
                    box-shadow: 0 0 6px rgba(0,200,255,0.4); }
+/* FCP 라벨 겸 모드 버튼(ALT·CRHT) — 걸려 있으면 그 모드 색 */
+.mode-lbl-btn.on { background: #0e2e1a; border-color: #44ff88; color: #44ff88; box-shadow: 0 0 6px rgba(44,255,100,0.4); }
+#alt-hold-btn.on { background: #0e1a2e; border-color: #00cfff; color: #00cfff; box-shadow: 0 0 6px rgba(0,200,255,0.4); }
+.td-col { gap: 3px; justify-content: center; }
+.td-col > button { width: 100%; }
+.tdown-btn.flash { background: #0e2e1a; border-color: #44ff88; color: #44ff88; }
+.tdown-btn.on    { background: #0e2e1a; border-color: #44ff88; color: #44ff88; box-shadow: 0 0 6px rgba(44,255,100,0.4); }
 .alt-hold-group  { display: flex; flex-direction: column; align-items: center; gap: 2px; }
 .alt-hold-btns   { display: flex; gap: 2px; }
 
@@ -463,6 +509,11 @@ html, body {
   transition: background 0.1s, border-color 0.1s, color 0.1s;
 }
 .force-trim-btn:active { background: #2a2a4a; }
+.ftr-col { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.ga-btn { width: 40px; height: 22px; border-radius: 11px; background: #1a1a1a; border: 2px solid #555; color: #9aa4ae;
+          font: bold 10px 'Helvetica Neue', Arial, sans-serif; cursor: pointer; touch-action: manipulation; padding: 0; }
+.ga-btn:active { background: #1a2a1a; }
+.ga-btn.on { border-color: #00ff88; color: #00ff88; box-shadow: 0 0 6px rgba(0,255,136,0.4); }
 .force-trim-btn.active { border-color: #cc66ff; color: #cc66ff; }
 .force-trim-btn.disabled { opacity: 0.3; cursor: not-allowed; pointer-events: none; }
 .gspd-btn:active { background: #2a1a1e; }
@@ -550,11 +601,47 @@ html, body {
   height: 100%; display: block; z-index: 1;
 }
 #map3d.panel-3d .maplibregl-ctrl-bottom-right { bottom: 10px; }
-#map3d.panel-3d .maplibregl-ctrl-bottom-left,
 #map3d.panel-3d .vfr-scale { bottom: 10px; }
-/* When 3D is on, hide the 2D Leaflet map so its panes never paint through */
-#map-wrap.map3d-on #map { visibility: hidden; }
-/* MG(Slaved)/DG — 방향 기준(07-sim.js toggleHdgRef). 3D 창·지도 창(툴바 아래 오른쪽)에 같은 버튼.
+/* 확대·나침반 · 기울기 버튼은 축척(왼쪽 아래 · 축척은 bottom 62px 로 직접 놓인다 — 04-map.js) 바로 위 — 아래 #map3d 규칙 그대로 */
+/* ── CHIN BUBBLE(SIM 1인칭) — 정면 시야는 3D 창 가득, 발밑 창은 그 위 아래 좌·우 모서리 ──
+   #chin-row 는 #map3d 바로 뒤에 붙어 다니며 3D 가 보일 때만 보인다.
+   발밑 창 하나는 3D 창 너비의 약 1/3 · 높이의 2/9 다(종전 '아래 1/3 을 좌·우 반씩' 의 2/3).
+   좌·우 가장자리에 붙여 정면 시야 위에 겹친다 — 가운데(앞쪽 아래)는 가리지 않는다.
+   줄 자체는 비어 있고 손 입력을 그대로 통과시킨다. */
+#chin-row {
+  display: none; position: absolute; left: 0; right: 0; z-index: 801;
+  justify-content: space-between; pointer-events: none;
+}
+#map3d.chin-on.active + #chin-row { display: flex; }
+.chin-pane {
+  flex: none; width: calc((100% - 18px) / 3); position: relative; overflow: hidden; min-width: 0;
+  border-radius: 10px 10px 42px 42px / 10px 10px 34px 34px;   /* 아래가 둥근 창 */
+  border: 2px solid #1d232b; background: #0b2638; box-sizing: border-box;
+  box-shadow: 0 0 10px rgba(0,0,0,0.6);                       /* 정면 시야와 갈라 보이게 */
+}
+.chin-pane::after {               /* 창틀 안쪽 그늘 — 정면 시야와 구분된다 */
+  content: ''; position: absolute; inset: 0; pointer-events: none; z-index: 2;
+  border-radius: inherit; box-shadow: inset 0 0 14px rgba(0,0,0,0.55);
+}
+/* 2D 위에 겹쳐 쓸 때: 3D 창(높이 80%, T-CUT 꺼짐이면 100%)의 아래 2/9 */
+#map3d.chin-on + #chin-row { top: calc(80% * 7 / 9); height: calc(80% * 2 / 9); }
+#map-wrap.tcut-off #map3d.chin-on + #chin-row { top: calc(100% * 7 / 9); height: calc(100% * 2 / 9); }
+/* 3D 가 제 창을 쓸 때 */
+#map3d.panel-3d.chin-on + #chin-row { top: calc(100% * 7 / 9); height: calc(100% * 2 / 9); z-index: 2; }
+#q3d-btn { position: absolute; top: 8px; right: 8px; z-index: 900; padding: 5px 10px; }
+#chin-btn { display: none; position: absolute; top: 40px; right: 8px; z-index: 900; padding: 5px 10px; }
+#chin-btn.show { display: block; }
+#chin-btn.on { color: #00e5ff; border-color: #00e5ff; }
+#ext-btn { display: none; position: absolute; top: 72px; right: 8px; z-index: 900; padding: 5px 10px; }
+/* SIM 1인칭 — 화면 아래 가운데의 기수(높이 1/10 · 둘러보기를 하면 그만큼 비켜 간다) */
+#sim-nose { display: none; position: absolute; left: 50%; bottom: 0; width: 34%; height: 10%;
+            transform: translateX(-50%); z-index: 3; pointer-events: none; }
+#sim-nose.show { display: block; }
+#sim-nose svg { display: block; width: 100%; height: 100%; }
+#ext-btn.show { display: block; }
+#ext-btn.on { color: #00e5ff; border-color: #00e5ff; }
+#fly3d-btn { position: absolute; top: 104px; right: 8px; z-index: 900; padding: 5px 10px; }
+/* MG(Slaved)/DG — 방향 기준(07-sim.js toggleHdgRef). 3D 창(FLY 아래)·지도 창(툴바 아래)에 같은 버튼.
    누를 때마다 바뀌고, DG 일 때만 −/+(HSI 1°)가 살아 있고 자기 나침반(COMP)이 보인다 */
 .hdgref { position: absolute; right: 8px; z-index: 900; width: 86px;
           display: flex; flex-direction: column; gap: 3px; }
@@ -568,11 +655,32 @@ html, body {
                background: rgba(0,0,0,0.75); color: #ffb000;
                font: bold 10px 'Helvetica Neue', Arial, sans-serif; }
 .hdgref.dg .hdgref-comp { display: block; }
-#hdgref-3d { top: 8px; }
-#map-wrap #hdgref-3d { top: 48px; }   /* 2D 위에 겹쳐 쓸 때는 지도 툴바 아래로 */
+#snd-btn { position: absolute; top: 136px; right: 8px; z-index: 900; padding: 5px 10px; }
+#pfdov-btn { position: absolute; top: 168px; right: 8px; z-index: 900; padding: 5px 10px; }
+#hdgref-3d { top: 200px; }
+#rotor-3d { position: absolute; right: 8px; top: 310px; z-index: 900; width: 86px; display: flex; flex-direction: column; gap: 3px; }
+#rotor-3d .sim-btn { flex: none; padding: 4px 2px; font-size: 11px; }
+#rotor-3d .sim-btn.on { color: #00e07a; border-color: #00e07a; }
+#rotor-3d .rotor-dir { display: flex; gap: 3px; }
+#rotor-3d .rotor-dir .sim-btn { flex: 1; }
+#rotor-3d .rotor-dir .sim-btn:disabled { opacity: 0.35; cursor: default; }
+#rotor-3d .rc-opts { display: flex; flex-direction: column; gap: 2px; }
+#rotor-3d .rc-opt { padding: 2px 2px !important; font-size: 9px !important; color: #777; }
+#rotor-3d .rc-opt.on { color: #00e07a; border-color: #00e07a; }
+#rotor-3d .rc-opt:disabled { opacity: 0.35; cursor: default; }
+#ase-3d { display: flex; flex-direction: column; gap: 3px; }
+#ctl3d #eng-3d.warn { color: #ffb000; border-color: #ffb000; }
+#ctl3d #eng-3d.fail { color: #ff4040; border-color: #ff4040; }
+#ase-3d .sim-btn.on { color: #00e07a; border-color: #00e07a; }
+#ase-3d .ase-hf { padding: 2px 0; border: 1px solid #333; border-radius: 3px; text-align: center;
+                  background: rgba(0,0,0,0.75); color: #555; font: bold 9px 'Helvetica Neue', Arial, sans-serif; }
+#ase-3d .ase-hf.avail { color: #9aa4ae; border-color: #556; }
+#ase-3d .ase-hf.on { color: #00e07a; border-color: #00e07a; }
 #hdgref-map { top: 48px; }
-/* 3D 를 지도 위에 겹쳐 쓰면 3D 쪽 버튼만 둔다 */
-#map-wrap.map3d-on #hdgref-map { display: none; }
+#simmap-btn { position: absolute; right: 8px; top: 140px; width: 86px; z-index: 900; padding: 5px 4px; }
+#map-wrap.map3d-on #simmap-btn { display: none; }
+.sim-side-btn.on { color: #00e07a !important; border-color: #00e07a !important; }
+#ctl3d #solo-half-btn { position: static !important; transform: none !important; width: 100%; display: block; margin-top: 3px; padding: 5px 4px; font-size: 11px; }
 /* 출발 공항 고르기(09-cdu.js openStartAirportPicker) */
 .ui-dlg.start-apt { width: min(560px, 94vw); max-width: min(560px, 94vw); }
 .start-apt-sub { font-size: 12px; color: #9aa4ae; }
@@ -583,11 +691,73 @@ html, body {
 .start-apt-btn b { color: #7fd4ff; margin-right: 4px; }
 .start-apt-btn:hover, .start-apt-btn:focus { border-color: #4aa8ff; background: #14212e; }
 .start-apt-skip { padding: 7px 12px; }
+/* 2D 위에 겹쳐 쓸 때는 지도 툴바 아래로 */
+#map-wrap #q3d-btn { top: 48px; }
+#map-wrap #chin-btn { top: 80px; }
+#map-wrap #ext-btn { top: 112px; }
+#map-wrap #fly3d-btn { top: 144px; }
+#map-wrap #snd-btn { top: 176px; }
+#map-wrap #pfdov-btn { top: 208px; }
+#map-wrap #hdgref-3d { top: 240px; }
+#map-wrap #rotor-3d { top: 350px; }
+
+/* ── 3D 조작 버튼 묶음(#ctl3d) — 오른쪽 한 줄, 너비는 가장 넓은 버튼(MG (Slaved)·회전익 특성)에 맞춘다 ── */
+#ctl3d { position: absolute; top: 8px; right: 8px; z-index: 900; width: 96px;
+         display: flex; flex-direction: column; gap: 3px;
+         max-height: calc(100% - 16px); box-sizing: border-box; }
+#map-wrap #ctl3d { top: 48px; max-height: calc(100% - 56px); }
+/* 창이 낮아 버튼이 아래로 넘치면 묶음 안에서 위아래로 밀어 올려 누른다(터치 · 휠) */
+#ctl3d-body { display: flex; flex-direction: column; gap: 3px;
+              flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden;
+              overscroll-behavior: contain; -webkit-overflow-scrolling: touch; touch-action: pan-y;
+              scrollbar-width: thin; }
+#ctl3d-body > * { flex-shrink: 0; }
+#ctl3d.collapsed #ctl3d-body { display: none; }
+#ctl3d-tog { padding: 3px 4px; font-size: 11px; color: #9aa4ae; }
+#ctl3d .sim-btn, #ctl3d #chin-btn, #ctl3d .hdgref, #ctl3d #rotor-3d, #ctl3d #ase-3d {
+  position: static !important; top: auto !important; right: auto !important;
+  width: 100%; box-sizing: border-box; margin: 0; }
+#ctl3d > #ctl3d-body > .sim-btn, #ctl3d-tog { padding: 5px 4px; text-align: center; }
+#ctl3d #chin-btn { display: none; gap: 3px; }
+#ctl3d .fcp-btn-row { display: flex; gap: 3px; }
+#ctl3d .fcp-btn-row .sim-btn { flex: 1; width: auto; padding: 5px 0; }
+#ctl3d .fcp-btn-row .sim-btn.on { color: #ffb000; border-color: #ffb000; }
+#ctl3d .fcp-btn-row .sim-btn.dim { opacity: 0.45; }
+/* 3D 화면의 FCP — 왼쪽 아래 한 창 */
+.fcp3d { display: none; position: absolute; bottom: 0; z-index: 802;   /* 크기는 04-map.js _fcpFit(너비 ≤ 1/2 · 높이 ≤ 45%) */
+         background: rgba(10,12,15,0.92); border: 2px solid #1d232b; border-radius: 10px 10px 0 0;
+         box-shadow: 0 0 10px rgba(0,0,0,0.6); overflow: hidden; box-sizing: border-box; }
+.fcp3d.show { display: block; }
+.fcp3d-l { left: 0; } .fcp3d-r { right: 0; }
+.fcp3d .fcp3d-in { position: absolute; top: 0; bottom: auto; left: auto; right: auto; width: max-content; padding: 2px 4px; border-top: none; background: transparent; }
+.fcp3d-l .fcp3d-in { left: 0; transform-origin: top left; }
+.fcp3d-r .fcp3d-in { right: 0; transform-origin: top right; }
+.fcp3d .ctrl-sub-row { flex-wrap: nowrap; }
+.fcp3d .ctrl-sub-row > #pfd-sk { flex: 1 1 100%; min-width: 0; }   /* 소프트키 줄은 FCP 패널 폭에 맞춘다 */
+#ctl3d #chin-btn.show { display: flex; }
+#ctl3d #chin-btn .sim-btn { flex: 1; width: auto; padding: 5px 0; font-size: 10px; }
+#ctl3d #chin-btn .sim-btn.on { color: #00e5ff; border-color: #00e5ff; }
+#ctl3d #chin-btn .sim-btn:not(.on) { color: #777; border-color: #444; }
+#ctl3d #ext-btn { display: none; }
+#ctl3d #ext-btn.show { display: block; }
+#ctl3d #extcam-3d { display: none; flex-direction: column; gap: 3px; width: 100%; }
+#ctl3d #extcam-3d.show { display: flex; }
+#extcam-3d .extcam-row { display: flex; gap: 3px; }
+#ctl3d #extcam-3d .extcam-row .sim-btn { flex: 1; width: auto; padding: 4px 0; font-size: 11px; }
+#extcam-info { text-align: center; font: bold 9px 'Helvetica Neue', Arial, sans-serif; color: #00e5ff;
+               background: rgba(0,0,0,0.7); border-radius: 3px; padding: 2px 0; }
+/* SIM 이 켜지면 축척과 우하단 3D 확대·기울기 버튼을 감춘다 */
+#map3d.sim3d .vfr-scale, #map3d.sim3d .maplibregl-ctrl-bottom-right,
+#map3d.sim3d .maplibregl-ctrl-bottom-left, #map3d.sim3d #tilt-ctrl { display: none !important; }
+/* 3D 를 지도 위에 겹쳐 쓰면 3D 쪽 버튼만 둔다 */
+#map-wrap.map3d-on #hdgref-map { display: none; }
+/* When 3D is on, hide the 2D Leaflet map so its panes never paint through */
+#map-wrap.map3d-on #map { visibility: hidden; }
 #layer-btn-3d { background: rgba(0,10,30,0.82); border: 1px solid #333; color: #aaa; }
 #layer-btn-3d.active { background: rgba(0,30,80,0.92); border-color: #4488ff; color: #88ccff; box-shadow: 0 0 8px rgba(68,136,255,0.4); }
 #follow-btn.active { background: rgba(60,30,0,0.92); border-color: #ffaa00; color: #ffcc44; box-shadow: 0 0 8px rgba(255,170,0,0.4); }
 #tilt-ctrl {
-  position: absolute; bottom: 54px; right: 46px; z-index: 900;
+  position: absolute; bottom: 118px; left: 48px; right: auto; z-index: 900;   /* 확대·나침반 버튼 오른쪽, 축척 위 */
   display: none; flex-direction: column; gap: 0;
 }
 #tilt-ctrl.active { display: flex; }
@@ -602,8 +772,10 @@ html, body {
 /* Lift the 3D zoom/tilt controls above the bottom SHIP/sim bar */
 /* #map3d 는 높이 80%라 하단 가장자리가 이미 terrain-cut 위에 있음 → px만 올림 */
 #map3d .maplibregl-ctrl-bottom-right { bottom: 44px; }
-/* 좌하단 축척은 좌표창(20%+44px) 위에 배치 */
-#map3d .maplibregl-ctrl-bottom-left { bottom: 62px; }
+/* 좌하단: 축척(bottom 62px) 바로 위에 확대·나침반 버튼 */
+#map3d .maplibregl-ctrl-bottom-left { bottom: 108px; }
+/* CHIN 창이 아래 모서리를 덮으므로 3D 확대·기울기 버튼을 그 위로 올린다 */
+#map3d.chin-on .maplibregl-ctrl-bottom-right { bottom: calc(100% * 2 / 9 + 8px); }
 /* 3D 축척(.vfr-scale)은 #map3d에 직접 절대배치(left:10px, bottom:62px).
    maplibre 기본값이 섞이지 않도록 박스 스타일을 2D와 동일하게 명시 */
 #map3d .vfr-scale {
@@ -723,6 +895,8 @@ body.solo-mode #solo-bar { display: none !important; }
 }
 #solo-half-btn:active { background: #1a3a5a; color: #fff; }
 body.solo-mode #solo-half-btn.show { display: block; }
+/* 3D 단독 — 오른쪽 위는 3D 버튼(화질·CHIN·EXT·FLY·SOUND·MG/DG) 자리라 위 가운데에 띄운다 */
+body.solo-mode #solo-half-btn.show.m3d { top: calc(env(safe-area-inset-top) + 8px); right: auto; left: 50%; transform: translateX(-50%); }
 /* Solo mode: one panel fills everything */
 body.solo-mode #left-panel,
 body.solo-mode #right-panel {
@@ -839,6 +1013,71 @@ body.solo-mode .solo-panel-visible {
 #fdr-timeline { display: none; margin-top: 5px; }
 #fdr-timeline input[type=range] { width: 100%; accent-color: #4488ff; }
 /* ── Map top button bar ── */
+/* 3D 화면에 겹쳐 띄우는 계기 — 3D 화면 왼쪽 위(가로 1/4 · 높이 3/5). 좁은 창에서는 읽을 만큼은
+   키우되(가로 300px) 오른쪽 3D 버튼 줄(화질·FLY·SOUND·계기·MG/DG)은 가리지 않는다.
+   FCP 없이 계기만 — 비행에 몰입하도록. 3D 창의 '계기' 버튼으로 켜고 끈다(07-sim.js pfdOverlayDraw).
+   지도를 끌거나 확대하는 손이 막히지 않게 눌림은 3D 지도로 흘려보낸다 */
+#pfd-ov { display: none; position: absolute; left: 8px; top: 46px; width: 25%; height: 60%;
+          min-width: min(300px, calc(100% - 120px)); min-height: min(360px, 85%);
+          z-index: 950; background: #000; border: 1px solid #333; border-radius: 4px;
+          overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.6); pointer-events: none; }
+#pfd-ov.show { display: block; }
+#pfd-ov canvas { display: block; width: 100%; height: 100%; }
+/* 3D 가 제 창(3D 탭 · 3D 단독) — 툴바가 없으므로 위에 붙인다 */
+#map3d-wrap > #pfd-ov { top: 8px; }
+/* 3D 단독 화면의 CDU — 3D 버튼 줄(오른쪽 8px · 너비 96px) 바로 왼쪽, 높이는 계기 칸과 같고 너비는 CDU 비율 */
+#cdu-ov { display: none; position: absolute; right: 112px; top: 8px; height: 60%; width: auto;
+          aspect-ratio: 354 / 567;                 /* 높이만 계기 칸에 맞추고 너비는 CDU 비율대로 — 좌우 빈 여백 없이 */
+          min-height: min(380px, 85%);
+          z-index: 950; background: #000; border: 1px solid #333; border-radius: 4px;
+          overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.6); }
+#cdu-ov.show { display: block; }
+#cdu-ov > #cdu-wrap, #cdu-ov > #cdu-wrap.page-hidden,
+#cdu-ov > #fp-wrap, #cdu-ov > #fp-wrap.page-hidden { display: block !important; position: absolute; inset: 0; width: auto; height: auto; }
+#ctl3d #cduov-btn.on { color: #00e5ff; border-color: #00e5ff; }
+/* 3D 단독 화면의 MAP — 계기 칸과 같은 크기, CDU 칸(또는 3D 버튼 줄) 바로 왼쪽(자리는 07-sim.js 가 잰다) */
+#map-ov { display: none; position: absolute; right: 112px; top: 8px; width: 25%; height: 60%;
+          min-width: min(300px, calc(100% - 120px)); min-height: min(360px, 85%);
+          z-index: 950; background: #000; border: 1px solid #333; border-radius: 4px;
+          overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.6); }
+#map-ov.show { display: block; }
+#map-ov > #map-wrap, #map-ov > #map-wrap.page-hidden { display: block !important; position: absolute; inset: 0; width: auto; height: auto; }
+#ctl3d #mapov-btn.on { color: #00e5ff; border-color: #00e5ff; }
+#ctl3d #vstick-btn.on { color: #ffb000; border-color: #ffb000; }
+#ctl3d #vstick-btn.dim { opacity: 0.45; }
+#ctl3d #gyro-btn.on, #ctl3d #gyro-align-btn.on { color: #ffb000; border-color: #ffb000; }
+#ctl3d #gyro-btn.dim { opacity: 0.45; }
+/* 화면 조종간 — R CHIN 창 자리(오른쪽 아래, 너비 1/3) */
+#vstick { display: none; position: absolute; right: 0; bottom: 0; width: calc((100% - 18px) / 3);
+          height: max(calc(100% * 2 / 9), 170px); z-index: 803; box-sizing: border-box; padding: 10px 12px 8px;
+          background: rgba(10,12,15,0.82); border: 2px solid #1d232b; border-radius: 10px 10px 0 0;
+          gap: 12px; align-items: stretch; touch-action: none; user-select: none; -webkit-user-select: none; }
+#vstick.show { display: flex; }
+/* 조종간이 떠 있으면 오른쪽 3D 버튼 줄은 그 위에서 끝나고 스크롤된다 */
+#map3d.vstick-on #ctl3d { max-height: calc(100% - max(calc(100% * 2 / 9), 170px) - 24px); }
+/* 컬렉티브 — 왼쪽 아래 끝(L CHIN 창 왼쪽 가장자리 위) */
+#vstick-coll { display: none; position: absolute; left: 0; bottom: 0; width: 84px; height: max(calc(100% * 2 / 9), 170px);
+               z-index: 803; box-sizing: border-box; padding: 10px 10px 8px; background: rgba(10,12,15,0.82);
+               border: 2px solid #1d232b; border-radius: 10px 10px 0 0; touch-action: none; user-select: none; -webkit-user-select: none; }
+#vstick-coll.show { display: flex; }
+#vstick-coll .vs-coll { flex: 1 1 auto; }
+/* 조종간이 떠 있으면 FCP 창은 컬렉티브 오른쪽으로 비킨다 */
+#map3d.vstick-on .fcp3d-l { left: 88px; }
+#vstick .vs-track, #vstick .vs-cyc, #vstick-coll .vs-track { position: relative; background: #11161c; border: 1px solid #2f3a46; border-radius: 8px; touch-action: none; }
+#vstick .vs-ped { flex: 1 1 auto; align-self: center; height: 34px; }
+#vstick .vs-cyc { flex: 0 0 auto; aspect-ratio: 1; height: 100%; border-radius: 50%; }
+#vstick .vs-ring { position: absolute; inset: 22%; border: 1px dashed #2f3a46; border-radius: 50%; pointer-events: none; }
+#vstick .vs-knob, #vstick-coll .vs-knob { position: absolute; width: 18px; height: 18px; border-radius: 50%; background: #9aa4ae;
+                   border: 2px solid #e8edf2; box-sizing: border-box; pointer-events: none; }
+#vstick-coll .vs-coll .vs-knob { left: calc(50% - 9px); width: 18px; border-radius: 4px; }
+#vstick .vs-ped .vs-knob { top: calc(50% - 9px); }
+#vstick .vs-cyc .vs-knob { width: 28px; height: 28px; background: #00e5ff; }
+#vstick .held .vs-knob, #vstick-coll .held .vs-knob { background: #ffb000; }
+#vstick .vs-lbl, #vstick-coll .vs-lbl { position: absolute; left: 0; right: 0; bottom: -2px; text-align: center; font: 600 9px Helvetica, Arial, sans-serif;
+                  color: #8a96a3; pointer-events: none; }
+#vstick-coll .vs-coll .vs-lbl { bottom: auto; top: 2px; font-size: 8px; }
+#ctl3d #mapov-btn.dim { opacity: 0.45; }
+#ctl3d #cduov-btn.dim { opacity: 0.45; }
 #map-top-bar {
   position: absolute; top: 8px; left: 8px; right: 8px; z-index: 1000;
   display: flex; gap: 4px;
@@ -919,6 +1158,10 @@ body.solo-mode .solo-panel-visible {
 #ruler-readout .rr-btns button {
   flex: 1; background: rgba(25,25,25,0.9); border: 1px solid #444; border-radius: 4px;
   color: #cfe; font-size: 10px; font-weight: bold; padding: 5px 0; cursor: pointer;
+}
+#notam-btn.active {
+  background: rgba(40,25,0,0.92); border-color: #ff9800; color: #ffb74d;
+  box-shadow: 0 0 8px rgba(255,152,0,0.4);
 }
 #fix-btn.active {
   background: rgba(0,35,40,0.92); border-color: #26c6da; color: #4dd0e1;
@@ -1055,6 +1298,15 @@ body.solo-mode .solo-panel-visible {
 }
 #map-wrap.tcut-off #ship-menu { bottom: 40px; }
 #ship-menu.open { display: flex; }
+/* 3D 창의 SHIP — 3D 가 제 창을 쓸 때만 보인다(2D 위에 겹쳐 쓸 때는 지도 아래 막대의 SHIP 을 쓴다).
+   메뉴·설정창은 이 창으로 옮겨 와 열린다(shipUiHome). */
+#ship3d-btn { display: none; position: absolute; top: 8px; left: 8px; z-index: 900; padding: 5px 10px; }
+#map3d.panel-3d #ship3d-btn { display: block; }
+/* 3D 창 — 확장 메뉴처럼 펼친다: 오른쪽 버튼 묶음 | 그 왼쪽에 SHIP 메뉴 | 다시 그 왼쪽에 SHIP CONTROL(설정창).
+   버튼 묶음(폭 96 + 여백 8)과 겹치지 않는다 */
+#map3d #ship-menu { top: 40px; bottom: auto; left: auto; right: 112px; width: 100px; }
+#map3d #ship-panel { top: 40px; right: 220px; bottom: auto; }
+#map-wrap #map3d #ship-menu, #map-wrap #map3d #ship-panel { top: 80px; }
 #ship-menu button {
   background: rgba(20,20,20,0.9); border: 1px solid #444; border-radius: 4px;
   color: #cfe; font-size: 11px; font-weight: bold; padding: 7px 12px;
@@ -1532,8 +1784,9 @@ body.solo-mode .solo-panel-visible {
         }
 
         /* Titles and Sub-headers */
-        .mode-title-bar { background: linear-gradient(to bottom, #555, #111);
-            text-align: center; padding: 3px; font-size: 9px; font-weight: bold; border-bottom: 1px solid #000; color: #eee;
+        .mode-title-bar { background: linear-gradient(to bottom, #3a5f86 0%, #1b3654 55%, #0d1d30 100%);
+            text-align: center; padding: 3px; font-size: 10px; font-weight: bold; border-bottom: 1px solid #000; color: #e8f3ff;
+            border-radius: 0 0 12px 12px; margin: 0 18%; box-shadow: inset 0 1px 0 rgba(255,255,255,0.25), 0 1px 3px rgba(0,0,0,0.6);
         }
         .sub-header { display: flex; align-items: flex-end; padding: 4px 7px 0 7px;
             gap: 5px; background: #1a1a1a; }
@@ -1689,7 +1942,7 @@ body.solo-mode .solo-panel-visible {
 .ship-ent { background: radial-gradient(circle at 35% 35%, #0d1f4a, #060e20) !important; border-color: #3355bb !important; color: #88aaff !important; font-size: 9px !important; }
 .sim-btn.ship-active { background: #1a3050; border-color: #7ab8f5; color: #7ab8f5; }
 /* ── 야간(Night) 모드: 밝은 지도/차트를 어둡게, 붉은 딤 오버레이 ── */
-body.night-mode #map, body.night-mode #map3d { filter: brightness(0.5) contrast(1.05); }
+body.night-mode #map, body.night-mode #map3d, body.night-mode #chin-row { filter: brightness(0.5) contrast(1.05); }
 body.night-mode #pfd { filter: brightness(0.72); }
 body.night-mode #pdfViewArea, body.night-mode #cdu-wrap { filter: brightness(0.72); }
 body.night-mode::after {
@@ -1698,6 +1951,40 @@ body.night-mode::after {
 }
 
 /* ── 시작 안내 오버레이 ── */
+/* ── 시작 잠금(비밀번호) — 무엇보다 위에서 앱 전체를 덮는다 ── */
+#gate-overlay {
+  position: fixed; inset: 0; z-index: 2147483000;
+  display: flex; align-items: center; justify-content: center;
+  background: radial-gradient(circle at 50% 40%, #102030 0%, #05080c 70%);
+}
+body.gate-open #gate-overlay { display: none; }
+#gate-box {
+  display: flex; flex-direction: column; align-items: stretch; gap: 10px;
+  width: min(300px, calc(100vw - 32px)); padding: 24px 20px;
+  background: #0d151d; border: 1px solid #2a3a4a; border-radius: 10px;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.6);
+}
+#gate-box .gate-title { color: #00e5ff; font: bold 17px Helvetica, Arial, sans-serif; text-align: center; letter-spacing: 1px; }
+#gate-box .gate-sub { color: #9fb0c0; font-size: 13px; text-align: center; }
+#gate-pw {
+  font-size: 16px; padding: 10px 12px; border-radius: 6px;
+  border: 1px solid #3a4a5a; background: #05080c; color: #fff; outline: none;
+}
+#gate-pw:focus { border-color: #00e5ff; }
+#gate-ok {
+  font-size: 15px; font-weight: bold; padding: 10px; border-radius: 6px; cursor: pointer;
+  border: 1px solid #00e5ff; background: rgba(0,229,255,0.15); color: #00e5ff;
+}
+#gate-msg { min-height: 16px; color: #ff6666; font-size: 12px; text-align: center; }
+#gate-mode { display: none; flex-direction: column; gap: 10px; }
+#gate-box.choose > :not(#gate-mode):not(.gate-title) { display: none; }
+#gate-box.choose #gate-mode { display: flex; }
+.gate-mode-btn { display: flex; flex-direction: column; gap: 3px; align-items: center; padding: 12px 10px; border-radius: 8px; cursor: pointer;
+                 border: 1px solid #2f5a6a; background: rgba(0,229,255,0.08); color: #e8f6ff; font-size: 15px; }
+.gate-mode-btn span { font-size: 11px; color: #8fa6b6; }
+.gate-mode-btn:hover, .gate-mode-btn:focus { border-color: #00e5ff; background: rgba(0,229,255,0.18); outline: none; }
+#gate-box.shake { animation: gate-shake 0.35s; }
+@keyframes gate-shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-8px); } 75% { transform: translateX(8px); } }
 #help-overlay {
   position: fixed; inset: 0; z-index: 5000;
   background: rgba(0,0,0,0.72);
@@ -1743,15 +2030,284 @@ body.night-mode::after {
   font-size: 12px; font-weight: bold; padding: 7px 20px; border-radius: 5px; cursor: pointer;
 }
 #help-foot button:active { background: #1e4a75; color: #fff; }
+
+/* ── UPPER CONSOLE(상부 콘솔 · js/17-upper.js) — 1000×950 설계 크기를 창에 맞춰 통째로 줄이고 키운다 ── */
+#ovhd-wrap, #lcon-wrap { position: relative; overflow: hidden; background: #15171a; }
+/* SYSTEM 창(js/18-system.js) — 캔버스 하나에 MFD 계통 화면 */
+#sysp-wrap { position: relative; overflow: hidden; background: #000; }
+#sysp-wrap canvas { display: block; }
+#ovhd-stage, .ov-stage { position: absolute; left: 0; top: 0; transform-origin: 0 0; user-select: none; -webkit-user-select: none; touch-action: none;
+  font-family: 'Helvetica Neue', Arial, sans-serif; color: #eef0f2; }
+.ov-reset-btn { position: absolute; right: 6px; bottom: 6px; z-index: 2; background: #22262b; color: #9ab; border: 1px solid #3a4250;
+  border-radius: 4px; font-size: 10px; padding: 3px 8px; cursor: pointer; }
+.ov-plate { position: absolute; background: linear-gradient(#35383c, #2a2d30); border: 2px solid #111; border-radius: 6px;
+  box-shadow: inset 0 0 0 1px #474b50, 0 2px 6px #000; }
+.ov-screw { position: absolute; width: 12px; height: 12px; border-radius: 50%; background: radial-gradient(circle at 40% 35%, #777, #222);
+  box-shadow: inset 0 0 0 1px #111; }
+.ov-screw::after { content: ''; position: absolute; left: 2px; right: 2px; top: 5px; height: 2px; background: #111; }
+.ov-screw.a { left: 8px; top: 8px; } .ov-screw.b { right: 8px; top: 8px; } .ov-screw.c { left: 8px; bottom: 8px; } .ov-screw.d { right: 8px; bottom: 8px; }
+.ov-plate > div { position: absolute; width: 0; height: 0; }
+.ov-title, .ov-pl, .ov-rl, .ov-lbl { position: absolute; left: 0; transform: translateX(-50%); white-space: nowrap; text-align: center;
+  font-weight: bold; letter-spacing: .3px; pointer-events: none; }
+.ov-title { bottom: 42px; font-size: 13px; line-height: 1.05; }
+.ov-sub { font-size: 9px; font-weight: bold; }
+.ov-pl { font-size: 10px; }
+.ov-pl.top { top: -40px; } .ov-pl.bot { top: 27px; }
+.ov-pl.side { left: -18px; top: -6px; transform: translateX(-100%); }
+.ov-lbl { transform: translate(-50%, -50%); font-size: 13px; } .ov-lbl.sm { font-size: 10px; }
+.ov-br { height: 8px !important; border: 2px solid #dde; border-bottom: none; }
+.ov-br span { position: absolute; left: 50%; top: -9px; transform: translateX(-50%); background: #32353a; padding: 0 6px;
+  font-size: 13px; font-weight: bold; white-space: nowrap; }
+/* 토글 */
+.ov-tg, .ov-guard, .ov-rot, .ov-pb, .ov-th { cursor: pointer; }
+.ov-bez { position: absolute; left: -12px; top: -12px; width: 24px; height: 24px; border-radius: 50%;
+  background: radial-gradient(circle, #6a6d70 30%, #2a2c2e 70%); box-shadow: 0 0 0 2px #0e0f10, 0 2px 3px #000; }
+.ov-lever { position: absolute; left: 7px; width: 10px; height: 19px; border-radius: 5px;
+  background: linear-gradient(90deg, #8d9095, #f2f3f4 45%, #9a9da1); box-shadow: 0 2px 3px rgba(0,0,0,.6); transition: all .08s; }
+[data-p="up"] .ov-lever { bottom: 10px; }
+[data-p="dn"] .ov-lever { top: 10px; }
+[data-p="mid"] .ov-lever { top: 5px; left: 5px; width: 14px; height: 14px; border-radius: 50%; }
+.ov-tg.red .ov-lever { background: linear-gradient(90deg, #5c1010, #d43a32 45%, #6b1512); }
+.ov-tg.big .ov-lever { left: 6px; width: 12px; height: 22px; }
+.ov-tg.paddle .ov-lever { left: 5px; width: 14px; border-radius: 2px; background: linear-gradient(90deg, #6a5e4c, #c9b89a 45%, #6a5e4c); }
+.ov-tg.tiny .ov-title { font-size: 11px; }
+/* 덮개 스위치 */
+.ov-cover { z-index: 2; position: absolute; left: -24px; top: -66px; width: 48px; height: 118px; border-radius: 6px 6px 4px 4px;
+  background: linear-gradient(90deg, #6d0f0f, #d0302a 45%, #7a1210); box-shadow: 0 4px 6px #000; transform-origin: 50% 0;
+  transition: transform .15s; display: flex; align-items: flex-end; justify-content: center; cursor: pointer; }
+.ov-cover b { color: #f4f4f4; font-size: 40px; line-height: 1; margin-bottom: 14px; }
+.ov-guard.open .ov-cover { transform: translateY(-28px) scaleY(.32); }
+.ov-guard .ov-title { bottom: 74px; }
+.ov-guard.hazard .ov-cover { left: -46px; top: -24px; width: 92px; height: 56px; border-radius: 3px;
+  background: repeating-linear-gradient(135deg, #e8b012 0 9px, #1a1a1a 9px 18px); border: 3px solid #e8b012; }
+.ov-guard.hazard .ov-title { bottom: 30px; font-size: 11px; color: #111; background: #e8b012; padding: 1px 4px; z-index: 1; }
+.ov-guard.hazard.open .ov-cover { transform: translateY(-34px) scaleY(.25); }
+/* 노브 */
+.ov-knob { position: absolute; left: -30px; top: -30px; width: 60px; height: 60px; border-radius: 50%;
+  background: radial-gradient(circle at 42% 35%, #e4e6e8, #9a9ea2 55%, #5a5d60); box-shadow: 0 4px 8px #000, 0 0 0 3px #1c1d1f;
+  transition: transform .12s; }
+.ov-ptr { position: absolute; left: 27px; top: 3px; width: 5px; height: 27px; border-radius: 3px; background: #fbfbfb; box-shadow: 0 0 0 1px #333; }
+.ov-rot.sm .ov-knob { left: -22px; top: -22px; width: 44px; height: 44px; }
+.ov-rot.sm .ov-ptr { left: 19px; height: 20px; }
+.ov-rot.dim .ov-knob { box-shadow: 0 4px 8px #000, 0 0 0 3px #1c1d1f, 0 0 0 6px #d8d8d8; }
+.ov-rl { transform: translate(-50%, -50%); font-size: 10.5px; pointer-events: auto; cursor: pointer; padding: 5px 6px; border-radius: 4px; }
+/* 터치 영역 — 글자 쪽을 누르면 그 위치로(17-upper.js _ovhdZones). 누르는 동안 살짝 밝힌다 · ZONES 로 테두리를 본다 */
+.ov-hit { position: absolute; border-radius: 4px; cursor: pointer; z-index: 1; -webkit-tap-highlight-color: transparent; }
+.ov-hit:active, .ov-rl:active { background: rgba(255, 255, 255, 0.10); }
+.ov-zones .ov-hit { outline: 1px dashed rgba(0, 229, 255, 0.75); background: rgba(0, 229, 255, 0.06); }
+.ov-zones .ov-rl { outline: 1px dashed rgba(255, 210, 0, 0.8); }
+.ov-zones-btn { position: absolute; right: 62px; bottom: 6px; z-index: 2; background: #22262b; color: #9ab; border: 1px solid #3a4250;
+  border-radius: 4px; font-size: 10px; padding: 3px 8px; cursor: pointer; }
+.ov-zones-btn.on { color: #00e5ff; border-color: #00e5ff; }
+.ov-rot .ov-title { bottom: 72px; }
+.ov-rot.sm .ov-title { bottom: 56px; }
+/* 누름 버튼 · T-핸들 */
+.ov-btn { position: absolute; left: -13px; top: -13px; width: 26px; height: 26px; border-radius: 4px;
+  background: linear-gradient(#f4f2ea, #c9c6bc); box-shadow: 0 3px 0 #77756d, 0 4px 5px #000; transition: all .05s; }
+.ov-lv .ov-slot { position: absolute; left: -9px; top: -15px; width: 18px; border-radius: 9px; background: #0d0e10; box-shadow: inset 0 0 0 2px #1d1f22; }
+.ov-lvh { position: absolute; left: -24px; width: 48px; height: 36px; border-radius: 7px; transition: top .12s;
+  background: linear-gradient(#e6e8ea, #9fa3a7 55%, #6e7276); box-shadow: 0 4px 6px #000; }
+.ov-lvh i { position: absolute; left: 6px; right: 6px; top: 16px; height: 4px; background: #333; border-radius: 2px; }
+.ov-lv[data-p="OFF"] .ov-lvh { background: linear-gradient(#ffb3a8, #d9473a 55%, #8a2018); }
+/* 하부 콘솔 조작(19-lower.js) — 눌러 두는 사각 버튼 · 키 · 표시등 · 표시창 */
+.ov-lpb, .ov-key { cursor: pointer; }
+.ov-sq { position: absolute; display: flex; align-items: center; justify-content: center; text-align: center; box-sizing: border-box;
+  border-radius: 4px; font-weight: bold; font-size: 11px; line-height: 1.1; color: #6a6e72; pointer-events: none;
+  background: linear-gradient(#2c2f33, #1c1e21); box-shadow: 0 0 0 2px #0e0f10, 0 3px 4px #000, inset 0 0 0 1px #4a4f55; transition: all .06s; }
+.ov-lpb.in .ov-sq { color: #ffb000; text-shadow: 0 0 6px rgba(255,176,0,.7); box-shadow: 0 0 0 2px #0e0f10, 0 1px 2px #000, inset 0 0 0 1px #806020; transform: translateY(1px); }
+.ov-key .ov-sq { background: linear-gradient(#e9e7df, #bdbab2); color: #222; box-shadow: 0 3px 0 #77756d, 0 4px 5px #000; }
+.ov-key.pressed .ov-sq { transform: translateY(2px); box-shadow: 0 1px 0 #77756d; }
+.ov-lamp .ov-sq { font-size: 10px; color: #3c4a3c; background: #111; }
+.ov-lamp.on .ov-sq { color: #001a00; background: #3ad13a; box-shadow: 0 0 8px #3ad13a, 0 0 0 2px #0e0f10; }
+/* 절차 훈련판(js/00-edition.js · Flightsimulator) — SIM 모드와 그 조작 버튼을 감춘다 */
+html.ed-proc #sim3d-btn, html.ed-proc #simmap-btn, html.ed-proc #rotor-3d, html.ed-proc #ase-3d, html.ed-proc #eng-3d,
+html.ed-proc #snd-btn, html.ed-proc #vstick-btn, html.ed-proc #gyro-btn, html.ed-proc #gyro-align-btn,
+html.ed-proc #chin-btn, html.ed-proc #ext-btn, html.ed-proc #extcam-3d, html.ed-proc #gate-mode-sim { display: none !important; }
+/* CDU 실기 GTC 화면(18-system.js — Fuel Configuration · Video Settings) */
+/* 칸이 넘치면 위아래로 밀어 본다(터치 · 휠) — 스크롤 막대를 보여 넘친 칸이 있음을 알린다 */
+#mainContentArea { touch-action: pan-y; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
+#mainContentArea::-webkit-scrollbar { width: 6px; }
+#mainContentArea::-webkit-scrollbar-thumb { background: #3f5b70; border-radius: 3px; }
+#mainContentArea::-webkit-scrollbar-track { background: transparent; }
+.gtc-page .nav-btn { flex: 1; width: auto; max-width: none; height: 32px; min-height: 32px; font-size: 12px; padding: 2px 4px; white-space: nowrap; }
+.gtc-sim { padding: 8px 6px 4px; color: #cde; font-size: 12px; border-top: 1px solid #1e2a33; margin-top: 10px; }
+.gtc-page { position: relative; padding: 8px 8px 10px; color: #fff; font-family: 'Helvetica Neue', Arial, sans-serif; }
+.gtc-head { margin: 0 auto 10px; width: fit-content; padding: 2px 18px; border-radius: 0 0 10px 10px; background: linear-gradient(#1d3b52, #0d2234);
+  color: #9fe7ff; font-weight: bold; font-size: 13px; letter-spacing: .3px; }
+.gtc-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.gtc-grid.three { grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
+.gtc-btn { min-height: 62px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; cursor: pointer; text-align: center;
+  background: linear-gradient(#262b30, #08090a 40%); border: 1px solid #3a4652; border-top: 3px solid #4f6a82; border-radius: 4px;
+  box-shadow: 0 2px 4px #000; padding: 6px 4px; user-select: none; }
+.gtc-btn:active { filter: brightness(1.4); }
+.gtc-t { font-size: 13px; font-weight: bold; color: #fff; }
+.gtc-v { font-size: 16px; font-weight: bold; color: #4fe3d0; letter-spacing: .5px; }
+.gtc-bar { width: 60%; height: 7px; border-radius: 4px; background: #555; box-shadow: inset 0 1px 2px #000; }
+.gtc-bar.on { background: linear-gradient(#b7f27a, #6ccf2a); }
+.gtc-rows { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; }
+.gtc-row { display: grid; grid-template-columns: 78px 34px 1fr 34px; gap: 4px; align-items: stretch; padding: 4px; border: 1px solid #3a4652; border-radius: 4px; background: #0b0d0f; }
+.gtc-rl { font-size: 12px; font-weight: bold; display: flex; flex-direction: column; justify-content: center; }
+.gtc-rl b { font-size: 12px; color: #fff; margin-top: 2px; }
+.gtc-pm { display: flex; align-items: center; justify-content: center; font-size: 22px; font-weight: bold; color: #cfd8df; cursor: pointer;
+  background: linear-gradient(#2a3036, #0b0d0f); border: 1px solid #3a4652; border-top: 2px solid #4f6a82; border-radius: 3px; user-select: none; }
+.gtc-pm:active { filter: brightness(1.5); }
+.gtc-slide { position: relative; background: #050607; border: 1px solid #2a323a; border-radius: 3px; overflow: hidden; min-height: 34px; }
+.gtc-slide i { position: absolute; left: 0; bottom: 0; height: 100%; background: linear-gradient(to top right, #1d6fa8 50%, transparent 50%); }
+.gtc-slide u { position: absolute; top: 2px; bottom: 2px; width: 8px; margin-left: -4px; border-radius: 2px; background: linear-gradient(90deg, #2f8f63, #6fe3a7, #2f8f63); }
+.gtc-pick { position: absolute; left: 50%; top: 40px; transform: translateX(-30%); width: 42%; display: flex; flex-direction: column; gap: 4px;
+  padding: 4px; background: #000; border: 2px solid #5b6b78; border-radius: 4px; box-shadow: 0 6px 16px #000; z-index: 5; }
+.gtc-opt { min-height: 40px; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 15px; cursor: pointer;
+  background: linear-gradient(#262b30, #08090a 40%); border: 1px solid #3a4652; border-top: 3px solid #4f6a82; border-radius: 3px; }
+.gtc-opt.sel { color: #4fe3d0; }
+/* 하부 콘솔 전원 없음(19-lower.js lconPowerSync) — 버튼 글씨 · 표시등이 꺼진다 */
+.lcon-nopwr .ov-lpb.in .ov-sq { color: #555 !important; text-shadow: none !important; }
+.lcon-nopwr .ov-lamp.on .ov-sq { color: #3c4a3c !important; background: #111 !important; box-shadow: none !important; }
+.lcon-nopwr .npx-led { background: radial-gradient(circle at 40% 35%, #c7c9cc, #6c6f73) !important; box-shadow: 0 0 0 2px #222, 0 0 0 3px #888 !important; }
+/* NAT NPX138 FM TRANSCEIVER(js/22-npx138.js) — 하부 콘솔 ⑧ */
+#npx { background: linear-gradient(#2a2c2f, #1b1c1f); border-radius: 4px; box-shadow: inset 0 0 0 2px #0c0d0f, inset 0 0 0 3px #3a3e44; color: #e8e8e8; font-family: Arial, sans-serif; }
+.npx-title { position: absolute; left: 14px; width: 290px; top: 1px; text-align: center; font: bold 9px Arial; letter-spacing: .5px; }
+.npx-lcd { position: absolute; left: 14px; top: 12px; width: 290px; height: 50px; box-sizing: border-box; padding: 2px 5px;
+  background: #0a1a0c; border: 3px solid #08090a; border-radius: 3px; box-shadow: inset 0 0 12px #000;
+  color: #66e07a; font: bold 19px 'Courier New', monospace; line-height: 22px; opacity: var(--npx-dim, 1); text-shadow: 0 0 3px rgba(102,224,122,.5); }
+.npx-lcd.off { color: transparent; text-shadow: none; }
+.npx-row { display: flex; white-space: pre; }
+.npx-row span { width: 17.4px; text-align: center; }
+.npx-row span.npx-cur { animation: npxBlink .8s steps(1) infinite; }
+@keyframes npxBlink { 50% { color: transparent; text-shadow: none; } }
+.npx-g { font-style: normal; font-size: 9px; line-height: 9px; display: inline-block; width: 10px; word-break: break-all; vertical-align: middle; }
+.npx-l { position: absolute; width: 60px; text-align: center; font: bold 7.5px Arial; color: #ddd; pointer-events: none; }
+.npx-l.s { font-size: 8px; }
+#npx.edit .npx-l { opacity: .55; }
+.npx-line { position: absolute; height: 1px; background: #bbb; pointer-events: none; }
+.npx-tog, .npx-rock { position: absolute; width: 30px; height: 30px; cursor: pointer; touch-action: none; }
+.npx-rock { height: 26px; }
+.npx-tog::before { content: ''; position: absolute; left: 7px; top: 7px; width: 16px; height: 16px; border-radius: 50%;
+  background: radial-gradient(#d8dadc, #7d8085); box-shadow: 0 0 0 1px #000, 0 2px 3px #000; }
+.npx-tog b { position: absolute; left: 10px; top: 10px; width: 10px; height: 10px; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #fff, #a9adb2); box-shadow: 0 0 0 1px #333; transition: transform .08s; }
+.npx-tog[data-pos="ID"] b, .npx-tog[data-pos="CH"] b { transform: translateX(-6px); }
+.npx-tog[data-pos="TX"] b, .npx-tog[data-pos="ST"] b { transform: translateX(6px); }
+.npx-tog[data-pos="RX"] b, .npx-tog[data-pos="GDTX"] b, .npx-tog[data-pos="GD2"] b { transform: translateY(6px); }
+.npx-tog[data-pos="SCAN"] b, .npx-tog[data-pos="GD1"] b { transform: translateY(-6px); }
+.npx-rock b { position: absolute; left: 7px; top: 2px; width: 16px; height: 22px; border-radius: 8px; background: linear-gradient(90deg, #8d9095, #e9ebed 45%, #8d9095);
+  box-shadow: 0 0 0 1px #000, 0 2px 3px #000; }
+.npx-rock b::after { content: ''; position: absolute; left: 6px; top: 4px; width: 4px; height: 14px; border-left: 1px solid #555; border-right: 1px solid #555; }
+.npx-rock:active b { filter: brightness(.85); }
+.npx-sq { position: absolute; width: 26px; height: 26px; border-radius: 50%; border: 0; cursor: pointer; padding: 0;
+  background: radial-gradient(circle at 40% 35%, #fff, #c9cbce 60%, #8d9095); box-shadow: 0 0 0 1px #000, 0 3px 4px #000; }
+.npx-sq:active { transform: translateY(1px); filter: brightness(.9); }
+.npx-knob { position: absolute; width: 36px; height: 36px; border-radius: 50%; cursor: pointer; touch-action: none;
+  background: #111; box-shadow: 0 0 0 2px #050505, 0 3px 5px #000; }
+.npx-cap { position: absolute; inset: 3px; border-radius: 50%; background: radial-gradient(circle at 40% 35%, #6a6d72, #33363a); transition: transform .1s; }
+.npx-cap i { position: absolute; left: 14px; top: 1px; width: 2px; height: 7px; background: #fff; }
+.npx-cap span { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font: bold 9px Arial; color: #eee; }
+.npx-led { position: absolute; width: 14px; height: 14px; border-radius: 50%; background: radial-gradient(circle at 40% 35%, #c7c9cc, #6c6f73); box-shadow: 0 0 0 2px #222, 0 0 0 3px #888; }
+.npx-led.rx { background: radial-gradient(circle at 40% 35%, #ffe08a, #ff9d00); box-shadow: 0 0 0 2px #222, 0 0 8px #ffa000; }
+.npx-led.tx { background: radial-gradient(circle at 40% 35%, #b7ffb7, #20d020); box-shadow: 0 0 0 2px #222, 0 0 8px #30e030; }
+.npx-logo { position: absolute; left: 436px; top: 96px; font: bold italic 14px Arial; color: #eee; letter-spacing: -.5px; pointer-events: none; }
+/* Wulfsberg C-5000 CMC(js/21-c5000.js) — 하부 콘솔 ⑦ */
+.ov-html { position: absolute; }
+#c5k { background: linear-gradient(#26292d, #17191c); border-radius: 6px; box-shadow: inset 0 0 0 2px #0c0d0f, inset 0 0 0 3px #3a3e44; color: #eee; font-family: Arial, sans-serif; }
+.c5-brand { position: absolute; left: 0; right: 0; top: 4px; text-align: center; font: bold 13px Arial; letter-spacing: 4px; color: #e8e8e8; }
+.c5-lcd { position: absolute; left: 62px; top: 24px; width: 372px; height: 78px; box-sizing: border-box; padding: 8px 10px;
+  background: #061309; border: 4px solid #0b0c0d; border-radius: 3px; box-shadow: inset 0 0 14px #000;
+  color: #5cf07e; font: bold 21px 'Courier New', monospace; line-height: 29px; opacity: var(--c5-dim, 1); text-shadow: 0 0 4px rgba(92,240,126,.5); }
+.c5-lcd.off { color: transparent; text-shadow: none; }
+.c5-row { white-space: pre; display: flex; }
+.c5-row span { width: 17.6px; text-align: center; }
+.c5-row span.c5-cur { background: #5cf07e; color: #061309; text-shadow: none; }
+.c5-soft { position: absolute; left: 18px; width: 34px; height: 28px; border-radius: 4px; border: 0; cursor: pointer;
+  background: linear-gradient(#e9e7df, #bdbab2); box-shadow: 0 3px 0 #77756d, 0 4px 5px #000; }
+.c5-soft.up { top: 32px; } .c5-soft.dn { top: 68px; }
+.c5-soft:active, .c5-key:active { transform: translateY(2px); box-shadow: 0 1px 0 #77756d; }
+.c5-pad { position: absolute; left: 132px; top: 114px; width: 216px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px; }
+.c5-key { height: 37px; border: 0; border-radius: 4px; cursor: pointer; padding: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  background: linear-gradient(#e9e7df, #bdbab2); color: #222; box-shadow: 0 3px 0 #77756d, 0 4px 5px #000; line-height: 1; }
+.c5-key b { font-size: 15px; } .c5-key i { font-style: normal; font-size: 9px; font-weight: bold; margin-top: 2px; }
+.c5-tag { position: absolute; top: 112px; width: 110px; text-align: center; font: bold 11px Arial; color: #ddd; }
+.c5-tag.vol { left: 12px; } .c5-tag.sel { left: 358px; }
+.c5-knob { position: absolute; top: 128px; width: 110px; height: 110px; border-radius: 50%; cursor: pointer; touch-action: none;
+  background: repeating-conic-gradient(#2a2c30 0 6deg, #15171a 6deg 12deg); box-shadow: 0 0 0 3px #0c0d0f, 0 4px 8px #000; }
+.c5-knob.vol { left: 12px; } .c5-knob.sel { left: 358px; }
+.c5-inner { position: absolute; left: 18%; top: 18%; width: 64%; height: 64%; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  background: repeating-conic-gradient(#3a3d42 0 8deg, #26282c 8deg 16deg); box-shadow: 0 0 0 2px #0c0d0f, 0 2px 4px #000; }
+.c5-push { width: 50%; height: 50%; border-radius: 50%; background: radial-gradient(#55595f, #2a2c30); box-shadow: 0 0 0 1px #0c0d0f;
+  display: flex; align-items: center; justify-content: center; text-align: center; font: bold 7.5px Arial; color: #eee; line-height: 1.1; }
+.ov-disp { position: absolute; display: flex; align-items: center; justify-content: center; text-align: center; box-sizing: border-box;
+  background: #0b1a10; border: 3px solid #0e0f10; border-radius: 3px; box-shadow: inset 0 0 12px #000;
+  color: #59e07a; font: bold 18px 'Courier New', monospace; letter-spacing: 1px; white-space: pre; }
+.ov-pb.pressed .ov-btn { transform: translateY(2px); box-shadow: 0 1px 0 #77756d; }
+.ov-pb .ov-title { bottom: 22px; }
+.ov-thbar { position: absolute; left: -78px; top: -22px; width: 156px; height: 44px; border-radius: 22px;
+  background: linear-gradient(#9da1a5, #f2f3f4 30%, #d0d3d6 65%, #7d8085); box-shadow: 0 4px 8px #000;
+  display: flex; align-items: center; justify-content: space-between; padding: 0 6px; box-sizing: border-box; transition: transform .12s; }
+.ov-thbar::before { content: ''; position: absolute; left: 58px; top: -40px; width: 40px; height: 44px; background: #16171a; border-radius: 4px 4px 0 0; z-index: -1; }
+.ov-thbar span { background: #121316; color: #ff3b30; font-weight: bold; font-size: 26px; padding: 1px 12px; border-radius: 3px; letter-spacing: 1px; }
+.ov-thbar i { width: 14px; height: 30px; border-radius: 5px; background: #5a1515; box-shadow: inset 0 0 3px #000; }
+.ov-th .ov-title { bottom: 58px; }
+.ov-th.pulled .ov-thbar { transform: translateY(18px) scale(1.04); }
+.ov-th.pulled .ov-thbar i { background: #ff3b30; box-shadow: 0 0 10px #ff3b30; }
+
+/* SIM Mode 창 배치판(07-sim.js simLayoutShow) · 화면 하나만 담는 그릇(본 창에서는 숨긴다) */
+.po-screen-host { display: none; }
+#simlay { display: none; position: fixed; inset: 0; z-index: 30000; background: rgba(0,0,0,0.72); align-items: center; justify-content: center; }
+#simlay.show { display: flex; }
+.simlay-box { background: #11161c; border: 1px solid #2c3a48; border-radius: 10px; padding: 18px 20px; width: min(560px, 92vw); color: #cde; font-family: 'Helvetica Neue', Arial, sans-serif; }
+.simlay-title { font-size: 17px; font-weight: bold; color: #00e5ff; margin-bottom: 6px; }
+.simlay-note { font-size: 12px; color: #8fa6b6; line-height: 1.5; margin-bottom: 12px; }
+.simlay-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.simlay-btn { display: flex; flex-direction: column; gap: 3px; align-items: center; padding: 12px 8px; border-radius: 8px; cursor: pointer;
+  background: #1a2129; border: 1px solid #34465a; color: #e8f2f8; font-size: 14px; }
+.simlay-btn span { font-size: 10px; color: #8fa6b6; }
+.simlay-btn.on { border-color: #3ad13a; background: rgba(58,209,58,0.12); }
+.simlay-btn.on span { color: #3ad13a; }
+.simlay-foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+.simlay-sm { background: #22262b; color: #9ab; border: 1px solid #3a4250; border-radius: 5px; padding: 6px 12px; cursor: pointer; font-size: 12px; }
+
+/* Simple mode(07-sim.js) — 위 막대에서 고른 창 하나만 화면 가득 */
+#simple-bar, #simple-view { display: none; }
+body.simple-mode #app, body.simple-mode #solo-bar, body.simple-mode #solo-half-btn { display: none !important; }
+/* iPad·iPhone 홈 화면 앱은 상태바(시계·배터리)가 화면 위에 겹친다(black-translucent) — 그만큼 내려 둔다 */
+body.simple-mode #simple-bar { display: flex; position: fixed; left: 0; right: 0; top: 0; height: calc(40px + env(safe-area-inset-top)); z-index: 20000;
+  padding-top: env(safe-area-inset-top); padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); box-sizing: border-box;
+  background: #0b0e12; border-bottom: 1px solid #263240; }
+#simple-bar button { flex: 1 1 0; min-width: 0; background: transparent; border: none; border-right: 1px solid #1e2732; color: #9fb4c6;
+  font: bold 12px 'Helvetica Neue', Arial, sans-serif; letter-spacing: 0.5px; cursor: pointer; }
+#simple-bar button.on { color: #00e5ff; background: rgba(0,229,255,0.10); box-shadow: inset 0 -3px 0 #00e5ff; }
+#simple-bar button.simple-exit { flex: 0 0 auto; padding: 0 12px; color: #ffb000; border-right: none; }
+body.simple-mode #simple-view { display: flex; position: fixed; left: 0; right: 0; top: calc(40px + env(safe-area-inset-top)); bottom: 0; background: #000; }
+#simple-host { flex: 1 1 0; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+#simple-host > .page-content, #simple-host > #pfd-wrap { flex: 1 1 0; }
+#pfdov-size { position: static; align-items: center; }
+#pfdov-size span { flex: 0 0 auto; min-width: 34px; text-align: center; color: #9fb4c6; font: bold 10px 'Helvetica Neue', Arial, sans-serif; }
 </style>
 </head>
 <body>
+<!-- 시작 잠금 — 비밀번호를 넣어야 시뮬을 쓸 수 있다(js/00-gate.js). 다른 무엇보다 먼저 덮는다 -->
+<div id="gate-overlay">
+  <form id="gate-box" autocomplete="off">
+    <div class="gate-title">FLIGHT SIMULATOR</div>
+    <div class="gate-sub">비밀번호를 입력하세요</div>
+    <input id="gate-pw" type="password" autocomplete="current-password" spellcheck="false"
+           aria-label="비밀번호" placeholder="비밀번호">
+    <button type="submit" id="gate-ok">확인</button>
+    <div id="gate-msg" role="alert"></div>
+    <!-- 비밀번호가 맞으면 화면 고르기 — PC 모드(지금처럼 분할) · 3D 단독 모드(3D Only 로 바로) -->
+    <div id="gate-mode">
+      <div class="gate-sub">화면을 고르세요</div>
+      <button type="button" class="gate-mode-btn" id="gate-mode-pc" data-mode="pc"><b>PC 모드</b><span>PFD · 지도 · CDU 를 나눠 봅니다</span></button>
+      <button type="button" class="gate-mode-btn" id="gate-mode-3d" data-mode="3d"><b>3D 단독 모드</b><span>3D Only — 태블릿·휴대폰에 알맞습니다</span></button>
+      <button type="button" class="gate-mode-btn" id="gate-mode-simple" data-mode="simple"><b>Simple Mode</b><span>창 하나씩 화면 가득 — 위 막대에서 PFD · 3D · MAP · CDU · UPPER · LOWER · SYSTEM 을 고른다</span></button>
+      <button type="button" class="gate-mode-btn" id="gate-mode-sim" data-mode="sim"><b>SIM Mode</b><span>SIM 조종 · 화면마다 새 창으로 따로 배치(다중 모니터)</span></button>
+    </div>
+  </form>
+</div>
+<script src="js/00-gate.js?v=590"></script>
 <!-- ── 단일화면 선택 바 (기본 숨김) ── -->
 <!-- ── 시작 안내(사용법/키보드) 오버레이 ── -->
 <div id="help-overlay" style="display:none;">
   <div id="help-panel">
     <div id="help-head">
-      <span>✈ VFR Flight Simulator 사용 안내</span>
+      <span>✈ Flight Simulator 사용 안내</span>
       <button data-act="closeHelp" title="닫기">✕</button>
     </div>
     <div id="help-body">
@@ -1773,16 +2329,18 @@ body.night-mode::after {
 
       <h3>2. 기본 비행 (시뮬레이션)</h3>
       <ul>
-        <li><b>시작</b> — 처음 열면 <b>출발 공항을 고르는 창</b>이 뜹니다. 지도의 ICAO 공항 목록이며,
-            ICAO·이름으로 걸러 찾을 수 있습니다(Enter = 맨 위). 고르면 그 공항 <b>지면에 멈춰</b> 서고
-            (고도 유지 기준도 지면 높이 — 날아오르려면 <b>ALT ▲</b>), 건너뛰면 송도에서 시작합니다.
-            같은 탭에서 새로고침하면 다시 묻지 않고, <b>브라우저를 새로 열면</b> 지난번 상태가 남아 있어도
-            <b>다시 묻습니다</b> — 그때 건너뛰면 지난 자리에서 이어 갑니다. <b>GPS 는 꺼진 채 시작</b>합니다(기기 위치를 묻지
+        <li><b>시작</b> — 처음 열면(비밀번호 다음) <b>출발 공항을 고르는 창</b>이 뜹니다. 지도의 ICAO 공항 목록이며,
+            ICAO·이름으로 걸러 찾을 수 있습니다(Enter = 맨 위). 고르면 그 공항 <b>지면에 멈춰</b> 서고, 건너뛰면 송도에서
+            시작합니다. 같은 탭에서 새로고침하면 다시 묻지 않고, <b>브라우저를 새로 열면</b>(비밀번호를 다시 묻는 때)
+            지난번 상태가 남아 있어도 <b>다시 묻습니다</b> — 그때 건너뛰면 지난 자리에서 이어 갑니다. <b>GPS 는 꺼진 채 시작</b>합니다(기기 위치를 묻지
             않습니다) — 실비행에 쓰려면 지도의 GPS 버튼으로 켭니다.</li>
-        <li>MAP 하단 <b>▶ FLY</b>로 시작(다시 누르면 PAUSE), <b>RESET</b> 초기화, <b>CLR</b> 비행계획 삭제.</li>
-        <li><b>ALT</b>(FCP ALT 유지 버튼): 누른 순간의 고도를 지킵니다. <b>ALT ▲▼</b> 로 기준을 옮기면 그 고도로
-            가고, 가는 동안 FMA 가 <b>ALT.A</b>, 닿으면 다시 <b>ALT</b> 입니다.</li>
-        <li><b>지도의 내 헬기</b>는 흰수리 평면도(위에서 본 모습)로, 기수 방향으로 돕니다.</li>
+        <li>MAP 하단 <b>▶ FLY</b>로 시작(다시 누르면 PAUSE), <b>RESET</b> 초기화, <b>CLR</b> 비행계획 삭제.
+            3D 창 오른쪽 위(EXT 아래)에도 같은 <b>▶ FLY / ⏸ PAUSE</b> 버튼이 있습니다.</li>
+        <li><b>🔇 / 🔊 SOUND</b>(3D 창 FLY 아래): 로터 소리를 켜고 끕니다. 땅에 있으면 <b>이륙 전</b> 소리,
+            바퀴가 떨어지면 <b>이륙 후</b> 소리가 나고, 뜨고 내려앉을 때 두 소리가 <b>2.5초에 걸쳐 겹쳐</b> 바뀝니다
+            (LIGHT ON WHEELS 에서는 이륙 후 소리를 조금 미리 섞습니다). PAUSE 면 소리도 잦아듭니다.
+            소리 크기는 <b>토크</b>를 따릅니다 — 토크 0% 에서 <b>70%</b>, 100% 이상이면 <b>100%</b>.
+            켜 둔 채 앱을 새로 열면, 브라우저 규칙상 화면을 한 번 누르거나 키를 누를 때 소리가 납니다.</li>
         <li><b>3D 창</b>: 각 창의 탭에 <b>3D</b> 가 있습니다. 한 창을 <b>MAP</b>, 다른 창을 <b>3D</b> 로 두면
             <b>2D 지도와 3D 지도를 나란히</b> 볼 수 있습니다(3분할이면 가운데 2D · 우측 3D 처럼).
             3D 지도는 한 벌을 옮겨 쓰므로 타일을 두 배로 받지 않습니다. 3D 창을 쓰는 동안에는
@@ -1794,27 +2352,296 @@ body.night-mode::after {
         <li><b>⛶ 단독</b>(각 창 탭 줄의 오른쪽 끝): <b>PFD 단독 · MAP 단독 · CDU 단독</b> — 그 창 하나만
             화면 가득 띄웁니다. 계기비행 연습처럼 PFD 만 크게 보거나, 지도·CDU 를 넓게 볼 때 쓰십시오.
             버튼을 <b>한 번 더 누르면</b>(또는 떠 있는 <b>✥ HALF</b> · 상단 막대의 <b>✕</b>)
-            <b>들어가기 전 배치 그대로</b> 돌아옵니다. 단독 중에는 <b>상단 막대</b>에서 다른 창으로 바로 넘어갈 수 있습니다.</li>
+            <b>들어가기 전 배치 그대로</b> 돌아옵니다. 단독 중에는 <b>상단 막대</b>에서 다른 창으로 바로 넘어갈 수 있습니다.<br>
+            <b>⛶ 3D Only</b>(오른쪽 창 탭 줄 — 2분할·3분할 모두) — 3D 지도를 화면 가득 띄웁니다. 빠져나갈 때는 위 가운데의 <b>✥ HALF</b>.<br>
+            <b>계기 크기 − / +</b>(3D 단독 화면, 계기 버튼 아래) — 왼쪽 위 PFD 계기를 60 % ~ 160 % 사이로 10 % 씩 줄이고 키웁니다(크기는 기억됩니다).<br>
+            <b>LOWER</b>(UPPER 옆 탭) — 실기 <b>하부 콘솔</b>: 왼쪽 열 ⑰ AHRS · ⑯ AFCAU(AUTO TRIM · TRIM FEEL · AP1/AP2) · ⑮ 비디오 컨버터 · ⑭ 비상부주(EMERG FLOATS) ·
+            ⑬ 호이스트 · ⑫ CPI CONTROLLER · ⑪ PA, 오른쪽 열 ⑥ FUEL(X-FEED · FT1/BP1 · XFER · FT2/BP2 · AUX1/F5/AUX2 XFER) · ⑦ U/VHF-AM/FM · ⑧ VHF-FM · ⑨ AVCS · ⑩ MPP ·
+            NOSE WHEEL LOCK · PARKING BRAKE. 사각 버튼은 누르면 들어가 글씨가 켜지고(한 번 더 누르면 나옴), 흰 키는 누르는 동안만 들어갑니다(FLOATS TEST 는 BTL 표시등).
+            조작법·RESET·ZONES 는 UPPER 와 같습니다. <b>연동</b>: PARKING BRAKE 레버 <b>RELEASE · EMER · SET</b> → SIM 브레이크(SET 은 파킹 — 스페이스 두 번과 같고 레버도 따라 움직임 · <b>EMER</b> 는 비상 브레이크로 세기가 스페이스 휠 브레이크(6 kt/s)와 SET(12 kt/s) 사이인 9 kt/s, PFD 에 EMER BRAKE) · FUEL 패널 → SYSTEM 창 Fuel(BP · TP)과 Aircraft Status(Crossfeed · 이송 펌프 · E-AUX) ·
+            AFCAU AP1/AP2 OFF → SYSTEM 창 AFCS 레인 OFF. 나머지는 위치만 갖고 있고 연동을 하나씩 붙여 갑니다.<br>
+            <b>UPPER</b>(CDU · MAP · 3D 옆 탭) — 실기 <b>상부 콘솔</b>(WIPER · VAPOR VENT · TRAINING · ECS · 조명 · APU · 전원 · ANTI ICE)을 한 창에 띄웁니다.
+            토글은 <b>글자 쪽을 누르면 그 위치로</b> 갑니다 — 윗글자(OFF 등) 쪽 → 위, 아랫글자(ON 등) 쪽 → 아래, 3단의 옆 글자(ALL · AUTO 등) → 가운데.
+            노브는 <b>위치 글자를 누르면 그 위치로 바로</b>, 노브 몸통의 <b>왼쪽 절반 반시계 · 오른쪽 절반 시계</b>(휠도 됨) ·
+            오른쪽 아래 <b>ZONES</b> 를 누르면 터치 영역이 테두리로 보입니다 ·
+            덮개 스위치(TRAINING · FIRE EXTGH RESERVE)는 <b>덮개를 먼저 열고</b>(닫으면 제자리로) · CHIP DETECTOR TEST 와 EMB RST 는 누르는 동안만 ·
+            APU FIRE EXTGH T-핸들은 눌러 당기고 다시 눌러 넣습니다. 위치는 저장되고, 오른쪽 아래 <b>RESET</b> 으로 처음 위치로 돌립니다.
+            <b>연동</b>: <b>TRAINING NO1/NO2 ENG TRNG</b> → SIM 의 <b>OEI 훈련</b> — 한쪽을 TRNG 로 올리면 그 엔진이 IDLE 로 줄고 남은 엔진이
+            2.5분 정격(MTA 의 73%) → 연속 정격(64%)까지 냅니다(PFD 에 OEI 2.5MIN 타이머와 <b>ENG n TRNG</b>, 3D 의 ENG 버튼도 ENGn TRNG).
+            둘 다 올리면 훈련이 걸리지 않고(AEO), 다 내리면 AEO 로 돌아옵니다.<br>
+            <b>TQS</b>(UPPER 창 아래 — 엔진 출력 조절장치): <b>PCD 레버</b> 둘(OFF · IDLE · FLY — 위치 글자 쪽을 누른다. FLY 에서 내리면 IDLE 에서 한 번 멈추고(누름쇠)
+            한 번 더 눌러야 OFF), <b>MTRING</b> 버튼, 엔진마다 <b>FUEL</b>(OPEN · CLOSE)과 <b>T HANDLE</b>(UNARMED · ARM).
+            SIM 에서 엔진마다: PCD FLY → 출력 · IDLE → IDLE · OFF 또는 FUEL CLOSE 또는 T HANDLE ARM → 멎음. 한 엔진만 출력이면 OEI(2.5분 → 연속 정격),
+            둘 다 없으면 동력 없는 오토로테이션입니다(PFD 경고 ENG IDLE / ENG OFF). 3D 의 ENG 버튼(AEO · OEI · IDLE)도 그대로 씁니다.
+            그림 7 대로 SRCH LT · NAV LTS 는 NORM/IR, DISPLAY 는 DAY/NIGHT/NVG, APU/GPU 는 GPU/OFF/APU GEN(GPU 는 땅 위에서만 전원), TRAINING 은 NORM/TRNG 입니다.<br>
+            <b>3D 화면의 계기</b> — 3D 지도가 떠 있으면(3D 단독 · 3D 탭 창 · 2D 지도 위 3D) 그 <b>왼쪽 위</b>에
+            PFD 의 계기(FCP 없이)가 겹쳐 뜹니다(3D 화면의 가로 1/4 · 높이 3/5 — 좁은 창에서는 읽을 만큼 키우고 비율대로 줄여 그립니다).
+            조작부 없이 비행에 몰입할 때 쓰십시오. 3D 창 오른쪽 위의 <b>계기 ON / OFF</b> 로 보이고 감춥니다(이 기기에 저장).</li>
+        <li><b>활주로 평탄화</b> — 지도의 ICAO 공항 활주로 면(끝 너머 60m · 옆 30m 여유)은 <b>공항표고</b>로 평평합니다.
+            지형 자료는 활주로 위에서도 들쑥날쑥해 착륙·활주할 때 기체가 튀었습니다. 그 밖 150m 에 걸쳐 원래 땅으로
+            부드럽게 이어 턱이 지지 않습니다. 3D 지형 · SIM 의 땅 · 전파고도가 같은 높이를 씁니다.
+            활주로 좌표 자료가 없는 속초·울진은 공항 기준점 둘레(반지름 400m)를 폅니다.</li>
+        <li><b>시작 비밀번호</b>: 앱을 열면 먼저 비밀번호를 묻습니다. 맞게 넣으면 그 탭에서는 다시 묻지 않고
+            (새로고침해도 그대로), 앱을 새로 열면 다시 묻습니다. 화면 앞에서 막는 잠금이며 보안 장치는 아닙니다.</li>
+        <li><b>시작 화면</b>: 비밀번호를 넣으면 화면을 고릅니다 — <b>PC 모드</b>(지금처럼 PFD·지도·CDU 분할) · <b>3D 단독 모드</b>(3D Only 로 바로 — 태블릿·휴대폰) · <b>Simple Mode</b>(창을 하나씩만 — 위쪽 줄의 PFD · 3D · MAP · CDU · UPPER · LOWER · SYSTEM 버튼으로 골라 보고, <b>PC 모드</b> 버튼으로 돌아갑니다) · <b>SIM Mode</b>(SIM 조종을 켜고 <b>창 배치판</b>을 띄웁니다 — PFD·FCP · 3D · MAP · CDU · UPPER · LOWER · SYSTEM 을
+            하나씩 눌러 화면마다 새 창으로 띄워 모니터마다 따로 놓습니다. 브라우저가 한 번 누를 때 창 하나만 열어 주므로 하나씩 누르고, 떠 있는 화면은 녹색으로 표시되며
+            한 번 더 누르면 본 창으로 돌아옵니다. 본 창은 시뮬을 돌리는 바탕이니 닫거나 최소화하지 마십시오. PFD 창 탭의 <b>⧉ 창 배치</b> 로 언제든 다시 엽니다).
+            같은 탭에서 새로고침하면 고른 화면으로 다시 열립니다.</li>
+        <li><b>SIM 모드</b>(FCP 1행 TDOWN·T/D to H 버튼 오른쪽 <b>SIM</b> 버튼): 조이스틱으로 <b>직접 조종</b>합니다.
+            PFD 의 자세·속도·고도와 지도의 위치·항적이 함께 움직입니다.<br>
+            <b>사이클릭 좌우</b> → 뱅크(최대 45°)와 선회, <b>사이클릭 전후</b> → 기수 자세(최대 60°), <b>페달</b> → 기수만 회전(최대 25°/s),
+            <b>컬렉티브</b> → <b>토크(TQ %)</b>.<br>
+            <b>자세 하나가 곧 속도입니다</b> — 고도를 지키며 날 때 <b>수평 120kt · 기수 4° 80kt ·
+            7.5° 호버(0kt)</b>(4° 까지는 1° 당 10kt, 그 뒤 호버까지는 1° 당 약 23kt — 호버 언저리에서는
+            자세를 조금만 바꿔도 속도가 크게 바뀝니다), <b>−10° 140kt</b>(숙일 때 <b>1° 당 2kt</b> — 빨라질수록
+            항력이 급히 늘어 덜 늡니다). 7.5° 보다 더 들면 뒤로 갑니다.
+            <b>오르내려도 같은 자세면 같은 속도</b>로 수렴합니다(수평 120kt 는 1,000ft 로 오르는 중에도 수평 —
+            실제의 피토관 오차 같은 어긋남은 두지 않습니다).<br>
+            <b>속도·고도는 점점 빠르게 바뀝니다</b> — 자세를 바꾸면 가감속이 <b>처음엔 작다가 갈수록 커져</b>
+            속도가 <b>점점 가속되며</b> 바뀝니다(일정한 빠르기로 바뀌지 않습니다 — 가속은 1초에 0.8kt/s 씩 오래 커집니다).
+            그 자세의 속도에 가까워져서야 짧게 풀려 넘쳐 지나치지 않습니다.
+            <b>감속은 더 빨리 붙어</b> 1초에 3kt/s 씩 <b>최대 12kt/s</b>(기수를 들면 원판을 젖혀 항력까지 받습니다),
+            <b>가속은 제자리 3.5kt/s 에서 속도가 붙을수록 커져 40kt 부터 6.5kt/s</b>(전이양력)까지 갑니다
+            (예: 120kt 에서 기수 10° 숙이면 1초마다 +0.4 · +1.2 · +2.0 · +2.8kt 로 붙음 / 동고도 120kt 에서
+            60kt 자세로 들면 감속 3 → 6 → 9 → 12kt/s 로 세져 8초면 60kt / 제자리에서 기수 5° 숙이면 10초에 36kt · 20초에 100kt).
+            <b>자세가 가감속의 세기를 바꿉니다</b>(위 한계·붙는 빠르기에 곱함) —
+            <b>증속</b>은 수평 ×1.0 · 기수 <b>5° 숙임 ×1.2 · 10° 숙임 ×1.4</b>(사이는 고르게) ·
+            기수 들림 <b>0~3° ×0.8 · 3~5° ×0.6 · 5~7.5° ×0.5</b>,
+            <b>감속</b>은 기수 들림 <b>0~3° ×1.2 · 3~5° ×1.3 · 5~10° ×1.5 · 10° 넘게 ×2.0</b>.<br>
+            컬렉티브를 올리면 토크가 <b>0.25초쯤</b>에 따라붙고(1초에 최대 120% — 종전의 2배 빠르기), 상승률도 <b>점점 빨라지며</b> 붙습니다 —
+            상승·강하율이 바뀌는 빠르기는 <b>1초에 최대 500fpm</b>(최소·최대 상승률은 그대로)입니다.<br>
+            조종(컬렉티브·사이클릭)에 따른 <b>속도·고도 변화 빠르기는 위 값의 90%</b>입니다(종전보다 10% 느리게).<br>
+            자세는 <b>위아래 48°</b>(조종간 끝까지 — 종전 60° 의 80%로 좁혀 같은 움직임에 더 정밀) 까지 잡힙니다(속도는 뒤로 40kt · 앞으로 160kt 에서 멎습니다).
+            <b>땅 위(바퀴형)</b> — 토크를 <b>20% 넘게</b> 쓰면 천천히 앞으로 굴러가고(토크가 클수록), <b>사이클릭을 민 만큼</b>
+            더 빨리 붙습니다(당기면 늦추고, 뒤로는 구르지 않습니다). 땅 위의 자세는 <b>위아래 10°</b> 까지이고,
+            토크를 20% 아래로 내리면 섭니다. 옆으로는 미끄러지지 않습니다.<br>
+            <b>지면효과 · 호버 높이</b> — HOV(호버 파워, PERF 의 IGE 호버 토크)를 기준으로 <b>HOV−10% 면 바퀴가 떨어져
+            3ft</b>, <b>HOV−5% 면 5ft</b>, <b>HOV 면 10ft</b> 에서 호버링합니다(그 위는 로터 지름쯤에서 OGE 로 늘어납니다).
+            <b>HOV−20 ~ HOV−10%</b> 는 바퀴가 떨어지기 직전이라 PFD 에 호박색 <b>LIGHT ON WHEELS</b> 가 뜹니다
+            (기본 PERF 에서 HOV 가 70% 라 50~60%). 땅 가까이에서는 상승률이 토크를 곧 따라가 그 높이를 지나쳐 출렁이지 않습니다.<br>
+            <b>오토로테이션 · 플레어</b> — 컬렉티브를 끝까지 내리면 크게 강하합니다(80kt 에서 약 3,000fpm). 그 상태에서
+            <b>기수를 들면</b>(그 속도의 자세보다 더 든 각만큼, 속도가 클수록 세게) 원판이 바람을 받아 <b>강하가 빠르게 멎습니다</b>
+            — 100ft 에서 20° 로 들면 <b>30ft 언저리</b>에서 거의 멎고, 더 들면 더 높이서 멎습니다.
+            너무 높이서 멎으면 속도가 빠진 뒤 <b>다시 떨어져</b> 충격 착륙이 됩니다. 멎을 무렵 기수를 고르고 레버를 올려 받쳐 내려앉으십시오.
+            출력을 걸고 나는 동안(레버를 올려 둔 비행)은 이 몫이 붙지 않습니다.<br>
+            <b>접지 알림</b> — 땅·갑판에 닿는 순간의 강하율과 속도를 알려 줍니다:
+            <b>360fpm(6ft/s)</b> 까지 부드러운 접지 · <b>600fpm(10ft/s)</b> 까지 단단한 접지(노랑) · 그 넘으면 <b>충격 착륙</b>(빨강).
+            100fpm 보다 살며시 내려놓으면 알리지 않습니다.<br>
+            <b>저속에서는 뱅크가 '옆걸음' 이 됩니다</b> — 제자리에서 오른쪽으로 기울이면 기수는 그대로 둔 채
+            오른쪽으로 갑니다(최대 35kt). 속도가 붙을수록 그 몫이 줄어 <b>45kt 부터는 보통의 선회</b>만
+            남습니다. 호버 페이지의 좌우 속도에도 그대로 나옵니다.<br>
+            <b>기수를 들어 감속하면 줄어든 속도가 고도로 조금 돌아옵니다</b>(운동에너지의 절반) — 그래서
+            <b>기수를 들며 컬렉티브를 조금 내리면 고도는 지키면서 속도가 크게 줍니다</b>
+            (실제로 잃은 고도가 없으므로 레버를 내린 몫으로 속도를 돌려받지 않습니다).<br>
+            <b>TQ 계기</b>는 <b>속도계 아래</b>에 막대로 섭니다. 헬기의 컬렉티브는 상승률 레버가 아니라
+            <b>출력 레버</b>이므로, 지금 <b>필요한 토크</b>(노란 <b>HOV</b> 선)보다 <b>남으면 상승·모자라면 강하</b>합니다.<br>
+            그 <b>기준 토크는 CDU 의 PERF 자료</b>를 그대로 씁니다 —
+            제자리 호버 토크는 PERF 의 <b>OGE/IGE</b>(고도·온도·<b>중량</b>으로 뽑은 값)이고,
+            <b>지면 가까이</b>(10ft 이하)에서는 지면효과로 IGE 까지 내려갔다가 <b>53ft</b> 위에서 OGE 가 됩니다.
+            <b>필요 동력은 U 자 곡선</b>입니다 — 제자리(호버 OGE, 약 77%)에서 가장 많이 들고, 앞으로 날수록
+            로터 내리흐름이 줄어(유도 동력 · 운동량 이론) 줄다가 <b>70kt 언저리에서 가장 적고</b>(약 48% — 호버의 0.62),
+            그 위로는 유해 항력이 속도의 세제곱으로 늘어 <b>150kt 면 약 95%</b>, 160kt 면 108% 가 듭니다.
+            그래서 <b>최대 수평 속도는 그날의 MTA 가 정하고</b>, 토크가 모자란 채 기수만 숙이면 고도를 잃으며 빨라집니다.
+            회전익 특성 <b>속도·TQ 효율</b>을 켜 두면 전이양력(ETL)이 <b>12~24kt</b> 에서 한꺼번에 나타납니다.
+            필요 동력은 <b>대기속도</b>로 셉니다 — 맞바람을 받고 제자리에 버티면 그만큼 덜 듭니다.<br>
+            <b>상승률 = 남는 토크 × 44fpm</b>(레버 토크 − 그 속도의 필요 토크). 그래서 100% 토크면 제자리는 약 <b>1,000fpm</b>,
+            Vy 는 약 <b>2,300fpm</b>, 고속에서는 다시 줄어듭니다. 모자라면 <b>1% 당 38fpm</b> 으로 내려갑니다(한계 상승 3,000 · 강하 4,000fpm).
+            이 값은 PERF 중량 <b>16,000lb</b> 기준이고 <b>무게에 반비례</b>합니다(남는 동력 ÷ 무게 — 20,000lb 면 80%).
+            필요 토크가 이미 무게·밀도고도를 담고 있어, 무겁고 덥고 높을수록 오토로테이션 강하율도 커집니다.<br>
+            <b>토크는 레버를 약 0.25초 늦게</b> 따라갑니다(엔진·거버너). 레버를 급히 올리면 그동안 로터 회전이 모자란 몫을 내줘
+            <b>NR 이 잠깐 처지고</b>, 급히 내리면 잠깐 넘쳤다가 돌아옵니다.<br>
+            SIM 은 <b>진대기속도(TAS)</b>로 움직이고 돕니다 — 같은 IAS 라도 높은 곳에서는 더 멀리 가고(10,000ft 에서 약 16%),
+            같은 뱅크면 덜 돕니다(선회율 = g·tanφ / TAS). 밀도는 고도와 METAR 기온(2°C/1000ft 감률)으로 셉니다.<br>
+            감속·가속은 <b>운동에너지 ↔ 고도</b>를 같은 비율로 주고받습니다 — 감속하면 떠오르고 가속하면 가라앉으며, 줄였다 늘리면 고도가 제자리입니다.<br>
+            <b>플레어</b>: 기수를 그 속도의 자세보다 2° 넘게 들어 감속하면 <b>Vy 에서 20kt 로 줄어드는 만큼에 비례해 강하율이 점점 줄어</b>
+            20kt 언저리에서 약 <b>1,700fpm</b> 줄어듭니다(레버 그대로 — Vy · −500fpm 에서 20° 로 들면 강하가 멎고 오른다).
+            플레어 중에는 속도가 줄며 늘어나는 필요 동력을 치르지 않고, 기수를 고르면 사라집니다. 감속에 걸리는 시간은 종전의 120% 입니다.<br>
+            <b>오토로테이션</b>(두 엔진 IDLE · 고장): 레버는 <b>NR</b> 을 다룹니다 — <b>컬렉티브 최하단이면 자동회전 비행 RPM 수정표</b>
+            (총중량 12~20,000lb · 밀도고도 −6,000~16,000ft · 75KIAS)의 NR 로 자리 잡고, 레버 1% 당 0.6% 씩 낮아집니다.
+            110% 를 넘으면 NR HIGH 입니다. 조금 올려 견제합니다.
+            NR 이 90% 위에 있는 동안은 레버를 조금 써도 강하율이 크게 늘지 않습니다(80kt 약 1,900fpm).
+            마지막에 플레어로 강하율을 2,000fpm 가까이 줄이고, 땅 가까이에서 <b>레버를 당기면(쿠션)</b> 로터 회전(NR)을 강하율과 맞바꿔
+            1초 남짓 강하가 크게 줄어듭니다 — 너무 일찍 당기면 NR 만 쓰고 다시 가라앉습니다.<br>
+            <b>레버를 그대로 둬도</b> 선회를 걸면 하중배수만큼 필요 토크가 올라 가라앉고(100kt 에서 뱅크 30° ≈ +8% · 45° ≈ +23%),
+            <b>속도를 Vy 쪽으로 붙이면</b> 필요 토크가 줄어 떠오릅니다.
+            오르내리는 동안 속도는 조금만 어긋납니다 — 속도는 자세가 정합니다.<br>
+            계기는 <b>0~100% 녹색</b>(연속 사용) · <b>100~113% 노랑</b>(주의) · <b>113~140% 빨강</b>(오버토크)
+            구간으로 칠해져 있고, 막대는 지금 값이 든 구간의 색으로 찹니다.
+            노란 구간에서는 숫자도 노랗게, <b>113%</b>(붉은 선)를 넘으면 막대와 숫자가 붉어지고 <b>OVER TQ</b> 가 뜹니다.<br>
+            계기에는 기준선이 셋 있습니다 — <b>HOV</b>(노랑 · 지금 수평 비행에 필요한 토크),
+            <b>Vy</b>(흰색 · PERF 의 Vy 로 수평 비행할 때 필요한 토크 — 가장 적게 드는 토크),
+            <b>MTA</b>(청록 · 그날의 최대 가용 토크). <b>Vy 선과 MTA 선 사이가 그날 오를 수 있는 여유</b>입니다.<br>
+            <b>그날의 MTA</b> 는 CDU <b>PERF</b> 의 <b>MTA(30)</b> 입니다 — PERF 에 넣은 <b>고도·온도</b>가 그날의 기준이고,
+            다른 고도에서는 그 온도에서 표준 기온감률(2°C/1000ft)로 셈한 온도를 씁니다
+            (PERF 고도에서는 PERF 화면 값과 같고, 올라갈수록·더울수록 줄어듭니다).
+            레버 맨 위는 <b>140%</b> 지만 엔진이 내는 토크는 <b>MTA 에서 멈춥니다</b>. 그보다 더 당기면
+            모자란 힘을 로터 회전(NR)이 내주며 처져 <b>RPM LOW</b>(계기 가운데 깜박임 · NR 값)가 뜨고,
+            양력이 줄어 <b>가라앉습니다</b> — 조금 넘기면 덜 오르고, 더 당길수록 NR 이 더 처지고 더 빨리
+            가라앉습니다(MTA +8% 면 1,000fpm 넘게). 레버를 <b>MTA 아래로 내리면 NR 이 돌아옵니다</b>.
+            레버가 MTA 를 넘겨 있으면 그 자리에 흰 삼각형이 섭니다.
+            <b>엔진(ENG 버튼 · 3D 오른쪽 묶음)</b> — 누를 때마다 <b>AEO</b>(정상) → <b>OEI</b>(ENG 2 고장) → <b>IDLE</b>(두 엔진, 동력 없는 오토로테이션 연습).
+            OEI 면 남은 엔진이 <b>2.5분 정격(AEO MTA 의 73%)</b>을 내다가 그 뒤로는 <b>연속 정격(64%)</b>까지 냅니다(PFD 에 <b>OEI 2.5MIN</b> 남은 시간).<br>
+            <b>오토로테이션과 NR</b> — 엔진이 레버가 요구하는 만큼을 못 내면 모자란 몫을 로터 회전(NR)이 냅니다. 엔진이 멎었는데
+            레버를 그대로 두면 <b>NR 이 1~2초 만에 처집니다</b>(RPM LOW) — 곧 레버를 내리십시오. 강하가 자리 잡으면 흘러드는 바람이
+            로터를 돌려, 레버 <b>약 12%</b> 에서 NR 100%, <b>다 내리면 넘칩니다</b>(<b>NR HIGH</b> · 노랑). 강하율은 필요 동력 곡선을 따라
+            <b>Vy 언저리에서 가장 작고(약 1,800~2,000fpm)</b> 제자리·고속에서 커집니다. 플레어(감속)는 NR 을 올리고,
+            바닥에서 레버를 올리면 처지는 NR 의 운동에너지가 잠깐 양력이 되어 <b>쿠션</b>이 됩니다.<br>
+            <b>꼬리로터</b> — 반토크 쪽 페달(CW 로터면 오른쪽)을 차면 토크가 최대 <b>+6%</b> 더 들고, 반대쪽은 −3% 덜 듭니다.
+            앞으로 날수록 수직안정판이 맡아 줄어듭니다. MTA 언저리에서 페달을 차면 NR 이 처집니다.<br>
+            <b>VRS(정착 강하)</b> — 대기속도 15kt 아래에서 출력을 건 채(토크 25% 위) <b>700fpm</b> 넘게 가라앉으면 PFD 에 <b>VRS</b> 가 뜨고,
+            레버를 올려도 오르지 못하고 더 가라앉습니다. <b>앞으로 속도를 붙이거나(20kt) 레버를 내리면</b> 빠져나옵니다.<br>
+            <b>바람</b> — SIM 은 공중에 뜨면 <b>제자리에서도 바람에 실립니다</b>(속도는 대기속도). 제자리를 지키려면 바람 쪽으로 기수를
+            숙이거나 기울이십시오. 바퀴가 땅·갑판에 붙어 있으면 밀리지 않습니다. GSPD 는 땅에 대한 속도를 지킵니다.<br>
+            <b>VNE · 후퇴익 실속</b> — VNE 는 해면 <b>160kt</b>, 1,000ft 마다 2kt 줄어듭니다. 넘기면 PFD 에 <b>VNE</b> 가 뜨고
+            후퇴익 쪽(CW 로터 → 오른쪽)으로 구르며 기수가 듭니다 — 속도를 줄이면 풀립니다.<br>
+            컬렉티브 축을 배정하지 않았으면 고도를 지킬 만큼만 저절로 걸립니다.<br>
+            <b>4방향 햇</b>을 트림 ▲▼◀▶ 에 배정해 두면 SIM 모드에서 <b>사이클릭 비퍼 트림</b>이 됩니다 —
+            <b>좌우는 뱅크 1°</b>, <b>전후는 피치 0.5°</b> 씩 <b>한 번 누를 때</b> 옮기고, 누르고 있으면
+            0.1초마다 한 칸씩 이어 옮깁니다. 조종간을 가운데 두어도 그 자세로 납니다
+            (최대 뱅크 ±30° · 피치 ±20°. 모드를 켤 때 초기화).<br>
+            <b>시야 둘러보기</b> — <b>B0</b>(기본 배정)을 누르고 있는 동안 햇은 트림이 아니라 <b>시선</b>입니다.
+            ◀▶ 로 좌우(최대 150°), ▲▼ 로 위아래를 훑어볼 수 있고, <b>B0 을 놓으면 정면으로</b> 돌아옵니다.
+            시선은 기체 자세 위에 얹히므로 오른쪽 뱅크에서 오른쪽을 보면 땅 쪽을 보게 됩니다.
+            설정 → 조종 장치 버튼 배정의 「시야 둘러보기」에서 다른 버튼으로 바꿀 수 있습니다.<br>
+            <b>스로틀처럼 세워 두는 레버</b>를 컬렉티브로 쓰면 축 행의 <b>레버식</b>을 켜십시오 —
+            레버 자리가 그대로 <b>토크 0…140%</b> 가 됩니다(맨 아래 0% · 가운데 70% · 맨 위 140%).
+            가운데로 돌아오는 축이면 끄십시오(호버 기준 · 끝까지 올리면 140% · 끝까지 내리면 −45%). 컬렉티브로 잡을 때
+            쉬는 자리가 가운데가 아니면 <b>레버식이 저절로 켜집니다</b>.<br>
+            아무것도 배정하지 않은 장치에는 흔한 배치를 먼저 넣어 줍니다 —
+            <b>축 0 좌우(롤) · 축 1 전후(피치) · 축 2 스로틀(컬렉티브) · 축 5 비틀기(요)</b>,
+            <b>피치와 컬렉티브는 반전</b>이 기본입니다(미는 쪽이 기수 내림·출력 증가).
+            맞지 않으면 아래에서 바꾸면 되고, 한 번 바꾼 장치에는 다시 손대지 않습니다.<br>
+            축 배정은 <b>설정 → 조종 장치 버튼 배정</b> 맨 아래 <b>「SIM 모드 조종간」</b>에서 합니다 —
+            역할을 누르고 그 축을 끝까지 밀면 잡히며, <b>민 방향이 ＋</b> 가 되도록 반전까지 맞춰 둡니다.<br>
+            <b>조종간 가운데(중립)</b>: SIM 을 켜는 순간 사이클릭·페달의 지금 자리를 가운데로 다시 잡습니다(손을 떼고 켜십시오).
+            작은 어긋남은 데드존이 흡수하고, 언제든 <b>조종 장치 설정의 「조종간 중립 맞추기」</b>
+            ·FCP <b>HOCAS 옆 CTR</b> 또는 그 동작을 배정한 버튼으로 맞출 수 있습니다. FCP 의 <b>HOCAS</b> 로 가운데인지 확인하십시오.<br>
+            <b>SIM 을 누르면 묻지 않고 바로 켜집니다</b> —
+            땅 가까이(<b>AGL 50ft 미만</b>)에 있으면 <b>지상 시작</b>입니다: 고도·속도·토크를 0 으로 두고
+            땅에서 레버를 올리며 뜹니다. 여기서 <b>0 ft 는 AGL</b> 이라, 그 자리의 <b>지형 표고</b>(T-CUT 과
+            같은 DEM 자료)에 맞춰 세워 두므로 3D 화면에서 땅에 파묻히거나 떠 있지 않습니다. 비행 중에도
+            <b>지면 아래로는 내려가지 않습니다</b>.<br>
+            떠 있으면 날던 고도·속도 그대로 이어 갑니다.
+            <b>비행계획에 출발지(ORIGIN)를 넣어 항공기를 옮기면 그 자리 지면 고도에 멈춰 세우므로</b>,
+            그다음 SIM 을 켜면 곧바로 지상 시작이 됩니다.<br>
+            <b>SIM 을 켜면 지도 창이 3D 로 바뀌고</b> <b>1인칭(조종석) 시야</b>가 됩니다 —
+            눈이 헬기 자리에 놓이므로 화면에는 <b>앞</b>만 보입니다(뒤에서 따라가는 3인칭이 아닙니다).<br>
+            카메라가 <b>헬기 자리·고도</b>에 그대로 놓이고, <b>방향지시계</b>대로 방위가,
+            <b>자세계</b>대로 기울기와 뱅크가 따라갑니다. 기본 시선은 저속(40kt 이하)에서 <b>기체 자세보다 5° 아래</b>라(함정 이착함 때 발밑 갑판이 잘 보이게) 수평 자세면 지평선이 화면 한가운데보다 조금 위이고, 속도가 붙을수록 덜 숙여 <b>120kt 에서는 0°</b> — 순항 수평 자세면 지평선이 한가운데로 와서 <b>외부 시점(EXT)에서 본 기체 자세와 목측이 같습니다</b>.
+            <b>기수를 들면 그만큼 하늘</b>을, <b>숙이면 땅</b>을 봅니다(카메라 자체가 들리므로 앞으로
+            나가 보이지 않습니다). 뱅크를 주면 카메라가 그대로 기울어 지평선이 <b>PFD 의 ADI 와 같은 쪽으로</b>
+            기웁니다(오른쪽 뱅크면 지평선 오른쪽이 올라갑니다 · 확대되지 않습니다).
+            1인칭에서는 3D 축척과 제 마커(모형)를 숨기고, 대신 <b>화면 아래 가운데에 내 헬기의 기수(nose)</b>가
+            높이 1/10 만큼 보입니다(기체에 붙어 있으므로 자세가 바뀌어도 그 자리 · 둘러보기로 고개를 돌리면 비켜 갑니다).<br>
+            <b>지형의 기복에 튀지 않습니다</b> — 3D 지형은 높이를 1.5배 과장해 그리고, 더 자세한 지형 타일이
+            들어올 때마다 높이가 조금씩 바뀝니다. 카메라(와 외부 시점의 헬기)는 그 차이를 <b>천천히(1.5초) 따라가</b>
+            산 위를 지나거나 타일이 바뀌는 순간에도 위아래로 튀지 않습니다. 땅 가까이(AGL 40m 아래)에서는
+            그려진 땅에 그대로 맞춰 내려앉고, 외부 시점의 카메라는 같은 프레임의 헬기 자리를 그대로 씁니다.<br>
+            <b>MAP ON/OFF</b>(CDU 버튼 아래) — 3D 단독 화면에서 <b>2D 지도</b>를 계기 칸과 같은 크기로 CDU 칸 왼쪽에 겹쳐 띄웁니다.
+            겹친 CDU 의 <b>MAP</b> 버튼도 이 지도를 켭니다(3D 단독은 그대로). MAP 단독 화면에서는 지도 아래 <b>3D</b> 버튼으로 3D 단독에 돌아갑니다.<br>
+            <b>CDU ON/OFF</b>(3D 오른쪽 버튼 묶음, 계기 버튼 아래) — <b>3D 단독(3D Only) 화면</b>에서 CDU 를 <b>3D 버튼 줄 바로 왼쪽</b>에
+            계기 칸과 같은 높이(3/5)로 겹쳐 띄웁니다(너비는 CDU 비율대로 — 좌우 빈 여백 없이). CDU 창 그대로라 키·화면이 같고, 끄거나 단독을 나오면 제자리로 돌아갑니다(이 기기에 기억).<br>
+            <b>STICK ON/OFF</b>(FCP 버튼 아래) — SIM 모드의 3D 단독 화면에서 <b>오른쪽 아래(R CHIN 자리)</b>에 화면 조종간 셋을 띄웁니다:
+            <b>컬렉티브</b>(위아래 · 놓아도 그 자리 · 아래 0% … 위 140%)는 <b>화면 왼쪽 아래 끝</b>(왼손), 오른쪽 아래에는 <b>페달</b>(좌우 · 놓으면 가운데)과
+            <b>사이클릭</b>(원형 · 16방향으로 맞춰 민 만큼 · 끝까지 밀면 <b>피치 ±10° · 롤 ±20°</b>(트림 자세 위에) · 피치는 가운데 감도 반 · 놓으면 가운데 — 트림이 자세를 지킵니다). 켜면 R CHIN 창은 닫히고,
+            켤 때 컬렉티브는 지금 토크 자리에서 시작합니다. 실물 조종간과 함께 쓸 수 있습니다(화면 조종간을 쥔 동안은 그 값).<br>
+            <b>GYRO ON/OFF · GYRO ALIGN</b>(STICK 버튼 아래) — 태블릿·휴대폰을 <b>기울여 사이클릭</b>을 몹니다(SIM 3D 단독).
+            GYRO ON 을 누르면 기울기 센서를 켜고(아이폰·아이패드는 허락을 묻습니다), <b>GYRO ALIGN 을 누른 그때의 자세가 가운데</b>가 되어 그때부터 조종합니다.
+            기기를 25° 기울이면 끝 — 화면 사이클릭과 같이 <b>16방향 · 피치 ±10° · 롤 ±20°</b>(피치는 가운데 감도 반)입니다. 화면 사이클릭을 손으로 쥐면 손이 앞서고,
+            화면을 가로·세로로 돌리면 다시 ALIGN 해야 합니다.<br>
+            <b>FCP ON/OFF</b>(3D 오른쪽 버튼 묶음) — <b>3D 단독(3D Only) 화면</b>에서 PFD 소프트키(위) + FCP 패널(아래)을 <b>3D 화면 왼쪽 아래에 한 창</b>으로 띄웁니다
+            (화면 너비의 반 · 높이의 45% 안으로 줄여 그림). 버튼 그대로라 기능이 같고, 켜면 L CHIN 창은 닫힙니다. 분할 화면에서는 PFD 아래에 FCP 가 있으므로 열지 않습니다.<br>
+            <b>CHIN BUBBLE</b> — 1인칭에서는 <b>정면 시야가 3D 창 가득</b> 차고, 좌·우 발밑 창은 그 위
+            <b>아래 왼쪽·오른쪽 모서리에 붙어 겹쳐</b> 뜹니다(창 하나가 너비 약 1/3 · 높이 2/9).
+            가운데 앞쪽 아래는 가리지 않아 전방을 넓게 봅니다. 발밑 창은 헬기의 CHIN BUBBLE 처럼 <b>정면보다 50° 아래</b>를 좌·우로 15° 벌려 보며,
+            기체 자세를 따라 돕니다(고개 돌리기는 따르지 않습니다). 함정도 그려지므로 착함할 때 갑판을
+            내려다볼 수 있습니다. 3D 창 오른쪽 위 <b>CHIN</b> 버튼으로 끄고 켭니다.<br>
+            <b>외부 시점(EXT)</b> — CHIN 아래 <b>EXT</b> 버튼을 누르면 <b>뒤에서 따라가며 내 헬기(흰수리)</b>를 봅니다
+            (한 번 더 누르면 1인칭 · 조이스틱 버튼에 「외부 시점」을 배정할 수도 있습니다). 헬기 뒤 조금 위(12°)에서
+            기수 방향으로 내려다보고, <b>시야 둘러보기(B0 + 햇)</b>로 ◀▶ 는 헬기 둘레를 돌고 ▲▼ 는 위아래로
+            오르내립니다(놓으면 다시 뒤로). 창이 좁으면 헬기 전체가 들어오게 그만큼 물러섭니다.
+            외부 시점에서는 CHIN 창을 닫고, SIM 을 나갔다 들어오면 1인칭부터 시작합니다.
+            바꿀 때는 <b>0.9초 동안 카메라가 옮겨 갑니다</b> — EXT 로는 조종석 시선 그대로 <b>뒤로 쑥 물러나며 헬기가 앞으로 나오고</b>,
+            1인칭으로는 헬기 뒤에서 <b>조종석으로 쑥 빨려 들어간 뒤</b> 기수·CHIN 창이 나타납니다.<br>
+            <b>흰수리 3D 모형</b> — 입면도·평면도·측면도를 바탕으로 <b>실제 크기(전장 20m — 주로터 앞 끝에서
+            꼬리로터 뒤 끝까지)</b>로 그립니다: 주로터 지름 14.1m · 꼬리로터 3m · 동체 약 18.8m, 흰 동체에 붉은 엔진 덮개,
+            뒤로 노랑 → 파랑 띠, 붉은 수평 꼬리날개(왼쪽에만), 꼬리로터는 오른쪽. 자세(기수·피치·뱅크)를 그대로 따르고 로터가 돕니다
+            (시뮬이 멈추면 멈춤). 바퀴 바닥이 지면 · 함정 갑판에 닿게 놓입니다.
+            SIM 이 아닐 때 3D 지도에도 초록 삼각형 대신 이 모형이 보이며, 멀어서 작게 보일 때만 삼각형을 같이 띄웁니다.<br>
+            <b>3D 화질(상·중·하)</b> — 3D 창 오른쪽 위 <b>화질</b> 버튼을 누를 때마다 상 → 중 → 하 로 바뀝니다
+            (기본 <b>중</b>, 고른 값은 이 기기에 남습니다). 낮출수록 그리는 해상도와 받는 타일이 줄어
+            <b>저고도에서도 부드럽습니다</b> — 상: 기기 해상도 · 사진 19 · 지형 15 단계 / 중: 1.25배 · 17 · 14 /
+            하: 0.8배 · 15 · 12. CHIN 창은 중에서 1초에 30번, 하에서 15번만 다시 그립니다.<br>
+            <b>지형·사진은 20NM 안의 것을 들고 있습니다</b> — 3D 와 CHIN 창이 같은 타일을 함께 쓰고(한 번 받고 한 번
+            고친다), 20NM 안의 덜 자세한 단계와 발밑 4NM 의 지형은 미리 받아 둡니다. 20NM 밖으로 벗어난 것은 지웁니다.<br>
+            땅 위에서는 그려진 지형 위로 눈높이(8m)만큼 떠 있습니다.
+            끄면 <b>원래 보던 창으로 되돌아옵니다</b>.<br>
+            켤 때 <b>AFCS(NAV·HDG·ALT·CRHT·GSPD·IAS)는 풀립니다</b>. 켠 뒤 <b>상위모드를 다시 걸면 그 축은 AFCS 가
+            몰고 조종간의 그 축 값은 무시합니다</b> — <b>HDG·NAV</b> 는 좌우(뱅크)와 페달을,
+            <b>ALT</b>(선택 고도로 가는 것 포함)·<b>CRHT</b> 는 컬렉티브를 가져갑니다.<br>
+            SIM 의 <b>ALT·CRHT 는 출력(토크)으로 고도를 지킵니다</b> — 고도를 곧바로 옮기지 않습니다.
+            CRHT 중에도 기수를 숙이면 <b>속도가 붙고, 운동에너지로 바뀐 만큼 고도가 빠지려 하면 토크를 더 써서
+            되찾습니다</b>(80 → 120kt 가속에 약 20ft 빠졌다가 15초쯤에 돌아옴). 뱅크를 주면 늘어난 필요 토크만큼
+            더 씁니다. ALT 는 선택 상승률로 오르내려 선택 고도에 넘치지 않고 섭니다.<br>
+            <b>IAS</b> 는 기수 자세를 가져갑니다 — FCP 의 <b>IAS 라벨</b>을 누르면 <b>지금 속도를 기준</b>으로 켜지고
+            (다시 누르면 꺼집니다), <b>IAS ▲▼</b> 는 기준을 1kt 씩 옮기며 켭니다. 켜져 있으면 ADI 가
+            <b>그 속도를 내는 자세</b>(수평 120kt · 4° 80kt · 7.5° 호버)로 잡히고 속도가 그 값에 섭니다
+            (오르내려도 그 자세 그대로). <b>조종간을 밀고 당기면 그만큼 자세가 벗어나고
+            속도도 따라 바뀌었다가, 놓으면 IAS 자세로 천천히(초당 5°) 돌아와</b> 속도도 기준으로 돌아갑니다.
+            켜져 있는 동안 <b>전후 트림</b>은 기준 속도를 1kt 씩 옮기고, <b>FORCE TRIM</b> 은 지금 속도를 새 기준으로
+            잡습니다. PFD 속도계에 기준 속도(<b>청록 벅과 숫자</b>)가 나오고 FMA 의 IAS 가 초록으로 켜집니다.
+            끄면 그 자세를 트림으로 잡아 두어 튀지 않습니다. <b>GSPD</b> 를 걸면 IAS 는 풀립니다(GSPD 가 자세를 맡습니다).
+            HDG 가 걸려 있는 동안 <b>좌우 트림(4방향 비퍼 트림·조이스틱 햇)</b>은 HDG 를 풀지 않고
+            <b>선택 헤딩을 1° 씩</b> 옮깁니다(누르고 있으면 0.5초 뒤부터 0.1초마다 1°).
+            HDG 는 <b>HDG 라벨을 한 번 더 누르면</b> 풀리며 그 자리 뱅크를 이어 잡고,
+            NAV·ALT·CRHT 는 버튼으로 풉니다(ALT·CRHT 를 풀면 그 상승률에서 레버가 이어 받습니다).
+            조이스틱 <b>B1</b> 은 <b>상위모드 모두 해제</b>입니다(NAV·HDG·ALT·CRHT·G/S·IAS·GSPD).
+            끄면 수평으로 돌아오고 종전 방식으로 돌아갑니다.</li>
         <li><b>전파고도(RA)</b> — PFD 오른쪽 아래 <b>CRHT 창</b>은 기압고도가 아니라 <b>전파고도(지면 위 높이 AGL)</b>입니다.
-            지형 자료(T-CUT 과 같은 DEM)로 그 자리 땅 높이를 빼서 보입니다(창의 <b>RA</b> 숫자). 바다 위에서는
-            기압고도와 같고, 산 위에서는 그만큼 낮게 읽힙니다(지형 자료를 아직 받지 못했으면 해수면 기준).
-            <b>CRHT 는 이 전파고도를 지킵니다</b> — 걸면 지금 RA 가 기준이 되고, 땅이 오르내리면 그만큼
-            따라 오르내립니다(500fpm 까지).</li>
+            지형 자료(T-CUT 과 같은 DEM)로 그 자리 땅 높이를 빼서 보이고(창의 <b>RA</b> 숫자), SIM 에서 함정 위에서는
+            갑판에서 잽니다. 바다 위에서는 기압고도와 같고, 산 위에서는 그만큼 낮게 읽힙니다(지형 자료를
+            아직 받지 못했으면 해수면 기준). <b>CRHT 는 이 전파고도를 지킵니다</b> — 걸면 지금 RA 가 기준이 되고,
+            땅이 오르내리면 그만큼 따라 오르내립니다(500fpm 까지).</li>
         <li><b>승강계</b>는 위로 <b>3,000fpm</b>, 아래로 <b>4,000fpm</b> 까지 읽습니다 — ±1,000fpm 까지는 반 칸에 넓게,
-            그 위는 좁혀 담습니다.</li>
+            그 위는 좁혀 담습니다. SIM 에서 상승률은 토크 100% 에서 Vy 2,300fpm, 그보다 더 당기면(MTA 까지)
+            <b>3,000fpm</b> 까지 오르고, 강하는 4,000fpm 까지입니다.</li>
+        <li><b>ALT 버튼</b>은 <b>누른 순간의 고도</b>를 기준으로 그 고도를 지킵니다(FMA <b>ALT</b>). 다른 고도로 가려면
+            <b>ALT ▲▼</b> 로 기준을 옮깁니다 — 그 고도로 가는 동안 FMA 가 <b>ALT.A</b>(선택 상승률로)이고 닿으면 ALT 로 바뀝니다.</li>
         <li>PFD 하단 FCP에서 <b>IAS·HDG·CRS·VS·ALT·CRHT</b>를 ▲▼/◀▶로 조절.
             <b>CRHT ▲▼</b> 는 10ft 씩 옮기며, 지금 고도로 걸어 끝자리가 남아 있으면(예: 1,237ft)
             먼저 <b>10ft 단위</b>로 맞춥니다(▲ 1,240 · ▼ 1,230).
-            스톱워치는 FCP <b>2행</b>(BRG 오른쪽), ALT·CRHT·G/S 버튼은 <b>1행</b>(CRHT ▲▼ 오른쪽)에 있습니다.</li>
+            스톱워치는 FCP <b>2행</b>(BRG 오른쪽)에 있습니다. <b>ALT·CRHT 는 IAS·HDG 처럼 글자를 누르면</b> 그 모드가 걸리고(한 번 더 누르면 해제),
+            그 오른쪽 <b>HHT ▲▼</b> 는 T/D to H 가 멈출 호버 높이(전파고도, 10ft 단위 · 기본 50ft)를 정합니다.</li>
+        <li><b>TDOWN</b>(1행 HHT 오른쪽 위): 누르면 <b>속도 80kt · 전파고도 200ft</b> 로 기준만 바꿉니다 —
+            IAS 80 · CRHT 200 이 걸리고 FMA 는 <b>CRHT · IAS</b> 입니다(SIM 밖에서도 같은 기준).</li>
+        <li><b>T/D to H</b>(SIM 모드 · TDOWN 아래): <b>50kt 이상 · 전파고도 200ft 이상</b>에서 누르면 FMA 컬렉티브·피치 축이 <b>TDH</b> —
+            지금 자리에서 <b>3° 강하각</b>으로 내려가며 속도를 <b>0 으로 모아</b> HHT 높이에서 제자리 비행으로 멈춥니다
+            (남은 높이에 맞춰 <b>지상속도</b>를 일정 감속으로 줄이고, 강하율은 지상속도 × tan3° — 바람이 있어도 땅 위 한 점으로 내려갑니다).
+            다 내려오면 <b>GSPD 0kt + CRHT(HHT)</b> 로 넘겨 바람에 흘러가지 않고 그 자리에서 호버합니다. 롤 축은 HDG·NAV 가 그대로 몰다가
+            <b>45kt 밑</b>이면 FMA 가 <b>황색</b>(성능 감소 주의), <b>30kt 밑</b>이면 롤 축을 놓습니다(decouple).
+            한 번 더 누르거나 ALT·CRHT·IAS·GSPD·G/A 를 걸면 풀립니다. 그동안 PFD 오른쪽 아래 높이 창이 <b>HHT</b> 로 바뀝니다.</li>
+        <li><b>내활·외활 볼</b> — 자세계 맨 위 <b>롤 지표 바로 위</b>의 작은 관입니다. 볼이 가운데 두 선 사이에 있으면
+            협조 비행이고, <b>낮은 날개 쪽</b>으로 가면 <b>내활(slip)</b> — 뱅크만큼 돌지 않음(저속 옆걸음 등),
+            <b>선회 바깥쪽</b>으로 가면 <b>외활(skid)</b> — 뱅크 없이 페달로 기수를 돌림입니다.
+            <b>볼 쪽 페달</b>을 밟으면 가운데로 돌아옵니다. 볼은 액체 속에서 구르듯 조금 늦게 따라옵니다.</li>
         <li><b>HDG ◀▶</b>는 기수를 즉시 돌리지 않고 <b>선택 헤딩(HSI 청록 벅)</b>만 옮깁니다.
             AFCS가 <b>표준선회(360°/2분 = 3°/s)</b>로 선회하며, 뱅크각은 <b>속도의 16%</b>로 자동 산출됩니다
-            (100kt → 16°). 목표에 가까워지면 자동 롤아웃하고, 수동 뱅크 트림을 쓰면 해제됩니다.</li>
-        <li><b>IAS/HDG/CRS 라벨 버튼</b>을 누르면 현재 값으로 즉시 동기화(CRS는 NAV 소스로 Direct-To).</li>
+            (100kt → 16°). 목표에 가까워지면 자동 롤아웃합니다. HDG 가 걸려 있을 때 <b>좌우 트림</b>은
+            HDG 를 풀지 않고 선택 헤딩을 <b>1° 씩</b> 옮깁니다(NAV 가 잡고 있을 때는 제외).</li>
+        <li><b>IAS/HDG/CRS 라벨 버튼</b>을 누르면 현재 값으로 즉시 동기화(CRS는 NAV 소스로 Direct-To).
+            <b>HDG</b> 라벨은 IAS·ALT 버튼처럼 <b>켜고 끕니다</b> — 누르면 지금 헤딩을 지키는 HDG 가 걸리고
+            (FMA 가운데 초록 <b>HDG</b>), 한 번 더 누르면 풀립니다(FMA 의 HDG 가 어두워짐 · 그 뱅크를 이어 잡음).
+            NAV 가 걸려 있을 때 누르면 HDG 로 넘어갑니다.</li>
+        <li><b>상위모드 모두 해제</b> — 조이스틱 <b>B1</b>(기본 배정). NAV·HDG·ALT·CRHT·G/S·IAS·GSPD 를 한꺼번에
+            풉니다. 이미 배정해 쓰던 조이스틱도 한 번 B1 을 이것으로 바꾸고, B1 에 있던 동작(예: GSPD)은
+            비어 있는 버튼(B8 · B10 · B11)으로 옮겨 둡니다. 설정 → 조종 장치 버튼 배정에서 바꿀 수 있습니다.</li>
       </ul>
 
       <h3>3. MAP 창</h3>
       <ul>
-        <li>상단: GPS·WX·＋(웨이포인트)·RAIN·WIND·FIX·AWY·<b>공역</b>·<b>📏 측정자</b>·FULL.</li>
+        <li>상단: GPS·WX·＋(웨이포인트)·RAIN·WIND·NOTAM·FIX·AWY·<b>공역</b>·<b>📏 측정자</b>·FULL.</li>
+        <li><b>내 헬기 심볼</b>은 흰수리 평면도입니다(위에서 본 모습 · 실제 축척이 아니라 36px) — 흰 동체, 붉은 엔진 덮개,
+            노랑 → 파랑 꼬리, 왼쪽 수평안정판, 오른쪽 꼬리로터, 주로터 4엽. 기수 방향으로 돕니다.</li>
         <li><b>＋ 메뉴</b>: <b>PP 현재위치</b>(항공기 자리) · <b>＋ 십자위치</b>(지도 중앙) ·
             <b>🔎 주소 검색</b>. 주소 검색은 주소·지명을 찾아 그 자리를 <b>웨이포인트(AD1·AD2…)</b> 로 넣고
             지도를 그리로 옮깁니다. <b>좌표(37.5665, 126.9780)</b> 를 그대로 넣어도 됩니다.<br>
@@ -1831,6 +2658,10 @@ body.night-mode::after {
             회전하며 생기는 모서리는 지도를 확대하지 않고 <b>보이는 영역의 대각선만큼 넓혀서</b> 채웁니다.
             (종전에는 1.42배 확대로 덮어 모드를 바꾸는 순간 지도가 확대됐고, 세로로 긴 화면에서는
             그래도 모서리에 검은 삼각형이 남았습니다.)</li>
+        <li><b>함정 TACAN(I-SHP · 110X)</b>: NAV1/NAV2 에 <b>110X</b> 를 넣으면 함정이 국이 되고, 코스는 함정 침로를 따라갑니다.
+            그 소스로 <b>NAV</b> 를 걸면 함정 <b>뒤 접근로</b>로 들어가 함정까지 자동으로 따라갑니다 —
+            함정 앞이면 함정 위를 넘지 않고 <b>옆(1.2NM)</b>을 지나, 함정 뒤 <b>2NM 관문</b>으로 돌아 들어간 뒤 코스선(함정 침로)에 붙어 따라가고,
+            지상 VOR 처럼 1.5NM 안에서 손을 놓지 않습니다. 함정 위에 닿으면 함정 침로로 납니다.</li>
         <li><b>DME 경사거리</b>: VOR/DME·TACAN 거리는 <b>항공기와 지상국 사이의 직선거리</b>입니다
             (수평거리가 아닙니다). 그래서 <b>6,000ft 로 송신소 상공을 지나면 0 이 아니라 약 1.0NM</b> 에서
             멈춥니다(6,000ft ÷ 6,076ft = 0.99NM). 고도가 높고 국이 가까울수록 차이가 커지고, 멀어지면
@@ -1840,11 +2671,12 @@ body.night-mode::after {
             <b>승강계 왼편</b>에 <b>G/S</b> 눈금과 <b>자홍색 마름모</b>가 뜹니다 — 마름모가 가운데
             기준선보다 <b>위에 있으면 강하선보다 높다</b>는 뜻이고, 위아래 점은 각각 <b>0.35°</b>
             (최대편위 0.7° = 2점)입니다. 최대편위를 넘으면 마름모가 <b>속이 빈</b> 채 끝에 붙습니다.<br>
-            AP 의 <b>G/S</b> 버튼을 누르면 <b>ARM</b>(호박색)이 되고, 강하선에 닿는 순간 스스로
+            G/S 버튼은 없습니다 — ILS 를 지금 NAV 소스로 맞추면 스스로 <b>무장(ARM)</b>하고, 강하각에 맞는 순간
             <b>CAPT</b>(자홍색)로 붙잡아 <b>고도를 맡습니다</b> — 강하각과 지상속도에 맞는 강하율로
             내려가며(3°·120kt ≈ 640fpm) 벗어난 만큼만 되돌립니다. 잡고 있는 동안에는
             <b>ALT·CRHT 유지가 물러납니다</b>(고도를 두 곳에서 몰면 서로 싸웁니다).
-            신호를 잃거나(25NM 밖·안테나 뒤) 한 번 더 누르면 풀립니다.<br>
+            신호를 잃거나(25NM 밖·안테나 뒤) ALT·CRHT·TDOWN·T/D to H·G/A 를 걸면 풀리고, 그 뒤에는 강하선에서
+            0.3° 넘게 벗어났다 돌아올 때 다시 잡습니다.<br>
             상태는 <b>PFD 위쪽 AFCS 줄</b>에도 나옵니다 — 무장 중에는 왼쪽 칸에
             <b>ALT</b> 옆에 <b>흰색 G/S</b> 가 함께 뜨고(고도는 아직 ALT 가 맡고 있다는 뜻),
             붙잡으면 그 칸의 주 모드가 <b>자홍색 G/S</b> 로 바뀝니다.<br>
@@ -1864,7 +2696,8 @@ body.night-mode::after {
             NAV 주파수 입력창에서는 <b>ENTER 든 XFER 든</b> 넣은 값이 곧바로 활성이 됩니다 — NAV 에는 대기(STBY)가
             없기 때문입니다(COM 은 종전대로 XFER 로 활성↔대기를 맞바꿉니다).</li>
         <li><b>BRG 니들 · 지도 BRG 시현</b>(PFD 소프트키 <b>PFD Settings → Bearing1 · Bearing2</b> — FCP 의 BRG1 · BRG2 · #1BDP · #2BDP 버튼은 없앴습니다):
-            누를 때마다 <b>OFF → NAV1 → NAV2 → FMS</b>. 고른 국을 HSI 니들이 가리키고 지도에도 선과 방위·거리 글자가 함께 나옵니다. 처음(고르기 전)은 니들만, OFF 면 함께 사라집니다.</li>
+            누를 때마다 <b>OFF → NAV1 → NAV2 → FMS</b>. 고른 국을 HSI 니들이 가리키고, 지도에도 그 니들의 <b>선과 방위·거리 글자</b>가 함께 나옵니다.
+            처음(고르기 전)은 니들만 있고 지도는 깨끗하며, OFF 면 니들 · 선 · 글자가 함께 사라집니다.</li>
         <li><b>DME 아크(Y 절차)</b>: 접근절차의 아크 구간은 <b>기준국에서 지정된 거리를 유지하며</b> 돕니다.
             지도에 그려지는 원호와 <b>NAV 오토파일럿이 나는 길이 같습니다</b> — 종전에는 두 픽스를 잇는
             직선으로 날아 원호 안쪽을 가로질렀습니다(11NM 아크에서 약 0.3NM). CDI 편차도 이 구간에서는
@@ -1878,45 +2711,40 @@ body.night-mode::after {
             테두리 선을 탭하면 공역 정보가 뜨고, 접근/진입 시 경보는 종전과 동일합니다.</li>
         <li><b>심볼 탭</b>: FIX·항로 경유점·<b>VOR</b>·<b>공항</b>·<b>비행계획 웨이포인트</b> 어느 것을 탭해도 좌표 확인·복사가 가능합니다.
             VOR은 <b>NAV1/NAV2 튜닝</b>, 공항은 <b>METAR/TAF</b>·<b>공항 정보</b>가 함께 나옵니다.<br><b>비행계획 웨이포인트</b>는 몇 번째인지·HOLD·VNAV 여부를 보여 주고, <b>ℹ 정보</b> 를 누르면 CDU 의 그 <b>웨이포인트 카드</b>로 바로 갑니다(이미 플랜에 있으므로 「플랜 추가」는 없습니다). 종전에는 지도에서 누르는 즉시 활성 웨이포인트가 됐습니다 — 이제 활성 지정은 카드의 <b>Direct To</b> 입니다.</li>
-        <li><b>SHIP</b>: 버튼을 누르면 「배 표시 / 설정창」 선택. 선박 속도·침로를 입력해 이동시킬 수 있습니다.<br>
-            설정창 맨 아래 <b>난이도</b>로 배 속도의 흔들림을 고릅니다 —
-            <b>상 ±2kt</b> · <b>중 ±1kt</b> · <b>하 변화 없음</b>(설정 속도 그대로).
-            실제 배처럼 설정 속도 둘레로 빨라졌다 느려졌다 하므로, <b>GSPD</b> 로 배 위에 따라붙으려면
-            HOVER PAGE 의 SHIP 위치를 보며 속도를 계속 고쳐 잡아야 합니다.
-            흔들림은 15~40초마다 바뀌고 <b>초당 0.1kt</b> 씩 천천히 옮겨 갑니다(갑자기 튀지 않습니다).
-            설정창에는 <b>설정 속도와 흔들림 폭</b>만 나오고 지금 실제 속도는 나오지 않습니다.
-            서 있는 배(0kt)는 흔들리지 않습니다. 고른 난이도는 기억해 둡니다.</li>
+        <li><b>SHIP</b>: 버튼을 누르면 「배 표시 / 설정창」 선택. 선박 속도·침로를 입력해 이동시킬 수 있습니다.</li>
         <li><b>🔒 잠금</b>: 화면 터치를 차단(비행 중 오조작 방지). 해제는 하단 버튼을 <b>1.2초 길게</b> 누르기.</li>
         <li>우하단 <b>REC</b>(항적 기록, GPX/KML 저장) · <b>FDR</b>(항적 리플레이).</li>
       </ul>
 
       <h3>4. PFD · HOVER PAGE</h3>
       <ul>
-        <li><b>FCP</b>(실기 AFCS 조작 패널 모양 — 옛 FCP 의 줄들은 없앴습니다): 왼쪽 IAS · HDG · VS · ALT.A · <b>ALT</b> · CR.HT / <b>G/S</b> · <b>NAVD CPL</b>(NAV) · T-DOWN · T.D.HOV · H.HT(이 셋은 자리만) | BARO · UPLIM / CRS · DH.
-          노브는 왼쪽(‹) · 오른쪽(›)을 누르면 돌고(누르고 있으면 계속), 가운데를 누르면 PUSH — IAS · HDG · CRS 는 현재값 맞춤, CR.HT 는 CRHT 유지, BARO 는 STD(29.92 inHg = 1013.25 hPa).
-          <b>UPLIM 오른쪽 구분선 뒤</b>는 사용자 기능 — WIND DIR · WIND SPD 노브 · RNP · SIM SPD · FORCE TRIM · GSPD(윗줄) · COLLECTIVE TRIM · 4-WAY TRIM · ANTI-TORQUE PEDAL(아랫줄). PFD 창이 좁으면 아래 줄로 내려갑니다.</li>
-        <li><b>PFD 소프트키</b>(PFD 바로 아래 12칸 — KUH-1CG FLM 그림 5~8): Map Range − · + · PFD Map Settings ▸ · Traffic Map · PFD Settings ▸ · <b>OBS</b>(넘어갈지 정할 자리 — 홀딩 지점 · 비행계획 마지막 지점 · 보류 중 — 에서는 <b>SUSP</b>, 걸려 있으면 녹색 바) ·
-          <b>Active NAV</b>(VOR1 → VOR2 → FMS) · Sensors ▸ · <b>Hover Display</b> · <b>Hover Position</b> · CAS. PFD Settings ▸ <b>Bearing1 · Bearing2</b>(OFF → NAV1 → NAV2 → FMS — HSI 니들과 지도 BRG 선) · Other ▸ Altitude Units ▸ <b>IN · HPA</b>.
-          Back 은 한 단계 위로, 45초 동안 누르지 않으면 최상위로. 아직 고른 상태만 기억하는 칸: Traffic · Terrain · WX · Detail · Map Layout · Meters · RA · CAS.</li>
-        <li><b>스톱워치</b>(PFD HSI 오른쪽 아래 — FCP 의 STOP WATCH 는 없앴습니다): 평소 현재 시각, <b>STOP WATCH</b> 를 누르면 <b>GO/STP · RST · TIME</b>.</li>
-        <li><b>NAV SRC</b>(PFD 소프트키 <b>Active NAV</b>): VOR1(NAV1) → VOR2(NAV2) → FMS. NAV1·NAV2는 CDU에서 튜닝한 VOR을 따라갑니다.</li>
+        <li><b>PFD 배치</b>(실기 PFD 형식): 자세계 하늘·땅이 위쪽 전체를 덮고, 그 위에 <b>속도계</b>(왼쪽 · 아래 <b>GS</b> 칸)와
+            <b>고도계 + 승강계</b>(오른쪽 · 위 <b>RA</b> 칸 — 2,500ft 위면 RA UP · 아래 <b>QNH</b> 칸)가 반투명으로 얹힙니다.
+            아래쪽은 땅 빛이 이어진 위에 왼쪽 <b>엔진 파라미터</b>(TGT · NG · TQ1/TQ2 · NP1/NR/NP2), 가운데 HSI, 오른쪽 <b>레이더 고도계(CRHT)</b> 테이프가
+            반투명으로 얹힙니다. <b>HSI 나침반 중심은 자세계 중심과 같은 세로선</b>이고, TAS · OAT · GS · ISA 는 HSI 왼쪽 아래에 한 줄에 하나씩 네 줄입니다.
+            엔진 파라미터의 TQ 막대에는 HOV · Vy · MTA 선이 그대로 있고, TGT · NG · NP 값은 지금은 토크·NR·엔진 상태(AEO/OEI/IDLE)에서
+            어림한 값입니다(엔진 모델은 차차 갖춥니다). 엔진이 돌면 <b>NP 는 거버너가 100% 를 지키고</b>, 레버를 내려 NR 이 넘치면
+            바늘이 갈라져 NR 만 오릅니다(출력을 넘겨 당겨 NR 이 처지면 NP 도 함께 처짐). NR 막대 띠는 자동회전 RPM 수정표(녹 88~110 · 황 84~88/110~114 · 적)입니다.</li>
+        <li><b>NAV SRC</b>(PFD 소프트키 <b>Active NAV</b> — FCP 버튼은 없앴습니다): VOR1(NAV1) → VOR2(NAV2) → FMS. NAV1·NAV2는 CDU에서 튜닝한 VOR을 따라갑니다.</li>
         <li><b>접근절차 자동 튜닝</b> — 비행계획에서 접근절차를 불러오면(＋ ADD APPROACH) <b>NAV1 은 그 공항의 VOR</b>,
             <b>NAV2 는 그 활주로의 LOC</b> 주파수로 저절로 맞춥니다(알림으로 보여 줍니다). VOR 은 절차 경로에 든 VOR →
             비행장 자료의 VOR(공항 25NM 안 — 주파수가 같은 먼 국은 잡지 않습니다) → 공항에서 가장 가까운 VOR(30NM 안) 순으로,
             LOC 는 절차 이름의 활주로(RWY 36R) → 같은 방향 → 그 공항의 다른 LOC 순으로 고릅니다. 맞출 국이 없으면 그대로 둡니다.</li>
-        <li><b>RNP</b>: FCP 오른쪽 영역. <b>4 / 2 / 1 / 0.3</b> NM — CDI 최대편위(스케일)를 정합니다.</li>
-        <li><b>MG (Slaved) / DG</b> — 방향 기준(MAS). <b>3D 창</b>과 <b>지도 창</b>(툴바 아래 오른쪽)에 같은 버튼이 있고,
-            누를 때마다 바뀝니다(두 창이 함께).
+        <li><b>RNP</b>: FCP 아래 줄. <b>4 / 2 / 1 / 0.3</b> NM — CDI 최대편위(스케일)를 정합니다.</li>
+        <li><b>MG (Slaved) / DG</b> — 방향 기준(MAS). <b>LOWER 창 AHRS 패널</b>에서 정합니다: <b>AHRS 노브</b>(1 · N · 2 · BACKUP)가 PFD 에 쓰는 AHRS 를 고르고
+            (2 면 AHRS 2, 그 밖은 AHRS 1), 고른 AHRS 의 <b>TG/MG DG</b> 버튼이 들어가 있으면 DG · 나와 있으면 MG(Slaved) 입니다.
+            DG 일 때 고른 AHRS 의 <b>HIQ</b> 노브를 돌리면 한 칸에 1° 씩 HSI 를 맞춥니다(노브는 다시 가운데로).
+            <b>3D 창</b>(FLY 아래)의 MG/DG 버튼과 −/+ 도 그대로 쓰고, 누르면 고른 AHRS 의 DG 버튼도 함께 바뀝니다(지도 창 버튼은 없앴습니다).
             <b>MG (Slaved)</b> — 방향 자이로를 <b>지구 자기장</b>에 늘 맞춥니다: HSI 가 지도와 꼭 맞습니다(처음 상태).
             <b>DG</b> — <b>방향 자이로만</b>으로 방향을 정합니다: 지구 자전 등으로 <b>1시간에 약 6°</b> 씩 HSI 가 어긋나고
             (비행 중에만 · 배속이면 그만큼 빨리), 버튼 아래 <b>− / +</b> 로 HSI 를 <b>왼쪽 / 오른쪽 1°</b> 씩 맞춥니다.
-            이때 버튼 아래에 <b>COMP</b>(자기 나침반) 값이 보이니 그것과 견주어 맞추십시오.
+            이때 3D 창 버튼 아래에 <b>COMP</b>(자기 나침반) 값이 보이니 그것과 견주어 맞추십시오.
             DG 이면 PFD 의 HDG 칸 왼쪽에 호박색 <b>DG</b> 가 뜹니다.<br>
             <b>HSI · HDG 칸 · HDG 유지(HDG 상위모드)</b>는 이 계기 헤딩을 따르므로, 오차가 쌓인 채 HDG 로 날면
             <b>실제 기수는 그만큼 비껴</b> 갑니다(예: 오차 −6° 면 HDG 090 으로 날아도 실제로는 096).
             <b>지도 · 3D · NAV(GPS 항법)</b>는 실제 기수를 쓰므로 그대로 맞습니다.
             <b>MG</b> 로 돌아오면 곧 다시 자기 헤딩에 맞습니다.</li>
-        <li><b>SUSP</b>(PFD 소프트키 — 넘어갈지 정할 자리에서 OBS 칸이 SUSP 로 바뀝니다): 걸려 있으면 녹색 바. <b>시퀀싱 보류</b> — 켜져 있으면 활성 웨이포인트를 지나도
+        <li><b>SUSP</b>(PFD 소프트키 — 넘어갈지 정할 자리에서 OBS 칸이 SUSP 로 바뀝니다 · FCP 버튼은 없앴습니다): 켜지면 칸 아래 녹색 바. <b>시퀀싱 보류</b> — 켜져 있으면 활성 웨이포인트를 지나도
             <b>다음으로 넘어가지 않고</b> 그 구간의 코스를 계속 따라갑니다. <b>마지막 지점이어도 NAV 가
             풀리지 않아</b>, 홀딩이나 미스드어프로치를 계속 수행할 수 있습니다.
             비행계획에 <b>홀딩이 걸리면 저절로 켜지고</b>(버튼에 「자동」 표시), 그만하고 다음 절차로 가려면
@@ -1972,14 +2800,7 @@ body.night-mode::after {
         <li><b>방위 표기는 모두 자북(°M)</b>입니다 — HDG·CRS·BRG·NAV SOURCE·지도 BRG 라벨·비행계획 구간방위·바람·선박 침로.
             지도의 선과 거리는 정확도를 위해 내부적으로 진북(대권) 기하로 계산하고, 화면 숫자와 입력만 자북으로 변환합니다
             (한국 자기편차 9°W 기준). 측정자는 <b>°T / °M</b>을 함께 표시합니다.</li>
-        <li><b>PFD 배치</b>(실기 PFD 형식): 자세계 하늘·땅이 위쪽 전체를 덮고, 그 위에 <b>속도계</b>(왼쪽 · 아래 <b>GS</b> 칸)와
-            <b>고도계 + 승강계</b>(오른쪽 · 위 <b>RA</b> 칸 · 아래 <b>QNH</b> 칸)가 반투명으로 얹힙니다.
-            아래쪽은 왼쪽 <b>엔진 파라미터</b>(TGT · NG · TQ1/TQ2 · NP1/NR/NP2), 가운데 HSI, 오른쪽 <b>레이더 고도계(CRHT)</b>(위 2/3)와
-            <b>FMS · NAV1 · NAV2</b> 칸(아래 1/3)입니다. CRHT·NAV 칸은 고도계 칸과 세로로 맞춰 있고, <b>HSI 나침반 중심은 자세계 중심과 같은 세로선</b>입니다.
-            바람은 HSI 오른쪽 위, TAS · OAT · GS · ISA 는 HSI 왼쪽 아래에 네 줄입니다.
-            엔진 계기의 <b>토크는 지금 비행 상태(속도·뱅크·상승률)에서 들 법한 값</b>을 CDU <b>PERF</b> 의 호버 토크·상승 토크 표로 셈해 보여 주고,
-            TQ 막대에 <b>HOV · Vy · MTA</b> 선을 긋습니다(PERF 의 고도·온도·중량을 따름). TGT · NG 는 그 토크에서 어림한 값이고, NP/NR 은 두 엔진 정상(100%)입니다.</li>
-        <li><b>NAV SOURCE 판독</b>(오른쪽 아래 칸 — CRHT 밑, HSI 와 겹치지 않음): <b>FMS · NAV1 · NAV2</b> 세 소스가 각각 가리키는 지점의
+        <li><b>NAV SOURCE 판독</b>(오른쪽 아래 칸 — CRHT 계기를 2/3 높이로 줄이고 그 밑에 둠, HSI 와 겹치지 않음): <b>FMS · NAV1 · NAV2</b> 세 소스가 각각 가리키는 지점의
             <b>명칭 · 방위 · 거리</b>를 소스마다 두 줄(윗줄 소스·명칭, 아랫줄 방위·거리)로 동시에 표시합니다. 현재 선택된 소스는 배경 강조로 구분되며,
             좌우의 <b>BRG1 · BRG2 판독을 모두 대신합니다</b> — 같은 값을 두 번 적지 않습니다.
             <b>나침반의 BRG1(파랑) · BRG2(녹색) 니들</b>은 그대로이고, 하단 <b>BRG</b> 버튼으로 켜고 끕니다.</li>
@@ -2027,8 +2848,37 @@ body.night-mode::after {
             범위를 벗어난 값(방위 0~360, 거리 0.1~400NM)은 알리고 <b>원래 값을 그대로 둡니다</b>.
             웨이포인트 카드의 <b>VNAV 고도 · 오프셋</b>, <b>홀딩 설정</b>의 <b>INBD CRS · 시간/거리</b>도 같은 방식입니다.
             홀딩 시간은 이제 <b>아무 값이나</b>(10~600초) 넣을 수 있습니다 — 종전에는 30·60·90·120·150·180초만 골랐습니다.</li>
-        <li><b>HOVER PAGE</b>(80kt 미만): 호버 속도·위치 지시. PFD 소프트키 <b>Hover Display / Hover Position</b> 으로 켜고,
-            기준 속도는 트림 옆 원형 <b>GSPD</b> 버튼으로 잡습니다(실제 조종간 배치에 맞춘 위치).</li>
+        <li><b>PFD 소프트키</b>(PFD 바로 아래 12칸 — KUH-1CG FLM 그림 5~8 의 트리): 최상위 Map Range − · Map Range + · <b>PFD Map Settings ▸</b> · Traffic Map · <b>PFD Settings ▸</b> · <b>OBS</b> · <b>Active NAV</b> · <b>Sensors ▸</b> · <b>Hover Display</b> · <b>Hover Position</b> · CAS · <b>SIM</b>.
+          <b>OBS</b> 는 지금 FCP 와 같고(NAV 로 날며 홀딩 지점 · 비행계획 마지막 지점(접근 끝 · 미스드어프로치)을 향하거나 보류 중이면 <b>SUSP</b> 로 바뀌어 옛 FCP 의 SUSP 처럼 다음 지점으로 넘어가지 않게 붙잡고, 다시 누르면 풀어 다음으로 — 걸려 있으면(손으로 켬 · 홀딩으로 저절로) 녹색 바), <b>Hover Display · Hover Position</b> 은 옛 FCP 의 HOVER PAGE · HOVER POS(FCP 버튼은 없앴습니다), <b>SIM</b> 은 옛 FCP 의 SIM 버튼(조종간으로 직접 모는 모드 — FCP 버튼은 없앴습니다), <b>Active NAV</b> 는 VOR1 → VOR2 → FMS 로 돌며, Map Range −/+ 는 지도 축척.
+          ▸ 칸은 하위 메뉴 — PFD Map Settings(Map Layout ▸ · Detail · Traffic · Terrain · WX Overlay · Lightning) · PFD Settings(<b>Bearing1 · Bearing2</b> OFF → NAV1 → NAV2 → FMS · Other PFD Settings ▸ Altitude Units ▸ Meters · <b>IN · HPA</b>) · Sensors(RA Settings ▸ RA1 · RA2).
+          <b>Back</b> 은 한 단계 위로, 45초 동안 누르지 않으면 최상위로 돌아갑니다. 켜진 기능은 칸 아래 녹색 바, 지금 쓸 수 없는 칸은 회색. Traffic · Terrain · WX · Detail · Map Layout · Meters · RA · CAS 는 아직 고른 상태만 기억합니다.</li>
+        <li><b>FCP</b>(실기 AFCS 조작 패널 모양 — 옛 FCP 의 줄들과 SIMPLE/FULL 탭은 없앴습니다. 모든 버튼이 이 패널과 PFD 소프트키로 옮겨 왔습니다): 왼쪽은 실기 패널(IAS · HDG · VS · ALT.A · ALT · CR.HT / NAVD CPL · T-DOWN · T.D.HOV · H.HT | BARO · UPLIM / CRS · DH), <b>UPLIM 오른쪽 구분선 뒤</b>는 사용자 기능 — <b>WIND DIR · WIND SPD</b> 노브(위아래) · <b>RNP</b> · <b>SIM SPD</b> · <b>FORCE TRIM · G/A · GSPD</b>(윗줄) · <b>COLLECTIVE TRIM · 4-WAY TRIM · ANTI-TORQUE PEDAL</b>(아랫줄). PFD 창이 좁으면 오른쪽 영역은 아래 줄로 내려갑니다. 위 줄 <b>IAS · HDG · VS · ALT.A · ALT · CR.HT</b>, 아래 줄 <b>NAVD CPL · T-DOWN · T.D.HOV · H.HT</b>, 오른쪽 <b>BARO · UPLIM / CRS · DH</b>.
+          노브는 왼쪽(‹) · 오른쪽(›)을 누르면 돌고(누르고 있으면 계속), 가운데를 누르면 PUSH — IAS · HDG · CRS 는 지금 FCP 의 이름 버튼, CR.HT 는 CRHT 유지, BARO 는 STD(1013).
+          노브 아래 작은 숫자가 지금 기준값이고, 걸린 모드는 녹색으로 켜집니다. UPLIM · DH 와 빈 버튼 둘은 아직 자리만 있습니다.</li>
+        <li><b>스톱워치</b>(PFD HSI 오른쪽 아래 — 메시지 시현창 · HOCAS 창 아래, HOCAS 와 같은 폭 · FCP 의 STOP WATCH 는 없앴습니다): 평소에는 현재 시각(TIME), <b>STOP WATCH</b> 를 누르면 스톱워치 — <b>GO/STP</b> · <b>RST</b> · <b>TIME</b>(시각으로). 배속을 걸면 기체와 같은 시간으로 흐릅니다.</li>
+        <li><b>메시지 시현창</b>(PFD HSI 오른쪽 위 바람 정보 아래): <span style="color:#ffb000">PITOT OFF</span>(PITOT HEAT OFF) ·
+          <span style="color:#ffb000">1 / 2 GEN OFF</span>(그 GEN 스위치 OFF — 엔진이 멎어 발전기가 떨어져도) ·
+          <span style="color:#22e022">PARKING BRAKE SET</span> · <span style="color:#22e022">1 / 2 ENG A/I ON</span>(그 엔진 ANTI ICE 스위치 ON, 또는 NgR 87.5 % 이하면 늘) ·
+          <span style="color:#22e022">NLG LOCK</span>(NOSE WHEEL LOCK) · <span style="color:#22e022">EMER FLOATS ARMED</span>(FLOATS 스위치 ARMED). UPPER · LOWER 창 스위치를 따라 곧바로 바뀝니다.</li>
+        <li><b>HOCAS</b>(CDU <b>Aircraft Systems → HOCAS</b> 칸의 <b>PFD 표시</b> 버튼): 켜면 HSI 오른쪽 아래에 <b>사이클릭(전후·좌우)과 페달</b>이 가운데(중립)인지,
+            한쪽으로 얼마나 치우쳤는지 보입니다 — <b>●</b> 지금 조종간 자리(가운데면 초록 · 치우치면 호박색, F/A·L/R %),
+            <b>○</b> SIM 에서 트림이 잡고 있는 자리, 아래 막대는 페달입니다.
+            오른쪽 세로 막대는 <b>컬렉티브</b>(아래 0 · 위 끝, SIM 은 레버가 요구하는 토크 % · 흰 눈금은 호버 토크)입니다.
+            손을 뗐는데도 가운데가 아니면 같은 칸의 <b>CTR</b> 을 누르십시오 — 지금 자리가 가운데(중립)가 되고 <b>이 장치에 저장</b>되어,
+            다음에 열거나 다시 꽂아도 그대로 씁니다(저장한 가운데가 있으면 SIM 을 켤 때도 바꾸지 않습니다).
+            <b>DEFAULT</b> 는 저장한 가운데를 지우고 기본값(손을 뗀 지금 자리)으로 돌립니다. 칸 아래에 조종 장치 · 저장 여부 · 지금 CYC · PEDAL · COLLECTIVE 값이 보입니다.
+            (FCP 의 HOCAS · CTR 버튼은 이 칸으로 옮겼고, FCP 는 HOVER 글씨로 돌아왔습니다.)</li>
+        <li><b>HOVER PAGE</b>(80kt 미만): 호버 속도·위치 지시. 좌측 HOVER 그룹의 <b>HOVER PAGE / HOVER POS</b> 사각 버튼으로 켜고,
+            기준 속도는 트림 옆 원형 <b>GSPD</b> 버튼으로 잡습니다(실제 조종간 배치에 맞춘 위치).
+            SIM 에서 GSPD 가 걸려 있을 때 <b>트림을 거슬러 조종간을 밀면(against trim)</b> 그쪽으로
+            지상속도가 붙습니다 — 끝까지 밀면 <b>초당 10.5kt</b>(종전의 세 배). 놓으면 기준속도로 돌아가고,
+            FORCE TRIM 을 누르면 그 순간의 속도가 새 기준이 됩니다.</li>
+        <li><b>G/A</b>(FORCE TRIM 아래, SIM 모드): 누르면 FMA 컬렉티브·피치 축이 <b>GA</b> — 두 단계로 갑니다.
+            ① <b>40kt 미만</b>이면 기수를 <b>지금 자세에서 7.5° 숙여</b> 증속하고, 컬렉티브는 <b>고도가 떨어지지 않게만</b> 씁니다.
+            ② <b>40kt 를 넘으면</b>(넘어서 눌렀으면 곧바로) <b>선택 상승률(기본 1000fpm, VS ▲▼ 로 최저 300fpm)</b>로 오르며 속도는
+            <b>Vy 로 수렴</b>합니다(Vy~VNE 면 지금 속도 유지, VNE 초과면 VNE). 상승률은 8초에 걸쳐 붙고 속도가 목표에 다가갈수록 늘어납니다.
+            목표 속도에 닿고 상승률이 다 붙으면 컬렉티브 <b>VS</b> · 피치 <b>IAS</b> 로 넘어갑니다. 어느 단계든 누른 고도 아래로는 내려가지 않습니다.
+            롤 축은 커플되지 않으므로 뱅크는 그대로 — 기수 유지가 필요하면 조종사가 HDG 를 겁니다.</li>
         <li>HOVER PAGE에는 <b>SHIP</b>(청록)과 <b>비행계획 활성 웨이포인트</b>(빨강 삼각형)가 함께 표시됩니다.
             반경 50 ft 이내면 실제 축척 위치에, 밖이면 방향 니들과 점선으로 나타납니다.</li>
         <li><b>ANTI-TORQUE PEDAL ◀▶</b>(GSPD 우측): 뱅크 없이 기수만 즉시 회전(홀드 시 약 12°/s).
@@ -2051,8 +2901,30 @@ body.night-mode::after {
           <b>Waypoint Info</b>를 누르면 실기처럼 3칸씩 <b>Airport · INT · VOR / NDB · VRP · User Waypoint / Create Waypoint · Airport INFO</b>가 나옵니다. <b>Airport INFO</b>는 비행장 정보(Back 은 Waypoint Info 로), <b>Create Waypoint</b>는 Flight Plan 의 <b>Add WPT</b> 와 같은 ADD WAYPOINT 화면을 엽니다. <b>Airport</b> · <b>INT</b> · <b>VOR</b> · <b>NDB</b>는 ICAO 비행장(28곳) · Fix(146곳) · VOR(41곳) · ADF/NDB(113곳) 목록을 보입니다(지금 자리에서 방위·거리, <b>거리순/이름순</b> 버튼). 줄을 누르면 그 시설을 Flight Plan 끝에 넣고 Flight Plan 을 엽니다. 나머지는 차차 갖춥니다(지금은 준비 중 화면).</li>
         <li><b>기상</b>: 홈의 <b>Weather</b> 버튼을 누르면 <b>Windy · 저고도 날씨 · CCTV · METAR/TAF</b> 네 버튼이 나옵니다(CCTV 의 Back 은 Weather 로). Tide forecast 는 홈에 그대로 있습니다.</li>
         <li><b>Aircraft Systems</b>(홈 둘째 버튼): 누르면 <b>AFCS · Aircraft Status · Electrical · Engines · Fuel · RA Self Test · HOCAS · System Tests · Lighting Config · Video · Maintenance</b>
-            버튼이 나옵니다(실기 사진의 배치 — 계통 화면은 아직 준비 중). Back 은 Aircraft Systems 로 돌아옵니다.</li>
-        <li><b>정보</b>: CCTV · Charts · NOTAM · <b>Airport INFO</b>(Waypoint Info 안 — 비행장) · Services · SkyVector · ER availability · Wildfire status</li>
+            버튼이 나옵니다. 누른 버튼이 <b>SYSTEM 창</b>(창 탭의 SYSTEM)의 화면도 고릅니다. Back 은 Aircraft Systems 로 돌아옵니다.</li>
+        <li><b>SYSTEM 창</b>(창 탭 — CDU · MAP · 3D · UPPER 옆, 제일 왼쪽 PFD 창의 탭에도 있어 PFD 자리에 띄울 수 있습니다 — PFD 탭으로 돌아옵니다): 실기 MFD 계통 화면. 왼쪽 띠에 TGT · NG · EOT · EOP · MGB · Fuel F · Fuel P · HYD P ·
+            Fuel QTY · Battery · ACCP, 위 줄에 END(남은 연료 ÷ 연료 흐름) · FLT(비행 시간) · DNALT. 지금 갖춘 화면은 <b>Fuel</b> —
+            Left · Total · Right · AUX, 탱크(FWD · FT1 · FT2 · AFT · F5)의 양과 채움, 엔진마다 PPH · 연료 압력, 경고 칸(PRESS LOW · FUEL LOW ·
+            FUEL IMBALANCE 는 걸리면 호박색). 연료는 시뮬 시계가 돌 때 엔진 토크를 따라 줄고(배속 반영), 집합 탱크(FT1 · FT2)는 주 탱크에서
+            채워 둡니다. <b>AUX 탱크</b>(EXT AUX1 왼쪽 · EXT AUX2 오른쪽)에는 처음 <b>525 lbs 씩</b>(합 1050) 들어 있고, LOWER 창 FUEL 패널의 <b>AUX1/AUX2 XFER</b> 로
+            주 탱크에 보냅니다 — <b>AUTO</b>: 그쪽 주 탱크가 100 lbs 넘게 비면 이송 펌프가 저절로 돌고 거의 차면 멈춤 · <b>ON</b>: 주 탱크가 찰 때까지 늘 · <b>OFF</b>: 안 보냄.
+            펌프가 돌 때만 Fuel 화면에 <b>TP</b> 심벌(AUX1 칸 · AUX2 의 TP1/TP2)이 나오고 이송 배관이 녹색이 됩니다.
+            <b>가용 토크(MTA)</b>: UPPER 창 ECS 노브 <b>HEAT</b> 면 #1·#2 엔진 모두 4% 씩(계기 MTA −4%), <b>ENG ANTI ICE</b> 를 켠 엔진마다 14%(둘 다 −14% · 하나 −7%)가 줄어
+            TQ 막대의 MTA 선과 SIM 에서 낼 수 있는 토크가 함께 낮아집니다.
+            CDU 의 <b>Aircraft Systems → Fuel</b> 에서 −100 · +100 · 합계 정하기(1000 · 1500 · 2000 · 2500) · RESET(1914) 로 연료를 조정합니다.
+            <b>Electrical</b> — GEN 1·2 · APU GEN · AC GPU → AC 1·2 Primary Bus(DIC · ESS · N-ESS) → TRU 1·2 → DC 1·2 Primary Bus(SEC · ESS · N-ESS) · BATT · BATT BUS.
+            UPPER 창의 스위치를 따릅니다: GEN n(엔진이 돌 때) · APU CONTR + APU GEN · TRU n · BATT. 발전기 하나가 멎으면 남은 발전기가 두 AC 버스를
+            맡고(가운데 연결선), TRU 가 다 없으면 배터리가 DC 를 맡아 방전합니다.
+            <b>주 발전기(GEN 1·2)가 하나라도 살아 있으면 APU GEN · AC GPU 는 돌고 있어도 버스에서 떨어집니다</b>(원 표시는 녹색 · 아래로 가는 선은 회색 = 대기).
+            주 발전기가 없을 때 APU GEN 이 붙으면 AC 1·2 를 맡고, 불필요한 전기를 줄이려고 <b>DC 쪽 N-ESS 는 끊습니다</b>(회색). 전기가 오는 선·버스는 녹색, 안 오면 회색.
+            (UPPER 창의 GEN · TRU · BATT 는 정상 비행 구성인 ON 이 처음 값입니다.) CDU 의 Electrical 칸에는 전원 상태가 줄로 나옵니다.
+            <b>AFCS</b> — AP1 · AP2 레인(SEMA1 · SEMA2 · TRIM)과 AFCS MAINTENANCE MODE. CDU 의 AFCS 칸에서 <b>AFCS TEST</b> 를 누르거나 LOWER 창 AFCAU 의 <b>P FLT TST</b> 를 누르면
+            두 AP 가 함께 시험(C · YR · P 액추에이터가 붉게)을 시작해 AP2 TEST OK → AP1 TEST OK 뒤 AFCS TEST OK 화면이 됩니다(약 10초 · 이때는 AFCS MAINTENANCE MODE · NOM DEF 를 지운다).
+            <b>Engine</b> — 엔진마다 EHC 자료(Anti-Ice · T45 Margin · T2 · PS3 · P0 · LDS · PCD Position 등)와 MGB · IGB · TGB 온도. 엔진이 멎으면 값이 노란 X.
+            <b>Aircraft Status</b> — 유압 1·2(PSI · °C · Liters), 연료 FQMS 표(탱크별 · L/R · Total), Feed PRESS · MFSOV 상태, 이송 펌프,
+            화재 탐지(FIRE DETECTOR 노브로 시험) · 화재 소화(TQS T HANDLE ARM → ENG CMD · APU T-핸들 · RESERVE), ADS 가열(PITOT HEAT), ACC PRESS, 방빙(ENG ANTI ICE).
+            나머지 화면은 '준비 중'입니다.</li>
+        <li><b>정보</b>: CCTV · Charts · NOTAM · <b>INFO</b>(비행장) · Services · SkyVector · ER availability · Wildfire status</li>
         <li><b>항법</b>: Flight Plan · PROC · <b>VNAV</b> · Track &amp; Point · MAP</li>
         <li><b>운영</b>: PERF · Checklist · Utilities · Setting</li>
         <li>하단 공통 버튼: <b>Home · Full/Half · Setting · Back</b> (홈 화면에는 <b>UBIKAIS</b> 바로가기)</li>
@@ -2082,7 +2954,7 @@ body.night-mode::after {
 
       <h3>7. GPS 모드 (실비행)</h3>
       <ul>
-        <li>GPS 버튼을 켜면 실제 위치·속도·고도로 계기가 움직입니다.</li>
+        <li>GPS 버튼을 켜면 실제 위치·속도·고도로 계기가 움직입니다. 앱을 열면 GPS 는 꺼져 있습니다.</li>
         <li>헤딩: <b>10kt 미만은 기기 나침반</b>, 10kt 이상은 항적 기준(첫 실행 시 나침반 권한 허용).</li>
         <li>신호가 잠시 끊겨도 GPS는 꺼지지 않고 자동으로 재개됩니다.</li>
       </ul>
@@ -2115,9 +2987,9 @@ body.night-mode::after {
             진단에 연결된 장치가 모두 나오고 사용 중인 것에 <b>←사용</b> 이 붙습니다.</li>
         <li><b>설정 → 조종 장치 버튼 배정</b>에서 동작을 누르면 <b>입력 대기</b>가 되고,
             그때 누른 버튼이 그 동작에 잡힙니다. 배정은 기기에 저장되어 다음에도 그대로입니다.</li>
-        <li>배정할 수 있는 동작: <b>FLY/PAUSE · FORCE TRIM · GSPD · HOVER POSITION</b>,
+        <li>배정할 수 있는 동작: <b>FLY/PAUSE · FORCE TRIM · G/S·GSPD(지상속도) · HOVER POSITION</b>,
             <b>트림 ▲▼◀▶ · 페달</b>, <b>HDG · IAS · ALT · CRHT · VS · CRS</b> 증감,
-            <b>ALT/CRHT 유지 · NAV · G/S · SUSP · OBS</b>, <b>HOVER PAGE</b>,
+            <b>ALT/CRHT 유지 · NAV · SUSP · OBS</b>, <b>HOVER PAGE</b>,
             지도 <b>추종 · HDG↑/N↑ · 확대/축소</b>.</li>
         <li>동작 성격에 따라 <b>누르는 순간 한 번</b>(FLY/PAUSE 등), <b>누르는 동안 유지</b>(트림),
             <b>누르고 있으면 연속</b>(HDG·IAS 등, 화면 버튼과 같은 리듬)으로 동작합니다.</li>
@@ -2178,18 +3050,35 @@ body.night-mode::after {
   <div id="left-panel">
     <div id="left-tabs">
       <button class="page-tab active" data-sel="pfd" data-act="selectPanel" data-arg='["left", "pfd"]'>PFD</button>
-      <button class="page-tab" data-sel="map" data-act="selectPanel" data-arg='["left", "map"]'>MAP</button>
-      <button class="page-tab" data-sel="cdu" data-act="selectPanel" data-arg='["left", "cdu"]'>CDU</button>
-      <button class="page-tab" data-sel="m3d" data-act="selectPanel" data-arg='["left", "m3d"]' title="3D 지도 — 2D 지도와 나란히 볼 수 있습니다">3D</button>
+      <button class="page-tab" data-sel="sysp" data-act="selectPanel" data-arg='["left", "sysp"]' title="SYSTEM — MFD 계통 화면을 이 창에(PFD 탭으로 돌아온다)">SYSTEM</button>
       <button class="page-tab split-tab" id="pfd-solo-btn" data-act="pfdSolo" title="PFD 단독 — PFD 만 화면 가득(한 번 더 누르면 원래 배치)">⛶ PFD 단독</button>
-      <button class="page-tab split-tab" id="split-toggle" data-act="toggleTriple" title="2분할 ⇄ 3분할">⿲ 3분할</button>
+      <button class="page-tab split-tab" id="m3d-solo-btn" data-act="panelSolo" data-arg='["m3d"]' title="3D 단독 — 3D 지도를 화면 가득, PFD(계기만)를 왼쪽 위에 겹쳐(한 번 더 누르면 원래 배치)">⛶ 3D 단독</button>
+      <button class="page-tab split-tab" id="split-toggle" data-act="cycleSplit" title="분할 바꾸기 — 2 → 3 → 4 분할">⿲ 3분할</button>
+      <button class="page-tab simlay-tab" id="simlay-open-btn" data-act="simLayoutShow" title="창 배치 — 화면(PFD · 3D · MAP · CDU · UPPER · LOWER · SYSTEM)마다 새 창으로 따로 띄운다(SIM Mode)">⧉ 창 배치</button>
+      <button class="page-tab po-btn" data-act="popoutToggle" data-arg='["left"]' title="이 패널을 새 창으로 띄운다(다중 모니터에 따로 배치)">⧉ POP UP</button>
+      <button class="page-tab po-top-btn" data-act="popoutTop" data-arg='["left", "$el"]' title="Top — 이 창을 다른 창들보다 늘 위에 띄운다(한 번 더 누르면 본 창으로)">📌 Top</button>
     </div>
     <div id="pfd-wrap">
     <canvas id="pfd"></canvas>
     <div class="ctrl-bar">
 
-      <!-- 옛 FCP 1·2행(IAS · HDG · CRS · VS · ALT · CRHT ▲▼ · ALT/CRHT/G/S · WDIR · WSPD · AP · BRG · 스톱워치 · HOVER)은 없앴다 —
-           FCP 패널(07-sim.js)과 PFD 소프트키 · PFD 안 스톱워치가 대신한다 -->
+      <!-- 1행(IAS · HDG · CRS · VS · ALT · CRHT · HHT · TDOWN · T/D to H)은 없앴다 — 같은 기능이 FCP SIMPLE 패널(07-sim.js)에 다 있고, 그 패널은 늘 보인다 -->
+
+      <!-- 2행: WDIR / WSPD / AP(OBS·NAV) / BRG / 스톱워치 / HOVER -->
+      <div class="ctrl-sub-row" style="border-top:1px solid #1e1e1e;">
+
+        <!-- WDIR · WSPD ▲▼ 는 FCP 패널의 WIND DIR · WIND SPD 노브로, AP 의 OBS 는 소프트키 OBS, NAV 는 FCP 패널 NAVD CPL 로 옮겼다 -->
+        <!-- 인터셉트 각도 버튼은 없앴다(NAV 인터셉트는 기본 45°) -->
+
+        <div class="ctrl-div"></div>
+
+        <!-- BRG1 · BRG2 · #1BDP · #2BDP 는 PFD 소프트키 PFD Settings → Bearing1 · Bearing2 로 옮겼다 -->
+        <!-- STOP WATCH 는 PFD 안(HSI 오른쪽 아래 — 메시지 시현창 · HOCAS 아래)으로 옮겼다(03-pfd.js drawStopwatch) -->
+
+        <!-- HOVER PAGE · HOVER POS 는 PFD 소프트키 Hover Display · Hover Position 으로 옮겼다 -->
+
+      </div><!-- end ctrl-sub-row 2 -->
+
       <!-- 3행: NAV SOURCE / RNP -->
       <div class="ctrl-sub-row" style="border-top:1px solid #1e1e1e;">
 
@@ -2239,7 +3128,11 @@ body.night-mode::after {
               <button class="trim-cell tc-r"   id="trim-r"   data-trim-dir="R">►</button>
             </div>
           </div>
-          <button class="force-trim-btn" id="force-trim-btn" data-act="forceTrim" title="Force Trim">FORCE<br>TRIM</button>
+          <div class="ftr-col">
+          <button class="force-trim-btn" id="force-trim-btn" data-act="forceTrimBtn" title="Force Trim">FORCE<br>TRIM</button>
+          <!-- G/A — 복행: 컬렉티브·피치 GA → 25초(전진 20kt 넘으면 17초) 뒤 VS · IAS (14-simmode.js gaEngage) -->
+          <button class="ga-btn" id="ga-btn" data-act="gaEngage" title="G/A(복행) — 지금 고도 아래로 가지 않고 25초(전진 20kt 넘으면 17초)에 걸쳐 Vy 까지 점점 가속하며 1,000fpm(VS ▲▼ 로 300fpm 까지)으로 상승. 끝나면 VS · IAS. 롤 축은 그대로(HDG 는 조종사가 건다)">G/A</button>
+          </div>
           <button class="gspd-btn" id="gspd-btn" data-act="toggleGspd" title="Ground Speed Hold">GSPD</button>
           <div class="pedal-group">
             <div class="pedal-lbl">ANTI-TORQUE<br>PEDAL</div>
@@ -2262,11 +3155,15 @@ body.night-mode::after {
   <!-- 3분할일 때만 보이는 중앙 패널 -->
   <div id="mid-panel">
     <div id="mid-tabs" class="panel-tabs">
-      <button class="page-tab" data-sel="pfd" data-act="selectPanel" data-arg='["mid", "pfd"]'>PFD</button>
-      <button class="page-tab active" data-sel="map" data-act="selectPanel" data-arg='["mid", "map"]'>MAP</button>
       <button class="page-tab" data-sel="cdu" data-act="selectPanel" data-arg='["mid", "cdu"]'>CDU</button>
-      <button class="page-tab" data-sel="m3d" data-act="selectPanel" data-arg='["mid", "m3d"]' title="3D 지도 — 2D 지도와 나란히 볼 수 있습니다">3D</button>
+      <button class="page-tab" data-sel="map" data-act="selectPanel" data-arg='["mid", "map"]'>MAP</button>
+      <button class="page-tab" data-sel="m3d" data-act="selectPanel" data-arg='["mid", "m3d"]' title="3D — SIM 이 꺼져 있으면 지형 정찰(우하단 조작 버튼), SIM 이면 조종석 시야">3D</button>
+      <button class="page-tab" data-sel="ovhd" data-act="selectPanel" data-arg='["mid", "ovhd"]' title="UPPER CONSOLE — 상부 콘솔 스위치(시뮬레이터 연동 예정)">UPPER</button>
+      <button class="page-tab" data-sel="lcon" data-act="selectPanel" data-arg='["mid", "lcon"]' title="LOWER CONSOLE — 하부 콘솔(AHRS · AFCAU · FUEL · MPP · PARKING BRAKE 등)">LOWER</button>
+      <button class="page-tab" data-sel="sysp" data-act="selectPanel" data-arg='["mid", "sysp"]' title="SYSTEM — MFD 계통 화면(CDU 의 Aircraft Systems 버튼으로 화면을 고른다)">SYSTEM</button>
       <button class="page-tab split-tab" id="map-solo-btn" data-act="panelSolo" data-arg='["map"]' title="MAP 단독 — 지도만 화면 가득(한 번 더 누르면 원래 배치)">⛶ MAP 단독</button>
+      <button class="page-tab po-btn" data-act="popoutToggle" data-arg='["mid"]' title="이 패널을 새 창으로 띄운다(다중 모니터에 따로 배치)">⧉ POP UP</button>
+      <button class="page-tab po-top-btn" data-act="popoutTop" data-arg='["mid", "$el"]' title="Top — 이 창을 다른 창들보다 늘 위에 띄운다(한 번 더 누르면 본 창으로)">📌 Top</button>
     </div>
   </div>
   <div id="divider-2"><div id="divider-grip-2"></div></div>
@@ -2274,36 +3171,147 @@ body.night-mode::after {
   <div id="right-panel">
 
     <div id="page-tabs">
-      <button class="page-tab" data-sel="pfd" data-act="selectPanel" data-arg='["right", "pfd"]'>PFD</button>
-      <button class="page-tab active" data-sel="map" data-act="selectPanel" data-arg='["right", "map"]'>MAP</button>
       <button class="page-tab" data-sel="cdu" data-act="selectPanel" data-arg='["right", "cdu"]'>CDU</button>
-      <button class="page-tab" data-sel="m3d" data-act="selectPanel" data-arg='["right", "m3d"]' title="3D 지도 — 2D 지도와 나란히 볼 수 있습니다">3D</button>
+      <button class="page-tab active" data-sel="map" data-act="selectPanel" data-arg='["right", "map"]'>MAP</button>
+      <button class="page-tab" data-sel="m3d" data-act="selectPanel" data-arg='["right", "m3d"]' title="3D — SIM 이 꺼져 있으면 지형 정찰(우하단 조작 버튼), SIM 이면 조종석 시야">3D</button>
+      <button class="page-tab" data-sel="ovhd" data-act="selectPanel" data-arg='["right", "ovhd"]' title="UPPER CONSOLE — 상부 콘솔 스위치(시뮬레이터 연동 예정)">UPPER</button>
+      <button class="page-tab" data-sel="lcon" data-act="selectPanel" data-arg='["right", "lcon"]' title="LOWER CONSOLE — 하부 콘솔(AHRS · AFCAU · FUEL · MPP · PARKING BRAKE 등)">LOWER</button>
+      <button class="page-tab" data-sel="sysp" data-act="selectPanel" data-arg='["right", "sysp"]' title="SYSTEM — MFD 계통 화면(CDU 의 Aircraft Systems 버튼으로 화면을 고른다)">SYSTEM</button>
+      <button class="page-tab split-tab" id="m3d-only-btn" data-act="panelSolo" data-arg='["m3d"]' title="3D Only — 3D 지도를 화면 가득, PFD(계기)를 왼쪽 위에 겹쳐(한 번 더 누르면 원래 배치)">⛶ 3D Only</button>
       <button class="page-tab split-tab" id="cdu-solo-btn" data-act="panelSolo" data-arg='["cdu"]' title="CDU 단독 — CDU 만 화면 가득(한 번 더 누르면 원래 배치)">⛶ CDU 단독</button>
+      <button class="page-tab po-btn" data-act="popoutToggle" data-arg='["right"]' title="이 패널을 새 창으로 띄운다(다중 모니터에 따로 배치)">⧉ POP UP</button>
+      <button class="page-tab po-top-btn" data-act="popoutTop" data-arg='["right", "$el"]' title="Top — 이 창을 다른 창들보다 늘 위에 띄운다(한 번 더 누르면 본 창으로)">📌 Top</button>
       <button id="reload-btn" data-act="hardReload" title="새로고침(상태 초기화)">⟳</button>
     </div>
 
     <!-- 3D 전용 창 — 탭에서 '3D' 를 고르면 #map3d 가 이 안으로 옮겨 온다.
          (지도 한 벌을 옮겨 쓰므로 3D 지도가 두 번 그려지지 않는다) -->
     <div id="map3d-wrap" class="page-content page-hidden"></div>
+    <!-- UPPER CONSOLE — 상부 콘솔(js/17-upper.js) -->
+    <div id="ovhd-wrap" class="page-content page-hidden"></div>
+    <!-- LOWER CONSOLE — 하부 콘솔(js/19-lower.js) -->
+    <div id="lcon-wrap" class="page-content page-hidden"></div>
+    <!-- SYSTEM — MFD 계통 화면(js/18-system.js) -->
+    <div id="sysp-wrap" class="page-content page-hidden"></div>
 
     <!-- Page 1: Map -->
     <div id="map-wrap" class="page-content tcut-off">
       <div id="map"></div>
+      <!-- 3D 화면에 겹쳐 띄우는 계기(PFD 일부 · FCP 없이) — 3D 가 떠 있는 창의 왼쪽 위(07-sim.js pfdOverlayDraw) -->
+      <div id="pfd-ov"><canvas id="pfd-ov-cvs" data-no-fcp="1"></canvas></div>
       <div id="map3d">
-        <!-- MG(Slaved)/DG — 방향 기준. 지도 창의 같은 버튼과 같다(07-sim.js) -->
-        <div class="hdgref" id="hdgref-3d">
-          <button class="sim-btn hdgref-btn" data-act="toggleHdgRef" title="방향 기준 — MG(Slaved): 자이로를 지구 자기장에 맞춘다 · DG: 방향 자이로만(1시간에 약 6° 어긋난다 → −/+ 로 맞춘다)">MG (Slaved)</button>
-          <div class="hdgref-adj">
-            <button class="sim-btn" data-act="dgAdjust" data-arg='[-1]' title="DG — HSI 를 왼쪽으로 1°" disabled>−</button>
-            <button class="sim-btn" data-act="dgAdjust" data-arg='[1]' title="DG — HSI 를 오른쪽으로 1°" disabled>+</button>
+        <!-- SIM 1인칭에서만 — 화면 아래 가운데로 보이는 내 헬기의 기수(nose) · 15-heli3d.js -->
+        <div id="sim-nose" aria-hidden="true">
+          <svg viewBox="0 0 400 100" preserveAspectRatio="xMidYMax meet">
+            <defs>
+              <linearGradient id="nose-side" x1="0" x2="1" y1="0" y2="0">
+                <stop offset="0" stop-color="#9ea4ab"/><stop offset="0.28" stop-color="#e3e6e9"/>
+                <stop offset="0.5" stop-color="#f6f7f8"/><stop offset="0.72" stop-color="#e3e6e9"/>
+                <stop offset="1" stop-color="#9ea4ab"/>
+              </linearGradient>
+              <linearGradient id="nose-shade" x1="0" x2="0" y1="0" y2="1">
+                <stop offset="0" stop-color="#000" stop-opacity="0"/><stop offset="0.7" stop-color="#000" stop-opacity="0.08"/>
+                <stop offset="1" stop-color="#000" stop-opacity="0.45"/>
+              </linearGradient>
+            </defs>
+            <path d="M 14 100 C 52 42, 132 13, 200 11 C 268 13, 348 42, 386 100 Z" fill="url(#nose-side)"/>
+            <path d="M 14 100 C 52 42, 132 13, 200 11 C 268 13, 348 42, 386 100 Z" fill="url(#nose-shade)"/>
+            <ellipse cx="200" cy="15" rx="34" ry="7.5" fill="#2b2e33"/>
+            <line x1="200" y1="23" x2="200" y2="100" stroke="#a3a9b0" stroke-width="1.4"/>
+            <path d="M 14 100 C 52 42, 132 13, 200 11 C 268 13, 348 42, 386 100" fill="none" stroke="#6d737a" stroke-width="1.2"/>
+          </svg>
+        </div>
+        <!-- 3D 조작 버튼 — 오른쪽 한 줄, 같은 너비. ☰ 로 접고 편다(04-map.js toggleCtl3d) -->
+        <div id="ctl3d">
+          <button class="sim-btn" id="ctl3d-tog" data-act="toggleCtl3d" title="버튼 접기/펴기">▲ 접기</button>
+          <div id="ctl3d-body">
+            <!-- 3D 가 제 창(탭의 '3D')을 쓸 때의 SHIP — 메뉴·설정창을 이 창 안에서 연다 -->
+            <button class="sim-btn" id="ship3d-btn" data-act="toggleShip3d">⛵ SHIP</button>
+          <!-- 3D 화질 — 상 → 중 → 하(낮출수록 부드럽다 · 04-map.js) -->
+          <button class="sim-btn" id="q3d-btn" data-act="cycleMap3dQuality" title="3D 화질 — 누를 때마다 상 → 중 → 하. 낮출수록 저고도에서도 부드럽습니다">화질 중</button>
+          <!-- SIM 1인칭에서만 보인다 — 아래 좌·우 CHIN 창을 끄고 켠다 -->
+          <div id="chin-btn">
+            <button class="sim-btn" id="chin-l-btn" data-act="toggleChinView" data-arg='["L"]' title="L CHIN — 왼쪽 발밑 창 켜기/끄기">L CHIN</button>
+            <button class="sim-btn" id="chin-r-btn" data-act="toggleChinView" data-arg='["R"]' title="R CHIN — 오른쪽 발밑 창 켜기/끄기">R CHIN</button>
           </div>
-          <div class="hdgref-comp" title="자기 나침반(스탠바이) — DG 를 맞출 때 견준다"></div>
+          <!-- SIM 에서만 보인다 — 1인칭 ↔ 외부 시점(뒤에서 내 헬기를 본다) -->
+          <button class="sim-btn" id="ext-btn" data-act="toggleExtView" title="외부 시점 — 뒤에서 따라가며 내 헬기(흰수리)를 봅니다. 시야 둘러보기(B0 + 햇)로 둘레를 돌아봅니다">EXT</button>
+          <!-- 외부 시점 카메라 — EXT 일 때만 보인다(15-heli3d.js extCam*) -->
+          <div id="extcam-3d">
+            <div class="extcam-row"><button class="sim-btn" data-act="extCamHold" data-arg='["L"]' data-on="pointerdown" title="헬기를 축으로 왼쪽으로 1° 돈다(누르고 있으면 이어 간다)">◀</button><button class="sim-btn" data-act="extCamHold" data-arg='["R"]' data-on="pointerdown" title="오른쪽으로 1° 돈다">▶</button></div>
+            <div class="extcam-row"><button class="sim-btn" data-act="extCamHold" data-arg='["U"]' data-on="pointerdown" title="위에서 내려다보게 1°">▲</button><button class="sim-btn" data-act="extCamHold" data-arg='["D"]' data-on="pointerdown" title="아래에서 올려다보게 1°">▼</button></div>
+            <div class="extcam-row"><button class="sim-btn" data-act="extCamHold" data-arg='["IN"]' data-on="pointerdown" title="가까이">거리 −</button><button class="sim-btn" data-act="extCamHold" data-arg='["OUT"]' data-on="pointerdown" title="멀리">거리 +</button></div>
+            <button class="sim-btn" data-act="extCamDefault" title="뒤에서 기본 거리·각으로">DEFAULT</button>
+            <div id="extcam-info" title="둘레 각 · 내려다보는 각 · 거리 배율">0° · 12° · ×1.0</div>
+          </div>
+          <!-- FLY/PAUSE — 지도 창의 같은 버튼과 같다(3D 를 제 창으로 쓸 때도 바로 멈추고 이어 간다) -->
+          <button class="sim-btn" id="fly3d-btn" data-act="toggleSim" title="FLY / PAUSE — 지도 창의 같은 버튼과 같습니다">▶ FLY</button>
+          <!-- SOUND — 로터 소리 켜기/끄기(16-sound.js). 땅에서는 이륙 전, 바퀴가 떨어지면 이륙 후 소리 -->
+          <button class="sim-btn" id="snd-btn" data-act="toggleSound" title="소리 — 땅에서는 이륙 전, 바퀴가 떨어지면 이륙 후 소리(뜨고 내릴 때 겹쳐 바뀝니다)">🔇 SOUND</button>
+          <!-- 계기 ON/OFF — 3D 화면 왼쪽 위에 겹친 계기(PFD 일부)를 보이고 감춘다(07-sim.js) -->
+          <button class="sim-btn on" id="fpv-btn" data-act="toggleFpv" title="ADI 의 예상 항적(초록 원 · FPV) 보이기/감추기">FPV ON</button>
+            <button class="sim-btn on" id="pfdov-btn" data-act="togglePfdOverlay" title="계기 — 3D 화면 왼쪽 위에 PFD 계기(FCP 없이)를 겹쳐 보이기/감추기">계기 ON</button>
+            <!-- 겹친 계기 크기 — 60~160%(07-sim.js pfdOvSize) -->
+            <div class="hdgref-adj" id="pfdov-size" title="겹친 계기 크기 — − 줄이기 · + 키우기(60~160%)">
+              <button class="sim-btn" data-act="pfdOvSize" data-arg='[-1]' title="계기 줄이기">−</button>
+              <span id="pfdov-pct">100%</span>
+              <button class="sim-btn" data-act="pfdOvSize" data-arg='[1]' title="계기 키우기">+</button>
+            </div>
+          <!-- CDU ON/OFF — 3D 단독 화면에서 3D 버튼 줄 바로 왼쪽에 CDU 를 계기 칸 크기로 겹쳐 띄운다(07-sim.js) -->
+          <button class="sim-btn" id="cduov-btn" data-act="toggleCduOverlay" title="CDU — 3D 단독(3D Only) 화면에서 3D 버튼 줄 바로 왼쪽에 CDU 를 계기 칸 높이(3/5)로 보이기/감추기">CDU OFF</button>
+          <!-- MAP ON/OFF — 3D 단독 화면에서 2D 지도를 계기 칸 크기로 겹쳐 띄운다(CDU 칸 왼쪽 · 07-sim.js) -->
+          <button class="sim-btn" id="mapov-btn" data-act="toggleMapOverlay" title="MAP — 3D 단독(3D Only) 화면에서 2D 지도를 계기 칸 크기(가로 1/4 · 높이 3/5)로 CDU 칸 왼쪽에 보이기/감추기(CDU 의 MAP 버튼과 같다)">MAP OFF</button>
+          <!-- FCP ON/OFF — PFD 아래 FCP 전체를 3D 화면 왼쪽 아래에 한 창으로(3D 단독에서만 · 04-map.js) -->
+          <div id="fcp-btn" class="fcp-btn-row"><button class="sim-btn" id="fcp-l-btn" data-act="toggleFcp3d" title="FCP — PFD 아래 FCP 전체를 3D 화면 왼쪽 아래에 한 창으로 보이기/감추기(L CHIN 창은 닫힘 · 3D 단독 화면에서만)">FCP OFF</button></div>
+          <!-- STICK — 3D 단독 · SIM 에서 오른쪽 아래(R CHIN 자리)에 화면 조종간 셋(컬렉티브 · 페달 · 16방향 사이클릭) · 14-simmode.js -->
+          <button class="sim-btn" id="vstick-btn" data-act="toggleVStick" title="화면 조종간 — 3D 단독(SIM)에서 오른쪽 아래에 컬렉티브(위아래) · 페달(좌우) · 사이클릭(16방향 원형)을 띄운다(R CHIN 창은 닫힘)">STICK OFF</button>
+          <!-- GYRO — 태블릿·휴대폰 기울기로 16방향 사이클릭(3D 단독 · SIM). ALIGN 을 누른 그때를 가운데로 · 14-simmode.js -->
+          <button class="sim-btn" id="gyro-btn" data-act="toggleGyro" title="GYRO — 기기를 기울여 사이클릭(16방향 · 피치 ±10° · 롤 ±20°)을 몬다. 켠 뒤 GYRO ALIGN 을 누른 그때의 자세가 가운데">GYRO OFF</button>
+          <button class="sim-btn" id="gyro-align-btn" data-act="gyroAlign" style="display:none" title="GYRO ALIGN — 지금 기기 자세를 가운데로 잡고 그때부터 기울기로 조종">GYRO ALIGN</button>
+          <!-- MG(Slaved)/DG — 방향 기준. 지도 창의 같은 버튼과 같다(07-sim.js) -->
+          <div class="hdgref" id="hdgref-3d">
+            <button class="sim-btn hdgref-btn" data-act="toggleHdgRef" title="방향 기준 — MG(Slaved): 자이로를 지구 자기장에 맞춘다 · DG: 방향 자이로만(1시간에 약 6° 어긋난다 → −/+ 로 맞춘다)">MG (Slaved)</button>
+            <div class="hdgref-adj">
+              <button class="sim-btn" data-act="dgAdjust" data-arg='[-1]' title="DG — HSI 를 왼쪽으로 1°" disabled>−</button>
+              <button class="sim-btn" data-act="dgAdjust" data-arg='[1]' title="DG — HSI 를 오른쪽으로 1°" disabled>+</button>
+            </div>
+            <div class="hdgref-comp" title="자기 나침반(스탠바이) — DG 를 맞출 때 견준다"></div>
+          </div>
+          <!-- 회전익 특성 — COLLECTIVE TO YAW · COLLECTIVE TO PITCH · YAW TO PITCH (14-simmode.js) -->
+          <div id="rotor-3d">
+            <button class="sim-btn rotor-main" data-act="toggleRotorChar" title="회전익 특성 — 컬렉티브→요 · 컬렉티브→피치(±5°) · 페달→피치(±2°) · 전이성향 편류 · 선회 1/2 볼 외활 · 블로우 백(전진 10kt 부터 기수 2.5° 들림 · ASE 면 SAS 가 잡음) · 횡류 효과(10~20kt 한쪽으로 2° 구름) · 전이양력 지대 침하">회전익 특성</button>
+            <div class="rotor-dir">
+              <button class="sim-btn on" data-rdir="CW" data-act="setRotorDir" data-arg='["CW"]' title="시계방향 로터(위에서 볼 때)" disabled>CW ↻</button>
+              <button class="sim-btn" data-rdir="CCW" data-act="setRotorDir" data-arg='["CCW"]' title="반시계방향 로터(위에서 볼 때)" disabled>CCW ↺</button>
+            </div>
+            <div class="rc-opts">
+              <button class="sim-btn on rc-opt" data-rc="etl" data-act="toggleRcOpt" data-arg='["etl"]' title="유효전이양력 — 20kt 언저리를 지나며 가속할 때 침하(지면효과 40ft 이내)" disabled>유효전이양력</button>
+              <button class="sim-btn on rc-opt" data-rc="blowback" data-act="toggleRcOpt" data-arg='["blowback"]' title="블로우백 — 전진 8~10kt 를 지나면 기수 2.5° 들림(후진에는 없음). ASE 꺼짐: 들린 채 남아 조종사가 한 번 더 밀어 준다. ASE 켜짐: SAS 가 잡아 10~15kt 에서 한 번 들렸다가 18kt 에서 사라지고 속도 기준은 그대로" disabled>블로우백</button>
+              <button class="sim-btn on rc-opt" data-rc="collPitch" data-act="toggleRcOpt" data-arg='["collPitch"]' title="컬렉티브 → 피치(±5°, 20kt 이하)" disabled>Coll to Pitch</button>
+              <button class="sim-btn on rc-opt" data-rc="collYaw" data-act="toggleRcOpt" data-arg='["collYaw"]' title="컬렉티브 → 요(호버 토크에서 벗어난 만큼 계속 돈다 · 반대 페달로 잡는다 — 레버 끝까지 = 페달 50% · 0.5초 지연 · 20kt 이하)" disabled>Coll to YAW</button>
+              <button class="sim-btn on rc-opt" data-rc="yawPitch" data-act="toggleRcOpt" data-arg='["yawPitch"]' title="페달 → 피치(±2°, 20kt 이하)" disabled>YAW to Pitch</button>
+              <button class="sim-btn on rc-opt" data-rc="spdTq" data-act="toggleRcOpt" data-arg='["spdTq"]' title="속도와 토크 효율 — 20kt 까지 호버와 같은 파워, 그 위로 Vy 까지 드는 토크가 줄어 같은 레버면 상승" disabled>속도·TQ 효율</button>
+              <button class="sim-btn on rc-opt" data-rc="transverse" data-act="toggleRcOpt" data-arg='["transverse"]' title="횡류 효과 — 전진 10~20kt 에서 로터 방향에 따라 한쪽으로 2° 구름(CCW 오른쪽 · CW 왼쪽). ASE 면 SAS 가 대부분 잡음" disabled>횡류 효과</button>
+            </div>
+          </div>
+          <!-- ASE — 수리온 계열 자동 안정 장치(14-simmode.js). 기능은 하나씩 더해 간다 -->
+          <div id="ase-3d">
+            <button class="sim-btn ase-main" data-act="toggleAse" title="ASE — 켜면 HOVER FOLLOW: 40kt 이내에서 조종간을 트림에 맞서 쥐고 자세를 초당 2° 이내로 움직이면 트림 기준이 그 자세를 따라온다">ASE</button>
+            <div class="ase-hf" title="HOVER FOLLOW — 트림 기준이 따라오는 중이면 켜진다">HOVER FOLLOW</div>
+          </div>
+          <!-- 엔진 — 누를 때마다 AEO → OEI(한 엔진 고장) → IDLE(두 엔진, 오토로테이션 연습) -->
+          <button class="sim-btn" id="eng-3d" data-act="cycleSimEng" title="엔진 상태 — 누를 때마다 AEO(정상) → OEI(ENG 2 고장, 2.5분 정격 뒤 연속 정격) → IDLE(두 엔진 동력 없음 · 오토로테이션)">ENG AEO</button>
+          <button class="sim-btn sim-side-btn" id="sim3d-btn" data-act="simModeBtnPress" title="SIM 모드 켜기/끄기 — PFD 의 SIM 버튼과 같다">SIM OFF</button>
+          </div>
         </div>
         <div id="tilt-ctrl">
           <button data-act="tiltAdj" data-arg='[-5]' title="Tilt up">▲</button>
           <button data-act="tiltAdj" data-arg='[5]'  title="Tilt down">▼</button>
         </div>
       </div>
+      <!-- CHIN BUBBLE — SIM 1인칭에서 3D 창의 아래 좌·우 모서리에 발밑 창을 겹쳐 띄운다(04-map.js).
+           3D 지도(#map3d) 바로 뒤에 붙어 다닌다(제 창으로 옮겨 갈 때도) -->
+      <div id="chin-row"><div id="chin-l" class="chin-pane"></div><div id="chin-r" class="chin-pane"></div></div>
       <div id="map-top-bar">
         <button id="gps-btn" data-act="toggleGPS">GPS</button>
         <button id="wx-btn" data-act="toggleWxPanel">WX</button>
@@ -2315,21 +3323,16 @@ body.night-mode::after {
         </div>
         <button id="rain-btn" data-act="toggleRain">RAIN</button>
         <button id="wind-btn" data-act="toggleWind">WIND</button>
+        <button id="notam-btn" data-act="toggleNotamLayer">NOTAM</button>
         <button id="fix-btn" data-act="toggleFixPanel">FIX</button>
         <button id="awy-btn" data-act="toggleAwyLayer">AWY</button>
         <button id="aspc-btn" data-act="toggleAspcPanel">공역</button>
         <button id="map-ruler-btn" data-act="toggleRuler" title="거리·방위 측정">📏</button>
         <button id="map-full-btn" data-act="toggleMapFull" title="전체화면/분할 전환">FULL</button>
       </div>
-        <!-- MG(Slaved)/DG — 방향 기준. 3D 창의 같은 버튼과 같다(07-sim.js) -->
-        <div class="hdgref" id="hdgref-map">
-          <button class="sim-btn hdgref-btn" data-act="toggleHdgRef" title="방향 기준 — MG(Slaved): 자이로를 지구 자기장에 맞춘다 · DG: 방향 자이로만(1시간에 약 6° 어긋난다 → −/+ 로 맞춘다)">MG (Slaved)</button>
-          <div class="hdgref-adj">
-            <button class="sim-btn" data-act="dgAdjust" data-arg='[-1]' title="DG — HSI 를 왼쪽으로 1°" disabled>−</button>
-            <button class="sim-btn" data-act="dgAdjust" data-arg='[1]' title="DG — HSI 를 오른쪽으로 1°" disabled>+</button>
-          </div>
-          <div class="hdgref-comp" title="자기 나침반(스탠바이) — DG 를 맞출 때 견준다"></div>
-        </div>
+        <!-- MG(Slaved)/DG 는 LOWER 창의 AHRS 패널(TG/MG DG · AHRS 선택 · HIQ)과 3D 창 버튼으로 옮겼다 -->
+        <!-- SIM — 지도 창 오른쪽 버튼 맨 아래(PFD 의 SIM 버튼과 같다) -->
+        <button class="sim-btn sim-side-btn" id="simmap-btn" data-act="simModeBtnPress" title="SIM 모드 켜기/끄기 — PFD 의 SIM 버튼과 같다">SIM OFF</button>
       <div id="geo-panel">
         <div id="geo-panel-hdr">주소 · 지명 검색
           <span id="geo-close" data-act="closeGeoSearch" title="닫기">✕</span></div>
@@ -2347,6 +3350,7 @@ body.night-mode::after {
       <div id="aspc-panel"></div>
       <div id="fix-panel"></div>
       <div id="awy-panel"></div>
+      <input type="file" id="notamFileInput" accept=".kml,.gpx" style="display:none" onchange="loadNotamFile(this)">
       <!-- 지도 중앙 십자마크 + 중앙(1인칭: 항공기) 좌표 표시 -->
       <div id="map-crosshair"><div class="ch-h"></div><div class="ch-v"></div></div>
       <div id="center-coord"></div>
@@ -2401,6 +3405,7 @@ body.night-mode::after {
         <div style="color:#889;font-size:9px;font-weight:bold;letter-spacing:1px;padding:2px 4px;">⛵ SHIP</div>
         <button id="ship-menu-show" data-act="shipToggleOn">배 표시 <span>OFF</span></button>
         <button id="ship-menu-panel" data-act="shipTogglePanel">설정창 <span>OFF</span></button>
+        <button id="ship-menu-heli" data-act="shipPlaceHeli" title="헬기를 함정 비행갑판(착함 원)에 앉힌 채로 SIM 을 시작합니다">항공기 위치</button>
       </div>
       <div id="aspc-alert"></div>
       <div id="terrain-alert">⚠ TERRAIN</div>
@@ -2452,6 +3457,8 @@ body.night-mode::after {
         <div style="display:flex;gap:4px;margin-bottom:8px;">
           <button id="ship-tab-spd" class="ship-tab ship-tab-active" data-act="shipSetMode" data-arg='["SPD"]'>SPD</button>
           <button id="ship-tab-crs" class="ship-tab" data-act="shipSetMode" data-arg='["CRS"]'>CRS</button>
+          <button id="ship-tab-roll" class="ship-tab" data-act="shipSetMode" data-arg='["ROLL"]' title="롤 폭(°) — 최대 10°">ROLL</button>
+          <button id="ship-tab-pitch" class="ship-tab" data-act="shipSetMode" data-arg='["PITCH"]' title="피칭 폭(°) — 최대 5°">PITCH</button>
         </div>
         <div id="ship-display" style="background:#000;border:1.5px solid #333;border-radius:4px;color:#c8ff00;font-size:24px;text-align:right;padding:4px 10px;margin-bottom:3px;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica Neue,Arial,sans-serif;min-height:36px;display:flex;align-items:center;justify-content:flex-end;letter-spacing:2px;">0</div>
         <div id="ship-unit" style="color:#555;font-size:7px;text-align:right;margin-bottom:8px;">kt · max 50</div>
@@ -2477,6 +3484,10 @@ body.night-mode::after {
           <div style="text-align:center;">
             <div style="color:#555;font-size:6px;letter-spacing:0.5px;">COURSE</div>
             <div id="ship-stat-crs" style="color:#00ffff;font-size:11px;font-weight:bold;">000°</div>
+          </div>
+          <div style="text-align:center;grid-column:span 2;">
+            <div style="color:#555;font-size:6px;letter-spacing:0.5px;">ROLL / PITCH</div>
+            <div id="ship-stat-mot" style="color:#ffb74d;font-size:11px;font-weight:bold;">±0° / ±0°</div>
           </div>
         </div>
         <!-- 난이도 — 배 속도가 설정값 둘레로 흔들리는 폭 -->
@@ -2564,35 +3575,63 @@ body.night-mode::after {
     </div>
 
   </div><!-- end #right-panel -->
+
+  <!-- 4분할일 때만 보이는 아래 창(기본 CDU) -->
+  <div id="bot-panel">
+    <div id="bot-tabs" class="panel-tabs">
+      <button class="page-tab" data-sel="cdu" data-act="selectPanel" data-arg='["bot", "cdu"]'>CDU</button>
+      <button class="page-tab" data-sel="map" data-act="selectPanel" data-arg='["bot", "map"]'>MAP</button>
+      <button class="page-tab" data-sel="m3d" data-act="selectPanel" data-arg='["bot", "m3d"]' title="3D — SIM 이 꺼져 있으면 지형 정찰(우하단 조작 버튼), SIM 이면 조종석 시야">3D</button>
+      <button class="page-tab" data-sel="ovhd" data-act="selectPanel" data-arg='["bot", "ovhd"]' title="UPPER CONSOLE — 상부 콘솔 스위치(시뮬레이터 연동 예정)">UPPER</button>
+      <button class="page-tab" data-sel="lcon" data-act="selectPanel" data-arg='["bot", "lcon"]' title="LOWER CONSOLE — 하부 콘솔(AHRS · AFCAU · FUEL · MPP · PARKING BRAKE 등)">LOWER</button>
+      <button class="page-tab" data-sel="sysp" data-act="selectPanel" data-arg='["bot", "sysp"]' title="SYSTEM — MFD 계통 화면(CDU 의 Aircraft Systems 버튼으로 화면을 고른다)">SYSTEM</button>
+      <button class="page-tab po-btn" data-act="popoutToggle" data-arg='["bot"]' title="이 패널을 새 창으로 띄운다(다중 모니터에 따로 배치)">⧉ POP UP</button>
+      <button class="page-tab po-top-btn" data-act="popoutTop" data-arg='["bot", "$el"]' title="Top — 이 창을 다른 창들보다 늘 위에 띄운다(한 번 더 누르면 본 창으로)">📌 Top</button>
+    </div>
+  </div>
+  <!-- 4분할 경계 그립 — 1|2 열, 2|3 열, 3열의 위|아래(07-sim.js initQuadGrips) -->
+  <div class="qgrip v" id="qgrip-1" title="끌어서 PFD · 3D 폭 조절(두 번 누르면 기본)"></div>
+  <div class="qgrip v" id="qgrip-2" title="끌어서 3D · 오른쪽 열 폭 조절(두 번 누르면 기본)"></div>
+  <div class="qgrip h" id="qgrip-3" title="끌어서 MAP · CDU 높이 조절(두 번 누르면 기본)"></div>
 </div><!-- end #app -->
 
 <!-- 앱 코드 — 클래식 스크립트(모듈 아님)라 전역 스코프를 공유한다.
      순서가 곧 실행 순서이므로 임의로 바꾸지 말 것. -->
   <!-- AIP 데이터 — 코드보다 먼저 로드한다 -->
-  <script src="js/data/terminal-fixes.js"></script>
-  <script src="js/data/ifr-fixes.js"></script>
-  <script src="js/data/ifr-procedures.js"></script>
-  <script src="js/data/airfield-info.js"></script>
-  <script src="js/data/enr-vors.js"></script>
-  <script src="js/data/loc-stations.js"></script>
-  <script src="js/data/enr-routes.js"></script>
-  <script src="js/data/airspace.js"></script>
+  <script src="js/data/terminal-fixes.js?v=590"></script>
+  <script src="js/data/ifr-fixes.js?v=590"></script>
+  <script src="js/data/ifr-procedures.js?v=590"></script>
+  <script src="js/data/airfield-info.js?v=590"></script>
+  <script src="js/data/enr-vors.js?v=590"></script>
+  <script src="js/data/loc-stations.js?v=590"></script>
+  <script src="js/data/enr-routes.js?v=590"></script>
+  <script src="js/data/airspace.js?v=590"></script>
+  <script src="js/data/runways.js?v=590"></script>
   <!-- 앱 코드 -->
-  <script src="js/00-ui.js"></script>
-  <script src="js/01-state.js"></script>
-  <script src="js/02-math.js"></script>
-  <script src="js/03-pfd.js"></script>
-  <script src="js/04-map.js"></script>
-  <script src="js/05-gps.js"></script>
-  <script src="js/06-nav.js"></script>
-  <script src="js/07-sim.js"></script>
-  <script src="js/08-ifrdb.js"></script>
-  <script src="js/09-cdu.js"></script>
-  <script src="js/10-tools.js"></script>
-  <script src="js/11-charts.js"></script>
-  <script src="js/12-joystick.js"></script>
-  <script src="js/13-joyhid.js"></script>
-  <script src="js/20-navaids.js"></script>
+  <script src="js/00-ui.js?v=590"></script>
+  <script src="js/01-state.js?v=590"></script>
+  <script src="js/02-math.js?v=590"></script>
+  <script src="js/03-pfd.js?v=590"></script>
+  <script src="js/04-map.js?v=590"></script>
+  <script src="js/05-gps.js?v=590"></script>
+  <script src="js/06-nav.js?v=590"></script>
+  <script src="js/07-sim.js?v=590"></script>
+  <script src="js/08-ifrdb.js?v=590"></script>
+  <script src="js/09-cdu.js?v=590"></script>
+  <script src="js/10-tools.js?v=590"></script>
+  <script src="js/11-charts.js?v=590"></script>
+  <script src="js/12-joystick.js?v=590"></script>
+  <script src="js/13-joyhid.js?v=590"></script>
+  <script src="js/14-simmode.js?v=590"></script>
+  <script src="js/15-heli3d.js?v=590"></script>
+  <script src="js/16-sound.js?v=590"></script>
+  <script src="js/17-upper.js?v=590"></script>
+  <script src="js/18-system.js?v=590"></script>
+  <script src="js/19-lower.js?v=590"></script>
+  <script src="js/20-navaids.js?v=590"></script>
+  <script src="js/21-c5000.js?v=590"></script>
+  <script src="js/22-npx138.js?v=590"></script>
+  <script src="js/23-afcs.js?v=590"></script>
 
 <input type="file" id="zipFileInput" accept=".zip,application/zip,application/x-zip-compressed,application/octet-stream" style="display:none" onchange="handleZipFile(this.files[0]); this.value='';"></body>
 </html>

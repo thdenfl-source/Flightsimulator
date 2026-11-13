@@ -104,7 +104,7 @@ export async function run(page, t) {
     `높으면 위로, 낮으면 아래로 움직인다 (${Math.round(drawn.high.cy)} · ` +
     `${Math.round(drawn.mid.cy)} · ${Math.round(drawn.low.cy)}px)`);
 
-  // ── 무장하면 강하선에 닿을 때 잡는다 ──
+  // ── G/S 버튼은 없다 — ILS 를 맞춰 두면 스스로 무장하고, 강하선에 닿을 때 잡는다 ──
   const cap = await page.evaluate(([GP, CRS, ELEV, ANG, FT_NM]) => {
     // 강하선 아래에서 수평비행으로 다가가다 만나는 흔한 모양 대신,
     // 여기서는 위에서 접근한다(편차가 0 으로 줄어드는지가 요점).
@@ -113,21 +113,35 @@ export async function run(page, t) {
       S.lat = p[0]; S.lon = p[1];
       S.alt = ELEV + d * FT_NM * Math.tan(ANG * Math.PI / 180) + off;
     };
+    const noBtn = !document.getElementById('gs-btn');
     place(8, 600);
-    gsArmed = false; gsOn = false; updateGsBtn();
-    document.getElementById('fks-gs').click();      // 무장
-    const armed = { gsArmed, gsOn, cls: document.getElementById('fks-gs').className };
+    gsArmed = false; gsOn = false; _gsLatch = false; altHoldOn = true; crhtOn = false; updateGsBtn();
     gsCaptureCheck();
-    const stillArmed = gsOn;                        // 아직 멀리 있으니 잡히면 안 된다
+    const armed = { gsArmed, gsOn };                // 멀리 있어도 무장은 된다
     place(8, 0);                                    // 강하선에 닿았다
     gsCaptureCheck();
-    return { armed, stillArmed, capt: gsOn, armedAfter: gsArmed,
-             cls: document.getElementById('fks-gs').className };
+    const capt = { gsOn, gsArmed, alt: altHoldOn };
+    // 조종사가 ALT 를 걸면 물러나고, 강하선 안에 있는 동안은 다시 잡지 않는다
+    toggleAltHold(); gsCaptureCheck();
+    const back = { gsOn, alt: altHoldOn };
+    gsCaptureCheck();
+    const stay = gsOn;
+    // 0.3° 넘게 벗어났다 돌아오면 다시 잡는다
+    if (altHoldOn) toggleAltHold();
+    place(8, 400); gsCaptureCheck(); place(8, 0); gsCaptureCheck();
+    const again = gsOn;
+    gsArmed = false; gsOn = false; updateGsBtn();
+    // ILS 가 아니면(신호 없음) 무장도 없다
+    setNavSrc('FMS'); gsCaptureCheck(); const noIls = gsArmed || gsOn; setNavSrc('NAV1');
+    return { noBtn, armed, capt, back, stay, again, noIls };
   }, [GP, CRS, ELEV, ANG, FT_NM]);
-  t.ok(cap.armed.gsArmed && !cap.armed.gsOn, '누르면 먼저 무장(ARM)된다');
-  t.ok(/armed/.test(cap.armed.cls), `버튼이 무장 모양이다 (${cap.armed.cls})`);
-  t.eq(cap.stillArmed, false, '강하선에서 멀면 잡지 않는다');
-  t.ok(cap.capt && !cap.armedAfter, '강하선에 닿으면 붙잡는다(CAPT)');
+  t.eq(cap.noBtn, true, 'G/S 버튼은 없다');
+  t.ok(cap.armed.gsArmed && !cap.armed.gsOn, 'ILS 를 맞추면 스스로 무장(ARM)한다 — 멀면 아직 잡지 않는다');
+  t.ok(cap.capt.gsOn && !cap.capt.gsArmed && !cap.capt.alt, '강하각에 맞으면 스스로 붙잡고(CAPT) ALT 는 물러난다');
+  t.ok(!cap.back.gsOn && cap.back.alt, '조종사가 ALT 를 걸면 G/S 가 물러난다');
+  t.eq(cap.stay, false, '강하선 안에 있는 동안 곧바로 다시 잡지 않는다');
+  t.eq(cap.again, true, '벗어났다 돌아오면 다시 잡는다');
+  t.eq(cap.noIls, false, 'ILS 가 아니면 무장하지 않는다');
 
   // ── 붙잡으면 강하선을 따라 내려간다 ──
   // 실제 접근처럼 '강하선 아래에서 수평비행으로 다가가다' 만나게 한다.

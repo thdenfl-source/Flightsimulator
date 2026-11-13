@@ -264,7 +264,7 @@ export async function run(page, t) {
     _mapOpenWpt(1);
     return { mode: fpMode, idx: fpWptIdx,
              title: document.getElementById('fp-mode-title').textContent,
-             cduShown: leftSel === 'cdu' || rightSel === 'cdu' || rightSel === 'plan' };
+             cduShown: leftSel === 'cdu' || rightSel === 'cdu' || rightSel === 'plan' || (typeof midSel !== 'undefined' && (midSel === 'cdu' || midSel === 'plan')) };   // 3분할이면 가운데 칸도
   });
   t.ok(jump.mode === 'WPT' && jump.idx === 1,
     '「정보」를 누르면 비행계획의 그 웨이포인트 카드로 간다');
@@ -339,10 +339,12 @@ export async function run(page, t) {
     S.running = false; gpsMode = false;
     S.lat = 37.3895; S.lon = 126.6550; S.wps = []; S.awp = -1;
     S.trail = [[S.lat, S.lon], [37.4, 126.7]];
+    S.alt = 3000; S.spd = 90; S.vs = 500;      // 날던 고도·속도는 버리고 지면에 세운다
     fpAddPreset('RKPK');                       // 공항 명칭으로 출발지 지정
     await wait(100);
     const apt = AIRPORTS.find(x => x.ident === 'RKPK');
     r.toApt = distance(S.lat, S.lon, apt.lat, apt.lon);
+    r.gnd = { alt: S.alt, g: simGroundFt(), spd: S.spd, vs: S.vs };
     r.trail = S.trail.length;
     // 두 번째부터는 옮기지 않는다 — 출발지만 자리를 정한다
     const at = [S.lat, S.lon];
@@ -368,6 +370,9 @@ export async function run(page, t) {
     return r;
   });
   t.ok(org.toApt < 0.05, `공항 명칭으로 출발지를 넣으면 그 공항에 선다 (RKPK 에서 ${org.toApt.toFixed(2)}NM)`);
+  t.ok(Math.abs(org.gnd.alt - org.gnd.g) < 1 && org.gnd.alt < 3000,
+    `출발지에서는 지면 고도에 선다 (${org.gnd.alt.toFixed(0)}ft · 지면 ${org.gnd.g.toFixed(0)}ft)`);
+  t.ok(org.gnd.spd === 0 && org.gnd.vs === 0, `멈춰 선다 (${org.gnd.spd}kt · ${org.gnd.vs}fpm)`);
   t.eq(org.trail, 0, '옮기면서 옛 항적을 지운다 — 남기면 순간이동 선이 하나 그어진다');
   t.eq(org.secondMoved, false, '두 번째 웨이포인트부터는 항공기를 옮기지 않는다');
   t.ok(org.byCoord < 0.05 && org.afterEdit < 0.05,

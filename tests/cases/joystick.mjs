@@ -24,6 +24,7 @@ const SETUP = () => {
   for (const k in _joyNoHat) delete _joyNoHat[k];
   for (const k in _joyOdd) delete _joyOdd[k];
   joyActiveIdx = -1;
+  joyAxes = {}; joyAxSaved = true;
 };
 
 export async function run(page, t) {
@@ -147,7 +148,7 @@ export async function run(page, t) {
     _pad.axes = [0, 0, 0, 0, 0, 0, 0, 0, 0, 3.2857142857142856];   // 축9 = 햇
     joySetBind('h9N', 'trimF'); joySetBind('h9S', 'trimA');
     joySetBind('h9W', 'trimL'); joySetBind('h9E', 'trimR');
-    gspdOn = false; rollApOn = true;
+    gspdOn = false; rollApOn = true; hdgSelOn = false; navApOn = false;   // HDG 가 걸려 있으면 좌우는 헤딩을 옮긴다
     let now = 1000;
     S.spd = 100; bankTarget = 0;
     joyPoll(now);                       // 쉬는 자리 — 아무 방향도 아니다
@@ -195,7 +196,7 @@ export async function run(page, t) {
     _pad.axes = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0];      // 축9 햇이 0 에서 쉰다
     joySetBind('h9N', 'trimF'); joySetBind('h9S', 'trimA');
     joySetBind('h9W', 'trimL'); joySetBind('h9E', 'trimR');
-    gspdOn = false; S.spd = 100; bankTarget = 0;
+    gspdOn = false; hdgSelOn = false; navApOn = false; S.spd = 100; bankTarget = 0;
     let now = 1000;
     joyPoll(now);
     const idle = { spd: S.spd, bank: bankTarget, hat: !!(_joyHat[0] || {})[9] };
@@ -283,26 +284,54 @@ export async function run(page, t) {
     `왜 안 보이는지까지 짚어 준다 (${why.why})`);
 
   // ── 아날로그 축을 햇으로 잘못 잡지 않는다 ──
-  // 8방향 햇은 정해진 값만 내지만 아날로그 스틱은 그 사이를 연속으로 지나간다.
+  // 8방향 햇은 정해진 값만 내지만 사이클릭은 그 사이를 연속으로 지나간다.
   // '격자값이 한 번 나왔다' 만 보면 스틱을 천천히 움직이는 것만으로 햇이 되고,
-  // 그러면 그 축의 ± 배정이 아예 듣지 않는다(실제로 났던 증상이다).
+  // 그러면 조종간이 아예 듣지 않는다(실제로 났던 증상이다).
   const stick = await page.evaluate(`(() => {
     (${SETUP.toString()})();
     _pad.axes = [0, 0, 0, 0];
     let now = 1000;
     joyPoll(now);
-    // 스틱을 천천히 민다 — 도중에 1/7·3/7·5/7 을 그냥 지나간다
+    // 사이클릭을 천천히 민다 — 도중에 1/7·3/7·5/7 을 그냥 지나간다
     for (let v = 0; v <= 1.0001; v += 1 / 70) { _axis(0, v); joyPoll(now += 16); }
     const stickHat = !!(_joyHat[0] || {})[0];
     // 진짜 햇은 격자 위에서만 움직인다
-    [-1, -5/7, -3/7, -1/7, 1/7, 3/7, 5/7, 1].forEach(v => { _axis(1, v); joyPoll(now += 16); });
+    const L = [-1, -5/7, -3/7, -1/7, 1/7, 3/7, 5/7, 1];
+    L.forEach(v => { _axis(1, v); joyPoll(now += 16); });
     const realHat = !!(_joyHat[0] || {})[1];
-    _axis(0, 0); _axis(1, 0); joyPoll(now += 16);
-    return { stickHat, realHat };
+    // 조종간으로 배정해 둔 축은 아예 보지 않는다
+    joyAxes = { roll: { i: 2, inv: false } };
+    L.forEach(v => { _axis(2, v); joyPoll(now += 16); });
+    const boundHat = !!(_joyHat[0] || {})[2];
+    joyAxes = {};
+    return { stickHat, realHat, boundHat, val: joyAxVal('roll') };
   })()`);
   t.eq(stick.stickHat, false,
-    '천천히 움직인 아날로그 축은 햇이 아니다 (종전에는 여기서 그 축이 죽었다)');
+    '천천히 움직인 아날로그 축은 햇이 아니다 (종전에는 여기서 조종간이 죽었다)');
   t.eq(stick.realHat, true, '격자 위에서만 움직이는 축은 햇으로 잡는다');
+  t.eq(stick.boundHat, false, '조종간으로 배정해 둔 축은 햇으로 보지 않는다');
+
+  // ── 아무것도 배정하지 않은 장치에는 흔한 배치를 넣어 준다 ──
+  const dflt = await page.evaluate(`(() => {
+    (${SETUP.toString()})();
+    joyAxes = {}; joyAxSaved = false;
+    _pad.axes = [0, 0, -1, 0, 0, 0];           // 축2 스로틀은 아래에 세워 둔 채
+    joyPoll(1000);
+    const got = JSON.parse(JSON.stringify(joyAxes));
+    // 사용자가 바꿔 둔 장치에는 손대지 않는다
+    joyAxes = { roll: { i: 4, inv: true } }; joyAxSaved = true;
+    joyPoll(1050);
+    const kept = joyAxes.roll.i;
+    joyAxes = {};
+    return { got, kept };
+  })()`);
+  t.eq(dflt.got.roll && dflt.got.roll.i, 0, '축 0 = 좌우(롤)');
+  t.eq(dflt.got.pitch && dflt.got.pitch.i, 1, '축 1 = 전후(피치)');
+  t.eq(dflt.got.coll && dflt.got.coll.i, 2, '축 2 = 스로틀(컬렉티브)');
+  t.eq(dflt.got.yaw && dflt.got.yaw.i, 5, '축 5 = 비틀기(요)');
+  t.eq(dflt.got.coll && dflt.got.coll.abs, true,
+    '아래에 세워 둔 스로틀은 레버식으로 잡는다');
+  t.eq(dflt.kept, 4, '이미 배정해 둔 장치에는 손대지 않는다');
 
   // ── 배정(캡처) — 동작을 고른 뒤 누른 버튼이 그 자리에서 잡힌다 ──
   const cap = await page.evaluate(`(() => {
@@ -458,6 +487,23 @@ export async function run(page, t) {
   t.eq(ui.hidMark, true, '쓸 수 없는 기기에서는 버튼에 그렇게 적혀 있다(눌러 보고 알게 되지 않는다)');
   t.eq(ui.hasHoverPage, true, 'HOVER PAGE 도 배정할 수 있다');
   t.eq(ui.cap, ui.first, '행을 누르면 그 동작이 입력 대기가 된다');
+
+  // 배정을 바꿨다가 '기본 배정으로 되돌리기' 를 누르면 시야 둘러보기(B0)가 돌아온다
+  const rst = await page.evaluate(() => {
+    joySetBind('b0', 'ftr'); joyClearBind('lookMod');
+    joyResetToDefault();
+    const o = { b0: joyBinds.b0, b1: joyBinds.b1 };
+    // B0 를 누르고 햇 ◀ — 트림이 아니라 시선이 된다
+    const sim0 = simModeOn; simModeOn = true; simLookReset();
+    const keep = simTrim.roll;
+    _joyEdge('b0', true, 0); startTrimHold('L');
+    o.dir = simLookDir; o.trim = simTrim.roll === keep;
+    stopTrimHold(); _joyEdge('b0', false, 1);
+    o.held = simLookHeld; simModeOn = sim0;
+    return o;
+  });
+  t.ok(rst.b0 === 'lookMod' && rst.b1 === 'apOff', `되돌리면 B0 = 시야 둘러보기 · B1 = 상위모드 해제 (${rst.b0} · ${rst.b1})`);
+  t.ok(rst.dir === 'L' && rst.trim && !rst.held, '되돌린 뒤 B0 + 햇으로 다시 둘러본다(트림은 그대로)');
 
   // 뒷정리 — 다음 검사가 가짜 패드를 물려받지 않도록
   await page.evaluate(() => {

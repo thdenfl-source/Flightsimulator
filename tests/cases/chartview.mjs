@@ -30,7 +30,7 @@ const mkOverlay = () => {
 
 export async function run(page, t) {
   // CDU 를 좌측 패널에 띄운다
-  await page.evaluate(() => { try { selectPanel('left', 'cdu'); } catch (e) { setPage(2); } });
+  await page.evaluate(() => { try { selectPanel('right', 'cdu'); } catch (e) { setPage(2); } });   // 왼쪽 칸은 늘 PFD(07-sim.js fixPanelDupes) — CDU 는 오른쪽에
   await page.waitForTimeout(300);
 
   // 넓은 창(태블릿·덱스) · 좁은 창(폰) 양쪽에서 확인
@@ -129,7 +129,7 @@ export async function runRealPdf(page, t) {
   // 그때그때의 기본 배치를 보는 것이 아니므로, 제 환경을 스스로 정한다.
   await page.evaluate(() => { try { toggleTriple(false); } catch (e) {} });
   await page.waitForTimeout(200);
-  await page.evaluate(() => { try { selectPanel('left', 'cdu'); } catch (e) { setPage(2); } });
+  await page.evaluate(() => { try { selectPanel('right', 'cdu'); } catch (e) { setPage(2); } });   // 왼쪽 칸은 늘 PFD(07-sim.js fixPanelDupes) — CDU 는 오른쪽에
   await page.waitForTimeout(300);
   await page.evaluate(() => switchMode('CHARTS'));
   await page.waitForTimeout(300);

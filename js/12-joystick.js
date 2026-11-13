@@ -18,17 +18,26 @@ const JOY_ON = 0.6, JOY_OFF = 0.35;   // 히스테리시스(떨림 방지)
 const JOY_REPEAT_DELAY = 350, JOY_REPEAT_INT = 80;   // 화면 버튼 홀드와 같은 값
 
 // kind — press: 누를 때 한 번 · hold: 누르는 동안 · repeat: 누른 뒤 연속
+// 트림(4방향 트림·햇)은 SIM 모드에서 딸깍 한 번에 뱅크 1° · 피치 0.5°, 누르고
+// 있으면 이어서 옮긴다. GSPD 가 걸려 있으면 기준속도를 옮긴다(01-state.js startTrimHold).
 const JOY_ACTIONS = [
   { id: 'sim',    grp: '운항',   label: 'FLY / PAUSE',   kind: 'press',
     run: () => toggleSim() },
-  { id: 'ftr',    grp: '운항',   label: 'FORCE TRIM',    kind: 'press',
-    run: () => forceTrim() },
-  { id: 'gspd',   grp: '운항',   label: 'GSPD (호버)',    kind: 'press',
+  { id: 'ftr',    grp: '운항',   label: 'FORCE TRIM',    kind: 'hold',
+    // 누르고 있는 동안 조종간으로 자세를 옮기고, 놓으면 그 자세가 새 트림이다(SIM)
+    on: () => forceTrim(), off: () => forceTrimRelease() },
+  { id: 'gspd',   grp: '운항',   label: 'G/S · GSPD (지상속도 · 호버)',    kind: 'press',
     run: () => toggleGspd() },
   { id: 'hovpos', grp: '운항',   label: 'HOVER POSITION', kind: 'press',
     run: () => toggleHoverPosition() },
   { id: 'hovpage', grp: '운항', label: 'HOVER PAGE (호버 화면)', kind: 'press',
     run: () => toggleHoverPage() },
+  // SIM 1인칭에서 누르고 있는 동안 4방향 햇이 트림 대신 '시선' 이 된다
+  { id: 'lookMod', grp: '운항', label: '시야 둘러보기 (누르는 동안 햇 = 시선)', kind: 'hold',
+    on: () => simLookHold(true), off: () => simLookHold(false) },
+  // SIM 에서 1인칭 ↔ 외부 시점(뒤에서 내 헬기를 본다 · 15-heli3d.js)
+  { id: 'extView', grp: '운항', label: '외부 시점 (SIM 1인칭 ↔ 3인칭)', kind: 'press',
+    run: () => toggleExtView() },
 
   { id: 'trimF',  grp: '트림',   label: '트림 ▲ (전/증속)', kind: 'hold',
     on: () => startTrimHold('F'), off: () => stopTrimHold() },
@@ -56,10 +65,12 @@ const JOY_ACTIONS = [
   { id: 'crsDn',  grp: 'FCP',    label: 'CRS −',  kind: 'repeat', run: () => applyDelta('crs', -1) },
   { id: 'crsUp',  grp: 'FCP',    label: 'CRS +',  kind: 'repeat', run: () => applyDelta('crs', 1) },
 
+  // 상위모드(NAV·HDG·ALT·CRHT·G/S 강하선·IAS·GSPD)를 한꺼번에 푼다 — B1 이 기본이다
+  { id: 'apOff',   grp: 'AFCS',  label: '상위모드 모두 해제', kind: 'press', run: () => afcsReleaseAll() },
+  { id: 'center',  grp: '운항',  label: '조종간 중립 맞추기 (손을 뗀 자리를 가운데로)', kind: 'press', run: () => joyRecenter() },
   { id: 'altHold', grp: 'AFCS',  label: 'ALT 유지',  kind: 'press', run: () => toggleAltHold() },
   { id: 'crht',    grp: 'AFCS',  label: 'CRHT 유지', kind: 'press', run: () => toggleCrht() },
   { id: 'navap',   grp: 'AFCS',  label: 'NAV (AP)',  kind: 'press', run: () => toggleNavAp() },
-  { id: 'gs',      grp: 'AFCS',  label: 'G/S',       kind: 'press', run: () => toggleGs() },
   { id: 'susp',    grp: 'AFCS',  label: 'SUSP',      kind: 'press', run: () => toggleSusp() },
   { id: 'obs',     grp: 'AFCS',  label: 'OBS',       kind: 'press', run: () => toggleObs() },
 
@@ -83,8 +94,8 @@ const JOY_HAT_MAP  = [['N'], ['N', 'E'], ['E'], ['E', 'S'], ['S'], ['S', 'W'], [
 // ── 햇으로 볼지 말지 ──
 // 8방향 햇은 '정해진 값만' 낸다(±1/7 · ±3/7 · ±5/7 · ±1, 쉬는 자리는 1 밖).
 // 반면 아날로그 축은 그 사이를 연속으로 지나간다. 그래서 '격자값이 한 번
-// 나왔다' 만으로는 갈라낼 수 없다 — 스틱을 천천히 움직이면 1/7 을 그냥
-// 스쳐 지나가고, 그러면 그 축이 햇으로 잘못 잡혀 ± 배정이 듣지 않게 된다.
+// 나왔다' 만으로는 갈라낼 수 없다 — 사이클릭을 천천히 움직이면 1/7 을 그냥
+// 스쳐 지나가고, 그러면 조종간이 햇으로 잘못 잡혀 아예 듣지 않게 된다.
 // 그래서 격자에서 벗어난 값이 한 번이라도 나오면 그 축은 영영 햇이 아니다.
 const JOY_HAT_ODD = [1 / 7, 3 / 7, 5 / 7];
 const JOY_LATTICE = [0, 1 / 7, 3 / 7, 5 / 7, 1];   // 0 은 '쉬는 자리' 로 허용
@@ -119,7 +130,7 @@ function joyZoom(d) {
 
 // 표준 배치 패드용 첫 배정(사용자가 바꾸면 저장값이 이긴다)
 const JOY_STD_BINDS = {
-  b0: 'ftr',  b1: 'gspd', b2: 'altHold', b3: 'navap',
+  b0: 'ftr',  b1: 'apOff', b2: 'altHold', b3: 'navap', b8: 'gspd',
   b4: 'crsDn', b5: 'crsUp', b6: 'spdDn', b7: 'spdUp',
   b9: 'sim',
   b12: 'trimF', b13: 'trimA', b14: 'trimL', b15: 'trimR',
@@ -129,8 +140,77 @@ let joyOn = true;
 try { joyOn = localStorage.getItem('joyOn') !== '0'; } catch (e) { _swallow(e); }
 let joyBinds = {};
 try { joyBinds = JSON.parse(localStorage.getItem('joyBinds') || 'null') || {}; } catch (e) { joyBinds = {}; }
+// 예전 'G/S'(ILS 강하선) 동작은 없앴다 — 강하선은 이제 스스로 잡는다.
+// 조종사가 그 칸에 기대한 것은 지상속도(G/S = GSPD)이므로 그 배정을 GSPD 로 옮긴다.
+try {
+  let moved = false;
+  for (const c in joyBinds) if (joyBinds[c] === 'gs') { joyBinds[c] = 'gspd'; moved = true; }
+  if (moved) localStorage.setItem('joyBinds', JSON.stringify(joyBinds));
+} catch (e) { _swallow(e); }
 let joyBindsSaved = false;
 try { joyBindsSaved = localStorage.getItem('joyBinds') !== null; } catch (e) { _swallow(e); }
+// '시야 둘러보기' 는 B0 이 기본이다. 한 번만 잡아 두고(그 뒤로 사용자가 바꾸면
+// 그 값이 이긴다), 이미 배정해 쓰던 장치라면 지금 바로 B0 에 옮겨 둔다.
+// 처음 쓰는 장치는 연결 후 첫 폴링에서 B0 이 비어 있을 때 잡는다(표준 패드의
+// 기본 배치를 먼저 깔아야 하므로).
+const _joyHadSaved = joyBindsSaved;   // 이번에 켜기 전부터 배정을 쓰던 장치인가
+let joyLookDefaultDone = false;
+try { joyLookDefaultDone = localStorage.getItem('joyLookB0') !== null; } catch (e) { _swallow(e); }
+function joyLookDefault(force) {
+  if (joyLookDefaultDone) return;
+  const has = Object.keys(joyBinds).some(c => joyBinds[c] === 'lookMod');
+  if (!has && (force || !joyBinds.b0)) { joyBinds.b0 = 'lookMod'; joySave(); }
+  joyLookDefaultDone = true;
+  try { localStorage.setItem('joyLookB0', '1'); } catch (e) { _swallow(e); }
+}
+
+// '상위모드 모두 해제' 는 B1 이다. 한 번만 잡아 둔다(그 뒤로 사용자가 바꾸면 그 값이 이긴다).
+// 이미 쓰던 배정에서 B1 에 있던 동작이 다른 버튼에 없으면 빈 버튼(B8·B10·B11)으로 옮겨
+// 잃지 않게 한다(표준 패드의 B1 은 종전에 GSPD 였다).
+let joyApOffDone = false;
+try { joyApOffDone = localStorage.getItem('joyApOffB1') !== null; } catch (e) { _swallow(e); }
+function joyApOffDefault() {
+  if (joyApOffDone) return;
+  joyApOffDone = true;
+  try { localStorage.setItem('joyApOffB1', '1'); } catch (e) { _swallow(e); }
+  if (Object.keys(joyBinds).some(c => joyBinds[c] === 'apOff')) return;   // 이미 어딘가에 있다
+  const old = joyBinds.b1;
+  joyBinds.b1 = 'apOff';
+  if (old && !Object.keys(joyBinds).some(c => joyBinds[c] === old)) {
+    const free = ['b8', 'b10', 'b11'].find(c => !joyBinds[c]);
+    if (free) joyBinds[free] = old;
+  }
+  joySave();
+}
+
+// 배정 초기화 — 비우지 않고 기본 배치로 되돌린다. 표준 배치 패드면 흔한 배치를 깔고,
+// 어떤 장치든 B0 = 시야 둘러보기 · B1 = 상위모드 모두 해제 를 다시 잡는다(초기화 뒤 둘러보기가
+// 사라지던 문제 — 기본 B0 은 처음 한 번만 잡게 되어 있어 비운 뒤로는 돌아오지 않았다).
+function joyDefaultBinds() {
+  let std = false;
+  try { std = joyPads().some(p => p && p.mapping === 'standard'); } catch (e) { _swallow(e); }
+  const b = std ? Object.assign({}, JOY_STD_BINDS) : {};
+  const put = (code, act) => {
+    const old = b[code];
+    for (const c in b) if (b[c] === act) delete b[c];
+    b[code] = act;
+    if (old && old !== act && !Object.keys(b).some(c => b[c] === old)) {
+      const free = ['b8', 'b10', 'b11'].find(c => !b[c]);
+      if (free) b[free] = old;
+    }
+  };
+  put('b0', 'lookMod');
+  put('b1', 'apOff');
+  return b;
+}
+function joyResetToDefault() {
+  joyReleaseAll();
+  joyBinds = joyDefaultBinds();
+  joySave();
+  joyLookDefaultDone = true; joyApOffDone = true;
+  try { localStorage.setItem('joyLookB0', '1'); localStorage.setItem('joyApOffB1', '1'); } catch (e) { _swallow(e); }
+  try { if (typeof simLookHold === 'function') simLookHold(false); } catch (e) { _swallow(e); }
+}
 
 let joyPadName = '';          // 연결된 장치 이름(설정 화면 표시용)
 let joyActiveIdx = -1;        // 지금 쓰고 있는 패드 번호(여러 대가 올라올 때)
@@ -141,6 +221,12 @@ const _joyNeutral = {};       // padIndex → 축 중립값 배열
 const _joyHat = {};           // padIndex → { 축번호: true } 햇으로 판정된 축
 const _joyNoHat = {};         // padIndex → { 축번호: true } 햇이 아님이 드러난 축
 const _joyOdd = {};           // padIndex → { 축번호: {7배값: true} } 본 격자값들
+// SIM 조종간으로 배정해 둔 축인가 — 그런 축은 햇으로 보지 않는다
+function _joyAxUsed(i) {
+  try {
+    return Object.keys(joyAxes).some(k => joyAxes[k] && joyAxes[k].i === i);
+  } catch (e) { return false; }
+}
 let _joyRaf = null;
 
 function joySave() {
@@ -198,6 +284,8 @@ function joyPads() {
     const g = fn.call(navigator);
     const list = Array.prototype.slice.call(g || []).filter(Boolean);
     // WebHID 로 직접 연 장치도 같은 패드로 취급한다(13-joyhid.js)
+    // 패널을 새 창으로 띄워 그쪽에 포커스가 있으면 본 창에 패드가 안 올라오는 브라우저가 있다(00-popout.js)
+    if (!list.length && typeof popoutGamepads === 'function') { try { list.push(...popoutGamepads()); } catch (e) { _swallow(e); } }
     try { const h = (typeof joyHidPad === 'function') ? joyHidPad() : null; if (h) list.push(h); }
     catch (e) { _swallow(e); }
     return list;
@@ -261,6 +349,9 @@ function _joyEdge(code, pressed, now) {
 // 같은 입력으로 받아 배정할 수 있게 한다. 배정한 키만 듣는다(배정 대기 제외).
 const _joyKeys = {};              // code → true (지금 눌려 있는 키)
 function joyKeyCode(e) { return 'k' + (e.code || e.keyCode); }
+// 이 키를 조종 장치 설정에서 배정해 두었는가 — 그러면 이쪽이 맡는다.
+// 키보드 단축키(07-sim.js)가 같은 키를 또 받으면 한 번 누름이 두 번 걸린다.
+function joyKeyOwned(e) { return joyOn && !!joyBinds[joyKeyCode(e)]; }
 function _joyKeyTyping(t) {
   return !!(t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable));
 }
@@ -279,15 +370,182 @@ document.addEventListener('keyup', e => {
   _joyEdge(code, false, (typeof performance !== 'undefined') ? performance.now() : 0);
 });
 
+// ══ 아날로그 축 배정(SIM 모드 조종간) ══
+// 버튼과 달리 '얼마나 밀었는가' 가 그대로 쓰인다. 기종마다 축 번호가 달라
+// 설정 화면에서 해당 축을 한 번 움직여 잡는다. 중립은 연결 시점 값을 쓴다.
+const JOY_AX_ROLES = [
+  { id: 'roll',  label: '사이클릭 좌우 (롤)' },
+  { id: 'pitch', label: '사이클릭 전후 (피치)' },
+  { id: 'yaw',   label: '페달 (요)' },
+  { id: 'coll',  label: '컬렉티브 (상승·강하)' },
+];
+const JOY_AX_DEAD = 0.08;          // 중립 근처 떨림 무시
+let joyAxes = {};
+try { joyAxes = JSON.parse(localStorage.getItem('joyAxes') || 'null') || {}; } catch (e) { joyAxes = {}; }
+let joyAxSaved = false;
+try { joyAxSaved = localStorage.getItem('joyAxes') !== null; } catch (e) { _swallow(e); }
+// 흔한 조종간 배치 — 축 0 좌우(롤) · 1 전후(피치) · 2 스로틀(컬렉티브) · 5 비틀기(요).
+// 아직 아무것도 배정하지 않은 장치에만 한 번 넣어 준다(바꾸면 그 값이 이긴다).
+// 피치와 컬렉티브는 반전이 기본이다 — 조종간을 앞으로 밀면 축 값이 늘어나는
+// 기종이 흔한데, 그건 '기수 내림' 이 아니라 반대로 읽힌다. 스로틀도 아래로
+// 내릴수록 값이 커지는 배선이 많다.
+const JOY_AX_DEFAULT = { roll: 0, pitch: 1, coll: 2, yaw: 5 };
+const JOY_AX_DEF_INV = { pitch: true, coll: true };
+function joyAxApplyDefault(p, neu) {
+  if (joyAxSaved || Object.keys(joyAxes).length) return;
+  const n = (p.axes || []).length;
+  if (n <= Math.max.apply(null, Object.values(JOY_AX_DEFAULT))) return;
+  Object.keys(JOY_AX_DEFAULT).forEach(k => {
+    const i = JOY_AX_DEFAULT[k];
+    // 스로틀은 보통 아래에 세워 둔 채 꽂는다 — 그러면 '레버식' 으로 본다
+    const rest = Number.isFinite(neu[i]) ? neu[i] : 0;
+    joyAxes[k] = { i, inv: !!JOY_AX_DEF_INV[k],
+                   abs: (k === 'coll') && Math.abs(rest) > 0.5 };
+  });
+  joyAxSave();
+}
+let joyAxCapture = null;           // 축 배정 대기 중인 역할 id
+
+function joyAxSave() {
+  try { localStorage.setItem('joyAxes', JSON.stringify(joyAxes)); joyAxSaved = true; }
+  catch (e) { _swallow(e); }
+}
+function joyAxBeginCapture(role) { joyAxCapture = role; }
+function joyAxCancelCapture() { joyAxCapture = null; }
+function joyAxClear(role) { delete joyAxes[role]; joyAxSave(); }
+function joyAxInvert(role) {
+  const a = joyAxes[role];
+  if (!a) return;
+  a.inv = !a.inv; joyAxSave();
+}
+function joyAxLabel(role) {
+  const a = joyAxes[role];
+  if (!a) return '없음';
+  return `축 ${a.i}${a.inv ? ' · 반전' : ''}${a.abs ? ' · 레버식' : ''}`;
+}
+// 지금 쓰고 있는 패드에서 그 역할의 값(-1…1)을 읽는다. 배정이 없으면 0.
+function joyAxVal(role) {
+  const a = joyAxes[role];
+  if (!a || !joyOn) return 0;
+  const pads = joyPads();
+  if (!pads.length) return 0;
+  const p = pads.find(q => q.index === joyActiveIdx) || pads[0];
+  const v = (p.axes || [])[a.i];
+  if (!Number.isFinite(v)) return 0;
+  const neu = (_joyNeutral[p.index] || [])[a.i];
+  let d = v - (Number.isFinite(neu) ? neu : 0);
+  if (a.inv) d = -d;
+  if (Math.abs(d) < JOY_AX_DEAD) return 0;
+  // 중립 밖의 나머지 구간을 -1…1 로 편다(문턱에서 값이 튀지 않게)
+  const k = (Math.abs(d) - JOY_AX_DEAD) / (1 - JOY_AX_DEAD);
+  return Math.max(-1, Math.min(1, Math.sign(d) * k));
+}
+// ── 조종간 중립 다시 잡기 ──
+// 손을 뗀 지금 자리를 가운데로 삼는다(설정 화면 버튼 · 배정할 수 있는 동작 '조종간 중립 맞추기').
+function joyRecenter() {
+  const pads = joyPads();
+  const p = pads.find(q => q.index === joyActiveIdx) || pads[0];
+  if (!p) { try { uiToast('조종 장치가 없습니다', 'err', 2000); } catch (e) { _swallow(e); } return false; }
+  _joyNeutral[p.index] = Array.prototype.slice.call(p.axes || []);
+  joyNeutralSave(p);
+  try { uiToast('조종간 중립을 지금 자리로 맞췄습니다(이 장치에 저장)', '', 2000); } catch (e) { _swallow(e); }
+  return true;
+}
+// ── 맞춘 가운데를 기기에 저장 ── 장치 이름마다 따로 둔다. 다음에 열어도(장치를 다시 꽂아도) 처음 읽은 값 대신 이것을 쓴다.
+const JOY_NEU_KEY = 'joyNeutral';
+function _joyNeuStore() { try { return JSON.parse(localStorage.getItem(JOY_NEU_KEY) || '{}') || {}; } catch (e) { return {}; } }
+function joyNeutralSave(p) {
+  if (!p || !p.id) return;
+  const st = _joyNeuStore();
+  st[p.id] = Array.prototype.slice.call(_joyNeutral[p.index] || p.axes || []).map(v => +(+v).toFixed(4));
+  try { localStorage.setItem(JOY_NEU_KEY, JSON.stringify(st)); } catch (e) { _swallow(e); }
+}
+// DEFAULT — 저장해 둔 가운데를 지우고, 장치가 처음 읽은(손을 뗀 지금) 자리를 가운데로 쓴다
+function joyNeutralDefault() {
+  const pads = joyPads();
+  const p = pads.find(q => q.index === joyActiveIdx) || pads[0];
+  const st = _joyNeuStore();
+  if (p && p.id) delete st[p.id];
+  try { localStorage.setItem(JOY_NEU_KEY, JSON.stringify(st)); } catch (e) { _swallow(e); }
+  if (p) _joyNeutral[p.index] = Array.prototype.slice.call(p.axes || []);
+  try { uiToast(p ? '저장한 가운데를 지웠습니다(기본값 — 지금 자리를 가운데로)' : '조종 장치가 없습니다', p ? '' : 'err', 2000); } catch (e) { _swallow(e); }
+  return !!p;
+}
+// 저장해 둔 가운데(축 수가 같을 때만) — 없으면 null
+function joyNeutralSaved(p) {
+  if (!p || !p.id) return null;
+  const v = _joyNeuStore()[p.id];
+  return (Array.isArray(v) && v.length === (p.axes || []).length && v.every(Number.isFinite)) ? v.slice() : null;
+}
+// SIM 을 켤 때 — 사이클릭·페달(가운데로 돌아오는 축)의 가운데를 지금 자리로 다시 잡는다.
+// 크롬은 조종 장치를 한 번 움직여야 보여 주므로, 처음 잡은 가운데가 그때 밀려 있던 자리일 수 있다
+// (손을 떼도 조종간이 한쪽으로 밀린 것으로 읽힌다). SIM 버튼을 누르는 순간에는 대개 손이 떨어져 있다.
+function joyRecenterCyclic() {
+  const pads = joyPads();
+  const p = pads.find(q => q.index === joyActiveIdx) || pads[0];
+  if (!p) return;
+  if (joyNeutralSaved(p)) return;   // 조종사가 CTR 로 맞춰 저장한 가운데가 있으면 그것을 믿는다
+  const neu = _joyNeutral[p.index] || (_joyNeutral[p.index] = Array.prototype.slice.call(p.axes || []));
+  for (const role of ['roll', 'pitch', 'yaw']) {
+    const a = joyAxes[role];
+    if (!a || a.abs) continue;
+    const v = (p.axes || [])[a.i];
+    if (Number.isFinite(v)) neu[a.i] = v;
+  }
+}
+// (가운데를 저절로 맞추던 것은 뺐다 — 스프링이 없는 조종간은 일부러 민 자리에 그대로 서 있을 수 있어 조종 입력을
+//  지워 버릴 위험이 있다. 작은 어긋남은 데드존(JOY_AX_DEAD)이 흡수하고, 큰 어긋남은 SIM 을 켤 때·CTR 로 맞춘다)
+// 레버식(절대값) 축 — 중립을 빼지 않고 자리 그대로 -1…1 로 읽는다.
+// 스로틀·컬렉티브처럼 민 자리에 서 있는 레버에 쓴다.
+function joyAxRaw(role) {
+  const a = joyAxes[role];
+  if (!a || !joyOn) return -1;
+  const pads = joyPads();
+  if (!pads.length) return -1;
+  const p = pads.find(q => q.index === joyActiveIdx) || pads[0];
+  const v = (p.axes || [])[a.i];
+  if (!Number.isFinite(v)) return -1;
+  return Math.max(-1, Math.min(1, a.inv ? -v : v));
+}
+function joyAxToggleAbs(role) {
+  const a = joyAxes[role];
+  if (!a) return;
+  a.abs = !a.abs; joyAxSave();
+}
+
+// 폴링 중 축 배정 — 가장 크게 움직인 축을 그 역할로 잡는다
+function _joyAxCaptureStep(p, neu) {
+  let best = -1, bestD = 0.45;      // 이만큼은 움직여야 '고른 것' 으로 본다
+  (p.axes || []).forEach((v, i) => {
+    if (!Number.isFinite(v)) return;
+    if ((_joyHat[p.index] || {})[i]) return;        // 햇은 조종간이 아니다
+    const d = Math.abs(v - (Number.isFinite(neu[i]) ? neu[i] : 0));
+    if (d > bestD) { bestD = d; best = i; }
+  });
+  if (best < 0) return;
+  const v = p.axes[best] - (Number.isFinite(neu[best]) ? neu[best] : 0);
+  // 민 방향이 '+' 가 되도록 맞춰 둔다(밀었더니 반대로 가는 일이 없게)
+  const inv = v < 0;
+  // 쉬는 자리가 가운데가 아니면 '세워 두는 레버'(스로틀·컬렉티브)로 본다 —
+  // 그런 축은 자리 자체가 값이므로 중립을 빼지 않고 그대로 쓴다.
+  const rest = Number.isFinite(neu[best]) ? neu[best] : 0;
+  const abs = (joyAxCapture === 'coll') && Math.abs(rest) > 0.5;
+  joyAxes[joyAxCapture] = { i: best, inv, abs };
+  joyAxSave();
+  joyAxCapture = null;
+}
+
 // 한 프레임분 폴링. 테스트에서 직접 부를 수 있게 시각을 인자로 받는다.
 function joyPoll(now) {
+  // 시작 잠금(00-lock.js)이 걸려 있는 동안에는 조이스틱이 앱을 움직이지 않는다
+  if (window.gateLocked) return;
   // 눌려 있는 키의 연속 동작(repeat)도 여기서 돈다 — 장치가 없어도 듣는다
   Object.keys(_joyKeys).forEach(code => _joyEdge(code, true, now));
   const pads = joyPads();
   if (!pads.length) { joyPadName = ''; joyActiveIdx = -1; joyReleaseAll(); return; }
   // 축 중립은 패드마다 따로 — 나중에 고르는 패드도 제 중립을 갖고 있어야 한다
   pads.forEach(q => {
-    if (!_joyNeutral[q.index]) _joyNeutral[q.index] = Array.prototype.slice.call(q.axes || []);
+    if (!_joyNeutral[q.index]) _joyNeutral[q.index] = joyNeutralSaved(q) || Array.prototype.slice.call(q.axes || []);   // CTR 로 맞춰 저장해 둔 가운데가 있으면 그것
   });
   // ── 쓸 패드 고르기 ──
   // 조종 장치 하나가 여러 대로 올라오는 기종이 있다(허브·복합 장치). 그때
@@ -303,12 +561,16 @@ function joyPoll(now) {
   const p = sel;
   const neu = _joyNeutral[p.index];
 
+  if (joyAxCapture) _joyAxCaptureStep(p, neu);
   (p.buttons || []).forEach((b, i) => {
     const v = (typeof b === 'object') ? (b.value != null ? b.value : (b.pressed ? 1 : 0)) : b;
     const code = 'b' + i;
     const on = _joyDown[code] ? (v > JOY_OFF) : (v >= JOY_ON);
     _joyEdge(code, on, now);
   });
+  joyAxApplyDefault(p, neu);
+  if (!joyLookDefaultDone) joyLookDefault(_joyHadSaved);
+  if (!joyApOffDone) joyApOffDefault();
   const hat = _joyHat[p.index] || (_joyHat[p.index] = {});
   const no  = _joyNoHat[p.index] || (_joyNoHat[p.index] = {});
   const odd = _joyOdd[p.index] || (_joyOdd[p.index] = {});
@@ -323,8 +585,11 @@ function joyPoll(now) {
     //   ② 격자(0·±1/7·±3/7·±5/7·±1) 밖의 값이 한 번이라도 오면 영영 아니다.
     //   ③ 격자만 지키면서 ±1/7·±3/7·±5/7 이 나오면 햇이다(한 번이면 충분하다 —
     //      ②가 아날로그 축을 이미 걸러 냈으므로).
+    // SIM 조종간으로 배정한 축은 아예 보지 않는다 — 그 축은 사람이 이미
+    // "이건 조종간" 이라고 말한 것이다.
     const wasHat = hat[i];
-    if (!hat[i] && !no[i]) {
+    if (_joyAxUsed(i)) { no[i] = true; }
+    else if (!hat[i] && !no[i]) {
       if (joyIsHatValue(v)) hat[i] = true;                   // ① 1 밖 — 확정
       else if (joyLatticeHit(v) > JOY_LAT_TOL) no[i] = true; // ② 격자 밖 — 영영 아님
       else if (joyIsOddValue(v)) {                           // ③ 햇에서만 나오는 값
