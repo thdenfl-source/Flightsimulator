@@ -105,7 +105,7 @@ export async function run(page, t) {
     o.def = _ovhdDefs.avcsPower.def;
     const s0 = { spd: S.spd, alt: S.alt }; S.spd = 20; S.alt = 1000;
     o.vibOn = ckVibAmp(); ovhdSet('avcsPower', 'OUT'); o.vibOff = ckVibAmp(); ovhdSet('avcsPower', 'IN');
-    const ra = window.radarAltFt; window.radarAltFt = () => 0; o.gnd = { on: ckVibAmp(), act: avcsActive() }; window.radarAltFt = ra;
+    const ra = window.radarAltFt; window.radarAltFt = () => 0; o.gnd = { on: ckVibAmp(), act: avcsActive() }; ovhdSet('avcsPower', 'OUT'); o.gnd.off = ckVibAmp(); ovhdSet('avcsPower', 'IN'); window.radarAltFt = ra;
     S.spd = s0.spd; S.alt = s0.alt;
     ['mpp0', 'mpp1', 'mpp2'].forEach(id => ovhdSet(id, 'OUT'));
     // MPP COM2
@@ -117,5 +117,5 @@ export async function run(page, t) {
   t.ok(m.fcp.pos === '1,N,2' && m.fcp.def === 'N', `FCP 선택 — 1 · N(둘 다) · 2, 처음 N (${m.fcp.pos})`);
   t.ok(m.c1.act === '121.500' && m.c1.stb === '121.500' && m.c0.act !== '121.500', `MPP COM2 — CDU COM2 주 · 예비가 121.500 (${m.c0.act} → ${m.c1.act} / ${m.c1.stb})`);
   t.ok(m.def === 'IN' && m.vibOff > 0.2 && m.vibOn < 0.02, `AVCS — 처음 켜짐 · 공중에서 진동을 거의 없앤다 (${m.vibOff.toFixed(2)}° → ${m.vibOn.toFixed(3)}°)`);
-  t.ok(!m.gnd.act && Math.abs(m.gnd.on - m.vibOff) < 1e-6, `AVCS — 땅 위(WOW)에서는 켜져 있어도 쉰다 (${m.gnd.on.toFixed(2)}°)`);
+  t.ok(!m.gnd.act && m.gnd.on === 0 && m.gnd.off === 0, `땅 위(WOW)에서는 AVCS 는 쉬고, 켜든 끄든 화면이 떨지 않는다 (${m.gnd.on} · ${m.gnd.off})`);
 }

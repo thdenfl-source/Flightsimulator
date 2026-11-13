@@ -30,20 +30,40 @@ export async function run(page, t) {
   await key('9'); await key('1'); L = await lcd();
   t.ok(/^11  φ\.\.1 MARINE 16/.test(L[0]), `PVTφ · DIR(→ 끔)이 윗줄에 나온다 (${L[0]})`);
   await key('9'); await key('1');
-  // UPPER 소프트키 — NORMAL/GUARD 고르기: 첫 1 위에 ‾ · 첫 1 에 _ 커서 → VALUE 로 NORMAL 끄기 · CURSOR 로 GUARD 자리 → VALUE 로 GUARD 끄기
-  const cls = () => page.evaluate(() => [...document.querySelectorAll('#c5-lcd .c5-row:first-child span')].slice(0, 2).map(s => s.className));
-  await page.locator('[data-c5="soft0"]').click(); const c0 = await cls();
+  // UPPER 소프트키 — 누를 때마다 ‾ 가 첫 1(NORMAL) ⇄ 둘째 1(GUARD)
+  //   첫 1: 1 과 ..M 이 함께 골라져(‾ 첫 1 · _ ..M) VALUE 로 채널 · 둘째 1: 오른쪽 #1 GUARD VHF → VALUE 로 #2 GUARD UHF
+  //   CURSOR 로 _ 를 그 1 로 옮기면 VALUE 로 1 이 사라졌다 나타났다
+  const spans = () => page.evaluate(() => [...document.querySelectorAll('#c5-lcd .c5-row:first-child span')].map(s => s.className));
+  const has = (c, i, k) => (c[i] || '').split(' ').includes(k);
+  await page.evaluate(() => { c5.r[0].ch = 0; c5Render(); });            // 매뉴얼 채널 ..M 에서
+  await page.locator('[data-c5="soft0"]').click(); const s0 = await spans(); L = await lcd(); const n0 = L[0];
+  await knob('sel', 'inner', 1); L = await lcd(); const nCh = L[0];
+  await knob('sel', 'inner', -1);
+  await page.locator('[data-c5="soft0"]').click(); const s1 = await spans(); L = await lcd(); const g0 = L[0];
+  await knob('sel', 'inner', 1); L = await lcd(); const g1 = L[0];
+  const gf = await page.evaluate(() => c5UvhfInfo().gf);
+  await knob('sel', 'inner', 1);                                           // 다시 #1 GUARD VHF
+  await page.locator('[data-c5="soft0"]').click(); const s2 = await spans();
+  t.ok(has(s0, 0, 'c5-ovl') && !has(s0, 1, 'c5-ovl') && [5, 6, 7].every(i => has(s0, i, 'c5-ul')) && /\.\.M/.test(n0),
+    `UPPER 한 번 — 첫 1 위에 ‾ · ..M 에 _ (1 과 ..M 이 함께 골라진다) (${n0})`);
+  t.ok(/^11 {3}\.\.1→MARINE 16/.test(nCh), `그때 VALUE 로 채널을 고른다 (${nCh})`);
+  t.ok(has(s1, 1, 'c5-ovl') && !has(s1, 0, 'c5-ovl') && /^11 {2}#1 GUARD VHF/.test(g0) && has(s1, 4, 'c5-ul'),
+    `UPPER 한 번 더 — 둘째 1 위에 ‾ · 오른쪽에 #1 GUARD VHF (${g0})`);
+  t.ok(/^11 {2}#2 GUARD UHF/.test(g1) && gf === '243.000', `그때 VALUE 로 #2 GUARD UHF(243.000) (${g1})`);
+  t.ok(has(s2, 0, 'c5-ovl') && !has(s2, 1, 'c5-ovl'), 'UPPER 를 또 누르면 다시 첫 1 — 번갈아 간다');
+  // CURSOR 로 _ 를 그 1 로 → VALUE 로 끄고 켠다
+  await knob('sel', 'outer', 1); const c0 = await spans();
   await knob('sel', 'inner', 1); L = await lcd(); const nOff = L[0];
-  await knob('sel', 'outer', 1); const c1 = await cls();
+  await knob('sel', 'inner', 1);
+  await page.locator('[data-c5="soft0"]').click(); await knob('sel', 'outer', 1);
   await knob('sel', 'inner', 1); L = await lcd(); const gOff = L[0];
   const g = await page.evaluate(() => ({ nrm: c5.r[0].nrm, guard: c5.r[0].guard }));
-  await knob('sel', 'inner', 1); await knob('sel', 'outer', 1); await knob('sel', 'inner', 1);   // 다시 켠다
+  await knob('sel', 'inner', 1);                                           // 다시 켠다
   await knob('sel', 'push'); const ngEnd = await page.evaluate(() => c5.ng); L = await lcd();
-  t.ok(/c5-ovl/.test(c0[0]) && /c5-ul/.test(c0[0]) && /c5-ul/.test(c1[1]) && !/c5-ul/.test(c1[0]),
-    `UPPER 소프트키 — 첫 1 위에 ‾, _ 커서가 첫 1 → CURSOR 로 둘째 1 (${c0.join(',')} → ${c1.join(',')})`);
-  t.ok(/^ 1/.test(nOff) && /^ {2}/.test(gOff) && g.nrm === false && g.guard === false,
-    `VALUE 로 그 자리 1 이 사라졌다 나타났다 — NORMAL · GUARD 안 씀 (${nOff.slice(0, 4)} → ${gOff.slice(0, 4)})`);
-  t.ok(ngEnd === null && /^11/.test(L[0]), `ENTER 로 고르기를 끝낸다 — 다시 켠 11 (${L[0].slice(0, 4)})`);
+  t.ok(has(c0, 0, 'c5-ul') && !has(c0, 5, 'c5-ul'), `CURSOR 로 _ 를 첫 1 로 옮긴다 (${c0.slice(0, 2).join(',')})`);
+  t.ok(/^ 1/.test(nOff) && /^1 /.test(gOff) && g.nrm === true && g.guard === false,
+    `VALUE 로 그 자리 1 이 사라졌다 나타났다 — NORMAL · GUARD 쓰고 안 쓰고 (${nOff.slice(0, 4)} · ${gOff.slice(0, 4)})`);
+  t.ok(ngEnd === null && /^11 {3}\.\.M/.test(L[0]), `ENTER 로 고르기를 끝낸다 — 다시 켠 11 · ..M (${L[0].slice(0, 8)})`);
   // NUM — 번호로 채널
   await key('#'); await key('6'); L = await lcd(); const numPg = L[0];
   await knob('sel', 'push'); L = await lcd();
