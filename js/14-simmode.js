@@ -1601,8 +1601,8 @@ function simFly(dt) {
 
     // ── 피치 → 속도 ──
     // 고도를 지키며 나는 헬기는 '자세 하나가 곧 속도' 다 — 수평 120kt,
-    // 기수 4° 80kt, 7.5° 45kt (1° = 10kt). 그 속도로 천천히 수렴한다.
-    // 기수를 더 들면 뒤로도 간다(16° ≈ −40kt).
+    // 기수 2° 100kt, 6° 호버(01-state.js PITCH_SPD). 그 속도로 천천히 수렴한다.
+    // 기수를 더 들면 뒤로도 간다(7.6° ≈ −40kt). 감속 강하(레버를 내린 채)면 7.5° 35kt 에서 멎는다.
     // 오르내리는 동안에도 같은 자세면 같은 속도로 수렴한다(상승·강하로 어긋나지 않는다).
     // 상승 파워에서는 기수 5° 가 80kt(수평 비행에서는 4°) — 남는 토크만큼(10% 에서 다) 1° 를 덜 들어 본다
     // (상승률로 가르면 감속 → 상승 → 감속 으로 되먹임이 생긴다)
@@ -1615,7 +1615,11 @@ function simFly(dt) {
     // 속도 기준 자세 — 트림이 잡고 있으면 블로우 백 들림은 빼고 본다(트림 자세 그대로)
     const pitRef = (aseOn && simBb > 0 && S.pit > pBase) ? Math.max(pBase, S.pit - simBb) : S.pit;   // ASE 일 때만 속도 기준을 지킨다
     _simKePowered = tqKt > 0 && S.spd >= spdFromPitch(pitRef) - 0.5;
-    const sTgt = Math.max(SIM_SPD_BACK, Math.min(SIM_SPD_MAX, spdFromPitch(pitRef) + tqKt));
+    // 감속 강하(접근) — 수평 비행 파워보다 레버를 내린 채(5% 모자라기 시작해 10% 에서 다) 기수를 들면
+    // 감속 강하의 자세-속도(7.5° → 35kt)를 따른다. 수평 파워로 받치면 다시 수평 비행의 식(6° 호버)으로 더 준다
+    const descK = (!simAfcsPitch() && !simAfcsVert() && !onGnd) ? Math.max(0, Math.min(1, (tqRequired() - S.tq - DESC_TQ) / DESC_TQ)) : 0;
+    const vPit = spdFromPitch(pitRef), vDesc = Math.max(vPit, spdFromPitchDesc(pitRef));
+    const sTgt = Math.max(SIM_SPD_BACK, Math.min(SIM_SPD_MAX, vPit + descK * (vDesc - vPit) + tqKt));
     if (onGnd) {
       // 바퀴로 구른다 — 토크 20% 를 넘기면 천천히 앞으로, 사이클릭을 민 만큼 더 빨리
       let acc;

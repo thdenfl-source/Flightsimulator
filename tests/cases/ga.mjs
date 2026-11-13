@@ -99,11 +99,11 @@ export async function run(page, t) {
     const hovPit = S.pit;
     document.getElementById('ga-btn').click();
     let minSpd = 99; for (let i = 0; i < 25; i++) { fly(1); minSpd = Math.min(minSpd, S.spd); }
-    const o = { hovPit, minSpd, spd: S.spd, vs: S.vs };
+    const o = { hovPit, hovRef: pitchFromSpd(0), minSpd, spd: S.spd, vs: S.vs };   // 호버 자세 — 01-state.js PITCH_SPD(6°)
     rotorChar = false; gaRelease(); toggleSimMode(false);
     return o;
   })()`);
-  t.ok(Math.abs(lv.hovPit - 8.5) < 0.5, `레버를 맨 아래에서 켜도 호버 자세가 기수 들림 없이 그대로다 (${lv.hovPit.toFixed(1)}°)`);
+  t.ok(Math.abs(lv.hovPit - lv.hovRef) < 0.5, `레버를 맨 아래에서 켜도 호버 자세(${lv.hovRef}°)가 기수 들림 없이 그대로다 (${lv.hovPit.toFixed(1)}°)`);
   t.ok(lv.minSpd > -1 && lv.spd > 55, `회전익 특성·실제 레버로도 G/A 는 뒤로 가지 않고 가속한다 (최저 ${lv.minSpd.toFixed(1)} → 25초 ${lv.spd.toFixed(0)}kt)`);
 
   await page.evaluate(() => {

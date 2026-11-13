@@ -188,7 +188,8 @@ async function part1(page, t) {
     `그러면 느려진다 (${pitch.fwd.spd.toFixed(0)} → ${pitch.aft.spd.toFixed(0)}kt)`);
 
   // ── 자세 하나가 곧 속도다 ──
-  // 고도를 지키며 날 때: 수평 120kt · 기수 4° 80kt · 7.5° 45kt (1° = 10kt).
+  // 고도를 지키며 날 때: 수평 120kt · 기수 2° 100kt · 6° 호버 · 숙임 10° 140kt.
+  // 감속 강하(레버를 내린 채)면 기수 7.5° 에서 35kt 까지만 준다.
   // 실제 기재의 자세-속도 관계다. 조종간을 잡아 자세를 만들고 멎는 속도를 잰다.
   const trimSpd = await page.evaluate(`(() => {
     (${SETUP.toString()})();
@@ -210,26 +211,37 @@ async function part1(page, t) {
       return { pit: S.pit, spd: S.spd, vs: S.vs, rbsP: simRbs.p };
     };
     const level = hold(0);
-    const four  = hold(4);
-    const seven = hold(7.5);
+    const four  = hold(2);                      // 기수 2° → 100kt
+    const seven = hold(6);                      // 기수 6° → 호버
+    // 감속 강하 — 레버를 수평 비행 토크보다 15% 내리고 기수 7.5° → 35kt 에서 멎는다
+    joyAxes = { pitch: { i: 1, inv: false }, coll: { i: 3, inv: false, abs: true } };
+    const lever = tq => _ax(3, Math.max(-1, Math.min(1, tq / SIM_LEVER_TOP * 2 - 1)));
+    S.alt = 6000; S.spd = 70; simAcc = 0; lever(tqRequired() - 15); _ax(1, stick(-7.5 / SIM_PITCH_MAX)); fly(30);
+    const desc = { pit: S.pit, spd: S.spd, vs: S.vs, def: tqRequired() - S.tq };
+    // 수평 파워로 받치면(레버 미배정 — 고도를 지키는 만큼) 같은 7.5° 에서도 35kt 아래로 준다
+    joyAxes = { pitch: { i: 1, inv: false } };
+    S.alt = 3000; S.spd = 40; simAcc = 0; fly(15);
+    const lvl75 = { pit: S.pit, spd: S.spd };
     const down  = hold(-10);                    // 기수 내림 10° → 140kt
     const max   = hold(-SIM_PITCH_MAX);          // 끝까지 숙여도 자세는 48° 까지
-    return { level, four, seven, down, max,
-             law: [spdFromPitch(0), spdFromPitch(5), spdFromPitch(7.5), spdFromPitch(8.5), spdFromPitch(-10)],
-             inv: [pitchFromSpd(120), pitchFromSpd(70), pitchFromSpd(0), pitchFromSpd(140)] };
+    return { level, four, seven, down, max, desc, lvl75,
+             law: [spdFromPitch(0), spdFromPitch(2), spdFromPitch(6), spdFromPitch(-10), spdFromPitchDesc(7.5)],
+             inv: [pitchFromSpd(120), pitchFromSpd(100), pitchFromSpd(0), pitchFromSpd(140)] };
   })()`);
-  t.eq(trimSpd.law.join('/'), '120/70/35/0/140',
-    `자세-속도 식이 기재와 같다 (0°→${trimSpd.law[0]} · 4°→${trimSpd.law[1]} · ` +
-    `7.5°→${trimSpd.law[2]} · −10°→${trimSpd.law[3]}kt)`);
-  t.ok(Math.abs(trimSpd.inv[0]) < 0.01 && Math.abs(trimSpd.inv[1] - 5) < 0.01
-       && Math.abs(trimSpd.inv[2] - 8.5) < 0.01 && Math.abs(trimSpd.inv[3] + 10) < 0.01,
-    `거꾸로도 같다 (120kt→${trimSpd.inv[0].toFixed(1)}° · 70kt→${trimSpd.inv[1].toFixed(1)}° · 호버→${trimSpd.inv[2].toFixed(1)}°)`);
+  t.eq(trimSpd.law.join('/'), '120/100/0/140/35',
+    `자세-속도 식 (0°→${trimSpd.law[0]} · 2°→${trimSpd.law[1]} · 6°→${trimSpd.law[2]}(호버) · −10°→${trimSpd.law[3]}kt · 감속 강하 7.5°→${trimSpd.law[4]}kt)`);
+  t.ok(Math.abs(trimSpd.inv[0]) < 0.01 && Math.abs(trimSpd.inv[1] - 2) < 0.01
+       && Math.abs(trimSpd.inv[2] - 6) < 0.01 && Math.abs(trimSpd.inv[3] + 10) < 0.01,
+    `거꾸로도 같다 (120kt→${trimSpd.inv[0].toFixed(1)}° · 100kt→${trimSpd.inv[1].toFixed(1)}° · 호버→${trimSpd.inv[2].toFixed(1)}°)`);
   t.ok(Math.abs(trimSpd.level.pit) < 0.6 && Math.abs(trimSpd.level.spd - 120) < 8,
     `수평 자세로 날면 120kt 에서 멎는다 (${trimSpd.level.pit.toFixed(1)}° · ${trimSpd.level.spd.toFixed(0)}kt)`);
-  t.ok(Math.abs(trimSpd.four.pit - 4) < 0.6 && Math.abs(trimSpd.four.spd - 80) < 8,
-    `기수 4° 면 80kt 다 (${trimSpd.four.pit.toFixed(1)}° · ${trimSpd.four.spd.toFixed(0)}kt)`);
-  t.ok(Math.abs(trimSpd.seven.pit - 7.5) < 0.6 && Math.abs(trimSpd.seven.spd - 35) < 3,
-    `기수 7.5° 면 35kt 다 (${trimSpd.seven.pit.toFixed(1)}° · ${trimSpd.seven.spd.toFixed(1)}kt)`);
+  t.ok(Math.abs(trimSpd.four.pit - 2) < 0.6 && Math.abs(trimSpd.four.spd - 100) < 8,
+    `기수 2° 면 100kt 다 (${trimSpd.four.pit.toFixed(1)}° · ${trimSpd.four.spd.toFixed(0)}kt)`);
+  t.ok(Math.abs(trimSpd.seven.pit - 6) < 0.6 && Math.abs(trimSpd.seven.spd) < 3,
+    `기수 6° 면 호버(0kt) 다 (${trimSpd.seven.pit.toFixed(1)}° · ${trimSpd.seven.spd.toFixed(1)}kt)`);
+  t.ok(Math.abs(trimSpd.desc.pit - 7.5) < 0.8 && Math.abs(trimSpd.desc.spd - 35) < 3 && trimSpd.desc.def > 10,
+    `감속 강하(레버 내림) · 기수 7.5° 면 35kt 까지만 준다 (${trimSpd.desc.pit.toFixed(1)}° · ${trimSpd.desc.spd.toFixed(1)}kt · 수평 토크보다 ${trimSpd.desc.def.toFixed(0)}% 모자람 · ${trimSpd.desc.vs.toFixed(0)}fpm)`);
+  t.ok(trimSpd.lvl75.spd < 30, `수평 파워로 받치면 같은 7.5° 에서도 35kt 아래로 준다 (${trimSpd.lvl75.spd.toFixed(1)}kt)`);
   t.ok(Math.abs(trimSpd.down.pit + 10) < 0.6 && Math.abs(trimSpd.down.spd - 140) < 8,
     `기수를 10° 숙이면 140kt 다 (${trimSpd.down.pit.toFixed(1)}° · ${trimSpd.down.spd.toFixed(0)}kt)`);
   t.ok(Math.abs(trimSpd.max.pit - trimSpd.max.rbsP + 48) < 1.5,
@@ -2293,10 +2305,10 @@ async function part5(page, t) {
         const agl = S.alt - simGroundFt();
         if (!flared && agl <= flareAt) { flared = true; simTrim.pitch = -pit; o.flare = agl; }
         if (flared && cush && !cushed && agl <= cush) {
-          cushed = true; simTrim.pitch = -5; _ax(3, ((hoverPowerTq() - 8) / SIM_LEVER_TOP) * 2 - 1);
+          cushed = true; simTrim.pitch = -pitchFromSpd(70); _ax(3, ((hoverPowerTq() - 8) / SIM_LEVER_TOP) * 2 - 1);   // 기수를 고른다 — 70kt 자세(종전 5°, 지금 표로 약 3.2°)
         }
         // 지면효과에 받쳐 뜬 채 머물지 않게, 땅 가까이서 레버를 조금 더 내려 내려앉는다(전진 속도에서는 드는 토크가 작다)
-        if (cushed && !settled && agl <= cush - 8) { settled = true; _ax(3, ((tqRequired() - 10) / SIM_LEVER_TOP) * 2 - 1); }
+        if (cushed && !settled && agl <= cush - 8) { settled = true; _ax(3, ((tqRequired() - 20) / SIM_LEVER_TOP) * 2 - 1); }   // (감속 강하 자세-속도로 속도가 버티므로 레버를 넉넉히)
         if (flared && !cushed && agl > 1) {                // 땅에 닿은 뒤(0fpm)는 빼고 본다
           if (S.vs > o.best) { o.best = S.vs; o.bestAgl = agl; }
           if (o.arrest === null && S.vs > -300) o.arrest = agl;
@@ -2468,38 +2480,38 @@ async function part5(page, t) {
     // ASE 꺼짐 — 들린 채 남는다(조종사가 한 번 더 밀어 준다)
     aseOn = false; o.n12 = at(12); o.n40 = at(40); o.nBack = at(-12);
     aseOn = true;
-    // 4WAY 트림 4°(80kt 자세)로 호버 언저리에서 가속 — 블로우 백을 지나도 속도 기준은 트림 자세다
+    // 4WAY 트림 2°(100kt 자세)로 호버 언저리에서 가속 — 블로우 백을 지나도 속도 기준은 트림 자세다
     joyAxes = { pitch: { i: 1, inv: false } }; _ax(1, 0);
     // 블로우 백만 켜고 끈다(회전익 특성은 켠 채 — 다른 특성(속도·TQ 효율 등)이 가속을 바꾸지 않게)
     const accel = (bb) => {
-      rotorChar = true; rcOpt.blowback = bb; S.spd = 5; simAcc = 0; S.vs = 0; simVsAcc = 0; simLat = 0; S.pit = pitchFromSpd(5); simTrimReset(); simTrim.pitch = -4; simTrimAct.pitch = -4;
+      rotorChar = true; rcOpt.blowback = bb; S.spd = 5; simAcc = 0; S.vs = 0; simVsAcc = 0; simLat = 0; S.pit = pitchFromSpd(5); simTrimReset(); simTrim.pitch = -2; simTrimAct.pitch = -2;
       let maxPit = -99; const spd = [];
       for (let i = 0; i < 25; i++) { fly(1); maxPit = Math.max(maxPit, S.pit); spd.push(S.spd); }
       return { maxPit, spd, pit: S.pit };
     };
     o.on = accel(true); o.off = accel(false); rcOpt.blowback = true;
-    // 조종간을 쥔 채(4° 자세) 가속해도 기수가 출렁이지 않고 한 번만 들린다
+    // 조종간을 쥔 채(2° 자세) 가속해도 기수가 출렁이지 않고 한 번만 들린다
     const held = () => {
-      rotorChar = true; S.spd = 5; S.pit = 4; simTrimReset(); _ax(1, (-4 / SIM_PITCH_MAX) * (1 - 0.08) - 0.08);
+      rotorChar = true; S.spd = 5; S.pit = 2; simTrimReset(); _ax(1, (-2 / SIM_PITCH_MAX) * (1 - 0.08) - 0.08);
       let ups = 0, prevUp = false; const spd = [];
-      for (let i = 0; i < 25 * 20; i++) { fly(0.05); const up = S.pit > 5; if (up && !prevUp) ups++; prevUp = up; if (i % 20 === 19) spd.push(S.spd); }
+      for (let i = 0; i < 25 * 20; i++) { fly(0.05); const up = S.pit > 3; if (up && !prevUp) ups++; prevUp = up; if (i % 20 === 19) spd.push(S.spd); }
       _ax(1, 0); return { ups, spd, pit: S.pit };
     };
     o.held = held();
-    // ASE 꺼짐 — 조종간을 4° 에 쥔 채 가속하면 기수가 들린 채(6.5°) 남아 속도가 덜 붙는다
+    // ASE 꺼짐 — 조종간을 2° 에 쥔 채 가속하면 기수가 들린 채(4.5°) 남아 속도가 덜 붙는다
     aseOn = false; o.nHeld = held(); aseOn = true;
     rotorChar = false; aseOn = false; simTrimReset();
     return o;
   })()`);
   t.ok(bb.n12 > 2.3 && bb.n40 > 2.3 && Math.abs(bb.nBack) < 0.05,
     `ASE 꺼짐 — 블로우 백으로 들린 기수가 그대로 남는다(조종사가 한 번 더 밀어 준다) (12kt +${bb.n12.toFixed(1)} · 40kt +${bb.n40.toFixed(1)}° · 후진 ${bb.nBack.toFixed(1)}°)`);
-  t.ok(Math.abs(bb.nHeld.pit - 6.5) < 0.2 && bb.nHeld.spd[24] < bb.held.spd[24] - 10,
+  t.ok(Math.abs(bb.nHeld.pit - 4.5) < 0.2 && bb.nHeld.spd[24] < bb.held.spd[24] - 10,
     `ASE 꺼짐 — 조종간을 그대로 두면 기수가 ${bb.nHeld.pit.toFixed(1)}° 로 남아 속도가 덜 붙는다 (25초 ${bb.nHeld.spd[24].toFixed(0)} · ASE ${bb.held.spd[24].toFixed(0)}kt)`);
   t.ok(bb.k12 > 1.5 && bb.k12 <= bb.peak + 0.01 && Math.abs(bb.k20) < 0.05 && Math.abs(bb.k60) < 0.05,
     `ASE 켜짐 — 블로우 백은 10~15kt 에서 기수가 2.5° 안쪽으로 한 번 들린다 (12kt +${bb.k12.toFixed(1)}° · 20kt ${bb.k20.toFixed(1)}° · 60kt ${bb.k60.toFixed(1)}°)`);
   t.ok(Math.abs(bb.kBack) < 0.05, `후진 비행(12kt)에서는 블로우 백이 없다 (${bb.kBack.toFixed(2)}°)`);
-  t.ok(bb.on.maxPit > 5.5 && bb.on.maxPit < 4 + bb.peak + 0.3 && Math.abs(bb.on.pit - 4) < 0.1,
-    `트림 4° 로 가속하면 10~15kt 에서 한 번 들렸다가(최대 ${bb.on.maxPit.toFixed(1)}°) 트림 자세로 돌아온다 (${bb.on.pit.toFixed(1)}°)`);
+  t.ok(bb.on.maxPit > 3.5 && bb.on.maxPit < 2 + bb.peak + 0.3 && Math.abs(bb.on.pit - 2) < 0.1,
+    `트림 2° 로 가속하면 10~15kt 에서 한 번 들렸다가(최대 ${bb.on.maxPit.toFixed(1)}°) 트림 자세로 돌아온다 (${bb.on.pit.toFixed(1)}°)`);
   t.ok(bb.held.ups === 1 && bb.held.spd[24] > 60,
     `조종간을 쥐고 가속해도 기수는 한 번만 들리고 출렁이지 않는다 (들림 ${bb.held.ups}번 · 25초 ${bb.held.spd[24].toFixed(0)}kt)`);
   t.ok(bb.on.spd.every((v, i) => Math.abs(v - bb.off.spd[i]) < 0.5),

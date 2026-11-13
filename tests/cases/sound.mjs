@@ -43,7 +43,8 @@ export async function run(page, t) {
   const btn = await page.evaluate(() => {
     const b = document.getElementById('snd-btn'), f = document.getElementById('fly3d-btn');
     return { inside: !!(b && b.closest('#map3d')), txt: b ? b.textContent : '', on: sndOn,
-             below: b && f ? parseFloat(getComputedStyle(b).top) > parseFloat(getComputedStyle(f).top) : false };
+             // 3D 조작 칸(#ctl3d-body)에 차례로 놓인다 — SOUND 가 FLY 바로 다음(아래)
+             below: !!(b && f && b.parentElement === f.parentElement && (f.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING)) };
   });
   t.ok(btn.inside && btn.below, '3D 창 FLY 버튼 아래에 SOUND 버튼이 있다');
   t.ok(!btn.on && /SOUND/.test(btn.txt) && /🔇/.test(btn.txt), `처음에는 꺼져 있다 (${btn.txt})`);

@@ -12,7 +12,10 @@
 // (앱에는 이와 다른 '화면 잠금'(#lock-overlay · 07-sim.js)이 따로 있다 — 이름을 gate 로 가른다)
 // ─────────────────────────────────────────────────────────────
 (function () {
-  const LOCK_HASH = '8b3923f7aa11169b84db0436811860d348a5bd64000e93dfe6070ef72fd269d6';
+  // 판마다 비밀번호가 다르다(js/00-edition.js — 이 파일보다 먼저 읽힌다): shinesong(full) · Flightsimulator(proc)
+  const LOCK_HASH_FULL = '8b3923f7aa11169b84db0436811860d348a5bd64000e93dfe6070ef72fd269d6';
+  const LOCK_HASH_PROC = 'fe5f103afb59882d3b0f38d61152a835729626559128e397cff9d09bfc25d92e';
+  const LOCK_HASH = (typeof APP_EDITION !== 'undefined' && APP_EDITION === 'proc') ? LOCK_HASH_PROC : LOCK_HASH_FULL;
   const LOCK_KEY  = 'vfrUnlocked';
 
   // SHA-256(UTF-8) → 16진 문자열. 보안 맥락(https)이 아니어도 돌도록 직접 셈한다.
