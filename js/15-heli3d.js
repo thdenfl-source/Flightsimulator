@@ -724,10 +724,19 @@ let ckConPop = null;          // 'lcon' | 'ovhd' | null
 function _ck3dVisible() {
   return (typeof simModeOn !== 'undefined') && simModeOn && !!_ml3d && (typeof _map3dShown !== 'function' || _map3dShown());
 }
-// 07-sim.js applyPanels 가 콘솔(#ovhd-wrap · #lcon-wrap)을 둘 그릇을 물을 때 — ph: 'pop'(팝아웃) · 'mini'(조종석 안)
+// 팝아웃으로 띄울 수 있는 화면 — 콘솔 둘 + MFD 를 누르면 그 화면(PFD · SYSTEM · 2D 지도)을 크게(실제 창 그대로라 조작된다)
+const CKPIT_POP = { ovhd: 'UPPER CONSOLE', lcon: 'LOWER CONSOLE', pfd: 'PFD', sysp: 'SYSTEM', map: 'MAP' };
+// 2D 지도는 3D 지도가 그 안에 겹쳐 있지 않을 때만(3D 를 제 창으로 쓸 때) 옮길 수 있다
+function _ckPopOk(k) {
+  if (k !== 'map') return true;
+  const mw = document.getElementById('map-wrap'), d3 = document.getElementById('map3d');
+  return !!mw && !!d3 && !mw.contains(d3);
+}
+// 07-sim.js applyPanels 가 화면(#ovhd-wrap · #lcon-wrap · #pfd-wrap · #sysp-wrap · #map-wrap)을 둘 그릇을 물을 때
+//   ph: 'pop'(팝아웃) · 'mini'(조종석 안 — 콘솔만)
 function ckpitConsoleHost(k, ph) {
+  if (ph === 'pop') return ckConPop === k && CKPIT_POP[k] && _ck3dVisible() && _ckPopOk(k) ? _ckPopEl(k) : null;
   if (!CKPIT_CON[k]) return null;
-  if (ph === 'pop') return ckConPop === k && _ck3dVisible() ? _ckPopEl(k) : null;
   if (ph === 'mini') return ckpitWanted() ? document.getElementById('ck-mini-' + k) : null;
   return null;
 }
@@ -743,7 +752,7 @@ function _ckPopEl(k) {
     d3.appendChild(p);
   }
   const t = document.getElementById('ck-pop-title');
-  if (t && t.textContent !== CKPIT_CON[k].name) t.textContent = CKPIT_CON[k].name;
+  if (t && t.textContent !== CKPIT_POP[k]) t.textContent = CKPIT_POP[k];
   p.dataset.k = k;
   return document.getElementById('ck-pop-host');
 }
@@ -760,11 +769,17 @@ function _ckPopSync() {
   }
 }
 function toggleConsolePop(k) {
-  ckConPop = (k && ckConPop !== k && CKPIT_CON[k]) ? k : null;
+  if (k && !_ckPopOk(k)) { try { uiToast('지도 팝아웃은 3D 를 제 창(3D 탭 · 3D Only)으로 쓸 때 됩니다', '', 2500); } catch (e) { _swallow(e); } return; }
+  ckConPop = (k && ckConPop !== k && CKPIT_POP[k]) ? k : null;
+  // 2D 지도를 3D 화면에 겹쳐 둔 것(MAP ON · 07-sim.js)은 끄고 지도를 팝아웃으로 옮긴다
+  if (ckConPop === 'map') { try { if (typeof mapOvOn !== 'undefined' && mapOvOn) { mapOvOn = false; syncMapOverlay(); } } catch (e) { _swallow(e); } }
   if (ckConPop) _ckPopEl(ckConPop);
   _ckPopSync();
   try { applyPanels(); } catch (e) { _swallow(e); }
+  setTimeout(() => { try { leafMap.invalidateSize(); } catch (e) { _swallow(e); } }, 60);
 }
+// MFD 를 누르면 띄울 화면
+const CKPIT_SCR_POP = { pfd: 'pfd', sys: 'sysp', map: 'map' };
 function _ckpitSvg() {
   const bez = CKPIT_SCR.map(s => {
     const x = s.x - 14, y = s.y - 12, w = s.w + 28, h = s.h + 40;
@@ -824,7 +839,7 @@ function _ckpitEl() {
   el.id = 'sim-ckpit'; el.setAttribute('aria-hidden', 'true');
   const pct = (x, y, w, h) => `left:${(x / 16).toFixed(3)}%;top:${(y / 9).toFixed(3)}%;width:${(w / 16).toFixed(3)}%;height:${(h / 9).toFixed(3)}%`;
   el.innerHTML = _ckpitSvg() + CKPIT_SCR.map((s, i) =>
-    `<canvas class="ck-scr" data-i="${i}" data-no-fcp="1" style="${pct(s.x, s.y, s.w, s.h)}"></canvas>`).join('') +
+    `<canvas class="ck-scr" data-i="${i}" data-no-fcp="1" data-act="toggleConsolePop" data-arg='["${CKPIT_SCR_POP[s.k]}"]' title="${CKPIT_POP[CKPIT_SCR_POP[s.k]]} — 눌러 크게(팝아웃)" style="${pct(s.x, s.y, s.w, s.h)}"></canvas>`).join('') +
     Object.entries(CKPIT_CON).map(([k, c]) =>
       `<div class="ck-con" id="ck-mini-${k}" data-act="toggleConsolePop" data-arg='["${k}"]' title="${c.name} — 눌러 크게(팝아웃)" style="${pct(c.x, c.y, c.w, c.h)}"></div>`).join('');
   d3.appendChild(el);
