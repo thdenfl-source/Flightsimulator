@@ -198,7 +198,7 @@ function init(){
 
     // Mirror drawPFD geometry
     const ctrlEl = document.querySelector('.ctrl-bar');
-    const CTRL_H = ctrlEl ? ctrlEl.offsetHeight : 80;
+    const CTRL_H = (typeof pfdFcpSide === 'function' && pfdFcpSide()) ? 0 : (ctrlEl ? ctrlEl.offsetHeight : 80);
     const W      = cvs.width;
     const H      = cvs.height;
     const L      = pfdLayout(W, H, CTRL_H);       // drawPFD 와 같은 배치(03-pfd.js)

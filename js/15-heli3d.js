@@ -719,27 +719,37 @@ const CKPIT_CON = {
   ovhd: { x: 700, y: 10, w: 200, h: 250, name: 'UPPER CONSOLE' },
   lcon: { x: 708, y: 798, w: 184, h: 258, name: 'LOWER CONSOLE' },
 };
-// CDU — 하부 콘솔 오른쪽(07-sim.js syncCduOverlay 가 CDU 를 이 칸에 넣는다 · 3D 단독 화면에서)
+// CDU — 하부 콘솔 오른쪽 칸(3D 단독 화면에서 07-sim.js syncCduOverlay 가 CDU 를 넣는다).
+// 다른 화면처럼 누르면 가운데에 크게 띄워(팝아웃) 조작한다.
 const CKPIT_CDU = { x: 888, y: 798, w: 90, h: 146 };
-// CDU 칸은 3D 지도(#map3d) 안이 아니라 그 바로 뒤의 얇은 층(#ck-cdu-layer)에 둔다 — 3D 지도 안에서는 브라우저가
-// 누른 자리를 엉뚱한 버튼으로 잡는다(작게 줄인 CDU 의 위아래 버튼이 바뀌어 눌림). 층은 3D 지도 칸에 꼭 맞춘다.
-function ckpitCduSlot() { return ckpitWanted() ? (_ckCduLayer(), document.getElementById('ck-mini-cdu')) : null; }
-function _ckCduLayer() {
+function ckpitCduSlot() {
+  if (ckConPop === 'cdu' && _ck3dVisible()) return _ckPopEl('cdu');
+  return ckpitWanted() ? (_ckpitEl(), document.getElementById('ck-mini-cdu')) : null;
+}
+// 팝아웃 층 — 3D 지도(#map3d) 안이 아니라 그 바로 뒤에 3D 지도 칸에 꼭 맞춘 층(#ck-layer)에 둔다.
+// 3D 지도 안에서는 브라우저가 누른 자리를 엉뚱한 요소로 잡는 일이 있다(작게 줄인 화면의 버튼이 바뀌어 눌림).
+function _ckLayer() {
   const d3 = document.getElementById('map3d');
   if (!d3) return null;
-  let L = document.getElementById('ck-cdu-layer');
-  if (!L) {
-    L = document.createElement('div'); L.id = 'ck-cdu-layer';
-    const pct = (x, y, w, h) => `left:${(x / 16).toFixed(3)}%;top:${(y / 9).toFixed(3)}%;width:${(w / 16).toFixed(3)}%;height:${(h / 9).toFixed(3)}%`;
-    L.innerHTML = `<div class="ck-cdu" id="ck-mini-cdu" style="${pct(CKPIT_CDU.x, CKPIT_CDU.y, CKPIT_CDU.w, CKPIT_CDU.h)}"></div>`;
-  }
-  _ckCduPlace(L, d3);
-  return L;
-}
-function _ckCduPlace(L, d3) {
+  let L = document.getElementById('ck-layer');
+  if (!L) { L = document.createElement('div'); L.id = 'ck-layer'; }
   if (L.parentElement !== d3.parentElement) d3.after(L);
   const st = { left: d3.offsetLeft + 'px', top: d3.offsetTop + 'px', width: d3.offsetWidth + 'px', height: d3.offsetHeight + 'px' };
   for (const k in st) if (L.style[k] !== st[k]) L.style[k] = st[k];
+  return L;
+}
+// 화면마다 가로/세로 비율 — 팝아웃 칸을 그 비율로 3D 화면 안에 가득(오른쪽 버튼 줄은 비켜) 맞춘다
+const CKPIT_POP_AR = { ovhd: 1000 / 1240, lcon: 1000 / 1400, pfd: 1.6, sysp: 1000 / 630, map: 1.3, cdu: 354 / 567 };
+function _ckPopFit() {
+  const p = document.getElementById('ck-pop'), L = document.getElementById('ck-layer');
+  if (!p || !L || !p.classList.contains('show')) return;
+  const W = L.clientWidth, H = L.clientHeight, bar = 28, a = CKPIT_POP_AR[p.dataset.k] || 0.75;
+  if (!(W > 0 && H > 0)) return;
+  const room = W - 130;                                   // 오른쪽 3D 버튼 줄(약 110px)을 비킨다
+  const w = Math.max(160, Math.min(room - 12, (H * 0.96 - bar) * a)), h = w / a + bar;
+  const st = { width: Math.round(w) + 'px', height: Math.round(h) + 'px',
+               left: Math.round(Math.max(6, (room - w) / 2)) + 'px', top: Math.round(Math.max(4, (H - h) / 2)) + 'px' };
+  for (const k in st) if (p.style[k] !== st[k]) p.style[k] = st[k];
 }
 // 콘솔 팝아웃 — LowerC · UpperC 버튼(또는 작은 콘솔을 누르면)으로 3D 화면 가운데에 크게 띄워 조작한다
 let ckConPop = null;          // 'lcon' | 'ovhd' | null
@@ -747,9 +757,10 @@ function _ck3dVisible() {
   return (typeof simModeOn !== 'undefined') && simModeOn && !!_ml3d && (typeof _map3dShown !== 'function' || _map3dShown());
 }
 // 팝아웃으로 띄울 수 있는 화면 — 콘솔 둘 + MFD 를 누르면 그 화면(PFD · SYSTEM · 2D 지도)을 크게(실제 창 그대로라 조작된다)
-const CKPIT_POP = { ovhd: 'UPPER CONSOLE', lcon: 'LOWER CONSOLE', pfd: 'PFD', sysp: 'SYSTEM', map: 'MAP' };
+const CKPIT_POP = { ovhd: 'UPPER CONSOLE', lcon: 'LOWER CONSOLE', pfd: 'PFD', sysp: 'SYSTEM', map: 'MAP', cdu: 'CDU' };
 // 2D 지도는 3D 지도가 그 안에 겹쳐 있지 않을 때만(3D 를 제 창으로 쓸 때) 옮길 수 있다
 function _ckPopOk(k) {
+  if (k === 'cdu') { try { return cduOvAvail(); } catch (e) { return false; } }   // CDU 는 3D 단독 화면에서(07-sim.js)
   if (k !== 'map') return true;
   const mw = document.getElementById('map-wrap'), d3 = document.getElementById('map3d');
   return !!mw && !!d3 && !mw.contains(d3);
@@ -757,22 +768,23 @@ function _ckPopOk(k) {
 // 07-sim.js applyPanels 가 화면(#ovhd-wrap · #lcon-wrap · #pfd-wrap · #sysp-wrap · #map-wrap)을 둘 그릇을 물을 때
 //   ph: 'pop'(팝아웃) · 'mini'(조종석 안 — 콘솔만)
 function ckpitConsoleHost(k, ph) {
+  if (k === 'cdu') return null;                           // CDU 는 07-sim.js syncCduOverlay 가 ckpitCduSlot 으로 옮긴다
   if (ph === 'pop') return ckConPop === k && CKPIT_POP[k] && _ck3dVisible() && _ckPopOk(k) ? _ckPopEl(k) : null;
   if (!CKPIT_CON[k]) return null;
   if (ph === 'mini') return ckpitWanted() ? document.getElementById('ck-mini-' + k) : null;
   return null;
 }
 function _ckPopEl(k) {
-  const d3 = document.getElementById('map3d');
-  if (!d3) return null;
+  const Ly = _ckLayer();
+  if (!Ly) return null;
   let p = document.getElementById('ck-pop');
   if (!p) {
     p = document.createElement('div');
     p.id = 'ck-pop';
     p.innerHTML = '<div class="ck-pop-bar"><span id="ck-pop-title"></span>' +
       '<button class="sim-btn" data-act="toggleConsolePop" data-arg="[null]" title="닫기">✕</button></div><div id="ck-pop-host"></div>';
-    d3.appendChild(p);
   }
+  if (p.parentElement !== Ly) Ly.appendChild(p);
   const t = document.getElementById('ck-pop-title');
   if (t && t.textContent !== CKPIT_POP[k]) t.textContent = CKPIT_POP[k];
   p.dataset.k = k;
@@ -781,7 +793,10 @@ function _ckPopEl(k) {
 function _ckPopSync() {
   const p = document.getElementById('ck-pop');
   const on = !!ckConPop && _ck3dVisible();
-  if (p) p.classList.toggle('show', on);
+  // PFD 팝아웃은 옆으로 편다 — 계기(HSI 까지 다)는 왼쪽, FCP 는 오른쪽(03-pfd.js pfdFcpSide)
+  const pw = document.getElementById('pfd-wrap'), side = on && ckConPop === 'pfd';
+  if (pw && pw.classList.contains('fcp-side') !== side) { pw.classList.toggle('fcp-side', side); try { resizePFD(); } catch (e) { _swallow(e); } }
+  if (p) { p.classList.toggle('show', on); if (on) { _ckLayer(); _ckPopFit(); } }
   const sim = (typeof simModeOn !== 'undefined') && simModeOn;
   for (const [k, id] of [['lcon', 'lconc-btn'], ['ovhd', 'upperc-btn']]) {
     const b = document.getElementById(id);
@@ -791,13 +806,17 @@ function _ckPopSync() {
   }
 }
 function toggleConsolePop(k) {
-  if (k && !_ckPopOk(k)) { try { uiToast('지도 팝아웃은 3D 를 제 창(3D 탭 · 3D Only)으로 쓸 때 됩니다', '', 2500); } catch (e) { _swallow(e); } return; }
+  if (k && !_ckPopOk(k)) {
+    try { uiToast(k === 'cdu' ? 'CDU 팝아웃은 3D Only 화면에서 됩니다' : '지도 팝아웃은 3D 를 제 창(3D 탭 · 3D Only)으로 쓸 때 됩니다', '', 2500); } catch (e) { _swallow(e); }
+    return;
+  }
   ckConPop = (k && ckConPop !== k && CKPIT_POP[k]) ? k : null;
   // 2D 지도를 3D 화면에 겹쳐 둔 것(MAP ON · 07-sim.js)은 끄고 지도를 팝아웃으로 옮긴다
   if (ckConPop === 'map') { try { if (typeof mapOvOn !== 'undefined' && mapOvOn) { mapOvOn = false; syncMapOverlay(); } } catch (e) { _swallow(e); } }
   if (ckConPop) _ckPopEl(ckConPop);
   _ckPopSync();
   try { applyPanels(); } catch (e) { _swallow(e); }
+  try { syncCduOverlay(); } catch (e) { _swallow(e); }   // CDU — 팝아웃 ↔ 하부 콘솔 오른쪽 칸
   setTimeout(() => { try { leafMap.invalidateSize(); } catch (e) { _swallow(e); } }, 60);
 }
 // MFD 를 누르면 띄울 화면
@@ -863,7 +882,8 @@ function _ckpitEl() {
   el.innerHTML = _ckpitSvg() + CKPIT_SCR.map((s, i) =>
     `<canvas class="ck-scr" data-i="${i}" data-no-fcp="1" data-act="toggleConsolePop" data-arg='["${CKPIT_SCR_POP[s.k]}"]' title="${CKPIT_POP[CKPIT_SCR_POP[s.k]]} — 눌러 크게(팝아웃)" style="${pct(s.x, s.y, s.w, s.h)}"></canvas>`).join('') +
     Object.entries(CKPIT_CON).map(([k, c]) =>
-      `<div class="ck-con" id="ck-mini-${k}" data-act="toggleConsolePop" data-arg='["${k}"]' title="${c.name} — 눌러 크게(팝아웃)" style="${pct(c.x, c.y, c.w, c.h)}"></div>`).join('');
+      `<div class="ck-con" id="ck-mini-${k}" data-act="toggleConsolePop" data-arg='["${k}"]' title="${c.name} — 눌러 크게(팝아웃)" style="${pct(c.x, c.y, c.w, c.h)}"></div>`).join('') +
+    `<div class="ck-con" id="ck-mini-cdu" data-act="toggleConsolePop" data-arg='["cdu"]' title="CDU — 눌러 크게(팝아웃)" style="${pct(CKPIT_CDU.x, CKPIT_CDU.y, CKPIT_CDU.w, CKPIT_CDU.h)}"></div>`;
   d3.appendChild(el);
   return el;
 }
@@ -875,7 +895,7 @@ function ckpitWanted() {
 // 보이기·감추기와 시야 둘러보기 이동(heli3dNoseSync 가 매 프레임 부른다)
 function ckpitSync(tf) {
   const want = ckpitWanted();
-  if (ckConPop && !_ck3dVisible()) { ckConPop = null; try { applyPanels(); } catch (e) { _swallow(e); } }
+  if (ckConPop && !_ck3dVisible()) { ckConPop = null; _ckPopSync(); try { applyPanels(); syncCduOverlay(); } catch (e) { _swallow(e); } }
   _ckPopSync();
   const el = want ? _ckpitEl() : document.getElementById('sim-ckpit');
   const b = document.getElementById('ckpit-btn');
@@ -900,12 +920,7 @@ function ckpitSync(tf) {
     try { syncCduOverlay(); } catch (e) { _swallow(e); } // CDU 도 하부 콘솔 오른쪽으로(3D 단독에서)
   }
   if (want && tf != null && el.style.transform !== tf) el.style.transform = tf;
-  const L = document.getElementById('ck-cdu-layer');
-  if (L) {
-    const lw = want && !(ckConPop && _ck3dVisible());      // 팝아웃이 떠 있으면 그 아래 겹치지 않게 감춘다
-    if (L.classList.contains('show') !== lw) L.classList.toggle('show', lw);
-    if (want) { const d3 = document.getElementById('map3d'); if (d3) _ckCduPlace(L, d3); if (tf != null && L.style.transform !== tf) L.style.transform = tf; }
-  }
+  if (ckConPop) { _ckLayer(); _ckPopFit(); }               // 창 크기가 바뀌어도 팝아웃을 3D 화면에 맞춘다
 }
 // MFD 화면 그리기 — 1초에 열 번(PFD 창·계통 창과 따로 그린다)
 function ckpitDraw() {

@@ -25,8 +25,18 @@ let ctx = cvs.getContext('2d');
 
 function resizePFD() {
   const el = document.getElementById('pfd-wrap');
-  cvs.width  = el.clientWidth;
+  cvs.width  = pfdCanvasW();
   cvs.height = el.clientHeight;
+}
+// FCP 를 PFD 오른쪽에 나란히 둔 배치(#pfd-wrap.fcp-side — SIM 조종석 PFD 팝아웃 · 15-heli3d.js).
+// 그때 계기는 FCP 를 뺀 왼쪽 칸을 다 쓰고, 아래에 FCP 높이를 비우지 않는다.
+function pfdFcpSide() { const w = document.getElementById('pfd-wrap'); return !!w && w.classList.contains('fcp-side'); }
+function pfdCanvasW() {
+  const el = document.getElementById('pfd-wrap');
+  if (!el) return 0;
+  if (!pfdFcpSide()) return el.clientWidth;
+  const bar = el.querySelector('.ctrl-bar');
+  return Math.max(80, el.clientWidth - (bar ? bar.offsetWidth : 0));
 }
 
 // ── PFD 배치 ── (실기 PFD 처럼) 자세계 하늘·땅이 위쪽 전체를 덮고, 그 위에 속도계(왼쪽)·고도계+승강계(오른쪽)가
@@ -72,7 +82,7 @@ function drawPFD() {
   if (!(W >= 80) || !(H >= 80)) return;
   const ctrlEl = document.querySelector('.ctrl-bar');
   // 3D 화면에 겹친 계기(drawPfdTo)는 FCP 가 없다 — 칸을 다 계기에 쓴다
-  const CTRL_H = cvs.dataset.noFcp ? 0 : (ctrlEl ? ctrlEl.offsetHeight : 80);
+  const CTRL_H = (cvs.dataset.noFcp || pfdFcpSide()) ? 0 : (ctrlEl ? ctrlEl.offsetHeight : 80);
   const L = pfdLayout(W, H, CTRL_H);
 
   ctx.fillStyle = '#000';

@@ -733,7 +733,7 @@ function simStep(ts, noLoop){   // noLoop — 새 창이 대신 한 프레임을
       // (PFD가 좌/우 어느 패널에 있든 clientHeight>0 이면 표시 중)
       const _pw = document.getElementById('pfd-wrap');
       if (_pw && _pw.clientHeight > 0 &&
-          (cvs.width !== _pw.clientWidth || cvs.height !== _pw.clientHeight)) {
+          (cvs.width !== pfdCanvasW() || cvs.height !== _pw.clientHeight)) {
         resizePFD();
       }
     }
