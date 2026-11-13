@@ -27,7 +27,7 @@ export async function run(page, t) {
     // ② BP1 OFF — 9 psi 아래 · 1 F/L PRES · BP1 심벌 LOW · PRESS 1 LOW 호박색
     ovhdSet('bp1', 'OFF'); tick(1);
     const d1 = draw();
-    o.p1 = fuelPress(1); o.m1 = msgs().includes('1 F/L PRES'); o.low1 = d1.seen.includes('LOW') && d1.fills.includes('#ffb000@361,278');
+    o.p1 = fuelPress(1); o.m1 = msgs().includes('1 F/L PRES'); o.low1 = d1.seen.includes('LOW') && d1.fills.includes('#f2e64b@361,278');
     // ③ X-FEED ENG1 — 점선 · FUEL XFEED(녹) · 5초 뒤 BP2 압력이 1번 라인에(1 F/L PRES 꺼짐) · 엔진 1 은 FT2 에서 먹는다
     ovhdSet('xFeed', 'ENG1'); tick(1);
     o.xf1 = msgs().includes('FUEL XFEED') && msgs().includes('1 F/L PRES') && draw().dash;
@@ -38,6 +38,16 @@ export async function run(page, t) {
     ovhdSet('xFeed', 'OFF'); tick(0.5);
     o.xfOff = !msgs().includes('FUEL XFEED') && !draw().dash && msgs().includes('1 F/L PRES');
     ovhdSet('bp1', 'BP1'); tick(1);
+    // ③-2 실기 사진 — 두 펌프가 돌 때 X-FEED ENG1: 곧바로는 흰 점선만(가로질러) · 5초 뒤 PRESS 1 LOW(노랑) ·
+    //      라인 압력은 19 psi 그대로(BP2 가 ENG1 을 먹인다) · ENG2 로 돌리면 PRESS 2 LOW
+    ovhdSet('xFeed', 'ENG1'); tick(1);
+    { const d = draw(); o.x1a = d.dash && !d.fills.includes('#f2e64b@361,278') && fuelPress(1) === 19; }
+    tick(4.5);
+    { const d = draw(); o.x1b = d.fills.includes('#f2e64b@361,278') && !d.fills.includes('#f2e64b@787,277') && fuelPress(1) === 19 && fuelPress(2) === 19 && fuelSrc(1) === 2 && !msgs().includes('1 F/L PRES'); }
+    ovhdSet('xFeed', 'ENG2'); tick(5.5);
+    { const d = draw(); o.x2 = d.fills.includes('#f2e64b@787,277') && !d.fills.includes('#f2e64b@361,278') && fuelSrc(2) === 1 && fuelSrc(1) === 1; }
+    ovhdSet('xFeed', 'OFF'); tick(1);
+    o.xOff = !draw().fills.includes('#f2e64b@787,277');
     // ④ XFER LH — FWD → AFT, AFT 98% 에서 저절로 멈춘다(TP ◀ 사라짐)
     fuel.aft -= 100; ovhdSet('xferSel', 'LH'); tick(0.1);
     o.lh = fuelSys.xfer === -1 && (draw(), fuelDrawn.tp === -1);
@@ -55,7 +65,7 @@ export async function run(page, t) {
     // ⑦ FUEL IMBALANCE — 차 150 넘게(기내 1800 아래) 30초
     fuelReset(); fuelWow = () => true; ovhdSet('xferSel', 'OFF'); fuel.fwd -= 350; tick(0.1, 20);
     o.imb20 = msgs().includes('FUEL IMBALANCE');
-    tick(0.1, 11); o.imb31 = msgs().includes('FUEL IMBALANCE') && draw().fills.includes('#ffb000@263,562');
+    tick(0.1, 11); o.imb31 = msgs().includes('FUEL IMBALANCE') && draw().fills.includes('#f2e64b@263,562');
     fuelWow = wow0;
     // ⑧ F5 XFER — ON: F5 → AFT(TP ▲) · AUTO: 비행 중 AFT 170 아래에서
     fuelReset(); fuel.aft -= 100; ovhdSet('f5Xfer', 'ON'); tick(0.1);
@@ -66,8 +76,8 @@ export async function run(page, t) {
     fuelWow = () => false; tick(0.1); o.f5Auto = fuelSys.f5; fuelWow = wow0;
     // ⑨ MSOV(TQS 연료차단) CLOSE — 압력 0 · MFSOV 1 CLOSE 호박색 · Aircraft Status Closed
     fuelReset(); ovhdSet('fuel1', 'CLOSE'); tick(1);
-    o.msov = fuelPress(1) === 0 && draw().fills.includes('#ffb000@284,231');
-    ovhdSet('fuel1', 'OPEN'); tick(1); o.msovOpen = fuelPress(1) >= 15 && !draw().fills.includes('#ffb000@284,231');
+    o.msov = fuelPress(1) === 0 && draw().fills.includes('#f2e64b@284,231');
+    ovhdSet('fuel1', 'OPEN'); tick(1); o.msovOpen = fuelPress(1) >= 15 && !draw().fills.includes('#f2e64b@284,231');
     // ⑩ FUEL 1 LOW
     fuel.ft1 = 100; o.low = msgs().includes('FUEL 1 LOW');
     fuelReset(); ovhdReset('lcon'); localStorage.removeItem('ovhdState'); tick(1);
@@ -77,10 +87,12 @@ export async function run(page, t) {
   t.ok(!R.idle.aux[0] && !R.idle.aux[1] && !R.idle.f5 && !R.idle.seen.includes('TP1') && R.idle.tp === 'AUTO' && R.idle.on && R.idle.seen.includes('AUTO'),
     `주 탱크 가득 · 모두 AUTO — AUX TP1/TP2 · F5 TP 안 보임, 가운데 TP 는 녹색 'AUTO' (${R.idle.tp})`);
   t.ok(R.auxOn && R.f5Show, 'AUX XFER · F5 XFER 를 ON 으로 두면(또는 AUTO 가 이송을 시작하면) TP 가 보인다');
-  t.ok(R.p0.join() === '17,18' && R.m0 === 0 && R.bp0 === 2, `BP1 · BP2 켜짐 — 라인 압력 ${R.p0.join(' · ')} psi, F/L PRES 없음, BP 심벌 둘`);
+  t.ok(R.p0.join() === '19,19' && R.m0 === 0 && R.bp0 === 2, `BP1 · BP2 켜짐 — 라인 압력 ${R.p0.join(' · ')} psi, F/L PRES 없음, BP 심벌 둘`);
   t.ok(R.p1 < 9 && R.m1 && R.low1, `BP1 OFF — ${R.p1} psi · 1 F/L PRES · BP1 LOW · PRESS 1 LOW 호박색`);
   t.ok(R.xf1, 'X-FEED ENG1 — 교차공급 점선 · FUEL XFEED, 압력은 아직(1 F/L PRES 그대로)');
   t.ok(R.xf5 && R.xfCol === '#22e022' && R.stXf, '약 5초 뒤 BP2 압력이 1번 라인에 — 1 F/L PRES 꺼짐 · 엔진 1 은 FT2 · FUEL XFEED 녹색 · Status Open');
+  t.ok(R.x1a && R.x1b, 'X-FEED ENG1(두 펌프 켬) — 흰 점선, 5초 뒤 PRESS 1 LOW 노랑 · 라인 19 psi 그대로 · ENG1 은 FT2 에서(실기 사진)');
+  t.ok(R.x2 && R.xOff, 'X-FEED ENG2 — 5초 뒤 PRESS 2 LOW(PRESS 1 은 꺼짐) · OFF 면 꺼진다');
   t.ok(R.xfOff, 'X-FEED OFF — 점선 · FUEL XFEED 사라지고 1 F/L PRES 다시');
   t.ok(R.lh && R.lhStop, 'XFER LH — FWD → AFT(TP ◀), AFT 98% 에서 저절로 멈춘다');
   t.ok(R.rh, 'XFER RH — AFT → FWD(TP ▶)');
