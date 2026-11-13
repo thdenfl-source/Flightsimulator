@@ -1,55 +1,40 @@
-// Cockpit mode(07-sim.js) — 조종석처럼 세로로 쌓은 화면 · 두 번 누르면 그 칸이 화면 가득 · 다시 두 번이면 복원
+// Cockpit Mode(07-sim.js cockpitStart) — 3D 단독 화면 · 1인칭 조종석 시야 · 조종석 패널(MFD · 위아래 콘솔 · CDU)
+// SIM 이 꺼져 있어도(절차 훈련판 · AFCS 로 나는 비행) 조종석에 앉는다 · 'Split screen' 으로 끝낸다
 // + FCP IAS 를 누르면 AFCS 상태 띠의 IAS 가 꺼진다(SIM 이 꺼져 있어도)
 export const name = 'Cockpit 모드';
 
 export async function run(page, t) {
-  await page.setViewportSize({ width: 820, height: 1180 });
-  const btn = await page.evaluate(() => !!document.getElementById('gate-mode-cockpit'));
-  await page.evaluate(() => cockpitStart());
-  await page.waitForTimeout(900);
-  const A = await page.evaluate(() => {
-    const wraps = { ovhd: 'ovhd-wrap', m3d: 'map3d-wrap', pfd: 'pfd-wrap', sysp: 'sysp-wrap', cdu: 'cdu-wrap', lcon: 'lcon-wrap' };
-    const cells = Object.entries(wraps).map(([k, id]) => {
-      const c = document.getElementById('ck-' + k), r = c.getBoundingClientRect(), w = document.getElementById(id);
-      return { k, inside: !!(w && c.contains(w) && !w.classList.contains('page-hidden')), x: r.left, y: r.top, w: r.width, h: r.height };
-    });
-    const f = document.getElementById('fcp-simple');
-    return { cells, app: getComputedStyle(document.getElementById('app')).display, fcpFit: f.scrollWidth <= f.clientWidth + 2 };
+  const gate = await page.evaluate(() => ({ ck: !!document.getElementById('gate-mode-cockpit'), d3: !!document.getElementById('gate-mode-3d') }));
+  t.ok(gate.ck && !gate.d3, '시작 화면 고르기에 Cockpit Mode 가 있고 3D 단독 모드는 없다');
+  const A = await page.evaluate(async () => {
+    const w = ms => new Promise(r => setTimeout(r, ms));
+    S.alt = 1500; S.spd = 100;
+    cockpitStart(); await w(1500);
+    const vis = id => { const e = document.getElementById(id); return !!e && getComputedStyle(e).display !== 'none'; };
+    const o = { sim: simModeOn, solo: _soloActive && _soloCurrent, cam: ckCamOn(), pitch: _ml3d ? _ml3d.getPitch() : 0, model: heli3dShown(),
+                panel: vis('sim-ckpit'), mfd: document.querySelectorAll('#sim-ckpit canvas.ck-scr').length,
+                ovhd: (document.getElementById('ovhd-wrap').parentElement || {}).id, lcon: (document.getElementById('lcon-wrap').parentElement || {}).id,
+                cdu: ((document.getElementById('cdu-ov') || {}).parentElement || {}).id, scale: document.getElementById('map3d').classList.contains('sim3d'),
+                btns: ['ckpit-btn', 'lconc-btn', 'upperc-btn'].every(vis),
+                fly: ['vstick-btn', 'gyro-btn', 'rotor-3d', 'sim3d-btn'].map(id => vis(id)) };
+    // 화면을 누르면 크게(팝아웃)
+    document.querySelector('#sim-ckpit canvas.ck-scr[data-i="0"]').click(); await w(300);
+    o.pop = ckConPop; toggleConsolePop(null); await w(200);
+    // Split screen — 분할 화면으로 끝낸다
+    exitSolo(); await w(500);
+    o.exit = { ck: window._cockpitOn, cam: ckCamOn(), panel: vis('sim-ckpit'), mode: sessionStorage.getItem('vfrStartMode'), app: getComputedStyle(document.getElementById('app')).display };
+    S.alt = 0; S.spd = 0;
+    return o;
   });
-  const C = Object.fromEntries(A.cells.map(c => [c.k, c]));
-  t.ok(btn, '시작 화면 고르기에 Cockpit Mode 가 있다');
-  t.ok(A.cells.every(c => c.inside && c.w > 50 && c.h > 50) && A.app === 'none', `여섯 칸에 UPPER · 3D · PFD · SYSTEM · CDU · LOWER 가 들어간다`);
-  const row = (a, b) => Math.abs(a.y - b.y) < 2 && a.x < b.x;
-  t.ok(row(C.m3d, C.cdu) && row(C.pfd, C.sysp) && row(C.ovhd, C.lcon) && C.m3d.y < C.pfd.y && C.pfd.y < C.ovhd.y,
-    '배치 — 3D | CDU · PFD·FCP | SYSTEM · UPPER | LOWER(위에서 아래로)');
-  t.ok(C.m3d.w > C.cdu.w * 1.6 && C.ovhd.h > C.pfd.h, '3D 가 CDU 보다 넓고 · UPPER · LOWER 가 가장 높다');
-  t.ok(A.fcpFit, 'PFD 칸의 FCP 가 칸 폭에 맞춰 줄어 다 보인다');
-  // 두 번 누르기 — SYSTEM 칸 → 화면 가득 → 다시 두 번 → 복원
-  const bb = await page.locator('#ck-sysp').boundingBox();
-  await page.mouse.dblclick(bb.x + bb.width / 2, bb.y + bb.height / 2); await page.waitForTimeout(300);
-  const M = await page.evaluate(() => { const r = document.getElementById('ck-sysp').getBoundingClientRect();
-    return { w: r.width, h: r.height, others: [...document.querySelectorAll('#ck-view .ck-cell')].filter(c => c.id !== 'ck-sysp' && getComputedStyle(c).display !== 'none').length }; });
-  await page.mouse.dblclick(400, 600); await page.waitForTimeout(300);
-  const R = await page.evaluate(() => ({ max: document.getElementById('ck-view').classList.contains('has-max'), h: document.getElementById('ck-sysp').getBoundingClientRect().height }));
-  t.ok(M.w > 780 && M.h > 1100 && M.others === 0, `두 번 누르면 그 칸이 화면 가득 (${Math.round(M.w)}×${Math.round(M.h)})`);
-  t.ok(!R.max && Math.abs(R.h - C.sysp.h) < 3, '다시 두 번 누르면 처음 배치로');
-  // CDU 의 MAP — SYSTEM 창 큰 칸에 2D 지도(Map 화면) · 계통 화면을 고르면 지도는 빠진다
-  await page.evaluate(() => CDU_ACT.switchMode('HOME')); await page.waitForTimeout(200);
-  await page.click('#ck-cdu [data-act="cduOpenMap"]'); await page.waitForTimeout(500);
-  const Mp = await page.evaluate(() => { const s = document.getElementById('sysp-map'), m = document.getElementById('map-wrap'), r = s && s.getBoundingClientRect(), c = document.getElementById('ck-sysp').getBoundingClientRect();
-    return { page: sysPage, inSlot: !!(s && s.contains(m)) && !m.classList.contains('page-hidden'), inside: r && r.width > c.width * 0.6 && r.left > c.left + c.width * 0.15 && r.bottom <= c.bottom + 1 }; });
-  await page.evaluate(() => sysPageSet('asys_fuel')); await page.waitForTimeout(200);
-  const Mq = await page.evaluate(() => ({ page: sysPage, hidden: document.getElementById('map-wrap').classList.contains('page-hidden'), slot: getComputedStyle(document.getElementById('sysp-map')).display }));
-  t.ok(Mp.page === 'map' && Mp.inSlot && Mp.inside, 'CDU 의 MAP — SYSTEM 창의 큰 칸(왼쪽 계기 띠 오른쪽)에 지도가 나온다');
-  t.ok(Mq.page === 'asys_fuel' && Mq.hidden && Mq.slot === 'none', '계통 화면(Fuel)을 고르면 지도는 빠지고 그 화면이 나온다');
-  // CDU 버튼을 두 번 눌러도 화면 가득이 되지 않는다(조작으로 본다)
-  const cb = await page.locator('#ck-cdu [data-act]').first().boundingBox();
-  await page.mouse.dblclick(cb.x + cb.width / 2, cb.y + cb.height / 2); await page.waitForTimeout(200);
-  t.ok(!(await page.evaluate(() => document.getElementById('ck-view').classList.contains('has-max'))), '버튼 위에서 두 번 누른 것은 그 조작 — 화면 가득이 되지 않는다');
-  await page.evaluate(() => { if (typeof CDU_ACT !== 'undefined') CDU_ACT.switchMode('HOME'); cockpitExit(); });
-  await page.waitForTimeout(300);
-  const E = await page.evaluate(() => ({ app: getComputedStyle(document.getElementById('app')).display, pfdIn: document.getElementById('pfd-wrap').closest('#app') !== null, zoom: document.getElementById('fcp-simple').style.zoom }));
-  t.ok(E.app !== 'none' && E.pfdIn && !E.zoom, 'PC 모드 — 분할 화면으로 돌아온다(FCP 크기도 그대로)');
+  t.ok(A.solo === 'm3d' && !A.sim && A.cam && A.pitch > 80 && !A.model && A.scale,
+    `Cockpit Mode — 3D 를 화면 가득 · SIM 없이도 1인칭 조종석 시야(카메라 피치 ${Math.round(A.pitch)}°) · 제 헬기 모형 · 축척은 감춘다`);
+  t.ok(A.panel && A.mfd === 4 && A.ovhd === 'ck-mini-ovhd' && A.lcon === 'ck-mini-lcon' && A.cdu === 'ck-mini-cdu' && A.btns,
+    `조종석 패널 — MFD 넷 · 위아래 콘솔 · CDU 가 제자리에, 조종석 · LowerC · UpperC 버튼 (${A.ovhd} · ${A.lcon} · ${A.cdu})`);
+  const procEd = await page.evaluate(() => typeof SIM_ENABLED !== 'undefined' && !SIM_ENABLED);
+  if (procEd) t.ok(A.fly.every(v => !v), '절차 훈련판 — 스틱 · 자이로 · 회전익 특성 · SIM 처럼 비행하는 버튼은 없다');
+  else t.ok(A.fly.every(v => v), '종합판 — 스틱 · 자이로 · 회전익 특성 · SIM 버튼을 모두 쓸 수 있다');
+  t.ok(A.pop === 'pfd', '화면(MFD)을 누르면 가운데에 크게 뜬다');
+  t.ok(!A.exit.ck && !A.exit.cam && !A.exit.panel && A.exit.mode === 'pc' && A.exit.app !== 'none', 'Split screen — 분할 화면(PC 모드)으로 끝낸다');
   // IAS — 누를 때마다 AFCS 상태 띠의 IAS 가 꺼지고 켜진다(SIM 꺼짐)
   const I = await page.evaluate(() => {
     const on = () => { const seen = []; const proto = CanvasRenderingContext2D.prototype, oT = proto.fillText; let col = null;

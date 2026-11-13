@@ -1833,7 +1833,7 @@ function simFly(dt) {
 
 // 화면 버튼(data-act) 연결 — 이 파일이 11-charts.js 보다 나중에 로드되므로
 // 거기 목록에 넣으면 아직 정의되지 않은 이름이 된다. 여기서 직접 등록한다.
-// ── 시작 화면 — 비밀번호 다음에 고른 '3D 단독 모드' 면 앱이 뜬 뒤 3D Only 로 바로 들어간다(00-gate.js) ──
+// ── 시작 화면 — 비밀번호 다음에 고른 화면으로 앱이 뜬 뒤 바로 들어간다(00-gate.js) ──
 // (같은 탭에서 새로고침해도 그 화면으로 — sessionStorage 의 vfrStartMode)
 (function startModeApply() {
   let mode = null;
@@ -1844,11 +1844,8 @@ function simFly(dt) {
     clearInterval(t);
     if (mode === 'sim') { setTimeout(() => { try { simLayoutStart(); } catch (e) { _swallow(e); } }, 400); return; }   // SIM Mode — 창 배치판
     if (mode === 'simple') { setTimeout(() => { try { simpleModeStart('pfd'); } catch (e) { _swallow(e); } }, 300); return; }   // Simple mode — 창 하나씩
-    if (mode === 'cockpit') { setTimeout(() => { try { cockpitStart(); } catch (e) { _swallow(e); } }, 300); return; }   // Cockpit mode — 조종석 세로 배치
-    if (mode !== '3d') return;
-    setTimeout(() => {
-      try { if (!(_soloActive && _soloCurrent === 'm3d')) panelSolo('m3d'); } catch (e) { _swallow(e); }
-    }, 300);
+    // Cockpit Mode — 3D 조종석(07-sim.js cockpitStart). 예전 '3D 단독 모드'(3d)로 적혀 있던 탭도 이리로
+    if (mode === 'cockpit' || mode === '3d') { setTimeout(() => { try { cockpitStart(); } catch (e) { _swallow(e); } }, 300); return; }
   }, 200);
 })();
 // toggleFcp3d 는 04-map.js 에 있다(그 파일은 appRegister 보다 먼저 읽혀 여기서 연결한다)

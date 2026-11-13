@@ -82,8 +82,8 @@
 
   const form = el('gate-box'), pw = el('gate-pw'), msg = el('gate-msg');
   if (!form || !pw) { setUnlocked(); return; }      // 덮개가 없으면 막을 것도 없다
-  // 비밀번호가 맞으면 화면을 고른다(PC 모드 · 3D 단독 모드) — 고른 뒤에 연다.
-  // 고른 화면은 그 탭에 적어 두고(vfrStartMode), 3D 단독이면 앱이 뜬 뒤 3D Only 로 바로 들어간다(14-simmode.js).
+  // 비밀번호가 맞으면 화면을 고른다(PC 모드 · Cockpit Mode · Simple · SIM) — 고른 뒤에 연다.
+  // 고른 화면은 그 탭에 적어 두고(vfrStartMode), 앱이 뜬 뒤 그 화면으로 바로 들어간다(14-simmode.js).
   const chooseMode = () => {
     form.classList.add('choose');
     const pick = mode => {
