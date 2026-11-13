@@ -101,9 +101,12 @@ export async function run(page, t) {
     o.cols = ['mpp0', 'mpp1', 'mpp2', 'avcsPower'].map(col);
     o.legend = document.querySelector('.ov-stage [data-ov="avcsPower"] .ov-sq').textContent;
     o.fcp = { pos: _ovhdDefs.fcpSel.pos.join(','), def: ovhdGet('fcpSel') };
-    // AVCS — 진동 크기(전이 양력 구간 20kt)
-    const s0 = S.spd; S.spd = 20;
-    o.vibOn = ckVibAmp(); ovhdSet('avcsPower', 'OUT'); o.vibOff = ckVibAmp(); S.spd = s0;
+    // AVCS — 처음 켜짐 · 공중(전이 양력 구간 20kt)에서만 진동을 줄인다 · 땅 위(WOW)에서는 쉰다
+    o.def = _ovhdDefs.avcsPower.def;
+    const s0 = { spd: S.spd, alt: S.alt }; S.spd = 20; S.alt = 1000;
+    o.vibOn = ckVibAmp(); ovhdSet('avcsPower', 'OUT'); o.vibOff = ckVibAmp(); ovhdSet('avcsPower', 'IN');
+    const ra = window.radarAltFt; window.radarAltFt = () => 0; o.gnd = { on: ckVibAmp(), act: avcsActive() }; window.radarAltFt = ra;
+    S.spd = s0.spd; S.alt = s0.alt;
     ['mpp0', 'mpp1', 'mpp2'].forEach(id => ovhdSet(id, 'OUT'));
     // MPP COM2
     o.c0 = cduCom2Freqs(); ovhdSet('com2', 'IN'); o.c1 = cduCom2Freqs(); ovhdSet('com2', 'OUT');
@@ -113,5 +116,6 @@ export async function run(page, t) {
   t.ok(m.cols.every(c => c === 'rgb(92, 240, 126)') && m.legend === 'ON', `RADAR · EGPWS · DMM · AVCS POWER 의 ON 은 녹색 (${m.cols[0]})`);
   t.ok(m.fcp.pos === '1,N,2' && m.fcp.def === 'N', `FCP 선택 — 1 · N(둘 다) · 2, 처음 N (${m.fcp.pos})`);
   t.ok(m.c1.act === '121.500' && m.c1.stb === '121.500' && m.c0.act !== '121.500', `MPP COM2 — CDU COM2 주 · 예비가 121.500 (${m.c0.act} → ${m.c1.act} / ${m.c1.stb})`);
-  t.ok(m.vibOff > 0.2 && Math.abs(m.vibOn - m.vibOff * 0.25) < 1e-6, `AVCS ON — 진동을 1/4 로 줄인다 (${m.vibOff.toFixed(2)}° → ${m.vibOn.toFixed(2)}°)`);
+  t.ok(m.def === 'IN' && m.vibOff > 0.2 && m.vibOn < 0.02, `AVCS — 처음 켜짐 · 공중에서 진동을 거의 없앤다 (${m.vibOff.toFixed(2)}° → ${m.vibOn.toFixed(3)}°)`);
+  t.ok(!m.gnd.act && Math.abs(m.gnd.on - m.vibOff) < 1e-6, `AVCS — 땅 위(WOW)에서는 켜져 있어도 쉰다 (${m.gnd.on.toFixed(2)}°)`);
 }
