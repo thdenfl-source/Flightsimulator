@@ -26,7 +26,7 @@ export async function run(page, t) {
   t.ok(lsys.a.join() === 'sysp,left-panel,true' && lsys.r !== 'sysp' && lsys.b[0] === 'pfd' && lsys.b[2] === false,
     `왼쪽 창 SYSTEM 탭 — PFD 자리에 SYSTEM, PFD 탭으로 돌아온다 (${lsys.a.join(' ')} · 우측 ${lsys.r} · ${lsys.b.join(' ')})`);
   t.ok(tabs.M === 'CDU|MAP|3D|UPPER|LOWER|SYSTEM|⧉ POP UP|⟳', `CDU 창 탭: CDU · MAP · 3D · UPPER · LOWER · SYSTEM · POP UP · 새로고침 (+ 📌 Top) (${tabs.M})`);
-  t.ok(tabs.R === 'CDU|MAP|3D|UPPER|LOWER|SYSTEM|⛶ 3D Only|⧉ POP UP', `MAP 창 탭: CDU · MAP · 3D · UPPER · LOWER · SYSTEM · 3D Only · POP UP (+ 📌 Top) (${tabs.R})`);
+  t.ok(tabs.R === 'CDU|MAP|3D|UPPER|LOWER|SYSTEM|⛶ Cockpit Mode|⧉ POP UP', `MAP 창 탭: CDU · MAP · 3D · UPPER · LOWER · SYSTEM · Cockpit Mode · POP UP (+ 📌 Top) (${tabs.R})`);
   const two = await page.evaluate(() => { toggleTriple(false); const o = [leftSel, rightSel].join('·'); toggleTriple(true); return o; });
   t.eq(two, 'pfd·map', '2분할은 PFD · MAP');
   // 4분할 — 위에 PFD · 3D · MAP, 아래에 CDU

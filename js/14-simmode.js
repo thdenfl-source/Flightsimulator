@@ -1163,7 +1163,7 @@ function syncGyro() {
 }
 async function toggleGyro() {
   if (!vStickAvail()) {
-    try { uiToast('GYRO 는 SIM 모드의 3D 단독(3D Only) 화면에서 씁니다', '', 2500); } catch (e) { _swallow(e); }
+    try { uiToast('GYRO 는 SIM 모드의 Cockpit Mode 화면에서 씁니다', '', 2500); } catch (e) { _swallow(e); }
     return;
   }
   if (gyroOn) { gyroOn = false; gyroAligned = false; _gyroZero = null; vStick.roll = vStick.pitch = 0; vStickRender(); syncGyro(); return; }
@@ -1193,7 +1193,7 @@ function gyroAlign() {
 }
 function toggleVStick() {
   if (!vStickAvail()) {
-    try { uiToast('화면 조종간은 SIM 모드의 3D 단독(3D Only) 화면에서 씁니다', '', 2500); } catch (e) { _swallow(e); }
+    try { uiToast('화면 조종간은 SIM 모드의 Cockpit Mode 화면에서 씁니다', '', 2500); } catch (e) { _swallow(e); }
     return;
   }
   vStickOn = !vStickOn;

@@ -817,7 +817,7 @@ function _ckPopSync() {
 }
 function toggleConsolePop(k) {
   if (k && !_ckPopOk(k)) {
-    try { uiToast(k === 'cdu' ? 'CDU 팝아웃은 3D Only 화면에서 됩니다' : '지도 팝아웃은 3D 를 제 창(3D 탭 · 3D Only)으로 쓸 때 됩니다', '', 2500); } catch (e) { _swallow(e); }
+    try { uiToast(k === 'cdu' ? 'CDU 팝아웃은 Cockpit Mode 화면에서 됩니다' : '지도 팝아웃은 3D 를 제 창(3D 탭 · Cockpit Mode)으로 쓸 때 됩니다', '', 2500); } catch (e) { _swallow(e); }
     return;
   }
   ckConPop = (k && ckConPop !== k && CKPIT_POP[k]) ? k : null;

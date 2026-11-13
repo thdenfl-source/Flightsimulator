@@ -17,8 +17,8 @@
      CDN 을 쓰면 한 번이라도 못 받는 순간 앱이 통째로 죽는다 — 비행 중에는
      그럴 여지를 두지 않는다. -->
 <!-- 패널 새 창(다중 모니터) — 라이브러리가 거는 이벤트까지 받아 적어야 하므로 맨 먼저 -->
-<script src="js/00-edition.js?v=609"></script>
-<script src="js/00-popout.js?v=609"></script>
+<script src="js/00-edition.js?v=610"></script>
+<script src="js/00-popout.js?v=610"></script>
 <link rel="stylesheet" href="vendor/leaflet.css"/>
 <script src="vendor/leaflet.js"></script>
 <link rel="stylesheet" href="vendor/leaflet-velocity.min.css"/>
@@ -2368,7 +2368,7 @@ body.simple-mode #simple-view { display: flex; position: fixed; left: 0; right: 
     </div>
   </form>
 </div>
-<script src="js/00-gate.js?v=609"></script>
+<script src="js/00-gate.js?v=610"></script>
 <!-- ── 단일화면 선택 바 (기본 숨김) ── -->
 <!-- ── 시작 안내(사용법/키보드) 오버레이 ── -->
 <div id="help-overlay" style="display:none;">
@@ -2420,7 +2420,7 @@ body.simple-mode #simple-view { display: flex; position: fixed; left: 0; right: 
             화면 가득 띄웁니다. 계기비행 연습처럼 PFD 만 크게 보거나, 지도·CDU 를 넓게 볼 때 쓰십시오.
             버튼을 <b>한 번 더 누르면</b>(또는 떠 있는 <b>✥ HALF</b> · 상단 막대의 <b>✕</b>)
             <b>들어가기 전 배치 그대로</b> 돌아옵니다. 단독 중에는 <b>상단 막대</b>에서 다른 창으로 바로 넘어갈 수 있습니다.<br>
-            <b>⛶ 3D Only</b>(오른쪽 창 탭 줄 — 2분할·3분할 모두) — 3D 지도를 화면 가득 띄웁니다. 빠져나갈 때는 위 가운데의 <b>✥ HALF</b>.<br>
+            <b>⛶ Cockpit Mode</b>(오른쪽 창 탭 줄 — 2분할·3분할 모두) — 3D 조종석(3D 를 화면 가득 · 조종석 시야 · MFD · 콘솔 · CDU)으로 들어갑니다(종합판은 SIM 을 켠 채로). 빠져나갈 때는 오른쪽 위 <b>Split screen</b>.<br>
             <b>계기 크기 − / +</b>(3D 단독 화면, 계기 버튼 아래) — 왼쪽 위 PFD 계기를 60 % ~ 160 % 사이로 10 % 씩 줄이고 키웁니다(크기는 기억됩니다).<br>
             <b>LOWER</b>(UPPER 옆 탭) — 실기 <b>하부 콘솔</b>: 왼쪽 열 ⑰ AHRS · ⑯ AFCAU(AUTO TRIM · TRIM FEEL · AP1/AP2) · ⑮ 비디오 컨버터 · ⑭ 비상부주(EMERG FLOATS) ·
             ⑬ 호이스트 · ⑫ CPI CONTROLLER · ⑪ PA, 오른쪽 열 ⑥ FUEL(X-FEED · FT1/BP1 · XFER · FT2/BP2 · AUX1/F5/AUX2 XFER) · ⑦ U/VHF-AM/FM · ⑧ VHF-FM · ⑨ AVCS · ⑩ MPP ·
@@ -2606,7 +2606,7 @@ body.simple-mode #simple-view { display: flex; position: fixed; left: 0; right: 
             그려진 땅에 그대로 맞춰 내려앉고, 외부 시점의 카메라는 같은 프레임의 헬기 자리를 그대로 씁니다.<br>
             <b>MAP ON/OFF</b>(CDU 버튼 아래) — 3D 단독 화면에서 <b>2D 지도</b>를 계기 칸과 같은 크기로 CDU 칸 왼쪽에 겹쳐 띄웁니다.
             겹친 CDU 의 <b>MAP</b> 버튼도 이 지도를 켭니다(3D 단독은 그대로). MAP 단독 화면에서는 지도 아래 <b>3D</b> 버튼으로 3D 단독에 돌아갑니다.<br>
-            <b>CDU ON/OFF</b>(3D 오른쪽 버튼 묶음, 계기 버튼 아래) — <b>3D 단독(3D Only) 화면</b>에서 CDU 를 <b>3D 버튼 줄 바로 왼쪽</b>에
+            <b>CDU ON/OFF</b>(3D 오른쪽 버튼 묶음, 계기 버튼 아래) — <b>Cockpit Mode 화면</b>에서 CDU 를 <b>3D 버튼 줄 바로 왼쪽</b>에
             계기 칸과 같은 높이(3/5)로 겹쳐 띄웁니다(너비는 CDU 비율대로 — 좌우 빈 여백 없이). CDU 창 그대로라 키·화면이 같고, 끄거나 단독을 나오면 제자리로 돌아갑니다(이 기기에 기억).<br>
             <b>STICK ON/OFF</b>(FCP 버튼 아래) — SIM 모드의 3D 단독 화면에서 <b>오른쪽 아래(R CHIN 자리)</b>에 화면 조종간 셋을 띄웁니다:
             <b>컬렉티브</b>(위아래 · 놓아도 그 자리 · 아래 0% … 위 140%)는 <b>화면 왼쪽 아래 끝</b>(왼손), 오른쪽 아래에는 <b>페달</b>(좌우 · 놓으면 가운데)과
@@ -2616,7 +2616,7 @@ body.simple-mode #simple-view { display: flex; position: fixed; left: 0; right: 
             GYRO ON 을 누르면 기울기 센서를 켜고(아이폰·아이패드는 허락을 묻습니다), <b>GYRO ALIGN 을 누른 그때의 자세가 가운데</b>가 되어 그때부터 조종합니다.
             기기를 25° 기울이면 끝 — 화면 사이클릭과 같이 <b>16방향 · 피치 ±10° · 롤 ±20°</b>(피치는 가운데 감도 반)입니다. 화면 사이클릭을 손으로 쥐면 손이 앞서고,
             화면을 가로·세로로 돌리면 다시 ALIGN 해야 합니다.<br>
-            <b>FCP ON/OFF</b>(3D 오른쪽 버튼 묶음) — <b>3D 단독(3D Only) 화면</b>에서 PFD 소프트키(위) + FCP 패널(아래)을 <b>3D 화면 왼쪽 아래에 한 창</b>으로 띄웁니다
+            <b>FCP ON/OFF</b>(3D 오른쪽 버튼 묶음) — <b>Cockpit Mode 화면</b>에서 PFD 소프트키(위) + FCP 패널(아래)을 <b>3D 화면 왼쪽 아래에 한 창</b>으로 띄웁니다
             (화면 너비의 반 · 높이의 45% 안으로 줄여 그림). 버튼 그대로라 기능이 같고, 켜면 L CHIN 창은 닫힙니다. 분할 화면에서는 PFD 아래에 FCP 가 있으므로 열지 않습니다.<br>
             <b>CHIN BUBBLE</b> — 1인칭에서는 <b>정면 시야가 3D 창 가득</b> 차고, 좌·우 발밑 창은 그 위
             <b>아래 왼쪽·오른쪽 모서리에 붙어 겹쳐</b> 뜹니다(창 하나가 너비 약 1/3 · 높이 2/9).
@@ -3244,7 +3244,7 @@ body.simple-mode #simple-view { display: flex; position: fixed; left: 0; right: 
       <button class="page-tab" data-sel="ovhd" data-act="selectPanel" data-arg='["right", "ovhd"]' title="UPPER CONSOLE — 상부 콘솔 스위치(시뮬레이터 연동 예정)">UPPER</button>
       <button class="page-tab" data-sel="lcon" data-act="selectPanel" data-arg='["right", "lcon"]' title="LOWER CONSOLE — 하부 콘솔(AHRS · AFCAU · FUEL · MPP · PARKING BRAKE 등)">LOWER</button>
       <button class="page-tab" data-sel="sysp" data-act="selectPanel" data-arg='["right", "sysp"]' title="SYSTEM — MFD 계통 화면(CDU 의 Aircraft Systems 버튼으로 화면을 고른다)">SYSTEM</button>
-      <button class="page-tab split-tab" id="m3d-only-btn" data-act="panelSolo" data-arg='["m3d"]' title="3D Only — 3D 지도를 화면 가득, PFD(계기)를 왼쪽 위에 겹쳐(한 번 더 누르면 원래 배치)">⛶ 3D Only</button>
+      <button class="page-tab split-tab" id="m3d-only-btn" data-act="cockpitToggle" title="Cockpit Mode — 3D 조종석(3D 를 화면 가득 · 1인칭 조종석 시야 · MFD · 콘솔 · CDU). 한 번 더 누르면 원래 배치">⛶ Cockpit Mode</button>
       <button class="page-tab split-tab" id="cdu-solo-btn" data-act="panelSolo" data-arg='["cdu"]' title="CDU 단독 — CDU 만 화면 가득(한 번 더 누르면 원래 배치)">⛶ CDU 단독</button>
       <button class="page-tab po-btn" data-act="popoutToggle" data-arg='["right"]' title="이 패널을 새 창으로 띄운다(다중 모니터에 따로 배치)">⧉ POP UP</button>
       <button class="page-tab po-top-btn" data-act="popoutTop" data-arg='["right", "$el"]' title="Top — 이 창을 다른 창들보다 늘 위에 띄운다(한 번 더 누르면 본 창으로)">📌 Top</button>
@@ -3330,9 +3330,9 @@ body.simple-mode #simple-view { display: flex; position: fixed; left: 0; right: 
               <button class="sim-btn" data-act="pfdOvSize" data-arg='[1]' title="계기 키우기">+</button>
             </div>
           <!-- CDU ON/OFF — 3D 단독 화면에서 3D 버튼 줄 바로 왼쪽에 CDU 를 계기 칸 크기로 겹쳐 띄운다(07-sim.js) -->
-          <button class="sim-btn" id="cduov-btn" data-act="toggleCduOverlay" title="CDU — 3D 단독(3D Only) 화면에서 3D 버튼 줄 바로 왼쪽에 CDU 를 계기 칸 높이(3/5)로 보이기/감추기">CDU OFF</button>
+          <button class="sim-btn" id="cduov-btn" data-act="toggleCduOverlay" title="CDU — Cockpit Mode 화면에서 3D 버튼 줄 바로 왼쪽에 CDU 를 계기 칸 높이(3/5)로 보이기/감추기">CDU OFF</button>
           <!-- MAP ON/OFF — 3D 단독 화면에서 2D 지도를 계기 칸 크기로 겹쳐 띄운다(CDU 칸 왼쪽 · 07-sim.js) -->
-          <button class="sim-btn" id="mapov-btn" data-act="toggleMapOverlay" title="MAP — 3D 단독(3D Only) 화면에서 2D 지도를 계기 칸 크기(가로 1/4 · 높이 3/5)로 CDU 칸 왼쪽에 보이기/감추기(CDU 의 MAP 버튼과 같다)">MAP OFF</button>
+          <button class="sim-btn" id="mapov-btn" data-act="toggleMapOverlay" title="MAP — Cockpit Mode 화면에서 2D 지도를 계기 칸 크기(가로 1/4 · 높이 3/5)로 CDU 칸 왼쪽에 보이기/감추기(CDU 의 MAP 버튼과 같다)">MAP OFF</button>
           <!-- FCP ON/OFF — PFD 아래 FCP 전체를 3D 화면 왼쪽 아래에 한 창으로(3D 단독에서만 · 04-map.js) -->
           <div id="fcp-btn" class="fcp-btn-row"><button class="sim-btn" id="fcp-l-btn" data-act="toggleFcp3d" title="FCP — PFD 아래 FCP 전체를 3D 화면 왼쪽 아래에 한 창으로 보이기/감추기(L CHIN 창은 닫힘 · 3D 단독 화면에서만)">FCP OFF</button></div>
           <!-- STICK — 3D 단독 · SIM 에서 오른쪽 아래(R CHIN 자리)에 화면 조종간 셋(컬렉티브 · 페달 · 16방향 사이클릭) · 14-simmode.js -->
@@ -3670,40 +3670,40 @@ body.simple-mode #simple-view { display: flex; position: fixed; left: 0; right: 
 <!-- 앱 코드 — 클래식 스크립트(모듈 아님)라 전역 스코프를 공유한다.
      순서가 곧 실행 순서이므로 임의로 바꾸지 말 것. -->
   <!-- AIP 데이터 — 코드보다 먼저 로드한다 -->
-  <script src="js/data/terminal-fixes.js?v=609"></script>
-  <script src="js/data/ifr-fixes.js?v=609"></script>
-  <script src="js/data/ifr-procedures.js?v=609"></script>
-  <script src="js/data/airfield-info.js?v=609"></script>
-  <script src="js/data/enr-vors.js?v=609"></script>
-  <script src="js/data/loc-stations.js?v=609"></script>
-  <script src="js/data/enr-routes.js?v=609"></script>
-  <script src="js/data/airspace.js?v=609"></script>
-  <script src="js/data/runways.js?v=609"></script>
+  <script src="js/data/terminal-fixes.js?v=610"></script>
+  <script src="js/data/ifr-fixes.js?v=610"></script>
+  <script src="js/data/ifr-procedures.js?v=610"></script>
+  <script src="js/data/airfield-info.js?v=610"></script>
+  <script src="js/data/enr-vors.js?v=610"></script>
+  <script src="js/data/loc-stations.js?v=610"></script>
+  <script src="js/data/enr-routes.js?v=610"></script>
+  <script src="js/data/airspace.js?v=610"></script>
+  <script src="js/data/runways.js?v=610"></script>
   <!-- 앱 코드 -->
-  <script src="js/00-ui.js?v=609"></script>
-  <script src="js/01-state.js?v=609"></script>
-  <script src="js/02-math.js?v=609"></script>
-  <script src="js/03-pfd.js?v=609"></script>
-  <script src="js/04-map.js?v=609"></script>
-  <script src="js/05-gps.js?v=609"></script>
-  <script src="js/06-nav.js?v=609"></script>
-  <script src="js/07-sim.js?v=609"></script>
-  <script src="js/08-ifrdb.js?v=609"></script>
-  <script src="js/09-cdu.js?v=609"></script>
-  <script src="js/10-tools.js?v=609"></script>
-  <script src="js/11-charts.js?v=609"></script>
-  <script src="js/12-joystick.js?v=609"></script>
-  <script src="js/13-joyhid.js?v=609"></script>
-  <script src="js/14-simmode.js?v=609"></script>
-  <script src="js/15-heli3d.js?v=609"></script>
-  <script src="js/16-sound.js?v=609"></script>
-  <script src="js/17-upper.js?v=609"></script>
-  <script src="js/18-system.js?v=609"></script>
-  <script src="js/19-lower.js?v=609"></script>
-  <script src="js/20-navaids.js?v=609"></script>
-  <script src="js/21-c5000.js?v=609"></script>
-  <script src="js/22-npx138.js?v=609"></script>
-  <script src="js/23-afcs.js?v=609"></script>
+  <script src="js/00-ui.js?v=610"></script>
+  <script src="js/01-state.js?v=610"></script>
+  <script src="js/02-math.js?v=610"></script>
+  <script src="js/03-pfd.js?v=610"></script>
+  <script src="js/04-map.js?v=610"></script>
+  <script src="js/05-gps.js?v=610"></script>
+  <script src="js/06-nav.js?v=610"></script>
+  <script src="js/07-sim.js?v=610"></script>
+  <script src="js/08-ifrdb.js?v=610"></script>
+  <script src="js/09-cdu.js?v=610"></script>
+  <script src="js/10-tools.js?v=610"></script>
+  <script src="js/11-charts.js?v=610"></script>
+  <script src="js/12-joystick.js?v=610"></script>
+  <script src="js/13-joyhid.js?v=610"></script>
+  <script src="js/14-simmode.js?v=610"></script>
+  <script src="js/15-heli3d.js?v=610"></script>
+  <script src="js/16-sound.js?v=610"></script>
+  <script src="js/17-upper.js?v=610"></script>
+  <script src="js/18-system.js?v=610"></script>
+  <script src="js/19-lower.js?v=610"></script>
+  <script src="js/20-navaids.js?v=610"></script>
+  <script src="js/21-c5000.js?v=610"></script>
+  <script src="js/22-npx138.js?v=610"></script>
+  <script src="js/23-afcs.js?v=610"></script>
 
 <input type="file" id="zipFileInput" accept=".zip,application/zip,application/x-zip-compressed,application/octet-stream" style="display:none" onchange="handleZipFile(this.files[0]); this.value='';"></body>
 </html>

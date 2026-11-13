@@ -211,4 +211,4 @@ lconSyncHdgRef();
 
 // SIM Mode 창 배치판 버튼(07-sim.js · 00-popout.js) — appRegister 가 정의된 뒤(09-cdu.js)라 여기서 등록한다
 try { appRegister({ popoutScreen: k => window.popoutScreen && window.popoutScreen(k), simLayoutShow, simLayoutHide, simLayoutAllBack,
-                    simpleSet, simpleExit, cockpitStart, cockpitExit, pfdOvSize, fcpsBaroStd, pfdSkNavCycle, pfdSkPress }); } catch (e) { _swallow(e); }
+                    simpleSet, simpleExit, cockpitStart, cockpitExit, cockpitToggle, pfdOvSize, fcpsBaroStd, pfdSkNavCycle, pfdSkPress }); } catch (e) { _swallow(e); }
