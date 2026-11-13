@@ -58,18 +58,19 @@ export async function run(page, t) {
     const w = ms => new Promise(r => setTimeout(r, ms));
     S.alt = 1500; S.spd = 100; cockpitStart(); await w(1000);
     toggleConsolePop('pfd'); await w(600);
-    const m = document.getElementById('ck-pop-map'), bar = document.querySelector('#pfd-wrap .ctrl-bar');
+    const m = document.getElementById('ck-pop-mapslot'), bar = document.querySelector('#pfd-wrap .ctrl-bar');
     const mr = m.getBoundingClientRect(), br = bar.getBoundingClientRect();
-    const d = m.getContext('2d').getImageData(0, 0, m.width, m.height).data; let lit = 0;
-    for (let i = 0; i < d.length; i += 64) if (d[i] + d[i + 1] + d[i + 2] > 60) lit++;
-    const o = { show: m.classList.contains('show'), below: mr.top >= br.bottom - 1 && Math.abs(mr.left - br.left) < 2 && mr.height > 80, lit };
-    toggleConsolePop('sysp'); await w(300); o.hide = !m.classList.contains('show');
+    const mw = document.getElementById('map-wrap'), lm = leafMap.getSize();
+    const o = { show: m.classList.contains('show'), below: mr.top >= br.bottom - 1 && Math.abs(mr.left - br.left) < 2 && mr.height > 80,
+                inSlot: mw.parentElement === m && !mw.classList.contains('page-hidden'), size: Math.abs(lm.x - mr.width) < 4 && Math.abs(lm.y - mr.height) < 4,
+                bars: getComputedStyle(document.getElementById('map-top-bar')).display === 'none' };
+    toggleConsolePop('sysp'); await w(300); o.hide = !m.classList.contains('show') && mw.parentElement !== m;
     toggleConsolePop(null); exitSolo(); await w(300);
     try { if (simModeOn) toggleSimMode(false); } catch (e) { /* 절차 훈련판 */ }
     S.alt = 0; S.spd = 0; S.running = false;
     return o;
   });
-  t.ok(pm.show && pm.below && pm.lit > 20 && pm.hide, `PFD 팝아웃 — FCP 아래 칸에 움직이는 지도(다른 화면으로 바꾸면 빠진다) (${JSON.stringify(pm)})`);
+  t.ok(pm.show && pm.below && pm.inSlot && pm.size && pm.bars && pm.hide, `PFD 팝아웃 — FCP 아래 칸에 2D 지도(지도만 · 크기 맞춤 · 다른 화면으로 바꾸면 빠진다) (${JSON.stringify(pm)})`);
   // ── Simple 모드 위 막대의 COCKPIT — Cockpit Mode 로 들어가고, 끝내면 그 Simple 화면으로 돌아온다 ──
   const sc = await page.evaluate(async () => {
     const w = ms => new Promise(r => setTimeout(r, ms));
