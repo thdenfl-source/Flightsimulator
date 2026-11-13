@@ -109,7 +109,7 @@ const LCON_PLATES = [
   { x: 510, y: 690, w: 480, h: 120, items: [
     { t: 'lbl', x: 40, y: 62, text: 'AVCS' },
     { t: 'lpb', id: 'avcsStatus', x: 170, y: 72, w: 60, h: 46, title: 'STATUS', legend: '' },
-    { t: 'lpb', id: 'avcsPower', x: 330, y: 72, w: 60, h: 46, title: 'POWER', legend: 'ON', grn: true },   // AVCS — 진동 저감(15-heli3d.js ckVib)
+    { t: 'lpb', id: 'avcsPower', x: 330, y: 72, w: 60, h: 46, title: 'POWER', legend: 'ON', grn: true, def: 'IN' },   // AVCS — 처음부터 켜짐 · 진동 저감(15-heli3d.js ckVib)
   ]},
   // ⑩ MPP 패널
   { x: 510, y: 820, w: 480, h: 290, items: [
@@ -142,10 +142,18 @@ consoleRegister('lcon', { wrap: 'lcon-wrap', plates: LCON_PLATES, W: LCON_W, H: 
 window.addEventListener('ovhd', e => {
   try { if (e.detail && e.detail.id === 'com2' && e.detail.value === 'IN' && typeof cduCom2Guard === 'function') cduCom2Guard(); } catch (er) { _swallow(er); }
 });
-// AVCS(능동 진동 저감) — POWER 를 누르면 녹색 ON · DC 전원이 있으면 작동해 기체 진동을 감지하고 맞진동으로 줄인다(15-heli3d.js ckVib)
+// AVCS(능동 진동 저감) — POWER 는 처음부터 켜짐(녹색 ON). 켜져 있고 DC 전원이 있어도 바퀴가 땅에 닿아 있으면(WOW) 쉬고,
+// 공중으로 인지하면 작동해 기체 진동을 감지하고 맞진동으로 거의 없앤다(15-heli3d.js ckVib)
 function avcsOn() {
   try { return typeof ovhdGet === 'function' && ovhdGet('avcsPower') === 'IN' && (typeof pwrDc !== 'function' || pwrDc()); } catch (e) { return false; }
 }
+function avcsActive() {
+  let wow = false;
+  try { wow = typeof fuelWow === 'function' ? fuelWow() : false; } catch (e) { _swallow(e); }
+  return avcsOn() && !wow;
+}
+// (AVCS 를 처음부터 켜 둔 판보다 먼저 저장된 꺼짐 값은 한 번 켠 쪽으로 맞춘다)
+try { if (!localStorage.getItem('avcsDefOn')) { localStorage.setItem('avcsDefOn', '1'); if (ovhdGet('avcsPower') !== 'IN') ovhdSet('avcsPower', 'IN'); } } catch (e) { _swallow(e); }
 function lconShow() { consoleBuild('lcon'); consoleFit('lcon'); if (typeof c5Build === 'function') c5Build(); if (typeof npxBuild === 'function') npxBuild(); }   // C-5000(21-c5000.js) · NPX138(22-npx138.js)
 try {
   const w = document.getElementById('lcon-wrap');
