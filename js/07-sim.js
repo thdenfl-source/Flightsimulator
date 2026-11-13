@@ -6,12 +6,17 @@
 // ══════════════════════════════════════════════════════
 // CONTROLS  — pitch & bank are AUTO; no manual buttons
 // ══════════════════════════════════════════════════════
+// SIM 모드가 꺼져 있을 때(절차 훈련)의 IAS 모드 — FCP IAS 노브를 누르면 걸고 풀고(AFCS 상태 띠 · FCP 등),
+// 노브를 돌리면 다시 걸린다. (SIM 이 꺼져 있으면 속도는 노브로만 바뀌므로 풀어도 지금 속도 그대로 난다)
+let iasNsOn = true;
+function iasModeOn() { return (typeof simModeOn !== 'undefined' && simModeOn) ? simIasOn : iasNsOn; }
 function applyDelta(field, d){
   switch(field){
     case 'spd':
       // SIM 모드에서는 속도를 곧바로 바꾸지 않는다 — IAS 기준 속도를 옮기고(꺼져 있으면
       // 지금 속도에서 켠다) 기수 자세가 그 속도로 데려간다(14-simmode.js)
       if (simModeOn) { simIasStep(d); break; }
+      iasNsOn = true;
       S.spd = Math.max(0, Math.min(320, S.spd + d));
       S.pit = pitchFromSpd(S.spd);   // auto pitch from speed
       break;
@@ -109,7 +114,8 @@ function afcsReleaseAll() {
 function fcpSync(which) {
   if (which === 'ias') {
     if (simModeOn) simIasToggle();
-    else selSpd = Math.max(0, Math.round(S.spd));
+    else { iasNsOn = !iasNsOn; if (iasNsOn) selSpd = Math.max(0, Math.round(S.spd)); }   // 한 번 더 누르면 푼다
+    try { drawPFD(); fcpsSync(); } catch (e) { _swallow(e); }
   } else if (which === 'hdg') {
     // IAS·ALT 처럼 한 번 더 누르면 푼다. NAV 가 걸려 있으면 HDG 로 넘긴다(지금 헤딩 유지).
     if (navApOn) toggleNavAp();
@@ -997,7 +1003,9 @@ function applyPanels() {
   const scrHost = k => (window._scrHost && window._scrHost[k]) ? document.getElementById('po-host-' + k) : null;
   // Simple mode — 고른 화면 하나가 전체 화면 그릇(#simple-host)을 차지한다
   const simpleHost = k => (window._simpleScr === k) ? document.getElementById('simple-host') : null;
-  const hostOf = k => simpleHost(k) || scrHost(k) || (leftSel === k ? L : (tripleMode && midSel === k ? M : (rightSel === k ? R : (quadMode && botSel === k ? B : null))));
+  // Cockpit mode — 화면마다 제 칸(#ck-<k>)이 있는 세로 배치(조종석 느낌)
+  const ckHost = k => (window._cockpitOn && CK_SCREENS.includes(k)) ? document.getElementById('ck-' + k) : null;
+  const hostOf = k => ckHost(k) || simpleHost(k) || scrHost(k) || (leftSel === k ? L : (tripleMode && midSel === k ? M : (rightSel === k ? R : (quadMode && botSel === k ? B : null))));
   ['pfd', 'map', 'cdu', 'm3d', 'plan', 'ovhd', 'sysp', 'lcon'].forEach(k => {
     const el = document.getElementById(wrapIds[k]);
     if (!el) return;
@@ -1848,6 +1856,97 @@ function simpleExit() {
 }
 
 
+// ── Cockpit mode ── 시작 화면에서 'Cockpit Mode' 를 고르면 조종석처럼 세로로 쌓은 화면을 한 화면 가득 본다:
+//      UPPER CONSOLE(위 가운데)
+//      3D 화면(가로 가득)
+//      PFD·FCP | SYSTEM
+//      CDU
+//      LOWER CONSOLE
+// 칸을 두 번 누르면(더블클릭 · 두 번 톡) 그 칸이 화면을 가득 채우고, 다시 두 번 누르면 처음 배치로 돌아온다
+// (버튼 · 입력칸 위에서 두 번 누른 것은 그 조작으로 보고 넘긴다). 오른쪽 위 'PC 모드' 로 끝낸다.
+const CK_SCREENS = ['ovhd', 'm3d', 'pfd', 'sysp', 'cdu', 'lcon'];
+const CK_NAMES = { ovhd: 'UPPER', m3d: '3D', pfd: 'PFD · FCP', sysp: 'SYSTEM', cdu: 'CDU', lcon: 'LOWER' };
+window._cockpitOn = false;
+let _ckMax = null, _ckTap = null;
+function _cockpitEnsure() {
+  if (document.getElementById('ck-view')) return;
+  const v = document.createElement('div'); v.id = 'ck-view';
+  v.innerHTML = CK_SCREENS.map(k => `<div class="ck-cell" id="ck-${k}" data-ck="${k}"><span class="ck-tag">${CK_NAMES[k]}</span></div>`).join('') +
+    `<button type="button" id="ck-exit" data-act="cockpitExit" title="Cockpit Mode 끝내기 — 분할 화면(PC 모드)으로">PC 모드</button>`;
+  document.body.appendChild(v);
+  // 두 번 누르기 — 마우스 dblclick 과 터치 두 번 톡(350ms · 20px 안) 모두
+  const interactive = t => !!(t && t.closest && t.closest('button, input, select, textarea, a, [data-act], .ov-hit, .fks-knob, .nav-btn, .gtc-btn, .pfd-sk'));
+  v.addEventListener('dblclick', e => {
+    const c = e.target.closest && e.target.closest('.ck-cell');
+    if (!c || interactive(e.target)) return;
+    cockpitToggleMax(c.dataset.ck);
+  });
+  v.addEventListener('pointerup', e => {
+    if (e.pointerType === 'mouse') return;                 // 마우스는 dblclick 이 맡는다
+    const c = e.target.closest && e.target.closest('.ck-cell');
+    if (!c || interactive(e.target)) { _ckTap = null; return; }
+    const now = performance.now();
+    if (_ckTap && _ckTap.k === c.dataset.ck && now - _ckTap.t < 350 && Math.hypot(e.clientX - _ckTap.x, e.clientY - _ckTap.y) < 20) {
+      _ckTap = null; cockpitToggleMax(c.dataset.ck);
+    } else _ckTap = { k: c.dataset.ck, t: now, x: e.clientX, y: e.clientY };
+  });
+}
+// PFD 칸의 FCP — 한 줄 그대로 칸 폭(높이는 칸의 반)에 맞춰 줄인다(키우지는 않는다)
+function _ckFitFcp() {
+  const f = document.getElementById('fcp-simple'), cell = document.getElementById('ck-pfd');
+  if (!f) return;
+  if (!window._cockpitOn || !cell || !cell.contains(f)) { f.style.zoom = ''; return; }
+  f.style.zoom = 1;
+  const nw = f.scrollWidth, nh = f.scrollHeight;
+  if (!(nw > 0 && nh > 0 && cell.clientWidth > 0)) return;
+  const pw = (f.parentElement && f.parentElement.clientWidth) || cell.clientWidth;   // FCP 를 담은 칸(PFD 그릇)의 폭
+  const k = Math.min(1, (pw - 6) / nw, cell.clientHeight * 0.5 / nh);
+  f.style.zoom = k.toFixed(3);
+}
+function _cockpitKick() {
+  const kick = () => {
+    try { _ckFitFcp(); } catch (e) { _swallow(e); }
+    try { window.dispatchEvent(new Event('resize')); } catch (e) { _swallow(e); }
+    try { resizePFD(); drawPFD(); } catch (e) { _swallow(e); }
+    try { scaleCdu(); } catch (e) { _swallow(e); }
+    try { if (typeof sysDraw === 'function') sysDraw(); } catch (e) { _swallow(e); }
+    try { if (typeof ovhdShow === 'function') ovhdShow(); } catch (e) { _swallow(e); }
+    try { if (typeof lconShow === 'function') lconShow(); } catch (e) { _swallow(e); }
+    try { if (_ml3d) _ml3d.resize(); } catch (e) { _swallow(e); }
+  };
+  kick(); setTimeout(kick, 80); setTimeout(kick, 300);
+}
+window.addEventListener('resize', () => { if (window._cockpitOn) { try { _ckFitFcp(); resizePFD(); drawPFD(); } catch (e) { _swallow(e); } } });
+function cockpitStart() {
+  try { if (typeof _soloActive !== 'undefined' && _soloActive) exitSolo(); } catch (e) { _swallow(e); }
+  try { if (simpleOn) simpleExit(); } catch (e) { _swallow(e); }
+  _cockpitEnsure();
+  window._cockpitOn = true; _ckMax = null;
+  document.body.classList.add('cockpit-mode');
+  document.getElementById('ck-view').classList.remove('has-max');
+  document.querySelectorAll('#ck-view .ck-cell').forEach(c => c.classList.remove('ck-max'));
+  try { applyPanels(); } catch (e) { _swallow(e); }
+  _cockpitKick();
+}
+// 그 칸이 화면 가득 ⇄ 처음 배치
+function cockpitToggleMax(k) {
+  if (!window._cockpitOn || !CK_SCREENS.includes(k)) return;
+  _ckMax = _ckMax === k ? null : k;
+  const v = document.getElementById('ck-view');
+  v.classList.toggle('has-max', !!_ckMax);
+  v.querySelectorAll('.ck-cell').forEach(c => c.classList.toggle('ck-max', c.dataset.ck === _ckMax));
+  _cockpitKick();
+}
+function cockpitExit() {
+  window._cockpitOn = false; _ckMax = null;
+  try { _ckFitFcp(); } catch (e) { _swallow(e); }
+  document.body.classList.remove('cockpit-mode');
+  try { applyPanels(); } catch (e) { _swallow(e); }
+  try { sessionStorage.setItem('vfrStartMode', 'pc'); } catch (e) { _swallow(e); }
+  setTimeout(() => { try { window.dispatchEvent(new Event('resize')); resizePFD(); } catch (e) { _swallow(e); } }, 60);
+}
+
+
 // ══════════════════════════════════════════════════════
 // FCP SIMPLE — 실기 AFCS 조작 패널 모양(사진)으로 간추린 FCP. 왼쪽 세로 탭 하나로 지금 FCP ⇄ SIMPLE.
 //   위: IAS · HDG · VS · ALT.A · [ALT] · CR.HT  |  BARO · UPLIM
@@ -1952,7 +2051,7 @@ function fcpsSync() {
   { const q = g(() => (Number.isFinite(window._qnhHpa) ? window._qnhHpa : QNH_STD), QNH_STD);
     set('baro', (typeof pfdBaroUnit !== 'undefined' && pfdBaroUnit === 'IN') ? (q / HPA_PER_IN).toFixed(2) : String(Math.round(q))); }
   set('crs', fmtA(g(() => (navSrc !== 'FMS' ? vorObsCrs : S.crs), S.crs)) + '°');
-  on('ias', g(() => simModeOn && simIasOn, false));
+  on('ias', g(() => iasModeOn(), false));
   on('hdg', g(() => hdgSelOn, false));
   on('crht', g(() => crhtOn, false));
   on('alt', g(() => altHoldOn, false));

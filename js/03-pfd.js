@@ -582,7 +582,7 @@ function drawFMA(x, y, w) {
     leftOn = altHoldOn || crhtOn;     // dim ALT if both collective holds off
     right  = 'IAS';
     // SIM 모드에서는 IAS 를 건 동안만 켜진다(풀려 있으면 기수 자세는 조종간 몫)
-    rightOn = !simModeOn || simIasOn;
+    rightOn = (typeof iasModeOn === 'function') ? iasModeOn() : (!simModeOn || simIasOn);   // FCP IAS 를 누르면 꺼진다(SIM 이 꺼져 있어도 — 07-sim.js iasNsOn)
     // G/A — 컬렉티브·피치 축이 GA, 끝나면 컬렉티브 VS(선택 상승률) · 피치 IAS
     const ga = (typeof gaOn !== 'undefined') && simModeOn && gaOn, vsm = (typeof vsModeOn !== 'undefined') && simModeOn && vsModeOn;
     const td = (typeof tdOn !== 'undefined') && simModeOn && tdOn;
