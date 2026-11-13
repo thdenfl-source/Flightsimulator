@@ -1005,7 +1005,11 @@ function applyPanels() {
   const simpleHost = k => (window._simpleScr === k) ? document.getElementById('simple-host') : null;
   // Cockpit mode — 화면마다 제 칸(#ck-<k>)이 있는 세로 배치(조종석 느낌)
   const ckHost = k => (window._cockpitOn && CK_SCREENS.includes(k)) ? document.getElementById('ck-' + k) : null;
-  const hostOf = k => ckHost(k) || simpleHost(k) || scrHost(k) || (leftSel === k ? L : (tripleMode && midSel === k ? M : (rightSel === k ? R : (quadMode && botSel === k ? B : null))));
+  // (Cockpit mode 에서는 제 칸이 없는 화면(2D 지도 · PLAN)은 감춘 분할 패널에 두지 않는다 — 지도는 SYSTEM 창 Map 화면으로)
+  const hostOf0 = k => window._cockpitOn ? ckHost(k) : simpleHost(k) || scrHost(k) || (leftSel === k ? L : (tripleMode && midSel === k ? M : (rightSel === k ? R : (quadMode && botSel === k ? B : null))));
+  // SYSTEM 창의 Map 화면(18-system.js) — 지도가 다른 창에 없고 SYSTEM 창이 보이면 그 큰 칸이 지도 그릇
+  const sysMapHost = () => { try { return (typeof sysMapSlot === 'function' && hostOf0('sysp')) ? sysMapSlot() : null; } catch (e) { return null; } };
+  const hostOf = k => hostOf0(k) || (k === 'map' ? sysMapHost() : null);
   ['pfd', 'map', 'cdu', 'm3d', 'plan', 'ovhd', 'sysp', 'lcon'].forEach(k => {
     const el = document.getElementById(wrapIds[k]);
     if (!el) return;
@@ -1183,6 +1187,12 @@ function applyPoRatio() {
 // 전체화면(solo)에서는 map-wrap이 숨겨진 좌측 패널에 있을 수 있어 setPage(0)로는
 // 검은 화면이 되므로, solo 모드일 때는 solo MAP 화면으로 전환한다.
 function cduOpenMap() {
+  // 지도가 어느 창에도 안 보이고 SYSTEM 창이 보이면(예: Cockpit Mode) — SYSTEM 창의 큰 칸에 지도(Map 화면)
+  try {
+    const mw = document.getElementById('map-wrap'), sw = document.getElementById('sysp-wrap');
+    const shown = el => el && !el.classList.contains('page-hidden') && el.getBoundingClientRect().width > 0;
+    if (typeof sysPageSet === 'function' && shown(sw) && (!shown(mw) || (typeof sysPage !== 'undefined' && sysPage === 'map'))) { sysPageSet('map'); return; }
+  } catch (e) { _swallow(e); }
   // 3D 단독에서는 단독 화면을 바꾸지 않고 MAP 을 계기 칸 크기로 겹쳐 띄운다(MAP ON/OFF 와 같다)
   if (_soloActive && _soloCurrent === 'm3d') {
     if (!mapOvOn) { mapOvOn = true; try { localStorage.setItem(MAP_OV_PREF, '1'); } catch (e) { _swallow(e); } }
@@ -1856,12 +1866,10 @@ function simpleExit() {
 }
 
 
-// ── Cockpit mode ── 시작 화면에서 'Cockpit Mode' 를 고르면 조종석처럼 세로로 쌓은 화면을 한 화면 가득 본다:
-//      UPPER CONSOLE(위 가운데)
-//      3D 화면(가로 가득)
-//      PFD·FCP | SYSTEM
-//      CDU
-//      LOWER CONSOLE
+// ── Cockpit mode ── 시작 화면에서 'Cockpit Mode' 를 고르면 조종석처럼 쌓은 화면을 한 화면 가득 본다:
+//      3D 화면(넓게)        | CDU
+//      PFD · FCP            | SYSTEM(CDU 의 MAP 을 누르면 그 큰 칸에 지도 — 18-system.js Map 화면)
+//      UPPER CONSOLE        | LOWER CONSOLE
 // 칸을 두 번 누르면(더블클릭 · 두 번 톡) 그 칸이 화면을 가득 채우고, 다시 두 번 누르면 처음 배치로 돌아온다
 // (버튼 · 입력칸 위에서 두 번 누른 것은 그 조작으로 보고 넘긴다). 오른쪽 위 'PC 모드' 로 끝낸다.
 const CK_SCREENS = ['ovhd', 'm3d', 'pfd', 'sysp', 'cdu', 'lcon'];
