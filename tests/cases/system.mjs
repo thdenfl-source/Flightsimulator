@@ -47,7 +47,7 @@ export async function run(page, t) {
     const proto = CanvasRenderingContext2D.prototype, orig = proto.fillRect;
     proto.fillRect = function (x, y, w, h) { fills.push([this.fillStyle, Math.round(x), Math.round(y)]); return orig.call(this, x, y, w, h); };
     try { sysDraw(); } finally { proto.fillRect = orig; }
-    o.lowAmber = fills.some(a => a[0] === '#ffb000' && a[1] === 517 && a[2] === 330);
+    o.lowAmber = fills.some(a => a[0] === '#f2e64b' && a[1] === 517 && a[2] === 330);
     fuelReset(); CDU_ACT.switchMode('HOME');
     selectPanel('right', 'map', true); selectPanel('mid', 'cdu', true);
     return o;

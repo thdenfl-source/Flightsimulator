@@ -51,7 +51,7 @@ const FUEL_MAX = 2500;                              // 채울 수 있는 끝(lbs
 const FUEL_FEED_PPH = 1000;                         // 주 탱크 → 집합 탱크(저절로)
 const FUEL_XFER_PPH = 1000, FUEL_F5_PPH = 840, FUEL_HI = 0.98;   // 이송 펌프 · F5 이송 · 고수준 감지(가득의 98%)
 const FUEL_LOW_LBS = 165;                           // FUEL n LOW — 집합 탱크가 이 아래
-const FUEL_BP_PSI = { 1: 17, 2: 18 }, FUEL_PRES_LOW = 9, FUEL_XFEED_SEC = 5, FUEL_SUCTION_PSI = 4;
+const FUEL_BP_PSI = { 1: 19, 2: 19 }, FUEL_PRES_LOW = 9, FUEL_XFEED_SEC = 5, FUEL_SUCTION_PSI = 4;
 // AUX 탱크(EXT AUX1 왼쪽 · EXT AUX2 오른쪽) — 처음 525 lbs 씩. 하부 콘솔 AUX1/AUX2 XFER 로 주 탱크에 보낸다:
 //   AUTO — 그쪽 주 탱크가 100 lbs 넘게 비면 이송 펌프가 저절로 돌고 거의 차면 멈춘다
 //   ON   — AUX 에 연료가 있는 한 주 탱크가 찰 때까지 늘 보낸다   · OFF — 보내지 않는다
@@ -78,7 +78,7 @@ const _auxFull = () => (fuelCfg.eaux ? FUEL_AUX_FULL : 0);
 let fuel = _fuelMk(Object.assign({}, FUEL_FULL, { auxL: _auxFull(), auxR: _auxFull() }));   // L 956 · R 958 · AUX 1050(E-AUX 장착 시)
 const auxPump = { 1: false, 2: false };             // 이송 펌프가 돌고 있나(Fuel 화면의 TP 심벌)
 // 연료 계통 상태 — 라인 압력(psi) · 교차공급이 선 시간 · 이송 방향(−1 왼쪽으로 · +1 오른쪽으로) · F5 이송 · 불균형 시간
-const fuelSys = { p: { 1: 0, 2: 0 }, xfT: { 1: 0, 2: 0 }, xfer: 0, f5: false, imbT: 0, autoT: 0, imb: false, init: false };
+const fuelSys = { p: { 1: 0, 2: 0 }, xfT: { 1: 0, 2: 0 }, xsT: { 1: 0, 2: 0 }, xfer: 0, f5: false, imbT: 0, autoT: 0, imb: false, init: false };
 let fuelDrawn = { tp: 0, tpTxt: '', tpOn: true, f5: false, f5Show: false, aux: [false, false] };             // Fuel 화면이 마지막으로 그린 이송 화살표(검사용)
 let sysFltSec = 0;                                  // FLT — 비행 시간(시뮬 시간)
 function fuelLeft()  { return fuel.ft1 + fuel.aft + fuel.f5; }
@@ -97,7 +97,7 @@ function fuelAdjust(d) { fuelSetTotal(fuelLeft() + fuelRight() + Number(d || 0))
 function fuelReset() {
   fuel = _fuelMk(Object.assign({}, FUEL_FULL, { auxL: _auxFull(), auxR: _auxFull() }));
   auxPump[1] = auxPump[2] = false; sysFltSec = 0;
-  Object.assign(fuelSys, { xfer: 0, f5: false, imbT: 0, autoT: 0, imb: false, init: false });
+  Object.assign(fuelSys, { xsT: { 1: 0, 2: 0 }, xfer: 0, f5: false, imbT: 0, autoT: 0, imb: false, init: false });
   _fuelCduRefresh();
 }
 // AUX 이송 펌프 — 스위치(하부 콘솔)와 주 탱크 양으로 돌지 정한다
@@ -130,7 +130,10 @@ function fuelPress(n) { return Math.round(fuelSys.p[n]); }
 function fuelPresLow(n) { return fuelSys.p[n] < FUEL_PRES_LOW; }
 function fuelXfeedOn() { return _ov('xFeed', 'OFF') !== 'OFF'; }
 // 엔진 n 이 먹는 집합 탱크 — 제 펌프가 쉬고 교차공급이 서 있으면 건너편
-function fuelSrc(n) { const L = fuelLine(n); return !L.own && L.xfOn ? (n === 1 ? 2 : 1) : n; }
+function fuelSrc(n) { const L = fuelLine(n); return L.xfOn ? (n === 1 ? 2 : 1) : n; }
+// 승압 펌프 n 출구 압력이 낮은가(Fuel 화면 'PRESS n LOW' — 실기 사진) — 펌프가 꺼졌거나,
+// X-FEED 를 ENG n 으로 돌린 지 5초가 지나 그 펌프가 끊기고 건너편 펌프가 ENG n 을 먹일 때
+function fuelPumpLow(n) { return !fuelLine(n).own || fuelSys.xsT[n] >= FUEL_XFEED_SEC; }
 // 엔진마다 연료 흐름(pph) — 토크를 따라 오른다. IDLE 은 130 · 멎은 엔진 · 먹는 쪽 연료가 다 떨어지면 0
 function fuelFlow() {
   let P = null;
@@ -149,8 +152,11 @@ function fuelSysTick(dtReal, dt) {
   [1, 2].forEach(n => {
     const L = fuelLine(n), o = n === 1 ? 2 : 1;
     fuelSys.xfT[n] = L.xf ? fuelSys.xfT[n] + dtReal : 0;
+    fuelSys.xsT[n] = _ov('xFeed', 'OFF') === 'ENG' + n ? fuelSys.xsT[n] + dtReal : 0;   // X-FEED 를 ENG n 으로 돌린 뒤 지난 시간
     const run = P ? (n === 1 ? P.e1 : P.e2).ng > 0 : false;
-    const tgt = !L.msov ? 0 : L.own ? FUEL_BP_PSI[n] : (L.xf && fuelSys.xfT[n] >= FUEL_XFEED_SEC) ? FUEL_BP_PSI[o] - 1 : run ? FUEL_SUCTION_PSI : 0;
+    // 교차공급이 서면(5초 뒤) 건너편 펌프가 이 라인을 먹인다 — 라인 압력은 그대로(19 psi)
+    const xfOn = L.xf && fuelSys.xfT[n] >= FUEL_XFEED_SEC;
+    const tgt = !L.msov ? 0 : xfOn ? FUEL_BP_PSI[o] : L.own ? FUEL_BP_PSI[n] : run ? FUEL_SUCTION_PSI : 0;
     fuelSys.p[n] = fuelSys.init ? fuelSys.p[n] + (tgt - fuelSys.p[n]) * Math.min(1, dtReal / 0.5) : tgt;
   });
   fuelSys.init = true;
@@ -423,9 +429,11 @@ function _sysTopBar(g, F) {
   item(892, 'MSA', '____', 'FT', '#ff40ff');
 }
 // 경고 칸 — 평소 흰 테두리, 걸리면 호박색으로 채운다
+// (켜지면 실기 사진의 주의 노랑)
+const SYS_CAUT = '#f2e64b';
 function _sysAnn(g, x, y, w, h, l1, l2, on) {
-  g.fillStyle = on ? SYS_AMBER : '#000'; g.fillRect(x, y, w, h);
-  g.strokeStyle = on ? SYS_AMBER : '#cfcfcf'; g.lineWidth = 2; g.strokeRect(x, y, w, h);
+  g.fillStyle = on ? SYS_CAUT : '#000'; g.fillRect(x, y, w, h);
+  g.strokeStyle = on ? SYS_CAUT : '#cfcfcf'; g.lineWidth = 2; g.strokeRect(x, y, w, h);
   g.fillStyle = on ? '#000' : '#e8e8e8'; g.textAlign = 'center';
   g.font = _f(11);
   if (l2) { g.fillText(l1, x + w / 2, y + h / 2 - 2); g.fillText(l2, x + w / 2, y + h / 2 + 12); }
@@ -506,9 +514,10 @@ function _sysFuelPage(g, F) {
   };
   // 하부 콘솔 FUEL 패널(19-lower.js)
   // X-FEED — 두 승압 펌프 출구를 잇는 교차공급 점선(---)
+  // (실기 사진 — ENG 1 연료 라인부터 ENG 2 라인까지, PRESS · FLTR 칸 바로 위를 가로지르는 흰 점선)
   if (fuelXfeedOn()) {
-    g.save(); g.strokeStyle = '#fff'; g.lineWidth = 3; g.setLineDash([8, 6]);
-    g.beginPath(); g.moveTo(556, 297); g.lineTo(649, 297); g.stroke(); g.restore();
+    g.save(); g.strokeStyle = '#fff'; g.lineWidth = 3; g.setLineDash([9, 6]);
+    g.beginPath(); g.moveTo(312, 272); g.lineTo(892, 272); g.stroke(); g.restore();
   }
   // BP1 · BP2 — 돌면 'BP'(녹 테), 서 있으면 'LOW'(호박색)
   const bp = (x, n) => {
@@ -549,10 +558,10 @@ function _sysFuelPage(g, F) {
   // 경고 칸
   _sysAnn(g, 284, 231, 60, 37, 'MFSOV 1', 'CLOSE', !fuelLine(1).msov);     // TQS 연료차단 레버 CLOSE
   _sysAnn(g, 863, 230, 60, 37, 'MFSOV 2', 'CLOSE', !fuelLine(2).msov);
-  _sysAnn(g, 361, 278, 56, 38, 'PRESS 1', 'LOW', !run1);
+  _sysAnn(g, 361, 278, 56, 38, 'PRESS 1', 'LOW', fuelPumpLow(1));   // 승압 펌프 1 출구 압력(교차공급 ENG1 5초 뒤에도)
   _sysAnn(g, 435, 278, 56, 38, 'FLTR 1', 'CLOG', false);
   _sysAnn(g, 713, 277, 57, 38, 'FLTR 2', 'CLOG', false);
-  _sysAnn(g, 787, 277, 58, 38, 'PRESS 2', 'LOW', !run2);
+  _sysAnn(g, 787, 277, 58, 38, 'PRESS 2', 'LOW', fuelPumpLow(2));
   _sysAnn(g, 517, 330, 52, 33, 'FUEL 1', 'LOW', fuel.ft1 < FUEL_LOW_LBS);
   _sysAnn(g, 637, 330, 52, 33, 'FUEL 2', 'LOW', fuel.ft2 < FUEL_LOW_LBS);
   _sysAnn(g, 263, 562, 116, 19, 'FUEL IMBALANCE', '', fuelSys.imb);
