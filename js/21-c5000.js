@@ -204,8 +204,9 @@ function c5Vol(i, d) {
 }
 // PUSH ON — 꺼져 있으면 1초 누르면 켜진다 · 켜져 있으면 누르는 동안 경고, 2초 넘게 누르면 꺼진다
 // 끄기: 켜진 채로 PUSH ON 을 누르면 삑 소리와 함께 '!!! USE CAUTION !!! / TURNING SYSTEM OFF' 가
-//        0.3초 간격으로 다섯 번 깜빡인 뒤 꺼진다(손을 떼도 멈추지 않는다). 켜기는 1초 누르기 그대로.
-const C5_OFF_BLINK = 300, C5_OFF_N = 5;
+//        켜짐 0.4초 · 꺼짐 0.2초로 다섯 번 깜빡인 뒤 꺼진다(손을 떼도 멈추지 않는다). 켜기는 1초 누르기 그대로.
+// 실기 영상대로 — 켜짐 0.4초 · 꺼짐 0.2초를 다섯 번(약 3초)
+const C5_OFF_ON_MS = 400, C5_OFF_OFF_MS = 200, C5_OFF_N = 5;
 let _c5PwrT = null, _c5OffT = null, _c5Blank = false, _c5Ac = null;
 function _c5Beep(ms = 120, hz = 2000) {
   try {
@@ -224,7 +225,7 @@ function c5PwrDown() {
   const step = () => {
     if (k >= C5_OFF_N * 2) { _c5OffT = null; _c5Blank = false; c5.on = false; c5.page = 'OFF'; _c5Save(); c5Render(); return; }
     _c5Blank = k % 2 === 1; if (!_c5Blank) _c5Beep();
-    k++; c5Render(); _c5OffT = setTimeout(step, C5_OFF_BLINK);
+    k++; c5Render(); _c5OffT = setTimeout(step, _c5Blank ? C5_OFF_OFF_MS : C5_OFF_ON_MS);
   };
   step();
 }
