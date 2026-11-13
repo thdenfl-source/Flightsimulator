@@ -90,4 +90,28 @@ export async function run(page, t) {
   t.ok(L.xfeed && L.aux, 'FUEL 패널 X-FEED · AUX1 XFER 가 Aircraft Status(Crossfeed Valve Open · E-AUX1 On)에 보인다');
   t.ok(L.tp, 'FUEL 패널 XFER LH — Fuel 화면 TP 에 왼쪽 이송 화살표(◀)');
   t.ok(L.afcs[0] === 6 && L.afcs[1] === 3, `AFCAU AP1 OFF 를 누르면 AFCS 화면 레인 1 이 OFF (ON ${L.afcs[0]} → ${L.afcs[1]})`);
+
+  // ── MPP RADAR · EGPWS · DMM · AVCS POWER — ON 은 녹색 · FCP 1 · N · 2 · MPP COM2 → CDU COM2 121.500 · AVCS 진동 저감 ──
+  const m = await page.evaluate(async () => {
+    const w = ms => new Promise(r => setTimeout(r, ms));
+    selectPanel('right', 'lcon', true); await w(300);
+    const col = id => { const e = document.querySelector(`.ov-stage [data-ov="${id}"] .ov-sq`); return e ? getComputedStyle(e).color : ''; };
+    const o = {};
+    ['mpp0', 'mpp1', 'mpp2', 'avcsPower'].forEach(id => ovhdSet(id, 'IN')); await w(500);
+    o.cols = ['mpp0', 'mpp1', 'mpp2', 'avcsPower'].map(col);
+    o.legend = document.querySelector('.ov-stage [data-ov="avcsPower"] .ov-sq').textContent;
+    o.fcp = { pos: _ovhdDefs.fcpSel.pos.join(','), def: ovhdGet('fcpSel') };
+    // AVCS — 진동 크기(전이 양력 구간 20kt)
+    const s0 = S.spd; S.spd = 20;
+    o.vibOn = ckVibAmp(); ovhdSet('avcsPower', 'OUT'); o.vibOff = ckVibAmp(); S.spd = s0;
+    ['mpp0', 'mpp1', 'mpp2'].forEach(id => ovhdSet(id, 'OUT'));
+    // MPP COM2
+    o.c0 = cduCom2Freqs(); ovhdSet('com2', 'IN'); o.c1 = cduCom2Freqs(); ovhdSet('com2', 'OUT');
+    selectPanel('right', 'map', true);
+    return o;
+  });
+  t.ok(m.cols.every(c => c === 'rgb(92, 240, 126)') && m.legend === 'ON', `RADAR · EGPWS · DMM · AVCS POWER 의 ON 은 녹색 (${m.cols[0]})`);
+  t.ok(m.fcp.pos === '1,N,2' && m.fcp.def === 'N', `FCP 선택 — 1 · N(둘 다) · 2, 처음 N (${m.fcp.pos})`);
+  t.ok(m.c1.act === '121.500' && m.c1.stb === '121.500' && m.c0.act !== '121.500', `MPP COM2 — CDU COM2 주 · 예비가 121.500 (${m.c0.act} → ${m.c1.act} / ${m.c1.stb})`);
+  t.ok(m.vibOff > 0.2 && Math.abs(m.vibOn - m.vibOff * 0.25) < 1e-6, `AVCS ON — 진동을 1/4 로 줄인다 (${m.vibOff.toFixed(2)}° → ${m.vibOn.toFixed(2)}°)`);
 }

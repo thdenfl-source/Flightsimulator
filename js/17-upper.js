@@ -226,7 +226,7 @@ function _ovhdItemHtml(it) {
     }
     case 'lpb': case 'key': {                          // 눌러 두는 사각 버튼(글씨가 켜진다) · 누르는 동안만 들어가는 키
       const w = it.w || 52, h = it.h || 34;
-      return `<div class="ov-${it.t}" data-ov="${it.id}" style="${at}">${title ? title.replace('class="ov-title"', `class="ov-title" style="bottom:${h / 2 + 4}px"`) : ''}` +
+      return `<div class="ov-${it.t}${it.grn ? ' grn' : ''}" data-ov="${it.id}" style="${at}">${title ? title.replace('class="ov-title"', `class="ov-title" style="bottom:${h / 2 + 4}px"`) : ''}` +
         `<div class="ov-sq" style="left:${-w / 2}px;top:${-h / 2}px;width:${w}px;height:${h}px">${_nl(it.legend || it.label || '')}</div>` +
         `<div class="ov-hit" style="left:${-w / 2 - 4}px;top:${-h / 2 - 4}px;width:${w + 8}px;height:${h + 8}px"></div></div>`;
     }

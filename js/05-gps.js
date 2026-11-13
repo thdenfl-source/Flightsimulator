@@ -1035,7 +1035,10 @@ function _ml3dSimCamera() {
   let look = { yaw: 0, pitch: 0 };
   try { if (typeof simLookStep === 'function') look = simLookStep(); } catch (e) { _swallow(e); }
   // 기본 시선은 기체 자세보다 simViewDown()(저속 5° → 120kt 0°) 아래 — 함정 이착함 때 발밑 갑판이 잘 보이게
-  const r = _ml3dCamRot(S.hdg, S.pit, S.bnk, look.yaw, look.pitch - simViewDown());
+  // 기체 진동(15-heli3d.js ckVib — AVCS 가 켜져 있으면 줄어든다)
+  let vb = { p: 0, y: 0 };
+  try { if (typeof ckVib === 'function') vb = ckVib(); } catch (e) { _swallow(e); }
+  const r = _ml3dCamRot(S.hdg, S.pit, S.bnk, look.yaw + vb.y, look.pitch - simViewDown() + vb.p);
   const pitch = Math.max(0, Math.min(180, 90 + r.pitch));
   // 화면 아래 가운데의 내 헬기 기수(15-heli3d.js) — 고개를 돌리면 비켜 간다
   try { if (typeof heli3dNoseSync === 'function') heli3dNoseSync(look); } catch (e) { _swallow(e); }

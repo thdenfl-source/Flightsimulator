@@ -458,6 +458,27 @@ function heli3dShown() {
   if (ckCamOn()) return false;                                                           // Cockpit Mode 조종석 시야 — 제 몸 안이다
   return true;
 }
+// ── 기체 진동 — 1인칭 조종석 시야에 얹는 작은 흔들림(05-gps.js _ml3dSimCamera) ──
+// 로터가 돌면(NR 40% 넘게) 늘 조금 떨리고, 전이 양력 구간(약 20kt)과 고속(110kt 넘게)에서 커진다.
+// 하부 콘솔 AVCS POWER ON(19-lower.js avcsOn)이면 진동을 감지해 맞진동을 내 1/4 로 줄인다.
+const VIB_BASE = 0.06, VIB_ETL = 0.22, VIB_HI = 0.006, AVCS_K = 0.25;
+function ckVibAmp() {
+  let nr = 100;
+  try { nr = engParams().nr; } catch (e) { _swallow(e); }
+  if (!(nr > 40)) return 0;
+  const spd = Math.abs(S.spd || 0);
+  let a = VIB_BASE + VIB_ETL * Math.exp(-Math.pow((spd - 20) / 8, 2)) + Math.max(0, spd - 110) * VIB_HI;
+  a *= Math.min(1, nr / 100);
+  try { if (typeof avcsOn === 'function' && avcsOn()) a *= AVCS_K; } catch (e) { _swallow(e); }
+  return a;
+}
+function ckVib() {
+  if (!S.running) return { p: 0, y: 0 };            // 멈춰 있으면(PAUSE) 떨리지 않는다
+  const a = ckVibAmp();
+  if (!a) return { p: 0, y: 0 };
+  const t = performance.now() / 1000;
+  return { p: a * (Math.sin(2 * Math.PI * 7.3 * t) + 0.4 * Math.sin(2 * Math.PI * 11.9 * t)), y: a * 0.5 * Math.sin(2 * Math.PI * 5.1 * t + 1) };
+}
 // Cockpit Mode(07-sim.js cockpitStart) — SIM 이 꺼져 있어도 3D 단독 화면에서 1인칭 조종석 시야(05-gps.js _follow3d)
 function ckCamOn() {
   return !!window._cockpitOn && !(typeof simModeOn !== 'undefined' && simModeOn) &&
