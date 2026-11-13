@@ -17,8 +17,8 @@
      CDN 을 쓰면 한 번이라도 못 받는 순간 앱이 통째로 죽는다 — 비행 중에는
      그럴 여지를 두지 않는다. -->
 <!-- 패널 새 창(다중 모니터) — 라이브러리가 거는 이벤트까지 받아 적어야 하므로 맨 먼저 -->
-<script src="js/00-edition.js?v=614"></script>
-<script src="js/00-popout.js?v=614"></script>
+<script src="js/00-edition.js?v=615"></script>
+<script src="js/00-popout.js?v=615"></script>
 <link rel="stylesheet" href="vendor/leaflet.css"/>
 <script src="vendor/leaflet.js"></script>
 <link rel="stylesheet" href="vendor/leaflet-velocity.min.css"/>
@@ -739,6 +739,9 @@ html, body {
 #ctl3d #chin-btn .sim-btn.on { color: #00e5ff; border-color: #00e5ff; }
 #ctl3d #chin-btn .sim-btn:not(.on) { color: #777; border-color: #444; }
 #ctl3d #ckpit-btn { display: none; }
+#ctl3d #ckpit-op { display: none; align-items: center; }
+#ctl3d #ckpit-op.show { display: flex; }
+#ctl3d #ckpit-op span { flex: 1.2; text-align: center; font: bold 11px Helvetica, Arial, sans-serif; color: #9fe8ff; }
 #ctl3d #ckpit-btn.show { display: block; }
 #ctl3d #ckpit-btn.on { color: #00e5ff; border-color: #00e5ff; }
 /* 조종석 패널(15-heli3d.js) — 3D 지도 안에 겹친다(버튼 줄 아래). 바닥 쪽은 비어 땅이 보인다 */
@@ -1134,7 +1137,14 @@ body.solo-mode .solo-panel-visible {
 /* 조종간이 떠 있으면 FCP 창은 컬렉티브 오른쪽으로 비킨다 */
 #map3d.vstick-on .fcp3d-l { left: 88px; }
 #vstick .vs-track, #vstick .vs-cyc, #vstick-coll .vs-track { position: relative; background: #11161c; border: 1px solid #2f3a46; border-radius: 8px; touch-action: none; }
-#vstick .vs-ped { flex: 1 1 auto; align-self: center; height: 34px; }
+#vstick .vs-left { flex: 1 1 auto; display: flex; flex-direction: column; justify-content: center; gap: 8px; min-width: 0; }
+#vstick .vs-ped { flex: 0 0 auto; height: 34px; }
+/* 시야 — 누르고 있는 동안 그쪽으로 고개를 돌린다(놓으면 정면으로) · 앞 = 바로 정면 · 뒤 = 어깨 너머 */
+#vstick .vs-look { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+#vstick .vs-look button { height: 26px; padding: 0; background: #1a2129; color: #9fe8ff; border: 1px solid #2f3a46; border-radius: 5px;
+                          font: 600 11px Helvetica, Arial, sans-serif; touch-action: none; }
+#vstick .vs-look button.held { background: #ffb000; color: #111; }
+#vstick .vs-look-lbl { grid-column: 1 / -1; text-align: center; font: 600 9px Helvetica, Arial, sans-serif; color: #6f7c88; margin-top: -2px; }
 #vstick .vs-cyc { flex: 0 0 auto; aspect-ratio: 1; height: 100%; border-radius: 50%; }
 #vstick .vs-ring { position: absolute; inset: 22%; border: 1px dashed #2f3a46; border-radius: 50%; pointer-events: none; }
 #vstick .vs-knob, #vstick-coll .vs-knob { position: absolute; width: 18px; height: 18px; border-radius: 50%; background: #9aa4ae;
@@ -2374,7 +2384,7 @@ body.simple-mode #simple-view { display: flex; position: fixed; left: 0; right: 
     </div>
   </form>
 </div>
-<script src="js/00-gate.js?v=614"></script>
+<script src="js/00-gate.js?v=615"></script>
 <!-- ── 단일화면 선택 바 (기본 숨김) ── -->
 <!-- ── 시작 안내(사용법/키보드) 오버레이 ── -->
 <div id="help-overlay" style="display:none;">
@@ -3310,6 +3320,12 @@ body.simple-mode #simple-view { display: flex; position: fixed; left: 0; right: 
           <button class="sim-btn" id="ext-btn" data-act="toggleExtView" title="외부 시점 — 뒤에서 따라가며 내 헬기(흰수리)를 봅니다. 시야 둘러보기(B0 + 햇)로 둘레를 돌아봅니다">EXT</button>
           <!-- SIM 1인칭에서만 보인다 — 조종석 패널(차양 · MFD 넷 · 콘솔 · 사이클릭)을 3D 화면에 겹친다(15-heli3d.js) -->
           <button class="sim-btn" id="ckpit-btn" data-act="toggleCockpitView" title="조종석 — 3D 1인칭 화면 아래에 흰수리 조종석 패널(MFD 넷은 살아 있는 PFD · 엔진 · 연료 화면)을 겹쳐 보이기/감추기">조종석 OFF</button>
+          <!-- 조종석 투명도 — 틀 · 구조(스크린 제외)를 10% 씩(0 = 불투명 · 100 = 투명) · 15-heli3d.js ckpitOpacity -->
+          <div class="hdgref-adj" id="ckpit-op" title="조종석 투명도 — − 진하게 · + 투명하게(10% 씩)">
+            <button class="sim-btn" data-act="ckpitOpacity" data-arg='[-1]' title="진하게">−</button>
+            <span id="ckpit-op-pct">50%</span>
+            <button class="sim-btn" data-act="ckpitOpacity" data-arg='[1]' title="투명하게">+</button>
+          </div>
           <!-- SIM 에서만 — 하부 · 상부 콘솔을 3D 화면 가운데에 크게 띄워 조작한다(15-heli3d.js toggleConsolePop) -->
           <button class="sim-btn" id="lconc-btn" data-act="toggleConsolePop" data-arg='["lcon"]' title="LowerC — 하부 콘솔을 크게 띄워 조작(다시 누르면 닫기)">LowerC</button>
           <button class="sim-btn" id="upperc-btn" data-act="toggleConsolePop" data-arg='["ovhd"]' title="UpperC — 상부 콘솔을 크게 띄워 조작(다시 누르면 닫기)">UpperC</button>
@@ -3669,40 +3685,40 @@ body.simple-mode #simple-view { display: flex; position: fixed; left: 0; right: 
 <!-- 앱 코드 — 클래식 스크립트(모듈 아님)라 전역 스코프를 공유한다.
      순서가 곧 실행 순서이므로 임의로 바꾸지 말 것. -->
   <!-- AIP 데이터 — 코드보다 먼저 로드한다 -->
-  <script src="js/data/terminal-fixes.js?v=614"></script>
-  <script src="js/data/ifr-fixes.js?v=614"></script>
-  <script src="js/data/ifr-procedures.js?v=614"></script>
-  <script src="js/data/airfield-info.js?v=614"></script>
-  <script src="js/data/enr-vors.js?v=614"></script>
-  <script src="js/data/loc-stations.js?v=614"></script>
-  <script src="js/data/enr-routes.js?v=614"></script>
-  <script src="js/data/airspace.js?v=614"></script>
-  <script src="js/data/runways.js?v=614"></script>
+  <script src="js/data/terminal-fixes.js?v=615"></script>
+  <script src="js/data/ifr-fixes.js?v=615"></script>
+  <script src="js/data/ifr-procedures.js?v=615"></script>
+  <script src="js/data/airfield-info.js?v=615"></script>
+  <script src="js/data/enr-vors.js?v=615"></script>
+  <script src="js/data/loc-stations.js?v=615"></script>
+  <script src="js/data/enr-routes.js?v=615"></script>
+  <script src="js/data/airspace.js?v=615"></script>
+  <script src="js/data/runways.js?v=615"></script>
   <!-- 앱 코드 -->
-  <script src="js/00-ui.js?v=614"></script>
-  <script src="js/01-state.js?v=614"></script>
-  <script src="js/02-math.js?v=614"></script>
-  <script src="js/03-pfd.js?v=614"></script>
-  <script src="js/04-map.js?v=614"></script>
-  <script src="js/05-gps.js?v=614"></script>
-  <script src="js/06-nav.js?v=614"></script>
-  <script src="js/07-sim.js?v=614"></script>
-  <script src="js/08-ifrdb.js?v=614"></script>
-  <script src="js/09-cdu.js?v=614"></script>
-  <script src="js/10-tools.js?v=614"></script>
-  <script src="js/11-charts.js?v=614"></script>
-  <script src="js/12-joystick.js?v=614"></script>
-  <script src="js/13-joyhid.js?v=614"></script>
-  <script src="js/14-simmode.js?v=614"></script>
-  <script src="js/15-heli3d.js?v=614"></script>
-  <script src="js/16-sound.js?v=614"></script>
-  <script src="js/17-upper.js?v=614"></script>
-  <script src="js/18-system.js?v=614"></script>
-  <script src="js/19-lower.js?v=614"></script>
-  <script src="js/20-navaids.js?v=614"></script>
-  <script src="js/21-c5000.js?v=614"></script>
-  <script src="js/22-npx138.js?v=614"></script>
-  <script src="js/23-afcs.js?v=614"></script>
+  <script src="js/00-ui.js?v=615"></script>
+  <script src="js/01-state.js?v=615"></script>
+  <script src="js/02-math.js?v=615"></script>
+  <script src="js/03-pfd.js?v=615"></script>
+  <script src="js/04-map.js?v=615"></script>
+  <script src="js/05-gps.js?v=615"></script>
+  <script src="js/06-nav.js?v=615"></script>
+  <script src="js/07-sim.js?v=615"></script>
+  <script src="js/08-ifrdb.js?v=615"></script>
+  <script src="js/09-cdu.js?v=615"></script>
+  <script src="js/10-tools.js?v=615"></script>
+  <script src="js/11-charts.js?v=615"></script>
+  <script src="js/12-joystick.js?v=615"></script>
+  <script src="js/13-joyhid.js?v=615"></script>
+  <script src="js/14-simmode.js?v=615"></script>
+  <script src="js/15-heli3d.js?v=615"></script>
+  <script src="js/16-sound.js?v=615"></script>
+  <script src="js/17-upper.js?v=615"></script>
+  <script src="js/18-system.js?v=615"></script>
+  <script src="js/19-lower.js?v=615"></script>
+  <script src="js/20-navaids.js?v=615"></script>
+  <script src="js/21-c5000.js?v=615"></script>
+  <script src="js/22-npx138.js?v=615"></script>
+  <script src="js/23-afcs.js?v=615"></script>
 
 <input type="file" id="zipFileInput" accept=".zip,application/zip,application/x-zip-compressed,application/octet-stream" style="display:none" onchange="handleZipFile(this.files[0]); this.value='';"></body>
 </html>

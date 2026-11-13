@@ -933,6 +933,8 @@ function ckpitSync(tf) {
     if (b.classList.contains('on') !== ckpitOn) { b.classList.toggle('on', ckpitOn); }
     const t = ckpitOn ? '조종석 ON' : '조종석 OFF';
     if (b.textContent !== t) b.textContent = t;
+    const op = document.getElementById('ckpit-op');               // 투명도 −/+ — 조종석이 켜져 있을 때
+    if (op && op.classList.contains('show') !== (sim && ckpitOn)) op.classList.toggle('show', sim && ckpitOn);
   }
   // CHIN 창은 패널 아래(발밑)로 줄여 내린다(index.html #map3d.ckpit-on + #chin-row) — 줄면 그 지도들을 다시 잰다
   const d3 = document.getElementById('map3d');
@@ -943,7 +945,7 @@ function ckpitSync(tf) {
   if (!el) return;
   if (el.classList.contains('show') !== want) {
     el.classList.toggle('show', want);
-    if (want) ckpitDraw();
+    if (want) { ckpitDraw(); _ckOpApply(); }
     try { applyPanels(); } catch (e) { _swallow(e); }    // 작은 콘솔을 조종석에 들이고 내보낸다(07-sim.js hostOf)
     try { syncCduOverlay(); } catch (e) { _swallow(e); } // CDU 도 하부 콘솔 오른쪽으로(3D 단독에서)
   }
@@ -1132,6 +1134,21 @@ function _ckWipeSync() {
 }
 // (17-upper.js 가 이 파일보다 늦게 읽혀 ovhdOn 은 아직 없다 — ovhdSet 이 내는 'ovhd' 알림을 듣는다)
 window.addEventListener('ovhd', e => { try { if (e.detail && e.detail.id === 'wiper') _ckWipeSync(); } catch (er) { _swallow(er); } });
+// 조종석 투명도(틀 · 구조 — 스크린 · 콘솔은 그대로) — 3D 버튼 줄의 −/+ 로 10% 씩(0 = 불투명 · 100 = 투명 · 처음 50%)
+let ckTransp = 50;
+try { const v = parseInt(localStorage.getItem('ckTransp'), 10); if (v >= 0 && v <= 100) ckTransp = v; } catch (e) { _swallow(e); }
+function _ckOpApply() {
+  const svg = document.querySelector('#sim-ckpit > svg');
+  const op = String(((100 - ckTransp) / 100).toFixed(2));
+  if (svg && svg.style.opacity !== op) svg.style.opacity = op;
+  const lb = document.getElementById('ckpit-op-pct');
+  if (lb && lb.textContent !== ckTransp + '%') lb.textContent = ckTransp + '%';
+}
+function ckpitOpacity(d) {
+  ckTransp = Math.max(0, Math.min(100, Math.round((ckTransp + 10 * (Number(d) || 0)) / 10) * 10));
+  try { localStorage.setItem('ckTransp', String(ckTransp)); } catch (e) { _swallow(e); }
+  _ckOpApply();
+}
 function ckpitSet(on) {
   if (!!on === ckpitOn) { try { heli3dNoseSync(null); } catch (e) { _swallow(e); } ckpitSync(null); return; }
   toggleCockpitView();
@@ -1142,7 +1159,7 @@ function toggleCockpitView() {
   try { heli3dNoseSync(null); } catch (e) { _swallow(e); }
   ckpitSync(null);
 }
-try { appRegister({ toggleCockpitView, toggleConsolePop }); } catch (e) { _swallow(e); }
+try { appRegister({ toggleCockpitView, toggleConsolePop, ckpitOpacity }); } catch (e) { _swallow(e); }
 
 // 화면 버튼(data-act) 연결 — 11-charts.js 보다 나중에 로드되므로 여기서 직접 등록한다
 try { appRegister({ toggleExtView, extCamHold, extCamDefault }); } catch (e) { _swallow(e); }
