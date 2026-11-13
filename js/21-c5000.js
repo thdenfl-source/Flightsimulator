@@ -36,8 +36,9 @@ function _c5Fresh() {
     on: true, page: 'HOME', line: 0, dim: 6,
     ch: C5_DEFAULT_CH.map(c => Object.assign({}, c)),
     // RT1 — 실기 기본 화면(매뉴얼 채널 ..M → 278.400 · NORMAL · GUARD 둘 다 켜짐) · RT2 는 화면에 띄우지 않는다
-    r: [0, 1].map(i => ({ ch: i ? 7 : 0, dir: !i, pvt: false, key: 'PSET', guard: !i, nrm: true, sq: false, vol: 6 })),
-    ng: null,            // NORMAL/GUARD 고르기(UPPER 소프트키) — 커서 자리 0(NORMAL) · 1(GUARD) · null 이면 아님
+    r: [0, 1].map(i => ({ ch: i ? 7 : 0, dir: !i, pvt: false, key: 'PSET', guard: !i, nrm: true, gsel: 0, sq: false, vol: 6 })),
+    ng: null,            // NORMAL/GUARD 고르기(UPPER 소프트키) — ‾ 자리 0(NORMAL · 채널) · 1(GUARD 주파수) · null 이면 아님
+    ngc: 'sel',          // 그때 _ 커서 — 'sel'(오른쪽: 채널 · GUARD 주파수) · 'flag'(그 자리 1: 쓰고 안 쓰고)
     mode: '',            // 켜 둔 강화 모드(SIMULCAST …) · '' 이면 보통
     modeSel: 0, keySel: 'PSET', num: '', pw: '', otar: '', edit: null, editF: 0, msg: '', msgT: 0, volShow: null,
   };
@@ -45,7 +46,7 @@ function _c5Fresh() {
 try {
   const v = JSON.parse(localStorage.getItem(C5_KEY) || 'null');
   if (v && Array.isArray(v.ch) && Array.isArray(v.r)) {
-    c5 = Object.assign(_c5Fresh(), v, { page: v.on ? 'HOME' : 'OFF', ng: null, line: 0 });
+    c5 = Object.assign(_c5Fresh(), v, { page: v.on ? 'HOME' : 'OFF', ng: null, ngc: 'sel', line: 0 });
     if (!v.v2) {                         // 예전 저장값 — 실기 기본 화면(..M → 278.400 · NORMAL · GUARD)으로 맞춘다
       const m = c5.ch.find(c => c.n === 0); if (m) Object.assign(m, { rx: 278.400, tx: 278.400, mod: 'AM', bw: 'W' });
       Object.assign(c5.r[0], { ch: 0, dir: true, nrm: true, guard: true });
@@ -83,23 +84,30 @@ function c5Lines() {
     const i = c5.volShow.i, v = c5.r[i].vol;
     l[i] = _c5pad(`${i + 1} VOL ` + '#'.repeat(v) + '-'.repeat(10 - v), C5_W);
   }
-  // NORMAL/GUARD 고르기 — 첫 1 위에 ‾ 표시 · 고르는 자리에 _ 커서(SEL 바깥 = 자리 · 안 = 켜고 끄기)
-  if (c5.ng !== null) return { l, cur: [0, c5.ng, 1], ul: true, ovl: [0, 0, 1] };
+  // NORMAL/GUARD 고르기 — 고른 1 위에 ‾ · _ 커서는 오른쪽 칸(NORMAL: ..M 채널 · GUARD: #1 GUARD VHF)
+  //   SEL 바깥(CURSOR)으로 _ 를 그 1 로 옮기면 안(VALUE)으로 1 이 사라졌다 나타났다(쓰고 안 쓰고)
+  if (c5.ng !== null) {
+    const cur = c5.ngc === 'flag' ? [0, c5.ng, 1] : c5.ng === 0 ? [0, 5, 3] : [0, 4, 12];
+    return { l, cur, ul: true, ovl: [0, c5.ng, 1] };
+  }
   return { l, cur: [0, 5, 3] };
 }
 // 기본 화면 줄 — [NORMAL 1][GUARD 1]  [φ][채널 ..M][→ Direct][이름 · 매뉴얼이면 주파수 R]
 //   첫 1: NORMAL(지정 주파수) 수신을 쓴다 · 둘째 1: GUARD(121.5 / 243.0) 수신기를 쓴다 — 끄면 그 자리가 빈다
 //   (GUARD 를 끄고 날면 GUARD 주파수를 듣지 못한다)
+// GUARD 고르기(‾ 가 둘째 1)일 때 오른쪽 — #1 GUARD VHF(121.500) · #2 GUARD UHF(243.000) 를 VALUE 로 고른다
+const C5_GUARDS = [{ t: '#1 GUARD VHF', f: 121.500 }, { t: '#2 GUARD UHF', f: 243.000 }];
 function homeLine(i) {
   if (i !== 0) return '';
   const r = c5.r[0], c = _c5ch(r.ch);
+  if (c5.ng === 1) return _c5pad(`${r.nrm !== false ? '1' : ' '}${r.guard ? '1' : ' '}  ${C5_GUARDS[r.gsel ? 1 : 0].t}`, C5_W);
   const name = r.ch === 0 ? _c5f(c.rx) + 'R' : c.id;
   return _c5pad(`${r.nrm !== false ? '1' : ' '}${r.guard ? '1' : ' '}  ${r.pvt ? C5_PHI : ' '}${_c5chNo(r.ch)}${r.dir ? C5_ARROW : ' '}${_c5pad(name, 11)}`, C5_W);
 }
 // CDU Audio & Radios 의 U/VHF 줄(09-cdu.js) — C-5000 RT1 의 채널 · 주파수 · 음량(0~100%)
 function c5UvhfInfo() {
   const r = c5.r[0], c = _c5ch(r.ch);
-  return { ch: _c5chNo(r.ch), id: c.id, f: _c5f(c.rx), vol: r.vol * 10, nrm: r.nrm !== false, guard: !!r.guard, on: !!(c5.on && _c5Pwr()) };
+  return { ch: _c5chNo(r.ch), id: c.id, f: _c5f(c.rx), vol: r.vol * 10, nrm: r.nrm !== false, guard: !!r.guard, gf: _c5f(C5_GUARDS[r.gsel ? 1 : 0].f), on: !!(c5.on && _c5Pwr()) };
 }
 function c5SetVolPct(p) { c5.r[0].vol = Math.max(0, Math.min(10, Math.round((Number(p) || 0) / 10))); _c5Save(); c5Render(); }
 // EDIT — 윗줄: 채널 · Direct · 수신 주파수 R 수신톤 변조 / 아랫줄: 대역폭 · 출력 · 송신 주파수 T 송신톤 · 암호 키
@@ -184,7 +192,7 @@ function c5Cursor(d) {
   if (!c5.on || !_c5Pwr()) return;
   c5.msg = '';                                        // 잠깐 띄운 알림은 다음 조작에서 걷힌다
   if (c5.page === 'EDIT') c5.editF = (c5.editF + d + C5_EF.length) % C5_EF.length;
-  else if (c5.page === 'HOME' && c5.ng !== null) c5.ng = 1 - c5.ng;   // N/G 고르기 — NORMAL ⇄ GUARD 자리
+  else if (c5.page === 'HOME' && c5.ng !== null) c5.ngc = c5.ngc === 'sel' ? 'flag' : 'sel';   // N/G 고르기 — _ 를 오른쪽 칸 ⇄ 그 1
   c5Render();
 }
 // VALUE 노브 — 커서 자리의 값을 돌린다(HOME: 채널 · EDIT: 칸 값 · MODE · KEY · DIM)
@@ -193,11 +201,12 @@ function c5Value(d) {
   c5.msg = '';                                        // 잠깐 띄운 알림은 다음 조작에서 걷힌다
   const p = c5.page, r = c5.r[c5.line];
   const cyc = (arr, v) => arr[(arr.indexOf(v) + d + arr.length) % arr.length];
-  if (p === 'HOME' && c5.ng !== null) {                                  // N/G 고르기 — 그 자리 1 을 켜고 끈다
+  if (p === 'HOME' && c5.ng !== null && c5.ngc === 'flag') {             // N/G 고르기 — 그 자리 1 을 켜고 끈다
     const r0 = c5.r[0];
     if (c5.ng === 0) r0.nrm = r0.nrm === false; else r0.guard = !r0.guard;
     _c5Save();
   }
+  else if (p === 'HOME' && c5.ng === 1) { c5.r[0].gsel = c5.r[0].gsel ? 0 : 1; _c5Save(); }   // #1 GUARD VHF ⇄ #2 GUARD UHF
   else if (p === 'HOME') { const ns = c5.ch.map(c => c.n); r.ch = cyc(ns, r.ch); _c5Save(); }
   else if (p === 'MODE') c5.modeSel = (c5.modeSel + d + C5_MODES.length) % C5_MODES.length;
   else if (p === 'KEY') { const ks = ['PSET', ...Array.from({ length: 16 }, (_, i) => String(i + 1))]; c5.keySel = cyc(ks, String(c5.keySel)); }
@@ -215,14 +224,16 @@ function c5Value(d) {
   c5Render();
 }
 // 소프트키 — DIM 화면: 밝기 ▲▼
-//   UPPER(위) — 기본 화면에서 NORMAL/GUARD 고르기를 켜고 끈다(첫 1 위에 ‾ · 첫 1 에 _ 커서). SEL 바깥 고리로 자리를
-//               옮기고(NORMAL ⇄ GUARD) 안 원판을 돌리면 그 1 이 사라졌다 나타났다(쓰고 안 쓰고) · ENTER 로 끝낸다
+//   UPPER(위) — 기본 화면에서 누를 때마다 ‾ 가 첫 1(NORMAL) ⇄ 둘째 1(GUARD)로 번갈아 간다
+//               첫 1: 1 과 ..M 이 함께 골라져 안 원판(VALUE)으로 채널 · 주파수를 고른다
+//               둘째 1: 오른쪽에 #1 GUARD VHF — 안 원판으로 #2 GUARD UHF 와 바꾼다
+//               SEL 바깥 고리로 _ 를 그 1 로 옮기면 안 원판으로 1 이 사라졌다 나타났다(쓰고 안 쓰고) · ENTER 로 끝낸다
 //   LOWER(아래) — 고르기를 끝낸다
 function c5Soft(i) {
   if (!c5.on || !_c5Pwr()) return;
   c5.msg = '';                                        // 잠깐 띄운 알림은 다음 조작에서 걷힌다
   if (c5.page === 'DIM') c5.dim = Math.max(1, Math.min(10, c5.dim + (i === 0 ? 1 : -1)));
-  else if (i === 0) { c5.page = 'HOME'; c5.line = 0; c5.ng = c5.ng === null ? 0 : null; }
+  else if (i === 0) { c5.page = 'HOME'; c5.line = 0; c5.ng = c5.ng === 0 ? 1 : 0; c5.ngc = 'sel'; }
   else c5.ng = null;
   c5Render();
 }
@@ -286,7 +297,7 @@ function c5Build() {
                 ['*', 'HOME'], ['9', 'PVT' + C5_PHI], ['0', 'PROG'], ['#', 'NUM']];
   host.innerHTML =
     `<div class="c5-brand">WULFSBERG</div>` +
-    `<button class="c5-soft up" data-c5="soft0" title="UPPER SOFT key — DIM: 밝기 ▲ · 그 밖: NORMAL/GUARD 고르기(SEL 바깥 = 자리 · 안 = 켜기/끄기)"></button>` +
+    `<button class="c5-soft up" data-c5="soft0" title="UPPER SOFT key — DIM: 밝기 ▲ · 그 밖: 누를 때마다 NORMAL(채널) ⇄ GUARD(#1 VHF · #2 UHF) · SEL 바깥 = 그 1 로 · 안 = 값"></button>` +
     `<button class="c5-soft dn" data-c5="soft1" title="LOWER SOFT key — DIM: 밝기 ▼ · 그 밖: NORMAL/GUARD 고르기 끝"></button>` +
     `<div class="c5-lcd" id="c5-lcd"></div>` +
     `<div class="c5-pad">` + KEYS.map(([n, f]) => `<button class="c5-key" data-c5="k${n}"><b>${n}</b><i>${f}</i></button>`).join('') + `</div>` +

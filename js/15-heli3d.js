@@ -460,12 +460,14 @@ function heli3dShown() {
 }
 // ── 기체 진동 — 1인칭 조종석 시야에 얹는 작은 흔들림(05-gps.js _ml3dSimCamera) ──
 // 로터가 돌면(NR 40% 넘게) 늘 조금 떨리고, 전이 양력 구간(약 20kt)과 고속(110kt 넘게)에서 커진다.
-// 하부 콘솔 AVCS(19-lower.js avcsActive — POWER ON · 공중)면 진동을 감지해 맞진동으로 거의 없앤다(땅 위에서는 쉰다).
+// 하부 콘솔 AVCS(19-lower.js avcsActive — POWER ON · 공중)면 진동을 감지해 맞진동으로 거의 없앤다 · 땅 위(WOW)에서는 AVCS 와 상관없이 진동이 없다(눈 피로).
 const VIB_BASE = 0.06, VIB_ETL = 0.22, VIB_HI = 0.006, AVCS_K = 0.04;   // AVCS 가 돌면 4% 만 남는다(느껴지지 않을 만큼)
 function ckVibAmp() {
   let nr = 100;
   try { nr = engParams().nr; } catch (e) { _swallow(e); }
   if (!(nr > 40)) return 0;
+  // 땅 위(WOW — 전파고도 5ft 아래)에서는 AVCS 와 상관없이 떨지 않는다 — 눈이 피로하다
+  try { if (typeof fuelWow === 'function' && fuelWow()) return 0; } catch (e) { _swallow(e); }
   const spd = Math.abs(S.spd || 0);
   let a = VIB_BASE + VIB_ETL * Math.exp(-Math.pow((spd - 20) / 8, 2)) + Math.max(0, spd - 110) * VIB_HI;
   a *= Math.min(1, nr / 100);
