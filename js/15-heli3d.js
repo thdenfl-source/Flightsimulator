@@ -714,6 +714,57 @@ const CKPIT_SCR = [
   { k: 'map', x: 831, y: 580, w: 242, h: 146 },    // 지도
   { k: 'pfd', x: 1129, y: 580, w: 242, h: 146 },   // 부조종사 PFD
 ];
+// 조종석 안의 작은 콘솔 자리(그림 좌표) — 상부(위 가운데 · 앞유리 기둥 위) · 하부(아래 가운데 · 화면 아래로 넘친다)
+const CKPIT_CON = {
+  ovhd: { x: 700, y: 10, w: 200, h: 250, name: 'UPPER CONSOLE' },
+  lcon: { x: 708, y: 798, w: 184, h: 258, name: 'LOWER CONSOLE' },
+};
+// 콘솔 팝아웃 — LowerC · UpperC 버튼(또는 작은 콘솔을 누르면)으로 3D 화면 가운데에 크게 띄워 조작한다
+let ckConPop = null;          // 'lcon' | 'ovhd' | null
+function _ck3dVisible() {
+  return (typeof simModeOn !== 'undefined') && simModeOn && !!_ml3d && (typeof _map3dShown !== 'function' || _map3dShown());
+}
+// 07-sim.js applyPanels 가 콘솔(#ovhd-wrap · #lcon-wrap)을 둘 그릇을 물을 때 — ph: 'pop'(팝아웃) · 'mini'(조종석 안)
+function ckpitConsoleHost(k, ph) {
+  if (!CKPIT_CON[k]) return null;
+  if (ph === 'pop') return ckConPop === k && _ck3dVisible() ? _ckPopEl(k) : null;
+  if (ph === 'mini') return ckpitWanted() ? document.getElementById('ck-mini-' + k) : null;
+  return null;
+}
+function _ckPopEl(k) {
+  const d3 = document.getElementById('map3d');
+  if (!d3) return null;
+  let p = document.getElementById('ck-pop');
+  if (!p) {
+    p = document.createElement('div');
+    p.id = 'ck-pop';
+    p.innerHTML = '<div class="ck-pop-bar"><span id="ck-pop-title"></span>' +
+      '<button class="sim-btn" data-act="toggleConsolePop" data-arg="[null]" title="닫기">✕</button></div><div id="ck-pop-host"></div>';
+    d3.appendChild(p);
+  }
+  const t = document.getElementById('ck-pop-title');
+  if (t && t.textContent !== CKPIT_CON[k].name) t.textContent = CKPIT_CON[k].name;
+  p.dataset.k = k;
+  return document.getElementById('ck-pop-host');
+}
+function _ckPopSync() {
+  const p = document.getElementById('ck-pop');
+  const on = !!ckConPop && _ck3dVisible();
+  if (p) p.classList.toggle('show', on);
+  const sim = (typeof simModeOn !== 'undefined') && simModeOn;
+  for (const [k, id] of [['lcon', 'lconc-btn'], ['ovhd', 'upperc-btn']]) {
+    const b = document.getElementById(id);
+    if (!b) continue;
+    if (b.classList.contains('show') !== sim) b.classList.toggle('show', sim);
+    if (b.classList.contains('on') !== (on && ckConPop === k)) b.classList.toggle('on', on && ckConPop === k);
+  }
+}
+function toggleConsolePop(k) {
+  ckConPop = (k && ckConPop !== k && CKPIT_CON[k]) ? k : null;
+  if (ckConPop) _ckPopEl(ckConPop);
+  _ckPopSync();
+  try { applyPanels(); } catch (e) { _swallow(e); }
+}
 function _ckpitSvg() {
   const bez = CKPIT_SCR.map(s => {
     const x = s.x - 14, y = s.y - 12, w = s.w + 28, h = s.h + 40;
@@ -728,15 +779,11 @@ function _ckpitSvg() {
     const cx = x0 + 18 + i * 33;
     knobs += `<circle cx="${cx}" cy="772" r="9" fill="#2c3035" stroke="#0e0f11" stroke-width="2"/><circle cx="${cx}" cy="772" r="3.5" fill="#55595e"/>`;
   }
-  let pkeys = '';
-  for (let r = 0; r < 3; r++) for (let i = 0; i < 9; i++)
-    pkeys += `<rect x="${708 + i * 21}" y="${866 + r * 13}" width="15" height="8" rx="1.5" fill="#34383d"/>`;
   return `<svg viewBox="0 0 1600 900" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
   <defs>
     <linearGradient id="ck-hood" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#3a3d42"/><stop offset="0.35" stop-color="#202226"/><stop offset="1" stop-color="#121315"/></linearGradient>
     <linearGradient id="ck-face" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#1a1c1f"/><stop offset="1" stop-color="#25282c"/></linearGradient>
     <linearGradient id="ck-bez" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#2f3337"/><stop offset="1" stop-color="#1d2023"/></linearGradient>
-    <linearGradient id="ck-ped" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#2a2d31"/><stop offset="1" stop-color="#16181a"/></linearGradient>
     <linearGradient id="ck-post" x1="0" x2="1" y1="0" y2="0"><stop offset="0" stop-color="#0f1012"/><stop offset="0.5" stop-color="#2b2e32"/><stop offset="1" stop-color="#0f1012"/></linearGradient>
     <linearGradient id="ck-grip" x1="0" x2="1" y1="0" y2="0"><stop offset="0" stop-color="#16181a"/><stop offset="0.45" stop-color="#3b3f44"/><stop offset="1" stop-color="#121315"/></linearGradient>
   </defs>
@@ -759,13 +806,6 @@ function _ckpitSvg() {
   <rect x="970" y="530" width="64" height="20" rx="3" fill="#3a0c0c" stroke="#0a0b0c"/><text x="1002" y="544" font-size="10" font-family="Arial" font-weight="bold" fill="#8a2a2a" text-anchor="middle">WARNING</text>
   <rect x="756" y="522" width="88" height="36" rx="4" fill="#0d0f11" stroke="#3a3e43" stroke-width="2"/>
   <rect x="764" y="528" width="72" height="24" fill="#123a5a"/><rect x="764" y="540" width="72" height="12" fill="#5a3a1a"/><line x1="764" y1="540" x2="836" y2="540" stroke="#fff" stroke-width="1.2"/>
-  <!-- 가운데 콘솔(pedestal) -->
-  <path d="M686 796 L914 796 L968 900 L632 900 Z" fill="url(#ck-ped)" stroke="#0b0c0e" stroke-width="2"/>
-  <rect x="704" y="808" width="100" height="50" rx="3" fill="#0b0d0e" stroke="#3a3e43"/>
-  <rect x="710" y="813" width="88" height="40" fill="#0e3a3a"/>
-  <line x1="716" y1="822" x2="788" y2="822" stroke="#3ad1a0" stroke-width="2"/><line x1="716" y1="832" x2="770" y2="832" stroke="#3ad1a0" stroke-width="2"/><line x1="716" y1="842" x2="780" y2="842" stroke="#2fe0e0" stroke-width="2"/>
-  <rect x="816" y="808" width="82" height="50" rx="3" fill="#0b0d0e" stroke="#3a3e43"/><rect x="822" y="813" width="70" height="40" fill="#101a16"/>
-  ${pkeys}
   <!-- 사이클릭(좌 · 우) -->
   <g><path d="M418 900 C418 868 400 852 404 826" stroke="url(#ck-grip)" stroke-width="26" fill="none" stroke-linecap="round"/>
      <path d="M372 808 C372 788 440 784 446 806 C450 822 436 834 404 834 C380 834 372 824 372 808 Z" fill="url(#ck-grip)" stroke="#0a0b0c" stroke-width="2"/>
@@ -782,8 +822,11 @@ function _ckpitEl() {
   if (!d3) return null;
   el = document.createElement('div');
   el.id = 'sim-ckpit'; el.setAttribute('aria-hidden', 'true');
+  const pct = (x, y, w, h) => `left:${(x / 16).toFixed(3)}%;top:${(y / 9).toFixed(3)}%;width:${(w / 16).toFixed(3)}%;height:${(h / 9).toFixed(3)}%`;
   el.innerHTML = _ckpitSvg() + CKPIT_SCR.map((s, i) =>
-    `<canvas class="ck-scr" data-i="${i}" data-no-fcp="1" style="left:${(s.x / 16).toFixed(3)}%;top:${(s.y / 9).toFixed(3)}%;width:${(s.w / 16).toFixed(3)}%;height:${(s.h / 9).toFixed(3)}%"></canvas>`).join('');
+    `<canvas class="ck-scr" data-i="${i}" data-no-fcp="1" style="${pct(s.x, s.y, s.w, s.h)}"></canvas>`).join('') +
+    Object.entries(CKPIT_CON).map(([k, c]) =>
+      `<div class="ck-con" id="ck-mini-${k}" data-act="toggleConsolePop" data-arg='["${k}"]' title="${c.name} — 눌러 크게(팝아웃)" style="${pct(c.x, c.y, c.w, c.h)}"></div>`).join('');
   d3.appendChild(el);
   return el;
 }
@@ -795,6 +838,8 @@ function ckpitWanted() {
 // 보이기·감추기와 시야 둘러보기 이동(heli3dNoseSync 가 매 프레임 부른다)
 function ckpitSync(tf) {
   const want = ckpitWanted();
+  if (ckConPop && !_ck3dVisible()) { ckConPop = null; try { applyPanels(); } catch (e) { _swallow(e); } }
+  _ckPopSync();
   const el = want ? _ckpitEl() : document.getElementById('sim-ckpit');
   const b = document.getElementById('ckpit-btn');
   if (b) {
@@ -811,7 +856,11 @@ function ckpitSync(tf) {
     setTimeout(() => { try { (typeof _chinMaps !== 'undefined' ? _chinMaps : []).forEach(m => m && m.resize && m.resize()); } catch (e) { _swallow(e); } }, 30);
   }
   if (!el) return;
-  if (el.classList.contains('show') !== want) { el.classList.toggle('show', want); if (want) ckpitDraw(); }
+  if (el.classList.contains('show') !== want) {
+    el.classList.toggle('show', want);
+    if (want) ckpitDraw();
+    try { applyPanels(); } catch (e) { _swallow(e); }    // 작은 콘솔을 조종석에 들이고 내보낸다(07-sim.js hostOf)
+  }
   if (want && tf != null && el.style.transform !== tf) el.style.transform = tf;
 }
 // MFD 화면 그리기 — 1초에 열 번(PFD 창·계통 창과 따로 그린다)
@@ -938,7 +987,7 @@ function toggleCockpitView() {
   try { heli3dNoseSync(null); } catch (e) { _swallow(e); }
   ckpitSync(null);
 }
-try { appRegister({ toggleCockpitView }); } catch (e) { _swallow(e); }
+try { appRegister({ toggleCockpitView, toggleConsolePop }); } catch (e) { _swallow(e); }
 
 // 화면 버튼(data-act) 연결 — 11-charts.js 보다 나중에 로드되므로 여기서 직접 등록한다
 try { appRegister({ toggleExtView, extCamHold, extCamDefault }); } catch (e) { _swallow(e); }
