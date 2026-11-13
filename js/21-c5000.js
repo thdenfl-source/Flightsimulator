@@ -13,7 +13,7 @@ const C5_KEY = 'c5000';
 const C5_W = 20;
 // 미리 넣어 둔 채널(해상 VHF-FM · 항공) — 0 은 매뉴얼 채널(..M, 주파수를 직접 바꾼다)
 const C5_DEFAULT_CH = [
-  { n: 0, id: '', rx: 156.800, tx: 156.800, rxT: '', txT: '', mod: 'FM', bw: 'S', pwr: 'HI', key: 0 },
+  { n: 0, id: '', rx: 278.400, tx: 278.400, rxT: '', txT: '', mod: 'AM', bw: 'W', pwr: 'HI', key: 0 },
   { n: 1, id: 'MARINE 16', rx: 156.800, tx: 156.800, rxT: '', txT: '', mod: 'FM', bw: 'S', pwr: 'HI', key: 0 },
   { n: 2, id: 'MARINE 06', rx: 156.300, tx: 156.300, rxT: '', txT: '', mod: 'FM', bw: 'S', pwr: 'HI', key: 0 },
   { n: 3, id: 'MARINE 67', rx: 156.375, tx: 156.375, rxT: '', txT: '', mod: 'FM', bw: 'S', pwr: 'HI', key: 0 },
@@ -35,15 +35,26 @@ function _c5Fresh() {
   return {
     on: true, page: 'HOME', line: 0, dim: 6,
     ch: C5_DEFAULT_CH.map(c => Object.assign({}, c)),
-    r: [0, 1].map(i => ({ ch: i ? 7 : 1, dir: false, pvt: false, key: 'PSET', guard: false, sq: false, vol: 6 })),
+    // RT1 — 실기 기본 화면(매뉴얼 채널 ..M → 278.400 · NORMAL · GUARD 둘 다 켜짐) · RT2 는 화면에 띄우지 않는다
+    r: [0, 1].map(i => ({ ch: i ? 7 : 0, dir: !i, pvt: false, key: 'PSET', guard: !i, nrm: true, sq: false, vol: 6 })),
+    ng: null,            // NORMAL/GUARD 고르기(UPPER 소프트키) — 커서 자리 0(NORMAL) · 1(GUARD) · null 이면 아님
     mode: '',            // 켜 둔 강화 모드(SIMULCAST …) · '' 이면 보통
     modeSel: 0, keySel: 'PSET', num: '', pw: '', otar: '', edit: null, editF: 0, msg: '', msgT: 0, volShow: null,
   };
 }
-try { const v = JSON.parse(localStorage.getItem(C5_KEY) || 'null'); if (v && Array.isArray(v.ch) && Array.isArray(v.r)) c5 = Object.assign(_c5Fresh(), v, { page: v.on ? 'HOME' : 'OFF' }); } catch (e) { _swallow(e); }
+try {
+  const v = JSON.parse(localStorage.getItem(C5_KEY) || 'null');
+  if (v && Array.isArray(v.ch) && Array.isArray(v.r)) {
+    c5 = Object.assign(_c5Fresh(), v, { page: v.on ? 'HOME' : 'OFF', ng: null, line: 0 });
+    if (!v.v2) {                         // 예전 저장값 — 실기 기본 화면(..M → 278.400 · NORMAL · GUARD)으로 맞춘다
+      const m = c5.ch.find(c => c.n === 0); if (m) Object.assign(m, { rx: 278.400, tx: 278.400, mod: 'AM', bw: 'W' });
+      Object.assign(c5.r[0], { ch: 0, dir: true, nrm: true, guard: true });
+    }
+  }
+} catch (e) { _swallow(e); }
 if (!c5) c5 = _c5Fresh();
 function _c5Save() {
-  try { localStorage.setItem(C5_KEY, JSON.stringify({ on: c5.on, dim: c5.dim, ch: c5.ch, r: c5.r, mode: c5.mode, line: c5.line })); } catch (e) { _swallow(e); }
+  try { localStorage.setItem(C5_KEY, JSON.stringify({ v2: 1, on: c5.on, dim: c5.dim, ch: c5.ch, r: c5.r, mode: c5.mode, line: c5.line })); } catch (e) { _swallow(e); }
 }
 const _c5pad = (s, n) => (String(s) + ' '.repeat(n)).slice(0, n);
 const _c5rpad = (s, n) => (' '.repeat(n) + String(s)).slice(-n);
@@ -66,20 +77,31 @@ function c5Lines() {
   if (p === 'PROG_PW') return { l: ['ENTER PASSWORD ' + (c5.line + 1), ' #=' + _c5pad('*'.repeat(c5.pw.length) + '....', 4) + ' <ENTER>'], cur: [1, 3, 4] };
   if (p === 'PROG_MENU') return { l: ['PROG: CHANNEL', '2=ADD 3=CHG 4=DEL'], cur: null };
   if (p === 'EDIT') return editLines();
-  // HOME
-  const l = [homeLine(0), homeLine(1)];
+  // HOME — 실기 기본 화면: 윗줄 하나(RT1) · 아랫줄은 비운다
+  const l = [homeLine(0), ''];
   if (c5.volShow && performance.now() < c5.volShow.t) {
     const i = c5.volShow.i, v = c5.r[i].vol;
     l[i] = _c5pad(`${i + 1} VOL ` + '#'.repeat(v) + '-'.repeat(10 - v), C5_W);
   }
-  return { l, cur: [c5.line, 5, 3] };
+  // NORMAL/GUARD 고르기 — 첫 1 위에 ‾ 표시 · 고르는 자리에 _ 커서(SEL 바깥 = 자리 · 안 = 켜고 끄기)
+  if (c5.ng !== null) return { l, cur: [0, c5.ng, 1], ul: true, ovl: [0, 0, 1] };
+  return { l, cur: [0, 5, 3] };
 }
+// 기본 화면 줄 — [NORMAL 1][GUARD 1]  [φ][채널 ..M][→ Direct][이름 · 매뉴얼이면 주파수 R]
+//   첫 1: NORMAL(지정 주파수) 수신을 쓴다 · 둘째 1: GUARD(121.5 / 243.0) 수신기를 쓴다 — 끄면 그 자리가 빈다
+//   (GUARD 를 끄고 날면 GUARD 주파수를 듣지 못한다)
 function homeLine(i) {
-  const r = c5.r[i], c = _c5ch(r.ch);
-  const st = r.sq ? 'SQ.' : r.guard ? 'G..' : '...';                 // R/T 상태(스켈치 열림 · GUARD 수신기 · 대기)
-  const name = r.ch === 0 ? _c5f(c.rx) : c.id;
-  return _c5pad(`${i + 1}${st}${r.pvt ? C5_PHI : ' '}${_c5chNo(r.ch)}${r.dir ? C5_ARROW : ' '}${_c5pad(name, 11)}`, C5_W);
+  if (i !== 0) return '';
+  const r = c5.r[0], c = _c5ch(r.ch);
+  const name = r.ch === 0 ? _c5f(c.rx) + 'R' : c.id;
+  return _c5pad(`${r.nrm !== false ? '1' : ' '}${r.guard ? '1' : ' '}  ${r.pvt ? C5_PHI : ' '}${_c5chNo(r.ch)}${r.dir ? C5_ARROW : ' '}${_c5pad(name, 11)}`, C5_W);
 }
+// CDU Audio & Radios 의 U/VHF 줄(09-cdu.js) — C-5000 RT1 의 채널 · 주파수 · 음량(0~100%)
+function c5UvhfInfo() {
+  const r = c5.r[0], c = _c5ch(r.ch);
+  return { ch: _c5chNo(r.ch), id: c.id, f: _c5f(c.rx), vol: r.vol * 10, nrm: r.nrm !== false, guard: !!r.guard, on: !!(c5.on && _c5Pwr()) };
+}
+function c5SetVolPct(p) { c5.r[0].vol = Math.max(0, Math.min(10, Math.round((Number(p) || 0) / 10))); _c5Save(); c5Render(); }
 // EDIT — 윗줄: 채널 · Direct · 수신 주파수 R 수신톤 변조 / 아랫줄: 대역폭 · 출력 · 송신 주파수 T 송신톤 · 암호 키
 const C5_EF = [   // 고칠 칸: [줄, 시작, 길이, 이름]
   [0, 3, 1, 'dir'], [0, 4, 7, 'rx'], [0, 12, 4, 'rxT'], [0, 17, 2, 'mod'],
@@ -141,7 +163,7 @@ function c5Enter() {
   if (!c5.on || !_c5Pwr()) return;
   c5.msg = '';                                        // 잠깐 띄운 알림은 다음 조작에서 걷힌다
   const p = c5.page, r = c5.r[c5.line];
-  if (p === 'HOME') c5.line = 1 - c5.line;
+  if (p === 'HOME') { c5.ng = null; c5.line = 0; }             // (RT 한 대 — 줄을 바꾸지 않는다) · N/G 고르기를 끝낸다
   else if (p === 'NUM') { const n = parseInt(c5.num || '0', 10); if (c5.ch.some(c => c.n === n)) { r.ch = n; c5.page = 'HOME'; } else _c5flash(`${c5.line + 1} CHAN ${n}`, 'NOT PROGRAMMED'); }
   else if (p === 'MODE') { c5.mode = C5_MODES[c5.modeSel]; c5.page = 'MODE_ON'; }
   else if (p === 'MODE_ON') { c5.mode = ''; c5.page = 'HOME'; _c5flash('ENHANCED MODE', 'OFF'); }
@@ -162,7 +184,7 @@ function c5Cursor(d) {
   if (!c5.on || !_c5Pwr()) return;
   c5.msg = '';                                        // 잠깐 띄운 알림은 다음 조작에서 걷힌다
   if (c5.page === 'EDIT') c5.editF = (c5.editF + d + C5_EF.length) % C5_EF.length;
-  else if (c5.page === 'HOME') c5.line = 1 - c5.line;
+  else if (c5.page === 'HOME' && c5.ng !== null) c5.ng = 1 - c5.ng;   // N/G 고르기 — NORMAL ⇄ GUARD 자리
   c5Render();
 }
 // VALUE 노브 — 커서 자리의 값을 돌린다(HOME: 채널 · EDIT: 칸 값 · MODE · KEY · DIM)
@@ -171,7 +193,12 @@ function c5Value(d) {
   c5.msg = '';                                        // 잠깐 띄운 알림은 다음 조작에서 걷힌다
   const p = c5.page, r = c5.r[c5.line];
   const cyc = (arr, v) => arr[(arr.indexOf(v) + d + arr.length) % arr.length];
-  if (p === 'HOME') { const ns = c5.ch.map(c => c.n); r.ch = cyc(ns, r.ch); _c5Save(); }
+  if (p === 'HOME' && c5.ng !== null) {                                  // N/G 고르기 — 그 자리 1 을 켜고 끈다
+    const r0 = c5.r[0];
+    if (c5.ng === 0) r0.nrm = r0.nrm === false; else r0.guard = !r0.guard;
+    _c5Save();
+  }
+  else if (p === 'HOME') { const ns = c5.ch.map(c => c.n); r.ch = cyc(ns, r.ch); _c5Save(); }
   else if (p === 'MODE') c5.modeSel = (c5.modeSel + d + C5_MODES.length) % C5_MODES.length;
   else if (p === 'KEY') { const ks = ['PSET', ...Array.from({ length: 16 }, (_, i) => String(i + 1))]; c5.keySel = cyc(ks, String(c5.keySel)); }
   else if (p === 'DIM') c5.dim = Math.max(1, Math.min(10, c5.dim + d));
@@ -187,18 +214,23 @@ function c5Value(d) {
   }
   c5Render();
 }
-// 소프트키 — DIM 화면: 밝기 ▲▼ · 그 밖: 그 줄 무전기의 GUARD 수신기 ⇄ MAIN
+// 소프트키 — DIM 화면: 밝기 ▲▼
+//   UPPER(위) — 기본 화면에서 NORMAL/GUARD 고르기를 켜고 끈다(첫 1 위에 ‾ · 첫 1 에 _ 커서). SEL 바깥 고리로 자리를
+//               옮기고(NORMAL ⇄ GUARD) 안 원판을 돌리면 그 1 이 사라졌다 나타났다(쓰고 안 쓰고) · ENTER 로 끝낸다
+//   LOWER(아래) — 고르기를 끝낸다
 function c5Soft(i) {
   if (!c5.on || !_c5Pwr()) return;
   c5.msg = '';                                        // 잠깐 띄운 알림은 다음 조작에서 걷힌다
   if (c5.page === 'DIM') c5.dim = Math.max(1, Math.min(10, c5.dim + (i === 0 ? 1 : -1)));
-  else { c5.r[i].guard = !c5.r[i].guard; _c5Save(); }
+  else if (i === 0) { c5.page = 'HOME'; c5.line = 0; c5.ng = c5.ng === null ? 0 : null; }
+  else c5.ng = null;
   c5Render();
 }
 // VOL 노브 — 안 = RT1 · 바깥 = RT2 (0 … 10)
 function c5Vol(i, d) {
   if (!c5.on || !_c5Pwr()) return;
   c5.r[i].vol = Math.max(0, Math.min(10, c5.r[i].vol + d));
+  if (i === 0) { try { if (typeof cduSetUvhfVol === 'function') cduSetUvhfVol(c5.r[0].vol * 10); } catch (e) { _swallow(e); } }   // CDU U/VHF 음량과 같다
   c5.volShow = { i, t: performance.now() + 1200 }; setTimeout(c5Render, 1250);
   _c5Save(); c5Render();
 }
@@ -235,10 +267,13 @@ function c5PwrUp() { clearTimeout(_c5PwrT); _c5PwrT = null; }
 function c5Render() {
   const lcd = document.getElementById('c5-lcd');
   if (!lcd) return;
-  const { l, cur } = c5Lines();
+  const { l, cur, ul, ovl } = c5Lines();
   const esc = ch => ch === '<' ? '&lt;' : ch === '>' ? '&gt;' : ch === '&' ? '&amp;' : ch === ' ' ? '&nbsp;' : ch;
-  lcd.innerHTML = l.map((line, li) => '<div class="c5-row">' + [..._c5pad(line, C5_W)].map((ch, ci) =>
-    `<span${cur && cur[0] === li && ci >= cur[1] && ci < cur[1] + cur[2] ? ' class="c5-cur"' : ''}>${esc(ch)}</span>`).join('') + '</div>').join('');
+  const inR = (r, li, ci) => r && r[0] === li && ci >= r[1] && ci < r[1] + r[2];
+  lcd.innerHTML = l.map((line, li) => '<div class="c5-row">' + [..._c5pad(line, C5_W)].map((ch, ci) => {
+    const cls = [inR(cur, li, ci) ? (ul ? 'c5-ul' : 'c5-cur') : '', inR(ovl, li, ci) ? 'c5-ovl' : ''].filter(Boolean).join(' ');
+    return `<span${cls ? ` class="${cls}"` : ''}>${esc(ch)}</span>`;
+  }).join('') + '</div>').join('');
   lcd.classList.toggle('off', !c5.on || !_c5Pwr());
   lcd.style.setProperty('--c5-dim', (0.35 + c5.dim * 0.065).toFixed(2));
   lcd.dataset.page = c5.on ? c5.page : 'OFF';
@@ -251,8 +286,8 @@ function c5Build() {
                 ['*', 'HOME'], ['9', 'PVT' + C5_PHI], ['0', 'PROG'], ['#', 'NUM']];
   host.innerHTML =
     `<div class="c5-brand">WULFSBERG</div>` +
-    `<button class="c5-soft up" data-c5="soft0" title="UPPER SOFT key — DIM: 밝기 ▲ · 그 밖: RT1 GUARD ⇄ MAIN"></button>` +
-    `<button class="c5-soft dn" data-c5="soft1" title="LOWER SOFT key — DIM: 밝기 ▼ · 그 밖: RT2 GUARD ⇄ MAIN"></button>` +
+    `<button class="c5-soft up" data-c5="soft0" title="UPPER SOFT key — DIM: 밝기 ▲ · 그 밖: NORMAL/GUARD 고르기(SEL 바깥 = 자리 · 안 = 켜기/끄기)"></button>` +
+    `<button class="c5-soft dn" data-c5="soft1" title="LOWER SOFT key — DIM: 밝기 ▼ · 그 밖: NORMAL/GUARD 고르기 끝"></button>` +
     `<div class="c5-lcd" id="c5-lcd"></div>` +
     `<div class="c5-pad">` + KEYS.map(([n, f]) => `<button class="c5-key" data-c5="k${n}"><b>${n}</b><i>${f}</i></button>`).join('') + `</div>` +
     `<div class="c5-tag vol">VOL</div><div class="c5-tag sel">SEL</div>` +

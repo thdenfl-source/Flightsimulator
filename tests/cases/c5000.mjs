@@ -20,18 +20,30 @@ export async function run(page, t) {
   t.ok(dom.keys === 12 && dom.soft === 2 && dom.knobs === 2 && /WULFSBERG/.test(dom.txt) && /PVTφ/.test(dom.txt),
     `제어기가 그려진다 — 12키 · 소프트키 둘 · 노브 둘 (${dom.keys}/${dom.soft}/${dom.knobs})`);
   let L = await lcd();
-  t.ok(L.length === 2 && L.every(l => l.length === 20) && /^1\.\.\. \.\.1 MARINE 16/.test(L[0]) && /^2\.\.\. \.\.7 AIR GUARD/.test(L[1]),
-    `HOME — 두 줄 20자, RT1/RT2 채널 (${L.join(' | ')})`);
-  // ENTER — RT1 ⇄ RT2 · VALUE 노브 — 채널
+  t.ok(L.length === 2 && L.every(l => l.length === 20) && /^11 {3}\.\.M→278\.400R/.test(L[0]) && L[1].trim() === '',
+    `HOME — 실기 기본 화면: 11(NORMAL · GUARD) · ..M → 278.400R · 아랫줄 비움 (${L.join(' | ')})`);
+  // VALUE 노브 — 채널(ENTER 는 줄을 바꾸지 않는다)
   await knob('sel', 'push'); const line = await page.evaluate(() => c5.line);
   await knob('sel', 'inner', 1); L = await lcd();
-  t.ok(line === 1 && /^2\.\.\. \.\.8 SAR 123\.1/.test(L[1]), `ENTER 로 RT2 줄을 고르고 VALUE 로 채널을 올린다 (${L[1]})`);
-  await knob('sel', 'push');
-  // DIR · PVT 기호 · TEST(스켈치) · 소프트키(GUARD)
-  await key('1'); await key('9'); await key('7'); await page.locator('[data-c5="soft0"]').click(); L = await lcd();
-  t.ok(/^1SQ\.φ\.\.1→MARINE 16/.test(L[0]), `DIR → · PVTφ · TEST SQ 가 윗줄에 나온다 (${L[0]})`);
-  await key('7'); await page.locator('[data-c5="soft0"]').click(); L = await lcd();
-  t.ok(/^1G?\.\.\.?φ/.test(L[0]) || /^1\.\.\.φ/.test(L[0]), `TEST 다시 누르면 스켈치가 닫힌다 (${L[0]})`);
+  t.ok(line === 0 && /^11 {3}\.\.1→MARINE 16/.test(L[0]), `VALUE 로 채널을 올린다 (${L[0]})`);
+  // PVTφ · DIR
+  await key('9'); await key('1'); L = await lcd();
+  t.ok(/^11  φ\.\.1 MARINE 16/.test(L[0]), `PVTφ · DIR(→ 끔)이 윗줄에 나온다 (${L[0]})`);
+  await key('9'); await key('1');
+  // UPPER 소프트키 — NORMAL/GUARD 고르기: 첫 1 위에 ‾ · 첫 1 에 _ 커서 → VALUE 로 NORMAL 끄기 · CURSOR 로 GUARD 자리 → VALUE 로 GUARD 끄기
+  const cls = () => page.evaluate(() => [...document.querySelectorAll('#c5-lcd .c5-row:first-child span')].slice(0, 2).map(s => s.className));
+  await page.locator('[data-c5="soft0"]').click(); const c0 = await cls();
+  await knob('sel', 'inner', 1); L = await lcd(); const nOff = L[0];
+  await knob('sel', 'outer', 1); const c1 = await cls();
+  await knob('sel', 'inner', 1); L = await lcd(); const gOff = L[0];
+  const g = await page.evaluate(() => ({ nrm: c5.r[0].nrm, guard: c5.r[0].guard }));
+  await knob('sel', 'inner', 1); await knob('sel', 'outer', 1); await knob('sel', 'inner', 1);   // 다시 켠다
+  await knob('sel', 'push'); const ngEnd = await page.evaluate(() => c5.ng); L = await lcd();
+  t.ok(/c5-ovl/.test(c0[0]) && /c5-ul/.test(c0[0]) && /c5-ul/.test(c1[1]) && !/c5-ul/.test(c1[0]),
+    `UPPER 소프트키 — 첫 1 위에 ‾, _ 커서가 첫 1 → CURSOR 로 둘째 1 (${c0.join(',')} → ${c1.join(',')})`);
+  t.ok(/^ 1/.test(nOff) && /^ {2}/.test(gOff) && g.nrm === false && g.guard === false,
+    `VALUE 로 그 자리 1 이 사라졌다 나타났다 — NORMAL · GUARD 안 씀 (${nOff.slice(0, 4)} → ${gOff.slice(0, 4)})`);
+  t.ok(ngEnd === null && /^11/.test(L[0]), `ENTER 로 고르기를 끝낸다 — 다시 켠 11 (${L[0].slice(0, 4)})`);
   // NUM — 번호로 채널
   await key('#'); await key('6'); L = await lcd(); const numPg = L[0];
   await knob('sel', 'push'); L = await lcd();
@@ -65,6 +77,9 @@ export async function run(page, t) {
   await knob('vol', 'inner', -1); await knob('vol', 'outer', 1);
   const v = await page.evaluate(() => c5.r.map(r => r.vol));
   t.ok(v[0] === 5 && v[1] === 7, `VOL — 안 = RT1 −, 바깥 = RT2 + (${v.join('/')})`);
+  // CDU Audio & Radios 의 U/VHF — C-5000 의 주파수 · 음량(VOL 과 같다)
+  const uv = await page.evaluate(() => { const i = c5UvhfInfo(); c5SetVolPct(80); return { i, v: c5.r[0].vol }; });
+  t.ok(uv.i.vol === 50 && uv.i.f === '159.138' && uv.v === 8, `CDU U/VHF — C-5000 주파수 ${uv.i.f} · 음량 ${uv.i.vol}% · CDU 에서 80% → C-5000 VOL ${uv.v}`);
   // PUSH ON — 켜진 채로 누르면 경고가 켜짐 0.4초 · 꺼짐 0.2초로 다섯 번 깜빡인 뒤 꺼지고, 1초 누르면 다시 켜진다
   await page.evaluate(() => { window._c5beeps = 0; const f = _c5Beep; _c5Beep = (...a) => { window._c5beeps++; return f(...a); }; });
   await knob('vol', 'push', 1, 100); L = await lcd(); const warn = L.join('|');

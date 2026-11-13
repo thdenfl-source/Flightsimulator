@@ -20,7 +20,8 @@ const LCON_PLATES = [
     { t: 'lpb', id: 'ahrsTrue', x: 245, y: 128, title: 'TRIM/TRUE', legend: 'TRUE' },
     { t: 'dim', id: 'ahrs2Hiq', x: 355, y: 128, small: true, def: 5 }, { t: 'lbl', x: 355, y: 166, text: 'HIQ', small: true },
     { t: 'lpb', id: 'ahrs2Dg', x: 430, y: 128, title: 'TG/MG', legend: 'DG' },
-    { t: 'rot', id: 'fcpSel', x: 70, y: 224, small: true, title: 'FCP', pos: ['1', '2'], ang: [-55, 55], def: '1' },
+    // FCP — 1 · N(정 · 부조종사 FCP 둘 다) · 2(그 쪽 FCP 만)
+    { t: 'rot', id: 'fcpSel', x: 70, y: 224, small: true, title: 'FCP', pos: ['1', 'N', '2'], ang: [-55, 0, 55], def: 'N' },
     { t: 'rot', id: 'ahrsSel', x: 190, y: 224, small: true, title: 'AHRS', pos: ['1', 'N', '2', 'BACKUP'], ang: [-60, 0, 60, 135], def: 'N' },
     { t: 'rot', id: 'adcSel', x: 310, y: 224, small: true, title: 'ADC', pos: ['1', 'N', '2', 'BACKUP'], ang: [-60, 0, 60, 135], def: 'N' },
     { t: 'dim', id: 'ahrsDim', x: 420, y: 224, small: true, title: 'DIM', lo: 'OFF', hi: 'BRT', def: 7 },
@@ -108,17 +109,17 @@ const LCON_PLATES = [
   { x: 510, y: 690, w: 480, h: 120, items: [
     { t: 'lbl', x: 40, y: 62, text: 'AVCS' },
     { t: 'lpb', id: 'avcsStatus', x: 170, y: 72, w: 60, h: 46, title: 'STATUS', legend: '' },
-    { t: 'lpb', id: 'avcsPower', x: 330, y: 72, w: 60, h: 46, title: 'POWER', legend: '' },
+    { t: 'lpb', id: 'avcsPower', x: 330, y: 72, w: 60, h: 46, title: 'POWER', legend: 'ON', grn: true },   // AVCS — 진동 저감(15-heli3d.js ckVib)
   ]},
   // ⑩ MPP 패널
   { x: 510, y: 820, w: 480, h: 290, items: [
     { t: 'lbl', x: 30, y: 140, text: 'MPP' },
     ...['RADAR', 'EGPWS', 'DMM', 'SPARE', 'SPARE'].map((n, i) =>
-      ({ t: 'lpb', id: `mpp${i}`, x: 100 + i * 78, y: 70, w: 64, h: 46, title: n, legend: n === 'SPARE' ? '' : 'ON' })),
+      ({ t: 'lpb', id: `mpp${i}`, x: 100 + i * 78, y: 70, w: 64, h: 46, title: n, legend: n === 'SPARE' ? '' : 'ON', grn: true })),   // ON 은 녹색(무전기 글씨와 같은 빛)
     { t: 'lpb', id: 'mpp5', x: 100, y: 150, w: 64, h: 46, title: 'SPARE', legend: '' },
     { t: 'lpb', id: 'mpp6', x: 178, y: 150, w: 64, h: 46, title: 'SPARE', legend: '' },
     { t: 'mom', id: 'xpdrIdent', x: 92, y: 248, title: 'ATC XPDR\nIDENT', pos: ['NORM', 'IDENT'], def: 'NORM', topLbl: '' },
-    { t: 'lpb', id: 'com2', x: 205, y: 248, w: 64, h: 46, title: 'COM2', legend: '' },
+    { t: 'lpb', id: 'com2', x: 205, y: 248, w: 64, h: 46, title: 'COM2', legend: '' },   // 누르면 CDU COM2 주 · 예비가 121.500(GUARD)
     { t: 'br', x: 278, y: 196, w: 180, text: 'RADAR' },
     { t: 'lpb', id: 'radarScnr', x: 322, y: 248, w: 64, h: 46, title: 'SCNR', legend: '' },
     { t: 'lpb', id: 'radarTx', x: 412, y: 248, w: 64, h: 46, title: 'TX', legend: '' },
@@ -137,6 +138,14 @@ const LCON_PLATES = [
 ];
 
 consoleRegister('lcon', { wrap: 'lcon-wrap', plates: LCON_PLATES, W: LCON_W, H: LCON_H });
+// MPP COM2 — 누르면(IN) CDU 의 COM2 주 · 예비 채널을 둘 다 121.500 으로 맞춰 GUARD 교신을 바로 할 수 있게 한다(09-cdu.js cduCom2Guard)
+window.addEventListener('ovhd', e => {
+  try { if (e.detail && e.detail.id === 'com2' && e.detail.value === 'IN' && typeof cduCom2Guard === 'function') cduCom2Guard(); } catch (er) { _swallow(er); }
+});
+// AVCS(능동 진동 저감) — POWER 를 누르면 녹색 ON · DC 전원이 있으면 작동해 기체 진동을 감지하고 맞진동으로 줄인다(15-heli3d.js ckVib)
+function avcsOn() {
+  try { return typeof ovhdGet === 'function' && ovhdGet('avcsPower') === 'IN' && (typeof pwrDc !== 'function' || pwrDc()); } catch (e) { return false; }
+}
 function lconShow() { consoleBuild('lcon'); consoleFit('lcon'); if (typeof c5Build === 'function') c5Build(); if (typeof npxBuild === 'function') npxBuild(); }   // C-5000(21-c5000.js) · NPX138(22-npx138.js)
 try {
   const w = document.getElementById('lcon-wrap');

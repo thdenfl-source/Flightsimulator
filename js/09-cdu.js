@@ -4411,8 +4411,14 @@ function act(name, ...args) {
     // --- Render Helpers ---
     function renderAudioRow(label, id) {
         let isMicOn = (micSelected === label);
-        let freqBoxHTML = id === 'uvhf' 
-            ? `<div></div>` 
+        // U/VHF — 하부 콘솔 C-5000(21-c5000.js) 의 RT1: 채널 · 주파수를 보이고, 음량은 C-5000 VOL 과 같다
+        let uv = null;
+        if (id === 'uvhf') { try { if (typeof c5UvhfInfo === 'function') { uv = c5UvhfInfo(); volumes.uvhf = uv.vol; } } catch (e) { _swallow(e); } }
+        let freqBoxHTML = id === 'uvhf'
+            ? (uv ? `<div class="freq-display-box" title="C-5000 — 채널 · 주파수는 하부 콘솔 C-5000 에서 바꾼다">
+                <div style="color:white; font-size:10px; font-weight:bold;">${uv.on ? uv.f : '---.---'}</div>
+                <div style="color:var(--text-cyan); font-size:8px;">${uv.on ? (uv.ch + (uv.guard ? ' G' : '')) : 'C-5000 OFF'}</div>
+               </div>` : `<div></div>`)
             : `<div class="freq-display-box" data-act="switchMode" data-arg='["COM_INPUT","${id}"]'>
                 <div style="color:white; font-size:10px; font-weight:bold;">${freqs[id].act}</div>
                 <div style="color:var(--text-cyan); font-size:8px;">${freqs[id].stb}</div>
@@ -4759,6 +4765,7 @@ function act(name, ...args) {
         const update = (pe) => {
             const r = s.getBoundingClientRect();
             volumes[id] = Math.round(Math.max(0, Math.min(100, (pe.clientX - r.left) / r.width * 100)));
+            if (id === 'uvhf') { try { if (typeof c5SetVolPct === 'function') c5SetVolPct(volumes[id]); } catch (er) { _swallow(er); } }   // C-5000 VOL 과 같다
             s.querySelector('.wedge-fill').style.width = volumes[id] + '%';
             if(s.querySelector('.wedge-text')) s.querySelector('.wedge-text').innerText = volumes[id] + '%';
         };
@@ -4980,6 +4987,11 @@ switchMode('HOME');
     // ── 밖으로 공개하는 이름 ───────────────────────────────────────
     // 함수: CDU 밖 JS 또는 위임이 닿지 않는 인라인 핸들러(지도 팝업)에서 호출
     window.switchMode        = switchMode;         // 앱 각처 + cduFooter의 인라인 문자열
+    // C-5000 VOL 노브(21-c5000.js) → CDU U/VHF 음량
+    window.cduSetUvhfVol     = v => { volumes.uvhf = Math.max(0, Math.min(100, Math.round(v))); if (currentMode === 'AUDIO') { try { renderContent(); } catch (e) { _swallow(e); } } };
+    // 하부 콘솔 MPP 의 COM2(19-lower.js) — COM2 주 · 예비 채널을 둘 다 121.500(GUARD)으로 맞춘다
+    window.cduCom2Guard      = () => { freqs.com2.act = '121.500'; freqs.com2.stb = '121.500'; monStates.com2 = true; try { renderContent(); } catch (e) { _swallow(e); } };
+    window.cduCom2Freqs      = () => ({ act: freqs.com2.act, stb: freqs.com2.stb });
     window.openAirfield      = openAirfield;       // 지도 공항 팝업 → INFO 열기
     window._afldIcao         = _afldIcao;          // 지도 ↔ INFO 매칭
     window._tpRenderMapPoints= _tpRenderMapPoints; // 시작 시 저장된 지도 포인트 복원
