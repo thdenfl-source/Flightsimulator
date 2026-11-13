@@ -1009,7 +1009,9 @@ function applyPanels() {
   const hostOf0 = k => window._cockpitOn ? ckHost(k) : simpleHost(k) || scrHost(k) || (leftSel === k ? L : (tripleMode && midSel === k ? M : (rightSel === k ? R : (quadMode && botSel === k ? B : null))));
   // SYSTEM 창의 Map 화면(18-system.js) — 지도가 다른 창에 없고 SYSTEM 창이 보이면 그 큰 칸이 지도 그릇
   const sysMapHost = () => { try { return (typeof sysMapSlot === 'function' && hostOf0('sysp')) ? sysMapSlot() : null; } catch (e) { return null; } };
-  const hostOf = k => hostOf0(k) || (k === 'map' ? sysMapHost() : null);
+  // SIM 3D 조종석(15-heli3d.js) — 콘솔 팝아웃(LowerC · UpperC)은 무엇보다 먼저, 조종석 안의 작은 콘솔은 다른 창에 없을 때만
+  const ckC = (k, ph) => { try { return typeof ckpitConsoleHost === 'function' ? ckpitConsoleHost(k, ph) : null; } catch (e) { return null; } };
+  const hostOf = k => ckC(k, 'pop') || hostOf0(k) || (k === 'map' ? sysMapHost() : null) || ckC(k, 'mini');
   ['pfd', 'map', 'cdu', 'm3d', 'plan', 'ovhd', 'sysp', 'lcon'].forEach(k => {
     const el = document.getElementById(wrapIds[k]);
     if (!el) return;

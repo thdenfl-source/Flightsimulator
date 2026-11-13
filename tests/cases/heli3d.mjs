@@ -331,4 +331,43 @@ export async function run(page, t) {
   t.ok(Math.abs(ck.on.chinTop - 0.89) < 0.02, `CHIN 창은 패널 아래(발밑)로 내려간다 (${(ck.on.chinTop * 100).toFixed(0)}%)`);
   t.ok(!ck.ext && ck.back, '외부 시점에서는 숨기고, 조종석으로 돌아오면 다시 보인다');
   t.ok(!ck.off.panel && ck.off.nose && ck.off.label === '조종석 OFF' && !ck.exit, '끄면 패널이 사라지고 기수가 돌아온다 · SIM 을 끄면 버튼도 숨는다');
+
+  // ── 조종석 안 작은 콘솔 · LowerC / UpperC 팝아웃 ──
+  const con = await page.evaluate(async () => {
+    const w = ms => new Promise(r => setTimeout(r, ms));
+    const par = id => (document.getElementById(id).parentElement || {}).id;
+    const vis = id => { const e = document.getElementById(id); return !!e && getComputedStyle(e).display !== 'none'; };
+    const out = {};
+    S.alt = 1000; S.spd = 80; toggleSimMode(true); S.alt = 1000; await w(300);
+    if (!ckpitOn) toggleCockpitView();
+    await w(300);
+    out.btns = vis('lconc-btn') && vis('upperc-btn');
+    out.mini = { l: par('lcon-wrap'), u: par('ovhd-wrap') };
+    document.getElementById('lconc-btn').click(); await w(300);
+    out.pop = { show: vis('ck-pop'), l: par('lcon-wrap'), u: par('ovhd-wrap'), title: document.getElementById('ck-pop-title').textContent };
+    const ap = document.querySelector('#ck-pop [data-ov="ap1"]'), v0 = ovhdGet('ap1');
+    const r = ap.getBoundingClientRect(), o = { bubbles: true, clientX: r.left + r.width / 2, clientY: r.top + r.height / 2, pointerId: 1 };
+    ap.dispatchEvent(new PointerEvent('pointerdown', o)); ap.dispatchEvent(new PointerEvent('pointerup', o)); await w(100);
+    out.ap = { v0, v1: ovhdGet('ap1') };
+    if (ovhdGet('ap1') !== v0) ovhdSet('ap1', v0);
+    document.getElementById('upperc-btn').click(); await w(300);
+    out.swap = { l: par('lcon-wrap'), u: par('ovhd-wrap'), title: document.getElementById('ck-pop-title').textContent };
+    document.getElementById('upperc-btn').click(); await w(300);
+    out.close = { show: vis('ck-pop'), u: par('ovhd-wrap') };
+    toggleCockpitView(); await w(200);
+    out.offMini = { l: par('lcon-wrap'), u: par('ovhd-wrap'), lHidden: document.getElementById('lcon-wrap').classList.contains('page-hidden') };
+    toggleSimMode(false); await w(100);
+    out.exit = vis('lconc-btn');
+    S.alt = 0; S.spd = 0; S.running = false;
+    return out;
+  });
+  t.ok(con.btns && con.mini.l === 'ck-mini-lcon' && con.mini.u === 'ck-mini-ovhd',
+    `조종석 안 위 가운데에 상부 콘솔 · 아래 가운데에 하부 콘솔을 작게 얹는다 (${con.mini.u} · ${con.mini.l})`);
+  t.ok(con.pop.show && con.pop.l === 'ck-pop-host' && con.pop.u === 'ck-mini-ovhd' && con.pop.title === 'LOWER CONSOLE',
+    'LowerC — 하부 콘솔을 가운데에 크게 띄운다');
+  t.ok(con.ap.v1 !== con.ap.v0, `팝아웃에서 스위치를 조작할 수 있다 (AP1 ${con.ap.v0} → ${con.ap.v1})`);
+  t.ok(con.swap.u === 'ck-pop-host' && con.swap.l === 'ck-mini-lcon' && con.swap.title === 'UPPER CONSOLE',
+    'UpperC — 상부 콘솔로 바꿔 띄우고, 하부 콘솔은 조종석 자리로 돌아간다');
+  t.ok(!con.close.show && con.close.u === 'ck-mini-ovhd', '다시 누르면 닫히고 콘솔은 조종석 자리로');
+  t.ok(con.offMini.lHidden && !con.exit, '조종석을 끄면 작은 콘솔도 감추고, SIM 을 끄면 버튼도 숨는다');
 }
