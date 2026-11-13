@@ -1006,6 +1006,7 @@ function simLookStep(dtGiven) {
     else if (simLookDir === 'L') simLook.yaw -= LOOK_YAW_RATE * dt;
     else if (simLookDir === 'F') simLook.pitch += LOOK_PIT_RATE * dt;   // 햇 ▲ = 올려다본다
     else if (simLookDir === 'A') simLook.pitch -= LOOK_PIT_RATE * dt;
+    else if (simLookDir === 'B') simLook.yaw += (simLook.yaw < 0 ? -1 : 1) * LOOK_YAW_RATE * 1.5 * dt;   // 뒤 — 돌던 쪽 어깨 너머로(화면 시야 버튼)
     simLook.yaw = Math.max(-LOOK_YAW_MAX, Math.min(LOOK_YAW_MAX, simLook.yaw));
     simLook.pitch = Math.max(-LOOK_PIT_DN, Math.min(LOOK_PIT_UP, simLook.pitch));
   } else {
@@ -1053,7 +1054,12 @@ function _vStickBox() {
   if (box) return box;
   box = document.createElement('div'); box.id = 'vstick';
   box.innerHTML =
-    '<div class="vs-track vs-ped" data-k="yaw"><div class="vs-knob"></div><span class="vs-lbl">PEDAL</span></div>' +
+    '<div class="vs-left"><div class="vs-track vs-ped" data-k="yaw"><div class="vs-knob"></div><span class="vs-lbl">PEDAL</span></div>' +
+    // 시야 조이스틱 — 앞 · 위 · 뒤 / 왼쪽 · 아래 · 오른쪽(누르고 있는 동안 돌아보고, 놓으면 정면으로)
+    '<div class="vs-look"><button type="button" data-look="C" title="정면">앞</button><button type="button" data-look="F" title="위를 본다">▲</button>' +
+    '<button type="button" data-look="B" title="뒤(어깨 너머)를 본다">뒤</button><button type="button" data-look="L" title="왼쪽을 본다">◀</button>' +
+    '<button type="button" data-look="A" title="아래를 본다">▼</button><button type="button" data-look="R" title="오른쪽을 본다">▶</button>' +
+    '<span class="vs-look-lbl">VIEW</span></div></div>' +
     '<div class="vs-cyc" data-k="cyc"><div class="vs-ring"></div><div class="vs-knob"></div><span class="vs-lbl">CYCLIC</span></div>';
   d3.appendChild(box);
   // 컬렉티브는 왼손 — 화면 왼쪽 아래 끝(L CHIN 창의 왼쪽 가장자리)에 따로 둔다
@@ -1087,6 +1093,17 @@ function _vStickBox() {
       vStickRender();
     };
     el.addEventListener('pointerup', end); el.addEventListener('pointercancel', end);
+  });
+  // 시야 버튼 — 햇 둘러보기(simLook)와 같다. '앞' 은 바로 정면으로
+  box.querySelectorAll('[data-look]').forEach(bt => {
+    const d = bt.dataset.look;
+    bt.addEventListener('pointerdown', ev => {
+      ev.preventDefault(); ev.stopPropagation(); try { bt.setPointerCapture(ev.pointerId); } catch (e) { _swallow(e); }
+      if (d === 'C') { simLookReset(); return; }
+      bt.classList.add('held'); simLookHold(true); simLookDir = d;
+    });
+    const up = () => { if (!bt.classList.contains('held')) return; bt.classList.remove('held'); simLookHold(false); };
+    bt.addEventListener('pointerup', up); bt.addEventListener('pointercancel', up);
   });
   return box;
 }

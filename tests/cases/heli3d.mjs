@@ -494,4 +494,42 @@ export async function run(page, t) {
   t.ok(wip.OFF.anim === 'none' && wip.LOW.anim === 'ckWipeL' && wip.HI.anim === 'ckWipeL' && parseFloat(wip.HI.dur) < parseFloat(wip.LOW.dur) && wip.moves,
     `와이퍼 — OFF 멈춤 · LOW ${wip.LOW.dur} · HI ${wip.HI.dur} 로 쓸어 움직인다`);
   t.ok(wip.WASH.anim === 'ckWipeL' && wip.WASH.water !== 'none' && wip.LOW.water === 'none', `WASH — 와이퍼 전체에서 물이 나오며 쓸린다(다른 자리에서는 물이 없다)`);
+
+  // ── 조종석 투명도 −/+(10% 씩) · 화면 조종간 PEDAL 아래 시야 버튼 ──
+  const tv = await page.evaluate(async () => {
+    const w = ms => new Promise(r => setTimeout(r, ms));
+    enterSolo('m3d'); await w(300);
+    S.alt = 1000; S.spd = 80; toggleSimMode(true); S.alt = 1000; await w(300);
+    if (!ckpitOn) toggleCockpitView();
+    await w(300);
+    const op = () => +getComputedStyle(document.querySelector('#sim-ckpit > svg')).opacity;
+    const t0 = ckTransp, o = { btn: getComputedStyle(document.getElementById('ckpit-op')).display !== 'none' };
+    ckTransp = 50; ckpitOpacity(0); o.a = op();
+    document.querySelector('#ckpit-op [data-arg="[1]"]').click(); o.b = op(); o.lbl = document.getElementById('ckpit-op-pct').textContent;
+    for (let i = 0; i < 9; i++) ckpitOpacity(-1); o.min = op();
+    ckTransp = t0; ckpitOpacity(0); localStorage.removeItem('ckTransp');
+    // 시야 버튼
+    if (!vStickOn) toggleVStick(); await w(300);
+    const vs = document.getElementById('vstick'), ped = vs.querySelector('.vs-ped').getBoundingClientRect(), lk = vs.querySelector('.vs-look').getBoundingClientRect();
+    o.below = lk.top >= ped.bottom - 1;
+    const btn = d => vs.querySelector(`[data-look="${d}"]`);
+    const hold = async (d, ms) => { const b = btn(d), r = b.getBoundingClientRect(), e = { bubbles: true, clientX: r.left + 4, clientY: r.top + 4, pointerId: 7 };
+      b.dispatchEvent(new PointerEvent('pointerdown', e)); for (let t = 0; t < ms; t += 50) { simLookStep(0.05); await w(5); }
+      const v = { yaw: simLook.yaw, pitch: simLook.pitch }; b.dispatchEvent(new PointerEvent('pointerup', e)); return v; };
+    simLookReset();
+    o.R = (await hold('R', 500)).yaw; simLookReset();
+    o.L = (await hold('L', 500)).yaw; simLookReset();
+    o.F = (await hold('F', 500)).pitch; simLookReset();
+    o.A = (await hold('A', 500)).pitch; simLookReset();
+    o.B = (await hold('B', 2000)).yaw;
+    simLookStep(1); o.ret = Math.abs(simLook.yaw) < Math.abs(o.B);              // 놓으면 정면으로 돌아간다
+    btn('C').dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerId: 8 })); o.C = simLook.yaw === 0 && simLook.pitch === 0;
+    toggleVStick(); toggleCockpitView(); toggleSimMode(false); exitSolo(); await w(200);
+    S.alt = 0; S.spd = 0; S.running = false;
+    return o;
+  });
+  t.ok(tv.btn && Math.abs(tv.a - 0.5) < 0.01 && Math.abs(tv.b - 0.4) < 0.01 && tv.lbl === '60%' && tv.min === 1,
+    `조종석 투명도 — 조종석 ON 밑 −/+ 로 10% 씩(50% → 60% 는 불투명도 ${tv.a} → ${tv.b} · 0% 는 불투명)`);
+  t.ok(tv.below && tv.R > 30 && tv.L < -30 && tv.F > 20 && tv.A < -20 && tv.B > 140 && tv.ret && tv.C,
+    `화면 조종간 PEDAL 아래 시야 — ▶ ${Math.round(tv.R)}° · ◀ ${Math.round(tv.L)}° · ▲ ${Math.round(tv.F)}° · ▼ ${Math.round(tv.A)}° · 뒤 ${Math.round(tv.B)}° · 놓으면 정면 · 앞`);
 }
