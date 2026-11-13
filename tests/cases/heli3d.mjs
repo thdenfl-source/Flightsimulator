@@ -311,6 +311,9 @@ export async function run(page, t) {
       for (let i = 0; i < d.length; i += 64) if (d[i] + d[i + 1] + d[i + 2] > 60) n++;
       return n;
     });
+    const pg0 = sysPage; sysPageSet('map'); ckpitDraw(); out.pgKeep = sysPage === 'map'; sysPageSet(pg0);
+    out.kinds = CKPIT_SCR.map(x => x.k).join(',');
+    out.op = +getComputedStyle(document.querySelector('#sim-ckpit svg')).opacity;
     out.on = { panel: vis('sim-ckpit'), nose: vis('sim-nose'), label: btn.textContent, lit, chinTop: (row.top - m.top) / m.height };
     toggleExtView(true); await w(100); out.ext = vis('sim-ckpit');
     toggleExtView(false); await w(SIM_CAM_TX_MS + 300); out.back = vis('sim-ckpit');
@@ -323,6 +326,8 @@ export async function run(page, t) {
   t.ok(!ck.offBtn && ck.simBtn && !ck.offPanel, '조종석 버튼은 SIM 에서만 보이고, 처음에는 꺼져 있다');
   t.ok(ck.on.panel && !ck.on.nose && ck.on.label === '조종석 ON' && ck.on.lit.length === 4 && ck.on.lit.every(n => n > 20),
     `켜면 패널이 겹치고 기수는 감춘다 — MFD 넷이 그려진다 (${ck.on.lit.join('/')})`);
+  t.ok(ck.kinds === 'pfd,asys_eng,map,sys' && ck.pgKeep, `MFD — 1 PFD · 2 엔진 · 3 지도 · 4 CDU 가 고른 SYSTEM 화면(${ck.kinds})`);
+  t.ok(ck.op > 0.2 && ck.op < 0.7, `스크린을 뺀 틀·구조는 반투명이다 (불투명도 ${ck.op})`);
   t.ok(Math.abs(ck.on.chinTop - 0.89) < 0.02, `CHIN 창은 패널 아래(발밑)로 내려간다 (${(ck.on.chinTop * 100).toFixed(0)}%)`);
   t.ok(!ck.ext && ck.back, '외부 시점에서는 숨기고, 조종석으로 돌아오면 다시 보인다');
   t.ok(!ck.off.panel && ck.off.nose && ck.off.label === '조종석 OFF' && !ck.exit, '끄면 패널이 사라지고 기수가 돌아온다 · SIM 을 끄면 버튼도 숨는다');

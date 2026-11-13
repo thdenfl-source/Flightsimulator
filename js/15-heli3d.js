@@ -700,7 +700,9 @@ function heli3dNoseSync(look) {
 // 앞유리 틀)을 겹쳐 그린다. 3D 창의 '조종석' 버튼으로 켜고 끈다(이 기기에 적어 둔다). 외부 시점(EXT)·시점이
 // 바뀌는 동안은 숨기고, 시야를 둘러보면(B0 + 햇) 기수처럼 함께 움직인다(heli3dNoseSync).
 // 바닥 쪽은 비워 두어 땅이 보이고, CHIN 창은 패널 아래(발밑) 좌·우로 줄여 내린다. MFD 넷은 살아 있는 화면이다 —
-// 1 · 4 = PFD(03-pfd.js drawPfdTo) · 2 = Engines · 3 = Fuel(18-system.js sysDrawTo).
+// 1 = PFD(03-pfd.js drawPfdTo) · 2 = Engines(18-system.js sysDrawTo) · 3 = 움직이는 지도(기수 위 · ckMapDraw) ·
+// 4 = CDU Aircraft Systems 에서 고른 SYSTEM 화면(sysPage — Map 이면 그 큰 칸에 지도).
+// 스크린을 뺀 틀·구조는 반투명이라 그 너머 바깥이 비쳐 보인다(index.html #sim-ckpit svg).
 // 그림 좌표는 1600×900(화면을 가득 채워 늘린다).
 const CKPIT_PREF = 'ckpitOv';
 let ckpitOn = false;
@@ -709,8 +711,8 @@ try { ckpitOn = localStorage.getItem(CKPIT_PREF) === '1'; } catch (e) { _swallow
 const CKPIT_SCR = [
   { k: 'pfd', x: 229, y: 580, w: 242, h: 146 },
   { k: 'asys_eng', x: 527, y: 580, w: 242, h: 146 },
-  { k: 'asys_fuel', x: 831, y: 580, w: 242, h: 146 },
-  { k: 'pfd', x: 1129, y: 580, w: 242, h: 146 },
+  { k: 'map', x: 831, y: 580, w: 242, h: 146 },
+  { k: 'sys', x: 1129, y: 580, w: 242, h: 146 },
 ];
 function _ckpitSvg() {
   const bez = CKPIT_SCR.map(s => {
@@ -827,9 +829,107 @@ function ckpitDraw() {
     if (c.width !== W || c.height !== H) { c.width = W; c.height = H; }
     try {
       if (s.k === 'pfd') { if (typeof drawPfdTo === 'function') drawPfdTo(c); }
+      else if (s.k === 'map') { const g = c.getContext('2d'); g.setTransform(1, 0, 0, 1, 0, 0); ckMapDraw(g, 0, 0, W, H); }
+      else if (s.k === 'sys') {
+        const pg = typeof sysPage !== 'undefined' ? sysPage : 'asys_fuel';
+        if (typeof sysDrawTo === 'function') sysDrawTo(c, pg);
+        if (pg === 'map') {                         // SYSTEM 창과 같은 자리(큰 칸 안쪽 227,49 · 766×574)
+          const g = c.getContext('2d'), kk = Math.min(W / SYS_W, H / SYS_H);
+          const ox = (W - SYS_W * kk) / 2, oy = (H - SYS_H * kk) / 2;
+          g.setTransform(1, 0, 0, 1, 0, 0);
+          ckMapDraw(g, ox + 227 * kk, oy + 49 * kk, 766 * kk, 574 * kk);
+        }
+      }
       else if (typeof sysDrawTo === 'function') sysDrawTo(c, s.k);
     } catch (e) { _swallow(e); }
   });
+}
+// ── MFD 움직이는 지도(기수 위) ── 2D 지도에서 쓰는 바탕(위성 · OSM)을 그대로 받아(같은 타일 주소) 캔버스에 돌려 그린다.
+// 축척은 2D 지도 확대 단계보다 한 단계 넓게(7~14). 비행계획(마젠타 · 활성 구간 굵게) · 거리 고리 · 내 헬기.
+const _ckTiles = new Map();
+function _ckTile(z, x, y) {
+  const n = 1 << z; x = ((x % n) + n) % n;
+  if (y < 0 || y >= n) return null;
+  const sat = !(typeof osmLayer !== 'undefined' && typeof leafMap !== 'undefined' && leafMap.hasLayer(osmLayer));
+  const key = `${sat ? 's' : 'o'}/${z}/${x}/${y}`;
+  let im = _ckTiles.get(key);
+  if (!im) {
+    im = new Image(); im.crossOrigin = 'anonymous';
+    im.src = sat ? `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${z}/${y}/${x}`
+                 : `https://${'abc'[(x + y) % 3]}.tile.openstreetmap.org/${z}/${x}/${y}.png`;
+    _ckTiles.set(key, im);
+    if (_ckTiles.size > 300) _ckTiles.delete(_ckTiles.keys().next().value);
+  }
+  return im.complete && im.naturalWidth > 0 ? im : null;
+}
+function _ckWorld(lat, lon, z) {
+  const s = 256 * Math.pow(2, z), r = lat * Math.PI / 180;
+  return [(lon + 180) / 360 * s, (1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2 * s];
+}
+function ckMapDraw(g, x, y, w, h) {
+  if (!(w > 4 && h > 4)) return;
+  let z = 11;
+  try { z = Math.max(7, Math.min(14, Math.round(leafMap.getZoom()) - 1)); } catch (e) { _swallow(e); }
+  const hdg = (Number(S.hdg) || 0) * Math.PI / 180, ca = Math.cos(-hdg), sa = Math.sin(-hdg);
+  const cx = x + w / 2, cy = y + h * 0.66;
+  const [ax, ay] = _ckWorld(S.lat, S.lon, z);
+  g.save();
+  g.beginPath(); g.rect(x, y, w, h); g.clip();
+  g.fillStyle = '#0b1f14'; g.fillRect(x, y, w, h);
+  // 바탕 타일 — 내 자리를 축으로 기수 방향이 위로 오게 돌린다
+  g.save(); g.translate(cx, cy); g.rotate(-hdg);
+  const R = Math.hypot(w, h), t0x = Math.floor((ax - R) / 256), t1x = Math.floor((ax + R) / 256);
+  const t0y = Math.floor((ay - R) / 256), t1y = Math.floor((ay + R) / 256);
+  for (let ty = t0y; ty <= t1y; ty++) for (let tx = t0x; tx <= t1x; tx++) {
+    const im = _ckTile(z, tx, ty);
+    if (im) g.drawImage(im, tx * 256 - ax, ty * 256 - ay, 256.5, 256.5);
+  }
+  g.restore();
+  g.fillStyle = 'rgba(0,0,0,0.22)'; g.fillRect(x, y, w, h);
+  const P = (lat, lon) => { const [px, py] = _ckWorld(lat, lon, z), dx = px - ax, dy = py - ay; return [cx + dx * ca - dy * sa, cy + dx * sa + dy * ca]; };
+  // 거리 고리 — 화면 높이의 절반쯤에 맞춘 둥근 NM
+  const mpp = 156543.03 * Math.cos(S.lat * Math.PI / 180) / Math.pow(2, z), pxNm = 1852 / mpp;
+  const want = h * 0.5 / pxNm, nm = [0.5, 1, 2, 5, 10, 20, 40, 80].find(v => v >= want * 0.7) || 80, rr = nm * pxNm;
+  g.strokeStyle = 'rgba(255,255,255,0.75)'; g.lineWidth = 1.2; g.setLineDash([5, 5]);
+  g.beginPath(); g.arc(cx, cy, rr, 0, Math.PI * 2); g.stroke(); g.setLineDash([]);
+  const fs = Math.max(10, h * 0.045);
+  g.font = `bold ${fs}px Arial`; g.fillStyle = '#fff'; g.textAlign = 'left';
+  g.fillText(`${nm} NM`, cx + rr * 0.72 + 4, cy - rr * 0.72);
+  // 고리 위 방위 눈금(30° 마다 · N 은 노랑)
+  for (let b = 0; b < 360; b += 30) {
+    const a = (b * Math.PI / 180) - hdg, ex = cx + Math.sin(a) * rr, ey = cy - Math.cos(a) * rr;
+    g.fillStyle = b === 0 ? '#ffe14a' : '#cfe'; g.textAlign = 'center';
+    g.fillText(b === 0 ? 'N' : String(b / 10), ex, ey - 4);
+  }
+  // 비행계획
+  const wps = (S.wps || []).filter(p => Number.isFinite(p.lat) && Number.isFinite(p.lon));
+  if (wps.length) {
+    const pts = wps.map(p => P(p.lat, p.lon));
+    g.strokeStyle = '#ff40ff'; g.lineWidth = 2; g.beginPath();
+    pts.forEach(([px, py], i) => i ? g.lineTo(px, py) : g.moveTo(px, py)); g.stroke();
+    const ai = S.awp;
+    if (ai > 0 && ai < pts.length) { g.lineWidth = 4; g.beginPath(); g.moveTo(...pts[ai - 1]); g.lineTo(...pts[ai]); g.stroke(); }
+    g.font = `bold ${fs * 0.9}px Arial`; g.textAlign = 'left';
+    pts.forEach(([px, py], i) => {
+      g.fillStyle = i === ai ? '#ff40ff' : '#fff';
+      g.beginPath(); g.moveTo(px, py - 5); g.lineTo(px + 5, py); g.lineTo(px, py + 5); g.lineTo(px - 5, py); g.closePath(); g.fill();
+      const id = wps[i].ident || wps[i].name || '';
+      if (id) g.fillText(String(id).slice(0, 7), px + 7, py - 6);
+    });
+  }
+  // 내 헬기(가운데 · 기수 위)
+  g.fillStyle = '#fff'; g.strokeStyle = '#000'; g.lineWidth = 1;
+  g.beginPath(); g.moveTo(cx, cy - 11); g.lineTo(cx + 7, cy + 8); g.lineTo(cx, cy + 4); g.lineTo(cx - 7, cy + 8); g.closePath(); g.fill(); g.stroke();
+  // 위 가운데 방위 상자
+  const ht = `${String(Math.round(((Number(S.hdg) || 0) % 360 + 360) % 360) || 360).padStart(3, '0')}°`;
+  g.font = `bold ${fs * 1.1}px Arial`; g.textAlign = 'center';
+  const bw = g.measureText(ht).width + 12;
+  g.fillStyle = '#000'; g.fillRect(cx - bw / 2, y + 4, bw, fs * 1.5);
+  g.strokeStyle = '#fff'; g.strokeRect(cx - bw / 2 + 0.5, y + 4.5, bw - 1, fs * 1.5 - 1);
+  g.fillStyle = '#fff'; g.fillText(ht, cx, y + 4 + fs * 1.15);
+  g.font = `bold ${fs * 0.85}px Arial`; g.textAlign = 'left'; g.fillStyle = '#2fe0e0';
+  g.fillText('MAP', x + 6, y + fs * 1.2);
+  g.restore();
 }
 setInterval(() => { try { ckpitDraw(); } catch (e) { _swallow(e); } }, 100);
 function toggleCockpitView() {
