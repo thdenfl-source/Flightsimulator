@@ -848,8 +848,14 @@ function _ckpitSvg() {
   <path d="M786 0 H814 L820 520 H780 Z" fill="url(#ck-post)"/>
   <path d="M0 150 L0 250 L196 600 L246 570 Z" fill="url(#ck-post)"/>
   <path d="M1600 150 L1600 250 L1404 600 L1354 570 Z" fill="url(#ck-post)"/>
-  <path d="M742 512 L700 300" stroke="#16181a" stroke-width="7" stroke-linecap="round"/>
-  <path d="M858 512 L900 300" stroke="#16181a" stroke-width="7" stroke-linecap="round"/>
+  <!-- 와이퍼 — 선(stroke)이 아니라 채운 도형(팔 + 블레이드)으로 그린다. 반투명 SVG 위의 가는 사선은 일부 브라우저(iPad Safari)에서
+       가운데가 끊겨 보였다 -->
+  <path d="M745.4 511.3 L703.4 299.3 L696.6 300.7 L738.6 512.7 Z" fill="#16181a"/>
+  <path d="M732.2 436.8 L704.9 299.0 L695.1 301.0 L722.4 438.8 Z" fill="#0d0e10"/>
+  <circle cx="742" cy="512" r="7" fill="#16181a"/>
+  <path d="M861.4 512.7 L903.4 300.7 L896.6 299.3 L854.6 511.3 Z" fill="#16181a"/>
+  <path d="M877.6 438.8 L904.9 301.0 L895.1 299.0 L867.8 436.8 Z" fill="#0d0e10"/>
+  <circle cx="858" cy="512" r="7" fill="#16181a"/>
   <!-- 계기판 앞면 -->
   <path d="M168 556 H1432 L1446 792 Q800 812 154 792 Z" fill="url(#ck-face)" stroke="#0b0c0e" stroke-width="2"/>
   ${bez}
