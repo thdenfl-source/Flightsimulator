@@ -1365,7 +1365,7 @@ function updateSoloBtn() {
     b.textContent = on ? '✥ 분할' : `⛶ ${SOLO_NAMES[k]} 단독`;
     b.classList.toggle('active', on);
   });  const ob = document.getElementById('m3d-only-btn');
-  if (ob) { const on = _soloActive && _soloCurrent === 'm3d'; ob.textContent = on ? '✥ 분할' : '⛶ 3D Only'; ob.classList.toggle('active', on); }
+  if (ob) { const on = _soloActive && _soloCurrent === 'm3d'; ob.textContent = on ? '✥ 분할' : '⛶ Cockpit Mode'; ob.classList.toggle('active', on); }
   try { if (typeof syncFcp3d === 'function') syncFcp3d(); } catch (e) { _swallow(e); }   // 3D 단독에서만 FCP L·R
   try { syncCduOverlay(); } catch (e) { _swallow(e); }   // 3D 단독에서만 CDU 겹치기
   try { syncMapOverlay(); } catch (e) { _swallow(e); }   // 3D 단독에서만 MAP 겹치기
@@ -1615,7 +1615,7 @@ function togglePfdOverlay() {
   updatePfdOvBtn();
   pfdOverlaySync();
 }
-// ── 3D 단독(3D Only) 화면의 CDU ── 3D 버튼 줄 바로 왼쪽에 계기 칸과 같은 크기(가로 1/4 · 높이 3/5)로
+// ── Cockpit Mode 화면의 CDU ── 3D 버튼 줄 바로 왼쪽에 계기 칸과 같은 크기(가로 1/4 · 높이 3/5)로
 // CDU 를 겹쳐 띄운다. CDU 창(#cdu-wrap) 그대로를 옮겨 오므로 버튼·화면이 같다(끄거나 단독을 나오면 제자리로).
 // 3D 창의 'CDU' 버튼으로 켜고 끈다(이 기기에 적어 둔다). 분할 화면에는 CDU 창이 따로 있다.
 const CDU_OV_PREF = 'cduOverlay';
@@ -1664,7 +1664,7 @@ function syncCduOverlay() {
   requestAnimationFrame(() => { const m = document.getElementById('map-ov'); if (m && m.classList.contains('show')) _mapOvPlace(m); });
 }
 let _cduOvWas = false;
-// ── 3D 단독(3D Only) 화면의 MAP ── 계기 칸과 같은 크기(가로 1/4 · 높이 3/5)로 2D 지도(#map-wrap)를 겹쳐 띄운다.
+// ── Cockpit Mode 화면의 MAP ── 계기 칸과 같은 크기(가로 1/4 · 높이 3/5)로 2D 지도(#map-wrap)를 겹쳐 띄운다.
 // 자리는 CDU 칸(켜져 있으면) 또는 3D 버튼 줄 바로 왼쪽. 'MAP' 버튼(CDU 아래)이나 겹친 CDU 의 MAP 으로 켠다.
 const MAP_OV_PREF = 'mapOverlay';
 let mapOvOn = false;
@@ -1712,7 +1712,7 @@ function syncMapOverlay() {
 }
 function toggleMapOverlay() {
   if (!cduOvAvail()) {
-    try { uiToast('MAP 겹치기는 3D 단독(3D Only) 화면에서 씁니다', '', 2500); } catch (e) { _swallow(e); }
+    try { uiToast('MAP 겹치기는 Cockpit Mode 화면에서 씁니다', '', 2500); } catch (e) { _swallow(e); }
     return;
   }
   mapOvOn = !mapOvOn;
@@ -1730,7 +1730,7 @@ function cduOvRoute(screen) {
 }
 function toggleCduOverlay() {
   if (!cduOvAvail()) {
-    try { uiToast('CDU 겹치기는 3D 단독(3D Only) 화면에서 씁니다 — 분할 화면에는 CDU 창이 따로 있습니다', '', 2500); } catch (e) { _swallow(e); }
+    try { uiToast('CDU 겹치기는 Cockpit Mode 화면에서 씁니다 — 분할 화면에는 CDU 창이 따로 있습니다', '', 2500); } catch (e) { _swallow(e); }
     return;
   }
   cduOvOn = !cduOvOn;
@@ -1882,7 +1882,7 @@ function simpleExit() {
 
 // ── Cockpit Mode ── 시작 화면에서 'Cockpit Mode' 를 고르면 3D 조종석으로 바로 들어간다:
 //   3D 를 화면 가득(3D 단독) · 1인칭 조종석 시야 · 조종석 패널(MFD 넷 · 위아래 콘솔 · CDU — 15-heli3d.js)을 켠다.
-//   SIM 이 꺼져 있어도(절차 훈련판 · AFCS 로 나는 비행) 카메라가 조종석에 앉는다(05-gps.js _follow3d · ckCamOn).
+//   종합판은 SIM 을 켠 채로 시작하고, 절차 훈련판은 SIM 없이(AFCS 로 나는 비행) 카메라가 조종석에 앉는다(05-gps.js _follow3d · ckCamOn).
 //   화면을 누르면 그 화면이 가운데에 크게 뜬다. 오른쪽 위 'Split screen' 으로 끝낸다(분할 화면).
 // (예전의 세로 칸 배치 Cockpit mode 와 '3D 단독 모드' 는 이것으로 합쳤다)
 window._cockpitOn = false;
@@ -1892,8 +1892,15 @@ function cockpitStart() {
   try { if (!followMode) toggleFollow(); } catch (e) { _swallow(e); }          // 카메라가 헬기를 따라간다
   try { if (!(_soloActive && _soloCurrent === 'm3d')) panelSolo('m3d'); } catch (e) { _swallow(e); }
   try { if (typeof ckpitSet === 'function') ckpitSet(true); } catch (e) { _swallow(e); }
+  // 종합판(shinesong)은 SIM 을 켠 채로 시작한다 — 절차 훈련판(SIM_ENABLED 거짓)은 SIM 없이 AFCS 로 나는 조종석 시야
+  try { if ((typeof SIM_ENABLED === 'undefined' || SIM_ENABLED) && !simModeOn) toggleSimMode(true); } catch (e) { _swallow(e); }
   const kick = () => { try { if (_ml3d) { _ml3d.resize(); _follow3d(); } } catch (e) { _swallow(e); } };
   kick(); setTimeout(kick, 200); setTimeout(kick, 800);
+}
+// 오른쪽 창 탭의 '⛶ Cockpit Mode' — 들어가고(3D 조종석) · 나온다(분할)
+function cockpitToggle() {
+  if (_soloActive && _soloCurrent === 'm3d') { exitSolo(); return; }
+  cockpitStart();
 }
 function cockpitExit() {
   if (!window._cockpitOn) return;

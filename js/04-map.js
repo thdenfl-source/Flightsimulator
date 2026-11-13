@@ -852,7 +852,7 @@ function toggleChinView(side) {
 // ── 3D 화면의 FCP ──
 // PFD 아래 FCP(.ctrl-bar 의 세 줄)를 통째로 3D 화면 왼쪽 아래에 한 창으로 띄운다(FCP ON/OFF 버튼 하나).
 // 버튼 그 자체를 옮겨 오므로 기능·상태가 그대로다(닫으면 제자리로 돌려놓는다). PFD 가 화면에 없는
-// 3D 단독(3D Only) 화면에서만 연다 — 분할 화면은 PFD 아래에 FCP 가 이미 있다. 켜면 L CHIN 창은 닫힌다.
+// Cockpit Mode 화면에서만 연다 — 분할 화면은 PFD 아래에 FCP 가 이미 있다. 켜면 L CHIN 창은 닫힌다.
 // (안쪽 이름은 L·R 두 칸이던 때를 따른다 — 지금은 L 칸 하나만 쓴다)
 let fcpL = false, fcpR = false;
 let _fcpParts = null;            // [{ el, side, row, ph(제자리 표시) }]
@@ -958,7 +958,7 @@ function syncFcp3d() {
 }
 function toggleFcp3d(side) {
   if (!fcp3dAvail()) {
-    try { uiToast('FCP 는 3D 단독(3D Only) 화면에서 엽니다 — 분할 화면은 PFD 아래에 FCP 가 있습니다', '', 2500); } catch (e) { _swallow(e); }
+    try { uiToast('FCP 는 Cockpit Mode 화면에서 엽니다 — 분할 화면은 PFD 아래에 FCP 가 있습니다', '', 2500); } catch (e) { _swallow(e); }
     return;
   }
   fcpL = !fcpL; fcpR = false;          // 한 창(왼쪽 아래)
