@@ -657,13 +657,31 @@ function _fuelCduRefresh() {
 //   TRU n   — 제 AC 버스가 살아 있고 TRU n ON 이면 28V DC
 //   DC 1·2 버스 — TRU 하나라도 있으면 둘 다(DC 연결), 없으면 BATT ON 일 때 배터리가 맡는다(방전)
 const ELEC_AC_LOAD = 230, ELEC_DC_LOAD = 120, ELEC_DC_NESS = 20;   // DC N-ESS 몫(A) — APU 로만 맡을 때 끊는다       // 버스 부하(A) — 살아 있는 발전기·TRU 가 나눠 진다
+// ── APU ── 상부 콘솔 APU CONTR 를 ON 하면 약 17초 걸려 돈다(그동안은 APU GEN 이 전기를 내지 못한다).
+// 돌고 나면 PFD 메시지 'APU ON'(녹), 그 상태에서 APU/GPU 스위치가 'APU GEN' 이면 'APU GEN'(녹) — 03-pfd.js pfdMsgs.
+// CONTR 가 OFF 면 APU GEN 스위치가 켜져 있어도 발전하지 않고 메시지도 없다.
+const APU_START_MS = 17000;
+let _apuOnT = null;
+function _apuSync() {
+  let on = false;
+  try { on = typeof ovhdGet === 'function' && ovhdGet('apuContr') === 'ON'; } catch (e) { _swallow(e); }
+  if (on && _apuOnT === null) _apuOnT = performance.now();
+  else if (!on) _apuOnT = null;
+}
+try { if (typeof ovhdOn === 'function') ovhdOn(id => { if (id === 'apuContr') _apuSync(); }); } catch (e) { _swallow(e); }
+function apuRunning() { _apuSync(); return _apuOnT !== null && performance.now() - _apuOnT >= APU_START_MS; }
+function apuGenOn() {
+  let g = false;
+  try { g = typeof ovhdGet === 'function' && ovhdGet('apuGen') === 'APU GEN'; } catch (e) { _swallow(e); }
+  return g && apuRunning();
+}
 function elecState() {
   let P = null;
   try { P = engParams(); } catch (e) { P = null; }
   const sw = (id, on) => { try { return typeof ovhdGet === 'function' ? ovhdGet(id) === on : true; } catch (e) { return true; } };
   const ng = i => P ? (i === 1 ? P.e1.ng : P.e2.ng) : 0;
   const gen1 = ng(1) > 50 && sw('gen1', 'ON'), gen2 = ng(2) > 50 && sw('gen2', 'ON');
-  const apu = sw('apuContr', 'ON') && sw('apuGen', 'APU GEN');
+  const apu = apuGenOn();                                    // APU 가 다 돈 뒤에만(17초 · apuRunning)
   let onGnd = false;
   try { onGnd = (typeof radarAltFt === 'function' ? radarAltFt() : S.alt) < 5; } catch (e) { _swallow(e); }
   const gpu = sw('apuGen', 'GPU') && onGnd;                 // 지상 전원 — 땅 위에서만 꽂혀 있다

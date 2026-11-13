@@ -76,4 +76,35 @@ export async function run(page, t) {
   t.ok(sw.clock, 'PFD 에 현재 시각(TIME)과 STOP WATCH 칸');
   t.ok(sw.align, 'HOCAS 창 아래 · 같은 왼쪽 끝(같은 폭)');
   t.ok(sw.sw && sw.run && sw.rst && sw.back, 'STOP WATCH → GO/STP · RST · TIME 이 PFD 를 눌러 동작한다');
+
+  // ── APU — CONTR ON 뒤 약 17초에 'APU ON'(녹), 그 뒤 APU GEN 스위치면 'APU GEN'(녹) · CONTR OFF 면 APU GEN 도 없다 ──
+  const apu = await page.evaluate(() => {
+    const has = t => pfdMsgs().some(m => m.t === t && m.c === PFD_MSG_GREEN);
+    const o = {};
+    ovhdSet('apuContr', 'OFF'); ovhdSet('apuGen', 'OFF');
+    ovhdSet('apuContr', 'ON'); o.t0 = { on: has('APU ON'), gen: has('APU GEN') };
+    _apuOnT = performance.now() - 16000; o.t16 = has('APU ON');                       // 16초 — 아직
+    _apuOnT = performance.now() - 17100; o.t17 = has('APU ON');                       // 17초 — 돈다
+    o.genOff = has('APU GEN');
+    ovhdSet('apuGen', 'APU GEN'); o.gen = has('APU GEN');
+    ovhdSet('apuContr', 'OFF'); o.offGen = { on: has('APU ON'), gen: has('APU GEN'), elec: apuGenOn() };
+    ovhdSet('apuContr', 'ON'); o.restart = has('APU GEN');                            // 다시 켜면 처음부터 17초
+    ovhdSet('apuContr', 'OFF'); ovhdSet('apuGen', 'OFF');
+    return o;
+  });
+  t.ok(!apu.t0.on && !apu.t0.gen && !apu.t16 && apu.t17, `APU CONTR ON 뒤 17초에 APU ON (0초 ${apu.t0.on} · 16초 ${apu.t16} · 17초 ${apu.t17})`);
+  t.ok(!apu.genOff && apu.gen, 'APU 가 돈 뒤 APU GEN 스위치를 켜면 APU GEN');
+  t.ok(!apu.offGen.on && !apu.offGen.gen && !apu.offGen.elec && !apu.restart, 'CONTR OFF 면 APU GEN 이 켜져 있어도 발전 · 메시지 없음(다시 켜면 17초부터)');
+  // ── FPV — 자세계 밖으로 나가도(저속에서 크게 오르내림) 가장자리에 점선으로 남는다 ──
+  const fpv = await page.evaluate(() => {
+    const c = document.createElement('canvas'); c.width = 600; c.height = 700; c.dataset.noFcp = '1';
+    const s0 = { spd: S.spd, vs: S.vs }, f0 = fpvOn;
+    const green = () => { const g = c.getContext('2d'), d = g.getImageData(0, 0, c.width, c.height).data; let n = 0; for (let i = 0; i < d.length; i += 4) if (d[i] < 40 && d[i + 1] > 230 && d[i + 2] > 110 && d[i + 2] < 160) n++; return n; };
+    S.spd = 10; S.vs = 1500;
+    fpvOn = true; drawPfdTo(c); const on = green();
+    fpvOn = false; drawPfdTo(c); const off = green();
+    S.spd = s0.spd; S.vs = s0.vs; fpvOn = f0;
+    return { on, off };
+  });
+  t.ok(fpv.on > fpv.off + 20, `저속에서 크게 올라도 FPV 가 보인다(가장자리 · 점선) (녹색 점 ${fpv.on} vs 끔 ${fpv.off})`);
 }

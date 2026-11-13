@@ -1593,9 +1593,18 @@ function pfdOverlayDraw(force) {
 // ADI 의 예상 항적(FPV · 초록 원) 켜기/끄기 — 3D 창의 FPV 버튼
 let fpvOn = true;
 try { fpvOn = localStorage.getItem('fpvOn') !== '0'; } catch (e) { _swallow(e); }
+// PFD 를 그리는 모든 곳(본 PFD · 3D 에 겹친 계기 · SIM 조종석 MFD)과 FCP 값을 지금 다시 그린다 — 단위 · FPV 처럼
+// 표시만 바뀌는 설정을 바꾼 즉시 보이게(다음 프레임을 기다리지 않는다)
+function pfdRefreshAll() {
+  try { drawPFD(); } catch (e) { _swallow(e); }
+  try { pfdOverlayDraw(true); } catch (e) { _swallow(e); }
+  try { if (typeof ckpitDraw === 'function') ckpitDraw(); } catch (e) { _swallow(e); }
+  try { fcpsSync(); } catch (e) { _swallow(e); }
+}
 function toggleFpv() {
   fpvOn = !fpvOn;
   try { localStorage.setItem('fpvOn', fpvOn ? '1' : '0'); } catch (e) { _swallow(e); }
+  pfdRefreshAll();
   updateFpvBtn();
 }
 function updateFpvBtn() {
@@ -2147,8 +2156,8 @@ const SK_MENUS = {
   UNITS: [
     {}, {}, {}, {}, {},
     { lbl: 'Meters', on: () => skState.meters, act: _skTog('meters') }, {},
-    { lbl: 'IN', on: () => pfdBaroUnit === 'IN', act: () => { pfdBaroUnit = 'IN'; _skSave(); try { drawPFD(); } catch (e) { _swallow(e); } } },
-    { lbl: 'HPA', on: () => pfdBaroUnit === 'HPA', act: () => { pfdBaroUnit = 'HPA'; _skSave(); try { drawPFD(); } catch (e) { _swallow(e); } } },
+    { lbl: 'IN', on: () => pfdBaroUnit === 'IN', act: () => { pfdBaroUnit = 'IN'; _skSave(); pfdRefreshAll(); } },
+    { lbl: 'HPA', on: () => pfdBaroUnit === 'HPA', act: () => { pfdBaroUnit = 'HPA'; _skSave(); pfdRefreshAll(); } },
     {}, _skBack, {},
   ],
   // 그림 8 — PFD 센서
