@@ -24,6 +24,7 @@ function applyDelta(field, d){
       // GSPD(호버) 중에는 HDG 화살표와 기수를 분리 — 요 조작은 ANTI-TORQUE PEDAL로만
       if (gspdOn) break;
       // 기수를 즉시 돌리지 않고 선택 헤딩(HDG bug)만 이동 → AFCS가 표준선회로 추종
+      if (hdgTurnDir && Math.sign(d) !== hdgTurnDir) hdgTurnDir = 0;   // 마킹을 도는 반대쪽으로 돌리면 방향을 다시 고른다
       selHdg = ((Math.round(selHdg + d) + 359) % 360) + 1;   // 1–360
       hdgSelOn = true;
       rollApOn = true;
@@ -636,17 +637,20 @@ function simStep(ts, noLoop){   // noLoop — 새 창이 대신 한 프레임을
       // HDG SEL: 선택 헤딩까지 표준선회(속도의 16% 뱅크). NAV AP·GSPD가 우선.
       // 계기 헤딩(hdgInd)을 맞춘다 — DG 오차가 있으면 실제 기수는 그만큼 비껴 난다.
       if (hdgSelOn && rollApOn && !navApOn && !gspdOn && !gspdCoasting) {
-        const err  = normAS(selHdg - hdgInd());         // -180 ~ +180
+        let err  = normAS(selHdg - hdgInd());           // -180 ~ +180
+        // 선회 방향 래치 — 돌고 있는 쪽을 지킨다(롤아웃 구간 밖에서만 · 맞춘 뒤 살짝 넘친 것은 그대로 되돌린다)
+        if (hdgTurnDir && Math.sign(err) === -hdgTurnDir && Math.abs(err) > HDG_ROLLOUT_DEG) err += 360 * hdgTurnDir;
+        else if (!hdgTurnDir && Math.abs(err) > 2) hdgTurnDir = Math.sign(err);
         const bMax = stdRateBank(S.spd);
         const aErr = Math.abs(err);
-        if (aErr < 0.5) { bankTarget = 0; _hdgJump += err; S.hdg = normA(selHdg - dgErr); }
+        if (aErr < 0.5) { bankTarget = 0; _hdgJump += err; S.hdg = normA(selHdg - dgErr); hdgTurnDir = 0; }
         else {
           // 롤아웃 구간에서도 최소 뱅크를 유지 — 비행모델이 |bank|<=0.5°를 무시하므로
           // 그 아래로 떨어지면 선회가 멈춘 채 오차가 남는다(저속에서 발생)
           const b = aErr >= HDG_ROLLOUT_DEG ? bMax : Math.max(1.2, bMax * aErr / HDG_ROLLOUT_DEG);
           bankTarget = Math.sign(err) * b;
         }
-      }
+      } else hdgTurnDir = 0;
 
       // NAV AP: drive bankTarget for course tracking
       if (navApOn) {

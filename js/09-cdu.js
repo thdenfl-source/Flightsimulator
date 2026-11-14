@@ -242,7 +242,7 @@ function init(){
     if (py >= fmaTop && py <= fmaBtm) {
       if (boxIdx === 1) {
         const v = await uiPrompt('HDG preselect (1–360°M):', fmtA(toMag(selHdg)), { numeric: true });
-        if (v !== null) { const n = parseInt(v, 10); if (!isNaN(n)) { selHdg = toTrue(Math.max(1, Math.min(360, n))) || 360; hdgSelOn = true; rollApOn = true; } }
+        if (v !== null) { const n = parseInt(v, 10); if (!isNaN(n)) { selHdg = toTrue(Math.max(1, Math.min(360, n))) || 360; hdgTurnDir = 0; hdgSelOn = true; rollApOn = true; } }
       } else if (boxIdx === 2) {
         const v = await uiPrompt('IAS preselect (kt):', selSpd, { numeric: true });
         if (v !== null) { const n = parseInt(v, 10); if (!isNaN(n) && n >= 0) selSpd = n; }
