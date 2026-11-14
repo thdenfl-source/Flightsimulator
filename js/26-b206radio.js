@@ -136,6 +136,74 @@ function b206AdfStation() {
   }
   return best && bd <= ADF_RANGE_NM ? { id: best.id, name: best.name, lat: best.lat, lon: best.lon, freq: f, dist: bd } : null;
 }
+// ── ADF 식별음 — 오디오 패널의 ADF 1(위 SPEAKER 또는 아래 PHONE)이 켜져 있고 ADF 가 NDB 를 잡으면
+//    그 국의 식별 부호(국 이름 앞 세 글자)를 모스 부호로 1020 Hz 에 되풀이한다(약 10초마다).
+//    ANT 모드도 소리는 들린다(방위만 없다). BFO 를 켜면 부호 사이에도 낮은 맥놀이 음이 깔린다.
+//    크기는 오디오 패널 INTERCOM VOL(0~10). 소리 장치는 첫 터치 뒤에 연다(브라우저 정책).
+const MORSE = { A: '.-', B: '-...', C: '-.-.', D: '-..', E: '.', F: '..-.', G: '--.', H: '....', I: '..', J: '.---', K: '-.-', L: '.-..', M: '--',
+  N: '-.', O: '---', P: '.--.', Q: '--.-', R: '.-.', S: '...', T: '-', U: '..-', V: '...-', W: '.--', X: '-..-', Y: '-.--', Z: '--..',
+  0: '-----', 1: '.----', 2: '..---', 3: '...--', 4: '....-', 5: '.....', 6: '-....', 7: '--...', 8: '---..', 9: '----.' };
+const ADF_TONE_HZ = 1020, ADF_DOT_S = 0.12, ADF_REPEAT_S = 10;
+// 모스 부호 일정 — [켜짐(초), 꺼짐(초)] 목록(점 1 · 선 3 · 부호 사이 1 · 글자 사이 3 단위)
+function morseSchedule(txt, unit = ADF_DOT_S) {
+  const out = [];
+  [...String(txt).toUpperCase()].filter(c => MORSE[c]).forEach((c, ci, arr) => {
+    const code = MORSE[c];
+    [...code].forEach((m, i) => out.push([(m === '-' ? 3 : 1) * unit, (i < code.length - 1 ? 1 : (ci < arr.length - 1 ? 3 : 0)) * unit]));
+  });
+  return out;
+}
+function b206AdfIdent(st) { return String((st && st.id) || '').replace(/[^A-Z0-9]/gi, '').slice(0, 3).toUpperCase(); }
+let _adfAc = null, _adfNext = 0, _adfBfo = null, _adfOn = false;
+function _adfAudioCtx() {
+  if (_adfAc) return _adfAc;
+  try { const AC = window.AudioContext || window.webkitAudioContext; if (AC) _adfAc = new AC(); } catch (e) { _swallow(e); }
+  return _adfAc;
+}
+// 지금 ADF 식별음을 들어야 하나 — 오디오 패널 ADF 1 · ADF 켜짐 · 국을 잡음(ANT 도)
+function b206AdfAudible() {
+  const a = b206r.adf, au = b206r.aud;
+  if (!a.on || !(au.spk.adf1 || au.phn.adf1) || au.ivol <= 0) return null;
+  const mode = a.mode; a.mode = 'ADF';                 // ANT 모드도 국은 잡는다(방위만 없다)
+  let st = null; try { st = b206AdfStation(); } finally { a.mode = mode; }
+  return st;
+}
+function _adfPlay(ident) {
+  const ac = _adfAudioCtx(); if (!ac || ac.state !== 'running') return 0;
+  const vol = 0.05 * b206r.aud.ivol / 10, t0 = ac.currentTime + 0.05;
+  const o = ac.createOscillator(), g = ac.createGain();
+  o.type = 'sine'; o.frequency.value = ADF_TONE_HZ; g.gain.setValueAtTime(0, t0);
+  let t = t0;
+  for (const [on, off] of morseSchedule(ident)) {
+    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vol, t + 0.008);
+    g.gain.setValueAtTime(vol, t + on - 0.008); g.gain.linearRampToValueAtTime(0, t + on);
+    t += on + off;
+  }
+  o.connect(g); g.connect(ac.destination); o.start(t0); o.stop(t + 0.05);
+  return t - t0;
+}
+function _adfBfoSet(on) {
+  const ac = _adfAc;
+  if (on && ac && ac.state === 'running' && !_adfBfo) {
+    const o = ac.createOscillator(), g = ac.createGain(); o.type = 'sine'; o.frequency.value = 1000;
+    g.gain.value = 0.012 * b206r.aud.ivol / 10; o.connect(g); g.connect(ac.destination); o.start(); _adfBfo = { o, g };
+  } else if (!on && _adfBfo) { try { _adfBfo.o.stop(); } catch (e) { _swallow(e); } _adfBfo = null; }
+}
+// 첫 터치 · 키에서 소리 장치를 연다(브라우저는 사람의 손이 닿기 전에는 소리를 막는다)
+['pointerdown', 'keydown'].forEach(ev => window.addEventListener(ev, () => {
+  try { if (typeof acIs === 'function' && acIs('b206')) { const ac = _adfAudioCtx(); if (ac && ac.state === 'suspended') ac.resume(); } } catch (e) { _swallow(e); }
+}, { passive: true }));
+setInterval(() => {
+  if (typeof acIs !== 'function' || !acIs('b206')) return;
+  const st = b206AdfAudible();
+  _adfOn = !!st;
+  _adfBfoSet(!!st && b206r.adf.bfo);
+  if (!st) { _adfNext = 0; return; }
+  const now = performance.now() / 1000;
+  if (now < _adfNext) return;
+  const dur = _adfPlay(b206AdfIdent(st));
+  _adfNext = now + (dur > 0 ? Math.max(ADF_REPEAT_S, dur + 2) : 1);
+}, 250);
 // 비행시간(FLT) · 경과시간(ET) — ADF 창의 타이머
 let _b206rT = 0, _b206rFlt = 0;
 setInterval(() => {

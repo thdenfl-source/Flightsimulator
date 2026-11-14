@@ -198,6 +198,35 @@ export async function run(page, t) {
   t.ok(RM.ant === null && RM.off === null && RM.none === null, 'ANT 모드 · ADF 꺼짐 · NDB 없는 주파수면 ADF 바늘은 3시에 눕는다(방위 없음)');
   t.ok(RM.vor ? (RM.nav !== null && Math.abs(RM.nav - RM.navWant) < 0.01) : true,
     `RMI NAV2 바늘 — NAV 수신기로 잡은 VOR 쪽 (${RM.vor || '근처 VOR 없음'} ${RM.nav != null ? RM.nav.toFixed(1) + '°' : ''})`);
+  // ── ADF 식별음(모스 부호) — 오디오 패널 ADF 1 이 켜져 있고 NDB 를 잡으면 · SYSTEM 창은 없다 ──
+  const AU = await page.evaluate(async () => {
+    const w = ms => new Promise(r => setTimeout(r, ms));
+    const o = {};
+    const sch = morseSchedule('BAN', 1);   // B -... A .- N -.
+    o.sch = sch.map(([on, off]) => `${on}/${off}`).join(' ');
+    const ap = AIRPORTS.find(a => a.ident === 'RKSS'); S.lat = ap.lat; S.lon = ap.lon;
+    Object.assign(b206r.adf, { on: true, mode: 'ADF', f: [1188, 266] }); b206r.aud.ivol = 6;
+    b206r.aud.spk.adf1 = false; b206r.aud.phn.adf1 = false; o.offBtn = !!b206AdfAudible();
+    b206r.aud.spk.adf1 = true; const st = b206AdfAudible(); o.on = st && st.id; o.ident = b206AdfIdent(st);
+    b206r.adf.mode = 'ANT'; o.ant = !!b206AdfAudible(); b206r.adf.mode = 'ADF';      // ANT 도 소리는 들린다
+    b206r.adf.on = false; o.adfOff = !!b206AdfAudible(); b206r.adf.on = true;
+    // 실제로 울리는지 — 소리 내는 함수가 그 식별 부호로 불린다
+    const calls = []; const orig = window._adfPlay; window._adfPlay = id => { calls.push(id); return 1; };
+    _adfNext = 0; await w(700); window._adfPlay = orig;
+    o.calls = calls;
+    b206r.aud.spk.adf1 = false;
+    // SYSTEM — 탭이 없고 골라도 들어가지 않는다
+    o.sysTab = [...document.querySelectorAll('.page-tab[data-sel="sysp"]')].some(e => getComputedStyle(e).display !== 'none');
+    selectPanel('left', 'sysp', true); await w(200); o.left = leftSel;
+    selectPanel('right', 'sysp', true); await w(200); o.right = rightSel; selectPanel('right', 'map', true);
+    o.simple = SIMPLE_SCREENS.map(x => x[0]).includes('sysp');
+    return o;
+  });
+  t.eq(AU.sch, '3/1 1/1 1/1 1/3 1/1 3/3 3/1 1/0', `모스 부호 일정 — B(-...) A(.-) N(-.) · 점 1 · 선 3 · 글자 사이 3 (${AU.sch})`);
+  t.ok(!AU.offBtn && AU.on === 'BANGSAN' && AU.ident === 'BAN' && AU.ant && !AU.adfOff,
+    `ADF 식별음 — 오디오 패널 ADF 1 을 켜야 들린다 · BANGSAN → 'BAN' · ANT 도 들리고 ADF 를 끄면 없다 (${AU.ident})`);
+  t.ok(AU.calls.length >= 1 && AU.calls[0] === 'BAN', `켜 두면 식별 부호를 되풀이해 울린다 (${AU.calls.join(',')})`);
+  t.ok(!AU.sysTab && AU.left === 'pfd' && AU.right !== 'sysp' && !AU.simple, `Bell 206 — SYSTEM 창이 없다 (왼쪽 ${AU.left} · 오른쪽 ${AU.right})`);
   const errs = (page.errors || []).filter(e => !/Failed to fetch|NetworkError|tile/i.test(e));
   t.ok(errs.length === 0, `오류 없음${errs.length ? ' (' + errs.slice(0, 2).join(' | ') + ')' : ''}`);
 }
