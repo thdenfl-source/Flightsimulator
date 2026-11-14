@@ -331,20 +331,61 @@ function _dbfChart(c, rows, ci) {
     g.fillStyle = '#fff'; g.font = '10px Arial'; g.textAlign = 'center'; g.fillText(_hms(rows[ci].t), Math.min(w - 20, Math.max(L0 + 14, x)), h - 1);
   }
 }
-// ── 비행 저장(이 기기 localStorage 'fdrSaved' · 최대 8개) · 불러오기 · 보고서 ──
+// ── 비행 저장(이 기기 IndexedDB 'shinesong' · 'flights' · 최대 30개) · 불러오기 · 보고서 ──
 // 표본은 칸 배열로 줄여 담는다. 불러오면 기록은 멈추고(REC 꺼짐) 그 비행을 강평 창에서 본다.
-const FDR_SAVE_KEY = 'fdrSaved', FDR_SAVE_MAX = 8;
+// 목록은 메모리(_fdrStore)에 두고 바뀔 때마다 IndexedDB 에 적는다(localStorage 5MB 한계를 벗어난다).
+// 예전 localStorage 'fdrSaved' 는 처음 열 때 옮기고 지운다. IndexedDB 를 못 쓰면 localStorage 로 돌아간다.
+const FDR_SAVE_KEY = 'fdrSaved', FDR_SAVE_MAX = 30, FDR_LS_MAX = 8;
 const _FDR_F = ['t', 'lat', 'lon', 'alt', 'ias', 'hdg', 'vs', 'tq', 'nr', 'bnk', 'pit', 'gnd', 'modes', 'eng', 'tqOver', 'vneOver', 'nrLow'];
-function fdrSavedList() { try { const a = JSON.parse(localStorage.getItem(FDR_SAVE_KEY) || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; } }
+let _fdrStore = null, _fdrIdb = null;      // _fdrIdb: IDBDatabase · false(못 씀) · null(여는 중)
+function _fdrLsList() { try { const a = JSON.parse(localStorage.getItem(FDR_SAVE_KEY) || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; } }
+function _fdrIdbOpen() {
+  return new Promise(ok => {
+    try {
+      const q = indexedDB.open('shinesong', 1);
+      q.onupgradeneeded = () => { const db = q.result; if (!db.objectStoreNames.contains('flights')) db.createObjectStore('flights'); };
+      q.onsuccess = () => ok(q.result); q.onerror = () => ok(false); q.onblocked = () => ok(false);
+    } catch (e) { ok(false); }
+  });
+}
+// 처음 한 번 — IndexedDB 에서 읽어 메모리에 올리고, 옛 localStorage 목록이 있으면 합쳐 옮긴다
+const fdrStoreReady = (async () => {
+  const ls = _fdrLsList();
+  if (typeof indexedDB === 'undefined') { _fdrIdb = false; _fdrStore = _fdrStore || ls; return; }
+  const db = await _fdrIdbOpen();
+  if (!db) { _fdrIdb = false; _fdrStore = _fdrStore || ls; return; }
+  const got = await new Promise(ok => { try { const r = db.transaction('flights').objectStore('flights').get('list'); r.onsuccess = () => ok(Array.isArray(r.result) ? r.result : []); r.onerror = () => ok([]); } catch (e) { ok([]); } });
+  _fdrIdb = db;
+  const mem = _fdrStore || [];                                  // 여는 사이에 저장한 것
+  const seen = new Set(), all = [];
+  [...mem, ...got, ...ls].forEach(r => { const k = r && (r.at + '|' + r.name); if (r && !seen.has(k)) { seen.add(k); all.push(r); } });
+  all.sort((x, y) => (y.at || 0) - (x.at || 0)); all.length = Math.min(all.length, FDR_SAVE_MAX);
+  _fdrStore = all;
+  if (ls.length || mem.length) { await _fdrPersist(); try { if (ls.length) localStorage.removeItem(FDR_SAVE_KEY); } catch (e) { _swallow(e); } }
+})();
+function _fdrPersist() {
+  const a = _fdrStore || [];
+  if (_fdrIdb) return new Promise(ok => {
+    try { const tx = _fdrIdb.transaction('flights', 'readwrite'); tx.objectStore('flights').put(a, 'list'); tx.oncomplete = () => ok(true); tx.onerror = tx.onabort = () => { try { uiToast('비행 저장 실패 — 저장 공간을 확인하십시오(도구 → 진단 기록)', 'err'); } catch (e) { _swallow(e); } ok(false); }; }
+    catch (e) { _swallow(e); ok(false); }
+  });
+  if (_fdrIdb === false) {                                      // localStorage — 8개 · 넘치면 오래된 것부터 버린다
+    const b = a.slice(0, FDR_LS_MAX);
+    for (;;) {
+      try { localStorage.setItem(FDR_SAVE_KEY, JSON.stringify(b)); return Promise.resolve(true); }
+      catch (e) { if (b.length > 1) { b.pop(); continue; } try { uiToast('저장 공간이 모자랍니다 — CSV 로 저장하십시오', 'err'); } catch (er) { _swallow(er); } return Promise.resolve(false); }
+    }
+  }
+  return fdrStoreReady.then(() => _fdrPersist());               // 아직 여는 중이면 열린 뒤에
+}
+function fdrSavedList() { return (_fdrStore || []).slice(); }
 function fdrSaveFlight(name) {
   if (!fdr.rows.length) { try { uiToast('저장할 기록이 없습니다'); } catch (e) { _swallow(e); } return false; }
   const rec = { name: String(name).slice(0, 60), at: Date.now(), ac: (typeof AC_TYPE !== 'undefined') ? AC_TYPE : '',
     f: _FDR_F, rows: fdr.rows.map(r => _FDR_F.map(k => typeof r[k] === 'number' ? +r[k].toFixed(k === 'lat' || k === 'lon' ? 6 : 1) : r[k])), ev: fdr.ev, grade: { a: _grade.a, b: _grade.b } };
-  const a = fdrSavedList(); a.unshift(rec); while (a.length > FDR_SAVE_MAX) a.pop();
-  for (;;) {
-    try { localStorage.setItem(FDR_SAVE_KEY, JSON.stringify(a)); break; }
-    catch (e) { if (a.length > 1) { a.pop(); continue; } try { uiToast('저장 공간이 모자랍니다 — CSV 로 저장하십시오', 'err'); } catch (er) { _swallow(er); } return false; }
-  }
+  _fdrStore = _fdrStore || [];
+  _fdrStore.unshift(rec); while (_fdrStore.length > FDR_SAVE_MAX) _fdrStore.pop();
+  _fdrPersist();
   try { uiToast(`비행 "${rec.name}" 저장 (${fdr.rows.length}초)`); } catch (e) { _swallow(e); }
   return true;
 }
@@ -357,7 +398,9 @@ function fdrLoadFlight(i) {
   try { uiToast(`저장한 비행 "${r.name}" — 기록은 멈췄습니다(● REC 로 다시 켭니다)`); } catch (e) { _swallow(e); }
   dbfRender(); return true;
 }
-function fdrDeleteFlight(i) { const a = fdrSavedList(); a.splice(i, 1); try { localStorage.setItem(FDR_SAVE_KEY, JSON.stringify(a)); } catch (e) { _swallow(e); } }
+function fdrDeleteFlight(i) { if (!_fdrStore) return; _fdrStore.splice(i, 1); _fdrPersist(); }
+// 들여오기(설정 파일) — 목록을 통째로 바꾼다
+function fdrSavedReplace(a) { if (!Array.isArray(a)) return false; _fdrStore = a.slice(0, FDR_SAVE_MAX); _fdrPersist(); return true; }
 function _dbfListOpen() {
   const a = fdrSavedList();
   let w = document.getElementById('dbf-list');

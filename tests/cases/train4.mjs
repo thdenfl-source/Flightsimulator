@@ -66,7 +66,7 @@ export async function run(page, t) {
     appSet.callsign = 'Coastguard zero one'; appSetSave(); sw.style.display = 'none';
     // 도구 메뉴 — 누르면 메뉴 · 메뉴에서 설정
     toggleTools(); const tm = document.getElementById('tools-menu');
-    o.tools = getComputedStyle(tm).display === 'block' && tm.querySelectorAll('[data-tool]').length === 7;
+    o.tools = getComputedStyle(tm).display === 'block' && tm.querySelectorAll('[data-tool]').length === TOOLS.length && TOOLS.length >= 9;
     tm.querySelector('[data-tool="toggleSettings"]').click(); o.toolSet = getComputedStyle(document.getElementById('set-wrap')).display === 'flex'; document.getElementById('set-wrap').style.display = 'none';
     // 브라운아웃 — 모래 · 15ft · 호버 토크
     envSet({ surface: 'sand' }); const ra0 = window.radarAltFt; window.radarAltFt = () => 15; const tq0 = window.tqShown; window.tqShown = () => 70; const s0 = S.spd; S.spd = 3;

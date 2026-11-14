@@ -35,6 +35,9 @@ const JOY_ACTIONS = [
   // SIM 1인칭에서 누르고 있는 동안 4방향 햇이 트림 대신 '시선' 이 된다
   { id: 'lookMod', grp: '운항', label: '시야 둘러보기 (누르는 동안 햇 = 시선)', kind: 'hold',
     on: () => simLookHold(true), off: () => simLookHold(false) },
+  // 무전 송신 — 누르고 있는 동안(Bell: 오디오 패널 MIC · 흰수리: CDU AUDIO 의 MIC) · 32-callout.js radioPtt
+  { id: 'ptt', grp: '운항', label: 'PTT (무전 송신 · 누르는 동안)', kind: 'hold',
+    on: () => { if (typeof radioPtt === 'function') radioPtt(true); }, off: () => { if (typeof radioPtt === 'function') radioPtt(false); } },
   // SIM 에서 1인칭 ↔ 외부 시점(뒤에서 내 헬기를 본다 · 15-heli3d.js)
   { id: 'extView', grp: '운항', label: '외부 시점 (SIM 1인칭 ↔ 3인칭)', kind: 'press',
     run: () => toggleExtView() },

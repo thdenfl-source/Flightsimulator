@@ -18,10 +18,12 @@
 //   · SIM 외부 시점(EXT) — 뒤에서 따라가며 내 헬기를 본다. 1인칭에서는 그리지 않는다.
 // ─────────────────────────────────────────────────────────────
 
-const HELI3D_LEN = 20;                       // 전장(m)
-const HELI3D_ROTOR = { x: 2.95, z: 5.45, r: 7.05, blades: 4 };          // 주로터
-const HELI3D_TAIL  = { x: -8.55, y: 0.42, z: 4.35, r: 1.45, blades: 4 };  // 꼬리로터(오른쪽)
-const HELI3D_RPS   = 4.4;                    // 주로터 회전(초당, 265rpm)
+// 기종(00-aircraft.js) — Bell 206B-3 은 따로 그린다: 전장 11.8m · 주로터 지름 10.16m(2날개) · 꼬리로터 1.65m(2날개 · 왼쪽) · 스키드
+const H3_B206 = typeof acIs === 'function' && acIs('b206');
+const HELI3D_LEN = H3_B206 ? 11.8 : 20;      // 전장(m)
+const HELI3D_ROTOR = H3_B206 ? { x: 0.6, z: 2.86, r: 5.08, blades: 2 } : { x: 2.95, z: 5.45, r: 7.05, blades: 4 };          // 주로터
+const HELI3D_TAIL  = H3_B206 ? { x: -5.22, y: -0.30, z: 1.78, r: 0.83, blades: 2 } : { x: -8.55, y: 0.42, z: 4.35, r: 1.45, blades: 4 };  // 꼬리로터(흰수리 오른쪽 · Bell 왼쪽)
+const HELI3D_RPS   = H3_B206 ? 6.5 : 4.4;    // 주로터 회전(초당 — 흰수리 265rpm · Bell 394rpm)
 const HELI3D_TAIL_RPS = 3.1;                 // 꼬리로터 — 눈에 도는 것이 보이게 늦춰 그린다
 const HELI3D_MARKER_PX = 14;                 // 모형이 이보다 작게 보이면 삼각형 표식도 띄운다
 
@@ -200,7 +202,50 @@ const H3_COWL = [
   [-2.60, 0.10, 3.30, 3.36, 2.0],
 ];
 
+// ── Bell 206B-3 — 흰 동체 · 파란 띠 · 앞 거품 유리 · 스키드 · 꼬리 붐 · 위아래 꼬리날개 · 수평 안정판 ──
+//   원점 = 전장(11.8m)의 가운데 · 스키드 바닥. 기수 +3.95m · 마스트 +0.6m · 꼬리 끝 −5.7m
+const H3B_FUSE = [
+  //  X      반폭   아래    위    지수
+  [ 3.95, 0.02, 1.02, 1.12, 2.0],      // 기수 끝
+  [ 3.85, 0.34, 0.74, 1.52, 2.0],
+  [ 3.60, 0.54, 0.62, 1.78, 2.2],
+  [ 3.20, 0.65, 0.56, 1.92, 2.4],
+  [ 2.60, 0.70, 0.55, 1.98, 2.6],
+  [ 1.00, 0.70, 0.55, 1.98, 2.8],      // 객실
+  [ 0.00, 0.68, 0.58, 1.95, 2.8],
+  [-0.80, 0.56, 0.74, 1.92, 2.6],
+  [-1.40, 0.32, 1.30, 1.88, 2.2],      // 꼬리 붐
+  [-3.00, 0.21, 1.44, 1.82, 2.0],
+  [-4.80, 0.15, 1.52, 1.77, 2.0],
+  [-5.60, 0.11, 1.55, 1.73, 2.0],
+  [-5.70, 0.02, 1.62, 1.66, 2.0],
+];
+function _h3BuildBodyB206() {
+  const m = _h3New(), R = HELI3D_ROTOR;
+  _h3Loft(m, H3B_FUSE, H3C.white, 2, false);
+  // 변속기 · 엔진 덮개(지붕 위)
+  _h3Loft(m, [[1.65, 0.28, 1.90, 1.96, 2.4], [1.30, 0.48, 1.90, 2.20, 2.6], [0.60, 0.55, 1.90, 2.42, 2.8], [-0.40, 0.50, 1.90, 2.36, 2.8],
+              [-1.20, 0.34, 1.86, 2.16, 2.6], [-1.65, 0.12, 1.86, 1.94, 2.2]], H3C.white, 0, false);
+  _h3Lathe(m, [-0.95, 0, 2.30], H3Z, [[0.13, 0], [0.13, 0.22], [0, 0.22]], H3C.dark, 12);           // 배기구
+  _h3Lathe(m, [R.x, 0, 2.38], H3Z, [[0.13, 0], [0.10, 0.10], [0.10, R.z - 2.38 - 0.04]], H3C.dark, 12); // 마스트
+  // 스키드 — 좌우 관 · 앞쪽 들림 · 가로 관 둘
+  [-1, 1].forEach(sd => {
+    const y = sd * 0.95;
+    _h3Rod(m, [-1.70, y, 0.06], [1.90, y, 0.06], 0.045, H3C.gray);
+    _h3Rod(m, [1.90, y, 0.06], [2.25, y, 0.30], 0.045, H3C.gray);
+    [1.00, -0.90].forEach(x => _h3Rod(m, [x, y, 0.06], [x, sd * 0.55, 0.62], 0.04, H3C.gray));
+  });
+  [1.00, -0.90].forEach(x => _h3Rod(m, [x, -0.55, 0.62], [x, 0.55, 0.62], 0.04, H3C.gray));
+  // 꼬리날개 — 위(파랑) · 아래(파랑) · 수평 안정판(파랑)
+  _h3Plate(m, [[-4.90, 1.74], [-5.50, 2.55], [-5.82, 2.55], [-5.62, 1.74]], [0, 0, 0], H3X, H3Z, H3Y, 0.08, H3C.blue);
+  _h3Plate(m, [[-5.00, 1.56], [-5.48, 0.98], [-5.72, 0.98], [-5.58, 1.56]], [0, 0, 0], H3X, H3Z, H3Y, 0.08, H3C.blue);
+  _h3Plate(m, [[-3.55, -0.98], [-3.55, 0.98], [-4.05, 0.98], [-4.05, -0.98]], [0, 0, 1.58], H3X, H3Y, H3Z, 0.06, H3C.blue);
+  // 꼬리로터 기어 덮개
+  _h3Pod(m, HELI3D_TAIL.x - 0.22, HELI3D_TAIL.x + 0.22, Math.sign(HELI3D_TAIL.y) * 0.10, HELI3D_TAIL.z, 0.11, 0.15, H3C.dark, 3, 2);
+  return m;
+}
 function _h3BuildBody() {
+  if (H3_B206) return _h3BuildBodyB206();
   const m = _h3New();
   _h3Loft(m, H3_FUSE, H3C.white, 1, false);
   _h3Loft(m, H3_COWL, H3C.white, 1, false);
@@ -331,9 +376,16 @@ vec3 livery(vec3 p, vec3 n) {
   if (p.z > 3.47 && p.x < 6.62) return RED;                        // 지붕 위 엔진 덮개
   return WHITE;
 }
+// Bell 206 — 흰 동체 · 앞 거품 유리 · 옆 문 창 · 파란 띠(창 아래)
+vec3 bell(vec3 p, vec3 n) {
+  if (p.x > 2.35 && p.z > 1.05) return GLASS;                                       // 앞 거품 유리
+  if (abs(n.y) > 0.5 && p.x > 0.35 && p.x < 2.30 && p.z > 1.12 && p.z < 1.80) return GLASS;   // 옆 문 창
+  if (p.z > 0.84 && p.z < 1.00 && p.x > -5.3) return BLUE;                           // 파란 띠
+  return WHITE;
+}
 void main() {
   if (v_mat < -0.5) { gl_FragColor = vec4(v_col * u_alpha, u_alpha); return; }   // 스스로 빛나는 등(함정 수평 지시등)
-  vec3 c = v_mat > 0.5 ? livery(v_pos, normalize(v_nm)) : v_col;
+  vec3 c = v_mat > 1.5 ? bell(v_pos, normalize(v_nm)) : v_mat > 0.5 ? livery(v_pos, normalize(v_nm)) : v_col;
   vec3 nw = normalize(v_nw);
   float d = max(dot(nw, u_light), 0.0);
   float sky = 0.5 + 0.5 * nw.z;
@@ -586,10 +638,10 @@ function heli3dTick() {
 // 뒤에서 따라가며 내 헬기를 본다. 시야 둘러보기(B0 + 햇)는 헬기를 축으로 카메라를 돌린다
 // — ◀▶ 로 둘레를 돌고 ▲▼ 로 위아래로 오르내린다. 놓으면 다시 뒤로 돌아온다.
 let simExtView = false;
-const EXT_DIST = 40;     // 헬기 가운데까지의 거리(m) — 전장의 두 배(가로로 넓은 창)
-const EXT_SPAN = 44;     // 화면 가로에 들어올 폭(m) — 좁은(세로로 긴) 창이면 그만큼 물러선다
+const EXT_DIST = HELI3D_LEN * 2;     // 헬기 가운데까지의 거리(m) — 전장의 두 배(가로로 넓은 창)
+const EXT_SPAN = HELI3D_LEN * 2.2;     // 화면 가로에 들어올 폭(m) — 좁은(세로로 긴) 창이면 그만큼 물러선다
 const EXT_ELEV = 12;     // 내려다보는 각(°)
-const EXT_TGT_Z = 2.5;   // 바라보는 곳 — 바닥에서 2.5m(동체 가운데)
+const EXT_TGT_Z = H3_B206 ? 1.4 : 2.5;   // 바라보는 곳 — 바닥에서 2.5m(동체 가운데)
 let _extFloor = null, _extFloorT = 0;
 // 외부 시점 카메라 조작(3D 창 EXT 아래 버튼) — 헬기를 축으로 1° 씩 돌고(◀▶), 위아래(▲▼),
 // 거리(− 가까이 · + 멀리), DEFAULT(뒤에서 기본 거리·각). 누르고 있으면 이어 간다.

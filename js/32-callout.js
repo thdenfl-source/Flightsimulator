@@ -197,3 +197,54 @@ function clAutoState(text) {
   return { ok: now.every(v => okVals.includes(String(v))), now: [...new Set(now)].join('/') };
 }
 setInterval(() => { try { if (typeof clAutoRefresh === 'function') clAutoRefresh(); } catch (e) { _swallow(e); } }, 1000);
+
+// ── 흰수리(KUH-1CG) PTT — CDU AUDIO 의 MIC 로 고른 무전기로 송신한다 ──
+//   COM1 · COM2(VHF-AM) — 놓으면 그 주파수의 관제 시설이 답한다(atcOnTx · 리드백 확인도 Bell 과 같다)
+//   U/VHF(C-5000 RT1) · VHF-FM(NPX138) — 송신만(해상 · 경비 채널은 관제 응답이 없다) · PA · OFF 는 송신 안 됨
+let _kuhTx = false, _kuhTxSnd = null, _kuhTxTgt = null;
+function kuhTxTarget() {
+  const mic = typeof cduMic === 'function' ? cduMic() : 'COM1';
+  const dc = (() => { try { return typeof pwrDc === 'function' ? pwrDc() : true; } catch (e) { return true; } })();
+  if (!mic || mic === 'OFF') return { name: 'OFF', ok: false, why: 'MIC 가 꺼져 있습니다(CDU AUDIO 에서 MIC 를 고르십시오)' };
+  if (!dc) return { name: mic, ok: false, why: '전원(DC 버스)이 없습니다' };
+  if (mic === 'COM1' || mic === 'COM2') { const r = typeof cduRadio === 'function' ? cduRadio(mic.toLowerCase()) : null; return r ? { name: mic, f: +r.act, ok: true } : { name: mic, ok: false, why: `${mic} 주파수를 읽지 못했습니다` }; }
+  if (mic === 'U/VHF') {
+    try { if (typeof c5 !== 'undefined' && c5 && c5.on) { const ch = c5.ch[c5.r[0].ch] || {}; return { name: 'U/VHF', f: +ch.tx || null, ok: true, noAtc: true }; } } catch (e) { _swallow(e); }
+    return { name: 'U/VHF', ok: false, why: 'C-5000 이 꺼져 있습니다' };
+  }
+  if (mic === 'VHF-FM') {
+    try { if (typeof npx !== 'undefined' && npx && npx.on) { const ch = npx.chans.find(c => c.n === npx.ch) || {}; return { name: 'VHF-FM', f: +ch.tx || null, ok: true, noAtc: true }; } } catch (e) { _swallow(e); }
+    return { name: 'VHF-FM', ok: false, why: 'NPX138 이 꺼져 있습니다' };
+  }
+  if (mic === 'PA') return { name: 'PA', ok: true, noAtc: true };
+  return { name: mic, ok: false, why: `${mic} 로는 송신하지 않습니다` };
+}
+function kuhPtt(on) {
+  on = !!on; if (on === _kuhTx) return;
+  if (on) {
+    const t = kuhTxTarget();
+    if (!t.ok) { try { uiToast(`송신 안 됨 — ${t.why}`, 'warn', 2000); } catch (e) { _swallow(e); } return; }
+    _kuhTx = true; _kuhTxTgt = t;
+    try { atcPttStart(); } catch (e) { _swallow(e); }
+    try { const ac = typeof _adfAudioCtx === 'function' ? _adfAudioCtx() : null; if (ac && ac.state === 'running' && typeof _b206TxNoise === 'function') _kuhTxSnd = _b206TxNoise(ac, 0.01); } catch (e) { _swallow(e); }
+  } else {
+    _kuhTx = false; const t = _kuhTxTgt; _kuhTxTgt = null;
+    try { if (_kuhTxSnd) { const s0 = _kuhTxSnd, ac = s0.src.context; _kuhTxSnd = null; s0.g.gain.linearRampToValueAtTime(0, ac.currentTime + 0.15); s0.src.stop(ac.currentTime + 0.16); } } catch (e) { _swallow(e); }
+    if (t && t.f && !t.noAtc) try { atcOnTx(t.f); } catch (e) { _swallow(e); }
+    else if (t && t.noAtc && atcExpect) try { atcOnTx(0); } catch (e) { _swallow(e); }      // 리드백을 다른 무전기로 했어도 듣기는 마친다
+  }
+  try { document.querySelectorAll('[data-ptt-kuh]').forEach(b => b.classList.toggle('on', _kuhTx)); } catch (e) { _swallow(e); }
+  try { if (typeof fdrNote === 'function' && on) fdrNote(`송신 ${_kuhTxTgt ? _kuhTxTgt.name : ''}${_kuhTxTgt && _kuhTxTgt.f ? ' ' + _kuhTxTgt.f.toFixed(3) : ''}`); } catch (e) { _swallow(e); }
+}
+function kuhTxOn() { return _kuhTx; }
+// 두 기종 함께 — 조이스틱 · 키 PTT
+function radioPtt(on) {
+  if (typeof acB206 === 'function' && acB206()) { if (typeof b206Ptt === 'function') b206Ptt(on); }
+  else kuhPtt(on);
+}
+// CDU AUDIO 의 🎙 PTT 단추 — 누르는 동안(다시 그려져도 듣도록 문서에서 받는다)
+document.addEventListener('pointerdown', e => {
+  const b = e.target.closest && e.target.closest('[data-ptt-kuh]'); if (!b) return;
+  e.preventDefault(); e.stopPropagation(); kuhPtt(true);
+}, true);
+['pointerup', 'pointercancel'].forEach(ev => document.addEventListener(ev, () => { if (_kuhTx) kuhPtt(false); }, true));

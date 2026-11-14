@@ -18,16 +18,32 @@ function instFailSet(kind, on, val) {
   try { if (typeof fdrNote === 'function') fdrNote(`계기 고장 ${kind} ${on ? '걸림' : '풀림'}`, on ? 'err' : ''); } catch (e) { _swallow(e); }
 }
 function instFailAny() { return instFail.asi !== null || instFail.alt !== null || instFail.vsi !== null || !!instFail.ahrs || !!instFail.hdg; }
-// 그리는 동안 S 를 바꿔 두고 되돌리는 함수를 돌려준다
+// 계기에 보일 값(S 를 건드리지 않는다) — 새로 짜는 계기는 이것을 읽는다
+function instView() {
+  const v = { spd: S.spd, alt: S.alt, vs: S.vs, pit: S.pit, bnk: S.bnk, hdg: S.hdg };
+  if (instFail.asi !== null) v.spd = instFail.asi;
+  if (instFail.alt !== null) v.alt = instFail.alt;
+  if (instFail.vsi !== null) v.vs = instFail.vsi;
+  if (instFail.ahrs) { v.pit = instFail.ahrs.pit; v.bnk = instFail.ahrs.bnk; }
+  if (instFail.hdg) v.hdg = ((S.hdg + instFail.hdg) % 360 + 360) % 360;
+  return v;
+}
+// 그리는 동안 S 를 바꿔 두고 되돌리는 함수를 돌려준다 — 옛 계기 그림(drawPFD · b206Draw …)이 S 를 직접 읽어서.
+//   · 겹쳐 불려도(그림 안에서 다른 그림) 한 번만 바꾼다(나침반 오차가 두 번 더해지지 않게)
+//   · 되돌릴 때는 바꾼 칸만 — 그림이 그 사이 칸을 고쳐 썼으면(있어서는 안 된다) 진짜 값으로 되돌리고 진단 기록에 남긴다
+let _instDepth = 0;
 function instFailApply() {
-  if (!instFailAny()) return () => {};
-  const keep = { spd: S.spd, alt: S.alt, vs: S.vs, pit: S.pit, bnk: S.bnk, hdg: S.hdg };
-  if (instFail.asi !== null) S.spd = instFail.asi;
-  if (instFail.alt !== null) S.alt = instFail.alt;
-  if (instFail.vsi !== null) S.vs = instFail.vsi;
-  if (instFail.ahrs) { S.pit = instFail.ahrs.pit; S.bnk = instFail.ahrs.bnk; }
-  if (instFail.hdg) S.hdg = ((S.hdg + instFail.hdg) % 360 + 360) % 360;
-  return () => Object.assign(S, keep);
+  if (_instDepth > 0 || !instFailAny()) { _instDepth++; return () => { _instDepth--; }; }
+  const v = instView(), keep = {}, put = {};
+  for (const k of Object.keys(v)) if (v[k] !== S[k]) { keep[k] = S[k]; put[k] = v[k]; S[k] = v[k]; }
+  _instDepth = 1;
+  return () => {
+    _instDepth = 0;
+    for (const k of Object.keys(keep)) {
+      if (S[k] !== put[k]) try { _swallow(new Error(`계기 고장 표시 중 S.${k} 가 바뀜(되돌림)`)); } catch (e) { /* 무시 */ }
+      S[k] = keep[k];
+    }
+  };
 }
 (function wrapDraw() {
   const wrap = (name, after) => {
@@ -108,7 +124,8 @@ function tcasEval() {
     const close = -(v.n * rv.n + v.e * rv.e) / Math.max(0.01, r);     // kt(+ 면 다가온다)
     const tau = close > 1 ? r / close * 3600 : 999;
     Object.assign(t, { r, rel, close, tau });
-    t.st = (r < 3 && Math.abs(rel) < 600 && tau < 25) ? 'RA' : (r < 6 && Math.abs(rel) < 1200 && (tau < 40 || r < 2)) ? 'TA' : (r < 6 && Math.abs(rel) < 1200) ? 'PT' : 'OT';
+    const C = TUNE.tcas;
+    t.st = (r < C.raNm && Math.abs(rel) < C.raFt && tau < C.raTau) ? 'RA' : (r < C.taNm && Math.abs(rel) < C.taFt && (tau < C.taTau || r < C.taNear)) ? 'TA' : (r < C.taNm && Math.abs(rel) < C.taFt) ? 'PT' : 'OT';
     if (t.st === 'RA') { worst = 'RA'; sense = rel <= 0 ? 1 : -1; } else if (t.st === 'TA' && worst !== 'RA') worst = 'TA';
   }
   const b2 = typeof acB206 === 'function' && acB206();
@@ -252,19 +269,20 @@ function _setRender() {
 const SET_KEYS = ['appSet', 'envSet', 'scnList', 'fdrSaved', 'b206rad', 'shipMotion', 'simSound', 'autoMetarOn'];
 function settingsExport() {
   const o = {}; SET_KEYS.forEach(k => { try { const v = localStorage.getItem(k); if (v !== null) o[k] = v; } catch (e) { _swallow(e); } });
+  try { if (typeof fdrSavedList === 'function' && fdrSavedList().length) o.fdrSaved = JSON.stringify(fdrSavedList()); } catch (e) { _swallow(e); }   // 저장 비행은 IndexedDB
   const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(o)], { type: 'application/json' })); a.download = 'shinesong-settings.json';
   document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
   return o;
 }
 function settingsImport(text) {
-  let n = 0; try { const o = JSON.parse(text); for (const k of SET_KEYS) if (typeof o[k] === 'string') { localStorage.setItem(k, o[k]); n++; } } catch (e) { _swallow(e); }
+  let n = 0; try { const o = JSON.parse(text); for (const k of SET_KEYS) if (typeof o[k] === 'string') { if (k === 'fdrSaved' && typeof fdrSavedReplace === 'function') fdrSavedReplace(JSON.parse(o[k])); else localStorage.setItem(k, o[k]); n++; } } catch (e) { _swallow(e); }
   try { uiToast(n ? `설정 ${n}가지를 들여왔습니다 — 다시 열면 반영됩니다` : '설정 파일을 읽지 못했습니다', n ? '' : 'err'); } catch (e) { _swallow(e); }
   return n;
 }
-function settingsReset() { SET_KEYS.forEach(k => { try { localStorage.removeItem(k); } catch (e) { _swallow(e); } }); try { uiToast('설정을 지웠습니다 — 다시 열면 처음 상태입니다'); } catch (e) { _swallow(e); } }
+function settingsReset() { SET_KEYS.forEach(k => { try { localStorage.removeItem(k); } catch (e) { _swallow(e); } }); try { if (typeof fdrSavedReplace === 'function') fdrSavedReplace([]); } catch (e) { _swallow(e); } try { uiToast('설정을 지웠습니다 — 다시 열면 처음 상태입니다'); } catch (e) { _swallow(e); } }
 
 // ── ⑥ 도구 메뉴(🧰) — 작은 화면(폭 900 · 높이 700 아래)에서는 낱 단추 대신 이 메뉴 하나로 ──
-const TOOLS = [['🎬 시나리오', 'toggleScenario'], ['🌙 환경', 'toggleEnvPanel'], ['📋 강평', 'toggleDebrief'], ['🧑‍✈️ 교관 화면', 'openIos'], ['📱 교관 기기와 잇기', 'toggleRemoteIos'], ['⚙ 설정', 'toggleSettings'], ['❓ 도움말', 'toggleHelp']];
+const TOOLS = [['🎬 시나리오', 'toggleScenario'], ['🌙 환경', 'toggleEnvPanel'], ['📋 강평', 'toggleDebrief'], ['🧑‍✈️ 교관 화면', 'openIos'], ['📱 교관 기기와 잇기', 'toggleRemoteIos'], ['⚙ 설정', 'toggleSettings'], ['🩺 진단 기록', 'toggleDiag'], ['📘 교관 교범', 'openManual'], ['❓ 도움말', 'toggleHelp']];
 function toggleTools(ev) {
   let m = document.getElementById('tools-menu');
   if (m && m.style.display === 'block') { m.style.display = 'none'; return; }

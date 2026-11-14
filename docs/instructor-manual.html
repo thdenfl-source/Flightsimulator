@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>교관 교범 — shinesong 헬기 시뮬레이터</title>
+<style>
+  :root { --ink: #1b2430; --dim: #5b6b7b; --line: #d5dde5; --acc: #0d5c8c; --warn: #b4441c; --bg: #ffffff; --soft: #f3f6f9; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.65 "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif; }
+  main { max-width: 860px; margin: 0 auto; padding: 32px 20px 60px; }
+  h1 { font-size: 28px; margin: 0 0 4px; } .sub { color: var(--dim); margin-bottom: 24px; }
+  h2 { font-size: 20px; margin: 34px 0 10px; padding-bottom: 6px; border-bottom: 2px solid var(--acc); color: var(--acc); break-after: avoid; }
+  h3 { font-size: 16px; margin: 20px 0 6px; break-after: avoid; }
+  p { margin: 6px 0 10px; }
+  table { width: 100%; border-collapse: collapse; margin: 8px 0 14px; font-size: 14px; break-inside: avoid; }
+  th, td { border: 1px solid var(--line); padding: 6px 8px; text-align: left; vertical-align: top; }
+  th { background: var(--soft); white-space: nowrap; }
+  .note { background: var(--soft); border-left: 4px solid var(--acc); padding: 8px 12px; margin: 10px 0; break-inside: avoid; }
+  .warn { border-left-color: var(--warn); }
+  code, kbd { font-family: ui-monospace, Menlo, Consolas, monospace; background: var(--soft); padding: 1px 5px; border-radius: 3px; font-size: 13px; }
+  ol, ul { padding-left: 22px; margin: 6px 0 10px; } li { margin: 2px 0; }
+  nav.toc { columns: 2; column-gap: 28px; background: var(--soft); padding: 12px 18px; border-radius: 6px; font-size: 14px; }
+  nav.toc a { color: var(--ink); text-decoration: none; } nav.toc a:hover { color: var(--acc); }
+  .cover { border: 1px solid var(--line); border-radius: 8px; padding: 18px 20px; margin-bottom: 18px; }
+  @media (max-width: 600px) { nav.toc { columns: 1; } th { white-space: normal; } }
+  @page { size: A4; margin: 16mm 14mm; }
+  @media print { main { padding: 0; max-width: none; } h2 { break-before: auto; } a { color: inherit; text-decoration: none; } .noprint { display: none; } }
+</style>
+</head>
+<body>
+<main>
+<div class="cover">
+  <h1>교관 교범</h1>
+  <div class="sub">shinesong 헬기 시뮬레이터 — 흰수리(KUH-1CG) · Bell 206B-3 · 판 v651</div>
+  <p>이 교범은 시뮬레이터로 조종사를 가르치는 교관을 위한 것이다. 장비를 켜는 법부터 고장을 거는 법, 평가하고 강평하는 법까지 훈련 한 회를 진행하는 순서대로 적었다.</p>
+  <p class="noprint">인쇄(또는 PDF 로 저장)하려면 브라우저의 인쇄 메뉴를 쓴다 — A4 에 맞춰 나뉜다.</p>
+</div>
+
+<nav class="toc">
+  <a href="#s1">1. 두 판 · 두 기종</a><br><a href="#s2">2. 켜기 — 비밀번호 · 기종 · 시작 공항</a><br><a href="#s3">3. 화면 배치</a><br>
+  <a href="#s4">4. SIM 조종</a><br><a href="#s5">5. 교관 화면(IOS)</a><br><a href="#s6">6. 고장 주입과 교육 요점</a><br>
+  <a href="#s7">7. 환경</a><br><a href="#s8">8. 시나리오</a><br><a href="#s9">9. 평가 · 강평</a><br>
+  <a href="#s10">10. Bell 206 고유 절차</a><br><a href="#s11">11. 무전 · 관제</a><br><a href="#s12">12. 조정값 바꾸기</a><br>
+  <a href="#s13">13. 문제 해결</a><br><a href="#s14">14. 훈련 한 회 예시</a>
+</nav>
+
+<h2 id="s1">1. 두 판 · 두 기종</h2>
+<table>
+  <tr><th>판</th><th>쓰임</th><th>다른 점</th></tr>
+  <tr><td>shinesong(종합)</td><td>조이스틱으로 직접 조종하는 SIM 모드 · 비행 모델 · 3D 조종석 시야 · 함정 착함</td><td>모든 기능</td></tr>
+  <tr><td>Flightsimulator(절차)</td><td>AIP 절차 · CDU · FPL · HOVER PAGE · 함정 접근 절차</td><td>SIM 모드와 그 단추가 없다. 나머지(계기 · 콘솔 · 무전 · 지도 · 3D)는 같다</td></tr>
+</table>
+<table>
+  <tr><th>기종</th><th>조종석</th><th>특징</th></tr>
+  <tr><td>KUH-1CG 흰수리</td><td>GLASS Cockpit — PFD · MFD · CDU · 상부/하부 콘솔</td><td>쌍발 · AFCS(ALT · HDG · CRHT · T/DOWN …) · 비상 플로트 · RA 콜아웃 · TCAS RA</td></tr>
+  <tr><td>Bell 206B-3</td><td>아날로그 원형 계기판 · GNS 430 · 오디오 패널</td><td>단발 · 시동 절차 · 유압 BOOST · W&amp;B · 저중력/마스트 범핑 · LTE · TCAS 는 TA 만</td></tr>
+</table>
+
+<h2 id="s2">2. 켜기 — 비밀번호 · 기종 · 시작 공항</h2>
+<ol>
+  <li>앱을 열고 비밀번호를 넣는다.</li>
+  <li>기종을 고른다(KUH-1CG / Bell 206B-3). 바꾸면 앱을 다시 불러온다. 주소 끝 <code>?ac=b206</code> 으로도 고른다.</li>
+  <li>시작 공항을 고른다. 처음에는 GPS 가 꺼진 채 지상에 있다.</li>
+</ol>
+<div class="note">홈 화면에 앱으로 추가(PWA)해 두면 인터넷이 끊겨도 앱은 열린다. 위성 지도 · METAR 는 인터넷이 있어야 새로 받는다.</div>
+
+<h2 id="s3">3. 화면 배치</h2>
+<p>화면은 2~4칸으로 나뉜다(PFD · 지도 · 3D · 콘솔 등). 각 칸 위 탭으로 바꾸고, <b>POP UP</b> 으로 다른 모니터에 띄운다.</p>
+<table>
+  <tr><th>자리</th><th>무엇이 있나</th></tr>
+  <tr><td>지도 아래 단추줄</td><td>▶ FLY · RESET · SHIP · SAR · 🧰 도구 · MAP/3D · 1인칭. 좁은 화면에서는 CLR · T-CUT · HOLD · INHIB · 방위 · 🔒 가 <b>⋯</b> 뒤로 접힌다</td></tr>
+  <tr><td>🧰 도구</td><td>🎬 시나리오 · 🌙 환경 · 📋 강평 · 🧑‍✈️ 교관 화면 · 📱 교관 기기와 잇기 · ⚙ 설정 · 🩺 진단 기록 · ❓ 도움말</td></tr>
+  <tr><td>3D 칸 오른쪽</td><td>SIM · EXT(외부 시점) · SOUND · 계기 겹침 · 회전익 특성 · 엔진 · STICK · GYRO</td></tr>
+</table>
+
+<h2 id="s4">4. SIM 조종</h2>
+<ul>
+  <li><b>조이스틱</b>: 설정에서 축(사이클릭 좌우 · 전후 · 페달 · 컬렉티브)을 한 번씩 움직여 잡고, 단추에 FORCE TRIM · PTT · 외부 시점 · 시야 둘러보기 등을 배정한다.</li>
+  <li><b>조이스틱 없이</b>: 화면 STICK · 4WAY 트림 · 컬렉티브 ▲▼ 로 조종한다.</li>
+  <li><b>EXT</b>: 뒤에서 내 헬기를 본다. ◀▶ 로 돌고, 거리 ± · ▲▼ 로 높이를 바꾼다. DEFAULT 로 돌아온다.</li>
+  <li><b>SIM SPD</b>: ×1 · ×2 · ×4 · ×8. 긴 이동 구간을 줄일 때 쓴다(평가 구간은 ×1).</li>
+</ul>
+
+<h2 id="s5">5. 교관 화면(IOS)</h2>
+<h3>같은 기기(창 두 개)</h3>
+<p>🧰 도구 → 🧑‍✈️ 교관 화면. 새 탭이 열리고 '● 교육생 창과 이어짐' 이 뜨면 된다. 교관 창에서 고장 · 바람 · 환경 · 메시지 · 시나리오 · 요구조자를 건다.</p>
+<h3>다른 기기(QR · 서버 없음)</h3>
+<ol>
+  <li>교육생 기기: 🧰 도구 → 📱 교관 기기와 잇기 → <b>① 연결 요청</b> — QR 이 뜬다.</li>
+  <li>교관 기기: 교관 화면(<code>?ios=1</code>) → <b>② 수락 — 교육생 QR 찍기</b> — 카메라로 ①의 QR 을 비춘다. 교관 기기에 QR 이 뜬다.</li>
+  <li>교육생 기기: <b>③ 교관 QR 찍기</b> — 교관 기기의 QR 을 비춘다. 두 기기 모두 '이어짐'.</li>
+</ol>
+<div class="note warn">두 기기는 같은 와이파이나 같은 휴대폰 핫스팟에 있어야 한다. 기기끼리 막아 둔 회사 망에서는 이어지지 않을 수 있다.</div>
+<h3>Bell 연료 · 무게</h3>
+<p>Bell 일 때 교관 화면에 <b>연료 · 무게(Bell)</b> 칸이 나온다. 연료(91 · 60 · 40 · 20 · 8 gal), 뒷자리 · 화물 무게, '뒤로 쏠림' · '최대 무게' · '표준' 보기를 바로 건다. 총중량이 3,200lb 를 넘거나 무게중심이 한계(106.0~114.2in) 밖이면 빨갛게 보인다.</p>
+
+<h2 id="s6">6. 고장 주입과 교육 요점</h2>
+<table>
+  <tr><th>고장</th><th>나타나는 것</th><th>교육 요점(회복)</th></tr>
+  <tr><td>엔진 고장(Bell)</td><td>ENG OUT 등 · 경고음 · NR 감소</td><td>즉시 컬렉티브 내림 · NR 유지 · 오토로테이션 · 플레어 · 착지. 스로틀 OFF 후 재시동으로 풀린다</td></tr>
+  <tr><td>2번 엔진 고장(흰수리 · OEI)</td><td>토크 한계 변화 · 성능 감소</td><td>OEI 한계 안 토크 · 속도 확보 · 착륙지 판단</td></tr>
+  <tr><td>두 엔진 IDLE(흰수리)</td><td>오토로테이션</td><td>컬렉티브 내림 · NR · 플레어 높이</td></tr>
+  <tr><td>거버너 HI / LO(Bell)</td><td>NR · N2 가 높게/낮게 머문다</td><td>스로틀로 손으로 맞춘다 · 착륙</td></tr>
+  <tr><td>ENG CHIP(Bell)</td><td>ENG CHIP 주의등</td><td>가까운 곳에 착륙 준비</td></tr>
+  <tr><td>스로틀 고착(Bell)</td><td>출력이 그 자리에 굳음</td><td>컬렉티브로 NR 을 다루며 진입 · 접지 직전 연료 차단 판단</td></tr>
+  <tr><td>유압 고장(Bell)</td><td>HYD PRESS · 조종이 무겁고 굼뜸</td><td>속도 줄여 천천히 · 활주 착륙 고려</td></tr>
+  <tr><td>꼬리로터 구동 상실</td><td>페달이 안 듣고 기수가 돈다(토크 클수록 · 느릴수록)</td><td>40kt 넘게 속도를 붙여 꼬리날개로 잡거나 출력을 줄여 오토로테이션</td></tr>
+  <tr><td>꼬리로터 피치 고정</td><td>페달이 굳는다</td><td>출력으로 기수를 맞춘다(올리면 반작용 쪽 · 내리면 반대) · 활주 착륙</td></tr>
+  <tr><td>속도계 · 고도계 · 승강계 고착</td><td>그 순간 값에 굳음</td><td>다른 계기와 교차 확인 · 자세와 출력으로 비행</td></tr>
+  <tr><td>AHRS 고장</td><td>자세가 굳고 ATT FAIL</td><td>예비 계기 · 부분 패널 비행</td></tr>
+  <tr><td>나침반 오차 25°</td><td>기수 표시가 어긋남</td><td>자기 나침반 · GPS 궤적과 비교</td></tr>
+</table>
+<p>SIM 이 스스로 일으키는 위험(교관이 걸지 않아도):</p>
+<ul>
+  <li><b>VRS</b> — 15kt 아래 · 700fpm 넘게 강하 · 출력 사용. 회복 방법(전진 · Vuichard · 컬렉티브 내림)과 시간 · 고도 손실을 강평에 남긴다.</li>
+  <li><b>저중력 · 마스트 범핑(Bell)</b> — 0.5G 아래에서 오른쪽 롤이 커지면. 회복: 사이클릭을 먼저 뒤로(G 회복) → 롤.</li>
+  <li><b>LTE(Bell)</b> — 30kt 아래 · 바람이 위험 방위. 회복: 왼쪽 페달 끝 · 사이클릭 앞으로 · 여유 있으면 컬렉티브 내림.</li>
+  <li><b>착수</b> — 물 위에 내려앉으면. 흰수리는 EMERG FLOATS ARMED 로 300fpm · 20kt 안이면 성공. Bell 은 플로트가 없다.</li>
+</ul>
+
+<h2 id="s7">7. 환경</h2>
+<p>🌙 환경(또는 교관 화면): 시간대(주간 · 황혼 · 야간) · 시정 · 비 · NVG · 바다 상태 · 돌풍 · 구름 밑면 · 지면(모래 · 눈 — 브라운아웃/화이트아웃) · 교통량(TCAS). <b>METAR</b> 단추로 가까운 공항의 실제 날씨를 그대로 건다.</p>
+<p>밤에는 활주로 · 갑판 · 함정 HAPI · 요구조자 스트로브가 보이고, 산 뒤의 불빛은 지형에 가린다.</p>
+
+<h2 id="s8">8. 시나리오</h2>
+<p>🎬 시나리오 — 지금 자리 · 고도 · 바람 · 환경 · 연료 · 비행계획 · SAR 를 이름 붙여 저장하고 불러온다. 파일로 내보내 교관끼리 나눈다. 교육생마다 같은 조건으로 시작할 때 쓴다.</p>
+
+<h2 id="s9">9. 평가 · 강평</h2>
+<ul>
+  <li><b>📋 강평</b>: 항적 · 고도 · 속도 · 토크 그래프 · 사건 목록 · 다시 보기 · 3D 다시 보기.</li>
+  <li><b>A/B 구간 채점</b>: 그래프에서 A · B 를 찍으면 그 구간의 고도 · 속도 · 기수 유지를 점수로 낸다.</li>
+  <li><b>비행 저장</b>: 이 기기에 30개까지(IndexedDB). <b>보고서</b>는 새 창에 열리며 인쇄 · PDF 로 저장한다. CSV 로도 내보낸다.</li>
+  <li>자동 판정: 오토로테이션 착지(강하 · 속도 · NR · 플레어 높이) · VRS 회복 · 착수 · 접지 강하율 · 한계 초과(토크 · VNE · NR).</li>
+</ul>
+
+<h2 id="s10">10. Bell 206 고유 절차</h2>
+<h3>시동</h3>
+<ol>
+  <li>BATT ON · FUEL VALVE ON · 스로틀 닫힘.</li>
+  <li>STARTER 를 한 번 누른다(ON 유지 — 다시 누르면 OFF).</li>
+  <li>N1 12% 넘으면 스로틀 IDLE · TOT 를 본다(고온 시동 주의).</li>
+  <li>N1 58% 넘으면 STARTER 를 다시 눌러 OFF. 60초를 넘기지 않는다.</li>
+</ol>
+<h3>무게 · 균형(W&amp;B)</h3>
+<p>계기판 FUEL QTY 를 누르거나 컬렉티브 창 W&amp;B — 자중 · 사람 · 화물 · 연료로 총중량과 무게중심, 호버 성능(HIGE/HOGE)을 셈한다. 무게중심이 뒤로 가면 기수가 들리고 앞으로 가면 숙는다.</p>
+<h3>계기판 단추</h3>
+<p>HORN MUTE(경고음 끔) · HYD SYS(유압 BOOST) · CAUTION LT TEST(누르는 동안 점검) · MASTER CAUTION(새 주의등 확인).</p>
+
+<h2 id="s11">11. 무전 · 관제</h2>
+<table>
+  <tr><th>기종</th><th>송신</th></tr>
+  <tr><td>Bell</td><td>오디오 패널에서 MIC(1 · 2) 를 고르고 <b>PTT</b> 를 누르는 동안 송신</td></tr>
+  <tr><td>흰수리</td><td>CDU AUDIO 에서 MIC(COM1 · COM2 · U/VHF · VHF-FM)를 고르고 같은 화면 <b>🎙 PTT</b> 를 누르는 동안 송신</td></tr>
+</table>
+<p>COM 주파수가 가까운 공항의 TWR · GND · APP 이면 놓았을 때 관제가 영어로 답한다(지시 · 교통 정보). 지시 뒤 30초 안에 다시 송신하면 리드백으로 듣고(⚙ 설정 '리드백 확인' · Chrome/Edge 음성 인식) 빠진 말이 있으면 'negative, read back …' 이라 한다. 조이스틱 단추에 PTT 를 배정하면 두 기종 모두 그 단추로 송신한다. 콜사인은 ⚙ 설정에서 바꾼다.</p>
+
+<h2 id="s12">12. 조정값 바꾸기</h2>
+<p>성능 · 무게중심 · 위험 판정 기준은 한 파일 <code>js/00-params.js</code>(TUNE)에 모여 있다.</p>
+<table>
+  <tr><th>묶음</th><th>무엇</th></tr>
+  <tr><td>b206Perf</td><td>Bell 표준 무게 · 호버 토크(IGE/OGE) · Vy · VNE · 출력 한계</td></tr>
+  <tr><td>b206Arm · b206Cg</td><td>Bell 팔 길이 · 무게중심 한계</td></tr>
+  <tr><td>lowg · lte · trFail · vrs</td><td>저중력 · LTE · 꼬리로터 고장 · VRS 기준</td></tr>
+  <tr><td>autoTd · ditch</td><td>오토로테이션 착지 · 착수 평가 기준</td></tr>
+  <tr><td>hapi · tcas</td><td>HAPI 각도 경계 · TCAS TA/RA 거리 · 고도 · 시간</td></tr>
+</table>
+<p>한 기기에서만 잠시 바꾸려면 브라우저 개발자 도구 콘솔에서 <code>localStorage.shineTune = '{"lowg":{"n":0.4}}'</code> 처럼 넣고 다시 연다. 바꾼 값은 🩺 진단 기록에 보이고 [기본으로] 로 지운다.</p>
+
+<h2 id="s13">13. 문제 해결</h2>
+<table>
+  <tr><th>증상</th><th>할 일</th></tr>
+  <tr><td>단추가 안 듣거나 화면이 이상하다</td><td>위에 '새 버전이 있습니다' 띠가 있으면 [새로고침]. 없으면 앱을 닫고 다시 연다</td></tr>
+  <tr><td>오류가 의심된다</td><td>🧰 도구 → 🩺 진단 기록 → 📋 복사 → 개발자에게 붙여 보낸다</td></tr>
+  <tr><td>저장이 안 된다</td><td>🩺 진단 기록의 저장 공간을 본다. 강평의 오래된 비행을 지운다</td></tr>
+  <tr><td>소리가 안 난다</td><td>화면을 한 번 누른다(브라우저가 첫 터치 전 소리를 막는다) · SOUND 켜기 · 기기 무음 스위치</td></tr>
+  <tr><td>교관 기기가 안 이어진다</td><td>같은 와이파이/핫스팟인지 · 카메라 권한 · 글자 코드로 다시</td></tr>
+  <tr><td>설정을 다른 기기로</td><td>⚙ 설정 → 모든 설정 내보내기 → 다른 기기에서 들여오기</td></tr>
+</table>
+
+<h2 id="s14">14. 훈련 한 회 예시 — Bell 오토로테이션(40분)</h2>
+<ol>
+  <li><b>브리핑(5분)</b> — 진입 조건 · NR 범위 · 플레어 높이 · 판정 기준(좋음: 300fpm · 15kt · NR 90% 이상).</li>
+  <li><b>준비</b> — 미리 저장해 둔 시나리오(예: '오토 연습장' — 1,500ft · 60kt · 바람 정면 10kt)를 🎬 시나리오에서 불러온다. 교관 화면을 연다.</li>
+  <li><b>연습 1~3회(20분)</b> — 교관 화면에서 '엔진 고장'. 끝나면 판정 알림을 함께 본다.</li>
+  <li><b>변수(5분)</b> — 돌풍 +10 · 연료 20gal(가벼움) · '뒤로 쏠림' 으로 같은 연습.</li>
+  <li><b>강평(10분)</b> — 📋 강평에서 NR · 고도 그래프 · 플레어 시점 · 사건. 보고서를 PDF 로 저장해 기록철에 넣는다.</li>
+</ol>
+</main>
+</body>
+</html>

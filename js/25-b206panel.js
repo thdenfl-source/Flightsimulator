@@ -747,7 +747,7 @@ function b206HydFail(on) { b206Hyd.fail = !!on; try { if (typeof fdrNote === 'fu
 // ── 무게중심(CG · 세로, 기준선에서 in) — 206B-3 대략 팔 길이 ──
 //   자중 1,950lb @116.5 · 조종석 65 · 뒷좌석 104 · 화물칸 148 · 연료 110.3
 //   허용 — 앞 106.0 · 뒤 114.2(총중량 3,200lb 까지) · 벗어나면 W&B 창에 빨갛게
-const B206_ARM = { empty: 116.5, pilot: 65, copilot: 65, rear: 104, cargo: 148, fuel: 110.3 }, B206_CG = { fwd: 106.0, aft: 114.2 };
+const B206_ARM = TUNE.b206Arm, B206_CG = TUNE.b206Cg;   // 값은 00-params.js
 function b206Cg(w = b206Wb, gal = b206FuelGal()) {
   let m = 0, wt = 0;
   for (const k of ['empty', 'pilot', 'copilot', 'rear', 'cargo']) { m += w[k] * B206_ARM[k]; wt += w[k]; }

@@ -195,9 +195,9 @@ function _envLightPts(t) {
       const td = at(0, tdy), d = _envDist(la0, lo0, td[0], td[1]).d, hft = S.alt - SHIP3D_DECK / 0.3048;
       if (d < 5600 && d > 20) {
         const ang = Math.atan2(hft * 0.3048, d) / _envD2R, blink = Math.floor(t * 2) % 2 === 0;
-        const col = ang > 4.5 ? (blink ? '#3dff6a' : null) : ang >= 2.5 ? '#3dff6a' : ang >= 1.5 ? '#ff3030' : (blink ? '#ff3030' : null);
+        const H = TUNE.hapi, col = ang > H.high ? (blink ? '#3dff6a' : null) : ang >= H.ok ? '#3dff6a' : ang >= H.slight ? '#ff3030' : (blink ? '#ff3030' : null);
         const [la, lo] = at(0, y0 - 1); if (col) P.push([la, lo, col, 1.6, 'HAPI']);
-        envHapi = { ang, col: ang > 4.5 ? '높음' : ang >= 2.5 ? '정상' : ang >= 1.5 ? '조금 낮음' : '낮음' };
+        envHapi = { ang, col: ang > H.high ? '높음' : ang >= H.ok ? '정상' : ang >= H.slight ? '조금 낮음' : '낮음' };
       } else envHapi = null;
     }
   } catch (e) { _swallow(e); }
@@ -213,6 +213,39 @@ function _envLightPts(t) {
   return P;
 }
 let envHapi = null, envSarLit = false;
+// ── 지형 가림(3D) — 카메라에서 불까지 12곳의 지형 높이를 보고, 시선보다 높은 곳이 있으면 가린다 ──
+//   지형 높이는 그려진 3D 지형(queryTerrainElevation · 과장 배율 그대로)이라 카메라 높이와 같은 잣대다.
+//   불 하나마다 0.6초 기억하고, 한 장면에 새로 재는 것은 60개까지(나머지는 지난 값).
+const ENV_OCC_N = 12, ENV_OCC_TTL = 600, ENV_OCC_MAX = 60;
+const _envOcc = new Map(); let _envOccBudget = 0;
+function envCamEye(m, cam) {
+  try {
+    const fc = m.getFreeCameraOptions && m.getFreeCameraOptions();
+    if (fc && fc.position && fc.position.toAltitude) { const ll = fc.position.toLngLat(); return { lat: ll.lat, lng: ll.lng, h: fc.position.toAltitude() }; }
+  } catch (e) { _swallow(e); }
+  return cam ? { lat: cam.lat, lng: cam.lng, h: (S.alt || 0) * 0.3048 } : null;
+}
+function envLightVisible(m, eye, la, lo, hM) {
+  if (!m.queryTerrainElevation) return true;
+  const now = performance.now(), key = la.toFixed(5) + ',' + lo.toFixed(5);
+  const c = _envOcc.get(key);
+  if (c && now - c.t < ENV_OCC_TTL) return c.v;
+  if (_envOccBudget <= 0) return c ? c.v : true;
+  _envOccBudget--;
+  let v = true;
+  try {
+    const q = ll => { const z = m.queryTerrainElevation(ll); return Number.isFinite(z) ? z : null; };
+    const g0 = q([lo, la]); const lh = (g0 == null ? 0 : Math.max(0, g0)) + (hM || 3);   // 불 높이 — 그 자리 지면 + 3m
+    for (let i = 1; i < ENV_OCC_N; i++) {
+      const k = i / ENV_OCC_N, sla = eye.lat + (la - eye.lat) * k, slo = eye.lng + (lo - eye.lng) * k;
+      const z = q([slo, sla]); if (z == null) continue;
+      if (z > eye.h + (lh - eye.h) * k + 2) { v = false; break; }
+    }
+  } catch (e) { _swallow(e); }
+  _envOcc.set(key, { v, t: now });
+  if (_envOcc.size > 4000) { for (const [k2, c2] of _envOcc) if (now - c2.t > ENV_OCC_TTL) _envOcc.delete(k2); }
+  return v;
+}
 function envFxFrame() {
   const fx = _envFxEls(); if (!fx) return;
   // 구름 속
@@ -235,7 +268,10 @@ function envFxFrame() {
   const visM = env.vis > 0 ? env.vis * 1000 : 30000;
   // 카메라 자리(조종석이면 기체 · 지도식 3D 면 위쪽 어딘가)에서 앞쪽에 있는 불만 그린다
   let cam = { lat: S.lat, lng: S.lon }; try { const c = m.transform && m.transform.getCameraLngLat ? m.transform.getCameraLngLat() : null; if (c) cam = c; } catch (e) { _swallow(e); }
-  const inFront = (la, lo) => { const v = _envDist(cam.lat, cam.lng, la, lo); if (v.d < 5) return { ok: true, d: v.d }; const a = Math.atan2(v.e, v.n) - camB; return { ok: Math.cos(a) > 0.05 || (m.getPitch && m.getPitch() < 50), d: v.d }; };
+  const inFront0 = (la, lo) => { const v = _envDist(cam.lat, cam.lng, la, lo); if (v.d < 5) return { ok: true, d: v.d }; const a = Math.atan2(v.e, v.n) - camB; return { ok: Math.cos(a) > 0.05 || (m.getPitch && m.getPitch() < 50), d: v.d }; };
+  // 산 뒤의 불은 가린다 — 카메라 눈높이에서 불까지 지형을 짚어 본다(envLightVisible · 0.6초 동안 기억)
+  const eye = envCamEye(m, cam); _envOccBudget = ENV_OCC_MAX;
+  const inFront = (la, lo, hM) => { const f = inFront0(la, lo); if (f.ok && eye && f.d > 150 && !envLightVisible(m, eye, la, lo, hM)) f.ok = false; return f; };
   // 다른 항공기 — 낮에는 작은 점 · 밤에는 충돌방지등(빨강 깜빡 · 흰 번쩍)
   for (const tr of tfc) {
     const f = inFront(tr.lat, tr.lon); if (!f.ok || f.d > 20000) continue;
