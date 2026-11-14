@@ -62,7 +62,7 @@ function instFailApply() {
 })();
 
 // ── 설정(⚙) — 이 기기 'appSet' ──
-const appSet = { callsign: 'Coastguard zero one', atcVoice: true, readback: true, rate: 1.05 };
+const appSet = { callsign: 'Coastguard zero one', atcVoice: true, readback: true, rate: 1.05, mission: 'patrol' };   // mission — Watchman 교신의 임무(patrol · medevac · sar)
 try { Object.assign(appSet, JSON.parse(localStorage.getItem('appSet') || '{}')); } catch (e) { _swallow(e); }
 function appSetSave() { try { localStorage.setItem('appSet', JSON.stringify(appSet)); } catch (e) { _swallow(e); } }
 
@@ -238,6 +238,7 @@ function toggleSettings() {
       if (k === 'sound' && typeof toggleSound === 'function') toggleSound();
       else if (k === 'atcVoice' || k === 'readback') { appSet[k] = v === '1'; appSetSave(); }
       else if (k === 'rate') { appSet.rate = +v; appSetSave(); }
+      else if (k === 'mission') { appSet.mission = v; appSetSave(); }
       else if (k === 'raCall' && typeof envSet === 'function') envSet({ raCall: v === '1' });
       else if (k === 'export') settingsExport();
       else if (k === 'reset') Promise.resolve(typeof uiConfirm === 'function' ? uiConfirm('모든 설정 · 시나리오 · 저장 비행을 지우고 처음으로 돌릴까요?') : false).then(ok => { if (ok) settingsReset(); });
@@ -261,6 +262,7 @@ function _setRender() {
     <div class="set-row"><span>관제 음성</span><div>${tg('atcVoice', appSet.atcVoice)}</div></div>
     <div class="set-row"><span>리드백 확인(음성 인식)</span><div>${tg('readback', appSet.readback)}</div></div>
     <div class="set-row"><span>말 빠르기</span><div>${[0.85, 1.05, 1.3].map(r => `<button class="sim-btn ${appSet.rate === r ? 'on' : ''}" data-set="rate:${r}">${r === 0.85 ? '느리게' : r === 1.05 ? '보통' : '빠르게'}</button>`).join('')}</div></div>
+    <div class="set-row"><span>임무(Watchman 교신)</span><div>${[['patrol', 'Sea patrol'], ['medevac', 'MEDEVAC'], ['sar', 'Search and Rescue']].map(([v, l]) => `<button class="sim-btn ${appSet.mission === v ? 'on' : ''}" data-set="mission:${v}">${l}</button>`).join('')}</div></div>
     <div class="set-row"><span>콜사인(관제)</span><div><input type="text" data-setv="callsign" value="${appSet.callsign.replace(/"/g, '&quot;')}"></div></div>
     <div class="set-row"><span>교관 기기 연결</span><div><button class="sim-btn" data-set="ios">📱 교관 기기와 잇기(QR)</button></div></div>
     <div class="set-row"><span>모든 설정</span><div><button class="sim-btn" data-set="export">내보내기</button><label class="sim-btn">들여오기<input type="file" accept=".json" data-setv="file" hidden></label><button class="sim-btn" data-set="reset">초기화</button></div></div>

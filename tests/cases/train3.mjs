@@ -63,6 +63,13 @@ export async function run(page, t) {
     F.leave = call([5, 90], [3, 90], false, false);
     F.inb = call([12, 240], [15, 240], false, false);
     F.final = call([5, 240], [7, 240], false, false);
+    // Watchman(VHF 125.3 · UHF 278.4) — 관제권 밖 레이더 조력 요청 → 관제권으로 들어오며 끝냄
+    window.sndOnGround = () => false; S.wps = [{ ident: 'SEA1', lat: ap.lat - 0.6, lon: ap.lon - 0.6 }]; S.awp = 0; atcWm.contact = false;
+    const wm = atcFacility(125.3); Object.assign(S, at(25, 250));
+    F.wm1 = { k: wm && wm.kind, t: atcReply(wm), p: atcPilotLast, contact: atcWm.contact };
+    Object.assign(S, at(6, 250));
+    F.wm2 = { t: atcReply(atcFacility(278.4)), p: atcPilotLast, contact: atcWm.contact };
+    appSet.mission = 'medevac'; Object.assign(S, at(25, 250)); atcReply(wm); F.wm3 = atcPilotLast; appSet.mission = 'patrol'; atcWm.contact = false; S.lat = ap.lat + 0.05; S.lon = ap.lon;
     atcOnRunway = onRw0; S.wps = wps0; _atcTrack.length = 0; atcTwr.phase = null;
     o.F = F;
     // APP — 코드를 주고 · 맞추면 레이더 포착
@@ -88,6 +95,10 @@ export async function run(page, t) {
   t.ok(/radial 5 miles, leaving your control zone/.test(F.leave.p) && /frequency change approved/.test(F.leave.t), `관제 — 5NM 관제권을 떠날 때: "${F.leave.p}" → "frequency change approved"`);
   t.ok(/radial 12 miles, request inbound for landing/.test(F.inb.p) && /report five miles from final/.test(F.inb.t), `관제 — 들어올 때: "${F.inb.p}" → "report five miles from final"`);
   t.ok(/five miles from final/.test(F.final.p) && /wind .* runway .* cleared to land/.test(F.final.t), `관제 — 5마일 final: → "wind …, runway …, cleared to land"`);
+  t.ok(F.wm1.k === 'WATCHMAN' && /^Watchman, .*, \d{3} radial \d+ miles from RK[A-Z]{2}, direct to SEA1 for sea patrol\.$/.test(F.wm1.p) && /radar contact, maintain VFR/.test(F.wm1.t) && F.wm1.contact,
+    `Watchman(125.3) — 레이더 조력 요청: "${F.wm1.p}" → "radar contact, maintain VFR"`);
+  t.ok(/landing assured to RK[A-Z]{2}, request frequency change/.test(F.wm2.p) && /radar frequency change approved\. Have a good day!/.test(F.wm2.t) && !F.wm2.contact && /for MEDEVAC\./.test(F.wm3),
+    `Watchman(UHF 278.4) — 관제권에 들어오며 "${F.wm2.p}" → "radar frequency change approved" · 임무 MEDEVAC`);
   t.ok(!A.app || (/squawk/.test(A.sq1) && /radar contact/.test(A.sq2)), `APP — 코드를 주고, 맞추면 레이더 포착 (${A.app ? A.sq2.slice(0, 50) : '주파수 없음'})`);
   t.ok(A.ptt.length === 1 && /cleared|report|approved|taxi/.test(A.ptt[0]), 'PTT 로 송신하고 놓으면 1.5초 뒤 관제가 답한다');
   t.ok(A.cl[3] === null && A.pitotAuto && A.pitotAuto.ok && A.pitotOff && !A.pitotOff.ok && A.pitotOff.now === 'OFF',
