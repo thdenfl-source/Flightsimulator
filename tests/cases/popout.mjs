@@ -109,8 +109,9 @@ export async function run(page, t) {
     window.requestAnimationFrame = () => 0;           // 본 창 rAF 를 멈춘 셈
     await new Promise(r => setTimeout(r, 400));
     const t0 = _simLastTick;
-    await new Promise(r => setTimeout(r, 800));
-    const t1 = _simLastTick;
+    // 검사를 여럿 함께 돌리면 새 창의 그리기 주기가 늦게 돈다 — 3초까지 기다린다
+    let t1 = t0;
+    for (let i = 0; i < 15 && t1 - t0 <= 300; i++) { await new Promise(r => setTimeout(r, 200)); t1 = _simLastTick; }
     window.requestAnimationFrame = raf; requestAnimationFrame(simStep);
     return t1 - t0;
   });

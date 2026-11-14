@@ -124,6 +124,11 @@ function sarTick(dt) {
     const m = kt * 0.514444 * dt, d = sar.dir * Math.PI / 180;
     [sar.lat, sar.lon] = _sarOff(sar.lat, sar.lon, m * Math.cos(d), m * Math.sin(d));
   }
+  // 바다 상태(29-env.js) — 익수자는 파도 · 바람에 바람 쪽으로 더 밀린다
+  if (sar.type === 'water' && typeof envSeaDrift === 'function') {
+    const sd = envSeaDrift();
+    if (sd.kt > 0) { const m = sd.kt * 0.514444 * dt, d = sd.dir * Math.PI / 180; [sar.lat, sar.lon] = _sarOff(sar.lat, sar.lon, m * Math.cos(d), m * Math.sin(d)); }
+  }
   // 자동 결속 — 높이 차 10ft · 반경 10m 안에 20초
   const g = sarGeom();
   if (hoistPowered() && hoistFt > 0 && Math.abs(g.dh) <= SAR_CAP_DH && g.dist !== null && g.dist <= SAR_CAP_R) {

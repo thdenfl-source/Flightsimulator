@@ -194,14 +194,18 @@ function uiToast(msg, kind, ms) {
       _uiToastWrap.className = 'ui-toast-wrap';
       document.body.appendChild(_uiToastWrap);
     }
+    // 알림 정리 — 같은 문구가 떠 있으면 새로 띄우지 않고 그 알림을 늘린다 · 한꺼번에 셋까지(넘으면 오래된 것부터 내린다)
+    const txt = String(msg == null ? '' : msg), dur = ms || 2600;
+    const same = [..._uiToastWrap.children].find(e => e.textContent === txt && !e._gone);
+    const hide = el => { if (el._gone) return; el._gone = true; clearTimeout(el._tm); el.classList.remove('on'); setTimeout(() => { try { el.remove(); } catch (e) { _swallow(e); } }, 250); };
+    if (same) { clearTimeout(same._tm); same._tm = setTimeout(() => hide(same), dur); return; }
+    const live = [..._uiToastWrap.children].filter(e => !e._gone);
+    while (live.length >= 3) hide(live.shift());
     const t = document.createElement('div');
     t.className = 'ui-toast' + (kind ? ' ' + kind : '');
-    t.textContent = String(msg == null ? '' : msg);
+    t.textContent = txt;
     _uiToastWrap.appendChild(t);
     requestAnimationFrame(() => t.classList.add('on'));
-    setTimeout(() => {
-      t.classList.remove('on');
-      setTimeout(() => { try { t.remove(); } catch (e) { _swallow(e); } }, 250);
-    }, ms || 2600);
+    t._tm = setTimeout(() => hide(t), dur);
   } catch (e) { _swallow(e); }
 }

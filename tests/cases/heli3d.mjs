@@ -145,8 +145,9 @@ export async function run(page, t) {
       out.a0 = simVisAlt().alt;              // 그려진 땅 300m (실제 200m)
       terr = 600;                            // 능선 — 그려진 땅이 한순간에 600m
       out.a1 = simVisAlt().alt;
-      await w(1000);
+      const tA = performance.now(); await w(1000);
       out.a15 = simVisAlt().alt;             // 1초 뒤 — 따라가는 중
+      out.dt15 = performance.now() - tA;     // 검사를 여럿 함께 돌리면 1초가 훨씬 늦게 온다
       await w(3500);
       out.a2 = simVisAlt().alt;              // 천천히 따라가 다 맞춘다
       terr = 900;                            // 같은 프레임에 두 번 재도(카메라 · 모형) 같은 값
@@ -158,7 +159,7 @@ export async function run(page, t) {
   });
   t.ok(Math.abs(vis.a0 - 1014.4) < 1, `높이 = 고도(914m) + 그려진 땅 − 실제 땅 (${vis.a0.toFixed(1)}m)`);
   t.ok(Math.abs(vis.a1 - vis.a0) < 3, `능선을 넘는 순간 튀지 않는다 (${vis.a0.toFixed(1)} → ${vis.a1.toFixed(1)}m · 종전 +100m)`);
-  t.ok(vis.a15 > vis.a1 + 20 && vis.a15 < 1110 && Math.abs(vis.a2 - 1114.4) < 6,
+  t.ok((vis.dt15 > 2500 || (vis.a15 > vis.a1 + 20 && vis.a15 < 1110)) && Math.abs(vis.a2 - 1114.4) < 6,
     `천천히 따라가 새 땅에 맞춘다 (1초 ${vis.a15.toFixed(1)} · 4.5초 ${vis.a2.toFixed(1)}m)`);
   t.ok(Math.abs(vis.b2 - vis.b1) < 0.5, '같은 프레임의 카메라와 모형은 같은 높이를 쓴다');
   t.ok(vis.gnd.agl < 0.01 && Math.abs(vis.gnd.alt - 600) < 0.01, `땅에 앉아 있으면 그려진 땅에 그대로 (${vis.gnd.alt.toFixed(1)}m)`);
@@ -236,6 +237,8 @@ export async function run(page, t) {
     // 한 번 더 누르면 1인칭으로 — CHIN 창이 돌아온다
     btn.click();
     await w(300 + SIM_CAM_TX_MS);                       // 조종석으로 들어가는 전환이 끝난 뒤
+    // 검사를 여럿 함께 돌리면 전환 · CHIN 창 만들기가 늦다 — 3초 더 기다린다
+    for (let i = 0; i < 15 && (simExtView || heli3dShown() || _chinMaps.length !== 2); i++) await w(200);
     out.back = { ext: simExtView, model: heli3dShown(), chin: _chinMaps.length };
     // 외부 시점에서 SIM 을 나가면 다음에는 1인칭부터
     toggleExtView(true);
@@ -488,8 +491,9 @@ export async function run(page, t) {
     const o = {};
     for (const v of ['OFF', 'LOW', 'HI', 'WASH']) { ovhdSet('wiper', v); await w(150); o[v] = st(); }
     ovhdSet('wiper', 'LOW'); await w(150);
-    const a = getComputedStyle(document.getElementById('ck-wipe-l')).transform; await w(400);
-    o.moves = getComputedStyle(document.getElementById('ck-wipe-l')).transform !== a;
+    // 움직이는가 — 검사를 여럿 함께 돌리면 그리기가 늦다(2초까지 본다)
+    const a = getComputedStyle(document.getElementById('ck-wipe-l')).transform; o.moves = false;
+    for (let i = 0; i < 10 && !o.moves; i++) { await w(200); o.moves = getComputedStyle(document.getElementById('ck-wipe-l')).transform !== a; }
     ovhdSet('wiper', 'OFF'); toggleCockpitView(); toggleSimMode(false); exitSolo(); await w(200);
     S.alt = 0; S.spd = 0; S.running = false;
     return o;

@@ -64,6 +64,8 @@ function fdrStep(dtSim) {
   fdr.t += dtSim;
   if (fdr.t >= fdr.nextT) { fdrRecord(); fdr.nextT = Math.floor(fdr.t) + 1; }
 }
+// 다른 파일이 사건을 적는다(엔진 한계 넘음 · 스타터 과열 · LTE · 마스트 범핑 …) — 기록이 꺼져 있으면 그만
+function fdrNote(txt, kind = '') { if (!fdr.on) return; fdr.ev.push({ t: fdr.t, i: Math.max(0, fdr.rows.length - 1), txt, kind }); }
 function fdrClear() { fdr.t = 0; fdr.nextT = 0; fdr.rows = []; fdr.ev = []; fdr.prev = null; fdr.drop0 = (typeof afcsDropCount === 'number') ? afcsDropCount : 0; }
 let _fdrT = 0;
 setInterval(() => {
@@ -75,7 +77,7 @@ setInterval(() => {
 
 // ── 요약 ──
 function fdrSummary(rows = fdr.rows) {
-  const s = { dur: 0, maxAlt: 0, maxIas: 0, maxTq: 0, tqOverS: 0, tqContS: 0, vneS: 0, nrLowS: 0, landings: 0, hardLdg: 0, airS: 0, drops: 0 };
+  const s = { dur: 0, maxAlt: 0, maxIas: 0, maxTq: 0, tqOverS: 0, tqContS: 0, vneS: 0, nrLowS: 0, landings: 0, hardLdg: 0, airS: 0, drops: 0, exceed: 0 };
   if (!rows.length) return s;
   s.dur = rows[rows.length - 1].t - rows[0].t;
   let cont = 100; try { cont = typeof tqLimitCont === 'function' ? tqLimitCont() : 100; } catch (e) { _swallow(e); }
@@ -86,6 +88,7 @@ function fdrSummary(rows = fdr.rows) {
     if (i && !rows[i - 1].gnd && r.gnd) { s.landings++; if (rows[i - 1].vs < -300) s.hardLdg++; }
   });
   s.drops = fdr.ev.filter(e => /AFCS 풀림/.test(e.txt)).length;
+  s.exceed = fdr.ev.filter(e => /한계 넘음|과열|마스트 범핑/.test(e.txt)).length;
   return s;
 }
 // ── CSV ──
@@ -108,7 +111,7 @@ function fdrSaveCsv() {
 }
 
 // ══ 강평 창 ══
-const _dbf = { open: false, cur: -1, live: true, play: 0, playT: null, track: null };
+const _dbf = { open: false, cur: -1, live: true, play: 0, playT: null, track: null, tab: 'ev' };
 const _hms = s => { s = Math.max(0, Math.round(s)); const h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60, x = s % 60; return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(x).padStart(2, '0'); };
 function _dbfBuild() {
   let w = document.getElementById('dbf-wrap');
@@ -122,8 +125,12 @@ function _dbfBuild() {
     <div class="dbf-sum" data-dbf-v="sum"></div>
     <div class="dbf-main"><canvas class="dbf-trk" data-dbf-c="trk"></canvas><canvas class="dbf-chart" data-dbf-c="chart"></canvas></div>
     <div class="dbf-ctl"><button class="sim-btn" data-dbf="play">▶</button><button class="sim-btn" data-dbf="spd">×10</button>
-      <input type="range" class="dbf-rng" min="0" max="0" value="0" data-dbf-v="rng"><button class="sim-btn" data-dbf="live">LIVE</button></div>
-    <div class="dbf-bot"><div class="dbf-read" data-dbf-v="read"></div><div class="dbf-ev" data-dbf-v="ev"></div></div></div>`;
+      <input type="range" class="dbf-rng" min="0" max="0" value="0" data-dbf-v="rng"><button class="sim-btn" data-dbf="live">LIVE</button>
+      <button class="sim-btn" data-dbf="ga" title="채점 구간 시작 = 지금 시각">A</button><button class="sim-btn" data-dbf="gb" title="채점 구간 끝 = 지금 시각">B</button>
+      <button class="sim-btn" data-dbf="r3d" title="기록한 비행을 3D 화면에서 다시 본다">3D 다시 보기</button></div>
+    <div class="dbf-bot"><div class="dbf-read" data-dbf-v="read"></div>
+      <div class="dbf-side"><div class="dbf-tabs"><button class="sim-btn on" data-dbf="tab:ev">사건</button><button class="sim-btn" data-dbf="tab:gr">채점</button></div>
+        <div class="dbf-ev" data-dbf-v="ev"></div><div class="dbf-gr" data-dbf-v="gr" style="display:none"></div></div></div></div>`;
   document.body.appendChild(w);
   w.addEventListener('click', e => {
     const b = e.target.closest('[data-dbf]'); if (!b) { const ev = e.target.closest('[data-ev]'); if (ev) { _dbfSeek(+ev.dataset.ev); } return; }
@@ -136,6 +143,16 @@ function _dbfBuild() {
     else if (k === 'play') _dbfPlay(!_dbf.playT);
     else if (k === 'spd') { const L = [10, 30, 60]; _dbf.play = L[(L.indexOf(_dbf.play || 10) + 1) % L.length]; dbfRender(); }
     else if (k === 'live') { _dbf.live = true; _dbf.cur = -1; _dbfPlay(false); dbfRender(); }
+    else if (k === 'ga' || k === 'gb') { const ci = _dbf.live || _dbf.cur < 0 ? fdr.rows.length - 1 : _dbf.cur; _grade[k === 'ga' ? 'a' : 'b'] = ci; if (k === 'ga') _grade.tgt = { alt: null, ias: null, hdg: null }; _dbfTab('gr'); dbfRender(); }
+    else if (k === 'r3d') dbfReplay(true);
+    else if (k.startsWith('tab:')) _dbfTab(k.slice(4));
+  });
+  // 채점 — 목표 · 허용 · 쓰기
+  w.addEventListener('change', e => {
+    const i = e.target.closest('[data-gr]'); if (!i) return;
+    const [f, key] = i.dataset.gr.split(':');
+    if (f === 'use') _grade.use[key] = i.checked; else { const v = parseFloat(i.value); _grade[f][key] = Number.isFinite(v) ? v : null; }
+    dbfRender();
   });
   w.querySelector('[data-dbf-v="rng"]').addEventListener('input', e => _dbfSeek(+e.target.value));
   // 그래프 · 항적을 눌러(끌어) 그 순간으로
@@ -145,7 +162,48 @@ function _dbfBuild() {
   chart.addEventListener('pointerdown', seekChart); chart.addEventListener('pointermove', seekChart);
   return w;
 }
-function _dbfSeek(i) { _dbf.live = false; _dbf.cur = Math.max(0, Math.min(fdr.rows.length - 1, i | 0)); dbfRender(); }
+function _dbfSeek(i) { _dbf.live = false; _dbf.cur = Math.max(0, Math.min(fdr.rows.length - 1, i | 0)); dbfRender(); _rpApply(); }
+function _dbfTab(t) {
+  const w = document.getElementById('dbf-wrap'); if (!w) return; _dbf.tab = t;
+  w.querySelector('[data-dbf-v="ev"]').style.display = t === 'ev' ? '' : 'none';
+  w.querySelector('[data-dbf-v="gr"]').style.display = t === 'gr' ? '' : 'none';
+  w.querySelectorAll('[data-dbf^="tab:"]').forEach(b => b.classList.toggle('on', b.dataset.dbf === 'tab:' + t));
+  dbfRender();
+}
+// ── 채점(평가 구간 A ~ B) ──
+// 고도 · 속도 · 기수를 목표 ± 허용 안에 지킨 시간의 몫(%)을 본다. 목표를 비우면 구간 시작 값이 목표다.
+// 점수 = 고른 항목의 '허용 안' 몫의 평균 · 등급 — 90 우수 · 75 만족 · 60 보통 · 그 밑 미흡
+const _grade = { a: -1, b: -1, tgt: { alt: null, ias: null, hdg: null }, tol: { alt: 100, ias: 10, hdg: 10 }, use: { alt: true, ias: true, hdg: true } };
+const _GR = { alt: ['고도', 'ft', r => r.alt], ias: ['속도', 'kt', r => r.ias], hdg: ['기수', '°', r => r.hdg] };
+function fdrGrade(a = _grade.a, b = _grade.b, opt = _grade) {
+  const rows = fdr.rows; if (!(a >= 0 && b > a && b < rows.length)) return null;
+  const seg = rows.slice(a, b + 1), out = { a, b, dur: seg[seg.length - 1].t - seg[0].t, items: [], score: 0, grade: '' };
+  for (const k of Object.keys(_GR)) {
+    if (!opt.use[k]) continue;
+    const f = _GR[k][2], tgt = Number.isFinite(opt.tgt[k]) ? opt.tgt[k] : f(seg[0]), tol = opt.tol[k];
+    let inN = 0, max = 0, sq = 0;
+    seg.forEach(r => { let d = f(r) - tgt; if (k === 'hdg') d = ((d + 540) % 360) - 180; const ad = Math.abs(d); if (ad <= tol) inN++; max = Math.max(max, ad); sq += d * d; });
+    out.items.push({ k, name: _GR[k][0], unit: _GR[k][1], tgt, tol, inPct: 100 * inN / seg.length, maxDev: max, rms: Math.sqrt(sq / seg.length) });
+  }
+  if (out.items.length) out.score = out.items.reduce((s0, x) => s0 + x.inPct, 0) / out.items.length;
+  out.grade = out.score >= 90 ? '우수' : out.score >= 75 ? '만족' : out.score >= 60 ? '보통' : '미흡';
+  return out;
+}
+function _dbfGradeHtml() {
+  const rows = fdr.rows, a = _grade.a, b = _grade.b;
+  const seg = a >= 0 && b > a && b < rows.length;
+  let h = `<div class="gr-seg">구간 <b>A ${a >= 0 && rows[a] ? _hms(rows[a].t) : '—'}</b> ~ <b>B ${b >= 0 && rows[b] ? _hms(rows[b].t) : '—'}</b>` +
+    (seg ? '' : ' <span class="dbf-m">— 시간 막대를 옮겨 A · B 를 누르십시오</span>') + '</div><table class="gr-t"><tr><th></th><th>목표</th><th>±허용</th><th>안(%)</th><th>최대</th><th>RMS</th></tr>';
+  const R = seg ? fdrGrade() : null;
+  for (const k of Object.keys(_GR)) {
+    const it = R && R.items.find(x => x.k === k), dflt = seg ? _GR[k][2](rows[a]).toFixed(0) : '';
+    h += `<tr><td><label><input type="checkbox" data-gr="use:${k}" ${_grade.use[k] ? 'checked' : ''}> ${_GR[k][0]}</label></td>` +
+      `<td><input type="number" data-gr="tgt:${k}" value="${_grade.tgt[k] ?? ''}" placeholder="${dflt}"></td><td><input type="number" data-gr="tol:${k}" value="${_grade.tol[k]}"></td>` +
+      (it ? `<td class="${it.inPct >= 90 ? 'ok' : it.inPct >= 60 ? '' : 'bad'}">${it.inPct.toFixed(0)}</td><td>${it.maxDev.toFixed(0)}</td><td>${it.rms.toFixed(0)}</td>` : '<td>—</td><td>—</td><td>—</td>') + '</tr>';
+  }
+  h += '</table>' + (R ? `<div class="gr-sum">점수 <b>${R.score.toFixed(0)}</b> · <b class="gr-${R.grade}">${R.grade}</b> · ${_hms(R.dur)}</div>` : '');
+  return h;
+}
 function _dbfPlay(on) {
   clearInterval(_dbf.playT); _dbf.playT = null;
   if (on && fdr.rows.length > 1) {
@@ -153,7 +211,7 @@ function _dbfPlay(on) {
     _dbf.playT = setInterval(() => {
       _dbf.cur += Math.max(1, Math.round((_dbf.play || 10) / 10));
       if (_dbf.cur >= fdr.rows.length - 1) { _dbf.cur = fdr.rows.length - 1; _dbfPlay(false); }
-      dbfRender();
+      dbfRender(); _rpApply();
     }, 100);
   }
   dbfRender();
@@ -191,7 +249,7 @@ function dbfRender() {
   const s = fdrSummary(), kv = (k, v, warn) => `<span class="${warn ? 'warn' : ''}"><em>${k}</em>${v}</span>`;
   q('sum').innerHTML = n ? kv('기록', _hms(s.dur)) + kv('비행', _hms(s.airS)) + kv('최고 고도', s.maxAlt.toFixed(0) + ' ft') + kv('최고 속도', s.maxIas.toFixed(0) + ' kt') +
     kv('최고 TQ', s.maxTq.toFixed(0) + '%', s.tqOverS > 0) + kv('TQ 연속한계↑', _hms(s.tqContS), s.tqContS > 0) + kv('TQ 최대한계↑', _hms(s.tqOverS), s.tqOverS > 0) +
-    kv('VNE↑', _hms(s.vneS), s.vneS > 0) + kv('낮은 NR', _hms(s.nrLowS), s.nrLowS > 0) + kv('착륙', `${s.landings}${s.hardLdg ? ` (거친 ${s.hardLdg})` : ''}`, s.hardLdg > 0) + kv('AFCS 풀림', String(s.drops), s.drops > 0)
+    kv('VNE↑', _hms(s.vneS), s.vneS > 0) + kv('낮은 NR', _hms(s.nrLowS), s.nrLowS > 0) + kv('착륙', `${s.landings}${s.hardLdg ? ` (거친 ${s.hardLdg})` : ''}`, s.hardLdg > 0) + kv('AFCS 풀림', String(s.drops), s.drops > 0) + (s.exceed ? kv('점검 필요', s.exceed + '건', true) : '')
     : '<span>아직 기록이 없습니다 — 비행(▶)을 시작하면 1초마다 적습니다.</span>';
   // 읽기
   q('read').innerHTML = cur ? `<b>${_hms(cur.t)}</b> · ALT ${cur.alt.toFixed(0)} ft · IAS ${cur.ias.toFixed(0)} kt · HDG ${String(Math.round(cur.hdg) % 360).padStart(3, '0')}° · VS ${cur.vs.toFixed(0)} fpm · TQ ${cur.tq.toFixed(0)}% · NR ${cur.nr.toFixed(0)}% · BANK ${cur.bnk.toFixed(0)}° · PITCH ${cur.pit.toFixed(1)}°<br>` +
@@ -199,6 +257,7 @@ function dbfRender() {
   // 사건
   const evh = fdr.ev.slice(-200).map(e => `<div data-ev="${e.i}" class="${e.kind} ${e.i <= ci && (!fdr.ev[fdr.ev.indexOf(e) + 1] || fdr.ev[fdr.ev.indexOf(e) + 1].i > ci) ? 'cur' : ''}"><b>${_hms(e.t)}</b> ${e.txt}</div>`).join('');
   const evEl = q('ev'); if (evEl.dataset.h !== evh) { evEl.dataset.h = evh; evEl.innerHTML = evh || '<div>사건 없음</div>'; }
+  if (_dbf.tab === 'gr') { const gEl = q('gr'), gh = _dbfGradeHtml(); if (gEl.dataset.h !== gh && !gEl.contains(document.activeElement)) { gEl.dataset.h = gh; gEl.innerHTML = gh; } }
   _dbfTrack(w.querySelector('[data-dbf-c="trk"]'), rows, ci);
   _dbfChart(w.querySelector('[data-dbf-c="chart"]'), rows, ci);
 }
@@ -255,10 +314,74 @@ function _dbfChart(c, rows, ci) {
     for (let i = 0; i < n; i += step) { const x = X(i), y = Y(f(rows[i])); if (i === 0) g.moveTo(x, y); else g.lineTo(x, y); }
     g.stroke(); g.lineWidth = 1;
   });
+  // 채점 구간(A ~ B) 그늘
+  if (n >= 2 && _grade.a >= 0) {
+    const xa = L0 + _grade.a / (n - 1) * (w - L0 - R0), xb = _grade.b > _grade.a ? L0 + Math.min(n - 1, _grade.b) / (n - 1) * (w - L0 - R0) : xa + 2;
+    g.fillStyle = 'rgba(0,229,255,0.10)'; g.fillRect(xa, 0, Math.max(2, xb - xa), h);
+    g.fillStyle = '#00e5ff'; g.font = 'bold 10px Arial'; g.textAlign = 'center'; g.fillText('A', xa, 10); if (_grade.b > _grade.a) g.fillText('B', xb, 10);
+  }
   if (n >= 2 && ci >= 0) {
     const x = L0 + ci / (n - 1) * (w - L0 - R0);
     g.strokeStyle = '#fff'; g.setLineDash([3, 3]); g.beginPath(); g.moveTo(x, 0); g.lineTo(x, h); g.stroke(); g.setLineDash([]);
     g.fillStyle = '#fff'; g.font = '10px Arial'; g.textAlign = 'center'; g.fillText(_hms(rows[ci].t), Math.min(w - 20, Math.max(L0 + 14, x)), h - 1);
   }
 }
-try { appRegister({ toggleDebrief, dbfOpen, dbfClose, fdrSaveCsv }); } catch (e) { _swallow(e); }
+// ── 3D 다시 보기 — 기록한 자리 · 고도 · 자세를 비행 상태(S)에 얹어 3D 화면(조종석 · 외부)이 그대로 따라 그린다 ──
+// 비행은 멈추고(PAUSE), 강평 창은 화면 아래 작은 막대로 줄어든다. 끝내면 다시 보기 전 상태로 돌아간다.
+const _rp = { on: false, snap: null };
+function _rpApply() {
+  if (!_rp.on) return;
+  const r = fdr.rows[_dbf.cur < 0 ? fdr.rows.length - 1 : _dbf.cur]; if (!r) return;
+  S.lat = r.lat; S.lon = r.lon; S.alt = r.alt; S.hdg = (typeof toTrue === 'function') ? toTrue(r.hdg) : r.hdg;
+  S.pit = r.pit; S.bnk = r.bnk; S.spd = r.ias; S.vs = r.vs; bankTarget = r.bnk;
+  try { updateAcOnMap(); } catch (e) { _swallow(e); }
+  try { drawPFD(); } catch (e) { _swallow(e); }
+  _rpMini();
+}
+function dbfReplay(on) {
+  if (on && fdr.rows.length < 2) { try { uiToast('다시 볼 기록이 없습니다'); } catch (e) { _swallow(e); } return; }
+  if (on && !_rp.on) {
+    _rp.snap = { lat: S.lat, lon: S.lon, alt: S.alt, hdg: S.hdg, pit: S.pit, bnk: S.bnk, spd: S.spd, vs: S.vs, running: S.running, trail: S.trail.slice() };
+    S.running = false; try { updateFlyBtns(); } catch (e) { _swallow(e); }
+    _rp.on = true; _dbf.live = false; if (_dbf.cur < 0) _dbf.cur = 0;
+    const w = document.getElementById('dbf-wrap'); if (w) w.style.display = 'none'; _dbf.open = false;
+    _rp.solo = false;
+    try { if (typeof _soloActive !== 'undefined' && !_soloActive && typeof enterSolo === 'function') { enterSolo('m3d'); _rp.solo = true; } } catch (e) { _swallow(e); }
+    _rpApply(); _dbfPlay(true);
+  } else if (!on && _rp.on) {
+    _dbfPlay(false); _rp.on = false;
+    const sn = _rp.snap; if (sn) { Object.assign(S, { lat: sn.lat, lon: sn.lon, alt: sn.alt, hdg: sn.hdg, pit: sn.pit, bnk: sn.bnk, spd: sn.spd, vs: sn.vs }); S.trail = sn.trail; bankTarget = sn.bnk; S.lastT = null; }
+    try { updateAcOnMap(); drawPFD(); } catch (e) { _swallow(e); }
+    const m = document.getElementById('dbf-mini'); if (m) m.style.display = 'none';
+    try { if (_rp.solo && typeof exitSolo === 'function' && _soloActive) exitSolo(); } catch (e) { _swallow(e); }
+    _rp.solo = false;
+    dbfOpen();
+  }
+}
+function _rpMini() {
+  let m = document.getElementById('dbf-mini');
+  if (!m) {
+    m = document.createElement('div'); m.id = 'dbf-mini';
+    m.innerHTML = `<b>3D 다시 보기</b><button class="sim-btn" data-rp="play">❚❚</button><button class="sim-btn" data-rp="spd">×10</button>` +
+      `<input type="range" min="0" max="0" value="0" data-rp="rng"><span data-rp="t"></span><button class="sim-btn" data-rp="ext" title="외부 시점(SIM)">EXT</button><button class="sim-btn" data-rp="end">✕ 끝내기</button>`;
+    document.body.appendChild(m);
+    m.addEventListener('click', e => {
+      const b = e.target.closest('button[data-rp]'); if (!b) return;
+      const k = b.dataset.rp;
+      if (k === 'play') _dbfPlay(!_dbf.playT);
+      else if (k === 'spd') { const L = [10, 30, 60]; _dbf.play = L[(L.indexOf(_dbf.play || 10) + 1) % L.length]; }
+      else if (k === 'ext') { try { if (typeof toggleExtView === 'function') toggleExtView(); else if (typeof simExtView !== 'undefined') simExtView = !simExtView; } catch (er) { _swallow(er); } }
+      else if (k === 'end') dbfReplay(false);
+      _rpMini();
+    });
+    m.querySelector('[data-rp="rng"]').addEventListener('input', e => { _dbf.cur = +e.target.value; _rpApply(); });
+  }
+  if (!_rp.on) { m.style.display = 'none'; return; }
+  m.style.display = 'flex';
+  const n = fdr.rows.length, ci = Math.max(0, _dbf.cur), r = fdr.rows[ci];
+  const rng = m.querySelector('[data-rp="rng"]'); rng.max = String(Math.max(0, n - 1)); rng.value = String(ci);
+  m.querySelector('[data-rp="play"]').textContent = _dbf.playT ? '❚❚' : '▶';
+  m.querySelector('[data-rp="spd"]').textContent = '×' + (_dbf.play || 10);
+  m.querySelector('[data-rp="t"]').textContent = r ? `${_hms(r.t)} · ${r.alt.toFixed(0)}ft · ${r.ias.toFixed(0)}kt` : '';
+}
+try { appRegister({ toggleDebrief, dbfOpen, dbfClose, fdrSaveCsv, dbfReplay }); } catch (e) { _swallow(e); }

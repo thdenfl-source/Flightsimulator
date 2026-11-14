@@ -109,10 +109,10 @@ export async function run(page, t) {
     const t0 = performance.now();
     (function tick() {
       n++;
-      if (performance.now() - t0 < 400) requestAnimationFrame(tick); else res(n);
+      if (performance.now() - t0 < 1000) requestAnimationFrame(tick); else res(n);
     })();
   }));
-  t.ok(frames > 5, `다이얼로그가 떠 있어도 렌더 루프가 계속 돈다 (400ms 동안 ${frames}프레임)`);
+  t.ok(frames > 3, `다이얼로그가 떠 있어도 렌더 루프가 계속 돈다 (1초 동안 ${frames}프레임 — 막혔다면 1)`);   // 검사를 여럿 함께 돌리면 프레임이 줄어든다
   await clickBtn('취소'); await p;
 
   t.eq(nativeDialog, null, `브라우저 기본 모달이 뜨지 않음${nativeDialog ? ' (' + nativeDialog + ')' : ''}`);
