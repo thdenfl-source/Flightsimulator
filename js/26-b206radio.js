@@ -166,6 +166,7 @@ function b206Ptt(on) {
   const t = b206TxTarget();
   if (on && !t.ok) { try { uiToast(`송신 안 됨 — ${t.why}`, 'warn', 2000); } catch (e) { _swallow(e); } return; }
   _b206Tx = on;
+  if (on && typeof atcPttStart === 'function') atcPttStart();     // 리드백이면 듣기 시작(32-callout.js)
   const ac = _adfAudioCtx(), v = b206r.aud.ivol / 10;
   try {
     if (on && ac && ac.state === 'running') _b206TxSnd = _b206TxNoise(ac, 0.012 * v);

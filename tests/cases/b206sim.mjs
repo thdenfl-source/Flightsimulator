@@ -35,9 +35,19 @@ export async function run(page, t) {
     envSet({ gust: 20 }); const bs = []; for (let i = 0; i < 20; i++) { FLY(0.5); bs.push(simTurb.r); } envSet({ gust: 0 });
     o.turb = Math.max(...bs) - Math.min(...bs);
     // 오토로테이션 착지 평가 — 엔진 고장 · 낮게 · 천천히 내려앉기
-    (${SIM_SETUP_SRC})(); S.spd = 10; S.pit = pitchFromSpd(10); simTrimHoldSpeed(); S.alt = 30; window._tcElev = () => 0;
+    (${SIM_SETUP_SRC})(); S.spd = 10; S.pit = pitchFromSpd(10); simTrimHoldSpeed(); window._tcElev = () => 30; S.alt = 30 / 0.3048 + 30;
     b206cFail(true); simAuto.flareAgl = 40; S.vs = -200; simNr = 95;
     simTouchdown(-200, 8); o.td1 = simAuto.last; simTouchdown(-900, 30); o.td2 = simAuto.last;
+    b206cFail(false); b206c.run = true; b206c.th = 'FULL'; _b206cApply();
+    // 꼬리로터 구동 상실 — 페달이 듣지 않고 기수가 돈다 · 40kt 넘으면 꼬리날개가 잡는다
+    (${SIM_SETUP_SRC})(); S.spd = 5; S.pit = pitchFromSpd(5); simTrimHoldSpeed(); S.alt = 1500; FLY(1);
+    simTrFailSet('drive'); let h1 = S.hdg; _ax(2, 1); FLY(3); o.trSlow = Math.abs(normAS(S.hdg - h1)); _ax(2, 0);
+    S.spd = 80; S.pit = pitchFromSpd(80); simTrimHoldSpeed(); FLY(4); h1 = S.hdg; FLY(3); o.trFast = Math.abs(normAS(S.hdg - h1));
+    simTrFailSet(null);
+    // VRS 회복 평가 — 빠뜨린 뒤 앞으로 나가 회복
+    (${SIM_SETUP_SRC})(); window._tcElev = () => null; S.spd = 3; S.pit = pitchFromSpd(3); simTrimHoldSpeed(); S.alt = 2000; FLY(1);
+    simVrs = 1; S.vs = -1500; simVrsEval(false); simVrsRec.alt0 = 2200;
+    S.spd = 40; S.pit = pitchFromSpd(40); simVrs = 0; S.vs = -200; S.alt = 2100; simVrsEval(false); o.vrs = simVrsRec.last;
     return o; })()`);
   t.ok(!R.small.warned && R.small.r < 1, '기수를 조금 숙이는 보통 조작은 저중력이 아니다');
   t.ok(R.push.n < 0.5 && R.push.r > 5 && R.push.bnk > 5 && R.push.warned,
@@ -49,6 +59,8 @@ export async function run(page, t) {
   t.ok(R.bnkNoHyd < R.bnkHyd * 0.6, `유압이 없으면 같은 사이클릭에 뱅크가 굼뜨다 (${R.bnkHyd.toFixed(1)}° → ${R.bnkNoHyd.toFixed(1)}° / 0.5초)`);
   t.ok(R.turb > 2, `돌풍 +20kt — 자세가 흔들린다 (롤 흔들림 ${R.turb.toFixed(1)}°)`);
   t.ok(R.td1.grade === '좋음' && R.td2.grade === '손상' && R.td1.flare === 40, `오토로테이션 착지 평가 — 200fpm · 8kt · NR 95 좋음 / 900fpm · 30kt 손상 (플레어 ${R.td1.flare}ft)`);
+  t.ok(R.trSlow > 40 && R.trFast < R.trSlow / 3, `꼬리로터 구동 상실 — 저속에서 페달을 차도 기수가 돈다(${R.trSlow.toFixed(0)}°/3초) · 80kt 에선 꼬리날개가 잡는다(${R.trFast.toFixed(0)}°)`);
+  t.ok(R.vrs && R.vrs.how === '전진 비행' && Math.round(R.vrs.loss) === 100 && R.vrs.grade === '좋음', `VRS 회복 평가 — ${R.vrs && R.vrs.how} · 고도 손실 ${R.vrs && Math.round(R.vrs.loss)}ft · ${R.vrs && R.vrs.grade}`);
   const errs = (page.errors || []).filter(e => !/Failed to fetch|NetworkError|tile/i.test(e));
   t.ok(errs.length === 0, '오류 없음' + (errs.length ? ' — ' + errs.slice(0, 2).join(' / ') : ''));
 }

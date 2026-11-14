@@ -429,7 +429,7 @@ function b206Annun(v) {
 // CAUTION LT TEST 를 누르고 있는 동안 경고 · 주의등이 다 켜지고 경고음이 난다(전구 · 경고음 점검).
 let b206TestOn = false, _b206Ack = new Set();
 function b206Cautions(v, an) {
-  return [['HYD PRESS', !b206HydOn()], ['GEN FAIL', !v.run], ['ENG CHIP', false], ['XMSN OIL', an.xmsnOil], ['ENG OIL', an.engOil], ['T/R CHIP', false], ['FUEL FILT', false], ['LOW FUEL', an.lowFuel]];
+  return [['HYD PRESS', !b206HydOn()], ['GEN FAIL', !v.run], ['ENG CHIP', typeof b206c !== 'undefined' && !!b206c.chip], ['XMSN OIL', an.xmsnOil], ['ENG OIL', an.engOil], ['T/R CHIP', false], ['FUEL FILT', false], ['LOW FUEL', an.lowFuel]];
 }
 function b206MasterCaution(v, an) {
   const on = b206Cautions(v, an).filter(c => c[1]).map(c => c[0]);

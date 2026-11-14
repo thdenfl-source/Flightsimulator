@@ -14,7 +14,7 @@
 // ══════════════════════════════════════════════════════
 
 // ── 말하기 ──
-function speak(text, lang = 'en-US', rate = 1.05) {
+function speak(text, lang = 'en-US', rate = (typeof appSet !== 'undefined' ? appSet.rate : 1.05)) {
   try {
     if (!('speechSynthesis' in window)) return false;
     const u = new SpeechSynthesisUtterance(text); u.lang = lang; u.rate = rate; u.volume = 1;
@@ -22,7 +22,7 @@ function speak(text, lang = 'en-US', rate = 1.05) {
   } catch (e) { _swallow(e); return false; }
 }
 let speakLog = [];          // 검사 · 강평용 — 마지막 말들
-function _say(text) { speakLog.push(text); if (speakLog.length > 20) speakLog.shift(); speak(text); }
+function _say(text, atc) { speakLog.push(text); if (speakLog.length > 20) speakLog.shift(); if (atc && typeof appSet !== 'undefined' && !appSet.atcVoice) return; speak(text); }
 
 // ── ① RA 콜아웃 ──
 const RA_CALLS = [500, 100, 50, 20, 10];
@@ -45,7 +45,8 @@ function raCalloutStep() {
 setInterval(() => { try { raCalloutStep(); } catch (e) { _swallow(e); } }, 150);
 
 // ── ② 관제 응답 ──
-const ATC_CS = 'Coastguard zero one';
+// 콜사인 — ⚙ 설정에서 바꾼다(33-train4.js appSet.callsign)
+const atcCs = () => (typeof appSet !== 'undefined' && appSet.callsign) || 'Coastguard zero one';
 const _apEn = { 인천: 'Incheon', 김포: 'Gimpo', 김해: 'Gimhae', 제주: 'Jeju', 광주: 'Gwangju', 목포: 'Mokpo', 무안: 'Muan', 군산: 'Gunsan', 여수: 'Yeosu',
   사천: 'Sacheon', 울산: 'Ulsan', 포항: 'Pohang', 대구: 'Daegu', 청주: 'Cheongju', 원주: 'Wonju', 양양: 'Yangyang', 서산: 'Seosan', 수원: 'Suwon',
   오산: 'Osan', 평택: 'Pyeongtaek', 강릉: 'Gangneung', 예천: 'Yecheon', 속초: 'Sokcho', 울진: 'Uljin', 태안: 'Taean', 정석: 'Jeongseok', 성무: 'Seongmu',
@@ -84,32 +85,91 @@ function atcReply(fac) {
   const nm = fac.en, wind = (() => { try { return windSpd > 0 ? `wind ${_say3(String(Math.round(windDir)).padStart(3, '0'))} at ${Math.round(windSpd)}` : 'wind calm'; } catch (e) { return 'wind calm'; } })();
   const rwy = atcRunway(fac.rwy), rw = rwy ? `runway ${_say3(rwy)}` : 'the active runway';
   let txt;
-  if (fac.kind === 'GND') txt = `${ATC_CS}, ${nm} Ground, taxi to holding point ${rw}.`;
+  if (fac.kind === 'GND') { txt = `${atcCs()}, ${nm} Ground, taxi to holding point ${rw}.`; atcExpect = { t: Date.now(), items: [['holding', 'hold'], rwy ? _rwyTokens(rwy) : []] }; }
   else if (fac.kind === 'TWR') {
-    if (gnd) txt = `${ATC_CS}, ${nm} Tower, ${wind}, ${rw}, cleared for takeoff.`;
-    else if (fac.d <= 10) txt = `${ATC_CS}, ${nm} Tower, ${wind}, ${rw}, cleared to land.`;
-    else txt = `${ATC_CS}, ${nm} Tower, report five miles final ${rw}.`;
+    if (gnd) { txt = `${atcCs()}, ${nm} Tower, ${wind}, ${rw}, cleared for takeoff.`; atcExpect = { t: Date.now(), items: [['cleared'], ['takeoff', 'take off'], rwy ? _rwyTokens(rwy) : []] }; }
+    else if (fac.d <= 10) { txt = `${atcCs()}, ${nm} Tower, ${wind}, ${rw}, cleared to land.`; atcExpect = { t: Date.now(), items: [['cleared'], ['land'], rwy ? _rwyTokens(rwy) : []] }; }
+    else txt = `${atcCs()}, ${nm} Tower, report five miles final ${rw}.`;
   } else {
     const code = (typeof b206r !== 'undefined') ? b206r.xpdr.code : null, mode = (typeof b206r !== 'undefined') ? b206r.xpdr.mode : 'ALT';
     if (!atcSquawk) {
       atcSquawk = String(Math.floor(Math.random() * 8)) + [0, 0, 0].map(() => Math.floor(Math.random() * 8)).join('');
       if (atcSquawk === '7700' || atcSquawk === '7600' || atcSquawk === '7500' || atcSquawk === '1200') atcSquawk = '4521';
-      txt = `${ATC_CS}, ${nm} Approach, squawk ${_say3(atcSquawk)}.`;
+      txt = `${atcCs()}, ${nm} Approach, squawk ${_say3(atcSquawk)}.`;
+      atcExpect = { t: Date.now(), items: [['squawk'], atcSquawk.split('')] };
     } else if (code === atcSquawk && (mode === 'ALT' || mode === 'ON')) {
       const brg = Math.round((Math.atan2((S.lon - fac.ap.lon) * Math.cos(S.lat * Math.PI / 180), S.lat - fac.ap.lat) * 180 / Math.PI + 360) % 360);
       const dir = ['north', 'northeast', 'east', 'southeast', 'south', 'southwest', 'west', 'northwest'][Math.round(brg / 45) % 8];
-      txt = `${ATC_CS}, ${nm} Approach, radar contact, ${Math.round(fac.d)} miles ${dir} of ${nm}, maintain VFR.`;
-    } else txt = `${ATC_CS}, ${nm} Approach, verify squawk ${_say3(atcSquawk)}.`;
+      const malt = Math.max(1000, Math.round((S.alt || 0) / 500) * 500);
+      txt = `${atcCs()}, ${nm} Approach, radar contact, ${Math.round(fac.d)} miles ${dir} of ${nm}, maintain ${_altWords(malt)} feet.` + atcTrafficInfo();
+      atcExpect = { t: Date.now(), items: [['maintain'], _altWords(malt).split(' ')] };
+    } else txt = `${atcCs()}, ${nm} Approach, verify squawk ${_say3(atcSquawk)}.`;
   }
   atcLast = { kind: fac.kind, icao: fac.icao, txt };
-  _say(txt);
+  _say(txt, true);
   try { uiToast(`📻 ${fac.name} ${fac.kind} — ${txt}`, '', 6000); } catch (e) { _swallow(e); }
   try { if (typeof fdrNote === 'function') fdrNote(`관제 ${fac.name} ${fac.kind}: ${txt}`); } catch (e) { _swallow(e); }
   return txt;
 }
+// ── 리드백 확인 — 관제 지시 뒤 30초 안의 다음 송신은 리드백으로 듣는다(브라우저 음성 인식 · ⚙ 설정 '리드백 확인') ──
+//   빠진 것(활주로 · 코드 · 고도 · 허가 말)이 있으면 "Negative, read back …" · 다 있으면 알림으로 '리드백 정확'
+let atcExpect = null, _atcRec = null, _atcHeard = '';
+const _NUMW = { zero: '0', one: '1', two: '2', three: '3', four: '4', five: '5', six: '6', seven: '7', eight: '8', nine: '9', niner: '9', tree: '3', fife: '5' };
+const _altWords = ft => { const th = Math.floor(ft / 1000), h = Math.round((ft % 1000) / 100); return (th ? `${th === 1 ? 'one' : ['', '', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine'][th]} thousand` : '') + (h ? ` ${['', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine'][h]} hundred` : ''); };
+const _rwyTokens = r => { const m = String(r).match(/^(\d)(\d)([LRC]?)$/); return m ? [m[1] + m[2], ({ L: 'left', R: 'right', C: 'center' })[m[3]]].filter(Boolean) : [r]; };
+function _normHeard(t) {
+  let s = ' ' + String(t || '').toLowerCase().replace(/[^a-z0-9 ]/g, ' ') + ' ';
+  for (const [w, d] of Object.entries(_NUMW)) s = s.replace(new RegExp(' ' + w + ' ', 'g'), ' ' + d + ' ');
+  return s.replace(/(\d) (?=\d)/g, '$1').replace(/\s+/g, ' ');
+}
+// 들은 말이 지시를 다 담았나 — 항목마다 그 가운데 하나라도 들리면 된다(숫자는 이어 붙여 견준다)
+function atcCheckReadback(heard, exp = atcExpect) {
+  if (!exp) return null;
+  const h = _normHeard(heard), hn = h.replace(/ /g, '');
+  const missing = [];
+  for (const alts of exp.items) {
+    if (!alts.length) continue;
+    const ok = alts.some(a => { const n = _normHeard(a).trim(); return n && (h.includes(' ' + n + ' ') || (/^\d+$/.test(n.replace(/ /g, '')) && hn.includes(n.replace(/ /g, '')))); });
+    if (!ok) missing.push(alts[0]);
+  }
+  // 숫자 낱자(코드 · 고도 자리)는 한데 모아 다시 본다
+  const digits = exp.items.filter(a => a.length === 1 && /^\d$/.test(a[0])).map(a => a[0]).join('');
+  if (digits.length >= 3 && hn.includes(digits)) for (let i = missing.length - 1; i >= 0; i--) if (/^\d$/.test(missing[i])) missing.splice(i, 1);
+  return { ok: !missing.length, missing };
+}
+function atcReadbackResult(heard) {
+  const r = atcCheckReadback(heard); atcExpect = null; if (!r) return null;
+  if (r.ok) { try { uiToast('📻 리드백 정확', '', 2500); } catch (e) { _swallow(e); } try { if (typeof fdrNote === 'function') fdrNote('리드백 정확'); } catch (e) { _swallow(e); } }
+  else {
+    const txt = `${atcCs()}, negative, read back ${r.missing.join(' ')}.`;
+    _say(txt, true); try { uiToast(`📻 리드백 틀림 — 빠진 것: ${r.missing.join(' · ')}`, 'warn', 4000); } catch (e) { _swallow(e); }
+    try { if (typeof fdrNote === 'function') fdrNote(`리드백 틀림(${r.missing.join(' · ')})`, 'warn'); } catch (e) { _swallow(e); }
+  }
+  return r;
+}
+function atcPttStart() {
+  _atcHeard = '';
+  const R = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!atcExpect || Date.now() - atcExpect.t > 30000 || !R || (typeof appSet !== 'undefined' && !appSet.readback)) return false;
+  try { _atcRec = new R(); _atcRec.lang = 'en-US'; _atcRec.interimResults = false; _atcRec.onresult = e => { for (const x of e.results) _atcHeard += ' ' + x[0].transcript; }; _atcRec.start(); return true; } catch (e) { _swallow(e); _atcRec = null; return false; }
+}
+// 둘레의 교통(33-train4.js) — "traffic, 2 o'clock, 4 miles, 1500 feet"
+function atcTrafficInfo() {
+  const T = (typeof traffic !== 'undefined') ? traffic.filter(t => t.r < 8).sort((a, b) => a.r - b.r) : [];
+  if (!T.length) return '';
+  const t = T[0], v = { n: (t.lat - S.lat) * 60, e: (t.lon - S.lon) * 60 * Math.cos(S.lat * Math.PI / 180) };
+  const rel = ((Math.atan2(v.e, v.n) * 180 / Math.PI - S.hdg) % 360 + 360) % 360, clock = Math.round(rel / 30) || 12;
+  return ` Traffic, ${clock} o'clock, ${Math.max(1, Math.round(t.r))} miles, ${_altWords(Math.max(500, Math.round(t.alt / 100) * 100))} feet.`;
+}
 // PTT 를 놓았을 때(26-b206radio.js b206Ptt) — 송신한 주파수
 let _atcT = null;
 function atcOnTx(freq, delayMs = 1500) {
+  // 지시 뒤 30초 안 — 리드백(음성 인식이 있으면 들은 것으로 견주고, 없으면 그냥 받는다)
+  if (atcExpect && Date.now() - atcExpect.t < 30000) {
+    if (_atcRec) { const rec = _atcRec; _atcRec = null; rec.onend = () => atcReadbackResult(_atcHeard); try { rec.stop(); } catch (e) { _swallow(e); atcReadbackResult(_atcHeard); } }
+    else atcExpect = null;
+    return null;
+  }
   const fac = atcFacility(freq); if (!fac) return null;
   clearTimeout(_atcT); _atcT = setTimeout(() => atcReply(fac), delayMs);
   return fac;

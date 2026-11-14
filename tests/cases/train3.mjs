@@ -54,7 +54,7 @@ export async function run(page, t) {
     if (app) { o.sq1 = atcReply(app); b206r.xpdr.code = atcSquawk; b206r.xpdr.mode = 'ALT'; o.sq2 = atcReply(app); }
     // PTT 를 놓으면 그 주파수로 답한다
     window.sndOnGround = () => false;
-    b206r.aud.mic = '1'; b206r.gns.on = true; b206r.gns.com[0] = twr; speakLog.length = 0;
+    b206r.aud.mic = '1'; b206r.gns.on = true; b206r.gns.com[0] = twr; speakLog.length = 0; atcExpect = null;
     b206Ptt(true); b206Ptt(false); await new Promise(r => setTimeout(r, 1800)); o.ptt = speakLog.slice();
     window.sndOnGround = gnd0; Object.assign(S, a0);
     // 체크리스트

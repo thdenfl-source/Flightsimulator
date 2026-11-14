@@ -19,7 +19,7 @@ const ENV_VIS = [0, 10, 5, 3, 1.5, 0.8, 0.4];                 // km(0 = 무제�
 const ENV_SEA_ROLL = [0, 1, 2, 4, 6, 8, 10], ENV_SEA_PITCH = [0, 0.5, 1, 2, 3, 4, 5];
 const ENV_SEA_DRIFT = [0, 0.1, 0.3, 0.6, 0.9, 1.3, 1.8];      // 익수자 바람 쪽 표류(kt) — 파도 · 바람에 밀린다
 const ENV_SEA_NAME = ['0 잔잔', '1 잔물결', '2 약', '3 보통', '4 약간 높음', '5 높음', '6 매우 높음'];
-const env = { tod: 'DAY', vis: 0, rain: 0, nvg: false, sea: 0, gust: 0, ceil: 0, ldg: false, raCall: true };
+const env = { tod: 'DAY', vis: 0, rain: 0, nvg: false, sea: 0, gust: 0, ceil: 0, ldg: false, raCall: true, surface: 'normal', traffic: 0 };
 try { Object.assign(env, JSON.parse(localStorage.getItem(ENV_KEY) || '{}')); } catch (e) { _swallow(e); }
 function _envSave() { try { localStorage.setItem(ENV_KEY, JSON.stringify(env)); } catch (e) { _swallow(e); } }
 // 시정(km) → 안개가 짙어지는 자리(0 = 화면 가운데 · 1 = 지평선)
@@ -63,7 +63,7 @@ function envApply() {
   } catch (e) { _swallow(e); }
 }
 function envSet(o) {
-  for (const k of ['tod', 'vis', 'rain', 'nvg', 'sea', 'gust', 'ceil', 'ldg', 'raCall']) if (o[k] !== undefined) env[k] = o[k];
+  for (const k of ['tod', 'vis', 'rain', 'nvg', 'sea', 'gust', 'ceil', 'ldg', 'raCall', 'surface', 'traffic']) if (o[k] !== undefined) env[k] = o[k];
   env.sea = Math.max(0, Math.min(6, env.sea | 0)); env.rain = Math.max(0, Math.min(2, env.rain | 0));
   if (o.sea !== undefined) env._seaApplied = -1;
   _envSave(); envApply(); envPanelRender();
@@ -99,15 +99,18 @@ function toggleEnvPanel() {
       grp('바다 상태', 'sea', [0, 1, 2, 3, 4, 5, 6].map(v => [v, String(v)])) +
       grp('돌풍', 'gust', [0, 5, 10, 15, 20].map(v => [v, v ? '+' + v + 'kt' : '없음'])) +
       grp('구름 밑면', 'ceil', [0, 500, 1000, 1500, 2500, 4000].map(v => [v, v ? v + 'ft' : '없음'])) +
+      grp('지면', 'surface', [['normal', '보통'], ['sand', '모래(브라운아웃)'], ['snow', '눈(화이트아웃)']]) +
+      grp('교통량(TCAS)', 'traffic', [0, 1, 3, 5].map(v => [v, v ? v + '대' : '없음'])) +
       grp('착륙등(흰수리)', 'ldg', [['false', '끔'], ['true', '켬']]) +
       grp('RA 콜아웃', 'raCall', [['false', '끔'], ['true', '켬']]) +
-      `<div class="env-note" data-envv="sea"></div></div>`;
+      `<div class="env-note" data-envv="sea"></div><div class="env-row"><span>METAR</span><div><button class="sim-btn" data-envx="metar">가까운 공항 METAR 로 맞추기</button></div></div></div>`;
     document.body.appendChild(w);
     w.addEventListener('click', e => {
+      if (e.target.closest('[data-envx="metar"]')) { if (typeof envMetarNearest === 'function') envMetarNearest().then(() => envPanelRender()); return; }
       if (e.target === w || e.target.closest('[data-envx]')) { w.style.display = 'none'; return; }
       const b = e.target.closest('[data-env]'); if (!b) return;
       const [k, v] = b.dataset.env.split(':');
-      envSet({ [k]: k === 'tod' ? v : (k === 'nvg' || k === 'ldg' || k === 'raCall') ? v === 'true' : +v });
+      envSet({ [k]: (k === 'tod' || k === 'surface') ? v : (k === 'nvg' || k === 'ldg' || k === 'raCall') ? v === 'true' : +v });
     });
   }
   w.style.display = 'flex'; envPanelRender();
@@ -221,8 +224,9 @@ function envFxFrame() {
   if (inC !== _envCloudIn) { _envCloudIn = inC; if (inC) { try { if (typeof fdrNote === 'function') fdrNote(`구름 진입(IMC) — ${Math.round(alt)}ft`, 'warn'); } catch (e) { _swallow(e); } } }
   // 불빛 — 밤 · 황혼 · NVG 에만
   const dark = env.tod !== 'DAY' || env.nvg;
+  const tfc = (typeof traffic !== 'undefined') ? traffic : [];
   const cv = fx.cv, m = (typeof _ml3d !== 'undefined') ? _ml3d : null;
-  if (!dark || !m || !m.project) { if (cv.width) { cv.width = 0; } return; }
+  if ((!dark && !tfc.length) || !m || !m.project) { if (cv.width) { cv.width = 0; } return; }
   const r = cv.parentElement.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
   const W = Math.round(r.width * dpr), H = Math.round(r.height * dpr);
   if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; }
@@ -232,6 +236,17 @@ function envFxFrame() {
   // 카메라 자리(조종석이면 기체 · 지도식 3D 면 위쪽 어딘가)에서 앞쪽에 있는 불만 그린다
   let cam = { lat: S.lat, lng: S.lon }; try { const c = m.transform && m.transform.getCameraLngLat ? m.transform.getCameraLngLat() : null; if (c) cam = c; } catch (e) { _swallow(e); }
   const inFront = (la, lo) => { const v = _envDist(cam.lat, cam.lng, la, lo); if (v.d < 5) return { ok: true, d: v.d }; const a = Math.atan2(v.e, v.n) - camB; return { ok: Math.cos(a) > 0.05 || (m.getPitch && m.getPitch() < 50), d: v.d }; };
+  // 다른 항공기 — 낮에는 작은 점 · 밤에는 충돌방지등(빨강 깜빡 · 흰 번쩍)
+  for (const tr of tfc) {
+    const f = inFront(tr.lat, tr.lon); if (!f.ok || f.d > 20000) continue;
+    const p = m.project([tr.lon, tr.lat]); const dy = ((tr.alt - S.alt) * 0.3048) / Math.max(50, f.d) * r.height * 0.9;
+    const y = p.y - dy - 4; if (!(p.x > -20 && p.x < r.width + 20 && y > -20 && y < r.height + 20)) continue;
+    const blink = Math.floor(t * 1.5 + tr.id) % 2 === 0;
+    g.fillStyle = dark ? (blink ? '#ff2a2a' : '#ffffff') : '#20262c'; g.globalAlpha = dark ? 1 : 0.8;
+    g.beginPath(); g.arc(p.x, y, Math.max(1.5, Math.min(5, 3000 / Math.max(300, f.d))), 0, 7); g.fill();
+  }
+  g.globalAlpha = 1;
+  if (!dark) return;
   g.globalCompositeOperation = 'lighter';
   // 빛 무리
   for (const b of envBeams()) {

@@ -24,6 +24,11 @@ function iosState() {
     fails: {
       bEng: b2 && typeof b206c !== 'undefined' && !!b206c.fail, bHyd: b2 && typeof b206Hyd !== 'undefined' && !!b206Hyd.fail,
       oei: !b2 && typeof _simEngBtn !== 'undefined' && _simEngBtn === 1, idle: !b2 && typeof _simEngBtn !== 'undefined' && _simEngBtn === 0,
+      trDrive: typeof simTrFail !== 'undefined' && simTrFail === 'drive', trFixed: typeof simTrFail !== 'undefined' && simTrFail === 'fixed',
+      govHi: b2 && typeof b206c !== 'undefined' && b206c.govFail === 'HI', govLo: b2 && typeof b206c !== 'undefined' && b206c.govFail === 'LO',
+      chip: b2 && typeof b206c !== 'undefined' && !!b206c.chip, thStuck: b2 && typeof b206c !== 'undefined' && !!b206c.thStuck,
+      asi: typeof instFail !== 'undefined' && instFail.asi !== null, alt: typeof instFail !== 'undefined' && instFail.alt !== null,
+      vsi: typeof instFail !== 'undefined' && instFail.vsi !== null, ahrs: typeof instFail !== 'undefined' && !!instFail.ahrs, hdg: typeof instFail !== 'undefined' && !!instFail.hdg,
     },
     eng: (() => { try { return engStateLabel(); } catch (e) { return ''; } })(),
     scn: (typeof scnList === 'function') ? scnList().map(x => x.name) : [],
@@ -44,6 +49,10 @@ function iosHandle(m) {
       if (m.what === 'bEng' && typeof b206cFail === 'function') { if (on) { if (b206c.run) b206cFail(true); } else b206cFail(false); }
       else if (m.what === 'bHyd' && typeof b206HydFail === 'function') b206HydFail(on);
       else if ((m.what === 'oei' || m.what === 'idle') && typeof simEngApply === 'function') { _simEngBtn = on ? (m.what === 'oei' ? 1 : 0) : 2; simEngApply(); }
+      else if ((m.what === 'trDrive' || m.what === 'trFixed') && typeof simTrFailSet === 'function') simTrFailSet(on ? (m.what === 'trDrive' ? 'drive' : 'fixed') : null);
+      else if ((m.what === 'govHi' || m.what === 'govLo') && typeof b206cEngFail === 'function') b206cEngFail('gov', on ? (m.what === 'govHi' ? 'HI' : 'LO') : null);
+      else if ((m.what === 'chip' || m.what === 'thStuck') && typeof b206cEngFail === 'function') b206cEngFail(m.what, on);
+      else if (['asi', 'alt', 'vsi', 'ahrs', 'hdg'].includes(m.what) && typeof instFailSet === 'function') instFailSet(m.what, on);
       try { if (typeof fdrNote === 'function') fdrNote(`교관 — 고장 ${m.what} ${on ? '걸림' : '풀림'}`, on ? 'err' : ''); } catch (e) { _swallow(e); }
     }
     else if (c === 'msg') { try { uiToast(`🧑‍✈️ 교관: ${String(m.text || '').slice(0, 200)}`, 'warn', 6000); } catch (e) { _swallow(e); } }
@@ -53,8 +62,9 @@ function iosHandle(m) {
   } catch (e) { _swallow(e); }
   iosSend();
 }
-function iosSend() { try { if (_iosCh && !IOS_MODE) _iosCh.postMessage(iosState()); } catch (e) { _swallow(e); } }
-function iosCmd(c, o = {}) { try { if (_iosCh) _iosCh.postMessage(Object.assign({ type: 'cmd', c }, o)); } catch (e) { _swallow(e); } }
+// 같은 브라우저(BroadcastChannel)와 다른 기기(WebRTC — 33-train4.js rtcSend) 둘 다로 보낸다
+function iosSend() { if (IOS_MODE) return; const m = iosState(); try { if (_iosCh) _iosCh.postMessage(m); } catch (e) { _swallow(e); } try { if (typeof rtcSend === 'function') rtcSend(m); } catch (e) { _swallow(e); } }
+function iosCmd(c, o = {}) { const m = Object.assign({ type: 'cmd', c }, o); try { if (_iosCh) _iosCh.postMessage(m); } catch (e) { _swallow(e); } try { if (typeof rtcSend === 'function') rtcSend(m); } catch (e) { _swallow(e); } }
 if (_iosCh) _iosCh.onmessage = e => { if (IOS_MODE) iosRender(e.data); else iosHandle(e.data); };
 if (!IOS_MODE) setInterval(iosSend, 500);
 function openIos() {
@@ -71,6 +81,7 @@ function iosBuild() {
   const R = document.createElement('div'); R.id = 'ios-root';
   const grp = (t, k, opts) => `<div class="ios-row"><span>${t}</span><div>${opts.map(([v, l]) => `<button data-ios="env:${k}:${v}">${l}</button>`).join('')}</div></div>`;
   R.innerHTML = `<h1>🧑‍✈️ 교관 화면 (IOS)</h1><div class="ios-link" data-iosv="link">교육생 창을 기다리는 중…</div>
+    <div class="ios-btns"><button data-ios="rtc">📱 다른 기기의 교육생 창과 잇기…</button></div>
     <div class="ios-state" data-iosv="state"></div>
     <div class="ios-btns"><button data-ios="run">▶ 비행</button><button data-ios="pause">❚❚ 멈춤</button><button data-ios="debrief">📋 강평 열기</button></div>
     <h2>고장</h2><div class="ios-btns" data-iosv="fails"></div>
@@ -81,13 +92,15 @@ function iosBuild() {
     grp('비', 'rain', [[0, '없음'], [1, '약'], [2, '강']]) + grp('NVG', 'nvg', [['false', '끔'], ['true', '켬']]) +
     grp('바다', 'sea', [0, 1, 2, 3, 4, 5, 6].map(v => [v, String(v)])) + grp('돌풍', 'gust', [0, 5, 10, 15, 20].map(v => [v, v ? '+' + v : '없음'])) +
     grp('구름 밑면', 'ceil', [0, 500, 1000, 1500, 2500].map(v => [v, v ? v + 'ft' : '없음'])) +
+    grp('지면', 'surface', [['normal', '보통'], ['sand', '모래'], ['snow', '눈']]) + grp('교통량', 'traffic', [0, 1, 3, 5].map(v => [v, v ? v + '대' : '없음'])) +
     `<h2>SAR · 시나리오</h2><div class="ios-btns"><button data-ios="sar:1">요구조자 앞에 놓기</button><button data-ios="sar:0">요구조자 치우기</button></div><div class="ios-btns" data-iosv="scn"></div>
     <h2>메시지</h2><div class="ios-row"><div style="flex:1;display:flex;gap:6px"><input type="text" data-iosv="msg" placeholder="교육생 화면에 띄울 말" style="flex:1"><button data-ios="msg">보내기</button></div></div>`;
   document.body.appendChild(R);
   R.addEventListener('click', e => {
     const b = e.target.closest('[data-ios]'); if (!b) return;
     const p = b.dataset.ios.split(':');
-    if (p[0] === 'env') iosCmd('env', { o: { [p[1]]: p[1] === 'tod' ? p[2] : (p[1] === 'nvg') ? p[2] === 'true' : +p[2] } });
+    if (p[0] === 'env') iosCmd('env', { o: { [p[1]]: (p[1] === 'tod' || p[1] === 'surface') ? p[2] : (p[1] === 'nvg') ? p[2] === 'true' : +p[2] } });
+    else if (p[0] === 'rtc') { if (typeof toggleRemoteIos === 'function') toggleRemoteIos(); }
     else if (p[0] === 'fail') iosCmd('fail', { what: p[1], on: p[2] === '1' });
     else if (p[0] === 'wind') iosCmd('wind', { dir: +R.querySelector('[data-iosv="wd"]').value, spd: +R.querySelector('[data-iosv="ws"]').value });
     else if (p[0] === 'msg') { const i = R.querySelector('[data-iosv="msg"]'); if (i.value.trim()) { iosCmd('msg', { text: i.value.trim() }); i.value = ''; } }
@@ -106,7 +119,9 @@ function iosRender(m) {
     kv('고도', Math.round(m.alt) + ' ft') + kv('전파고도', Math.round(m.ra) + ' ft') + kv('속도', Math.round(m.spd) + ' kt') + kv('기수', String(Math.round(m.hdg) % 360).padStart(3, '0') + '°') +
     kv('승강률', Math.round(m.vs) + ' fpm') + kv('토크', Math.round(m.tq) + '%') + kv('NR', Math.round(m.nr) + '%') + kv('바람', `${Math.round(m.wind.dir)}° / ${Math.round(m.wind.spd)} kt`) +
     kv('자리', `${m.lat.toFixed(4)}, ${m.lon.toFixed(4)}`);
-  const F = m.ac === 'b206' ? [['bEng', '엔진 고장'], ['bHyd', '유압 고장']] : [['oei', '2번 엔진 고장(OEI · SIM)'], ['idle', '두 엔진 IDLE(SIM)']];
+  const F = (m.ac === 'b206' ? [['bEng', '엔진 고장'], ['bHyd', '유압 고장'], ['govHi', '거버너 HI'], ['govLo', '거버너 LO'], ['chip', 'ENG CHIP'], ['thStuck', '스로틀 고착']]
+                             : [['oei', '2번 엔진 고장(OEI · SIM)'], ['idle', '두 엔진 IDLE(SIM)']])
+    .concat([['trDrive', '꼬리로터 구동 상실(SIM)'], ['trFixed', '꼬리로터 피치 고정(SIM)'], ['asi', '속도계 고착'], ['alt', '고도계 고착'], ['vsi', '승강계 고착'], ['ahrs', 'AHRS(자세) 고장'], ['hdg', '나침반 오차 25°']]);
   const fh = F.map(([k, l]) => `<button data-ios="fail:${k}:${m.fails[k] ? 0 : 1}" class="${m.fails[k] ? 'on' : ''}">${m.fails[k] ? '✕ ' : ''}${l}</button>`).join('');
   const fe = R.querySelector('[data-iosv="fails"]'); if (fe.dataset.h !== fh) { fe.dataset.h = fh; fe.innerHTML = fh; }
   const sh = m.scn.length ? m.scn.map((n, i) => `<button data-ios="scn:${i}">🎬 ${n.replace(/</g, '&lt;')}</button>`).join('') : '<span class="ios-dim">저장한 시나리오 없음</span>';
@@ -133,6 +148,11 @@ const HELP_ITEMS = [
   ['STARTER (Bell)', '한 번 누르면 ON · 다시 누르면 OFF. N1 12% 넘어 스로틀 IDLE → 58% 넘어 STARTER OFF. 60초 넘기지 않는다.'],
   ['PTT (Bell 오디오 패널)', '누르는 동안 MIC 로 고른 무전기로 송신. 가까운 공항 TWR · GND · APP 주파수면 관제가 답한다.'],
   ['SOUND', '로터 소리 — 토크에 따라 크기가 바뀐다. 경고음이 울리면 반으로 줄어든다.'],
+  ['🧰 도구', '작은 화면에서는 시나리오 · 환경 · 강평 · 교관 화면 · 설정 · 도움말이 이 메뉴 하나로 모인다.'],
+  ['⚙ 설정', '소리 · RA 콜아웃 · 관제 음성 · 리드백 확인 · 말 빠르기 · 콜사인 · 다른 기기 교관 연결 · 모든 설정 내보내기/들여오기/초기화.'],
+  ['TCAS 교통', 'ENV 교통량 — 둘레에 다른 항공기. TA "Traffic" · RA(흰수리) "Climb/Descend". PFD TCAS 창 · 지도 · 3D 에 보인다.'],
+  ['고장(교관)', '꼬리로터(구동 상실 · 피치 고정) · 계기(속도계 · 고도계 · 승강계 고착 · AHRS · 나침반) · Bell 거버너 · CHIP · 스로틀 고착 — 교관 화면에서.'],
+  ['평가', '오토로테이션 착지 · VRS 회복(방법 · 시간 · 고도 손실) · 착수(흰수리 플로트) 를 판정해 강평에 남긴다.'],
 ];
 function toggleHelp() {
   let w = document.getElementById('help-wrap');

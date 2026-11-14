@@ -13,6 +13,8 @@ export async function run(page, t) {
   const ctx1 = await browser.newContext({ viewport: { width: 1400, height: 900 } });
   const fresh = await ctx1.newPage();
   await fresh.goto(url);
+  // 파일이 다 읽힐 때까지(검사를 여럿 함께 돌리거나 파일이 늘면 0.9초로 모자라다)
+  await fresh.waitForFunction(() => typeof leftSel !== 'undefined' && typeof appRegister === 'function', null, { timeout: 20000 });
   await fresh.waitForTimeout(900);
 
   const v = await fresh.evaluate(() => {
@@ -50,6 +52,8 @@ export async function run(page, t) {
   const two = await ctx2.newPage();
   await two.addInitScript(() => { try { localStorage.setItem('tripleMode2', '0'); } catch (e) {} });
   await two.goto(url);
+  // 파일이 다 읽힐 때까지(검사를 여럿 함께 돌리거나 파일이 늘면 0.9초로 모자라다)
+  await two.waitForFunction(() => typeof leftSel !== 'undefined' && typeof appRegister === 'function', null, { timeout: 20000 });
   await two.waitForTimeout(900);
   const w = await two.evaluate(() => ({
     triple: document.getElementById('app').classList.contains('triple'),

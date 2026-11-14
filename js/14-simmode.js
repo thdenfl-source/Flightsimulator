@@ -592,6 +592,69 @@ const LOWG_N = 0.5, LOWG_ROLL = 30, LOWG_BUMP_S = 0.8, LTE_YAW = 35;
 const simLowG = { n: 1, r: 0, t: 0, bump: 0, warned: false, pit0: null, vs0: null };
 const simLte = { yaw: 0, risk: 0, warned: false };
 function _bump(x, c, w) { const d = Math.abs(((x - c + 540) % 360) - 180); return Math.max(0, 1 - d / w); }
+// ── 꼬리로터 고장(교관 · IOS — 두 기종) ──
+//   'drive' — 구동 상실: 페달이 듣지 않고, 주로터 토크의 반작용으로 기수가 돈다(토크가 클수록 · 느릴수록 빠르게).
+//             앞으로 40kt 넘게 날면 꼬리날개(수직안정판)가 바람개비처럼 잡아 준다. 엔진 출력을 줄이면(오토로테이션) 멎는다.
+//   'fixed'  — 피치 고정: 페달이 그 자리에 굳는다. 고장 때 토크보다 출력을 올리면 반작용 쪽으로, 내리면 반대쪽으로 돈다.
+let simTrFail = null, _trFailTq = 0, simTrYaw = 0, _simLastDt = 0.05;
+function simTrFailSet(mode) {
+  simTrFail = mode || null; _trFailTq = S.tq; simTrYaw = 0;
+  try { if (typeof fdrNote === 'function') fdrNote(mode ? `꼬리로터 고장 — ${mode === 'drive' ? '구동 상실' : '피치 고정'}` : '꼬리로터 고장 풀림', mode ? 'err' : ''); } catch (e) { _swallow(e); }
+  if (mode) try { uiToast(mode === 'drive' ? '꼬리로터 구동 상실 — 기수가 돈다: 속도를 붙이거나(40kt↑) 출력을 줄여 오토로테이션' : '꼬리로터 피치 고정 — 출력으로 기수를 맞춘다(올리면 반작용 쪽 · 내리면 반대)', 'err', 5000); } catch (e) { _swallow(e); }
+}
+function simTrFailStep(dt, onGnd) {
+  if (!simTrFail || onGnd) { simTrYaw *= Math.max(0, 1 - dt * 2); return; }
+  const V = simAirspeed(), dir = -rotorSign();             // 반작용 — 로터가 도는 반대쪽
+  const vane = Math.max(0, Math.min(1, (V - 25) / 25));    // 25 → 50kt 사이에서 꼬리날개가 잡는다
+  let tgt;
+  if (simTrFail === 'drive') tgt = dir * (S.tq / 100) * 45 * (1 - 0.85 * vane);
+  else tgt = dir * (S.tq - _trFailTq) * 0.6 * (1 - 0.6 * vane);
+  simTrYaw += (tgt - simTrYaw) * Math.min(1, dt / 1.0);
+  if (Math.abs(simTrYaw) > 0.05) { S.hdg = normA(S.hdg + simTrYaw * dt); selHdg = ((Math.round(hdgInd()) + 359) % 360) + 1; }
+}
+// ── VRS 회복 평가 — 빠졌다 나오면 걸린 시간 · 잃은 고도 · 회복 방법(전진 · Vuichard(옆) · 컬렉티브 내림)을 적는다 ──
+const simVrsRec = { on: false, t: 0, alt0: 0, spd0: 0, tq0: 0, maxLat: 0, minTq: 999, last: null };
+function simVrsEval(onGnd) {
+  const R = simVrsRec, on = simVrs > 0.3;
+  if (on && !R.on) Object.assign(R, { on: true, t: 0, alt0: S.alt, spd0: simAirspeed(), tq0: S.tq, maxLat: 0, minTq: S.tq });
+  if (R.on) {
+    R.t += (typeof _simLastDt === 'number' ? _simLastDt : 0.05); R.maxLat = Math.max(R.maxLat, Math.abs(simLat)); R.minTq = Math.min(R.minTq, S.tq);
+    if (!on && simVrs < 0.05) {
+      const loss = Math.max(0, R.alt0 - S.alt), gain = simAirspeed() - R.spd0;
+      const how = onGnd ? '지면 충돌' : R.maxLat >= 6 ? 'Vuichard(옆으로 · 출력)' : gain >= 10 ? '전진 비행' : R.minTq < R.tq0 - 15 ? '컬렉티브 내림' : '기타';
+      const grade = onGnd ? '실패' : loss <= 100 ? '좋음' : loss <= 300 ? '보통' : '늦음';
+      R.last = { t: R.t, loss, how, grade }; R.on = false;
+      const txt = `VRS 회복 — ${how} · ${R.t.toFixed(1)}초 · 고도 손실 ${Math.round(loss)}ft · ${grade}`;
+      try { uiToast(txt, grade === '좋음' ? '' : 'warn', 5000); } catch (e) { _swallow(e); }
+      try { if (typeof fdrNote === 'function') fdrNote(txt, grade === '좋음' ? '' : 'warn'); } catch (e) { _swallow(e); }
+    }
+  }
+}
+// ── 착수(물 위에 내려앉기) — 흰수리 비상 플로트(하부 콘솔 EMERG FLOATS ARMED) ──
+//   ARMED 로 300fpm · 20kt 안에 내려앉으면 플로트가 펴져 성공, 그보다 세면 플로트 손상, OFF 면 전복 · 침수. Bell 은 플로트가 없다.
+let simDitchLast = null;
+// 물 위인가 — 지형 자료를 읽었고(모르면 땅으로 본다) · 땅 높이 0 · 갑판 아님 · 공항 2NM 밖
+function simWaterBelow() {
+  try { if (typeof simDeckFt === 'function' && simDeckFt() != null) return false; } catch (e) { _swallow(e); }
+  try { simTerrainFt(); } catch (e) { _swallow(e); }
+  if (!_simGndFresh) return false;
+  let g = 1; try { g = simGroundFt(); } catch (e) { _swallow(e); }
+  if (g > 0.5) return false;
+  try { if (typeof AIRPORTS_KR !== 'undefined' && AIRPORTS_KR.some(a => distance(S.lat, S.lon, a.lat, a.lon) < 2)) return false; } catch (e) { _swallow(e); }
+  return true;
+}
+function simDitchCheck(vs, spd) {
+  if (!simWaterBelow()) return false;
+  const v = Math.max(0, -vs), gs = Math.max(0, spd), b2 = typeof acB206 === 'function' && acB206();
+  let armed = false; try { armed = !b2 && typeof ovhdGet === 'function' && (ovhdGet('fltArmSw') === 'ARMED' || ovhdGet('floatDeploy') === 'DEPLOY'); } catch (e) { _swallow(e); }
+  const grade = armed ? (v <= 300 && gs <= 20 ? '성공 — 플로트 전개' : '플로트 손상 — 너무 세게') : (b2 ? '침수 — 플로트 없음' : '전복 · 침수 — 플로트 미전개(ARMED 아님)');
+  simDitchLast = { vs: v, spd: gs, armed, grade };
+  const txt = `착수 ${grade} · 강하 ${Math.round(v)}fpm · ${Math.round(gs)}kt`;
+  try { uiToast(txt, /성공/.test(grade) ? '' : 'err', 6000); } catch (e) { _swallow(e); }
+  try { if (typeof fdrNote === 'function') fdrNote(txt, /성공/.test(grade) ? '' : 'err'); } catch (e) { _swallow(e); }
+  if (!/성공/.test(grade)) { S.running = false; try { updateFlyBtns(); } catch (e) { _swallow(e); } }
+  return true;
+}
 // ── 돌풍 난류 · 유압 · 무게중심 ──
 // 돌풍(29-env.js env.gust kt): 바람 세기가 흔들리고(simWindRel) 자세도 조금씩 흔들린다 — 공중에서만
 const simTurb = { r: 0, p: 0, ph: Math.random() * 100 };
@@ -608,7 +671,8 @@ function simHydK() { try { return (typeof acB206 === 'function' && acB206() && t
 // 무게중심(Bell W&B) — 기준(110in)보다 뒤면 기수가 들리고, 앞이면 숙는다(°)
 function simCgPitch() { try { return (typeof acB206 === 'function' && acB206() && typeof b206Cg === 'function') ? Math.max(-4, Math.min(4, (b206Cg() - 110) * 0.6)) : 0; } catch (e) { return 0; } }
 function simB206Hazards(dt, a, onGnd) {
-  try { simTurbStep(dt, onGnd); simAutoTrack(onGnd); } catch (e) { _swallow(e); }
+  try { simTurbStep(dt, onGnd); simAutoTrack(onGnd); simTrFailStep(dt, onGnd); } catch (e) { _swallow(e); }
+  _simLastDt = dt;
   const L = simLowG;
   if (!(typeof acB206 === 'function' && acB206()) || onGnd || !(dt > 0)) {
     L.n = 1; L.r *= Math.max(0, 1 - dt * 2); L.t = 0; L.bump = 0; L.warned = false; L.pit0 = S.pit; L.vs0 = S.vs; simLte.yaw = 0; simLte.risk = 0; simLte.warned = false; return;
@@ -1049,6 +1113,8 @@ function simAutoTouchdown(vs, spd) {
   simAuto.flareAgl = null; simAuto.nrMin = 100;
 }
 function simTouchdown(vs, spd) {
+  // 물 위(갑판 아님 · 땅 높이 0)에 내려앉으면 — 착수 평가(흰수리 비상 플로트)
+  try { if (simDitchCheck(vs, spd)) return; } catch (e) { _swallow(e); }
   if (simEng === 0) { simAutoTouchdown(vs, spd); simLastTouchdown = { vs: Math.max(0, -vs), spd, grade: simAuto.last.grade }; return; }
   const v = Math.max(0, -vs);
   const grade = v <= TD_SOFT ? '부드러운 접지' : v <= TD_HARD ? '단단한 접지' : '충격 착륙';
@@ -1845,6 +1911,8 @@ function simFly(dt) {
     simLat += (latTgt - simLat) * Math.min(1, (onGnd ? 1.2 : SIDE_K) * dt);
   }
 
+  // 꼬리로터 고장 — 페달이 듣지 않는다(아래 simTrFailStep 이 기수를 돌린다)
+  if (simTrFail) a.yaw = 0;
   // ── 페달 → 기수 ──
   // HDG·NAV 가 기수를 잡고 있으면 페달은 무시한다(선택 헤딩으로 되돌리며 싸운다)
   // 페달 요율은 곧바로 붙지 않고 SIM_YAW_TAU 로 따라붙고, 놓으면 같은 빠르기로 멎는다
@@ -1964,6 +2032,7 @@ function simFly(dt) {
     const tgt = inV ? 1 : outV ? 0 : simVrs;
     simVrs += (tgt - simVrs) * Math.min(1, dt / (tgt > simVrs ? VRS_TAU_IN : VRS_TAU_OUT));
     if (simVrs > 0.01) { if (vRaw > 0) vRaw *= 1 - 0.8 * simVrs; vRaw -= VRS_SINK * simVrs * Math.max(0.5, S.tq / Math.max(30, preq)); }
+    try { simVrsEval(onGnd); } catch (e) { _swallow(e); }
   }
   // RPM LOW — 양력이 NR² 로 줄어 오르던 힘이 빠지고 그만큼 가라앉는다
   const nrL = Math.min(115, simNr - _simNrGov);   // 양력에 쓰는 NR(거버너 지연 몫은 뺀다)

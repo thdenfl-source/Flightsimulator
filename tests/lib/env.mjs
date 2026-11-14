@@ -15,12 +15,17 @@ export const EDITION = process.env.EDITION || (/flightsimulator/i.test(ROOT) ? '
 // 기종 — AC=b206|aw189 (기본 aw189: shinesong 에서 가져온 검사들이 유리 조종석을 전제로 한다)
 export const AC = process.env.AC || 'aw189';
 
+// 검사마다 앱을 임시 폴더에 복사한다 — 끝나면 지운다(남겨 두면 수천 개가 쌓여 디스크를 다 써 버렸다:
+// 파일 복사가 잘려 페이지가 뜨지 않는 엉뚱한 실패가 났다)
+const _tmpDirs = [];
+process.on('exit', () => { for (const d of _tmpDirs) { try { fs.rmSync(d, { recursive: true, force: true }); } catch (e) { /* 그만 */ } } });
 export function buildEnv() {
   const vendor = path.join(ROOT, 'vendor');
   if (!fs.existsSync(path.join(vendor, 'leaflet.js'))) {
     throw new Error('vendor/leaflet.js 가 없습니다 — 저장소가 온전한지 확인하세요.');
   }
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'vfrsim-test-'));
+  _tmpDirs.push(dir);
   for (const d of ['vendor', 'js', 'sounds']) {
     const src = path.join(ROOT, d);
     if (fs.existsSync(src)) fs.cpSync(src, path.join(dir, d), { recursive: true });
