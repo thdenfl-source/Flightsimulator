@@ -33,6 +33,9 @@ function iosState() {
     eng: (() => { try { return engStateLabel(); } catch (e) { return ''; } })(),
     scn: (typeof scnList === 'function') ? scnList().map(x => x.name) : [],
     sar: typeof sar !== 'undefined' && sar.on,
+    // Bell — 연료 · 무게 · 무게중심(25-b206panel.js) · 교관이 바꾼다(cmd 'wb')
+    wb: b2 && typeof b206Wb !== 'undefined' ? { gal: _n(() => b206FuelGal()), gw: _n(() => b206GrossWt()), cg: _n(() => b206Cg()), cgOk: (() => { try { return b206CgOk(); } catch (e) { return true; } })(),
+      max: (typeof B206_WB !== 'undefined') ? B206_WB.max : 3200, cap: (typeof B206_LIM !== 'undefined') ? B206_LIM.fuelCap : 91, o: Object.assign({}, b206Wb) } : null,
   };
 }
 // 교육생 창 — 명령을 받는다
@@ -59,6 +62,11 @@ function iosHandle(m) {
     else if (c === 'scn' && typeof scnApply === 'function') scnApply(scnList()[+m.i]);
     else if (c === 'sar' && typeof sarPlaceAhead === 'function') { if (m.on) sarPlaceAhead(); else if (sar.on) sarToggleOn(); }
     else if (c === 'debrief' && typeof dbfOpen === 'function') dbfOpen();
+    else if (c === 'wb' && typeof b206WbSet === 'function' && typeof acB206 === 'function' && acB206()) {
+      b206WbSet(m.o || {});
+      try { if (typeof b206WbRender === 'function') b206WbRender(); } catch (e) { _swallow(e); }
+      try { if (typeof fdrNote === 'function') fdrNote(`교관 — 연료 · 무게 바꿈(${Math.round(b206FuelGal())}gal · ${Math.round(b206GrossWt())}lb · CG ${b206Cg().toFixed(1)}in)`); } catch (e) { _swallow(e); }
+    }
   } catch (e) { _swallow(e); }
   iosSend();
 }
@@ -85,6 +93,10 @@ function iosBuild() {
     <div class="ios-state" data-iosv="state"></div>
     <div class="ios-btns"><button data-ios="run">▶ 비행</button><button data-ios="pause">❚❚ 멈춤</button><button data-ios="debrief">📋 강평 열기</button></div>
     <h2>고장</h2><div class="ios-btns" data-iosv="fails"></div>
+    <div data-iosv="wbsec" style="display:none"><h2>연료 · 무게 (Bell)</h2><div class="ios-state" data-iosv="wbstate"></div>
+      <div class="ios-row"><span>연료</span><div>${[91, 60, 40, 20, 8].map(g => `<button data-ios="gal:${g}">${g} gal</button>`).join('')}</div></div>
+      <div class="ios-row"><span>뒷자리 · 화물(lb)</span><div><input type="number" data-iosv="wbrear" min="0" max="600" placeholder="뒷자리"><input type="number" data-iosv="wbcargo" min="0" max="250" placeholder="화물"><button data-ios="wbset">적용</button></div></div>
+      <div class="ios-row"><span>보기</span><div><button data-ios="wbp:aft">뒤로 쏠림(화물 250)</button><button data-ios="wbp:heavy">최대 무게</button><button data-ios="wbp:std">표준</button></div></div></div>
     <h2>바람</h2><div class="ios-row"><span>방향 · 세기</span><div><input type="number" data-iosv="wd" min="0" max="359" placeholder="°"><input type="number" data-iosv="ws" min="0" max="60" placeholder="kt"><button data-ios="wind">적용</button></div></div>
     <h2>환경</h2>` +
     grp('시간대', 'tod', [['DAY', '주간'], ['DUSK', '황혼'], ['NIGHT', '야간']]) +
@@ -106,6 +118,9 @@ function iosBuild() {
     else if (p[0] === 'msg') { const i = R.querySelector('[data-iosv="msg"]'); if (i.value.trim()) { iosCmd('msg', { text: i.value.trim() }); i.value = ''; } }
     else if (p[0] === 'scn') iosCmd('scn', { i: +p[1] });
     else if (p[0] === 'sar') iosCmd('sar', { on: p[1] === '1' });
+    else if (p[0] === 'gal') iosCmd('wb', { o: { gal: +p[1] } });
+    else if (p[0] === 'wbset') { const o = {}; const r = R.querySelector('[data-iosv="wbrear"]').value, c = R.querySelector('[data-iosv="wbcargo"]').value; if (r !== '') o.rear = +r; if (c !== '') o.cargo = +c; iosCmd('wb', { o }); }
+    else if (p[0] === 'wbp') iosCmd('wb', { o: p[1] === 'aft' ? { rear: 0, cargo: 250, copilot: 0 } : p[1] === 'heavy' ? { rear: 340, cargo: 100, copilot: 170, gal: 91 } : { rear: 0, cargo: 0, copilot: 170, pilot: 170 } });
     else iosCmd(p[0]);
   });
   setInterval(() => { const l = R.querySelector('[data-iosv="link"]'); const ok = Date.now() - _iosSeen < 2000; l.textContent = ok ? '● 교육생 창과 이어짐' : '○ 교육생 창을 기다리는 중… (교육생 창을 열어 두십시오)'; l.classList.toggle('ok', ok); }, 500);
@@ -126,6 +141,13 @@ function iosRender(m) {
   const fe = R.querySelector('[data-iosv="fails"]'); if (fe.dataset.h !== fh) { fe.dataset.h = fh; fe.innerHTML = fh; }
   const sh = m.scn.length ? m.scn.map((n, i) => `<button data-ios="scn:${i}">🎬 ${n.replace(/</g, '&lt;')}</button>`).join('') : '<span class="ios-dim">저장한 시나리오 없음</span>';
   const se = R.querySelector('[data-iosv="scn"]'); if (se.dataset.h !== sh) { se.dataset.h = sh; se.innerHTML = sh; }
+  const wbs = R.querySelector('[data-iosv="wbsec"]');
+  if (wbs) {
+    wbs.style.display = m.wb ? '' : 'none';
+    if (m.wb) R.querySelector('[data-iosv="wbstate"]').innerHTML = kv('연료', `${Math.round(m.wb.gal)} / ${m.wb.cap} gal`) +
+      kv('총중량', `<span style="color:${m.wb.gw > m.wb.max ? '#ff5050' : 'inherit'}">${Math.round(m.wb.gw)} / ${m.wb.max} lb</span>`) +
+      kv('무게중심', `<span style="color:${m.wb.cgOk ? 'inherit' : '#ff5050'}">${m.wb.cg.toFixed(1)} in${m.wb.cgOk ? '' : ' 한계 밖'}</span>`) + kv('뒷자리 · 화물', `${Math.round(m.wb.o.rear)} · ${Math.round(m.wb.o.cargo)} lb`);
+  }
   if (m.env) R.querySelectorAll('[data-ios^="env:"]').forEach(b => { const [, k, v] = b.dataset.ios.split(':'); b.classList.toggle('on', String(k === 'nvg' ? !!m.env[k] : m.env[k]) === v); });
 }
 if (IOS_MODE) {

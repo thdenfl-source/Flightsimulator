@@ -2405,7 +2405,10 @@ function act(name, ...args) {
                         <span style="font-size: 9px;">PA</span>
                         <div class="status-line"></div>
                     </div>
-                    <div style="flex: 1; background: black; border: 0.7px solid #444; border-radius: 4px; height: 35px;"></div>
+                    <div class="item-btn cdu-ptt" id="cdu-ptt" data-ptt-kuh="1" title="누르고 있는 동안 고른 MIC(${micSelected || 'OFF'})로 송신 — 조이스틱 PTT · 키 배정도 같다" style="flex: 1; height: 35px; touch-action: none;">
+                        <span style="font-size: 10px; font-weight: bold;">🎙 PTT · ${micSelected || 'OFF'}</span>
+                        <div class="status-line"></div>
+                    </div>
                 </div>
             `;
         }
@@ -5046,6 +5049,8 @@ switchMode('HOME');
         return { act: freqs[k].act, stb: freqs[k].stb };
     };
     window.cduRadio          = k => freqs[k] ? { act: freqs[k].act, stb: freqs[k].stb } : null;
+    // 흰수리 PTT(32-callout.js kuhPtt) — 지금 고른 MIC(COM1 · COM2 · U/VHF · VHF-FM · PA · OFF)
+    window.cduMic            = () => micSelected;
     // Bell 206 트랜스폰더(26-b206radio.js) — 코드를 CDU XPDR 과 같게(넣으면 바꾸고 · 돌려준다)
     window.cduXpdrCode       = c => { if (/^[0-7]{4}$/.test(String(c || ''))) { xpdrState.code = String(c); try { const e = document.getElementById('top-xpdr-code'); if (e) e.innerText = xpdrState.code; if (currentMode === 'XPDR') renderContent(); } catch (e) { _swallow(e); } } return xpdrState.code; };
     window.openAirfield      = openAirfield;       // 지도 공항 팝업 → INFO 열기

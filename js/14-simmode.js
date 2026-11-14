@@ -588,7 +588,7 @@ function updateEngBtn() {
 // ② LTE(꼬리로터 효과 상실) — 30kt 아래 · 바람 8kt 넘게 · 상대풍이 위험 방위면 기수가 오른쪽으로 저절로 돈다.
 //    285~315°(주로터 와류) · 210~330°(꼬리로터 와류고리) · 120~240°(뒷바람 — 바람 쪽으로 돈다). 오른쪽 선회 중이면 더 세다.
 //    회복: 왼쪽 페달 끝까지 · 사이클릭 앞으로(속도) · 고도 여유가 있으면 컬렉티브를 낮춘다. 30kt 넘으면 사라진다.
-const LOWG_N = 0.5, LOWG_ROLL = 30, LOWG_BUMP_S = 0.8, LTE_YAW = 35;
+const LOWG_N = TUNE.lowg.n, LOWG_ROLL = TUNE.lowg.roll, LOWG_BUMP_S = TUNE.lowg.bumpS, LTE_YAW = TUNE.lte.yaw;   // 값은 00-params.js
 const simLowG = { n: 1, r: 0, t: 0, bump: 0, warned: false, pit0: null, vs0: null };
 const simLte = { yaw: 0, risk: 0, warned: false };
 function _bump(x, c, w) { const d = Math.abs(((x - c + 540) % 360) - 180); return Math.max(0, 1 - d / w); }
@@ -605,10 +605,10 @@ function simTrFailSet(mode) {
 function simTrFailStep(dt, onGnd) {
   if (!simTrFail || onGnd) { simTrYaw *= Math.max(0, 1 - dt * 2); return; }
   const V = simAirspeed(), dir = -rotorSign();             // 반작용 — 로터가 도는 반대쪽
-  const vane = Math.max(0, Math.min(1, (V - 25) / 25));    // 25 → 50kt 사이에서 꼬리날개가 잡는다
+  const T = TUNE.trFail, vane = Math.max(0, Math.min(1, (V - T.vaneKt) / T.vaneSpan));    // 25 → 50kt 사이에서 꼬리날개가 잡는다
   let tgt;
-  if (simTrFail === 'drive') tgt = dir * (S.tq / 100) * 45 * (1 - 0.85 * vane);
-  else tgt = dir * (S.tq - _trFailTq) * 0.6 * (1 - 0.6 * vane);
+  if (simTrFail === 'drive') tgt = dir * (S.tq / 100) * T.driveRate * (1 - T.driveVane * vane);
+  else tgt = dir * (S.tq - _trFailTq) * T.fixedK * (1 - T.fixedVane * vane);
   simTrYaw += (tgt - simTrYaw) * Math.min(1, dt / 1.0);
   if (Math.abs(simTrYaw) > 0.05) { S.hdg = normA(S.hdg + simTrYaw * dt); selHdg = ((Math.round(hdgInd()) + 359) % 360) + 1; }
 }
@@ -634,20 +634,34 @@ function simVrsEval(onGnd) {
 //   ARMED 로 300fpm · 20kt 안에 내려앉으면 플로트가 펴져 성공, 그보다 세면 플로트 손상, OFF 면 전복 · 침수. Bell 은 플로트가 없다.
 let simDitchLast = null;
 // 물 위인가 — 지형 자료를 읽었고(모르면 땅으로 본다) · 땅 높이 0 · 갑판 아님 · 공항 2NM 밖
+//   해수면 높이의 낮은 땅(간척지 · 논 · 하구 둑)을 바다로 잘못 보지 않게, 가공 전 지형 값을 둘레 다섯 곳에서 본다:
+//   모두 해수면 근처(1m 아래)이고, 바다 밑(수심 · 음수)이 보이거나 다섯 곳이 거의 같은 높이(잔잔한 물낯)여야 물이다.
+const SIM_WATER_R = 40;     // 둘레를 볼 거리(m)
+function simWaterRaw(la, lo) {
+  const d = SIM_WATER_R / 111120, dl = d / Math.max(0.2, Math.cos(la * D2R)), z = [];
+  for (const [a, b] of [[0, 0], [d, 0], [-d, 0], [0, dl], [0, -dl]]) {
+    let m = null; try { m = _tcElev(la + a, lo + b); } catch (e) { _swallow(e); }
+    if (m == null) return null; z.push(m);
+  }
+  if (z[0] > 0.5 || z.some(v => v > 1.0)) return false;
+  const lo2 = Math.min(...z), hi = Math.max(...z);
+  return lo2 <= -1 || hi - lo2 <= 0.3;
+}
 function simWaterBelow() {
   try { if (typeof simDeckFt === 'function' && simDeckFt() != null) return false; } catch (e) { _swallow(e); }
   try { simTerrainFt(); } catch (e) { _swallow(e); }
   if (!_simGndFresh) return false;
   let g = 1; try { g = simGroundFt(); } catch (e) { _swallow(e); }
   if (g > 0.5) return false;
-  try { if (typeof AIRPORTS_KR !== 'undefined' && AIRPORTS_KR.some(a => distance(S.lat, S.lon, a.lat, a.lon) < 2)) return false; } catch (e) { _swallow(e); }
+  if (simWaterRaw(S.lat, S.lon) !== true) return false;
+  try { if (typeof AIRPORTS_KR !== 'undefined' && AIRPORTS_KR.some(a => distance(S.lat, S.lon, a.lat, a.lon) < TUNE.ditch.aptNm)) return false; } catch (e) { _swallow(e); }
   return true;
 }
 function simDitchCheck(vs, spd) {
   if (!simWaterBelow()) return false;
   const v = Math.max(0, -vs), gs = Math.max(0, spd), b2 = typeof acB206 === 'function' && acB206();
   let armed = false; try { armed = !b2 && typeof ovhdGet === 'function' && (ovhdGet('fltArmSw') === 'ARMED' || ovhdGet('floatDeploy') === 'DEPLOY'); } catch (e) { _swallow(e); }
-  const grade = armed ? (v <= 300 && gs <= 20 ? '성공 — 플로트 전개' : '플로트 손상 — 너무 세게') : (b2 ? '침수 — 플로트 없음' : '전복 · 침수 — 플로트 미전개(ARMED 아님)');
+  const grade = armed ? (v <= TUNE.ditch.fpm && gs <= TUNE.ditch.kt ? '성공 — 플로트 전개' : '플로트 손상 — 너무 세게') : (b2 ? '침수 — 플로트 없음' : '전복 · 침수 — 플로트 미전개(ARMED 아님)');
   simDitchLast = { vs: v, spd: gs, armed, grade };
   const txt = `착수 ${grade} · 강하 ${Math.round(v)}fpm · ${Math.round(gs)}kt`;
   try { uiToast(txt, /성공/.test(grade) ? '' : 'err', 6000); } catch (e) { _swallow(e); }
@@ -667,9 +681,9 @@ function simTurbStep(dt, onGnd) {
   simTurb.p = k * 2.5 * (0.6 * Math.sin(t * 0.9 + 2) + 0.4 * Math.sin(t * 2.7));
 }
 // 유압(Bell HYD BOOST — 25-b206panel.js b206HydOn) — 없으면 1 보다 작게(조종 반응 · 굼뜸)
-function simHydK() { try { return (typeof acB206 === 'function' && acB206() && typeof b206HydOn === 'function' && !b206HydOn()) ? 0.35 : 1; } catch (e) { return 1; } }
+function simHydK() { try { return (typeof acB206 === 'function' && acB206() && typeof b206HydOn === 'function' && !b206HydOn()) ? TUNE.hydOffK : 1; } catch (e) { return 1; } }
 // 무게중심(Bell W&B) — 기준(110in)보다 뒤면 기수가 들리고, 앞이면 숙는다(°)
-function simCgPitch() { try { return (typeof acB206 === 'function' && acB206() && typeof b206Cg === 'function') ? Math.max(-4, Math.min(4, (b206Cg() - 110) * 0.6)) : 0; } catch (e) { return 0; } }
+function simCgPitch() { try { return (typeof acB206 === 'function' && acB206() && typeof b206Cg === 'function') ? Math.max(-TUNE.cgPitch.max, Math.min(TUNE.cgPitch.max, (b206Cg() - TUNE.cgPitch.ref) * TUNE.cgPitch.k)) : 0; } catch (e) { return 0; } }
 function simB206Hazards(dt, a, onGnd) {
   try { simTurbStep(dt, onGnd); simAutoTrack(onGnd); simTrFailStep(dt, onGnd); } catch (e) { _swallow(e); }
   _simLastDt = dt;
@@ -794,7 +808,7 @@ function simTrTq(a, V) {
 // ── VRS(정착 강하) ── 대기속도 15kt 아래에서 출력을 건 채(토크 25% 위) 700fpm 넘게 가라앉으면
 // 자기 내리흐름 속으로 떨어진다 — 레버를 올려도 덜 오르고 더 가라앉는다. 앞으로 속도를 붙이거나(20kt)
 // 레버를 내리면 빠져나온다.
-const VRS_KT = 15, VRS_OUT_KT = 20, VRS_FPM = -700, VRS_TQ = 25, VRS_SINK = 1500, VRS_TAU_IN = 2, VRS_TAU_OUT = 1.5;
+const { kt: VRS_KT, outKt: VRS_OUT_KT, fpm: VRS_FPM, tq: VRS_TQ, sink: VRS_SINK, tauIn: VRS_TAU_IN, tauOut: VRS_TAU_OUT } = TUNE.vrs;   // 값은 00-params.js
 let simVrs = 0;
 function simVrsOn() { return simModeOn && simVrs > 0.3; }
 // ── VNE · 후퇴익 실속 ── VNE 는 해면 160kt, 고도 1,000ft 마다 2kt 준다. 넘기면 후퇴익 쪽(CW 로터 → 오른쪽)
@@ -1105,7 +1119,7 @@ function simAutoTrack(onGnd) {
 }
 function simAutoTouchdown(vs, spd) {
   const v = Math.max(0, -vs), g = Math.max(0, spd), nr = simNr;
-  const grade = v <= 300 && g <= 15 && nr >= 90 ? '좋음' : v <= 600 && g <= 25 ? '거침' : '손상';
+  const A = TUNE.autoTd, grade = v <= A.goodFpm && g <= A.goodKt && nr >= A.goodNr ? '좋음' : v <= A.roughFpm && g <= A.roughKt ? '거침' : '손상';
   simAuto.last = { vs: v, spd: g, nr, flare: simAuto.flareAgl, nrMin: simAuto.nrMin, grade };
   const txt = `오토로테이션 착지 — ${grade} · 강하 ${Math.round(v)}fpm · ${Math.round(g)}kt · NR ${Math.round(nr)}% · 플레어 ${simAuto.flareAgl == null ? '없음' : Math.round(simAuto.flareAgl) + 'ft'}`;
   try { uiToast(txt, grade === '좋음' ? '' : 'err', 6000); } catch (e) { _swallow(e); }
@@ -1480,7 +1494,7 @@ function simGroundFt() { return _simGndFresh ? _simGndFt : 0; }
 // 갑판에 앉아 있으면 함정과 함께 간다(07-sim.js 의 함정 이동 · 09-cdu.js 의 침로 변경).
 // 기체는 앞뒤 20m(로터 포함)로 본다. 그 길이 아래 어디라도 함정이 있으면 가장 높은
 // 윗면이 바닥이다 — 기수가 함교 위로 들어가 있으면 내려앉지 못하고 함교에 걸린다.
-const SIM_AC_LEN = 20;               // m
+const SIM_AC_LEN = (typeof acIs === "function" && acIs("b206")) ? 12 : 20;               // m
 function simShipTopM(lat, lon, hdg) {
   if (typeof shipDeckTopM !== 'function') return null;
   const h = hdg * D2R, cl = Math.cos(lat * D2R);

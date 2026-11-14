@@ -195,8 +195,7 @@ const PW_PAR  = 1.874e-5;      // 유해 동력(% / kt³)
 // 남는 토크 1% 당 상승률 24fpm(Vy 에서 100% 로 약 1,300fpm) · 오토로테이션 강하는 흰수리와 같은 셈(38fpm/%).
 // 밀도고도 6,000ft 까지는 변속기 한계(100%)로 평평하고, 그 위는 엔진 출력이 1,000ft 마다 3.5% 준다.
 // 09-cdu.js 의 PERF 접근자(perfHoverTq · perfMta · perfVy · perfTqForVs …)가 이 값을 쓴다 — 흰수리 성능표는 그대로.
-const B206P = { wt: 3000, hovIge: 72, hovOge: 82, vy: 52, vi0: 14, par: 3.51e-5, fpmUp: 24, fpmDn: 38,
-                vne: 130, vneAlt: 3000, vnePerKft: 3.5, mtaMax: 100, mtaFlatDa: 6000, mtaPerKft: 3.5, tqCont: 85 };
+const B206P = TUNE.b206Perf;   // 값은 00-params.js
 function acB206() { return typeof acIs === 'function' && acIs('b206'); }
 // 밀도고도(ft) — 고도 · 그 고도의 기온(°C)
 function densityAltFt(altFt, oatC) { return altFt + 120 * (oatC - (15 - 2 * altFt / 1000)); }

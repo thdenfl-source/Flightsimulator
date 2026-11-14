@@ -114,14 +114,15 @@ export async function run(page, t) {
     iosHandle({ type: 'cmd', c: 'msg', text: '엔진 고장 대비' }); o.msg = [...document.querySelectorAll('.ui-toast')].some(e => /교관: 엔진 고장 대비/.test(e.textContent));
     o.state = iosState();
     // 비행 저장 · 불러오기 · 보고서
-    const keep = localStorage.getItem('fdrSaved'); localStorage.removeItem('fdrSaved');
+    await fdrStoreReady; const keep = fdrSavedList(); fdrSavedReplace([]);
     fdrClear(); fdr.on = true; for (let i = 0; i < 12; i++) { S.alt = 1000 + i * 10; fdrStep(1); }
     o.saved = fdrSaveFlight('검사 비행'); fdrClear(); o.empty = fdr.rows.length;
     o.loaded = fdrLoadFlight(0) && fdr.rows.length === 12 && !fdr.on && Math.abs(fdr.rows[11].alt - 1110) < 0.5;
     const ox = uiOpenExternal; let opened = null; uiOpenExternal = u => { opened = u; };
     const html = fdrReport(); uiOpenExternal = ox; o.report = /^blob:/.test(opened || '') && /비행 강평 보고서/.test(html) && /사건/.test(html) && /<img/.test(html);
     dbfClose();
-    if (keep === null) localStorage.removeItem('fdrSaved'); else localStorage.setItem('fdrSaved', keep);
+    o.idb = await new Promise(ok => { const q = indexedDB.open('shinesong'); q.onsuccess = () => { const r = q.result.transaction('flights').objectStore('flights').get('list'); r.onsuccess = () => ok(Array.isArray(r.result) && r.result.length === 1 && r.result[0].name === '검사 비행'); r.onerror = () => ok(false); }; q.onerror = () => ok(false); });
+    fdrSavedReplace(keep);
     // 도움말
     document.getElementById('map-help-btn').click(); const hw = document.getElementById('help-wrap');
     o.help = getComputedStyle(hw).display !== 'none' && hw.querySelectorAll('.help-list > div').length >= 10; hw.style.display = 'none';
@@ -130,7 +131,7 @@ export async function run(page, t) {
   t.ok(C.calls.join(',') === 'five hundred,one hundred,fifty' && C.off === 0, `RA 콜아웃(흰수리) — 내려가며 ${C.calls.join(' · ')} · ENV 에서 끄면 조용`);
   t.ok(C.wind[0] === 200 && C.wind[1] === 18 && C.tod === 'DUSK' && C.msg && C.state.type === 'state' && C.state.ac === 'aw189',
     '교관 화면(IOS) 명령 — 바람 · 환경 · 메시지가 교육생 창에 걸리고, 상태를 0.5초마다 보낸다');
-  t.ok(C.saved && C.empty === 0 && C.loaded && C.report, '비행 저장 · 불러오기(기록은 멈춤) · 보고서(요약 · 항적 · 그래프 · 사건 — 인쇄/PDF)');
+  t.ok(C.saved && C.empty === 0 && C.loaded && C.report && C.idb, '비행 저장(IndexedDB) · 불러오기(기록은 멈춤) · 보고서(요약 · 항적 · 그래프 · 사건 — 인쇄/PDF)');
   t.ok(C.help, '❓ HELP — 새 단추와 기능 도움말');
 
   // ── 교관 창(?ios=1) — 다른 창에서 상태를 받고 명령을 보낸다 ──
