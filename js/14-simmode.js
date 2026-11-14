@@ -1791,7 +1791,7 @@ function simFly(dt) {
   const nrAuto = autoNrChart() - NR_AUTO_K * demand;
   const lowLev = (U === 0 && !onGnd) ? Math.max(0, wA * (nrAuto - 100)) : 0;
   const govLag = onGnd ? 0 : (tTgt > S.tq ? -NR_GOV_DROOP * (tTgt - S.tq) : NR_GOV_RISE * (S.tq - tTgt));   // 거버너 지연
-  const nrTgt = Math.max(NR_FLOOR, Math.min(118, (U > 0 ? 100 - NR_AUTO_K * U + wA * (autoNrChart() - 100) + flareNr : 100 + lowLev + flareNr) + govLag));
+  const nrTgt = Math.max(NR_FLOOR, Math.min(118, (U > 0 ? NR_GOV - NR_AUTO_K * U + wA * (autoNrChart() - 100) + flareNr : NR_GOV + lowLev + flareNr) + govLag));   // NR_GOV — 거버너 NR(03-pfd.js · 보통 100)
   // 거버너 지연 몫은 따로 들고 있는다 — 계기 NR 에는 보이되(잠깐 처짐·넘침), 양력 손실·로터 에너지 셈에는
   // 넣지 않는다(레버를 올려 추력이 느는 동안 엔진이 따라붙는 것이라 그만큼 가라앉지 않는다)
   const gov0 = _simNrGov;
@@ -1802,7 +1802,7 @@ function simFly(dt) {
   // (엔진이 FLY 가 아니면 레버 위치와 상관없다 — 땅 위의 로터는 바람으로 돌지 않는다)
   if (onGnd) {
     const g = engNrTarget(simEngSt);
-    if (g >= 100) { if (U === 0 && simNr < 100) simNr = Math.min(100, simNr + 20 * dt); }
+    if (g > 90) { if (U === 0) simNr = simNr < g ? Math.min(g, simNr + 20 * dt) : Math.max(g, simNr - 5 * dt); }   // FLY — 거버너 NR(보통 100)로
     else simNr = nr0 < g ? Math.min(g, nr0 + NR_SPOOL_UP * dt) : Math.max(g, nr0 - NR_SPOOL_DN * dt);   // 위 로터 운동은 버리고 엔진대로
   }
   // 처지는 NR 의 운동에너지는 레버가 요구하는 만큼(U)까지 잠깐 양력이 된다 — 오르는 NR 은 그만큼 받아들인다

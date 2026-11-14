@@ -227,6 +227,35 @@ export async function run(page, t) {
     `ADF 식별음 — 오디오 패널 ADF 1 을 켜야 들린다 · BANGSAN → 'BAN' · ANT 도 들리고 ADF 를 끄면 없다 (${AU.ident})`);
   t.ok(AU.calls.length >= 1 && AU.calls[0] === 'BAN', `켜 두면 식별 부호를 되풀이해 울린다 (${AU.calls.join(',')})`);
   t.ok(!AU.sysTab && AU.left === 'pfd' && AU.right !== 'sysp' && !AU.simple, `Bell 206 — SYSTEM 창이 없다 (왼쪽 ${AU.left} · 오른쪽 ${AU.right})`);
+  // ── 컬렉티브 머리 · 스로틀(Cockpit Mode) — OFF · IDLE · FULL OPEN · IDLE REL · STARTER · GOV RPM ──
+  const CL = await page.evaluate(async () => {
+    const w = ms => new Promise(r => setTimeout(r, ms));
+    const o = {}, pcd = () => ovhdGet('pcd1');
+    cockpitStart(); await w(1200);
+    o.mount = !!document.getElementById('b206-coll') && document.getElementById('b206-coll').querySelectorAll('[data-bc]').length >= 8;
+    _b206cRead(); o.start = `${b206c.th}/${pcd()}`;
+    b206cThrottle(-1); o.idle = `${b206c.th}/${pcd()}`;                         // FULL → IDLE
+    b206cThrottle(-1); o.noRel = `${b206c.th}/${pcd()}`;                        // IDLE REL 없이 닫히지 않는다
+    b206cIdleRel(); b206cThrottle(-1); o.off = `${b206c.th}/${pcd()}/${b206c.run}`;   // OFF — 엔진 꺼짐
+    b206cThrottle(1); o.idleNoStart = `${b206c.th}/${pcd()}`;                  // 열어도 시동 전에는 OFF
+    b206cStarter(true); await w(800); o.cranking = pcd(); await w(1000); b206cStarter(false);
+    o.started = `${b206c.run}/${pcd()}`;                                         // 1.5초 넘게 → IDLE
+    b206cThrottle(1); o.full = `${b206c.th}/${pcd()}`;                          // FULL OPEN → FLY
+    // GOV RPM — FULL 에서 DECR 를 누르는 동안 1%/초(97% 아래로는 안 간다)
+    b206cBeep(-1); await w(1600); b206cBeep(0); o.gov1 = NR_GOV; o.tgt = engNrTarget({ 1: 'FLY', 2: 'FLY' });
+    b206cBeep(-1); await w(3500); b206cBeep(0); o.govMin = NR_GOV;
+    b206cBeep(1); await w(4000); b206cBeep(0); o.govMax = NR_GOV;
+    b206cThrottle(-1); o.govIdle = NR_GOV; b206cThrottle(1);                     // IDLE 로 가면 100 으로
+    cockpitExit(); try { if (_soloActive) exitSolo(); } catch (e) { /* 그만 */ }
+    return o;
+  });
+  t.ok(CL.mount, 'Bell Cockpit Mode — 컬렉티브 머리(스위치 상자 · IDLE REL · 스로틀 그립)가 조종석에 있다');
+  t.ok(CL.start === 'FULL/FLY' && CL.idle === 'IDLE/IDLE' && CL.noRel === 'IDLE/IDLE' && CL.off === 'OFF/OFF/false',
+    `스로틀 FULL → IDLE → (IDLE REL 을 눌러야) OFF — 엔진 레버가 따른다 (${CL.start} · ${CL.idle} · ${CL.noRel} · ${CL.off})`);
+  t.ok(CL.idleNoStart === 'IDLE/OFF' && CL.cranking === 'OFF' && CL.started === 'true/IDLE' && CL.full === 'FULL/FLY',
+    `시동 — 스로틀 IDLE 에서 STARTER 를 1.5초 누르면 IDLE · 다시 열면 FULL OPEN (${CL.idleNoStart} · ${CL.started} · ${CL.full})`);
+  t.ok(CL.gov1 < 99.6 && CL.gov1 >= 97 && CL.tgt === CL.gov1 && CL.govMin === 97 && CL.govMax === 100 && CL.govIdle === 100,
+    `GOV RPM — FULL OPEN 에서 DECR · INCR 로 거버너 NR 97 ~ 100% (${CL.gov1.toFixed(1)} · 최저 ${CL.govMin} · 최고 ${CL.govMax})`);
   const errs = (page.errors || []).filter(e => !/Failed to fetch|NetworkError|tile/i.test(e));
   t.ok(errs.length === 0, `오류 없음${errs.length ? ' (' + errs.slice(0, 2).join(' | ') + ')' : ''}`);
 }
