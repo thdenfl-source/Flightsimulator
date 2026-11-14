@@ -113,7 +113,8 @@ export async function run(page, t) {
     selectPanel('right', 'map', true);
     return o;
   });
-  t.ok(m.cols.every(c => c === 'rgb(92, 240, 126)') && m.legend === 'ON', `RADAR · EGPWS · DMM · AVCS POWER 의 ON 은 녹색 (${m.cols[0]})`);
+  const isGreen = c => { const v = (c.match(/\d+/g) || []).map(Number); return v.length >= 3 && v[1] > 200 && v[1] - v[0] > 100 && v[1] - v[2] > 80; };   // 녹색 — 바뀌는 중(전환 효과)의 끝값 근처도 녹색이다
+  t.ok(m.cols.every(isGreen) && m.legend === 'ON', `RADAR · EGPWS · DMM · AVCS POWER 의 ON 은 녹색 (${m.cols[0]})`);
   t.ok(m.fcp.pos === '1,N,2' && m.fcp.def === 'N', `FCP 선택 — 1 · N(둘 다) · 2, 처음 N (${m.fcp.pos})`);
   t.ok(m.c1.act === '121.500' && m.c1.stb === '121.500' && m.c0.act !== '121.500', `MPP COM2 — CDU COM2 주 · 예비가 121.500 (${m.c0.act} → ${m.c1.act} / ${m.c1.stb})`);
   t.ok(m.def === 'IN' && m.vibOff > 0.2 && m.vibOn < 0.02, `AVCS — 처음 켜짐 · 공중에서 진동을 거의 없앤다 (${m.vibOff.toFixed(2)}° → ${m.vibOn.toFixed(3)}°)`);
