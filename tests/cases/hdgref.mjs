@@ -101,6 +101,25 @@ export async function run(page, t) {
   t.ok(new RegExp('rotate\\(' + hold.tru.toFixed(0)).test(hold.icon) || hold.icon.includes('rotate(' + hold.tru),
     `지도 심볼은 실제 기수를 가리킨다 (${hold.icon})`);
 
+  // ── HDG 선회 방향 래치 — 한 번 돌기 시작하면 반대쪽이 더 가까워져도 같은 쪽으로 돈다 ──
+  const latch = await page.evaluate(() => {
+    dgErr = 0; S.hdg = 0; S.bnk = 0; bankTarget = 0; S.spd = 100; navApOn = false; gspdOn = false;
+    selHdg = 360; hdgSelOn = true; rollApOn = true; hdgTurnDir = 0;
+    let ts = 1000; S.lastT = ts;
+    const fly = sec => { S.running = true; for (let i = 0; i < sec * 20; i++) { ts += 50; simStep(ts); } S.running = false; };
+    const turn = (deg) => { const d = Math.sign(deg); for (let i = 0; i < Math.abs(deg); i++) applyDelta('hdg', d); };
+    const o = {};
+    turn(170); fly(5); o.start = { bnk: S.bnk, hdg: S.hdg, dir: hdgTurnDir };          // 170 → 오른쪽
+    turn(40); fly(4); o.past = { bnk: S.bnk, sel: selHdg, hdg: S.hdg, dir: hdgTurnDir };  // 210 — 왼쪽이 더 가까워져도 오른쪽
+    turn(-200); fly(4); o.back = { bnk: S.bnk, sel: selHdg, hdg: S.hdg };                 // 거꾸로 돌려 010 — 다시 가까운 쪽(왼쪽)
+    hdgSelOn = false; rollApOn = false; S.bnk = 0; bankTarget = 0;
+    return o;
+  });
+  t.ok(latch.start.bnk > 5 && latch.start.dir === 1, `HDG 170 — 오른쪽으로 선회를 시작한다 (뱅크 ${latch.start.bnk.toFixed(1)}°)`);
+  t.ok(latch.past.bnk > 5 && latch.past.dir === 1,
+    `돌던 쪽으로 마킹을 더 돌려 ${latch.past.sel}°(왼쪽이 더 가까움)가 되어도 오른쪽 선회를 이어 간다 (기수 ${latch.past.hdg.toFixed(0)}° · 뱅크 ${latch.past.bnk.toFixed(1)}°)`);
+  t.ok(latch.back.bnk < -5, `마킹을 거꾸로 돌리면 다시 가까운 쪽으로 돈다 (마킹 ${latch.back.sel}° · 기수 ${latch.back.hdg.toFixed(0)}° · 뱅크 ${latch.back.bnk.toFixed(1)}°)`);
+
   // ── PFD — HSI 카드·HDG 칸은 계기 헤딩, 곁에 호박색 DG ──
   const pfd = await page.evaluate(() => {
     S.hdg = 100; dgErr = -7;
