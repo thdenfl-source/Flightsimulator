@@ -87,4 +87,25 @@ export async function run(page, t) {
   });
   t.ok(sc.names === 'PFD,COCKPIT,MAP,CDU,UPPER,LOWER,SYSTEM' && sc.ck && !sc.simpleIn, `Simple 위 막대 — 3D 자리에 COCKPIT · 누르면 Cockpit Mode (${sc.names})`);
   t.ok(sc.back.simple && sc.back.scr === 'map' && !sc.back.ck, 'Cockpit Mode 를 끝내면 들어오기 전 Simple 화면(MAP)으로 돌아온다');
+
+  // ── 오른쪽 창 탭이 LOWER(또는 UPPER)였어도 조종석 안 작은 콘솔에 들어온다 — 접힌 창에 남아 검게 비던 일 ──
+  const con = await page.evaluate(async () => {
+    const w = ms => new Promise(r => setTimeout(r, ms));
+    const o = {};
+    for (const k of ['lcon', 'ovhd']) {
+      try { if (window._simpleScr) simpleExit(); } catch (e) { /* 그만 */ }
+      try { if (_soloActive) exitSolo(); } catch (e) { /* 그만 */ }
+      await w(200);
+      selectPanel('right', k, true); await w(400);
+      cockpitStart(); await w(1500);
+      const el = document.getElementById(k + '-wrap');
+      o[k] = { par: el.parentElement.id, w: el.clientWidth };
+      cockpitExit(); try { if (_soloActive) exitSolo(); } catch (e) { /* 그만 */ }
+      await w(400);
+    }
+    selectPanel('right', 'map', true);
+    return o;
+  });
+  t.ok(con.lcon.par === 'ck-mini-lcon' && con.lcon.w > 40 && con.ovhd.par === 'ck-mini-ovhd' && con.ovhd.w > 40,
+    `탭이 LOWER · UPPER 였어도 조종석의 작은 콘솔 칸에 들어온다 (${con.lcon.par} ${con.lcon.w}px · ${con.ovhd.par} ${con.ovhd.w}px)`);
 }

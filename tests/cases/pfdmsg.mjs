@@ -60,9 +60,9 @@ export async function run(page, t) {
     o.clock = s0.includes('TIME') && s0.some(x => /^\d\d:\d\d:\d\d$/.test(x)) && s0.includes('STOP WATCH');
     // HOCAS 창 아래 · 같은 폭 — HOCAS 바탕과 왼쪽 끝이 같고 스톱워치가 그 아래
     const W = cvs.width, H = cvs.height, ctrl = document.querySelector('.ctrl-bar');
-    const L = pfdLayout(W, H, ctrl ? ctrl.offsetHeight : 80), RC = hsiRightCol(L.hsi.x, L.hsi.y, L.hsi.w, L.hsi.h, W / 2);
+    const L = pfdLayout(W, H, ctrl ? ctrl.offsetHeight : 80), RC = pfdRightCol(L, W);   // 자세계 오른쪽 칸(넓은 PFD) 또는 HSI 오른쪽 아래
     const hit = _swHit[0];
-    o.align = Math.abs(hit.x - (RC.left + 4)) < 1 && hit.y > RC.swY && hit.y + hit.h <= L.hsi.y + L.hsi.h;
+    o.align = Math.abs(hit.x - (RC.left + 4)) < 1 && hit.y > RC.swY && hit.y + hit.h <= RC.swY + RC.swH;
     // STOP WATCH 칸을 누르면(PFD 를 누른 자리) 스톱워치 — GO · RST · TIME
     swHitTest(hit.x + 2, hit.y + 2); const s1 = shot();
     o.sw = _swMode === 'sw' && ['GO', 'RST', 'TIME'].every(x => s1.includes(x)) && s1.includes('00:00.0');

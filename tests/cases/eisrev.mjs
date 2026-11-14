@@ -17,7 +17,19 @@ export async function run(page, t) {
     selectPanel('right', 'sysp', true); await w(400);
     o.on = { shown: sysScreenShown(), L: lay(), txt: seen() };
     o.D = eisData();
+    // 자세계 오른쪽 칸(메시지 · HOCAS · 스톱워치) · 오른쪽 아래 MAP/TCAS 창
     selectPanel('right', 'map', true); await w(300);
+    const c = document.getElementById('pfd'), L = lay();
+    hocasOn = true; ovhdSet('parkBrake', 'SET'); skState.tfcMap = false;
+    const t0 = seen(), RC = pfdRightCol(L, c.width);
+    o.side = { on: L.sideOn, inset: L.insetOn, msgX: L.side.x, altR: L.alt.x + L.alt.w + L.vsi.w, hsiR: L.hsi.x + L.hsi.w, crX: L.crht.x,
+               swIn: RC.left >= L.side.x && RC.swY + RC.swH <= L.side.y + L.side.h + 1, hocas: t0.includes('HOCAS'), park: t0.includes('PARKING BRAKE SET') };
+    o.side.msgRight = _pfdMsgBottom >= L.side.y && _pfdMsgBottom < L.side.y + L.side.h;
+    // 창을 누르면 MAP ⇄ TCAS
+    const r = L.inset, map0 = !pfdInsetTcas();
+    o.tap1 = pfdInsetHit(r.x + 5, r.y + 5) && pfdInsetTcas() && seen().includes('TCAS: TA ONLY');
+    o.tap2 = pfdInsetHit(r.x + 5, r.y + 5) && !pfdInsetTcas() && map0;
+    hocasOn = false; ovhdSet('parkBrake', 'RELEASE');
     return o;
   });
   const has = (txt, ks) => ks.every(k => txt.some(s => s.startsWith(k)));
@@ -32,6 +44,11 @@ export async function run(page, t) {
     `속도계 · 고도계가 가운데를 두고 좌우 대칭 (왼쪽 ${sL}px · 오른쪽 ${sR}px)`);
   t.ok(R.off.txt.includes(String(Math.round(R.D.qty.tot))) && R.off.txt.includes(String(R.D.accp)),
     `값은 SYSTEM 창 EIS 와 같다 (Fuel Total ${Math.round(R.D.qty.tot)} · ACCP ${R.D.accp})`);
+  const Sd = R.side;
+  t.ok(Sd.on && Sd.msgX > Sd.altR && Sd.park && Sd.msgRight && Sd.hocas && Sd.swIn,
+    `메시지 · HOCAS · 스톱워치는 자세계 오른쪽 칸(고도계 바깥 x ${Math.round(Sd.msgX)} > ${Math.round(Sd.altR)})`);
+  t.ok(Sd.inset && Math.abs(Sd.hsiR - Sd.crX) < 0.5, 'CRHT · NAV 칸은 HSI 바로 옆 · 오른쪽 끝에 MAP · TCAS 창');
+  t.ok(R.tap1 && R.tap2, '오른쪽 아래 창을 누르면 MAP ⇄ TCAS(TA ONLY)');
   t.ok(R.on.shown && !R.on.L.revOn && R.on.L.ai.x === 0 && !has(R.on.txt, ['EOT', 'HYD P']),
     'SYSTEM 창을 고르면 대체 모드를 거두고 원래 배치로');
 }

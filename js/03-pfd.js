@@ -65,11 +65,20 @@ function pfdLayout(W, H, ctrlH) {
   const inward = W >= 420;
   const spdX = inward ? Math.max(pad, Math.min(engW + pad, Math.round(W / 2 - tapW - 70))) : pad;
   const altX = inward ? W - spdX - tapW : W - pad - vsiW - tapW;
-  const crX  = W - pad - raW;                                   // 오른쪽 아래 CRHT · NAV 칸은 오른쪽 끝(HSI 오른쪽 칸 · 스톱워치 자리를 넉넉히)
+  // 자세계 오른쪽(고도계+승강계 바깥) 칸 — 메시지 시현창 · HOCAS · 스톱워치(넓이 420 이상 · 폭 90 이상)
+  const sideX = altX + tapW + vsiW + 6;
+  const sideOn = inward && (W - pad - sideX) >= 90;
+  // 오른쪽 아래 — CRHT · NAV 칸은 HSI 바로 옆으로 붙이고(나침반 반지름만큼 비켜), 남은 오른쪽 끝에 MAP · TCAS 창(inset)
+  const rH = hsiH * 0.46, INSET_MIN = 110;
+  const crX = sideOn ? Math.round(Math.max(Math.min(altX, W - pad - raW - INSET_MIN), Math.min(W / 2 + rH + 8, W - pad - raW - INSET_MIN)))
+                     : W - pad - raW;
+  const insetX = crX + raW + 4, insetOn = sideOn && (W - pad - insetX) >= 80;
   // 대체 모드 — 왼쪽 엔진 칸 폭만큼 위쪽(자세계 왼쪽 위 하늘)에도 EIS 를 얹는다(좁은 화면에서는 하지 않는다)
   const rev = inward && aiH >= 200 && pfdRevMode();
   return {
-    usableH, tapW, vsiW, aiH, hsiH, pad, revOn: rev,
+    usableH, tapW, vsiW, aiH, hsiH, pad, revOn: rev, sideOn, insetOn,
+    side:  { x: sideX, y: FMA_H + 4, w: W - pad - sideX, h: aiH - FMA_H - 8 },
+    inset: { x: insetX, y: aiH + 4, w: W - pad - insetX, h: hsiH - 8 },
     rev:  { x: 0, y: 0, w: engW, h: aiH },
     ai:   { x: 0, y: 0, w: W, h: aiH },
     spd:  { x: spdX, y: tY, w: tapW, h: tH },
@@ -115,6 +124,8 @@ function drawPFD() {
   // 아래: 땅 빛이 아래까지 이어지고(실기처럼), 그 위에 엔진 파라미터 · HSI · 레이더 고도계(CRHT)를 반투명으로 얹는다.
   // HSI 나침반 중심은 자세계 중심과 같은 세로선(화면 가운데)이다.
   ctx.fillStyle = '#654321'; ctx.fillRect(0, L.aiH, W, L.usableH - L.aiH);
+  if (!cvs.dataset.noFcp) _pfdInsetR = null;   // 이번에 그리지 않으면 누름 자리도 없다
+  _pfdSideMsgs = L.sideOn;                 // 메시지는 자세계 오른쪽 칸에(drawPfdSide) — HSI 에는 바람만
   drawHSI(L.hsi.x, L.hsi.y, L.hsi.w, L.hsi.h, W / 2);
   drawEnginePanel(L.eng.x, L.eng.y, L.eng.w, L.eng.h);
   drawCrhtDisplay(L.crht.x, L.crht.y, L.crht.w, L.crht.h);
@@ -123,8 +134,11 @@ function drawPFD() {
   ctx.beginPath(); ctx.moveTo(0, L.aiH); ctx.lineTo(W, L.aiH); ctx.stroke();
   ctx.beginPath(); ctx.moveTo(L.hsi.x + 0.5, L.aiH); ctx.lineTo(L.hsi.x + 0.5, L.usableH); ctx.stroke();
   ctx.beginPath(); ctx.moveTo(L.crht.x + 0.5, L.aiH); ctx.lineTo(L.crht.x + 0.5, L.usableH); ctx.stroke();
-  if (hocasOn) drawHocas(L.hsi.x, L.hsi.y, L.hsi.w, L.hsi.h, W / 2);
-  drawStopwatch(L.hsi.x, L.hsi.y, L.hsi.w, L.hsi.h, W / 2);
+  if (L.sideOn) drawPfdSideMsgs(L.side);
+  if (L.insetOn) drawPfdInset(L.inset);
+  const RC = pfdRightCol(L, W);
+  if (hocasOn) drawHocas(L.hsi.x, L.hsi.y, L.hsi.w, L.hsi.h, W / 2, RC);
+  drawStopwatch(L.hsi.x, L.hsi.y, L.hsi.w, L.hsi.h, W / 2, RC);
 }
 
 // ── FMS · NAV1 · NAV2 목적지(명칭·방위·거리) ── 오른쪽 아래, CRHT 계기 밑 칸(높이 1/3).
@@ -403,9 +417,9 @@ function drawNpNr(x, y, w, h, P) {
 // 시계 모드: 현재 시각 + [STOP WATCH] · 스톱워치 모드: 경과 시간 + [GO/STP] [RST] [TIME]. 칸을 누르면 그 동작(_swHit · onPfdTap)
 let _swHit = [];
 let _pfdMsgBottom = NaN;   // 메시지 시현창의 아래끝(drawHSI 가 그 프레임에 적는다) — HOCAS 가 그 아래로
-function drawStopwatch(x, y, w, h, cxC) {
+function drawStopwatch(x, y, w, h, cxC, RC0) {
   if (!(w >= 40) || !(h >= 40)) return;
-  const RC = hsiRightCol(x, y, w, h, cxC);
+  const RC = RC0 || hsiRightCol(x, y, w, h, cxC);
   const bx = RC.left, bw = RC.width, by = RC.swY, bh = RC.swH, fs = RC.fs;
   const sw = typeof _swMode !== 'undefined' && _swMode === 'sw';
   const run = sw && typeof SW !== 'undefined' && SW.running;
@@ -550,6 +564,83 @@ function hocasAxes() {
   return { roll: a.roll || 0, pitch: a.pitch || 0, yaw: a.yaw || 0, trim, coll };
 }
 // HSI 오른쪽 아래 칸의 자리 — HOCAS 창과 그 아래 스톱워치가 같은 왼쪽 · 폭으로 선다
+// ── 자세계 오른쪽 칸(실기 PFD 의 오른쪽 위) — 메시지 시현창(위) · HOCAS · 스톱워치(아래) ──
+let _pfdSideMsgs = false;
+function drawPfdSideMsgs(S0) {
+  const msgs = pfdMsgs();
+  _pfdMsgBottom = S0.y;
+  if (!msgs.length) return;
+  ctx.save();
+  let mfs = Math.max(8, Math.min(11, S0.w * 0.085));
+  ctx.font = `bold ${mfs}px Helvetica Neue, Arial, sans-serif`;
+  const widest = Math.max(...msgs.map(m => ctx.measureText(m.t).width));
+  if (widest > S0.w - 8) { mfs = Math.max(6, mfs * (S0.w - 8) / widest); ctx.font = `bold ${mfs}px Helvetica Neue, Arial, sans-serif`; }
+  const bh = msgs.length * mfs * 1.3 + 6;
+  ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(S0.x, S0.y, S0.w, bh);
+  ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+  let my = S0.y + 3 + mfs;
+  msgs.forEach(m => { ctx.fillStyle = m.c; ctx.fillText(m.t, S0.x + 4, my); my += mfs * 1.3; });
+  _pfdMsgBottom = S0.y + bh;
+  ctx.restore();
+}
+// HOCAS · 스톱워치 자리 — 자세계 오른쪽 칸이 있으면 그 칸 아래쪽, 없으면 종전대로 HSI 오른쪽 아래(hsiRightCol)
+function pfdRightCol(L, W) {
+  if (!L.sideOn) return hsiRightCol(L.hsi.x, L.hsi.y, L.hsi.w, L.hsi.h, W / 2);
+  const S0 = L.side;
+  const fs = Math.max(8, Math.min(11, S0.w * 0.085));
+  const colW = 8, colGap = 6;
+  const swH = Math.round(fs * 3.6 + 8), swY = S0.y + S0.h - swH;
+  const box0 = Math.max(30, Math.min(S0.w - 8 - colW - colGap, S0.h * 0.40));
+  let box = box0;
+  if (Number.isFinite(_pfdMsgBottom)) box = Math.max(30, Math.min(box0, (swY - 4) - (_pfdMsgBottom + 4) - (fs * 4.8 + 18)));
+  const bx = S0.x + 4 + Math.max(0, (S0.w - 8 - colW - colGap - box) / 2);
+  return { fs, colW, colGap, box, bx, left: S0.x, width: S0.w, swH, swY };
+}
+// ── 오른쪽 아래 창(inset) — MAP(기수 위 움직이는 지도) · TCAS(TA ONLY 거리 고리). 누르거나 소프트키 Traffic Map 으로 바꾼다 ──
+let _pfdInsetR = null;
+function pfdInsetTcas() { try { return typeof skState !== 'undefined' && !!skState.tfcMap; } catch (e) { return false; } }
+function pfdInsetToggle() {
+  try { if (typeof skState !== 'undefined') { skState.tfcMap = !skState.tfcMap; if (typeof _skSave === 'function') _skSave(); } } catch (e) { _swallow(e); }
+  try { if (typeof pfdSkRender === 'function') pfdSkRender(); } catch (e) { _swallow(e); }
+  try { drawPFD(); } catch (e) { _swallow(e); }
+}
+function drawPfdInset(R0) {
+  if (!(R0.w > 40 && R0.h > 60)) return;
+  const tcas = pfdInsetTcas();
+  ctx.save();
+  ctx.beginPath(); ctx.rect(R0.x, R0.y, R0.w, R0.h); ctx.clip();
+  ctx.fillStyle = '#05101a'; ctx.fillRect(R0.x, R0.y, R0.w, R0.h);
+  const fs = Math.max(8, Math.min(11, R0.w * 0.07));
+  if (!tcas && typeof ckMapDraw === 'function') {
+    try { ckMapDraw(ctx, R0.x, R0.y, R0.w, R0.h); } catch (e) { _swallow(e); }
+  } else {
+    // TCAS — 기수 위 · 안쪽 2NM 점 고리 · 바깥 6NM 고리 · 내 기체
+    const cx = R0.x + R0.w / 2, cy = R0.y + R0.h * 0.56, r = Math.min(R0.w, R0.h) * 0.40;
+    ctx.strokeStyle = '#d8dde2'; ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
+    for (let i = 0; i < 12; i++) { const a = i / 12 * Math.PI * 2; ctx.fillStyle = '#d8dde2'; ctx.beginPath(); ctx.arc(cx + Math.cos(a) * r / 3, cy + Math.sin(a) * r / 3, 1.4, 0, Math.PI * 2); ctx.fill(); }
+    for (let i = 0; i < 36; i++) {                    // 바깥 고리 눈금(30° 마다 길게)
+      const a = i / 36 * Math.PI * 2 - (S.hdg || 0) * Math.PI / 180, l = i % 3 === 0 ? 7 : 3;
+      ctx.beginPath(); ctx.moveTo(cx + Math.sin(a) * r, cy - Math.cos(a) * r); ctx.lineTo(cx + Math.sin(a) * (r - l), cy - Math.cos(a) * (r - l)); ctx.stroke();
+    }
+    ctx.fillStyle = '#ffffff';                        // 내 기체
+    ctx.beginPath(); ctx.moveTo(cx, cy - 8); ctx.lineTo(cx + 6, cy + 6); ctx.lineTo(cx, cy + 3); ctx.lineTo(cx - 6, cy + 6); ctx.closePath(); ctx.fill();
+    ctx.font = `bold ${fs}px Helvetica Neue, Arial, sans-serif`; ctx.textAlign = 'left'; ctx.fillStyle = '#00e5ff';
+    ctx.fillText('6 NM', cx + r * 0.72 + 2, cy + r * 0.72);
+    ctx.textAlign = 'right'; ctx.fillStyle = '#ffffff';
+    ctx.fillText('TCAS: TA ONLY', R0.x + R0.w - 4, R0.y + fs + 3);
+    ctx.textAlign = 'left'; ctx.fillStyle = '#00e5ff'; ctx.fillText('HDG UP', R0.x + 4, R0.y + fs + 3);
+    ctx.textAlign = 'right'; ctx.fillStyle = '#9aa5b0'; ctx.fillText('NO TRAFFIC', R0.x + R0.w - 4, R0.y + R0.h - 5);
+  }
+  ctx.restore();
+  ctx.strokeStyle = '#5a6672'; ctx.lineWidth = 1; ctx.strokeRect(R0.x + 0.5, R0.y + 0.5, R0.w - 1, R0.h - 1);
+  if (!cvs.dataset.noFcp) _pfdInsetR = R0;   // 본 PFD 에서만 누름 자리(09-cdu.js onPfdTap)
+}
+function pfdInsetHit(px, py) {
+  const r = _pfdInsetR;
+  if (!r || px < r.x || px > r.x + r.w || py < r.y || py > r.y + r.h) return false;
+  pfdInsetToggle(); return true;
+}
 function hsiRightCol(x, y, w, h, cxC) {
   const G = hsiGeom(x, y, w, h, cxC);
   const sideW = Math.max(60, G.rightW);
@@ -566,11 +657,11 @@ function hsiRightCol(x, y, w, h, cxC) {
   }
   return { G, sideW, fs, colW, colGap, box, bx, left: bx - 4, width: box0 + colW + colGap + 8, swH, swY: y + h - 6 - swH };
 }
-function drawHocas(x, y, w, h, cxC) {
+function drawHocas(x, y, w, h, cxC, RC0) {
   if (!(w >= 40) || !(h >= 40)) return;
-  // HSI 오른쪽 아래 — 왼쪽은 바람·TAS/OAT 등과 겹쳐 오른쪽 아래 빈자리로 옮겼다. 그 아래에는 스톱워치(drawStopwatch)
-  const RC = hsiRightCol(x, y, w, h, cxC);
-  const { G, sideW, fs, colW, colGap, box, bx } = RC;
+  // HSI 오른쪽 아래(또는 자세계 오른쪽 칸) — 그 아래에는 스톱워치(drawStopwatch)
+  const RC = RC0 || hsiRightCol(x, y, w, h, cxC);
+  const { fs, colW, colGap, box, bx } = RC;
   const ax = hocasAxes();
   const clamp = v => Math.max(-1, Math.min(1, v));
   const col = v => Math.abs(v) <= HOCAS_DEAD ? '#00ff88' : '#ffb74d';
@@ -1622,8 +1713,8 @@ function drawHSI(x, y, w, h, cxC) {
     ctx.closePath(); ctx.fillStyle = '#ffffff'; ctx.fill();
     ctx.restore();
     // ── 메시지 시현창(바람 정보 아래) ── 콘솔 스위치 · 엔진 상태를 따른다(pfdMsgs)
-    const msgs = pfdMsgs();
-    _pfdMsgBottom = wdY + fs * 1.1 + 4;    // 바람 글자 아래끝(메시지가 없을 때)
+    const msgs = _pfdSideMsgs ? [] : pfdMsgs();   // 자세계 오른쪽 칸이 있으면 거기에(drawPfdSideMsgs)
+    if (!_pfdSideMsgs) _pfdMsgBottom = wdY + fs * 1.1 + 4;    // 바람 글자 아래끝(메시지가 없을 때)
     if (msgs.length) {
       ctx.save();
       const mx0 = rightX, mw = Math.max(20, x + w - 4 - rightX);
