@@ -57,6 +57,26 @@ function _b206rSync() {
 function _b206rXpdrPush() { try { if (typeof window.cduXpdrCode === 'function') window.cduXpdrCode(b206r.xpdr.code); } catch (e) { _swallow(e); } }
 
 // ── GNS 430 기본 항법 화면 값 ──
+// ── GNS 430 CDI 감도(눈금 끝 = 몇 NM) — 비행 단계에 따라 저절로 바뀐다 ──
+//   ENR 2.0NM — 목적지(계획의 끝)에서 30NM 넘게
+//   TERM 1.0NM — 목적지 30NM 안 · 또는 접근(APP) 구간을 날지만 FAF 2NM 밖
+//   APR 0.3NM — FAF 2NM 안으로 들어오면 2NM 에 걸쳐 1.0 → 0.3 으로 좁혀지고, FAF 를 지나면 0.3
+//   FAF = 계획의 APP 구간 끝에서 둘째 점(마지막은 활주로 · MAPt). Bell 206 계기판 CDI(25-b206panel.js b206Cdi)가 이 값을 쓴다
+function gnsCdiScale() {
+  const o = { fs: 2.0, mode: 'ENR' };
+  try {
+    const W = S.wps || []; if (!W.length || S.awp < 0) return o;
+    const last = W[W.length - 1], dDest = distance(S.lat, S.lon, last.lat, last.lon);
+    const app = W.map((w, i) => (w.phase === 'APP' ? i : -1)).filter(i => i >= 0);
+    if (dDest <= 30 || (app.length && S.awp >= app[0])) { o.fs = 1.0; o.mode = 'TERM'; }
+    if (app.length >= 2) {
+      const faf = app[app.length - 2], f = W[faf], dF = distance(S.lat, S.lon, f.lat, f.lon);
+      if (S.awp > faf) { o.fs = 0.3; o.mode = 'APR'; }
+      else if (S.awp === faf && dF <= 2) { o.fs = 0.3 + 0.7 * Math.max(0, Math.min(1, dF / 2)); o.mode = 'APR'; }
+    }
+  } catch (e) { _swallow(e); }
+  return o;
+}
 function _gnsNav() {
   const o = { wpt: '_____', dis: '__._', dtk: '___', trk: '___', gs: '___', ete: '__:__', dev: null };
   try {
@@ -232,7 +252,8 @@ function _adfBfoSet(on) {
 }, { passive: true }));
 setInterval(() => {
   if (typeof acIs !== 'function' || !acIs('b206')) return;
-  const st = b206AdfAudible();
+  // 경고음이 울리는 동안은 ADF 식별음을 쉰다(소리 우선순위 — 25-b206panel.js)
+  const st = (typeof b206HornOn === 'function' && b206HornOn()) ? null : b206AdfAudible();
   _adfOn = !!st;
   _adfBfoSet(!!st && b206r.adf.bfo);
   if (!st) { _adfNext = 0; return; }
@@ -287,6 +308,7 @@ function b206rRender() {
         right = `<div class="b2r-gnav"><div class="b2r-gwpt">GPS&nbsp; <b>${n.wpt}</b></div>${kv('DIS', n.dis + 'nm')}${kv('DTK', n.dtk + '°')}${kv('TRK', n.trk + '°')}${kv('GS', n.gs + 'kt')}${kv('ETE', n.ete)}</div>${cdi}`;
       }
       let cdiSrc = 'GPS'; try { cdiSrc = navSrc === 'FMS' ? 'GPS' : navSrc === 'NAV1' ? 'VLOC' : navSrc; } catch (e) { _swallow(e); }
+      if (cdiSrc === 'GPS') { const sc = gnsCdiScale(); cdiSrc = `GPS <b class="b2r-cdim ${sc.mode.toLowerCase()}">${sc.mode}</b>`; }
       html = `<div class="b2r-gl">${left}<div class="b2r-gcdi">${cdiSrc}</div></div><div class="b2r-gr">${right}</div>`;
     }
     if (scr.dataset.h !== html) { scr.dataset.h = html; scr.innerHTML = html; }

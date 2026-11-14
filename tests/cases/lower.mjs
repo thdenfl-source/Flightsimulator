@@ -98,6 +98,9 @@ export async function run(page, t) {
     const col = id => { const e = document.querySelector(`.ov-stage [data-ov="${id}"] .ov-sq`); return e ? getComputedStyle(e).color : ''; };
     const o = {};
     ['mpp0', 'mpp1', 'mpp2', 'avcsPower'].forEach(id => ovhdSet(id, 'IN')); await w(500);
+    // 색이 바뀌는 전환 효과가 끝날 때까지(검사를 여럿 함께 돌리면 늦다 — 3초까지)
+    const grn = c => { const v = (c.match(/\d+/g) || []).map(Number); return v.length >= 3 && v[1] > 200 && v[1] - v[0] > 100 && v[1] - v[2] > 80; };
+    for (let i = 0; i < 12 && !['mpp0', 'mpp1', 'mpp2', 'avcsPower'].map(col).every(grn); i++) await w(250);
     o.cols = ['mpp0', 'mpp1', 'mpp2', 'avcsPower'].map(col);
     o.legend = document.querySelector('.ov-stage [data-ov="avcsPower"] .ov-sq').textContent;
     o.fcp = { pos: _ovhdDefs.fcpSel.pos.join(','), def: ovhdGet('fcpSel') };

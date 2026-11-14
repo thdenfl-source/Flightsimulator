@@ -1849,11 +1849,13 @@ function act(name, ...args) {
     const _b2Oat = alt => { const t0 = parseFloat(perfData.temp), a0 = parseFloat(perfData.alt) || 0;
                             return (Number.isFinite(t0) ? t0 : 15) - 2 * (alt - a0) / 1000; };
     const _b2Da = altFt => { const a = Number.isFinite(altFt) ? Math.max(0, altFt) : Math.max(0, S.alt || 0); return densityAltFt(a, _b2Oat(a)); };
+    // 총중량(lb) — Bell W&B(25-b206panel.js b206GrossWt · 연료가 타면 준다), 없으면 3,000lb
+    const _b2Wt = () => { try { const w = typeof b206GrossWt === 'function' ? b206GrossWt() : NaN; return Number.isFinite(w) && w > 1000 ? w : B206P.wt; } catch (e) { return B206P.wt; } };
     const _awHov = perfHoverTq, _awVy = perfVy, _awMta = perfMta, _awTqVs = perfTqForVs, _awVsTq = perfVsForTq, _awWt = perfWeightLb;
     perfHoverTq = function () {
         if (!_b2()) return _awHov();
-        const k = Math.pow(B206P.wt / 3000, 1.5) * (1 + 0.015 * Math.max(-3000, _b2Da()) / 1000);   // 무게^1.5 · 밀도고도
-        return { oge: B206P.hovOge * k, ige: B206P.hovIge * k, wt: 16000 * B206P.wt / 3000 };
+        const k = Math.pow(_b2Wt() / 3000, 1.5) * (1 + 0.015 * Math.max(-3000, _b2Da()) / 1000);   // 무게^1.5 · 밀도고도
+        return { oge: B206P.hovOge * k, ige: B206P.hovIge * k, wt: 16000 * _b2Wt() / 3000 };
     };
     perfVy = function () { return _b2() ? B206P.vy : _awVy(); };
     perfMta = function (altFt) {
@@ -1864,7 +1866,7 @@ function act(name, ...args) {
     perfTqForVs = function (vs) { return _b2() ? (vs > 0 ? vs / B206P.fpmUp : vs / B206P.fpmDn) : _awTqVs(vs); };
     perfVsForTq = function (d) { return _b2() ? (d > 0 ? d * B206P.fpmUp : d * B206P.fpmDn) : _awVsTq(d); };
     // SIM 의 무게 보정 · 자동회전 NR 표는 흰수리 무게(lb) 눈금이라, 같은 비율의 흰수리 무게로 넘긴다
-    perfWeightLb = function () { return _b2() ? 16000 * B206P.wt / 3000 : _awWt(); };
+    perfWeightLb = function () { return _b2() ? 16000 * _b2Wt() / 3000 : _awWt(); };
     })();
 
     // --- High-fidelity SVG Icons ---

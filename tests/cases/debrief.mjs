@@ -47,6 +47,53 @@ export async function run(page, t) {
   t.ok(W.cur >= 0 && !W.live && /ALT/.test(W.read), `사건을 누르면 그 순간의 값 (${W.read.slice(0, 40)}…)`);
   t.ok(W.track && W.trackOff && W.playing && W.played > 0 && W.closed, '지도에 항적 겹치기 · ▶ 다시 보기 · ✕ 닫기');
 
+  // ── 채점(A ~ B) · 3D 다시 보기 ──
+  const G = await page.evaluate(async () => {
+    fdrClear(); fdr.on = true; const o = {};
+    S.alt = 1000; S.spd = 100; S.hdg = 90;
+    for (let i = 0; i < 20; i++) { S.alt = 1000 + (i < 15 ? 20 : 300); fdrStep(1); }     // 15초는 ±100 안 · 5초는 밖
+    dbfOpen(); const w = document.getElementById('dbf-wrap');
+    _dbfSeek(0); w.querySelector('[data-dbf="ga"]').click(); _dbfSeek(19); w.querySelector('[data-dbf="gb"]').click();
+    const R = fdrGrade(); o.alt = R.items.find(x => x.k === 'alt'); o.score = R.score; o.grade = R.grade;
+    o.html = w.querySelector('[data-dbf-v="gr"]').textContent;
+    // 3D 다시 보기 — 기록 자리로 옮겨 그리고, 끝내면 돌아온다
+    const lat0 = S.lat; S.lat = 33; fdr.rows[5].lat = 35.5;
+    _dbfSeek(5); w.querySelector('[data-dbf="r3d"]').click(); _dbfPlay(false); _dbf.cur = 5; _rpApply();
+    o.rp = { on: _rp.on, lat: S.lat, mini: getComputedStyle(document.getElementById('dbf-mini')).display !== 'none', run: S.running };
+    document.querySelector('#dbf-mini [data-rp="end"]').click();
+    o.back = { on: _rp.on, lat: S.lat, open: _dbf.open };
+    dbfClose(); S.lat = lat0;
+    return o;
+  });
+  t.ok(Math.round(G.alt.inPct) === 75 && G.alt.maxDev > 250 && /점수/.test(G.html),
+    `채점 — 고도 ±100ft 안 ${G.alt.inPct.toFixed(0)}% · 최대 ${G.alt.maxDev.toFixed(0)}ft · 점수 ${G.score.toFixed(0)} ${G.grade}`);
+  t.ok(G.rp.on && G.rp.lat === 35.5 && G.rp.mini && !G.rp.run && !G.back.on && G.back.lat === 33 && G.back.open,
+    '3D 다시 보기 — 기록한 자리로 기체를 옮겨 그리고(비행 멈춤 · 아래 작은 막대) · 끝내면 원래 상태로');
+
+  // ── 시나리오 · 환경 ──
+  const SC = await page.evaluate(async () => {
+    const o = {}, keep = localStorage.getItem('scnList');
+    localStorage.removeItem('scnList');
+    S.lat = 36.1; S.lon = 126.2; S.alt = 1500; S.hdg = 45; S.spd = 80; windDir = 120; windSpd = 15;
+    envSet({ tod: 'NIGHT', vis: 3, rain: 1, nvg: false, sea: 4 });
+    o.env = { night: document.documentElement.classList.contains('env-night'), rain: document.documentElement.classList.contains('env-rain1'), roll: shipRollAmp, pitch: shipPitchAmp, fog: envSky()['fog-ground-blend'], drift: envSeaDrift() };
+    toggleScenario(); const w = document.getElementById('scn-wrap');
+    w.querySelector('[data-scnv="name"]').value = '검사 시나리오'; w.querySelector('[data-scn="save"]').click();
+    o.saved = scnList().length;
+    S.lat = 30; S.alt = 9000; windSpd = 0; envSet({ tod: 'DAY', vis: 0, rain: 0, sea: 0 });
+    w.querySelector('[data-scn="load:0"]').click();
+    o.loaded = { lat: S.lat, alt: S.alt, wind: windSpd, tod: env.tod, sea: env.sea, run: S.running };
+    o.imp = scnImport(JSON.stringify([Object.assign(scnCapture('들여온 것'), {})]));
+    envSet({ tod: 'DAY', vis: 0, rain: 0, sea: 0 }); windSpd = 0;
+    if (keep === null) localStorage.removeItem('scnList'); else localStorage.setItem('scnList', keep);
+    if (w) w.style.display = 'none';
+    return o;
+  });
+  t.ok(SC.env.night && SC.env.rain && SC.env.roll === 6 && SC.env.pitch === 3 && SC.env.fog < 0.3 && SC.env.drift.kt === 0.9 && SC.env.drift.dir === 300,
+    `환경 — 야간 · 비 · 시정 3km(안개 ${SC.env.fog.toFixed(2)}) · 바다 상태 4(함정 롤 ${SC.env.roll}° · 피칭 ${SC.env.pitch}° · 익수자 ${SC.env.drift.kt}kt 바람 쪽)`);
+  t.ok(SC.saved === 1 && Math.abs(SC.loaded.lat - 36.1) < 1e-9 && SC.loaded.alt === 1500 && SC.loaded.wind === 15 && SC.loaded.tod === 'NIGHT' && SC.loaded.sea === 4 && !SC.loaded.run && SC.imp === 1,
+    '시나리오 — 지금 상태 저장 · 불러오기(자리 · 고도 · 바람 · 환경, 멈춘 채) · 파일 들여오기');
+
   // ── PFD — HDG 선회 방향 화살표 · AFCS 모드 풀림 경보 ──
   const P = await page.evaluate(async () => {
     const o = {};

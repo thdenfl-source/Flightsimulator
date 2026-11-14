@@ -537,7 +537,8 @@ function simEngApply(quiet) {
   const changed = simEng !== prev.eng || st[1] !== prev.s1 || st[2] !== prev.s2;
   let msg = null, kind = 'err';
   if (single) {
-    if (changed) {
+    // Bell 컬렉티브(27-b206coll.js)가 시동 · 고장 · 소진을 제 알림으로 알릴 때는 겹쳐 띄우지 않는다
+    if (changed && !(window._engToastQuiet > performance.now())) {
       const air = simModeOn && !_simOnGnd;
       if (simEng === 2) { msg = '엔진 정상 — FULL OPEN'; kind = ''; }
       else if (st[1] === 'OFF') msg = air ? 'ENG OUT — 엔진 꺼짐 · 오토로테이션' : 'ENG OFF — 엔진 꺼짐';
@@ -578,6 +579,76 @@ function updateEngBtn() {
     b.classList.toggle('warn', simEng === 1); b.classList.toggle('fail', simEng === 0);
   } catch (e) { _swallow(e); }
 }
+// ── Bell 206 고유 위험(시소형 2날개 로터 · 꼬리로터) ──
+// ① 저중력(Low-G) — 사이클릭을 급히 밀어(pushover) 하중배수 n 이 0.5 아래로 떨어지면 시소형 로터는 추력이 없어
+//    동체가 꼬리로터 추력에 밀려 오른쪽으로 구른다(롤 몫 simLowG.r). 이때 왼쪽 사이클릭으로 롤을 바로잡으려 하거나
+//    오른쪽 롤이 25° 를 넘은 채 저중력이 0.8초 넘게 이어지면 로터 허브가 마스트를 친다(MAST BUMPING) — 비행이 멈춘다.
+//    회복: 사이클릭을 먼저 부드럽게 뒤로(G 를 되찾는다) → 그다음 롤을 바로잡는다.
+//    n ≈ 1 + V·q/g(피치율 q · 대기속도 V) + 승강 가속/g. 40kt 아래는 없다.
+// ② LTE(꼬리로터 효과 상실) — 30kt 아래 · 바람 8kt 넘게 · 상대풍이 위험 방위면 기수가 오른쪽으로 저절로 돈다.
+//    285~315°(주로터 와류) · 210~330°(꼬리로터 와류고리) · 120~240°(뒷바람 — 바람 쪽으로 돈다). 오른쪽 선회 중이면 더 세다.
+//    회복: 왼쪽 페달 끝까지 · 사이클릭 앞으로(속도) · 고도 여유가 있으면 컬렉티브를 낮춘다. 30kt 넘으면 사라진다.
+const LOWG_N = 0.5, LOWG_ROLL = 30, LOWG_BUMP_S = 0.8, LTE_YAW = 35;
+const simLowG = { n: 1, r: 0, t: 0, bump: 0, warned: false, pit0: null, vs0: null };
+const simLte = { yaw: 0, risk: 0, warned: false };
+function _bump(x, c, w) { const d = Math.abs(((x - c + 540) % 360) - 180); return Math.max(0, 1 - d / w); }
+function simB206Hazards(dt, a, onGnd) {
+  const L = simLowG;
+  if (!(typeof acB206 === 'function' && acB206()) || onGnd || !(dt > 0)) {
+    L.n = 1; L.r *= Math.max(0, 1 - dt * 2); L.t = 0; L.bump = 0; L.warned = false; L.pit0 = S.pit; L.vs0 = S.vs; simLte.yaw = 0; simLte.risk = 0; simLte.warned = false; return;
+  }
+  const V = simAirspeed();
+  // ① 저중력
+  const q = L.pit0 == null ? 0 : (S.pit - L.pit0) / dt * D2R, av = L.vs0 == null ? 0 : (S.vs - L.vs0) / 60 / dt;
+  L.pit0 = S.pit; L.vs0 = S.vs;
+  const nRaw = V < 40 ? 1 : 1 + (V * 1.6878 * q + av) / 32.17;
+  L.n += (nRaw - L.n) * Math.min(1, dt / 0.2);
+  if (L.n < LOWG_N) {
+    L.t += dt;
+    // 잠깐(0.3초 안) 스친 것은 그냥 둔다 — 기수를 조금 숙이는 보통 조작까지 잡지 않게
+    if (L.t > 0.3) L.r = Math.min(60, L.r + LOWG_ROLL * Math.min(1, (LOWG_N - L.n) / LOWG_N + 0.3) * dt);
+    if (!L.warned && L.t > 0.5) {
+      L.warned = true;
+      try { uiToast('LOW G — 사이클릭을 부드럽게 뒤로(G 회복) · 그다음 롤 바로잡기', 'err', 3500); } catch (e) { _swallow(e); }
+      try { if (typeof fdrNote === 'function') fdrNote(`저중력 Low-G (n ${L.n.toFixed(2)})`, 'err'); } catch (e) { _swallow(e); }
+    }
+    if (L.t > 0.3 && (a.roll < -0.3 || S.bnk > 25)) L.bump += dt; else L.bump = Math.max(0, L.bump - dt * 0.5);
+    if (L.bump >= LOWG_BUMP_S) simMastBump();
+  } else {
+    L.t = 0; L.bump = 0;
+    if (L.n > 0.8) { L.r -= L.r * Math.min(1, dt / 0.8); L.warned = false; }
+  }
+  // ② LTE
+  const T = simLte;
+  const rel = ((windDir - S.hdg) % 360 + 360) % 360;
+  const wK = Math.max(0, Math.min(1, (windSpd - 5) / 15)), vK = Math.max(0, Math.min(1, (30 - V) / 20));
+  const right = Math.max(_bump(rel, 300, 20), 0.8 * _bump(rel, 270, 65));
+  const wc = 0.6 * _bump(rel, 180, 65), wcDir = rel < 180 ? 1 : -1;
+  let dir = right >= wc ? 1 : wcDir;
+  T.risk = Math.max(right, wc) * wK * vK * (simYawRate > 2 ? 1.5 : 1);
+  const left = Math.max(0, -a.yaw);                       // 왼쪽 페달이 맞선다
+  const tgt = dir * LTE_YAW * Math.min(1, T.risk) * (1 - 0.75 * left);
+  T.yaw += (tgt - T.yaw) * Math.min(1, dt / 1.2);
+  if (Math.abs(T.yaw) > 0.05) { S.hdg = normA(S.hdg + T.yaw * dt); selHdg = ((Math.round(hdgInd()) + 359) % 360) + 1; }
+  if (Math.abs(T.yaw) > 10 && !T.warned) {
+    T.warned = true;
+    try { uiToast('LTE — 기수가 저절로 돈다: 왼쪽 페달 끝까지 · 사이클릭 앞으로(속도) · 고도 여유 있으면 컬렉티브 낮춤', 'err', 4500); } catch (e) { _swallow(e); }
+    try { if (typeof fdrNote === 'function') fdrNote(`LTE (상대풍 ${rel.toFixed(0)}° · ${windSpd.toFixed(0)}kt · ${V.toFixed(0)}kt)`, 'err'); } catch (e) { _swallow(e); }
+  }
+  if (Math.abs(T.yaw) < 3) T.warned = false;
+}
+let simMastBumpN = 0;
+function simMastBump() {
+  simMastBumpN++; simLowG.bump = 0; simLowG.t = 0;
+  try { if (typeof fdrNote === 'function') fdrNote('마스트 범핑 — 로터 허브가 마스트를 쳤다', 'err'); } catch (e) { _swallow(e); }
+  S.running = false;
+  try { if (typeof updateFlyBtns === 'function') updateFlyBtns(); } catch (e) { _swallow(e); }
+  try {
+    uiAlert('MAST BUMPING — 저중력 상태에서 롤을 사이클릭으로 바로잡으려 했거나 오른쪽 롤이 커져 로터 허브가 마스트를 쳤습니다(실기에서는 치명적).\n\n' +
+      '회복 순서: ① 사이클릭을 부드럽게 뒤로 — 하중(G)을 먼저 되찾는다  ② 그다음 롤을 바로잡는다.\n비행이 멈췄습니다 — 다시 시작하려면 ▶ 를 누르십시오.');
+  } catch (e) { _swallow(e); }
+}
+
 // ── 로터 회전(NR) — 오토로테이션 ──
 // 엔진이 레버가 요구하는 만큼(D)을 다 내면 거버너가 NR 100% 를 지킨다. 모자란 몫(U = D − 엔진)은
 // 로터가 낸다 — 강하가 붙기 전(수평)에는 NR 이 U 만큼 처지고, 오토로테이션 강하가 자리 잡을수록
@@ -1621,7 +1692,7 @@ function simFly(dt) {
     // HDG·NAV 가 걸려 있으면 뱅크는 AFCS 가 잡는다(07-sim.js) — 조종간 좌우는 무시한다.
     if (!simAfcsLat()) {
       simTf = (rcOn('transverse') && !onGnd) ? -rotorSign() * RC_TF_BANK * rcTransverseK(simAirspeed()) * (aseOn ? RC_TF_ASE : 1) : 0;
-      const bTgt = (gnd3 ? 0 : roll * SIM_BANK_MAX) + deckAtt.bank + rotorSign() * simRbs.r + simTf;
+      const bTgt = (gnd3 ? 0 : roll * SIM_BANK_MAX) + deckAtt.bank + rotorSign() * simRbs.r + simTf + simLowG.r;   // simLowG — Bell 206 저중력 오른쪽 롤
       const dB = bTgt - S.bnk;
       S.bnk += Math.sign(dB) * Math.min(Math.abs(dB), SIM_ROLL_RATE * dt);
       bankTarget = S.bnk;           // 모드를 빠져나가도 자세가 튀지 않게
@@ -1760,6 +1831,9 @@ function simFly(dt) {
     const yr = yrDelayed;
     if (yr) { S.hdg = normA(S.hdg + yr * dt); selHdg = ((Math.round(hdgInd()) + 359) % 360) + 1; }
   }
+
+  // Bell 206 고유 위험 — 저중력(Low-G) · 마스트 범핑 · LTE(아래 simB206Hazards)
+  try { simB206Hazards(dt, a, onGnd); } catch (e) { _swallow(e); }
 
   // ── 컬렉티브 → 토크 ──
   // 레버 자리가 곧 토크다. 토크는 천천히 따라 오른다(엔진·로터 관성).

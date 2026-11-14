@@ -16,7 +16,7 @@
 ## 두 저장소는 같은 코드다 — shinesong 에서만 고친다
 - 앱 파일(js · index.html · sw.js · tests · data · vendor · 그림)은 **두 저장소가 같다.** 판(edition)만 다르다:
   `js/00-edition.js` 가 주소에 `flightsimulator` 가 들어 있으면 **절차 훈련판(proc)** — SIM 모드를 켤 수 없고
-  SIM 조작 버튼(3D 창 SIM · 회전익 특성 · ASE · 엔진 · SOUND · STICK · GYRO, 지도 창 SIM, PFD 소프트키 SIM)을 감춘다.
+  SIM 조작 버튼(3D 창 SIM · 회전익 특성 · ASE · 엔진 · STICK · GYRO, 지도 창 SIM, PFD 소프트키 SIM)을 감춘다(SOUND 는 두 판 모두 보인다).
   그 밖(PFD · FCP · CDU · 지도 · 3D · 상부/하부 콘솔 · SYSTEM 창 · 무전기 · 연료 · AFCS)은 모두 같다.
 - **고칠 일은 shinesong 에서 한다.** 끝나면 Flightsimulator 로 그대로 복사해 PR 을 하나 더 올린다
   (`.git` · `.github` · `.nojekyll` · `.gitignore` · `CLAUDE.md` · `node_modules` 만 그 저장소 것을 둔다).

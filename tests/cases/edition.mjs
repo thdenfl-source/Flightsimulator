@@ -13,7 +13,8 @@ export async function run(page, t) {
     const o = { ed: APP_EDITION, sim: SIM_ENABLED, cls: document.documentElement.classList.contains('ed-proc'), pw: window.lockCheck('thdenfl') };
     toggleSimMode(true); o.on1 = simModeOn; simModeBtnPress(); o.on2 = simModeOn;
     const hidden = id => { const e = document.getElementById(id); return !e || getComputedStyle(e).display === 'none'; };
-    o.hidden = ['sim3d-btn', 'simmap-btn', 'rotor-3d', 'ase-3d', 'eng-3d', 'snd-btn', 'vstick-btn', 'gyro-btn'].filter(id => !hidden(id));
+    o.hidden = ['sim3d-btn', 'simmap-btn', 'rotor-3d', 'ase-3d', 'eng-3d', 'vstick-btn', 'gyro-btn'].filter(id => !hidden(id));
+    o.snd = (() => { const e = document.getElementById('snd-btn'); return !!e && getComputedStyle(e).display !== 'none'; })();
     o.sk = [...document.querySelectorAll('#pfd-sk .pfd-sk, #pfd-sk [data-sk]')].map(e => e.textContent.trim()).includes('SIM');
     o.pfd = typeof drawPFD === 'function' && (drawPFD(), true);
     try { selectPanel('right', 'lcon', true); selectPanel('right', 'sysp', true); sysDraw(); o.panels = true; } catch (e) { o.panels = String(e); }
@@ -26,5 +27,6 @@ export async function run(page, t) {
   t.ok(!P.on1 && !P.on2, '절차 훈련판에서는 SIM 모드가 켜지지 않는다(toggleSimMode · SIM 버튼)');
   t.eq(P.hidden.length, 0, `SIM 조작 버튼이 감춰진다${P.hidden.length ? ' (보임: ' + P.hidden.join(', ') + ')' : ''}`);
   t.ok(!P.sk, 'PFD 소프트키 SIM 칸이 빈칸');
+  t.ok(P.snd, '절차 훈련판에도 SOUND 버튼은 있다(로터 소리)');
   t.ok(P.pfd && P.panels === true && errs.length === 0, `PFD · 하부 콘솔 · SYSTEM 창은 그대로 돈다${errs.length ? ' (오류: ' + errs.slice(0, 2).join(' | ') + ')' : ''}`);
 }

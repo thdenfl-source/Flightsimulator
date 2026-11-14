@@ -38,11 +38,11 @@ function b206Vals() {
   // 시동 중(27-b206coll.js 시동 절차)에는 그 N1 · TOT · N2
   const sv = (typeof b206cStartVals === 'function') ? b206cStartVals() : null;
   const on = e1.ng > 0 || !!(sv && sv.lit);
-  if (sv) return Object.assign(b206Vals._rest(on, tq, nr, gal, sv.n1), { tq: 0, n1: sv.n1, tot: sv.tot, nr: Math.max(nr, sv.n2 * 0.95), n2: sv.n2, run: on && sv.n1 > 50 });
-  return Object.assign(b206Vals._rest(on, tq, nr, gal, n1), {
+  if (sv) return Object.assign(_b206ValsRest(on, tq, nr, gal, sv.n1), { tq: 0, n1: sv.n1, tot: sv.tot, nr: Math.max(nr, sv.n2 * 0.95), n2: sv.n2, run: on && sv.n1 > 50 });
+  return Object.assign(_b206ValsRest(on, tq, nr, gal, n1), {
     tq, n1, tot, nr, n2: e1.np, run: on });
 }
-b206Vals._rest = function (on, tq, nr, gal, n1) {
+function _b206ValsRest(on, tq, nr, gal, n1) {
   return {
     engOilP: on ? Math.min(130, 50 + n1 * 0.85) : 0, engOilT: on ? 72 + tq * 0.12 : 20,
     xmsnP: nr > 30 ? 30 + nr * 0.22 : nr * 0.5, xmsnT: 60 + tq * 0.18,
@@ -75,7 +75,9 @@ function b206Cdi() {
   try {
     if (navSrc === 'FMS' && S.awp >= 0 && S.awp < S.wps.length) {
       const xtk = courseXtk(activeCourseLine());
-      return { ok: true, dev: Math.max(-1, Math.min(1, -xtk / rnp)), crs: activeCrs(), to: true, src: 'GPS' };
+      // 눈금 끝 — GNS 430 의 비행 단계 감도(ENR 2 · TERM 1 · APR 0.3NM · 26-b206radio.js gnsCdiScale)
+      const fs = (typeof gnsCdiScale === 'function') ? gnsCdiScale().fs : rnp;
+      return { ok: true, dev: Math.max(-1, Math.min(1, -xtk / fs)), crs: activeCrs(), to: true, src: 'GPS', fs };
     }
     if (navSrc !== 'FMS' && navLat !== null && navLon !== null) {
       const brgFrom = bearing(navLat, navLon, S.lat, S.lon);
@@ -439,7 +441,7 @@ function b206MasterAck() {
   b206Cautions(v, an).forEach(([k, on]) => { if (on) _b206Ack.add(k); });
 }
 // 판 그림 좌표의 단추 — CAUTION LT TEST · MASTER CAUTION · FUEL QTY(재급유)
-const B206_HIT = { test: [888, 22, 52, 52], master: [810, 26, 70, 36], fuel: [94, 340, 112, 112] };
+const B206_HIT = { test: [888, 22, 52, 52], master: [810, 26, 70, 36], fuel: [94, 340, 112, 112], mute: [12, 24, 44, 40] };
 
 // ── 판 전체 — g 에 (x, y, w, h) 칸으로 그린다 ──
 function b206Draw(g, x, y, w, h) {
@@ -467,6 +469,9 @@ function b206Draw(g, x, y, w, h) {
     _b206Lamp(g, 810, 28, 70, 32, '', m, '#ffb21a');
     _b206Text(g, 'MASTER', 845, 38, 10, m ? '#1a0a00' : '#5a4434'); _b206Text(g, 'CAUTION', 845, 51, 10, m ? '#1a0a00' : '#5a4434'); }
   g.save(); g.fillStyle = '#1a1a1a'; g.fillRect(888, 22, 52, 52); g.fillStyle = T ? '#ff3a2a' : '#7a0d0d'; g.beginPath(); g.arc(914, 46, T ? 9 : 11, 0, 7); g.fill(); g.restore();
+  // HORN MUTE — 울리는 경고음을 끈다(경고가 풀리면 다시 산다)
+  { const m = _b206HornMuted; g.save(); g.fillStyle = '#1a1a1a'; g.fillRect(12, 24, 44, 40); g.strokeStyle = m ? '#ffb21a' : '#444'; g.lineWidth = 2; g.strokeRect(13, 25, 42, 38); g.restore();
+    _b206Text(g, 'HORN', 34, 38, 9, m ? '#ffb21a' : '#aaa'); _b206Text(g, 'MUTE', 34, 50, 9, m ? '#ffb21a' : '#aaa'); }
   // 누를 자리를 캔버스에 적어 둔다(아래 b206PanelHit)
   try { const m = g.getTransform(); g.canvas._b206 = { a: m.a, e: m.e, f: m.f }; } catch (e) { /* 그만 */ }
   _b206Text(g, 'CAUTION', 914, 16, 9, '#222'); _b206Text(g, 'LT TEST', 914, 84, 9, '#222');
@@ -582,10 +587,8 @@ document.addEventListener('pointerdown', ev => {
   ev.stopPropagation(); ev.preventDefault();
   if (h === 'test') { b206TestOn = true; b206HornAudio(true); }
   else if (h === 'master') b206MasterAck();
-  else if (h === 'fuel') {
-    Promise.resolve(typeof uiPrompt === 'function' ? uiPrompt(`연료(갤런, 0 ~ ${B206_LIM.fuelCap}) — 지금 ${b206FuelGal().toFixed(0)}`, Math.round(b206FuelGal()), { numeric: true }) : null)
-      .then(v => { if (v !== null && v !== undefined && v !== '') b206FuelSet(parseFloat(v)); }).catch(() => {});
-  }
+  else if (h === 'mute') { if (b206HornCond()) _b206HornMuted = true; }
+  else if (h === 'fuel') b206WbOpen();
   try { drawPFD(); } catch (e) { /* 그만 */ }
 }, true);
 document.addEventListener('click', ev => { if (b206PanelHit(ev)) { ev.stopPropagation(); ev.preventDefault(); } }, true);
@@ -593,14 +596,21 @@ document.addEventListener('click', ev => { if (b206PanelHit(ev)) { ev.stopPropag
 
 // ── 경고음(ENG OUT · 낮은 로터 RPM) — 공중에서 N1 55% 아래 · NR 90% 아래면 울린다 ──
 // 소리 장치는 처음 누를 때 연다(브라우저 규칙). 같은 음(약 700Hz)을 0.25초마다 끊어 낸다.
-let _b206Horn = null;
-function b206HornWant() {
-  if (b206TestOn) return true;
+// HORN MUTE(계기판 왼쪽 위)로 끌 수 있다 — 경고가 풀리면 다시 산다(다음 경고에는 울린다).
+// 경고음이 울리는 동안은 다른 소리가 비킨다(소리 우선순위: 경고음 > ADF 식별음 · 로터 소리는 반으로 · 16-sound.js · 26-b206radio.js)
+let _b206Horn = null, _b206HornMuted = false;
+function b206HornCond() {
   let air = false;
   try { air = typeof sndOnGround === 'function' ? !sndOnGround() : S.alt > 5; } catch (e) { air = false; }
   if (!air) return false;
   const v = b206Vals(), an = b206Annun(v);
   return an.engOut || an.rpm;
+}
+function b206HornWant() {
+  if (b206TestOn) return true;
+  const c = b206HornCond();
+  if (!c) { _b206HornMuted = false; return false; }
+  return !_b206HornMuted;
 }
 function b206HornAudio(on) {
   try {
@@ -625,6 +635,84 @@ setInterval(() => {
   const now = performance.now(), dt = _b206TickT ? Math.min(2, (now - _b206TickT) / 1000) : 0; _b206TickT = now;
   let k = 0; try { k = S.running ? (typeof simSpeed === 'number' ? simSpeed : 1) : 0; } catch (e) { k = 0; }
   b206FuelStep(dt * k);
+  if (k > 0) b206ExceedStep(dt * k);
   const want = b206HornWant();
   if (want !== !!_b206Horn) b206HornAudio(want);
 }, 250);
+
+// ── 무게 · 연료(W&B) — 자중 · 사람 · 화물 · 연료(갤런 × 6.7lb)로 총중량을 셈한다. 성능(09-cdu.js Bell PERF)이 이 무게를 쓴다 ──
+// 최대 총중량 3,200lb. 연료는 타는 만큼 무게가 준다. 계기판 FUEL QTY 를 누르거나 컬렉티브 창의 W&B 단추로 연다.
+const B206_WB = { empty: 1950, pilot: 170, copilot: 170, rear: 0, cargo: 0, max: 3200, lbPerGal: 6.7 };
+const b206Wb = { empty: B206_WB.empty, pilot: B206_WB.pilot, copilot: B206_WB.copilot, rear: B206_WB.rear, cargo: B206_WB.cargo };
+function b206GrossWt() { return b206Wb.empty + b206Wb.pilot + b206Wb.copilot + b206Wb.rear + b206Wb.cargo + b206FuelGal() * B206_WB.lbPerGal; }
+function b206WbSet(o) {
+  for (const k of ['empty', 'pilot', 'copilot', 'rear', 'cargo']) if (Number.isFinite(+o[k])) b206Wb[k] = Math.max(0, +o[k]);
+  if (Number.isFinite(+o.gal)) b206FuelSet(+o.gal);
+}
+function b206WbOpen() {
+  let w = document.getElementById('wb-wrap');
+  if (!w) {
+    w = document.createElement('div'); w.id = 'wb-wrap';
+    const row = (k, t, u) => `<label><span>${t}</span><input type="number" inputmode="decimal" data-wb="${k}"><em>${u}</em></label>`;
+    w.innerHTML = `<div class="wb-box"><div class="wb-bar"><b>Bell 206B-3 무게 · 연료 (W&amp;B)</b><button class="sim-btn" data-wbx="close">✕</button></div>` +
+      row('empty', '기본 자중', 'lb') + row('pilot', '조종사', 'lb') + row('copilot', '부조종사 · 교관', 'lb') + row('rear', '뒷좌석(3석 합)', 'lb') + row('cargo', '화물', 'lb') +
+      row('gal', '연료', `gal (최대 ${B206_LIM.fuelCap})`) +
+      `<div class="wb-sum" data-wbv="sum"></div><div class="wb-btns"><button class="sim-btn" data-wbx="full">연료 가득</button><button class="sim-btn on" data-wbx="ok">적용</button></div></div>`;
+    document.body.appendChild(w);
+    const read = () => { const o = {}; w.querySelectorAll('[data-wb]').forEach(i => { o[i.dataset.wb] = parseFloat(i.value); }); return o; };
+    const sum = () => {
+      const o = read(), gal = Math.max(0, Math.min(B206_LIM.fuelCap, o.gal || 0));
+      const gw = ['empty', 'pilot', 'copilot', 'rear', 'cargo'].reduce((a, k) => a + (o[k] || 0), 0) + gal * B206_WB.lbPerGal;
+      const over = gw > B206_WB.max;
+      w.querySelector('[data-wbv="sum"]').innerHTML = `총중량 <b class="${over ? 'over' : ''}">${gw.toFixed(0)} lb</b> / 최대 ${B206_WB.max} lb` + (over ? ' — <b class="over">최대 총중량 초과</b>' : ` · 여유 ${(B206_WB.max - gw).toFixed(0)} lb`);
+    };
+    w.addEventListener('input', sum);
+    w.addEventListener('click', e => {
+      const b = e.target.closest('[data-wbx]'); if (!b) return;
+      if (b.dataset.wbx === 'close') w.style.display = 'none';
+      else if (b.dataset.wbx === 'full') { w.querySelector('[data-wb="gal"]').value = B206_LIM.fuelCap; sum(); }
+      else if (b.dataset.wbx === 'ok') {
+        b206WbSet(read()); w.style.display = 'none';
+        const gw = b206GrossWt();
+        try { uiToast(`총중량 ${gw.toFixed(0)} lb · 연료 ${b206FuelGal().toFixed(0)} gal${gw > B206_WB.max ? ' — 최대 총중량 초과!' : ''}`, gw > B206_WB.max ? 'err' : ''); } catch (er) { /* 그만 */ }
+      }
+    });
+    w._sum = sum;
+  }
+  w.querySelectorAll('[data-wb]').forEach(i => { i.value = i.dataset.wb === 'gal' ? Math.round(b206FuelGal()) : b206Wb[i.dataset.wb]; });
+  w.style.display = 'flex'; w._sum();
+}
+
+// ── 엔진 · 로터 한계 넘음 기록(점검 필요) — 넘을 때마다 알림 · 비행 기록(28-debrief.js) 사건 ──
+//   TOT 시동 927°C 10초 넘게 · 1,093°C · 비행 810°C(빨강) · 738~810°C 5분 넘게 · TQ 100% · N1 105% · N2 105% · NR 107%
+const b206Exceed = [];
+const _b206Ex = {};
+function _b206ExHit(key, on, txt, val, dt, minS = 0) {
+  const e = _b206Ex[key] || (_b206Ex[key] = { t: 0, max: 0, logged: false });
+  if (on) {
+    e.t += dt; e.max = Math.max(e.max, val);
+    if (!e.logged && e.t >= minS) {
+      e.logged = true;
+      const m = `${txt} (${val.toFixed(0)})`;
+      b206Exceed.push({ key, txt: m, at: Date.now() });
+      try { uiToast(`한계 넘음 — ${m} · 엔진 점검 필요`, 'err', 3500); } catch (er) { /* 그만 */ }
+      try { if (typeof fdrNote === 'function') fdrNote(`한계 넘음 — ${m}`, 'err'); } catch (er) { /* 그만 */ }
+    }
+  } else { e.t = 0; e.max = 0; e.logged = false; }
+}
+function b206ExceedStep(dt) {
+  if (!(dt > 0)) return;
+  const v = b206Vals(), sv = (typeof b206cStartVals === 'function') ? b206cStartVals() : null;
+  if (sv) {
+    _b206ExHit('totStart', v.tot > 927, 'TOT 시동 한계 927°C 10초 넘게', v.tot, dt, 10);
+    _b206ExHit('totStartMax', v.tot > 1093, 'TOT 1,093°C 넘음', v.tot, dt);
+    return;
+  }
+  if (!v.run) return;
+  _b206ExHit('tot', v.tot > 810, 'TOT 810°C 넘음', v.tot, dt);
+  _b206ExHit('tot5', v.tot > 738 && v.tot <= 810, 'TOT 738~810°C 5분 넘게', v.tot, dt, 300);
+  _b206ExHit('tq', v.tq > 100, 'TORQUE 100% 넘음', v.tq, dt);
+  _b206ExHit('n1', v.n1 > 105, 'N1 105% 넘음', v.n1, dt);
+  _b206ExHit('n2', v.n2 > 105, 'N2 105% 넘음', v.n2, dt);
+  _b206ExHit('nr', v.nr > 107, 'NR 107% 넘음', v.nr, dt);
+}

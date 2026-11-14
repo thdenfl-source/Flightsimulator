@@ -119,7 +119,9 @@ function sndTick(dt) {
     _snd.gAir.gain.setTargetAtTime(b, t, 0.05);
     let tq = S.tq;
     try { if (typeof tqShown === 'function') tq = tqShown(); } catch (e) { _swallow(e); }
-    _snd.master.gain.setTargetAtTime(sndOn && S.running ? SND_VOL * sndTqGain(tq) : 0, t, 0.15);
+    // 경고음(Bell 206 ENG OUT · RPM)이 울리는 동안은 로터 소리를 반으로 줄여 경고음이 들리게 한다
+    const duck = (typeof b206HornOn === 'function' && b206HornOn()) ? 0.5 : 1;
+    _snd.master.gain.setTargetAtTime(sndOn && S.running ? SND_VOL * sndTqGain(tq) * duck : 0, t, 0.15);
   } catch (e) { _swallow(e); }
 }
 function sndFrame() {
