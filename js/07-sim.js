@@ -102,6 +102,7 @@ function afcsReleaseAll() {
   try { if (gsOn || gsArmed) toggleGs(); } catch (e) { _swallow(e); }
   try { if (simIasOn && typeof simIasRelease === 'function') simIasRelease(); } catch (e) { _swallow(e); }
   try { if (gspdOn) toggleGspd(); } catch (e) { _swallow(e); }
+  iasNsOn = false;                         // SIM 이 꺼져 있을 때의 IAS(FMA 오른쪽 칸)도 푼다
   try { if (typeof gaRelease === 'function') gaRelease(); } catch (e) { _swallow(e); }
   try { updateHoverBtns(); updateApInhibit(); } catch (e) { _swallow(e); }
 }

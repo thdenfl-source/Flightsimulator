@@ -105,7 +105,9 @@ function drawPFD() {
   // 내려간다. 그러면 ctx.arc 가 예외를 던지며 그 프레임의 계기 그리기가 통째로
   // 중단된다. 그릴 수 없는 크기면 조용히 건너뛴다.
   if (!(W >= 80) || !(H >= 80)) return;
-  const ctrlEl = document.querySelector('.ctrl-bar');
+  // PFD 창의 FCP(#pfd-wrap > .ctrl-bar) — 3D 화면의 FCP 칸(#fcp3d-l · r)에도 .ctrl-bar 가 있어 그것을 먼저 집으면 높이 0 으로
+  // 계기가 FCP 아래까지 그려졌다(Cockpit Mode PFD 팝아웃에서 HSI 아래가 잘림)
+  const ctrlEl = document.querySelector('#pfd-wrap > .ctrl-bar') || document.querySelector('.ctrl-bar');
   // 3D 화면에 겹친 계기(drawPfdTo)는 FCP 가 없다 — 칸을 다 계기에 쓴다
   const CTRL_H = (cvs.dataset.noFcp || pfdFcpSide()) ? 0 : (ctrlEl ? ctrlEl.offsetHeight : 80);
   const L = pfdLayout(W, H, CTRL_H);

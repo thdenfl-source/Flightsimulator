@@ -1,6 +1,6 @@
 // Cockpit Mode(07-sim.js cockpitStart) — 3D 단독 화면 · 1인칭 조종석 시야 · 조종석 패널(MFD · 위아래 콘솔 · CDU)
 // SIM 이 꺼져 있어도(절차 훈련판 · AFCS 로 나는 비행) 조종석에 앉는다 · 'Split screen' 으로 끝낸다
-// + FCP IAS 를 누르면 AFCS 상태 띠의 IAS 가 꺼진다(SIM 이 꺼져 있어도)
+// + FCP IAS 를 누르면 AFCS 상태 띠의 IAS 가 켜지고 꺼진다(SIM 이 꺼져 있어도 · 시작할 때는 풀려 있다)
 export const name = 'Cockpit 모드';
 
 export async function run(page, t) {
@@ -48,30 +48,26 @@ export async function run(page, t) {
     const o = { sim: simModeOn, c0: on(), m0: iasModeOn() };
     fcpSync('ias'); o.c1 = on(); o.m1 = iasModeOn(); o.lamp1 = document.querySelector('#fcp-simple [data-fk="ias"]') ? null : null;
     fcpSync('ias'); o.c2 = on(); o.m2 = iasModeOn();
-    fcpSync('ias'); applyDelta('spd', 5); o.m3 = iasModeOn(); applyDelta('spd', -5);
+    applyDelta('spd', 5); o.m3 = iasModeOn(); applyDelta('spd', -5); afcsReleaseAll();
     return o;
   });
-  t.ok(!I.sim && I.m0 && !I.m1 && I.m2 && I.m3 && I.c0 !== I.c1 && I.c2 === I.c0,
-    `FCP IAS 를 누르면 AFCS 상태 띠의 IAS 가 꺼지고, 다시 누르면 켜진다 · 노브를 돌리면 다시 걸린다 (${I.c0} → ${I.c1} → ${I.c2})`);
+  t.ok(!I.sim && !I.m0 && I.m1 && !I.m2 && I.m3 && I.c0 !== I.c1 && I.c2 === I.c0,
+    `IAS 는 풀린 채 시작 · FCP IAS 를 누르면 AFCS 상태 띠의 IAS 가 켜지고, 다시 누르면 꺼진다 · 노브를 돌리면 다시 걸린다 (${I.c0} → ${I.c1} → ${I.c2})`);
 
-  // ── PFD 팝아웃 — FCP 아래 남는 칸에 움직이는 지도 ──
+  // ── PFD 팝아웃 — PFD 화면만(계기 · 소프트키 · FCP). 종전의 지도 칸은 없다 ──
   const pm = await page.evaluate(async () => {
     const w = ms => new Promise(r => setTimeout(r, ms));
     S.alt = 1500; S.spd = 100; cockpitStart(); await w(1000);
     toggleConsolePop('pfd'); await w(600);
-    const m = document.getElementById('ck-pop-mapslot'), bar = document.querySelector('#pfd-wrap .ctrl-bar');
-    const mr = m.getBoundingClientRect(), br = bar.getBoundingClientRect();
-    const mw = document.getElementById('map-wrap'), lm = leafMap.getSize();
-    const o = { show: m.classList.contains('show'), below: mr.top >= br.bottom - 1 && Math.abs(mr.left - br.left) < 2 && mr.height > 80,
-                inSlot: mw.parentElement === m && !mw.classList.contains('page-hidden'), size: lm.x >= mr.width - 4 && lm.y >= mr.height - 4,   // (HDG↑ 이면 지도를 돌리려고 칸보다 크게 잡는다)
-                bars: getComputedStyle(document.getElementById('map-top-bar')).display === 'none' };
-    toggleConsolePop('sysp'); await w(300); o.hide = !m.classList.contains('show') && mw.parentElement !== m;
+    const m = document.getElementById('ck-pop-mapslot'), pw = document.getElementById('pfd-wrap'), mw = document.getElementById('map-wrap');
+    const o = { inPop: pw.parentElement && pw.parentElement.id === 'ck-pop-host', noMap: !(m && m.classList.contains('show')) && !(m && mw.parentElement === m),
+                side: pw.classList.contains('fcp-side') };
     toggleConsolePop(null); exitSolo(); await w(300);
     try { if (simModeOn) toggleSimMode(false); } catch (e) { /* 절차 훈련판 */ }
     S.alt = 0; S.spd = 0; S.running = false;
     return o;
   });
-  t.ok(pm.show && pm.below && pm.inSlot && pm.size && pm.bars && pm.hide, `PFD 팝아웃 — FCP 아래 칸에 2D 지도(지도만 · 크기 맞춤 · 다른 화면으로 바꾸면 빠진다) (${JSON.stringify(pm)})`);
+  t.ok(pm.inPop && pm.noMap && !pm.side, `PFD 팝아웃은 PFD 화면만 — 지도 칸 없이 FCP 는 아래 (${JSON.stringify(pm)})`);
   // ── Simple 모드 위 막대의 COCKPIT — Cockpit Mode 로 들어가고, 끝내면 그 Simple 화면으로 돌아온다 ──
   const sc = await page.evaluate(async () => {
     const w = ms => new Promise(r => setTimeout(r, ms));

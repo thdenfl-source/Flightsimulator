@@ -445,9 +445,12 @@ export async function run(page, t) {
       await w(300);
       const r = document.getElementById('ck-pop').getBoundingClientRect();
       out[k] = { inside: r.top >= L.top - 1 && r.bottom <= L.bottom + 1 && r.left >= L.left - 1, ar: +(r.width / r.height).toFixed(2) };
-      if (k === 'pfd') {   // 옆으로 편다 — FCP 는 오른쪽, 계기는 FCP 를 뺀 왼쪽 칸 전체 높이
-        const pw = document.getElementById('pfd-wrap'), bar = pw.querySelector('.ctrl-bar').getBoundingClientRect(), c = document.getElementById('pfd').getBoundingClientRect();
-        out.side = { cls: pw.classList.contains('fcp-side'), barRight: bar.left > c.left + c.width * 0.9, fullH: Math.abs(cvs.height - pw.clientHeight) < 2 };
+      if (k === 'pfd') {   // PFD 창 그대로 — 계기 위 · 소프트키 · FCP 아래(옆으로 펴지 않는다 · 지도 칸 없음) · HSI 는 FCP 위까지 다 그린다
+        await w(300);
+        const pw = document.getElementById('pfd-wrap'), bar = pw.querySelector('.ctrl-bar');
+        const L2 = pfdLayout(cvs.width, cvs.height, bar.offsetHeight), G = hsiGeom(L2.hsi.x, L2.hsi.y, L2.hsi.w, L2.hsi.h, cvs.width / 2);
+        out.side = { cls: pw.classList.contains('fcp-side'), barBelow: Math.abs(L2.usableH + bar.offsetHeight - cvs.height) < 2,
+                     hsiIn: G.cy + G.r <= L2.usableH + 1, map: document.getElementById('ck-pop-mapslot').classList.contains('show') };
       }
     }
     out.sideOff = document.getElementById('pfd-wrap').classList.contains('fcp-side');
@@ -458,8 +461,8 @@ export async function run(page, t) {
   t.ok(fit.sysp.inside && fit.pfd.inside && fit.cdu.inside && fit.pfd.ar > 0.9,
     `팝아웃은 3D 화면 안에 다 들어오고 PFD 는 옆으로 넓다 (SYSTEM ${fit.sysp.inside} · PFD 비율 ${fit.pfd.ar})`);
   t.ok(fit.back === 'ck-mini-cdu', '닫으면 CDU 는 하부 콘솔 오른쪽 칸으로 돌아간다');
-  t.ok(fit.side.cls && fit.side.barRight && fit.side.fullH && !fit.sideOff,
-    `PFD 팝아웃은 옆으로 펴서 FCP 를 오른쪽에 두고 계기는 아래까지(HSI) 다 그린다 (${JSON.stringify(fit.side)})`);
+  t.ok(!fit.side.cls && fit.side.barBelow && fit.side.hsiIn && !fit.side.map && !fit.sideOff,
+    `PFD 팝아웃은 PFD 화면만 — FCP 는 아래, HSI 는 그 위에 다 보인다 · 지도 칸 없음 (${JSON.stringify(fit.side)})`);
   const cdu1 = await page.evaluate(async () => {
     const w = ms => new Promise(r => setTimeout(r, ms));
     openFlightPlan(); await w(300);
