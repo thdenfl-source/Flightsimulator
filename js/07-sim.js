@@ -956,7 +956,7 @@ function fixPanelDupes() {
     if (botSel === 'pfd') botSel = 'cdu';
   }
   // Bell 206 — CDU · UPPER 자리는 LOWER(항공전자 스택)로(00-aircraft.js acScrOk)
-  if (typeof acScrOk === 'function') sides.forEach(k => { if (!acScrOk(panelGet(k))) panelSet(k, k === 'right' ? 'map' : 'lcon'); });
+  if (typeof acScrOk === 'function') sides.forEach(k => { if (!acScrOk(panelGet(k))) panelSet(k, k === 'left' ? 'pfd' : k === 'right' ? 'map' : 'lcon'); });
   const seen = new Set();
   sides.forEach(k => {
     let v = panelGet(k);

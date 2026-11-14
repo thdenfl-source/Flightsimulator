@@ -23,8 +23,8 @@ const AC_TYPE = (() => {
   return 'aw189';
 })();
 function acIs(k) { return AC_TYPE === k; }
-// 이 기종에 있는 화면인가 — Bell 206 은 CDU(· 비행계획 창) · UPPER CONSOLE 이 없다(무전 · 항법은 LOWER CONSOLE 의 항공전자 스택)
-function acScrOk(k) { return !(AC_TYPE === 'b206' && (k === 'cdu' || k === 'plan' || k === 'ovhd')); }
+// 이 기종에 있는 화면인가 — Bell 206 은 CDU(· 비행계획 창) · UPPER CONSOLE · SYSTEM 이 없다(무전 · 항법은 LOWER CONSOLE 의 항공전자 스택)
+function acScrOk(k) { return !(AC_TYPE === 'b206' && (k === 'cdu' || k === 'plan' || k === 'ovhd' || k === 'sysp')); }   // SYSTEM(MFD 계통 화면)도 없다
 function acInfo() { return AC_TYPES[AC_TYPE]; }
 // 기종을 바꾼다 — 적어 두고 다시 불러온다(주소의 ?ac= 는 걷어 낸다 · 그것이 저장값을 이기므로)
 function setAircraftType(k, reload = true) {
