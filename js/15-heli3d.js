@@ -1006,6 +1006,13 @@ function ckpitDraw() {
           g.setTransform(1, 0, 0, 1, 0, 0);
           ckMapDraw(g, ox + 227 * kk, oy + 49 * kk, 766 * kk, 574 * kk);
         }
+        // HOIST CAM(24-sar.js) — Video 의 Channel HOIST 면 같은 큰 칸에 호이스트 붐 아래 영상
+        if (pg === 'asys_video' && typeof videoCfg !== 'undefined' && videoCfg.ch === 'HOIST' && typeof sarHoistCamDrawTo === 'function') {
+          const g = c.getContext('2d'), kk = Math.min(W / SYS_W, H / SYS_H);
+          const ox = (W - SYS_W * kk) / 2, oy = (H - SYS_H * kk) / 2;
+          g.setTransform(1, 0, 0, 1, 0, 0);
+          sarHoistCamDrawTo(g, ox + 227 * kk, oy + 49 * kk, 766 * kk, 574 * kk);
+        }
       }
       else if (typeof sysDrawTo === 'function') sysDrawTo(c, s.k);
     } catch (e) { _swallow(e); }

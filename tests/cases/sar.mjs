@@ -123,4 +123,27 @@ export async function run(page, t) {
   t.ok(C.pitch === 0 && Math.abs(C.bearing - C.hdg) <= 1 && C.layer, `바로 아래를 보고(기울기 ${C.pitch}°) 기수가 위 (${C.bearing}° · HDG ${C.hdg}°)`);
   t.ok(C.z[0] > C.z[1] + 2, `낮을수록 크게 보인다 (RA 30ft z${C.z[0].toFixed(1)} · 200ft z${C.z[1].toFixed(1)})`);
   t.ok(C.off, '다른 채널을 고르면 HOIST CAM 을 거둔다');
+
+  // ── Cockpit Mode — 왼쪽에서 두 번째 MFD(SYSTEM)에도 HOIST CAM 이 나온다(화면 밖 지도를 옮겨 그린다) ──
+  const K = await page.evaluate(async () => {
+    const w = ms => new Promise(r => setTimeout(r, ms));
+    sysPageSet('asys_video'); videoChanSet('HOIST');
+    cockpitStart(); await w(2500);
+    const o = { mode: _sarCam.mode, on: sarHoistCamOn(), white: 0 };
+    const c = [...document.querySelectorAll('#sim-ckpit canvas.ck-scr')].find(x => CKPIT_SCR[+x.dataset.i].k === 'sys');
+    for (let k = 0; k < 20 && c && !(o.white > 0); k++, await w(250)) {   // 바쁠 때는 한 박자 늦게 그려진다   // 큰 칸 가운데의 십자(흰색) — HUD 가 옮겨 그려졌는지
+      const g = c.getContext('2d'), kk = Math.min(c.width / SYS_W, c.height / SYS_H);
+      const ox = (c.width - SYS_W * kk) / 2, oy = (c.height - SYS_H * kk) / 2;
+      const cx = Math.round(ox + (227 + 383) * kk), cy = Math.round(oy + (49 + 287) * kk);
+      const d = g.getImageData(cx - 40, cy - 3, 80, 7).data; let white = 0;
+      for (let i = 0; i < d.length; i += 4) if (d[i] > 110 && d[i + 1] > 110 && d[i + 2] > 110) white++;
+      o.white = white;
+    }
+    cockpitExit(); videoChanSet('RADAR'); await w(2200);
+    o.after = sarHoistCamOn();
+    sysPageSet('map');
+    return o;
+  });
+  t.ok(K.on && K.mode === 'off' && K.white > 0, `Cockpit Mode SYSTEM MFD 에도 HOIST CAM — 화면 밖 지도를 옮겨 그린다 (${K.mode} · 십자 ${K.white}px)`);
+  t.ok(!K.after, 'Cockpit Mode 를 나가거나 채널을 바꾸면 거둔다');
 }

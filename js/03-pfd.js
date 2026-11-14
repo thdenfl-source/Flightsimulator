@@ -44,7 +44,9 @@ function pfdCanvasW() {
 // 오른쪽 레이더 고도계(CRHT) 테이프. drawPFD 와 PFD 탭(09-cdu.js onPfdTap)이 이 한 곳의 셈을 같이 쓴다.
 // 대체 모드(Reversionary) EIS — SYSTEM 창이 화면에 없으면(18-system.js sysScreenShown) PFD 왼쪽 위에
 // MFD EIS 의 숫자 칸(EOT · EOP · MGB · Fuel F · Fuel P · HYD P · Fuel QTY · Battery · ACCP)을 띄운다.
-// 그 아래 엔진 칸(TGT · NG · TQ · NP/NR)과 이어져 왼쪽 한 줄이 실기 대체 모드 EIS 가 되고, 자세계·속도계는 오른쪽으로 비킨다.
+// 그 아래 엔진 칸(TGT · NG · TQ · NP/NR)과 이어져 왼쪽 한 줄이 실기 대체 모드 EIS 가 된다.
+// 실기 PFD 처럼 속도계 · 고도계는 가운데 쪽으로 모아(왼쪽 EIS 칸 폭만큼 안쪽 · 좌우 대칭) 자세계는 늘 화면 전체 폭이다 —
+// 자세계 가운데와 HSI 가운데가 한 세로줄(화면 가운데)에 선다. 대체 모드 EIS 는 자세계 왼쪽 위 하늘에 얹힌다.
 function pfdRevMode() { try { return typeof sysScreenShown === 'function' && !sysScreenShown(); } catch (e) { return false; } }
 function pfdLayout(W, H, ctrlH) {
   const usableH = H - ctrlH;
@@ -56,27 +58,31 @@ function pfdLayout(W, H, ctrlH) {
   const pad  = Math.round(4 + Math.max(0, W - 700) * 0.12);   // 넓은 화면에서는 테이프를 안쪽으로
   const raBoxH = 16, botH = 20;
   const tY = FMA_H + 4, tH = aiH - tY - botH - 6;
-  const altX = W - pad - vsiW - tapW;
   const altY = tY + raBoxH + 2, altH = tH - raBoxH - 2;
   const engW = Math.round(Math.max(140, Math.min(300, W * 0.27)));
   const raW  = tapW + vsiW;
-  // 대체 모드 — 왼쪽 엔진 칸 폭만큼 위쪽도 EIS 가 차지한다(좁은 화면에서는 하지 않는다)
-  const rev = W >= 420 && aiH >= 200 && pfdRevMode(), rx = rev ? engW : 0;
+  // 속도계는 왼쪽 엔진(EIS) 칸 바로 안쪽, 고도계는 그 거울 자리(좁은 화면은 종전처럼 양끝) — 자세 사이는 140px 이상 남긴다
+  const inward = W >= 420;
+  const spdX = inward ? Math.max(pad, Math.min(engW + pad, Math.round(W / 2 - tapW - 70))) : pad;
+  const altX = inward ? W - spdX - tapW : W - pad - vsiW - tapW;
+  const crX  = W - pad - raW;                                   // 오른쪽 아래 CRHT · NAV 칸은 오른쪽 끝(HSI 오른쪽 칸 · 스톱워치 자리를 넉넉히)
+  // 대체 모드 — 왼쪽 엔진 칸 폭만큼 위쪽(자세계 왼쪽 위 하늘)에도 EIS 를 얹는다(좁은 화면에서는 하지 않는다)
+  const rev = inward && aiH >= 200 && pfdRevMode();
   return {
     usableH, tapW, vsiW, aiH, hsiH, pad, revOn: rev,
     rev:  { x: 0, y: 0, w: engW, h: aiH },
-    ai:   { x: rx, y: 0, w: W - rx, h: aiH },
-    spd:  { x: rx + pad, y: tY, w: tapW, h: tH },
-    gs:   { x: rx + pad, y: tY + tH + 3, w: tapW, h: botH },
+    ai:   { x: 0, y: 0, w: W, h: aiH },
+    spd:  { x: spdX, y: tY, w: tapW, h: tH },
+    gs:   { x: spdX, y: tY + tH + 3, w: tapW, h: botH },
     ra:   { x: altX, y: tY, w: tapW + vsiW, h: raBoxH },
     alt:  { x: altX, y: altY, w: tapW, h: altH },
     vsi:  { x: altX + tapW, y: altY, w: vsiW, h: altH },
     baro: { x: altX, y: tY + tH + 3, w: tapW, h: botH },
     eng:  { x: 0, y: aiH, w: engW, h: hsiH },
-    // 오른쪽 아래 CRHT·NAV 칸은 위의 고도계+승강계 칸과 같은 x·폭(세로로 한 줄) — 오른쪽 여백(pad)은 땅 바탕 그대로
-    hsi:  { x: engW, y: aiH, w: altX - engW, h: hsiH },
-    crht: { x: altX, y: aiH, w: raW, h: Math.round(hsiH * 2 / 3) },                       // 위 2/3 — 레이더 고도계
-    navs: { x: altX, y: aiH + Math.round(hsiH * 2 / 3), w: raW, h: hsiH - Math.round(hsiH * 2 / 3) },   // 아래 1/3 — FMS·NAV1·NAV2
+    // 오른쪽 아래 CRHT·NAV 칸은 고도계+승강계와 같은 폭으로 오른쪽 끝에(넓이 420 미만이면 고도계와 한 세로줄)
+    hsi:  { x: engW, y: aiH, w: crX - engW, h: hsiH },
+    crht: { x: crX, y: aiH, w: raW, h: Math.round(hsiH * 2 / 3) },                       // 위 2/3 — 레이더 고도계
+    navs: { x: crX, y: aiH + Math.round(hsiH * 2 / 3), w: raW, h: hsiH - Math.round(hsiH * 2 / 3) },   // 아래 1/3 — FMS·NAV1·NAV2
   };
 }
 
@@ -308,8 +314,6 @@ function drawEisRev(x, y, w, h) {
   let D;
   try { D = eisData(); } catch (e) { return; }
   ctx.save(); ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
-  ctx.fillStyle = '#000'; ctx.fillRect(x, y, w, h);
-  ctx.fillStyle = 'rgba(18,30,48,0.55)'; ctx.fillRect(x, y, w, h);
   const m = 4, G = 11;                                       // 칸 사이 · 제목 자리
   const fsL = Math.max(8, Math.min(11, w * 0.04)), fsV0 = Math.max(10, Math.min(16, w * 0.058));
   const r0 = v => String(Math.round(v));
@@ -326,6 +330,12 @@ function drawEisRev(x, y, w, h) {
     ctx.font = `bold ${fv}px Helvetica Neue, Arial, sans-serif`; ctx.fillStyle = '#ffffff';
     ctx.fillText(v1, bx + bw * 0.27, by + bh - 5); ctx.fillText(v2, bx + bw * 0.73, by + bh - 5);
   };
+  // 바탕 — 숫자 칸이 차지하는 만큼만 어둡게(그 아래는 자세계 하늘 · 땅이 보인다)
+  {
+    const bh0 = Math.round(fsL * 2 + 22), ah0 = Math.round(fsL + 14);
+    const yEnd = Math.min(y + h, y + G + (H3 + G) * 2 + bh0 + G + ah0 + 4);
+    ctx.fillStyle = 'rgba(0,0,0,0.82)'; ctx.fillRect(x, y, w, yEnd - y);
+  }
   const row = (by, items) => items.forEach((it, i) => cell(x + m + i * (cw + m), by, cw, H3, ...it));
   const t = (a, u) => narrow ? a : `${a} ${u}`;
   let by = y + G;
@@ -639,7 +649,12 @@ const FMA_GAP    = 3;
 // AFCS 상태 띠(FMA)의 세 칸 — 칸 폭은 자세계 폭을 셋으로 나눈 것의 절반, 세 칸을 묶어 가운데에 둔다
 // (그리기 drawFMA 와 PFD 누름 09-cdu.js onPfdTap 이 같은 자리를 쓴다)
 function fmaCells(x, w) {
-  const cellW = Math.floor((w - FMA_MARGIN * 2 - FMA_GAP * 2) / 3 / 2);
+  let cellW = Math.floor((w - FMA_MARGIN * 2 - FMA_GAP * 2) / 3 / 2);
+  // 속도계 · 고도계를 가운데로 모은 배치(pfdLayout — 넓이 420 이상)에서는 왼쪽 EIS 칸과 닿지 않게 그 사이에 둔다
+  if (w >= 420) {
+    const engW = Math.round(Math.max(140, Math.min(300, w * 0.27)));
+    cellW = Math.min(cellW, Math.floor((w - engW * 2 - 12 - FMA_GAP * 2) / 3));
+  }
   const total = cellW * 3 + FMA_GAP * 2;
   return { cellW, x0: x + (w - total) / 2, total };
 }

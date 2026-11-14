@@ -24,8 +24,12 @@ export async function run(page, t) {
   const KS = ['EOT', 'EOP', 'MGB', 'Fuel F', 'Fuel P', 'HYD P', 'Fuel QTY', 'Battery', 'ACCP'];
   t.ok(!R.off.shown && R.off.L.revOn && has(R.off.txt, KS),
     'SYSTEM 창이 없으면 PFD 왼쪽 위에 대체 모드 EIS(EOT · EOP · MGB · Fuel F · Fuel P · HYD P · Fuel QTY · Battery · ACCP)');
-  t.ok(R.off.L.ai.x === R.off.L.eng.w && R.off.L.spd.x > R.off.L.eng.w && R.off.L.rev.w === R.off.L.eng.w,
-    `자세계 · 속도계는 EIS 칸만큼 오른쪽으로 (EIS ${R.off.L.rev.w}px · 자세계 x ${R.off.L.ai.x})`);
+  const Lo = R.off.L, aiC = Lo.ai.x + Lo.ai.w / 2, W = Lo.ai.w;
+  t.ok(Lo.ai.x === 0 && Math.abs(aiC - W / 2) < 0.5 && Lo.spd.x >= Lo.rev.w,
+    `자세계는 전체 폭 — 가운데가 HSI 가운데(화면 가운데)와 한 줄 · 속도계는 EIS 칸 안쪽 (자세계 가운데 ${aiC} · W/2 ${W / 2} · 속도계 x ${Lo.spd.x} ≥ EIS ${Lo.rev.w})`);
+  const sL = Lo.spd.x, sR = W - (Lo.alt.x + Lo.alt.w);
+  t.ok(Math.abs(sL - sR) <= 1 && Lo.crht.x + Lo.crht.w <= W,
+    `속도계 · 고도계가 가운데를 두고 좌우 대칭 (왼쪽 ${sL}px · 오른쪽 ${sR}px)`);
   t.ok(R.off.txt.includes(String(Math.round(R.D.qty.tot))) && R.off.txt.includes(String(R.D.accp)),
     `값은 SYSTEM 창 EIS 와 같다 (Fuel Total ${Math.round(R.D.qty.tot)} · ACCP ${R.D.accp})`);
   t.ok(R.on.shown && !R.on.L.revOn && R.on.L.ai.x === 0 && !has(R.on.txt, ['EOT', 'HYD P']),
