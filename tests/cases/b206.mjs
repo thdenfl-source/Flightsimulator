@@ -11,7 +11,7 @@ export async function run(page, t) {
 
   const A = await page.evaluate(() => {
     const o = { ac: AC_TYPE, cls: document.documentElement.classList.contains('ac-b206'), info: acInfo().engines,
-                gate: document.querySelectorAll('.gate-ac-btn').length, gateTxt: [...document.querySelectorAll('.gate-ac-btn b')].map(b => b.textContent).join('/') };
+                gate: document.querySelectorAll('.gate-ac-btn').length, gateTxt: [...document.querySelectorAll('.gate-ac-btn b')].map(b => b.textContent).join('/'), gateSub: (document.querySelector('.gate-ac-btn[data-ac="aw189"] span') || {}).textContent };
     // PFD 창 — drawPFD 가 유리 PFD 대신 b206Draw 를 부른다(유리 PFD 의 자세계 drawAI 는 부르지 않는다)
     let nB = 0, nAI = 0; const oB = b206Draw, oAI = drawAI;
     b206Draw = function (...a) { nB++; return oB.apply(this, a); };
@@ -33,7 +33,7 @@ export async function run(page, t) {
     return o;
   });
   t.ok(A.ac === 'b206' && A.cls && A.info === 1, `?ac=b206 — 기종 Bell 206B-3(단발) (${A.ac})`);
-  t.ok(A.gate === 2 && /KUH-1CG/.test(A.gateTxt) && !/AW189/.test(A.gateTxt), `시작 화면에 기종 고르기 버튼 둘 — 흰수리는 KUH-1CG (${A.gateTxt})`);
+  t.ok(A.gate === 2 && /KUH-1CG/.test(A.gateTxt) && !/AW189/.test(A.gateTxt) && /GLASS Cockpit/.test(A.gateSub), `시작 화면에 기종 고르기 버튼 둘 — 흰수리는 KUH-1CG (${A.gateTxt} · ${A.gateSub})`);
   t.ok(A.nB === 1 && A.nAI === 0, `PFD 창에는 유리 PFD 대신 Bell 206 아날로그 계기판 (b206Draw ${A.nB} · drawAI ${A.nAI})`);
   t.ok(A.v.nr > 95 && A.v.nr < 105 && A.v.n2 > 95 && A.v.n2 <= 100, `회전계 — NR ${A.v.nr.toFixed(0)}% · N2 ${A.v.n2.toFixed(0)}%`);
   t.ok(A.v.tq > 0 && A.v.tq < 100 && A.v.n1 > 60 && A.v.n1 < 106 && A.v.tot > 400 && A.v.tot < 810 && A.v.gal > 0 && A.v.gal <= 91,
