@@ -5,7 +5,7 @@ export async function run(page, t) {
   const cur = await page.evaluate(() => ({ ed: APP_EDITION, sim: SIM_ENABLED, pwProc: window.lockCheck('thdenfl') }));
   // 절차 훈련판으로 다시 띄운다(?edition=proc — 주소에 flightsimulator 가 들어 있을 때와 같다)
   const base = page.url().split('?')[0];
-  await page.goto(base + '?edition=proc');
+  await page.goto(base + '?edition=proc&ac=aw189');
   await page.waitForFunction(() => typeof S === 'object' && typeof toggleSimMode === 'function', null, { timeout: 20000 });
   await page.getByText('시작하기').click().catch(() => {});
   await page.waitForTimeout(300);

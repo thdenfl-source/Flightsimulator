@@ -741,7 +741,10 @@ const CKPIT_PREF = 'ckpitOv';
 let ckpitOn = false;
 try { ckpitOn = localStorage.getItem(CKPIT_PREF) === '1'; } catch (e) { _swallow(e); }
 // MFD 화면 자리(그림 좌표) — 테두리 안쪽
-const CKPIT_SCR = [
+// Bell 206(00-aircraft.js) — 화면 넷 대신 가운데 아날로그 계기판 하나(25-b206panel.js · 1000×600 비율)
+const CKPIT_SCR = (typeof acIs === 'function' && acIs('b206')) ? [
+  { k: 'b206', x: 550, y: 492, w: 500, h: 300 },
+] : [
   { k: 'pfd', x: 229, y: 580, w: 242, h: 146 },    // PFD
   { k: 'sys', x: 527, y: 580, w: 242, h: 146 },    // CDU 가 고른 SYSTEM 화면
   { k: 'map', x: 831, y: 580, w: 242, h: 146 },    // 지도
@@ -858,8 +861,35 @@ function toggleConsolePop(k) {
   setTimeout(() => { try { leafMap.invalidateSize(); } catch (e) { _swallow(e); } }, 60);
 }
 // MFD 를 누르면 띄울 화면
-const CKPIT_SCR_POP = { pfd: 'pfd', sys: 'sysp', map: 'map' };
+const CKPIT_SCR_POP = { pfd: 'pfd', sys: 'sysp', map: 'map', b206: 'pfd' };
+// Bell 206 조종석 틀 — 가운데 앞유리 기둥 · 좌우 문 기둥 · 계기판 덮개(검은 테) · 가운데 받침(페데스탈) · 사이클릭(오른쪽 = 기장석)
+function _ckpitSvgB206() {
+  const s = CKPIT_SCR[0], x = s.x - 18, y = s.y - 18, w = s.w + 36, h = s.h + 30;
+  return `<svg viewBox="0 0 1600 900" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="ck-post" x1="0" x2="1" y1="0" y2="0"><stop offset="0" stop-color="#0f1012"/><stop offset="0.5" stop-color="#2b2e32"/><stop offset="1" stop-color="#0f1012"/></linearGradient>
+    <linearGradient id="ck-grip" x1="0" x2="1" y1="0" y2="0"><stop offset="0" stop-color="#16181a"/><stop offset="0.45" stop-color="#3b3f44"/><stop offset="1" stop-color="#121315"/></linearGradient>
+    <linearGradient id="ck-floor" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#2a2c2f"/><stop offset="1" stop-color="#151617"/></linearGradient>
+  </defs>
+  <path d="M0 0 H1600 V18 Q800 30 0 18 Z" fill="#141518"/>
+  <path d="M788 0 H812 L816 ${y} H784 Z" fill="url(#ck-post)"/>
+  <path d="M0 120 L0 230 L250 640 L300 610 Z" fill="url(#ck-post)"/>
+  <path d="M1600 120 L1600 230 L1350 640 L1300 610 Z" fill="url(#ck-post)"/>
+  <!-- 계기판 덮개(검은 테 · 위가 둥글다) -->
+  <rect x="${x}" y="${y}" width="${w}" height="${h}" rx="22" fill="#0d0e10" stroke="#000" stroke-width="3"/>
+  <!-- 가운데 받침(페데스탈) — 아래 콘솔 · CDU 자리로 이어진다 -->
+  <path d="M700 ${y + h} H900 L912 900 H688 Z" fill="url(#ck-floor)" stroke="#0a0b0c" stroke-width="2"/>
+  <!-- 사이클릭(왼쪽 · 오른쪽) -->
+  <g><path d="M418 900 C418 868 400 852 404 826" stroke="url(#ck-grip)" stroke-width="26" fill="none" stroke-linecap="round"/>
+     <path d="M372 808 C372 788 440 784 446 806 C450 822 436 834 404 834 C380 834 372 824 372 808 Z" fill="url(#ck-grip)" stroke="#0a0b0c" stroke-width="2"/>
+     <circle cx="430" cy="800" r="5" fill="#b01818"/></g>
+  <g><path d="M1182 900 C1182 868 1200 852 1196 826" stroke="url(#ck-grip)" stroke-width="26" fill="none" stroke-linecap="round"/>
+     <path d="M1228 808 C1228 788 1160 784 1154 806 C1150 822 1164 834 1196 834 C1220 834 1228 824 1228 808 Z" fill="url(#ck-grip)" stroke="#0a0b0c" stroke-width="2"/>
+     <circle cx="1170" cy="800" r="5" fill="#b01818"/></g>
+</svg>`;
+}
 function _ckpitSvg() {
+  if (CKPIT_SCR[0].k === 'b206') return _ckpitSvgB206();
   const bez = CKPIT_SCR.map(s => {
     const x = s.x - 14, y = s.y - 12, w = s.w + 28, h = s.h + 40;
     let keys = '';
@@ -990,11 +1020,12 @@ function ckpitDraw() {
     const cw = c.clientWidth, ch = c.clientHeight;
     if (!(cw > 4 && ch > 4)) return;
     // 칸이 작으면 큰 크기로 그려 줄여 보인다(글자가 겹치지 않게 · 07-sim.js PFD_OV_MINW 와 같은 생각)
-    const k = Math.max(dpr, (s.k === 'pfd' ? 420 : 520) / cw);
+    const k = Math.max(dpr, (s.k === 'pfd' ? 420 : s.k === 'b206' ? 1000 : 520) / cw);
     const W = Math.round(cw * k), H = Math.round(ch * k);
     if (c.width !== W || c.height !== H) { c.width = W; c.height = H; }
     try {
-      if (s.k === 'pfd') { if (typeof drawPfdTo === 'function') drawPfdTo(c); }
+      if (s.k === 'b206') { if (typeof b206DrawTo === 'function') b206DrawTo(c); }
+      else if (s.k === 'pfd') { if (typeof drawPfdTo === 'function') drawPfdTo(c); }
       else if (s.k === 'map') { const g = c.getContext('2d'); g.setTransform(1, 0, 0, 1, 0, 0); ckMapDraw(g, 0, 0, W, H); }
       else if (s.k === 'sys') {
         const pg = typeof sysPage !== 'undefined' ? sysPage : 'asys_fuel';

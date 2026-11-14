@@ -110,6 +110,15 @@ function drawPFD() {
   const ctrlEl = document.querySelector('#pfd-wrap > .ctrl-bar') || document.querySelector('.ctrl-bar');
   // 3D 화면에 겹친 계기(drawPfdTo)는 FCP 가 없다 — 칸을 다 계기에 쓴다
   const CTRL_H = (cvs.dataset.noFcp || pfdFcpSide()) ? 0 : (ctrlEl ? ctrlEl.offsetHeight : 80);
+  // Bell 206 — 유리 PFD 대신 아날로그 계기판(25-b206panel.js)을 FCP 위 칸에 그린다
+  if (typeof acIs === 'function' && acIs('b206') && typeof b206Draw === 'function') {
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    // 3D 화면에 겹친 계기(계기 ON)는 다섯만 — 자세계/볼 · 고도계 · 승강계 · 토크 · 방향지시계
+    if (cvs.id === 'pfd-ov-cvs' && typeof b206OverlayDraw === 'function') { b206OverlayDraw(ctx, 0, 0, W, H); return; }
+    ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
+    b206Draw(ctx, 0, 0, W, b206RoomH(cvs, H, CTRL_H));
+    return;
+  }
   const L = pfdLayout(W, H, CTRL_H);
 
   ctx.fillStyle = '#000';

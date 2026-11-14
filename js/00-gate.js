@@ -74,7 +74,7 @@
     if (!window.gateLocked) return;
     const pw = el('gate-pw');
     if (pw && (e.target === pw || e.target === el('gate-ok'))) return;
-    if (e.target && e.target.classList && e.target.classList.contains('gate-mode-btn')) return;   // 화면 고르기 버튼(Enter·Tab)
+    if (e.target && e.target.classList && (e.target.classList.contains('gate-mode-btn') || e.target.classList.contains('gate-ac-btn'))) return;   // 화면 고르기 버튼(Enter·Tab)
     e.stopImmediatePropagation();
     if (pw && e.type === 'keydown') pw.focus();
   };
@@ -86,10 +86,18 @@
   // 고른 화면은 그 탭에 적어 두고(vfrStartMode), 앱이 뜬 뒤 그 화면으로 바로 들어간다(14-simmode.js).
   const chooseMode = () => {
     form.classList.add('choose');
+    // 기종(00-aircraft.js) — 지금 기종에 불을 켜 두고, 다른 기종을 고른 채 화면을 고르면 적어 두고 다시 불러온다
+    // (잠금은 풀린 채 · 고른 화면도 sessionStorage 에 있어 다시 묻지 않는다)
+    let ac = (typeof AC_TYPE !== 'undefined') ? AC_TYPE : null;
+    const acBtns = form.querySelectorAll('.gate-ac-btn');
+    const acMark = () => acBtns.forEach(b => b.classList.toggle('on', b.dataset.ac === ac));
+    acBtns.forEach(b => b.addEventListener('click', () => { ac = b.dataset.ac; acMark(); }));
+    acMark();
     const pick = mode => {
       try { sessionStorage.setItem('vfrStartMode', mode); } catch (e) { /* 이번만 */ }
       window.vfrStartMode = mode;
       setUnlocked();
+      if (ac && typeof AC_TYPE !== 'undefined' && ac !== AC_TYPE && typeof setAircraftType === 'function') setAircraftType(ac);
     };
     form.querySelectorAll('.gate-mode-btn').forEach(b => b.addEventListener('click', () => pick(b.dataset.mode)));
     const first = el('gate-mode-pc'); try { if (first) first.focus(); } catch (e) { /* 누르면 된다 */ }
