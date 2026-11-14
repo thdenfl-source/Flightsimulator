@@ -68,6 +68,42 @@ export async function run(page, t) {
   t.ok(P.cut === 0, 'CABLE CUT 이면 케이블이 끊긴다');
   t.ok(/CABLE/.test(P.panelTxt) && /유지/.test(P.panelTxt), `SAR CONTROL 에 케이블 · 높이 차 · 거리 · 유지 시간 (${P.panelTxt.slice(0, 40)}…)`);
 
+  // ── SOS 비콘 — ··· −−− ··· (점 0.25s) ──
+  const B = await page.evaluate(() => {
+    sarPlaceAt(37.5, 126.5);
+    let str = ''; for (let k = 0; k < SOS_LEN; k++) str += sarBeaconOn((k + 0.5) * SOS_UNIT) ? '1' : '0';
+    return { str, len: SOS_LEN };
+  });
+  t.eq(B.str, '10101000' + '11101110111000' + '101010000000', `SOS 비콘이 모스 부호 ··· −−− ··· 로 깜빡인다 (${B.str})`);
+
+  // ── 계기 비행계획 SAR01 — 놓으면 넣고, 옮기면 좌표를 고치고, 끄면 지운다 ──
+  const W = await page.evaluate(async () => {
+    clearFP();
+    const o = {};
+    const w = () => S.wps.find(x => x.ident === 'SAR01');
+    sarPlaceAt(37.45, 126.35);
+    o.add = { n: S.wps.filter(x => x.ident === 'SAR01').length, lat: w() && w().lat, act: S.awp === S.wps.indexOf(w()), dis: Math.abs(S.lat - 37.45) > 1e-3 || Math.abs(S.lon - 126.35) > 1e-3 };
+    // 지도 표식을 끌어 옮긴다
+    _sarMk.setLatLng([37.46, 126.36]); _sarMk.fire('dragend');
+    o.drag = { n: S.wps.filter(x => x.ident === 'SAR01').length, lat: w().lat, lon: w().lon, s: [sar.lat, sar.lon] };
+    // 표류는 SAR01 을 바꾸지 않는다(보고된 자리)
+    sar.lvl = 'HI'; sarTick(10); o.drift = { wp: w().lat, sar: sar.lat }; sar.lvl = 'MID';
+    // 경로 계산(GPS) — 활성 구간이 SAR01
+    updateNav(); o.dist = distance(S.lat, S.lon, w().lat, w().lon);
+    // 다른 계획이 있으면 끝에 붙고 활성은 그대로
+    sarToggleOn(); o.off = !w();
+    pushWP({ ident: 'AAA', lat: 37.3, lon: 126.3 });
+    sarPlaceAt(37.47, 126.37);
+    o.app = { last: S.wps[S.wps.length - 1].ident, awp: S.wps[S.awp].ident };
+    sarToggleOn(); clearFP();
+    return o;
+  });
+  t.ok(W.add.n === 1 && W.add.lat === 37.45 && W.add.act && W.add.dis, '요구조자를 놓으면 비행계획에 SAR01 이 들어가 활성 구간이 된다(기체는 그대로)');
+  t.ok(W.drag.n === 1 && W.drag.lat === 37.46 && W.drag.lon === 126.36 && W.drag.s[0] === 37.46, `지도에서 끌어 옮기면 SAR01 좌표도 같이 바뀐다 (${W.drag.lat}, ${W.drag.lon})`);
+  t.ok(W.drift.wp === 37.46 && W.drift.sar !== 37.46, 'SAR01 은 보고된 자리 — 표류해도 그대로');
+  t.ok(W.off, '요구조자를 끄면 SAR01 을 지운다');
+  t.ok(W.app.last === 'SAR01' && W.app.awp === 'AAA', `비행계획이 있으면 끝에 SAR01 을 붙이고 활성 구간은 그대로 (${W.app.last} · ${W.app.awp})`);
+
   // ── HOIST CAM — CDU Video Channel HOIST → SYSTEM 창 큰 칸에 바로 아래를 보는 3D 지도 ──
   const C = await page.evaluate(async () => {
     const w = ms => new Promise(r => setTimeout(r, ms));

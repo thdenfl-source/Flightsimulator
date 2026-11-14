@@ -57,6 +57,33 @@ function sarPlaceAt(lat, lon) {
   sar.lat = lat; sar.lon = lon; sar.on = true; sar.state = 'wait'; sar.hold = 0;
   sar.dir = Math.random() * 360;
   _sarMarker(); sarPanelRender(); _sarRepaint();
+  sarWptSync();
+}
+// ── 계기 비행계획의 SAR01 — 운용자가 요구조자를 놓거나 옮긴 자리(최초 보고 좌표) ──
+// 요구조자를 놓으면 비행계획 끝에 SAR01 로 넣고(이미 있으면 좌표만 고친다), 지도 표식을 끌어 옮기거나
+// 위치 버튼으로 다시 놓으면 SAR01 좌표도 같이 고친다. 계획이 비어 있었으면 SAR01 을 활성(Direct)으로 삼아
+// GPS 항법(HSI · 거리 · 방위)이 곧장 그리로 이끈다 — 출발지로 기체를 옮기지는 않는다.
+// 표류(움직임 상 · 중)는 좌표를 바꾸지 않는다 — SAR01 은 보고된 자리(datum)다. 요구조자를 끄면 SAR01 을 지운다.
+const SAR_WPT = 'SAR01';
+function sarWptIndex() { try { return S.wps.findIndex(w => w && w.sar === true && w.ident === SAR_WPT); } catch (e) { return -1; } }
+function sarWptSync() {
+  if (typeof S === 'undefined' || !Array.isArray(S.wps)) return;
+  const i = sarWptIndex();
+  const refresh = () => { try { updateWpMarkers(); fpRender(); updateNav(); } catch (e) { _swallow(e); } };
+  if (!sar.on || sar.lat === null) {
+    if (i >= 0) { try { removeWP(i); } catch (e) { S.wps.splice(i, 1); refresh(); } }
+    return;
+  }
+  const lat = +sar.lat.toFixed(6), lon = +sar.lon.toFixed(6);
+  if (i >= 0) {
+    S.wps[i].lat = lat; S.wps[i].lon = lon;
+    if (S.awp === i) { try { selectWP(i); } catch (e) { refresh(); } }   // 활성 구간이면 그 자리로 다시 잡는다(CRS)
+    else refresh();
+    return;
+  }
+  S.wps.push({ ident: SAR_WPT, lat, lon, sar: true });
+  if (S.awp < 0) { try { selectWP(S.wps.length - 1); } catch (e) { refresh(); } }
+  else refresh();
 }
 function sarPlaceAhead() { const [lat, lon] = _sarOff(S.lat, S.lon, 100 * Math.cos(S.hdg * Math.PI / 180), 100 * Math.sin(S.hdg * Math.PI / 180)); sarPlaceAt(lat, lon); }
 function sarPlaceCenter() {
@@ -65,7 +92,7 @@ function sarPlaceCenter() {
   if (!c) try { const k = leafMap.getCenter(); c = [k.lat, k.lng]; } catch (e) { c = [S.lat, S.lon]; }
   sarPlaceAt(c[0], c[1]);
 }
-function sarToggleOn() { if (sar.on) { sar.on = false; _sarMarker(); sarPanelRender(); _sarRepaint(); } else sarPlaceAhead(); }
+function sarToggleOn() { if (sar.on) { sar.on = false; _sarMarker(); sarPanelRender(); _sarRepaint(); sarWptSync(); } else sarPlaceAhead(); }
 function sarSetType(t) { if (t === 'water' || t === 'land') { sar.type = t; sarPanelRender(); _sarRepaint(); } }
 function sarSetLvl(l) { if (l in SAR_LVL_KT) { sar.lvl = l; sarPanelRender(); } }
 function sarReset() { if (sar.on) { sar.state = 'wait'; sar.hold = 0; } hoistFt = 0; sarPanelRender(); _sarRepaint(); }
@@ -116,15 +143,36 @@ setInterval(() => {
 }, 100);
 
 // ── 2D 지도 표식 ──
-let _sarMk = null;
+let _sarMk = null, _sarDrag = false;
+// ── SOS 비콘 — 모스 부호 ··· −−− ···(짧게 3 · 길게 3 · 짧게 3) 를 되풀이한다 ──
+// 한 점 0.25s · 줄 3점 · 부호 사이 1점 · 글자 사이 3점 · 되풀이 사이 7점(국제 모스 부호 간격)
+const SOS_UNIT = 0.25;
+const SOS_SEQ = (() => {
+  const out = [], letter = (on, n) => { for (let i = 0; i < n; i++) { out.push([1, on]); out.push([0, i < n - 1 ? 1 : 3]); } };
+  letter(1, 3); letter(3, 3); letter(1, 3);
+  out[out.length - 1] = [0, 7];
+  return out;
+})();
+const SOS_LEN = SOS_SEQ.reduce((a, x) => a + x[1], 0);
+function sarBeaconOn(tSec) {
+  if (!sar.on || sar.lat === null || sar.state !== 'wait') return false;
+  let t = ((tSec != null ? tSec : performance.now() / 1000) / SOS_UNIT) % SOS_LEN;
+  for (const [on, d] of SOS_SEQ) { if (t < d) return !!on; t -= d; }
+  return false;
+}
 function _sarMarker() {
   if (typeof leafMap === 'undefined' || typeof L === 'undefined') return;
   const show = sar.on && sar.lat !== null && sar.state !== 'aboard';
   if (!show) { if (_sarMk) { try { leafMap.removeLayer(_sarMk); } catch (e) { _swallow(e); } _sarMk = null; } return; }
   if (!_sarMk) {
-    _sarMk = L.marker([sar.lat, sar.lon], { interactive: false, icon: L.divIcon({ className: '', iconSize: [22, 22], iconAnchor: [11, 11],
-      html: '<div style="width:22px;height:22px;border-radius:50%;background:#ff7a00;border:2px solid #fff;box-shadow:0 0 6px #ff7a00;color:#fff;font:bold 9px Arial;line-height:18px;text-align:center">SAR</div>' }) }).addTo(leafMap);
-  } else _sarMk.setLatLng([sar.lat, sar.lon]);
+    // 끌어 옮길 수 있다 — 놓으면 그 자리로 다시 놓고 SAR01 좌표도 고친다
+    _sarMk = L.marker([sar.lat, sar.lon], { draggable: true, zIndexOffset: 500, icon: L.divIcon({ className: '', iconSize: [22, 22], iconAnchor: [11, 11],
+      html: '<div class="sar-mk" style="width:22px;height:22px;border-radius:50%;background:#ff7a00;border:2px solid #fff;box-shadow:0 0 6px #ff7a00;color:#fff;font:bold 9px Arial;line-height:18px;text-align:center;cursor:move">SAR</div>' }) }).addTo(leafMap);
+    _sarMk.on('dragstart', () => { _sarDrag = true; });
+    _sarMk.on('dragend', () => { _sarDrag = false; const p = _sarMk.getLatLng(); sarPlaceAt(p.lat, p.lng); });
+  } else if (!_sarDrag) _sarMk.setLatLng([sar.lat, sar.lon]);
+  // SOS 비콘 — 표식 테두리도 같이 깜빡인다
+  try { const d = _sarMk.getElement() && _sarMk.getElement().querySelector('.sar-mk'); if (d) d.style.boxShadow = sarBeaconOn() ? '0 0 14px 6px #fff' : '0 0 6px #ff7a00'; } catch (e) { _swallow(e); }
 }
 
 // ── SAR CONTROL 창 ──
@@ -257,6 +305,7 @@ function _sarMeshHoist() {
   return m;
 }
 function _sarMeshCable() { const m = []; _sarBox(m, [0, 0, -0.5], [0.025, 0.025, 1], [0.15, 0.15, 0.16]); return m; }   // 길이 1m(늘려 쓴다)
+function _sarMeshBeacon() { const m = []; _shipBox(m, [0, 0, 0], [1, 1, 1], [1.0, 1.0, 0.92], -1); return m; }   // 스스로 빛나는 1m 상자(크기는 그릴 때)
 function _sarMeshHook() { const m = []; _sarBox(m, [0, 0, -0.1], [0.12, 0.08, 0.2], [1.0, 0.82, 0.1]); return m; }
 const _sarGL = new WeakMap();
 function _sarGLInit(gl) {
@@ -288,7 +337,7 @@ function _sarGLInit(gl) {
     return part;
   };
   h = { gl, prog, loc, vao, water: up(_sarMeshWater()), land: up(_sarMeshLand()), hangW: up(_sarMeshHang(true)), hangL: up(_sarMeshHang(false)),
-        hoist: up(_sarMeshHoist()), cable: up(_sarMeshCable()), hook: up(_sarMeshHook()) };
+        hoist: up(_sarMeshHoist()), cable: up(_sarMeshCable()), hook: up(_sarMeshHook()), beacon: up(_sarMeshBeacon()) };
   _sarGL.set(gl, h);
   return h;
 }
@@ -348,6 +397,12 @@ function _sarLayer(cam) {
       const bob = sar.type === 'water' ? 0.06 * Math.sin(performance.now() / 700) : 0;
       _h3Draw(h, sar.type === 'water' ? h.water : h.land,
         f32(_m4Mul(main, _m4From(_m3Mul([[s, 0, 0], [0, -s, 0], [0, 0, s]], R), [mc.x, mc.y, mc.z + bob * s]))), _r3(R), 1);
+      // SOS 비콘 — 멀리서도 보이게 거리에 따라 키운다(1NM 에서 약 9m · 가까이 0.3m)
+      if (sarBeaconOn()) {
+        const dM = distance(S.lat, S.lon, sar.lat, sar.lon) * 1852;
+        const b = cam ? 0.25 : Math.max(0.3, dM * 0.005), top = sar.type === 'water' ? 1.05 : 1.35;
+        _h3Draw(h, h.beacon, f32(_m4Mul(main, _m4From([[s * b, 0, 0], [0, -s * b, 0], [0, 0, s * b]], [mc.x, mc.y, mc.z + (top + b / 2 + bob) * s]))), _r3(I), 1);
+      }
     },
   };
 }
