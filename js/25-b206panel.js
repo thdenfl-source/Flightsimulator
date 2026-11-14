@@ -20,8 +20,8 @@ const B206_LIM = {
   vne: 130,                        // KIAS
   fuelCap: 91, fuelLow: 20,        // 갤런
 };
-// AW189 의 토크 눈금(연속 100 · 한계 113)을 206 눈금(연속 85 · 한계 100)으로 옮긴다 — 비행 모델을 206 에 맞추기 전까지(2단계)
-const B206_TQ_K = 0.85;
+// 비행 모델이 206 눈금(연속 85 · 한계 100 · 01-state.js B206P)으로 셈하므로 그대로 보인다
+const B206_TQ_K = 1;
 
 // ── 값 읽기 ──
 function _b206Num(f, d) { try { const v = f(); return Number.isFinite(v) ? v : d; } catch (e) { return d; } }
@@ -34,11 +34,16 @@ function b206Vals() {
   const run = e1.ng > 50;
   const n1 = e1.ng > 0 ? Math.min(108, e1.ng + (e1.tq > 0 ? 2 : 0)) : 0;
   const tot = e1.ng > 0 ? (run && e1.tq > 0 ? 400 + 3.6 * tq : 420) : 30;
-  const mainLbs = _b206Num(() => fuelLeft() + fuelRight(), 1800), maxLbs = _b206Num(() => FUEL_MAX, 2500);
-  const gal = Math.max(0, Math.min(1, mainLbs / maxLbs)) * B206_LIM.fuelCap;
-  const on = e1.ng > 0;
+  const gal = b206FuelGal();
+  // 시동 중(27-b206coll.js 시동 절차)에는 그 N1 · TOT · N2
+  const sv = (typeof b206cStartVals === 'function') ? b206cStartVals() : null;
+  const on = e1.ng > 0 || !!(sv && sv.lit);
+  if (sv) return Object.assign(b206Vals._rest(on, tq, nr, gal, sv.n1), { tq: 0, n1: sv.n1, tot: sv.tot, nr: Math.max(nr, sv.n2 * 0.95), n2: sv.n2, run: on && sv.n1 > 50 });
+  return Object.assign(b206Vals._rest(on, tq, nr, gal, n1), {
+    tq, n1, tot, nr, n2: e1.np, run: on });
+}
+b206Vals._rest = function (on, tq, nr, gal, n1) {
   return {
-    tq, n1, tot, nr, n2: e1.np, run: on,
     engOilP: on ? Math.min(130, 50 + n1 * 0.85) : 0, engOilT: on ? 72 + tq * 0.12 : 20,
     xmsnP: nr > 30 ? 30 + nr * 0.22 : nr * 0.5, xmsnT: 60 + tq * 0.18,
     gal, fuelP: on ? 12 : 0, load: on ? 32 : 0,
@@ -49,7 +54,22 @@ function b206Vals() {
     slip: _b206Num(() => ((typeof gpsMode !== 'undefined' && gpsMode) ? 0 : slipBall) / (typeof SLIP_BALL_FS !== 'undefined' ? SLIP_BALL_FS : 8), 0),
     baro: _b206Num(() => (typeof window._qnhHpa === 'number' && Number.isFinite(window._qnhHpa) ? window._qnhHpa : 1013.25) / 33.8639, 29.92),
   };
+};
+// ── 연료(91 갤런 · Jet-A) — 흰수리 연료 계통과 따로 셈한다 ──
+// 흐름(gph) = IDLE 약 9 · 토크 1% 당 0.21 더(85% 에서 약 27gph) · 시동 중 점화되면 6. 20 갤런 아래 LOW FUEL, 0 이면 엔진이 멎는다.
+// 처음엔 76 갤런. 계기판의 FUEL QTY 계기를 누르면 바꿀 수 있다(재급유).
+const B206_FUEL = { start: 76, idleGph: 9, perTq: 0.21 };
+let _b206Gal = B206_FUEL.start, _b206FuelT = 0;
+function b206FuelGal() { return _b206Gal; }
+function b206FuelSet(g) { _b206Gal = Math.max(0, Math.min(B206_LIM.fuelCap, +g || 0)); }
+function b206FuelGph() {
+  let ep = null; try { ep = engParams(); } catch (e) { /* 없으면 0 */ }
+  const sv = (typeof b206cStartVals === 'function') ? b206cStartVals() : null;
+  if (ep && ep.e1.ng > 0) return B206_FUEL.idleGph + B206_FUEL.perTq * Math.max(0, ep.e1.tq);
+  return sv && sv.lit ? 6 : 0;
 }
+// 흐른 시간(s)만큼 태운다 — 멈춰 있으면(PAUSE) 그대로 · 배속이면 그만큼
+function b206FuelStep(dt) { if (dt > 0) _b206Gal = Math.max(0, _b206Gal - b206FuelGph() * dt / 3600); }
 // CDI — PFD HSI 와 같은 셈(03-pfd.js drawHSI): FMS 는 구간 옆 거리 / RNP, NAV 는 VOR 15° 가 끝. dev −1…1(+ 는 바늘 오른쪽)
 function b206Cdi() {
   try {
@@ -244,6 +264,7 @@ function b206Tach(g, cx, cy, R, nr, n2) {
   const map = _lin(0, 120, -150, 150);
   _b206Arc(g, cx, cy, R * 0.88, map(B206_LIM.n2Lo), map(B206_LIM.n2Hi), B206_COL.green, R * 0.08);
   _b206Radial(g, cx, cy, R * 0.80, R * 0.94, map(B206_LIM.n2Lo), B206_COL.red, R * 0.05);
+  _b206Arc(g, cx, cy, R * 0.88, map(B206_LIM.n2Hi), map(105), B206_COL.yellow, R * 0.08);   // 100~105% 잠깐(transient)
   _b206Radial(g, cx, cy, R * 0.80, R * 0.94, map(105), B206_COL.red, R * 0.05);
   _b206Arc(g, cx, cy, R * 0.66, map(B206_LIM.nrLo), map(B206_LIM.nrHi), B206_COL.green, R * 0.07);
   _b206Radial(g, cx, cy, R * 0.60, R * 0.72, map(B206_LIM.nrLo), B206_COL.red, R * 0.05);
@@ -391,15 +412,34 @@ function _b206Lamp(g, x, y, w, h, txt, on, col) {
   _b206Text(g, txt, x + w / 2, y + h / 2 + 1, Math.min(h * 0.5, 13), on ? '#1a0a00' : '#5a4434');
 }
 // 지금 켜진 경고 · 주의등
+// RPM 경고등은 로터가 처질 때(NR 90% 아래)만 — 넘침(107% 위)은 회전계의 빨간 선으로 본다(실기와 같다)
 function b206Annun(v) {
   return {
     engOut: v.run ? v.n1 < 55 : true,
-    rpm: v.nr < B206_LIM.nrLo || v.nr > B206_LIM.nrHi,
+    rpm: v.nr < B206_LIM.nrLo,
     lowFuel: v.gal < B206_LIM.fuelLow,
     xmsnOil: v.xmsnP < 30,
     engOil: v.run && v.engOilP < 50,
   };
 }
+// ── 주의등 줄 · MASTER CAUTION · CAUTION LT TEST ──
+// 새 주의등이 켜지면 MASTER CAUTION 이 깜빡인다 — 누르면 지금 켜진 것을 알았다고 치고 끈다(새 것이 켜지면 다시).
+// CAUTION LT TEST 를 누르고 있는 동안 경고 · 주의등이 다 켜지고 경고음이 난다(전구 · 경고음 점검).
+let b206TestOn = false, _b206Ack = new Set();
+function b206Cautions(v, an) {
+  return [['BATT RLY', false], ['GEN FAIL', !v.run], ['ENG CHIP', false], ['XMSN OIL', an.xmsnOil], ['ENG OIL', an.engOil], ['T/R CHIP', false], ['FUEL FILT', false], ['LOW FUEL', an.lowFuel]];
+}
+function b206MasterCaution(v, an) {
+  const on = b206Cautions(v, an).filter(c => c[1]).map(c => c[0]);
+  for (const k of [..._b206Ack]) if (!on.includes(k)) _b206Ack.delete(k);   // 꺼진 것은 잊는다 — 다시 켜지면 새 것
+  return on.some(k => !_b206Ack.has(k));
+}
+function b206MasterAck() {
+  const v = b206Vals(), an = b206Annun(v);
+  b206Cautions(v, an).forEach(([k, on]) => { if (on) _b206Ack.add(k); });
+}
+// 판 그림 좌표의 단추 — CAUTION LT TEST · MASTER CAUTION · FUEL QTY(재급유)
+const B206_HIT = { test: [888, 22, 52, 52], master: [810, 26, 70, 36], fuel: [94, 340, 112, 112] };
 
 // ── 판 전체 — g 에 (x, y, w, h) 칸으로 그린다 ──
 function b206Draw(g, x, y, w, h) {
@@ -416,11 +456,19 @@ function b206Draw(g, x, y, w, h) {
   g.restore();
   // 위 — 경고등(ENG OUT · RPM) · 주의등 줄 · CAUTION LT TEST
   g.save(); g.fillStyle = '#121212'; g.fillRect(60, 24, 150, 40); g.fillRect(240, 24, 560, 40); g.restore();
-  _b206Lamp(g, 66, 30, 66, 28, 'ENG OUT', an.engOut, '#ff3a2a');
-  _b206Lamp(g, 138, 30, 66, 28, 'RPM', an.rpm, '#ff3a2a');
-  const cau = [['BATT RLY', false], ['GEN FAIL', !v.run], ['ENG CHIP', false], ['XMSN OIL', an.xmsnOil], ['ENG OIL', an.engOil], ['T/R CHIP', false], ['FUEL FILT', false], ['LOW FUEL', an.lowFuel]];
-  cau.forEach(([t, on], i) => _b206Lamp(g, 246 + i * 69, 30, 65, 28, t, on, '#ffb21a'));
-  g.save(); g.fillStyle = '#1a1a1a'; g.fillRect(888, 22, 52, 52); g.fillStyle = '#7a0d0d'; g.beginPath(); g.arc(914, 46, 11, 0, 7); g.fill(); g.restore();
+  const T = b206TestOn;
+  _b206Lamp(g, 66, 30, 66, 28, 'ENG OUT', T || an.engOut, '#ff3a2a');
+  _b206Lamp(g, 138, 30, 66, 28, 'RPM', T || an.rpm, '#ff3a2a');
+  const cau = b206Cautions(v, an);
+  cau.forEach(([t, on], i) => _b206Lamp(g, 246 + i * 69, 30, 65, 28, t, T || on, '#ffb21a'));
+  // MASTER CAUTION — 새 주의등이면 깜빡인다(누르면 끈다)
+  { const m = T || (b206MasterCaution(v, an) && (performance.now() % 1000) < 600);
+    g.save(); g.fillStyle = '#121212'; g.fillRect(806, 24, 78, 40); g.restore();
+    _b206Lamp(g, 810, 28, 70, 32, '', m, '#ffb21a');
+    _b206Text(g, 'MASTER', 845, 38, 10, m ? '#1a0a00' : '#5a4434'); _b206Text(g, 'CAUTION', 845, 51, 10, m ? '#1a0a00' : '#5a4434'); }
+  g.save(); g.fillStyle = '#1a1a1a'; g.fillRect(888, 22, 52, 52); g.fillStyle = T ? '#ff3a2a' : '#7a0d0d'; g.beginPath(); g.arc(914, 46, T ? 9 : 11, 0, 7); g.fill(); g.restore();
+  // 누를 자리를 캔버스에 적어 둔다(아래 b206PanelHit)
+  try { const m = g.getTransform(); g.canvas._b206 = { a: m.a, e: m.e, f: m.f }; } catch (e) { /* 그만 */ }
   _b206Text(g, 'CAUTION', 914, 16, 9, '#222'); _b206Text(g, 'LT TEST', 914, 84, 9, '#222');
   // 1열 — 엔진 · 변속기 오일 · 연료 · 전기
   const c1 = 150, c2 = 282, Re = 56;
@@ -516,3 +564,67 @@ function b206DrawTo(canvas) {
   g.setTransform(1, 0, 0, 1, 0, 0);
   b206Draw(g, 0, 0, canvas.width, canvas.height);
 }
+
+// ── 계기판을 누르면 — CAUTION LT TEST(누르는 동안) · MASTER CAUTION(알았음) · FUEL QTY(재급유) ──
+// b206Draw 가 캔버스에 적어 둔 변환(_b206)으로 판 그림 좌표를 되짚는다. 맞으면 그 누름은 여기서 끝낸다(팝아웃이 열리지 않게).
+function b206PanelHit(ev) {
+  const c = ev.target; if (!c || c.tagName !== 'CANVAS' || !c._b206 || !acB206()) return null;
+  const r = c.getBoundingClientRect(); if (!(r.width > 0)) return null;
+  const px = (ev.clientX - r.left) * c.width / r.width, py = (ev.clientY - r.top) * c.height / r.height;
+  const k = c._b206.a, x = (px - c._b206.e) / k, y = (py - c._b206.f) / k;
+  for (const [n, [bx, by, bw, bh]] of Object.entries(B206_HIT)) if (x >= bx && x <= bx + bw && y >= by && y <= by + bh) return n;
+  return null;
+}
+function _b206TestEnd() { if (b206TestOn) { b206TestOn = false; try { drawPFD(); } catch (e) { /* 그만 */ } } }
+document.addEventListener('pointerdown', ev => {
+  try { if (_b206Horn && _b206Horn.ctx.state === 'suspended') _b206Horn.ctx.resume(); } catch (e) { /* 그만 */ }
+  const h = b206PanelHit(ev); if (!h) return;
+  ev.stopPropagation(); ev.preventDefault();
+  if (h === 'test') { b206TestOn = true; b206HornAudio(true); }
+  else if (h === 'master') b206MasterAck();
+  else if (h === 'fuel') {
+    Promise.resolve(typeof uiPrompt === 'function' ? uiPrompt(`연료(갤런, 0 ~ ${B206_LIM.fuelCap}) — 지금 ${b206FuelGal().toFixed(0)}`, Math.round(b206FuelGal()), { numeric: true }) : null)
+      .then(v => { if (v !== null && v !== undefined && v !== '') b206FuelSet(parseFloat(v)); }).catch(() => {});
+  }
+  try { drawPFD(); } catch (e) { /* 그만 */ }
+}, true);
+document.addEventListener('click', ev => { if (b206PanelHit(ev)) { ev.stopPropagation(); ev.preventDefault(); } }, true);
+['pointerup', 'pointercancel'].forEach(t => document.addEventListener(t, _b206TestEnd, true));
+
+// ── 경고음(ENG OUT · 낮은 로터 RPM) — 공중에서 N1 55% 아래 · NR 90% 아래면 울린다 ──
+// 소리 장치는 처음 누를 때 연다(브라우저 규칙). 같은 음(약 700Hz)을 0.25초마다 끊어 낸다.
+let _b206Horn = null;
+function b206HornWant() {
+  if (b206TestOn) return true;
+  let air = false;
+  try { air = typeof sndOnGround === 'function' ? !sndOnGround() : S.alt > 5; } catch (e) { air = false; }
+  if (!air) return false;
+  const v = b206Vals(), an = b206Annun(v);
+  return an.engOut || an.rpm;
+}
+function b206HornAudio(on) {
+  try {
+    if (on && !_b206Horn) {
+      const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
+      const ctx = new AC(), o = ctx.createOscillator(), lfo = ctx.createOscillator(), lg = ctx.createGain(), g = ctx.createGain();
+      o.type = 'square'; o.frequency.value = 700;
+      lfo.type = 'square'; lfo.frequency.value = 4; lg.gain.value = 0.05; g.gain.value = 0.05;   // 0.25초 끊음
+      lfo.connect(lg); lg.connect(g.gain); o.connect(g); g.connect(ctx.destination); o.start(); lfo.start();
+      _b206Horn = { ctx, o, lfo };
+    } else if (!on && _b206Horn) {
+      const h = _b206Horn; _b206Horn = null;
+      try { h.o.stop(); h.lfo.stop(); h.ctx.close(); } catch (e) { /* 그만 */ }
+    }
+  } catch (e) { _swallow(e); }
+}
+function b206HornOn() { return !!_b206Horn; }
+// 연료 · 경고음 — 0.25초마다(Bell 일 때만)
+let _b206TickT = 0;
+setInterval(() => {
+  if (!acB206()) { if (_b206Horn) b206HornAudio(false); return; }
+  const now = performance.now(), dt = _b206TickT ? Math.min(2, (now - _b206TickT) / 1000) : 0; _b206TickT = now;
+  let k = 0; try { k = S.running ? (typeof simSpeed === 'number' ? simSpeed : 1) : 0; } catch (e) { k = 0; }
+  b206FuelStep(dt * k);
+  const want = b206HornWant();
+  if (want !== !!_b206Horn) b206HornAudio(want);
+}, 250);

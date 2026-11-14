@@ -471,6 +471,7 @@ const NR_GOV_DROOP = 0.2, NR_GOV_RISE = 0.1;   // 토크 지연 1% 당 NR(%)
 const CLIMB_REF_TQ    = 100;   // 상승 성능을 견주는 토크(%)
 const CLIMB_FPM_UP = 44;       // 남는 토크 1% 당 상승률(fpm)
 const CLIMB_FPM_DN = 38;       // 모자란 토크 1% 당 강하율(fpm)
+function climbFpmUp() { return acB206() ? B206P.fpmUp : CLIMB_FPM_UP; }   // Bell 206 — 남는 토크 1% 당 24fpm
 // 상승·강하율의 한계(fpm). 기수를 숙인 채 레버를 끝까지 내리면 4,000fpm 까지 떨어지고,
 // 토크를 100% 넘게(MTA 까지) 당기면 3,000fpm 까지 오른다(100% 에서는 위의 Vy 2,300fpm).
 const SIM_VS_UP_MAX = 3000, SIM_VS_DN_MAX = 4000;
@@ -649,7 +650,10 @@ function simVrsOn() { return simModeOn && simVrs > 0.3; }
 // 으로 구르고 기수가 든다 — 넘긴 1kt 당 초당 0.8°·0.5° 씩 쌓여 조종간 자세에 더해진다(VNE 아래로 줄이면 풀린다).
 const VNE_SL = 160, VNE_PER_KFT = 2, RBS_ROLL = 0.8, RBS_PITCH = 0.5, RBS_MAX_ROLL = 30, RBS_MAX_PITCH = 15;
 let simRbs = { r: 0, p: 0 };
-function simVne(altFt = S.alt) { return VNE_SL - VNE_PER_KFT * Math.max(0, altFt) / 1000; }
+function simVne(altFt = S.alt) {
+  if (acB206()) return B206P.vne - B206P.vnePerKft * Math.max(0, altFt - B206P.vneAlt) / 1000;   // Bell 206 — 130kt, 3,000ft 위로 1,000ft 마다 3.5kt
+  return VNE_SL - VNE_PER_KFT * Math.max(0, altFt) / 1000;
+}
 function simOverVne() { return simModeOn && !_simOnGnd && simAirspeed() > simVne(); }
 // 남은 차이(d)를 향해 '바뀌는 빠르기(acc)' 를 한 구간 옮긴다. acc 는 jerk 의 빠르기로
 // 커진다(그래서 점점 빨라진다). 목표가 가까워지면 풀 수 있는 만큼(√(jb·|d|) — jb 는
@@ -887,7 +891,7 @@ function simIasRelease() {
   const p = -S.pit - simModeAxes().pitch * SIM_PITCH_MAX;
   simTrim.pitch = Math.max(-SIM_TRIM_MAX_PITCH, Math.min(SIM_TRIM_MAX_PITCH, p));
 }
-function simIasToggle() { if (simIasOn) simIasRelease(); else simIasEngage(); }
+function simIasToggle() { afcsCmd(); if (simIasOn) simIasRelease(); else simIasEngage(); }
 // 기준 속도를 d(kt)만큼 옮긴다 — 꺼져 있으면 지금 속도에서 켜고 옮긴다
 function simIasStep(d) {
   if (!simModeOn) return;
@@ -1522,13 +1526,13 @@ function simWtK() {
 }
 function simVsForTq(dTq) {
   const k = simWtK();
-  if (dTq > 0) return Math.min(SIM_VS_UP_MAX, CLIMB_FPM_UP * k * dTq);
+  if (dTq > 0) return Math.min(SIM_VS_UP_MAX, climbFpmUp() * k * dTq);
   return Math.max(-SIM_VS_DN_MAX, CLIMB_FPM_DN * k * dTq);
 }
 // 위의 역 — 그 상승·강하율에 드는 남는 토크(%)
 function simTqForVs(vs) {
   const k = simWtK();
-  if (vs > 0) return Math.min(vs, SIM_VS_UP_MAX) / (CLIMB_FPM_UP * k);
+  if (vs > 0) return Math.min(vs, SIM_VS_UP_MAX) / (climbFpmUp() * k);
   return vs / (CLIMB_FPM_DN * k);
 }
 // ── 바람 ── SIM 의 S.spd(앞) · simLat(오른쪽)은 대기속도다. 땅에 대한 속도 = 대기속도 + 바람.

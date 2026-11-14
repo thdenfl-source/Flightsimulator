@@ -257,13 +257,32 @@ export async function run(page, t) {
     b206cThrottle(-1); o.noRel = `${b206c.th}/${pcd()}`;                        // IDLE REL 없이 닫히지 않는다
     b206cIdleRel(); b206cThrottle(-1); o.off = `${b206c.th}/${pcd()}/${b206c.run}`;   // OFF — 엔진 꺼짐
     b206cThrottle(1); o.idleNoStart = `${b206c.th}/${pcd()}`;                  // 열어도 시동 전에는 OFF
-    b206cStarter(true); o.cranking = pcd(); await w(1800); b206cStarter(false);
-    o.started = `${b206c.run}/${pcd()}`;                                         // 1.5초 넘게 → IDLE
+    // 시동 절차 — 타이머 대신 b206cStep 을 곧바로 돌린다(0.1초씩)
+    const step = (sec, until) => { for (let i = 0; i < sec * 10; i++) { b206cStep(0.1); if (until && until()) break; } };
+    b206cIdleRel(); b206cThrottle(-1);                                            // 다시 OFF
+    b206cStarter(true); o.cranking = pcd(); step(6); o.crankN1 = b206c.n1;        // 스로틀 OFF 로 돌리기 — N1 약 22%
+    b206cThrottle(1); step(1.5); o.lit = b206c.lit;                               // N1 12%↑ 에서 IDLE — 점화
+    step(15, () => b206c.n1 >= 58); o.relN1 = b206c.n1; b206cStarter(false);       // 58% 에서 STARTER 놓기
+    step(5, () => b206c.run); o.started = `${b206c.run}/${pcd()}`; o.totMax = b206c.totMax; o.hot = b206c.hot;
+    o.startVals = b206cStartVals();
+    // HOT START — 스로틀을 먼저 열고(N1 0%) 돌리면 TOT 가 927°C 를 넘는다
+    b206cIdleRel(); b206cThrottle(-1); step(20);
+    b206cThrottle(1); b206cStarter(true); step(4); o.hotStart = { hot: b206c.hot, tot: b206c.totMax };
+    b206cStarter(false); b206cIdleRel(); b206cThrottle(-1); step(30);
+    // HUNG START — 58% 전에 놓으면 서지 못한다
+    b206cStarter(true); step(6); b206cThrottle(1); step(5); b206cStarter(false); step(4); o.hung = { run: b206c.run, n1: b206c.n1 };
+    b206cIdleRel(); b206cThrottle(-1); step(30);
+    // 다시 바로 시동(정상) → FULL OPEN
+    b206cStarter(true); step(6); b206cThrottle(1); step(15, () => b206c.n1 >= 58); b206cStarter(false); step(5, () => b206c.run);
     b206cThrottle(1); o.full = `${b206c.th}/${pcd()}`;                          // FULL OPEN → FLY
+    // 엔진 고장(훈련) — ENG OUT · 엔진 레버 OFF · 스로틀 OFF 로 닫으면 풀린다
+    b206cFail(true); o.fail = { run: b206c.run, pcd: pcd(), engOut: b206Annun(b206Vals()).engOut, lbl: engStateLabel() };
+    b206cIdleRel(); b206cThrottle(-1); b206cIdleRel(); b206cThrottle(-1); o.failClr = !b206c.fail; step(30);
+    b206cStarter(true); step(6); b206cThrottle(1); step(15, () => b206c.n1 >= 58); b206cStarter(false); step(5, () => b206c.run); b206cThrottle(1);
     // GOV RPM — FULL 에서 DECR 를 누르는 동안 1%/초(97% 아래로는 안 간다)
     b206cBeep(-1); await w(1600); b206cBeep(0); o.gov1 = NR_GOV; o.tgt = engNrTarget({ 1: 'FLY', 2: 'FLY' });
-    b206cBeep(-1); await w(3500); b206cBeep(0); o.govMin = NR_GOV;
-    b206cBeep(1); await w(4000); b206cBeep(0); o.govMax = NR_GOV;
+    b206cBeep(-1); for (let i = 0; i < 20 && NR_GOV > 97; i++) await w(500); b206cBeep(0); o.govMin = NR_GOV;
+    b206cBeep(1); for (let i = 0; i < 20 && NR_GOV < 100; i++) await w(500); b206cBeep(0); o.govMax = NR_GOV;
     b206cThrottle(-1); o.govIdle = NR_GOV; b206cThrottle(1);                     // IDLE 로 가면 100 으로
     cockpitExit(); try { if (_soloActive) exitSolo(); } catch (e) { /* 그만 */ }
     return o;
@@ -277,8 +296,15 @@ export async function run(page, t) {
   t.ok(CL.order === 'FULL·IDLE·OFF', `스로틀 눈금은 FULL · IDLE · OFF 순(왼→오른) (${CL.order})`);
   t.ok(CL.single.toasts.length && CL.single.toasts.every(m => !/두 엔진|OEI|ENG [12]/.test(m)) && CL.single.lbl === 'ENG IDLE' && CL.single.st2 === 'IDLE',
     `단발 — 스로틀 IDLE 문구가 엔진 하나로 나온다 (${CL.single.toasts.join(' / ')} · ${CL.single.lbl})`);
-  t.ok(CL.idleNoStart === 'IDLE/OFF' && CL.cranking === 'OFF' && CL.started === 'true/IDLE' && CL.full === 'FULL/FLY',
-    `시동 — 스로틀 IDLE 에서 STARTER 를 1.5초 누르면 IDLE · 다시 열면 FULL OPEN (${CL.idleNoStart} · ${CL.started} · ${CL.full})`);
+  t.ok(CL.idleNoStart === 'IDLE/OFF' && CL.cranking === 'OFF' && CL.crankN1 > 18 && CL.crankN1 < 23 && CL.lit,
+    `시동 ① STARTER(스로틀 OFF) — N1 ${CL.crankN1.toFixed(0)}% · ② N1 12% 넘어 IDLE 로 열면 점화(${CL.lit})`);
+  t.ok(CL.relN1 >= 58 && CL.started === 'true/IDLE' && CL.totMax > 700 && CL.totMax < 927 && !CL.hot && CL.startVals === null,
+    `시동 ③ N1 ${CL.relN1.toFixed(0)}% 에서 STARTER 를 놓으면 IDLE 로 선다 (${CL.started} · TOT 최고 ${CL.totMax.toFixed(0)}°C)`);
+  t.ok(CL.hotStart.hot && CL.hotStart.tot > 927, `HOT START — 스로틀을 먼저 열고 돌리면 TOT 가 927°C 를 넘는다 (${CL.hotStart.tot.toFixed(0)}°C)`);
+  t.ok(!CL.hung.run && CL.hung.n1 < 58, `HUNG START — 58% 전에 STARTER 를 놓으면 서지 못한다 (N1 ${CL.hung.n1.toFixed(0)}%)`);
+  t.ok(CL.full === 'FULL/FLY', `다시 시동해 FULL OPEN (${CL.full})`);
+  t.ok(!CL.fail.run && CL.fail.pcd === 'OFF' && CL.fail.engOut && CL.fail.lbl === 'ENG OFF' && CL.failClr,
+    `엔진 고장(훈련) — 엔진이 멎고 ENG OUT 이 켜진다 · 스로틀 OFF 로 풀린다 (${CL.fail.pcd} · ${CL.fail.lbl})`);
   t.ok(CL.gov1 < 99.6 && CL.gov1 >= 97 && CL.tgt === CL.gov1 && CL.govMin === 97 && CL.govMax === 100 && CL.govIdle === 100,
     `GOV RPM — FULL OPEN 에서 DECR · INCR 로 거버너 NR 97 ~ 100% (${CL.gov1.toFixed(1)} · 최저 ${CL.govMin} · 최고 ${CL.govMax})`);
   const errs = (page.errors || []).filter(e => !/Failed to fetch|NetworkError|tile/i.test(e));

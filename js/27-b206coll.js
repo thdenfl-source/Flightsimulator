@@ -6,15 +6,23 @@
 //   SRCH LT 방향(EXT · RETR) 단추 · STARTER 누름 단추
 // 아래 IDLE REL 단추가 달린 목 · 코르크 스로틀 그립(돌려서 FULL OPEN · IDLE · OFF)
 // 엔진:
-//   스로틀 OFF → 엔진 꺼짐(연료 차단). OFF 에서 IDLE 로 열고 STARTER 를 1.5초 누르고 있으면 시동(light-off).
+//   스로틀 OFF → 엔진 꺼짐(연료 차단). 시동은 실기 절차대로 — STARTER(N1 12%↑) → 스로틀 IDLE(점화 · TOT) → N1 58%↑ 에서 STARTER 놓기(B206S · b206cStep).
 //   IDLE → FULL OPEN 은 그냥 돌린다. FULL/IDLE → OFF 는 IDLE REL 단추를 누른 뒤에만(3초 동안) 닫힌다(실기처럼 실수로 끄지 않게).
 //   엔진 상태는 시뮬레이터의 엔진 레버(17-upper.js pcd1 · pcd2 — OFF · IDLE · FLY)로 넘긴다 — NR · 토크 · 계기는 그대로 따른다.
 //   FULL OPEN 이면 GOV RPM INCR/DECR 를 누르는 동안 거버너 NR(03-pfd.js NR_GOV)을 97 ~ 100% 사이에서 1%/초로 맞춘다.
 // 눈금은 FULL OPEN · IDLE · OFF 순(왼→오른). 그립은 왼쪽을 누르면 열리고(FULL 쪽) 오른쪽을 누르면 닫힌다(OFF 쪽) · 휠도 듣는다.
 // ══════════════════════════════════════════════════════
 const B206C_TH = ['OFF', 'IDLE', 'FULL'];
-const B206C_GOV_MIN = 97, B206C_GOV_MAX = 100, B206C_START_S = 1.5, B206C_REL_S = 3;
-const b206c = { th: 'FULL', run: true, idleRel: 0, start: 0, ldg: false, srch: 'OFF', srchExt: false, beep: 0 };
+const B206C_GOV_MIN = 97, B206C_GOV_MAX = 100, B206C_REL_S = 3;
+const b206c = { th: 'FULL', run: true, idleRel: 0, start: 0, ldg: false, srch: 'OFF', srchExt: false, beep: 0,
+                // 시동 중의 N1(%) · TOT(°C) · 점화(light-off)됐나 · 연료가 든 지 몇 초 · 이번 시동의 TOT 최고 · HOT START · 엔진 고장(훈련)
+                n1: 0, tot: 30, lit: false, litT: 0, peak: 0, totMax: 0, hot: false, fail: false };
+// ── 시동 절차(Bell 206B-3 · Allison 250) ──
+//   ① 스로틀 OFF 로 STARTER 를 누른다 — 스타터만으로 N1 이 오른다(약 22% 까지)
+//   ② N1 12% 넘어서 스로틀을 IDLE 로 연다 — 1초 뒤 점화(light-off), TOT 가 치솟았다(최고 약 760~820°C) 가라앉는다
+//   ③ N1 58% 넘어서 STARTER 를 놓는다 — 엔진 스스로 IDLE(N1 약 63%)로 선다
+//   N1 12% 전에 스로틀을 열면(연료가 먼저) TOT 가 927°C 를 넘는다 — HOT START. 58% 전에 놓으면 HUNG START(N1 이 처지고 TOT 가 오른다).
+const B206S = { lightN1: 12, relN1: 58, idleN1: 63, crankMax: 22, startLim: 927, idleTot: 450 };
 // 지금 엔진 레버(pcd1)에서 처음 상태를 읽는다(시작 상태 — 09-cdu.js startStateApply 는 FLY)
 function _b206cRead() {
   try {
@@ -43,18 +51,63 @@ function b206cThrottle(d) {
     return;
   }
   b206c.th = B206C_TH[j];
-  if (b206c.th === 'OFF') { b206c.run = false; b206c.idleRel = 0; }      // 연료 차단 — 엔진이 꺼진다
+  if (b206c.th === 'OFF') { b206c.run = false; b206c.idleRel = 0; b206c.fail = false; b206c.lit = false; b206c.litT = 0; b206c.hung = false; }      // 연료 차단 — 엔진이 꺼진다
   _b206cApply(); b206cRender();
 }
 function b206cIdleRel() { b206c.idleRel = performance.now() + B206C_REL_S * 1000; b206cRender(); }
-// STARTER — 누르는 동안 돌린다. 스로틀이 IDLE 에서 1.5초 넘게 돌리면 시동이 걸린다
+// STARTER — 누르는 동안 돌린다(시동 절차는 위 B206S · b206cStep)
 function b206cStarter(on) {
   if (on) {
     if (b206c.run) return;
     b206c.start = performance.now();
-    if (b206c.th === 'OFF') { try { uiToast('스타터 — 스로틀을 IDLE 로 열어야 시동이 걸립니다'); } catch (e) { _swallow(e); } }
+    if (!b206c.lit) { b206c.totMax = 0; b206c.hot = false; }
   } else b206c.start = 0;
   b206cRender();
+}
+function _b206cToast(m, k) { try { uiToast(m, k || '', 3000); } catch (e) { _swallow(e); } }
+// 엔진 고장(교관 훈련) — 엔진이 멎는다(ENG OUT · 경고음). 스로틀을 OFF 로 닫았다가 다시 시동하면 되살아난다
+function b206cFail(on = true) {
+  b206c.fail = !!on;
+  if (on) { b206c.run = false; b206c.lit = false; b206c.litT = 0; b206c.n1 = B206S.idleN1 + 20; b206c.tot = 600; _b206cApply(); _b206cToast('엔진 고장(훈련) — ENG OUT · 오토로테이션', 'err'); }
+  b206cRender();
+}
+// 시동 중 계기 값 — 엔진이 서 있지 않을 때만(돌고 있으면 비행 모델 값) · 25-b206panel.js b206Vals
+function b206cStartVals() {
+  if (b206c.run || !(b206c.n1 > 0.5 || b206c.tot > 40)) return null;
+  const n2 = b206c.lit ? Math.max(0, Math.min(60, (b206c.n1 - 22) * 1.6)) : 0;
+  return { n1: b206c.n1, tot: b206c.tot, n2, lit: b206c.lit, hot: b206c.hot };
+}
+// 시동 · 정지 한 걸음(dt 초) — 100ms 타이머가 부른다(검사는 곧바로 부른다)
+function b206cStep(dt) {
+  const c = b206c, crank = !!c.start;
+  if (c.run) { c.n1 = 0; c.tot = 30; c.lit = false; c.litT = 0; return; }
+  const fuel = c.th !== 'OFF' && !c.fail && !(typeof b206FuelGal === 'function' && b206FuelGal() <= 0);
+  // 연료가 들고 돌고 있으면 1초 뒤 점화 — 그때의 N1 으로 TOT 최고가 정해진다
+  if (!c.lit && fuel && (crank || c.n1 > 5)) {
+    c.litT += dt;
+    if (c.litT >= 1) {
+      c.lit = true;
+      c.peak = c.n1 >= B206S.lightN1 ? 760 + Math.max(0, 15 - c.n1) * 20 : B206S.startLim + 30 + (B206S.lightN1 - c.n1) * 45;
+    }
+  }
+  if (!fuel) { c.lit = false; c.litT = 0; }
+  // N1
+  if (c.lit) {
+    if (crank) c.n1 = Math.min(B206S.idleN1 + 2, c.n1 + 4.5 * dt);
+    else if (c.n1 >= B206S.relN1) c.n1 = Math.min(B206S.idleN1, c.n1 + 3 * dt);
+    else { c.n1 = Math.max(0, c.n1 - 1.2 * dt); c.peak = Math.max(c.peak, c.tot + 60 * dt); if (!c.hung) { c.hung = true; _b206cToast(`HUNG START — N1 ${c.n1.toFixed(0)}% 에서 STARTER 를 놓았습니다(58% 넘어서 놓습니다) · 스로틀 OFF`, 'err'); } }
+  } else if (crank) c.n1 += (B206S.crankMax - c.n1) * Math.min(1, 0.6 * dt);
+  else c.n1 = Math.max(0, c.n1 - (c.n1 > 30 ? 8 : 4) * dt);
+  // TOT — 점화되면 최고까지 치솟았다가 N1 이 오를수록 IDLE TOT 로 가라앉는다
+  const tgt = c.lit ? (c.n1 < 35 ? c.peak : c.peak - (c.n1 - 35) / (B206S.idleN1 - 35) * (c.peak - B206S.idleTot)) : 30;
+  c.tot += (tgt > c.tot ? Math.min(tgt - c.tot, 320 * dt) : Math.max(tgt - c.tot, -60 * dt));
+  c.totMax = Math.max(c.totMax, c.tot);
+  if (c.tot > B206S.startLim && !c.hot) { c.hot = true; _b206cToast(`HOT START — TOT ${B206S.startLim}°C 초과 · 스로틀 OFF(N1 ${B206S.lightN1}% 넘어서 연료를 넣습니다)`, 'err'); }
+  // 시동 완료 — 점화된 채 N1 58% 넘어서 STARTER 를 놓았다
+  if (c.lit && !crank && c.n1 >= B206S.idleN1 - 0.5) {
+    c.run = true; c.hung = false; c.fail = false; _b206cApply(); b206cRender();
+    _b206cToast(c.hot ? `엔진 시동 — IDLE (HOT START: TOT 최고 ${c.totMax.toFixed(0)}°C · 엔진 점검 필요)` : `엔진 시동 — IDLE (TOT 최고 ${c.totMax.toFixed(0)}°C)`, c.hot ? 'err' : '');
+  }
 }
 function b206cBeep(d) { b206c.beep = d; b206cRender(); }
 function b206cToggle(k) {
@@ -67,11 +120,10 @@ let _b206cT = 0;
 setInterval(() => {
   if (typeof acIs !== 'function' || !acIs('b206')) return;
   const now = performance.now(), dt = _b206cT ? Math.min(1.5, (now - _b206cT) / 1000) : 0; _b206cT = now;   // 타이머가 느리게 돌아도(배경 · 바쁜 기기) 실제 흐른 시간대로
-  // 시동 — 스로틀 IDLE · STARTER 1.5초
-  if (b206c.start && !b206c.run && b206c.th === 'IDLE' && now - b206c.start >= B206C_START_S * 1000) {
-    b206c.run = true; b206c.start = 0; _b206cApply(); b206cRender();
-    try { uiToast('엔진 시동 — IDLE'); } catch (e) { _swallow(e); }
-  }
+  // 시동 절차 · 엔진 정지 후 N1/TOT 가 가라앉는 것
+  { const wasRun = b206c.run, n = Math.round(b206c.n1); b206cStep(dt); if (b206c.run !== wasRun || Math.round(b206c.n1) !== n) b206cRender(); }
+  // 연료가 다 떨어지면 엔진이 멎는다(flameout)
+  if (b206c.run && typeof b206FuelGal === 'function' && b206FuelGal() <= 0) { b206c.run = false; _b206cApply(); _b206cToast('연료 소진 — 엔진 정지(FLAMEOUT)', 'err'); b206cRender(); }
   // 거버너 — FULL OPEN 에서 INCR/DECR 를 누르는 동안 1%/초
   if (b206c.beep && b206c.run && b206c.th === 'FULL') {
     NR_GOV = Math.max(B206C_GOV_MIN, Math.min(B206C_GOV_MAX, NR_GOV + b206c.beep * dt));
@@ -139,7 +191,7 @@ function _b206cSvg() {
     <polygon points="${87.5 + twist - 5},254 ${87.5 + twist + 5},254 ${87.5 + twist},262" fill="#fff"/>
   </g>
   <!-- 엔진 상태(작게) -->
-  ${lab(87.5, 372, run ? (th === 'FULL' ? `GOV ${NR_GOV.toFixed(0)}%` : 'ENG IDLE') : (b206c.start ? 'CRANKING' : 'ENG OFF'), 8, 'middle', run ? '#7dff3a' : '#ffb000')}
+  ${lab(87.5, 372, run ? (th === 'FULL' ? `GOV ${NR_GOV.toFixed(0)}%` : 'ENG IDLE') : b206c.fail ? 'ENG FAIL' : b206c.n1 > 0.5 ? `N1 ${b206c.n1.toFixed(0)}%${b206c.lit ? ' · LIT' : ''}` : 'ENG OFF', 8, 'middle', run ? '#7dff3a' : '#ffb000')}
 </svg>`;
 }
 function b206cRender() {
@@ -177,8 +229,9 @@ function _b206cPopSync() {
   if (!L) return;
   if (!p) {
     p = document.createElement('div'); p.id = 'b206-coll-pop';
-    p.innerHTML = '<div class="bcp-bar"><span>COLLECTIVE</span><button type="button" class="sim-btn bcp-x" title="닫기">✕</button></div><div id="b206-coll-pop-body"></div>';
+    p.innerHTML = '<div class="bcp-bar"><span>COLLECTIVE</span><button type="button" class="sim-btn bcp-fail" title="교관 훈련 — 엔진 고장(ENG OUT)">ENG FAIL</button><button type="button" class="sim-btn bcp-x" title="닫기">✕</button></div><div id="b206-coll-pop-body"></div>';
     p.querySelector('.bcp-x').addEventListener('click', e => { e.stopPropagation(); b206cPop(false); });
+    p.querySelector('.bcp-fail').addEventListener('click', e => { e.stopPropagation(); if (b206c.run) b206cFail(true); else _b206cToast('엔진이 돌고 있을 때만 고장을 넣습니다'); });
     const body = p.querySelector('#b206-coll-pop-body');
     body.addEventListener('pointerdown', e => {
       const t = e.target.closest('[data-bc]'); if (!t) return;

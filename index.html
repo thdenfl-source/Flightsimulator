@@ -17,9 +17,9 @@
      CDN 을 쓰면 한 번이라도 못 받는 순간 앱이 통째로 죽는다 — 비행 중에는
      그럴 여지를 두지 않는다. -->
 <!-- 패널 새 창(다중 모니터) — 라이브러리가 거는 이벤트까지 받아 적어야 하므로 맨 먼저 -->
-<script src="js/00-edition.js?v=642"></script>
-<script src="js/00-aircraft.js?v=642"></script>
-<script src="js/00-popout.js?v=642"></script>
+<script src="js/00-edition.js?v=643"></script>
+<script src="js/00-aircraft.js?v=643"></script>
+<script src="js/00-popout.js?v=643"></script>
 <link rel="stylesheet" href="vendor/leaflet.css"/>
 <script src="vendor/leaflet.js"></script>
 <link rel="stylesheet" href="vendor/leaflet-velocity.min.css"/>
@@ -1096,12 +1096,33 @@ body.solo-mode .solo-panel-visible {
           z-index: 950; background: #000; border: 1px solid #333; border-radius: 4px;
           overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.6); pointer-events: none; }
 #pfd-ov.show { display: block; }
+/* 비행 강평(28-debrief.js) */
+#dbf-wrap { display: none; position: fixed; inset: 0; z-index: 30000; background: rgba(0,0,0,0.55); align-items: center; justify-content: center; }
+#dbf-wrap .dbf-box { width: min(1200px, 96vw); height: min(820px, 94vh); background: #121a21; border: 1px solid #3a4a58; border-radius: 8px; display: flex; flex-direction: column; color: #dfe6ec; font-size: 13px; overflow: hidden; }
+#dbf-wrap .dbf-bar { display: flex; align-items: center; gap: 6px; padding: 6px 8px; background: #1b2731; flex-wrap: wrap; }
+#dbf-wrap .dbf-bar b { margin-right: auto; font-size: 15px; }
+#dbf-wrap .sim-btn { width: auto; flex: none; padding: 4px 10px; margin: 0; }
+#dbf-wrap .sim-btn.on { border-color: #00e5ff; color: #00e5ff; }
+#dbf-wrap .dbf-sum { display: flex; flex-wrap: wrap; gap: 4px 14px; padding: 6px 10px; border-bottom: 1px solid #22313d; }
+#dbf-wrap .dbf-sum em { font-style: normal; color: #8aa0b0; margin-right: 4px; } #dbf-wrap .dbf-sum .warn { color: #ffb000; }
+#dbf-wrap .dbf-main { flex: 1; display: flex; min-height: 0; gap: 6px; padding: 6px; }
+#dbf-wrap .dbf-trk { flex: 1 1 40%; min-width: 0; height: 100%; border-radius: 4px; }
+#dbf-wrap .dbf-chart { flex: 1 1 60%; min-width: 0; height: 100%; border-radius: 4px; touch-action: none; cursor: crosshair; }
+#dbf-wrap .dbf-ctl { display: flex; align-items: center; gap: 6px; padding: 0 8px; }
+#dbf-wrap .dbf-rng { flex: 1; }
+#dbf-wrap .dbf-bot { display: flex; gap: 8px; padding: 6px 8px 8px; height: 120px; }
+#dbf-wrap .dbf-read { flex: 1 1 50%; line-height: 1.6; } #dbf-wrap .dbf-read .dbf-m { color: #8aa0b0; }
+#dbf-wrap .dbf-ev { flex: 1 1 50%; overflow-y: auto; background: #0b1218; border-radius: 4px; padding: 4px 6px; }
+#dbf-wrap .dbf-ev div { cursor: pointer; padding: 1px 0; } #dbf-wrap .dbf-ev .warn { color: #ffb000; } #dbf-wrap .dbf-ev .err { color: #ff5252; }
+#dbf-wrap .dbf-ev .cur { background: #22384a; }
+@media (max-width: 700px) { #dbf-wrap .dbf-main { flex-direction: column; } #dbf-wrap .dbf-bot { flex-direction: column; height: 200px; } }
 /* Bell 206 컬렉티브 큰 창(27-b206coll.js) — 다른 팝아웃처럼 #ck-layer 위 */
 #b206-coll-pop { display: none; position: absolute; z-index: 2; flex-direction: column; pointer-events: auto; background: #101214;
   border: 1px solid #3a3e43; border-radius: 6px; box-shadow: 0 4px 24px rgba(0,0,0,0.7); }
 #b206-coll-pop .bcp-bar { height: 26px; flex: none; display: flex; align-items: center; justify-content: space-between; padding: 0 4px 0 10px;
   color: #cfd6dc; font: bold 12px Arial, sans-serif; letter-spacing: 1px; border-bottom: 1px solid #2a2e33; }
 #b206-coll-pop .bcp-x { width: 34px !important; min-width: 0; flex: none; padding: 2px 0; margin: 0; }
+#b206-coll-pop .bcp-fail { width: auto !important; min-width: 0; flex: none; margin: 0 4px 0 auto; padding: 2px 6px; font-size: 10px; color: #ff8a80; border-color: #7a2a2a; }
 #b206-coll-pop-body { flex: 1; min-height: 0; padding: 4px; touch-action: none; }
 /* Bell 206 — 겹친 계기는 다섯 계기 판(25-b206panel.js b206OverlayDraw) · 판이 살짝 비친다 */
 html.ac-b206 #pfd-ov { background: transparent; border: 0; box-shadow: none; min-height: 0; min-width: min(260px, calc(100% - 120px)); }
@@ -2307,6 +2328,10 @@ html.ac-b206 #lcon-wrap .ov-reset-btn, html.ac-b206 #lcon-wrap .ov-zones-btn { d
 .b2r-knob.xd { position: relative; width: 76px; height: 76px; display: inline-block; margin: 0 46px; }
 .b2r-ivl, .b2r-micl { position: absolute; font-size: 13px; font-weight: bold; color: #ff9a3a; }
 .b2r-ivl { left: 30px; bottom: 16px; } .b2r-micl { right: 64px; bottom: 16px; } .b2r-ivl b, .b2r-micl b { color: #fff; }
+.b2r-ptt { position: absolute; right: 186px; bottom: 10px; width: 54px; height: 30px; border-radius: 6px; border: 2px solid #5c6166; background: #1b1d1f; color: #ddd; font-weight: bold; font-size: 13px; touch-action: none; cursor: pointer; }
+.b2r-ptt.on { background: #b71c1c; border-color: #ff5252; color: #fff; }
+.b2r-txl { position: absolute; right: 250px; bottom: 16px; font-size: 13px; font-weight: bold; color: #ff5252; }
+.b2r-gns.tx::after, .b2r-rad.tx::after { content: 'TX'; position: absolute; left: 12px; top: 8px; padding: 1px 6px; border-radius: 3px; background: #b71c1c; color: #fff; font-size: 13px; font-weight: bold; }
 .b2r-arow { position: absolute; left: 160px; right: 200px; display: flex; justify-content: space-between; }
 .b2r-arow.t { top: 30px; } .b2r-arow.b { top: 112px; }
 .b2r-ab { width: 46px; height: 52px; border-radius: 4px; background: #1d1f21; border: 2px solid #4a4f54; display: flex; align-items: center; justify-content: center; padding: 0; }
@@ -2509,7 +2534,7 @@ body.simple-mode #simple-view { display: flex; position: fixed; left: 0; right: 
     </div>
   </form>
 </div>
-<script src="js/00-gate.js?v=642"></script>
+<script src="js/00-gate.js?v=643"></script>
 <!-- ── 단일화면 선택 바 (기본 숨김) ── -->
 <!-- ── 시작 안내(사용법/키보드) 오버레이 ── -->
 <div id="help-overlay" style="display:none;">
@@ -3436,6 +3461,7 @@ body.simple-mode #simple-view { display: flex; position: fixed; left: 0; right: 
             <button class="sim-btn" id="ship3d-btn" data-act="toggleShip3d">⛵ SHIP</button>
             <!-- SAR — 요구조자(익수자 · 육상) · 호이스트 구조(24-sar.js) -->
             <button class="sim-btn" id="sar3d-btn" data-act="toggleSarPanel" title="SAR — 요구조자 · 호이스트 구조 훈련">🛟 SAR</button>
+            <button class="sim-btn" id="dbf3d-btn" data-act="toggleDebrief" title="비행 기록 · 사후 강평">📋 DEBRIEF</button>
           <!-- 3D 화질 — 상 → 중 → 하(낮출수록 부드럽다 · 04-map.js) -->
           <button class="sim-btn" id="q3d-btn" data-act="cycleMap3dQuality" title="3D 화질 — 누를 때마다 상 → 중 → 하. 낮출수록 저고도에서도 부드럽습니다">화질 중</button>
           <!-- SIM 1인칭에서만 보인다 — 아래 좌·우 CHIN 창을 끄고 켠다 -->
@@ -3640,6 +3666,7 @@ body.simple-mode #simple-view { display: flex; position: fixed; left: 0; right: 
         <button class="sim-btn clr" data-act="clearFP">✕ CLR</button>
         <button class="sim-btn" id="map-ship-btn" data-act="toggleShip">⛵ SHIP</button>
         <button class="sim-btn" id="map-sar-btn" data-act="toggleSarPanel" title="SAR — 요구조자 · 호이스트 구조 훈련">🛟 SAR</button>
+        <button class="sim-btn" id="map-dbf-btn" data-act="toggleDebrief" title="비행 기록 · 사후 강평(항적 · 고도 · 속도 · 토크 · 사건)">📋 DEBRIEF</button>
         <button class="sim-btn" id="map-tcut-btn" data-act="toggleTcut">⛰ T-CUT</button>
         <button class="sim-btn" id="map-hold-btn" data-act="toggleHoldEntry">⟳ HOLD</button>
         <button class="sim-btn" id="inhib-btn" data-act="toggleInhibMenu">INHIB</button>
@@ -3813,44 +3840,45 @@ body.simple-mode #simple-view { display: flex; position: fixed; left: 0; right: 
 <!-- 앱 코드 — 클래식 스크립트(모듈 아님)라 전역 스코프를 공유한다.
      순서가 곧 실행 순서이므로 임의로 바꾸지 말 것. -->
   <!-- AIP 데이터 — 코드보다 먼저 로드한다 -->
-  <script src="js/data/terminal-fixes.js?v=642"></script>
-  <script src="js/data/ifr-fixes.js?v=642"></script>
-  <script src="js/data/ifr-procedures.js?v=642"></script>
-  <script src="js/data/airfield-info.js?v=642"></script>
-  <script src="js/data/enr-vors.js?v=642"></script>
-  <script src="js/data/loc-stations.js?v=642"></script>
-  <script src="js/data/enr-routes.js?v=642"></script>
-  <script src="js/data/airspace.js?v=642"></script>
-  <script src="js/data/runways.js?v=642"></script>
+  <script src="js/data/terminal-fixes.js?v=643"></script>
+  <script src="js/data/ifr-fixes.js?v=643"></script>
+  <script src="js/data/ifr-procedures.js?v=643"></script>
+  <script src="js/data/airfield-info.js?v=643"></script>
+  <script src="js/data/enr-vors.js?v=643"></script>
+  <script src="js/data/loc-stations.js?v=643"></script>
+  <script src="js/data/enr-routes.js?v=643"></script>
+  <script src="js/data/airspace.js?v=643"></script>
+  <script src="js/data/runways.js?v=643"></script>
   <!-- 앱 코드 -->
-  <script src="js/00-ui.js?v=642"></script>
-  <script src="js/01-state.js?v=642"></script>
-  <script src="js/02-math.js?v=642"></script>
-  <script src="js/03-pfd.js?v=642"></script>
-  <script src="js/04-map.js?v=642"></script>
-  <script src="js/05-gps.js?v=642"></script>
-  <script src="js/06-nav.js?v=642"></script>
-  <script src="js/07-sim.js?v=642"></script>
-  <script src="js/08-ifrdb.js?v=642"></script>
-  <script src="js/09-cdu.js?v=642"></script>
-  <script src="js/10-tools.js?v=642"></script>
-  <script src="js/11-charts.js?v=642"></script>
-  <script src="js/12-joystick.js?v=642"></script>
-  <script src="js/13-joyhid.js?v=642"></script>
-  <script src="js/14-simmode.js?v=642"></script>
-  <script src="js/15-heli3d.js?v=642"></script>
-  <script src="js/16-sound.js?v=642"></script>
-  <script src="js/17-upper.js?v=642"></script>
-  <script src="js/18-system.js?v=642"></script>
-  <script src="js/19-lower.js?v=642"></script>
-  <script src="js/20-navaids.js?v=642"></script>
-  <script src="js/21-c5000.js?v=642"></script>
-  <script src="js/22-npx138.js?v=642"></script>
-  <script src="js/23-afcs.js?v=642"></script>
-  <script src="js/24-sar.js?v=642"></script>
-  <script src="js/25-b206panel.js?v=642"></script>
-  <script src="js/26-b206radio.js?v=642"></script>
-  <script src="js/27-b206coll.js?v=642"></script>
+  <script src="js/00-ui.js?v=643"></script>
+  <script src="js/01-state.js?v=643"></script>
+  <script src="js/02-math.js?v=643"></script>
+  <script src="js/03-pfd.js?v=643"></script>
+  <script src="js/04-map.js?v=643"></script>
+  <script src="js/05-gps.js?v=643"></script>
+  <script src="js/06-nav.js?v=643"></script>
+  <script src="js/07-sim.js?v=643"></script>
+  <script src="js/08-ifrdb.js?v=643"></script>
+  <script src="js/09-cdu.js?v=643"></script>
+  <script src="js/10-tools.js?v=643"></script>
+  <script src="js/11-charts.js?v=643"></script>
+  <script src="js/12-joystick.js?v=643"></script>
+  <script src="js/13-joyhid.js?v=643"></script>
+  <script src="js/14-simmode.js?v=643"></script>
+  <script src="js/15-heli3d.js?v=643"></script>
+  <script src="js/16-sound.js?v=643"></script>
+  <script src="js/17-upper.js?v=643"></script>
+  <script src="js/18-system.js?v=643"></script>
+  <script src="js/19-lower.js?v=643"></script>
+  <script src="js/20-navaids.js?v=643"></script>
+  <script src="js/21-c5000.js?v=643"></script>
+  <script src="js/22-npx138.js?v=643"></script>
+  <script src="js/23-afcs.js?v=643"></script>
+  <script src="js/24-sar.js?v=643"></script>
+  <script src="js/25-b206panel.js?v=643"></script>
+  <script src="js/26-b206radio.js?v=643"></script>
+  <script src="js/27-b206coll.js?v=643"></script>
+  <script src="js/28-debrief.js?v=643"></script>
 
 <input type="file" id="zipFileInput" accept=".zip,application/zip,application/x-zip-compressed,application/octet-stream" style="display:none" onchange="handleZipFile(this.files[0]); this.value='';"></body>
 </html>

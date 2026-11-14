@@ -70,8 +70,10 @@ import * as afcslink from './cases/afcs.mjs';
 import * as gtc from './cases/gtc.mjs';
 import * as edition from './cases/edition.mjs';
 import * as cockpit from './cases/cockpit.mjs';
+import * as b206sys from './cases/b206sys.mjs';
+import * as debrief from './cases/debrief.mjs';
 
-const SUITES0 = [smoke, actions, coords, chartcal, hold, nav, gspd, dialog, chartview, procdata, simspd, tascalc, brg, fpwpt, maprot, map3d, dmearc, dme, fporder, wptcrs, brglbl, directto, crssync, locsta, susp, layout, gslope, joystick, geosearch, simmode, ga, tdown, bbtrim, physics2, hocas, joycenter, ship3d, heli3d, ralt, startapt, hdgref, sound, view3d, runway, apptune, lock, popout, upper, system, lower, c5000, npx138, fuelsys, afcslink, gtc, edition, cockpit, pfdmsg, fcpsimple, pfdsk, cdulive, sar, eisrev, b206];
+const SUITES0 = [smoke, actions, coords, chartcal, hold, nav, gspd, dialog, chartview, procdata, simspd, tascalc, brg, fpwpt, maprot, map3d, dmearc, dme, fporder, wptcrs, brglbl, directto, crssync, locsta, susp, layout, gslope, joystick, geosearch, simmode, ga, tdown, bbtrim, physics2, hocas, joycenter, ship3d, heli3d, ralt, startapt, hdgref, sound, view3d, runway, apptune, lock, popout, upper, system, lower, c5000, npx138, fuelsys, afcslink, gtc, edition, cockpit, pfdmsg, fcpsimple, pfdsk, cdulive, sar, eisrev, b206, b206sys, debrief];
 // 여러 묶음으로 나뉜 검사(suites 를 내보내는 파일)는 펼친다
 // 절차 훈련판(EDITION=proc — Flightsimulator)에서는 SIM 모드를 쓰는 묶음을 건너뛴다(그 판에는 SIM 이 없다)
 // — SIM 을 켜는 검사(toggleSimMode(true) · SIM_SETUP · simModeOn = true)가 든 파일은 통째로
