@@ -381,9 +381,34 @@ function _sysBars(g, x, y, w, h, lbls, vals, frac, lines) {
     });
   });
 }
-function _sysLeftStrip(g, F) {
+// EIS 값 — SYSTEM 창 왼쪽 띠(MFD EIS)와 PFD 대체 모드 EIS(03-pfd.js drawEisRev)가 같이 쓴다
+function eisData(F) {
+  F = F || fuelFlow();
   const P = F.P || { e1: { tgt: 0, ng: 0 }, e2: { tgt: 0, ng: 0 }, nr: 0 };
   const run1 = P.e1.ng > 50, run2 = P.e2.ng > 50, rot = (P.nr || 0) > 50;
+  let bat = { a: 0, v: 25 };
+  try { bat = elecState().bat; } catch (e) { _swallow(e); }
+  const hp = hydPsi();
+  return {
+    P, rot,
+    eot: [run1 ? 91 : 30, run2 ? 93 : 30], eop: [run1 ? 68 : 0, run2 ? 66 : 0], mgb: [rot ? 91 : 30, rot ? 43 : 0],
+    ff: [F.f1, F.f2], fp: [fuelPress(1), fuelPress(2)], hyd: [hp[1], hp[2]],
+    qty: { l: fuelLeft(), r: fuelRight(), aux: fuelAux(), tot: fuelTotal() }, bat, accp: rot ? 2837 : 0,
+  };
+}
+// SYSTEM 창(SYSTEM 탭 · Cockpit Mode 의 SYSTEM MFD)이 지금 화면에 있나 — 없으면 PFD 가 대체 모드 EIS 로 그린다(03-pfd.js)
+let _sysShownT = 0, _sysShownV = true;
+function sysScreenShown() {
+  const now = performance.now();
+  if (now - _sysShownT < 250) return _sysShownV;
+  _sysShownT = now;
+  let v = false;
+  try { const w = document.getElementById('sysp-wrap'); v = !!(w && w.isConnected && w.clientWidth > 40 && w.clientHeight > 40 && w.getClientRects().length); } catch (e) { _swallow(e); }
+  try { if (!v && typeof ckpitWanted === 'function' && ckpitWanted()) v = true; } catch (e) { _swallow(e); }
+  return (_sysShownV = v);
+}
+function _sysLeftStrip(g, F) {
+  const D = eisData(F), P = D.P, rot = D.rot;
   const r0 = v => String(Math.round(v));
   // TGT · NG
   _sysBox(g, 5, 20, 103, 152, 'TGT', '°C');
@@ -393,16 +418,16 @@ function _sysLeftStrip(g, F) {
   _sysBars(g, 118, 24, 96, 145, ['NG1', 'NG2'], [P.e1.ng.toFixed(1), P.e2.ng.toFixed(1)], [P.e1.ng / 110, P.e2.ng / 110],
     [[0.70, '#ff3030'], [0.66, '#ffcc00']]);
   // EOT · EOP · MGB
-  const eot = [run1 ? 91 : 30, run2 ? 93 : 30], eop = [run1 ? 68 : 0, run2 ? 66 : 0];
+  const eot = D.eot, eop = D.eop;
   _sysBox(g, 5, 188, 68, 152, 'EOT', '°C');
   _sysBars(g, 7, 192, 64, 145, ['T1', 'T2'], eot.map(r0), eot.map(v => v / 160), [[0.66, '#ff3030'], [0.56, '#ffcc00'], [0.12, '#ff3030']]);
   _sysBox(g, 78, 188, 68, 152, 'EOP', 'PSID');
   _sysBars(g, 80, 192, 64, 145, ['P1', 'P2'], eop.map(r0), eop.map(v => v / 140), [[0.82, '#ff3030'], [0.60, '#ffcc00'], [0.22, '#ffcc00'], [0.10, '#ff3030']]);
-  const mgb = [rot ? 91 : 30, rot ? 43 : 0];
+  const mgb = D.mgb;
   _sysBox(g, 151, 188, 67, 152, 'MGB', '');
   _sysBars(g, 153, 192, 63, 145, ['T', 'P'], mgb.map(r0), [mgb[0] / 140, mgb[1] / 80], [[0.80, '#ff3030'], [0.24, '#ffcc00']]);
   // Fuel F · Fuel P · HYD P
-  const ff = [F.f1, F.f2], fp = [fuelPress(1), fuelPress(2)], hyd = [hydPsi()[1], hydPsi()[2]];
+  const ff = D.ff, fp = D.fp, hyd = D.hyd;
   _sysBox(g, 5, 356, 72, 152, 'Fuel F', 'PPH');
   _sysBars(g, 7, 360, 68, 145, ['F1', 'F2'], ff.map(r0), ff.map(v => v / 800), []);
   _sysBox(g, 81, 356, 70, 152, 'Fuel P', 'PSI');
@@ -418,14 +443,13 @@ function _sysLeftStrip(g, F) {
   g.textAlign = 'right'; g.font = _f(13); g.fillText(r0(fuelAux()), 96, 594); g.fillText(r0(fuelTotal()), 96, 613);
   // Battery · ACCP
   // 배터리 — 전기 계통(elecState)과 같은 값(충전 + · 방전 −)
-  let bat = { a: 0, v: 25 };
-  try { bat = elecState().bat; } catch (e) { _swallow(e); }
+  const bat = D.bat;
   _sysBox(g, 118, 524, 100, 50, 'Battery', '');
   g.textAlign = 'left'; g.font = _f(11); g.fillStyle = '#fff'; g.fillText('Amps', 126, 545); g.fillText('Volts', 126, 563);
   g.textAlign = 'right'; g.font = _f(13); g.fillText(String(bat.a), 210, 545); g.fillText(String(bat.v), 210, 563);
   _sysBox(g, 118, 588, 100, 34, 'ACCP', '');
   g.textAlign = 'left'; g.font = _f(11); g.fillText('PSI', 126, 612);
-  g.textAlign = 'right'; g.font = _f(13); g.fillText(rot ? '2837' : '0', 210, 612);
+  g.textAlign = 'right'; g.font = _f(13); g.fillText(String(D.accp), 210, 612);
 }
 function _sysTopBar(g, F) {
   const ff = F.f1 + F.f2;

@@ -42,6 +42,10 @@ function pfdCanvasW() {
 // ── PFD 배치 ── (실기 PFD 처럼) 자세계 하늘·땅이 위쪽 전체를 덮고, 그 위에 속도계(왼쪽)·고도계+승강계(오른쪽)가
 // 반투명으로 얹힌다. 속도계 아래 GS 칸, 고도계 위 RA 칸·아래 QNH 칸. 아래쪽은 왼쪽 엔진 파라미터 · 가운데 HSI ·
 // 오른쪽 레이더 고도계(CRHT) 테이프. drawPFD 와 PFD 탭(09-cdu.js onPfdTap)이 이 한 곳의 셈을 같이 쓴다.
+// 대체 모드(Reversionary) EIS — SYSTEM 창이 화면에 없으면(18-system.js sysScreenShown) PFD 왼쪽 위에
+// MFD EIS 의 숫자 칸(EOT · EOP · MGB · Fuel F · Fuel P · HYD P · Fuel QTY · Battery · ACCP)을 띄운다.
+// 그 아래 엔진 칸(TGT · NG · TQ · NP/NR)과 이어져 왼쪽 한 줄이 실기 대체 모드 EIS 가 되고, 자세계·속도계는 오른쪽으로 비킨다.
+function pfdRevMode() { try { return typeof sysScreenShown === 'function' && !sysScreenShown(); } catch (e) { return false; } }
 function pfdLayout(W, H, ctrlH) {
   const usableH = H - ctrlH;
   const tapW = Math.max(56, Math.min(80, W * 0.075));
@@ -56,11 +60,14 @@ function pfdLayout(W, H, ctrlH) {
   const altY = tY + raBoxH + 2, altH = tH - raBoxH - 2;
   const engW = Math.round(Math.max(140, Math.min(300, W * 0.27)));
   const raW  = tapW + vsiW;
+  // 대체 모드 — 왼쪽 엔진 칸 폭만큼 위쪽도 EIS 가 차지한다(좁은 화면에서는 하지 않는다)
+  const rev = W >= 420 && aiH >= 200 && pfdRevMode(), rx = rev ? engW : 0;
   return {
-    usableH, tapW, vsiW, aiH, hsiH, pad,
-    ai:   { x: 0, y: 0, w: W, h: aiH },
-    spd:  { x: pad, y: tY, w: tapW, h: tH },
-    gs:   { x: pad, y: tY + tH + 3, w: tapW, h: botH },
+    usableH, tapW, vsiW, aiH, hsiH, pad, revOn: rev,
+    rev:  { x: 0, y: 0, w: engW, h: aiH },
+    ai:   { x: rx, y: 0, w: W - rx, h: aiH },
+    spd:  { x: rx + pad, y: tY, w: tapW, h: tH },
+    gs:   { x: rx + pad, y: tY + tH + 3, w: tapW, h: botH },
     ra:   { x: altX, y: tY, w: tapW + vsiW, h: raBoxH },
     alt:  { x: altX, y: altY, w: tapW, h: altH },
     vsi:  { x: altX + tapW, y: altY, w: vsiW, h: altH },
@@ -97,6 +104,7 @@ function drawPFD() {
   drawAltTape(L.alt.x, L.alt.y, L.alt.w, L.alt.h);
   drawVSI(L.vsi.x, L.vsi.y, L.vsi.w, L.vsi.h);
   drawBaroBox(L.baro.x, L.baro.y, L.baro.w, L.baro.h);
+  if (L.revOn) drawEisRev(L.rev.x, L.rev.y, L.rev.w, L.rev.h);
 
   // 아래: 땅 빛이 아래까지 이어지고(실기처럼), 그 위에 엔진 파라미터 · HSI · 레이더 고도계(CRHT)를 반투명으로 얹는다.
   // HSI 나침반 중심은 자세계 중심과 같은 세로선(화면 가운데)이다.
@@ -292,6 +300,62 @@ function drawEnginePanel(x, y, w, h) {
   const by = y + 9 + th + 12, bh = h - (by - y) - 4;
   drawTqGauge(x + m, by, half, bh, [P.e1.tq, P.e2.tq]);
   drawNpNr(x + m * 2 + half, by, half, bh, P);
+  ctx.restore();
+}
+// 대체 모드 EIS 의 위쪽 숫자 칸 — 그림 10 '대체 모드 EIS'의 배치(세 칸 두 줄 + Fuel QTY · Battery · ACCP)
+function drawEisRev(x, y, w, h) {
+  if (!(w > 100) || !(h > 120) || typeof eisData !== 'function') return;
+  let D;
+  try { D = eisData(); } catch (e) { return; }
+  ctx.save(); ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
+  ctx.fillStyle = '#000'; ctx.fillRect(x, y, w, h);
+  ctx.fillStyle = 'rgba(18,30,48,0.55)'; ctx.fillRect(x, y, w, h);
+  const m = 4, G = 11;                                       // 칸 사이 · 제목 자리
+  const fsL = Math.max(8, Math.min(11, w * 0.04)), fsV0 = Math.max(10, Math.min(16, w * 0.058));
+  const r0 = v => String(Math.round(v));
+  // 칸 폭에 맞춰 숫자 크기를 줄인다(4자리 HYD 3000 이 서로 닿지 않게)
+  const fit = (txt, maxW, fs) => { ctx.font = `bold ${fs}px Helvetica Neue, Arial, sans-serif`; const tw = ctx.measureText(txt).width; return tw > maxW ? Math.max(7, Math.floor(fs * maxW / tw)) : fs; };
+  const cw = (w - m * 4) / 3, narrow = cw < 62;
+  const H3 = Math.min((h - G * 3 - m * 2) * 0.3, fsL + fsV0 + 16);
+  const cell = (bx, by, bw, bh, title, l1, l2, v1, v2) => {
+    _engBox(bx, by, bw, bh, title);
+    ctx.textBaseline = 'alphabetic'; ctx.textAlign = 'center';
+    ctx.font = `bold ${fsL}px Helvetica Neue, Arial, sans-serif`; ctx.fillStyle = '#c6ced6';
+    ctx.fillText(l1, bx + bw * 0.27, by + 4 + fsL); ctx.fillText(l2, bx + bw * 0.73, by + 4 + fsL);
+    const fv = Math.min(fit(v1, bw * 0.44, fsV0), fit(v2, bw * 0.44, fsV0));
+    ctx.font = `bold ${fv}px Helvetica Neue, Arial, sans-serif`; ctx.fillStyle = '#ffffff';
+    ctx.fillText(v1, bx + bw * 0.27, by + bh - 5); ctx.fillText(v2, bx + bw * 0.73, by + bh - 5);
+  };
+  const row = (by, items) => items.forEach((it, i) => cell(x + m + i * (cw + m), by, cw, H3, ...it));
+  const t = (a, u) => narrow ? a : `${a} ${u}`;
+  let by = y + G;
+  row(by, [[t('EOT', '°C'), 'T1', 'T2', r0(D.eot[0]), r0(D.eot[1])], [t('EOP', 'PSID'), 'P1', 'P2', r0(D.eop[0]), r0(D.eop[1])], ['MGB', 'T', 'P', r0(D.mgb[0]), r0(D.mgb[1])]]);
+  by += H3 + G;
+  row(by, [[t('Fuel F', 'PPH'), 'F1', 'F2', r0(D.ff[0]), r0(D.ff[1])], [t('Fuel P', 'PSI'), 'P1', 'P2', r0(D.fp[0]), r0(D.fp[1])], [t('HYD P', 'PSI'), 'P1', 'P2', r0(D.hyd[0]), r0(D.hyd[1])]]);
+  by += H3 + G;
+  // 아래: Fuel QTY(왼쪽) · Battery · ACCP(오른쪽)
+  const hw = (w - m * 3) / 2, lx = x + m, rxx = x + m * 2 + hw;
+  const bh = Math.round(fsL * 2 + 22), ah = Math.round(fsL + 14);
+  const H4 = Math.min(y + h - by - 4, bh + G + ah);
+  if (H4 > 40) {
+    _engBox(lx, by, hw, H4, narrow ? 'Fuel QTY' : 'Fuel QTY LBS');
+    ctx.textAlign = 'center'; ctx.font = `bold ${fsL}px Helvetica Neue, Arial, sans-serif`; ctx.fillStyle = '#c6ced6';
+    ctx.fillText('L', lx + hw * 0.27, by + 4 + fsL); ctx.fillText('R', lx + hw * 0.73, by + 4 + fsL);
+    const fq = Math.min(fit(r0(D.qty.l), hw * 0.44, fsV0), fit(r0(D.qty.r), hw * 0.44, fsV0));
+    ctx.font = `bold ${fq}px Helvetica Neue, Arial, sans-serif`; ctx.fillStyle = '#fff';
+    ctx.fillText(r0(D.qty.l), lx + hw * 0.27, by + 6 + fsL + fq); ctx.fillText(r0(D.qty.r), lx + hw * 0.73, by + 6 + fsL + fq);
+    ctx.font = `bold ${fsL}px Helvetica Neue, Arial, sans-serif`; ctx.textAlign = 'left'; ctx.fillText('Total', lx + 4, by + H4 - 6);
+    ctx.font = `bold ${fq}px Helvetica Neue, Arial, sans-serif`; ctx.textAlign = 'right'; ctx.fillText(r0(D.qty.tot), lx + hw - 4, by + H4 - 6);
+    const kv = (yy, k, v) => {
+      ctx.font = `bold ${fsL}px Helvetica Neue, Arial, sans-serif`; ctx.fillStyle = '#fff'; ctx.textAlign = 'left'; ctx.fillText(k, rxx + 4, yy);
+      ctx.font = `bold ${fit(v, hw * 0.45, fsV0 - 1)}px Helvetica Neue, Arial, sans-serif`; ctx.textAlign = 'right'; ctx.fillText(v, rxx + hw - 4, yy);
+    };
+    const bh2 = Math.min(bh, H4 - G - ah);
+    _engBox(rxx, by, hw, bh2, 'Battery');
+    kv(by + 4 + fsL + 2, 'AMPS', String(D.bat.a)); kv(by + bh2 - 5, 'Volts', String(D.bat.v));
+    _engBox(rxx, by + bh2 + G, hw, H4 - bh2 - G, 'ACCP');
+    kv(by + H4 - 5, 'PSI', String(D.accp));
+  }
   ctx.restore();
 }
 // NP1 · NR · NP2 막대 — 0~120%. 빨간 선 106%(넘침) · NR 은 90%(처짐)에도 빨간 선
