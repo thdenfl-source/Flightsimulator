@@ -1,7 +1,7 @@
 'use strict';
 // ══════════════════════════════════════════════════════
 // 기종(aircraft type) — 시작 화면(비밀번호를 넣은 뒤)에서 기종을 고른다.
-//   aw189 : AW189(흰수리) — 기본. 유리 조종석(PFD · MFD 넷 · 쌍발)
+//   aw189 : KUH-1CG(흰수리 · 내부 이름 aw189) — 기본. 유리 조종석(PFD · MFD 넷 · 쌍발)
 //   b206  : Bell 206B-3 JetRanger — 단발 · 아날로그 원형 계기판(25-b206panel.js)
 // (SHINE 저장소에서 만들어 가져왔다 — SHINE 은 b206 이 기본)
 // 고르는 길: 시작 화면(00-gate.js 기종 버튼) · 주소 ?ac=b206|aw189 · localStorage 'shineAc'.
@@ -10,7 +10,7 @@
 // ══════════════════════════════════════════════════════
 const AC_TYPES = {
   b206:  { name: 'Bell 206B-3', full: 'Bell 206B-3 JetRanger', engines: 1 },
-  aw189: { name: 'AW189',       full: 'AW189 (흰수리)',          engines: 2 },
+  aw189: { name: 'KUH-1CG',     full: 'KUH-1CG (흰수리)',        engines: 2 },
 };
 const AC_PREF = 'shineAc';
 const AC_TYPE = (() => {
