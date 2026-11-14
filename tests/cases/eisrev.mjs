@@ -26,10 +26,21 @@ export async function run(page, t) {
                swIn: RC.left >= L.side.x && RC.swY + RC.swH <= L.side.y + L.side.h + 1, hocas: t0.includes('HOCAS'), park: t0.includes('PARKING BRAKE SET') };
     o.side.msgRight = _pfdMsgBottom >= L.side.y && _pfdMsgBottom < L.side.y + L.side.h;
     // 창을 누르면 MAP ⇄ TCAS
-    const r = L.inset, map0 = !pfdInsetTcas();
-    o.tap1 = pfdInsetHit(r.x + 5, r.y + 5) && pfdInsetTcas() && seen().includes('TCAS: TA ONLY');
+    // 창이 없는 좁은 PFD 에서도 그리기 · 누르기를 본다(넓은 PFD 의 자리를 빌려)
+    const r = L.insetOn ? L.inset : { x: 10, y: 10, w: 150, h: 150 }, map0 = !pfdInsetTcas();
+    if (!L.insetOn) { drawPfdInset(r); }
+    const seenI = () => { if (L.insetOn) return seen(); const proto = CanvasRenderingContext2D.prototype, orig = proto.fillText, out = [];
+      proto.fillText = function (x, ...a) { out.push(String(x)); return orig.call(this, x, ...a); }; try { drawPfdInset(r); } finally { proto.fillText = orig; } return out; };
+    o.tap1 = pfdInsetHit(r.x + 5, r.y + 5) && pfdInsetTcas() && seenI().includes('TCAS: TA ONLY');
+    if (!L.insetOn) drawPfdInset(r);
     o.tap2 = pfdInsetHit(r.x + 5, r.y + 5) && !pfdInsetTcas() && map0;
-    hocasOn = false; ovhdSet('parkBrake', 'RELEASE');
+    hocasOn = false; ovhdSet('parkBrake', 'RELEASE'); drawPFD();
+    // 자세계 · HSI 반반 · HSI 는 늘 다 보인다(창이 있으면 높이로 정한 크기 그대로)
+    o.half = [560, 700, 1000, 1400].map(W => {
+      const L2 = pfdLayout(W, 900, 300), G = hsiGeom(L2.hsi.x, L2.hsi.y, L2.hsi.w, L2.hsi.h, W / 2);
+      const inside = G.cx - G.r >= L2.hsi.x && G.cx + G.r <= L2.hsi.x + L2.hsi.w && G.cy - G.r >= L2.hsi.y && G.cy + G.r <= L2.hsi.y + L2.hsi.h;
+      return { W, half: Math.abs(L2.aiH - L2.hsiH) <= 1, inside, full: !L2.insetOn || G.r >= L2.hsiH * 0.46 * 0.94, inset: L2.insetOn };
+    });
     return o;
   });
   const has = (txt, ks) => ks.every(k => txt.some(s => s.startsWith(k)));
@@ -47,7 +58,9 @@ export async function run(page, t) {
   const Sd = R.side;
   t.ok(Sd.on && Sd.msgX > Sd.altR && Sd.park && Sd.msgRight && Sd.hocas && Sd.swIn,
     `메시지 · HOCAS · 스톱워치는 자세계 오른쪽 칸(고도계 바깥 x ${Math.round(Sd.msgX)} > ${Math.round(Sd.altR)})`);
-  t.ok(Sd.inset && Math.abs(Sd.hsiR - Sd.crX) < 0.5, 'CRHT · NAV 칸은 HSI 바로 옆 · 오른쪽 끝에 MAP · TCAS 창');
+  t.ok(Math.abs(Sd.hsiR - Sd.crX) < 0.5, 'CRHT · NAV 칸은 HSI 오른쪽에 붙는다');
+  t.ok(R.half.every(h => h.half && h.inside && h.full) && R.half.some(h => h.inset),
+    `자세계 · HSI 를 반반으로 · HSI 는 늘 다 보이고, 오른쪽 아래 MAP · TCAS 창은 자리가 있을 때만 (${R.half.map(h => h.W + (h.inset ? '·창' : '')).join(' ')})`);
   t.ok(R.tap1 && R.tap2, '오른쪽 아래 창을 누르면 MAP ⇄ TCAS(TA ONLY)');
   t.ok(R.on.shown && !R.on.L.revOn && R.on.L.ai.x === 0 && !has(R.on.txt, ['EOT', 'HYD P']),
     'SYSTEM 창을 고르면 대체 모드를 거두고 원래 배치로');

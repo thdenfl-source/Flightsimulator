@@ -52,7 +52,7 @@ function pfdLayout(W, H, ctrlH) {
   const usableH = H - ctrlH;
   const tapW = Math.max(56, Math.min(80, W * 0.075));
   const vsiW = Math.max(26, Math.min(36, W * 0.04));
-  const aiH  = Math.floor(usableH * 0.55);
+  const aiH  = Math.floor(usableH * 0.5);                  // 자세계 · HSI 반반
   const hsiH = usableH - aiH;
   const FMA_H = FMA_MARGIN + FMA_BOX_H;
   const pad  = Math.round(4 + Math.max(0, W - 700) * 0.12);   // 넓은 화면에서는 테이프를 안쪽으로
@@ -69,10 +69,13 @@ function pfdLayout(W, H, ctrlH) {
   const sideX = altX + tapW + vsiW + 6;
   const sideOn = inward && (W - pad - sideX) >= 90;
   // 오른쪽 아래 — CRHT · NAV 칸은 HSI 바로 옆으로 붙이고(나침반 반지름만큼 비켜), 남은 오른쪽 끝에 MAP · TCAS 창(inset)
-  const rH = hsiH * 0.46, INSET_MIN = 110;
-  const crX = sideOn ? Math.round(Math.max(Math.min(altX, W - pad - raW - INSET_MIN), Math.min(W / 2 + rH + 8, W - pad - raW - INSET_MIN)))
-                     : W - pad - raW;
-  const insetX = crX + raW + 4, insetOn = sideOn && (W - pad - insetX) >= 80;
+  // HSI 는 늘 다 보이고 높이로 정한 크기 그대로(반지름 = HSI 칸 높이의 46%) — CRHT · NAV 칸은 그 나침반 바로 옆에,
+  // 남는 오른쪽 끝이 100px 이상이면 MAP · TCAS 창. 모자라면 창을 빼고 CRHT · NAV 칸을 오른쪽 끝에(나침반은 그대로 다 보인다)
+  const rH = hsiH * 0.46;
+  const crX0 = Math.round(W / 2 + rH / 0.8 + 4);
+  const fitsInset = sideOn && (W - pad - (crX0 + raW + 4)) >= 100;
+  const crX2 = fitsInset ? crX0 : W - pad - raW;
+  const insetX = crX2 + raW + 4, insetOn = fitsInset;
   // 대체 모드 — 왼쪽 엔진 칸 폭만큼 위쪽(자세계 왼쪽 위 하늘)에도 EIS 를 얹는다(좁은 화면에서는 하지 않는다)
   const rev = inward && aiH >= 200 && pfdRevMode();
   return {
@@ -89,9 +92,9 @@ function pfdLayout(W, H, ctrlH) {
     baro: { x: altX, y: tY + tH + 3, w: tapW, h: botH },
     eng:  { x: 0, y: aiH, w: engW, h: hsiH },
     // 오른쪽 아래 CRHT·NAV 칸은 고도계+승강계와 같은 폭으로 오른쪽 끝에(넓이 420 미만이면 고도계와 한 세로줄)
-    hsi:  { x: engW, y: aiH, w: crX - engW, h: hsiH },
-    crht: { x: crX, y: aiH, w: raW, h: Math.round(hsiH * 2 / 3) },                       // 위 2/3 — 레이더 고도계
-    navs: { x: crX, y: aiH + Math.round(hsiH * 2 / 3), w: raW, h: hsiH - Math.round(hsiH * 2 / 3) },   // 아래 1/3 — FMS·NAV1·NAV2
+    hsi:  { x: engW, y: aiH, w: crX2 - engW, h: hsiH },
+    crht: { x: crX2, y: aiH, w: raW, h: Math.round(hsiH * 2 / 3) },                       // 위 2/3 — 레이더 고도계
+    navs: { x: crX2, y: aiH + Math.round(hsiH * 2 / 3), w: raW, h: hsiH - Math.round(hsiH * 2 / 3) },   // 아래 1/3 — FMS·NAV1·NAV2
   };
 }
 
