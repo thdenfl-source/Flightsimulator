@@ -4,13 +4,13 @@
 // 실기 사진대로: 위 스위치 상자
 //   SRCH LT(ON · OFF · STOW) 단추 · LDG LT(ON · OFF) 토글 · GOV RPM(INCR · DECR) 비프 스위치
 //   SRCH LT 방향(EXT · RETR) 단추 · STARTER 누름 단추
-// 아래 IDLE REL 단추가 달린 목 · 코르크 스로틀 그립(돌려서 OFF · IDLE · FULL OPEN)
+// 아래 IDLE REL 단추가 달린 목 · 코르크 스로틀 그립(돌려서 FULL OPEN · IDLE · OFF)
 // 엔진:
 //   스로틀 OFF → 엔진 꺼짐(연료 차단). OFF 에서 IDLE 로 열고 STARTER 를 1.5초 누르고 있으면 시동(light-off).
 //   IDLE → FULL OPEN 은 그냥 돌린다. FULL/IDLE → OFF 는 IDLE REL 단추를 누른 뒤에만(3초 동안) 닫힌다(실기처럼 실수로 끄지 않게).
 //   엔진 상태는 시뮬레이터의 엔진 레버(17-upper.js pcd1 · pcd2 — OFF · IDLE · FLY)로 넘긴다 — NR · 토크 · 계기는 그대로 따른다.
 //   FULL OPEN 이면 GOV RPM INCR/DECR 를 누르는 동안 거버너 NR(03-pfd.js NR_GOV)을 97 ~ 100% 사이에서 1%/초로 맞춘다.
-// 그립은 왼쪽을 누르면 닫히고(OFF 쪽) 오른쪽을 누르면 열린다(FULL 쪽) · 휠도 듣는다.
+// 눈금은 FULL OPEN · IDLE · OFF 순(왼→오른). 그립은 왼쪽을 누르면 열리고(FULL 쪽) 오른쪽을 누르면 닫힌다(OFF 쪽) · 휠도 듣는다.
 // ══════════════════════════════════════════════════════
 const B206C_TH = ['OFF', 'IDLE', 'FULL'];
 const B206C_GOV_MIN = 97, B206C_GOV_MAX = 100, B206C_START_S = 1.5, B206C_REL_S = 3;
@@ -88,7 +88,7 @@ setInterval(() => {
 // ── 그림(SVG · 빛과 그림자로 입체감) ──
 function _b206cSvg() {
   const th = b206c.th, rel = performance.now() < b206c.idleRel, run = b206c.run;
-  const twist = { OFF: -26, IDLE: 0, FULL: 26 }[th];                   // 그립 줄무늬가 돌아간 만큼(좌우로 비켜 그린다)
+  const twist = { FULL: -26, IDLE: 0, OFF: 26 }[th];                   // 눈금 FULL · IDLE · OFF(왼→오른) — 그립 줄무늬가 돌아간 만큼(좌우로 비켜 그린다)
   const lab = (x, y, t, s = 8, a = 'middle', c = '#e9ecef') => `<text x="${x}" y="${y}" font-size="${s}" fill="${c}" text-anchor="${a}" font-family="Arial" font-weight="bold">${t}</text>`;
   const ldgY = b206c.ldg ? 40 : 60;
   return `<svg viewBox="0 0 175 380" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;display:block;overflow:visible">
@@ -131,7 +131,7 @@ function _b206cSvg() {
     ${lab(118, 180, 'IDLE', 7, 'middle', '#d9a85a')}${lab(118, 189, 'REL', 7, 'middle', '#d9a85a')}</g>
   <!-- 스로틀 눈금 띠(고정) · 지시 -->
   <rect x="46" y="238" width="83" height="14" fill="#0e0f10" stroke="#333"/>
-  ${lab(58, 248, 'OFF', 7, 'middle', th === 'OFF' ? '#ff5a4a' : '#888')}${lab(87.5, 248, 'IDLE', 7, 'middle', th === 'IDLE' ? '#ffd23a' : '#888')}${lab(117, 248, 'FULL', 7, 'middle', th === 'FULL' ? '#7dff3a' : '#888')}
+  ${lab(58, 248, 'FULL', 7, 'middle', th === 'FULL' ? '#7dff3a' : '#888')}${lab(87.5, 248, 'IDLE', 7, 'middle', th === 'IDLE' ? '#ffd23a' : '#888')}${lab(117, 248, 'OFF', 7, 'middle', th === 'OFF' ? '#ff5a4a' : '#888')}
   <!-- 코르크 그립(돌아간 만큼 줄무늬가 비킨다) -->
   <g data-bc="grip" style="cursor:ew-resize">
     <rect x="44" y="254" width="87" height="104" rx="10" fill="url(#bc-cork)" stroke="#2a1f14" stroke-width="1.5"/>
@@ -184,7 +184,7 @@ function _b206cPopSync() {
       const t = e.target.closest('[data-bc]'); if (!t) return;
       e.preventDefault(); e.stopPropagation();
       const k = t.dataset.bc;
-      if (k === 'grip') { const r = t.getBoundingClientRect(); b206cThrottle(e.clientX < r.left + r.width / 2 ? -1 : 1); }
+      if (k === 'grip') { const r = t.getBoundingClientRect(); b206cThrottle(e.clientX < r.left + r.width / 2 ? 1 : -1); }
       else if (k === 'idlerel') b206cIdleRel();
       else if (k === 'starter') b206cStarter(true);
       else if (k === 'incr') b206cBeep(1);

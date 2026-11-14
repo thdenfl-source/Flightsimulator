@@ -240,6 +240,7 @@ export async function run(page, t) {
     const body = document.getElementById('b206-coll-pop-body').getBoundingClientRect();
     o.pop = { show: getComputedStyle(pop).display !== 'none', noOverlap: pr.right <= cr.left, k: +(pr.width / (175 / 1600 * ck.clientWidth)).toFixed(2),
               cdu: Math.abs(mini.getBoundingClientRect().left - ck.getBoundingClientRect().left - 896 / 1600 * ck.clientWidth) < 2, body: body.height > 100 };
+    o.order = [...document.querySelectorAll('#b206-coll-pop-body text[y="248"]')].sort((a, b) => +a.getAttribute('x') - +b.getAttribute('x')).map(e => e.textContent).join('·');
     _b206cRead(); o.start = `${b206c.th}/${pcd()}`;
     const _ut = uiToast, toasts = []; uiToast = (m, ...r) => { toasts.push(m); return _ut(m, ...r); };
     b206cThrottle(-1); o.idle = `${b206c.th}/${pcd()}`;                         // FULL → IDLE
@@ -263,6 +264,7 @@ export async function run(page, t) {
     `누르면 크게(종전의 ${CL.pop.k}배) · 오른쪽 버튼 줄과 겹치지 않는다`);
   t.ok(CL.start === 'FULL/FLY' && CL.idle === 'IDLE/IDLE' && CL.noRel === 'IDLE/IDLE' && CL.off === 'OFF/OFF/false',
     `스로틀 FULL → IDLE → (IDLE REL 을 눌러야) OFF — 엔진 레버가 따른다 (${CL.start} · ${CL.idle} · ${CL.noRel} · ${CL.off})`);
+  t.ok(CL.order === 'FULL·IDLE·OFF', `스로틀 눈금은 FULL · IDLE · OFF 순(왼→오른) (${CL.order})`);
   t.ok(CL.single.toasts.length && CL.single.toasts.every(m => !/두 엔진|OEI|ENG [12]/.test(m)) && CL.single.lbl === 'ENG IDLE' && CL.single.st2 === 'IDLE',
     `단발 — 스로틀 IDLE 문구가 엔진 하나로 나온다 (${CL.single.toasts.join(' / ')} · ${CL.single.lbl})`);
   t.ok(CL.idleNoStart === 'IDLE/OFF' && CL.cranking === 'OFF' && CL.started === 'true/IDLE' && CL.full === 'FULL/FLY',
