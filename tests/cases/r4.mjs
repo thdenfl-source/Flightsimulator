@@ -82,9 +82,13 @@ export async function run(page, t) {
     const st = iosState();
     o.wb = { gal: Math.round(b206FuelGal()), cargo: b206Wb.cargo, st: !!st.wb && Math.round(st.wb.gal) === 20 && st.wb.cg > 0 };
     b206FuelSet(g0); Object.assign(b206Wb, w0);
+    // Bell 은 ASE · HOVER FOLLOW 가 없다 — AFCAU 감시가 돌아도 꺼진 채
+    aseOn = true; afcsGuard(); o.ase = aseOn === false;
+    aseOn = true; aseFollowing = false; aseHoverFollow({ roll: 0.5, pitch: 0.5, yaw: 0, coll: 0 }, false, 0, 0); o.hf = aseFollowing === false; aseOn = false;
     return o;
   });
   t.ok(Math.abs(B.len - 11.8) < 0.3 && Math.abs(B.rotorD - 10.16) < 0.1 && B.blades === 2 && B.tailY < 0 && B.width < 2.2 && Math.abs(B.z0) < 0.05 && B.acLen === 12,
     `Bell 3D 모형 — 전장 ${B.len.toFixed(2)}m · 주로터 ${B.rotorD.toFixed(2)}m 2날개 · 꼬리로터 왼쪽 · 스키드 폭 ${B.width.toFixed(2)}m · 바닥 0m`);
+  t.ok(B.ase && B.hf, 'Bell — ASE(안정화) · HOVER FOLLOW 가 돌지 않는다(AFCS 없는 기체)');
   t.ok(B.wb.gal === 20 && B.wb.cargo === 250 && B.wb.st, '교관 화면 — Bell 연료 · 무게를 바꾸고 상태(연료 · 총중량 · 무게중심)를 받는다');
 }
