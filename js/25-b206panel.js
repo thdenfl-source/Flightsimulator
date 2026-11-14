@@ -265,7 +265,7 @@ function b206Tach(g, cx, cy, R, nr, n2) {
 // 7) N1(GAS PRODUCER) — 큰 바늘 0~110% · 작은 창 바늘이 1의 자리(0~10)
 function b206N1(g, cx, cy, R, n1) {
   b206RoundGauge(g, cx, cy, R, {
-    lo: 0, hi: 110, maj: 10, min: 2, lab: v => v % 20 === 0 ? String(v) : null, fs: R * 0.17,
+    lo: 0, hi: 110, maj: 10, min: 2, lab: v => v % 20 === 0 ? String(v) : null, fs: R * 0.98 * 0.17,
     bands: [[B206_LIM.n1Idle, B206_LIM.n1Max, B206_COL.green]], redline: [B206_LIM.n1Max], val: _cl(n1, 0, 112),
     title: ['GAS PROD', '% RPM'], ty: -0.32,
   });
@@ -481,8 +481,8 @@ function b206RoomH(canvas, H, ctrlH) {
   } catch (e) { /* 재지 못하면 FCP 높이로 */ }
   return Math.max(40, room);
 }
-// ── 3D 화면에 겹친 계기(계기 ON · 07-sim.js pfdOverlayDraw) — 비행에 꼭 필요한 다섯만 ──
-//   왼쪽 가운데 TORQUE · 위 가운데 자세계(+ 아래 볼) · 위 오른쪽 고도계 · 아래 가운데 방향지시계(DG) · 아래 오른쪽 승강계
+// ── 3D 화면에 겹친 계기(계기 ON · 07-sim.js pfdOverlayDraw) — 비행에 꼭 필요한 여섯만 ──
+//   위 왼쪽 속도계 · 아래 왼쪽 TORQUE · 위 가운데 자세계(+ 아래 볼) · 위 오른쪽 고도계 · 아래 가운데 방향지시계(DG) · 아래 오른쪽 승강계
 //   그림 좌표 600×420(B206_OV_W×B206_OV_H) — 칸에 맞춰 줄인다. 판은 살짝 비쳐 3D 가 보인다
 const B206_OV_W = 600, B206_OV_H = 420;
 function b206OverlayDraw(g, x, y, w, h) {
@@ -495,7 +495,8 @@ function b206OverlayDraw(g, x, y, w, h) {
   g.fillStyle = 'rgba(127,138,147,0.82)';                               // 판(살짝 비침)
   g.beginPath(); g.roundRect ? g.roundRect(0, 0, B206_OV_W, B206_OV_H, 14) : g.rect(0, 0, B206_OV_W, B206_OV_H); g.fill();
   const R = 88;
-  b206RoundGauge(g, 104, 210, R, { lo: 0, hi: 120, maj: 10, min: 5, lab: q => q % 20 === 0 ? String(q) : null, fs: R * 0.17,
+  b206Airspeed(g, 104, 108, R, v.ias);                                  // 속도계 — 토크 위
+  b206RoundGauge(g, 104, 318, R * 0.98, { lo: 0, hi: 120, maj: 10, min: 5, lab: q => q % 20 === 0 ? String(q) : null, fs: R * 0.98 * 0.17,
     bands: [[0, B206_LIM.tqCont, B206_COL.green], [B206_LIM.tqCont, B206_LIM.tqMax, B206_COL.yellow]], redline: [B206_LIM.tqMax], val: _cl(v.tq, 0, 125), title: ['TORQUE', 'PERCENT'] });
   b206Attitude(g, 300, 108, R, v.pit, v.bnk);
   // 볼 — 자세계 아래(미끄럼 · 외활)

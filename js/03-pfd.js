@@ -113,7 +113,7 @@ function drawPFD() {
   // Bell 206 — 유리 PFD 대신 아날로그 계기판(25-b206panel.js)을 FCP 위 칸에 그린다
   if (typeof acIs === 'function' && acIs('b206') && typeof b206Draw === 'function') {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    // 3D 화면에 겹친 계기(계기 ON)는 다섯만 — 자세계/볼 · 고도계 · 승강계 · 토크 · 방향지시계
+    // 3D 화면에 겹친 계기(계기 ON)는 여섯만 — 속도계 · 자세계/볼 · 고도계 · 승강계 · 토크 · 방향지시계
     if (cvs.id === 'pfd-ov-cvs' && typeof b206OverlayDraw === 'function') { b206OverlayDraw(ctx, 0, 0, W, H); return; }
     ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
     b206Draw(ctx, 0, 0, W, b206RoomH(cvs, H, CTRL_H));

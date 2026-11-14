@@ -95,7 +95,7 @@ export async function run(page, t) {
   // 기종 바꾸기 — 적어 두기만(다시 불러오지 않고)
   const P = await page.evaluate(() => { setAircraftType('aw189', false); const a = localStorage.getItem('shineAc'); setAircraftType('b206', false); return { a, b: localStorage.getItem('shineAc'), bad: setAircraftType('xx', false) }; });
   t.ok(P.a === 'aw189' && P.b === 'b206' && P.bad === false, '기종 고르기는 localStorage(shineAc)에 적힌다 · 없는 기종은 거절');
-  // ── 3D 화면에 겹친 계기(계기 ON) — 자세계/볼 · 고도계 · 승강계 · 토크 · 방향지시계 다섯만 ──
+  // ── 3D 화면에 겹친 계기(계기 ON) — 속도계 · 자세계/볼 · 고도계 · 승강계 · 토크 · 방향지시계 여섯만 ──
   const OV = await page.evaluate(() => {
     const c = document.createElement('canvas'); c.id = 'pfd-ov-cvs'; c.width = 600; c.height = 420; c.dataset.noFcp = '1';
     const names = ['b206Attitude', 'b206Altimeter', 'b206Vsi', 'b206Dg', 'b206RoundGauge', 'b206Airspeed', 'b206Tach', 'b206Rmi', 'b206Turn', 'b206CdiGauge', 'b206DualGauge', 'b206N1', 'b206Clock'];
@@ -103,15 +103,15 @@ export async function run(page, t) {
     names.forEach(k => { n[k] = 0; orig[k] = window[k]; });
     // 최상위 function 은 window 의 것 — 바꿔 끼워 몇 번 불리는지 센다
     names.forEach(k => { window[k] = function (...a) { n[k]++; return orig[k].apply(this, a); }; });
-    const titles = []; const oT = CanvasRenderingContext2D.prototype.fillText;
-    CanvasRenderingContext2D.prototype.fillText = function (x, ...a) { titles.push(String(x)); return oT.call(this, x, ...a); };
+    const titles = [], pos = {}; const oT = CanvasRenderingContext2D.prototype.fillText;
+    CanvasRenderingContext2D.prototype.fillText = function (x, px, py, ...a) { titles.push(String(x)); if (!pos[x]) { const m = this.getTransform(); pos[x] = { x: m.a * px + m.e, y: m.d * py + m.f }; } return oT.call(this, x, px, py, ...a); };
     try { drawPfdTo(c); } finally { names.forEach(k => { window[k] = orig[k]; }); CanvasRenderingContext2D.prototype.fillText = oT; }
-    return { n, torque: titles.includes('TORQUE') };
+    return { n, torque: titles.includes('TORQUE'), asiAbove: pos.AIRSPEED && pos.TORQUE && Math.abs(pos.AIRSPEED.x - pos.TORQUE.x) < 5 && pos.AIRSPEED.y < pos.TORQUE.y };
   });
   const N = OV.n;
-  t.ok(N.b206Attitude === 1 && N.b206Altimeter === 1 && N.b206Vsi === 1 && N.b206Dg === 1 && N.b206RoundGauge === 1 && OV.torque,
-    '계기 ON — 3D 화면에 자세계(+볼) · 고도계 · 승강계 · 토크 · 방향지시계 다섯이 뜬다');
-  t.ok(['b206Airspeed', 'b206Tach', 'b206Rmi', 'b206Turn', 'b206CdiGauge', 'b206DualGauge', 'b206N1', 'b206Clock'].every(k => N[k] === 0),
+  t.ok(N.b206Attitude === 1 && N.b206Altimeter === 1 && N.b206Vsi === 1 && N.b206Dg === 1 && N.b206RoundGauge === 1 && OV.torque && N.b206Airspeed === 1 && OV.asiAbove,
+    '계기 ON — 3D 화면에 속도계(토크 위) · 자세계(+볼) · 고도계 · 승강계 · 토크 · 방향지시계 여섯이 뜬다');
+  t.ok(['b206Tach', 'b206Rmi', 'b206Turn', 'b206CdiGauge', 'b206DualGauge', 'b206N1', 'b206Clock'].every(k => N[k] === 0),
     `그 밖의 계기(속도계 · 회전계 · RMI · 선회계 · CDI · 엔진 계기 · 시계)는 겹친 계기에 그리지 않는다 (${JSON.stringify(N)})`);
   // ── LOWER CONSOLE — 항공전자 스택(오디오 · GNS 430 · COMM · NAV · ADF · 트랜스폰더 — 26-b206radio.js) ──
   const RD = await page.evaluate(async () => {
