@@ -2,15 +2,15 @@
 // ══════════════════════════════════════════════════════
 // 35-kuhgrip.js — 흰수리(KUH-1CG) 컬렉티브 머리 · 사이클릭 그립 — Cockpit Mode(15-heli3d.js #sim-ckpit)
 //   컬렉티브: CDU 오른쪽에 Bell 컬렉티브와 같은 크기로 작게 → 누르면 크게 띄워 조작한다.
-//     HOOK EMER REL · CURSOR · OEI CONT(표시만) · LDG LT(EXT · ON/OFF · RET) · SRCH CTR(4방향 — 서치라이트 방향) ·
-//     COLL TRIM(DN · UP — 누르는 동안 VS ±100fpm 씩, FCP COLLECTIVE TRIM 과 같다) · SRCH LT(ON · OFF)
-//   사이클릭: 조종석 그림의 좌 · 우 사이클릭 자리에 실기 모양으로 그리고, 누르면 크게 띄워 조작한다.
-//     DISENGAG(AP 모두 해제) · 그 아래 검은 단추(FORCE TRIM — 누르는 동안) · 4-WAY BEEP(4방향 트림) ·
-//     앞 위 단추(PTT — 누르는 동안 송신) · G/SPEED(GSPD) · DMS · BEEP CTL · 빨간 단추(표시만)
+//     HOOK EMER REL · CURSOR(표시만) · OEI(한 엔진일 때 누를 때마다 HI 2.5분 ↔ LOW 10분 정격) · LDG LT(EXT · ON/OFF · RET) ·
+//     SRCH CTR(4방향 — 서치라이트 방향) · COLL TRIM(DN · UP — 누르는 동안 VS ±100fpm 씩) · SRCH LT(누르면 ON/OFF · 위아래로 광도)
+//   사이클릭: 좌 · 우 사이클릭 자리에 실기 모양으로(두 좌석 같은 방향) 그리고, 누르면 크게 띄워 조작한다.
+//     DISENGAG(AP 상위모드 해제) · 빨간 단추(AP FAST CUT OFF — AP1 · AP2 끊음) · 4-WAY BEEP(4방향 트림 · 실기처럼 왼쪽 30° 틀어짐) ·
+//     손잡이 앞 위부터 PTT(실기는 뒤편) · FORCE TRIM RELEASE(누르는 동안) · G/SPEED · DMS · BEEP CTL · 검은 단추(표시만)
 //   빛: 착륙등은 ENV 의 착륙등(env.ldg)과 같은 것 — 펼친 만큼(EXT) 아래로 비춘다. 서치라이트는 SRCH CTR 로 돌린 쪽을 비춘다(29-env.js envBeams).
 // ══════════════════════════════════════════════════════
 const KG_SRCH = { azMax: 120, elMin: 5, elMax: 80, azRate: 45, elRate: 25 };
-const kgLt = { ext: 0, srch: false, az: 0, el: 30 };     // 착륙등 펼침(0 접힘 ~ 1 다 펼침) · 서치라이트 켬 · 방향(기수 기준 ° · 아래로 °)
+const kgLt = { ext: 0, srch: false, az: 0, el: 30, br: 1 };     // 착륙등 펼침(0 접힘 ~ 1 다 펼침) · 서치라이트 켬 · 방향(기수 기준 ° · 아래로 °) · 광도(0.2~1)
 function kgOn() { return !(typeof acB206 === 'function' && acB206()); }
 function _kgToast(t, k) { try { uiToast(t, k || '', 2200); } catch (e) { _swallow(e); } }
 function _kgLdg() { return typeof env !== 'undefined' && !!env.ldg; }
@@ -25,10 +25,18 @@ function kgBeams() {
   if (!kgOn()) return [];
   const out = [];
   if (_kgLdg()) out.push({ az: 0, down: 14 + 31 * kgLt.ext, k: 1 });
-  if (kgLt.srch) out.push({ az: kgLt.az, down: kgLt.el, k: 0.9 });
+  if (kgLt.srch) out.push({ az: kgLt.az, down: kgLt.el, k: 0.9 * kgLt.br });
   return out;
 }
 
+// AP FAST CUT OFF(사이클릭 빨간 단추) — AP1 · AP2 를 한 번에 끊는다(하부 콘솔 AFCAU 의 AP1 · AP2 OFF 와 같다 — 상위모드 · 자세 유지 모두 풀리고 세 축 SAS)
+function kgApCut() {
+  try { if (typeof afcsReleaseAll === 'function') afcsReleaseAll(); } catch (e) { _swallow(e); }
+  try { if (typeof ovhdSet === 'function') { ovhdSet('ap1', 'IN'); ovhdSet('ap2', 'IN'); } } catch (e) { _swallow(e); }
+  try { if (typeof afcsGuard === 'function') afcsGuard(); } catch (e) { _swallow(e); }
+  try { if (typeof fdrNote === 'function') fdrNote('AP FAST CUT OFF — AP1 · AP2 끊음', 'warn'); } catch (e) { _swallow(e); }
+  _kgToast('AP CUT OFF — AP1 · AP2 끊음(다시 켜려면 하부 콘솔 AFCAU 의 AP1 · AP2)', 'warn');
+}
 // ── 누르는 동안 이어지는 조작(COLL TRIM · SRCH CTR · 4-WAY BEEP · FORCE TRIM · PTT · LDG EXT/RET) ──
 let _kgHold = null;
 function _kgHoldStop() {
@@ -63,16 +71,23 @@ function kgPress(k) {
     case 'ldgExt': return _kgHoldStart(k, () => { if (!_kgLdg()) kgLdgSet(true); kgLt.ext = Math.min(1, kgLt.ext + _kgDt() / 1.5); }, 0, 50);   // 1.5초에 다 펼친다
     case 'ldgRet': return _kgHoldStart(k, () => { kgLt.ext = Math.max(0, kgLt.ext - _kgDt() / 1.5); }, 0, 50);
     case 'ldgOn': return kgLdgSet(!_kgLdg());
-    case 'srchLt': return kgSrchSet(!kgLt.srch);
+    case 'srchLt': return kgSrchSet(!kgLt.srch);                                   // 누르면(PUSH) ON · OFF
+    case 'srchBrt': case 'srchDim': { const s = k === 'srchBrt' ? 0.1 : -0.1;        // 위아래로 밀면 광도
+      return _kgHoldStart(k, () => { kgLt.br = Math.round(Math.max(0.2, Math.min(1, kgLt.br + s)) * 10) / 10; }, 350, 150); }
+    case 'oei': {                                                                   // 한 엔진 상황 — 누를 때마다 OEI HI(2.5분) ↔ LOW(10분)
+      if (typeof simOeiToggle !== 'function') return _kgToast('OEI 출력 전환은 SIM 모드에서 씁니다');
+      simOeiToggle(); return kgRender(); }
+    case 'apCut': try { kgApCut(); } catch (e) { _swallow(e); } return kgRender();
     case 'srchL': case 'srchR': case 'srchU': case 'srchD': { const d = k.slice(-1); return _kgHoldStart(k, () => _kgSrchMove(d), 0, 50); }
     // 사이클릭
     case 'apDis': try { afcsReleaseAll(); _kgToast('AP DISENGAGE — 상위 모드 모두 해제'); } catch (e) { _swallow(e); } return kgRender();
+    // FORCE TRIM RELEASE — 누르는 동안 트림을 풀고, 놓으면 그 자세가 새 트림
     case 'ftr': return _kgHoldStart(k, () => { if (!_kgHold || !_kgHold.on) { forceTrim(); if (_kgHold) _kgHold.on = true; } }, () => forceTrimRelease(), 1e9);
     case 'beepL': case 'beepR': case 'beepF': case 'beepA': { const d = k.slice(-1); return _kgHoldStart(k, () => { if (!_kgHold || !_kgHold.on) { startTrimHold(d); if (_kgHold) _kgHold.on = true; } }, () => stopTrimHold(), 1e9); }
     case 'ptt': return _kgHoldStart(k, () => { if (!_kgHold || !_kgHold.on) { if (typeof radioPtt === 'function') radioPtt(true); if (_kgHold) _kgHold.on = true; } }, () => { if (typeof radioPtt === 'function') radioPtt(false); }, 1e9);
     case 'gspd': try { toggleGspd(); } catch (e) { _swallow(e); } return kgRender();
     default: {
-      const nm = { hook: 'HOOK EMER REL', cursor: 'CURSOR', oei: 'OEI CONT', cross: '조절 노브', dms: 'DMS', beepCtl: 'BEEP CTL', red: '빨간 단추' }[k] || k;
+      const nm = { hook: 'HOOK EMER REL', cursor: 'CURSOR', cross: '조절 노브', dms: 'DMS', beepCtl: 'BEEP CTL', blk: '검은 단추' }[k] || k;
       return _kgToast(`${nm} — 이 시뮬레이터에서는 아직 연결되지 않은 단추입니다`);
     }
   }
@@ -93,7 +108,7 @@ const _kgDefs = id => `<defs>
   </defs>`;
 // 컬렉티브 머리(첫 사진) — 175×380
 function kgCollSvg(id = '') {
-  const ldg = _kgLdg(), ext = kgLt.ext, srch = kgLt.srch;
+  const ldg = _kgLdg(), ext = kgLt.ext, srch = kgLt.srch, oeiOn = typeof simEng !== 'undefined' && simEng === 1 && typeof simOeiMode !== 'undefined';
   const hot = k => _kgOnK(k) ? '#5d636a' : '#222528';
   const arrow = (k, pts) => `<polygon data-kg="${k}" points="${pts}" fill="${_kgOnK(k) ? '#7dff3a' : '#e9ecef'}" style="cursor:pointer"/>`;
   return `<svg viewBox="0 0 175 380" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;display:block;overflow:visible">${_kgDefs(id)}
@@ -109,7 +124,8 @@ function kgCollSvg(id = '') {
   <g data-kg="hook" style="cursor:pointer"><circle cx="27" cy="44" r="10" fill="#111" stroke="#000"/><circle cx="27" cy="44" r="7.5" fill="url(#kg-red${id})"/></g>
   <g data-kg="cross" style="cursor:pointer"><circle cx="55" cy="38" r="11" fill="url(#kg-knob${id})" stroke="#000"/><rect x="51" y="29" width="8" height="18" rx="2" fill="#0e0f10"/><rect x="46" y="34" width="18" height="8" rx="2" fill="#0e0f10"/></g>
   ${_kgLab(98, 19, 'CURSOR', 7)}<g data-kg="cursor" style="cursor:pointer">${_kgRibbed(98, 42, 17, id)}</g>
-  ${_kgLab(148, 19, 'OEI', 7)}${_kgLab(148, 27, 'CONT', 7)}<g data-kg="oei" style="cursor:pointer"><circle cx="148" cy="44" r="10" fill="#111" stroke="#000"/><circle cx="148" cy="44" r="7.5" fill="url(#kg-red${id})"/></g>
+  ${_kgLab(148, 19, 'OEI', 7)}${_kgLab(148, 27, 'CONT', 7)}<g data-kg="oei" style="cursor:pointer"><circle cx="148" cy="44" r="10" fill="#111" stroke="${oeiOn ? '#ffd23a' : '#000'}" stroke-width="${oeiOn ? 2.5 : 1}"/><circle cx="148" cy="44" r="7.5" fill="url(#kg-red${id})"/></g>
+  ${oeiOn ? _kgLab(148, 64, 'OEI ' + simOeiMode, 6.5, 'middle', '#ffd23a') : ''}
   <!-- LDG LT(EXT · ON/OFF · RET) -->
   ${_kgLab(27, 76, 'LDG LT', 7)}${_kgLab(27, 84, 'EXT', 6.5)}${_kgLab(27, 150, 'RET', 6.5)}
   <rect x="15" y="88" width="24" height="54" rx="3" fill="#0b0c0d" stroke="#666"/>
@@ -134,12 +150,12 @@ function kgCollSvg(id = '') {
   ${[0, 1, 2, 3].map(i => `<line x1="109" y1="${94 + i * 4}" x2="121" y2="${94 + i * 4}" stroke="#555"/><line x1="109" y1="${120 + i * 4}" x2="121" y2="${120 + i * 4}" stroke="#555"/>`).join('')}
   <!-- SRCH LT(ON · OFF) -->
   ${_kgLab(153, 74, 'SRCH', 6.5)}${_kgLab(153, 82, 'LT', 6.5)}
-  <g data-kg="srchLt" style="cursor:pointer"><circle cx="152" cy="112" r="13" fill="url(#kg-knob${id})" stroke="#000"/>
-    <rect x="149" y="${srch ? 99 : 112}" width="6" height="13" rx="2" fill="${srch ? '#ffd23a' : '#9aa0a6'}" /></g>
-  ${_kgLab(160, 97, 'ON', 6, 'start', srch ? '#ffd23a' : '#888')}${_kgLab(160, 134, 'OFF', 6, 'start', srch ? '#888' : '#e9ecef')}
+  <rect data-kg="srchBrt" x="141" y="93" width="22" height="12" rx="3" fill="${_kgOnK('srchBrt') ? '#5d636a' : '#222528'}" stroke="#555" style="cursor:pointer"/>${_kgLab(152, 102, '▲ BRT', 5.5, 'middle', '#cfd4d9')}
+  <g data-kg="srchLt" style="cursor:pointer"><circle cx="152" cy="116" r="10" fill="url(#kg-knob${id})" stroke="${srch ? '#ffd23a' : '#000'}" stroke-width="${srch ? 2.5 : 1}"/>${_kgLab(152, 118, 'PUSH', 4.5, 'middle', srch ? '#ffd23a' : '#9aa0a6')}</g>
+  <rect data-kg="srchDim" x="141" y="127" width="22" height="12" rx="3" fill="${_kgOnK('srchDim') ? '#5d636a' : '#222528'}" stroke="#555" style="cursor:pointer"/>${_kgLab(152, 136, '▼ DIM', 5.5, 'middle', '#cfd4d9')}
   <!-- 상태 -->
   ${_kgLab(88, 186, `LDG ${ldg ? 'ON' : 'OFF'} · EXT ${Math.round(ext * 100)}%`, 7.5, 'middle', ldg ? '#7dff3a' : '#9aa0a6')}
-  ${_kgLab(88, 198, `SRCH ${srch ? 'ON' : 'OFF'} ${Math.abs(Math.round(kgLt.az))}°${kgLt.az >= 0 ? 'R' : 'L'} · ${Math.round(kgLt.el)}°↓`, 7.5, 'middle', srch ? '#ffd23a' : '#9aa0a6')}
+  ${_kgLab(88, 198, `SRCH ${srch ? 'ON' : 'OFF'} ${Math.round(kgLt.br * 100)}% · ${Math.abs(Math.round(kgLt.az))}°${kgLt.az >= 0 ? 'R' : 'L'} · ${Math.round(kgLt.el)}°↓`, 7.5, 'middle', srch ? '#ffd23a' : '#9aa0a6')}
 </svg>`;
 }
 // 사이클릭 그립(둘째 사진) — 200×380 · flip 이면 좌우 뒤집어(왼쪽 좌석)
@@ -152,28 +168,31 @@ function kgCyclicSvg(id = '', flip = false) {
   <!-- 손잡이(앞으로 굽은 몸통) -->
   <path d="M70 120 C64 170 70 205 92 232 C112 258 116 300 108 380 H150 C156 300 150 250 140 222 C130 192 136 150 150 108 Z" fill="url(#kg-tube${id})" stroke="#000" stroke-width="1.5"/>
   <path d="M86 140 C84 175 92 205 108 228" fill="none" stroke="#5a6067" stroke-width="1" opacity="0.6"/>
-  <!-- 앞 위 단추(PTT) · G/SPEED -->
-  <g data-kg="ptt" style="cursor:pointer"><circle cx="128" cy="176" r="12" fill="#0b0c0d" stroke="${hot('ptt', '#444')}" stroke-width="${_kgOnK('ptt') ? 3 : 1.5}"/><circle cx="128" cy="176" r="8" fill="url(#kg-knob${id})"/></g>
-  ${_kgLab(128, 198, 'PTT', 6.5, 'middle', '#cfd4d9')}
-  <g data-kg="gspd" style="cursor:pointer"><circle cx="138" cy="232" r="13" fill="#0b0c0d" stroke="${gs ? '#00e5ff' : '#444'}" stroke-width="${gs ? 3 : 1.5}"/><circle cx="138" cy="232" r="8.5" fill="url(#kg-knob${id})"/></g>
-  ${_kgLab(140, 260, 'G/SPEED', 6.5, 'middle', gs ? '#00e5ff' : '#cfd4d9', -70)}
+  <!-- 손잡이 앞 — 위에서부터 PTT(실기는 뒤편 · 쓰기 좋게 앞으로) · FORCE TRIM RELEASE · G/SPEED -->
+  <g data-kg="ptt" style="cursor:pointer"><circle cx="124" cy="158" r="12" fill="#0b0c0d" stroke="${hot('ptt', '#444')}" stroke-width="${_kgOnK('ptt') ? 3 : 1.5}"/><circle cx="124" cy="158" r="8" fill="url(#kg-knob${id})"/></g>
+  ${_kgLab(106, 161, 'PTT', 6.5, 'end', '#cfd4d9')}
+  <g data-kg="ftr" style="cursor:pointer"><circle cx="128" cy="198" r="12" fill="#0b0c0d" stroke="${hot('ftr', '#444')}" stroke-width="${_kgOnK('ftr') ? 3 : 1.5}"/><circle cx="128" cy="198" r="8" fill="url(#kg-knob${id})"/></g>
+  ${_kgLab(110, 197, 'FTR', 6.5, 'end', '#cfd4d9')}${_kgLab(110, 204, 'REL', 6.5, 'end', '#cfd4d9')}
+  <g data-kg="gspd" style="cursor:pointer"><circle cx="138" cy="240" r="13" fill="#0b0c0d" stroke="${gs ? '#00e5ff' : '#444'}" stroke-width="${gs ? 3 : 1.5}"/><circle cx="138" cy="240" r="8.5" fill="url(#kg-knob${id})"/></g>
+  ${_kgLab(140, 268, 'G/SPEED', 6.5, 'middle', gs ? '#00e5ff' : '#cfd4d9', -70)}
   <!-- 머리판 -->
   <path d="M12 128 C6 82 30 50 82 40 C120 32 160 26 184 44 C196 56 196 80 182 90 C158 104 122 106 92 120 C66 132 46 156 28 156 C17 155 13 142 12 128 Z" fill="url(#kg-plate${id})" stroke="#000" stroke-width="2"/>
   <path d="M18 127 C14 86 36 57 84 47 C120 39 156 34 178 50 C188 59 188 77 177 84" fill="none" stroke="#5a6067" stroke-width="1"/>
   ${[[30, 92], [70, 58], [104, 46], [96, 108]].map(([x, y]) => _kgScrew(x, y)).join('')}
-  <!-- DISENGAG(흰) · FORCE TRIM(검은) -->
+  <!-- DISENGAG(흰) · 검은 단추 -->
   ${_kgLab(30, 108, 'DISENGAG', 6, 'middle', '#cfd4d9', -60)}
   <g data-kg="apDis" style="cursor:pointer"><circle cx="44" cy="118" r="12" fill="#0b0c0d" stroke="#000"/><circle cx="44" cy="118" r="9" fill="url(#kg-white${id})"/></g>
-  <g data-kg="ftr" style="cursor:pointer"><circle cx="32" cy="142" r="10" fill="#0b0c0d" stroke="${hot('ftr', '#333')}" stroke-width="${_kgOnK('ftr') ? 3 : 1.5}"/><circle cx="32" cy="142" r="6.5" fill="url(#kg-knob${id})"/></g>
+  <g data-kg="blk" style="cursor:pointer"><circle cx="32" cy="142" r="10" fill="#0b0c0d" stroke="#333" stroke-width="1.5"/><circle cx="32" cy="142" r="6.5" fill="url(#kg-knob${id})"/></g>
   <!-- 4-WAY BEEP -->
   ${_kgLab(70, 66, '4-WAY BEEP', 6.5, 'middle', '#cfd4d9', -28)}
-  <g style="cursor:pointer">${_kgRibbed(82, 88, 15, id)}
+  <!-- 화살표는 실기처럼 왼쪽으로 30° 틀어져 있다(손가락 방향) -->
+  <g style="cursor:pointer">${_kgRibbed(82, 88, 15, id)}<g transform="rotate(-30 82 88)">
     ${beep('beepF', '82,70 77,76 87,76')}${beep('beepA', '82,106 77,100 87,100')}${beep('beepL', '64,88 70,83 70,93')}${beep('beepR', '100,88 94,83 94,93')}
     <rect data-kg="beepF" x="72" y="74" width="20" height="10" fill="transparent"/><rect data-kg="beepA" x="72" y="92" width="20" height="10" fill="transparent"/>
-    <rect data-kg="beepL" x="67" y="78" width="10" height="20" fill="transparent"/><rect data-kg="beepR" x="87" y="78" width="10" height="20" fill="transparent"/></g>
+    <rect data-kg="beepL" x="67" y="78" width="10" height="20" fill="transparent"/><rect data-kg="beepR" x="87" y="78" width="10" height="20" fill="transparent"/></g></g>
   <!-- DMS · 빨간 단추 · BEEP CTL -->
   ${_kgLab(124, 52, 'DMS', 6.5, 'middle', '#cfd4d9')}<g data-kg="dms" style="cursor:pointer">${_kgRibbed(124, 70, 11, id)}<rect x="119" y="65" width="10" height="10" rx="2" fill="#0e0f10"/></g>
-  <g data-kg="red" style="cursor:pointer"><circle cx="156" cy="40" r="10" fill="#111" stroke="#000"/><circle cx="156" cy="40" r="7.5" fill="url(#kg-red${id})"/></g>
+  ${_kgLab(156, 22, 'AP CUT', 5.5, 'middle', '#ff8a80')}<g data-kg="apCut" style="cursor:pointer"><circle cx="156" cy="40" r="10" fill="#111" stroke="#000"/><circle cx="156" cy="40" r="7.5" fill="url(#kg-red${id})"/></g>
   ${_kgLab(170, 60, 'BEEP CTL', 6, 'middle', '#cfd4d9')}<g data-kg="beepCtl" style="cursor:pointer">${_kgRibbed(164, 74, 12, id)}</g>
   </g>
 </svg>`;
@@ -187,7 +206,7 @@ function kgRender() {
   const set = (id, h) => { const el = document.getElementById(id); if (el && el.dataset.h !== h) { el.dataset.h = h; el.innerHTML = h; } };
   set('kg-mini-coll', kgCollSvg('m'));
   set('kg-mini-cycR', kgCyclicSvg('r'));
-  set('kg-mini-cycL', kgCyclicSvg('l', true));
+  set('kg-mini-cycL', kgCyclicSvg('l'));          // 왼쪽 좌석 사이클릭도 같은 방향(실기와 같다)
   const b = document.getElementById('kg-pop-body');
   if (b && kgPopK) set('kg-pop-body', kgPopK === 'coll' ? kgCollSvg('p') : kgCyclicSvg('p'));
 }

@@ -89,7 +89,7 @@ function iosBuild() {
   const R = document.createElement('div'); R.id = 'ios-root';
   const grp = (t, k, opts) => `<div class="ios-row"><span>${t}</span><div>${opts.map(([v, l]) => `<button data-ios="env:${k}:${v}">${l}</button>`).join('')}</div></div>`;
   R.innerHTML = `<h1>🧑‍✈️ 교관 화면 (IOS)</h1><div class="ios-link" data-iosv="link">교육생 창을 기다리는 중…</div>
-    <div class="ios-btns"><button data-ios="rtc">📱 교육생 기기와 잇기(QR 수락)</button></div>
+    <div class="ios-btns"><button data-ios="rtc">📷 교육생 QR 찍어 잇기(다른 기기)</button></div>
     <div class="ios-state" data-iosv="state"></div>
     <div class="ios-btns"><button data-ios="run">▶ 비행</button><button data-ios="pause">❚❚ 멈춤</button><button data-ios="debrief">📋 강평 열기</button></div>
     <h2>고장</h2><div class="ios-btns" data-iosv="fails"></div>
@@ -160,7 +160,7 @@ const HELP_ITEMS = [
   ['🎬 SCN', '시나리오 — 자리 · 고도 · 바람 · 환경 · 연료 · 비행계획 · SAR 를 이름 붙여 저장하고 불러온다. 파일로 내보내 교관끼리 나눈다.'],
   ['🌙 ENV', '환경 — 시간대(주간 · 황혼 · 야간) · 시정 · 비 · NVG · 바다 상태 · 돌풍 · 구름 밑면 · 흰수리 착륙등 · RA 콜아웃.'],
   ['📋 DEBRIEF', '비행 기록 · 강평 — 항적 · 그래프 · 사건 · 다시 보기 · 3D 다시 보기 · A/B 구간 채점 · CSV · 비행 저장 · 보고서(인쇄).'],
-  ['🧑‍✈️ IOS', '교관 화면 — 같은 기기에 교관 창을 따로 열어 고장 · 환경 · 바람 · 메시지 · 시나리오를 건다.'],
+  ['🧑‍✈️ IOS', '교관 화면 — 같은 기기에 교관 창을 따로 열거나, 교관 태블릿으로 메인 기기의 연결 요청 QR 을 찍어 잇는다(메인 기기에서 수락). 고장 · 환경 · 바람 · 메시지 · 시나리오를 건다.'],
   ['🛟 SAR', '요구조자(익수자 · 육상)와 호이스트 구조 훈련. 밤에는 스트로브가 번쩍이고 서치라이트에 반사판이 빛난다.'],
   ['W&B (Bell)', 'Bell 계기판 FUEL QTY 를 누르거나 컬렉티브 창 W&B — 무게 · 무게중심 · 연료 · 호버 성능(HIGE/HOGE).'],
   ['HORN MUTE (Bell)', '계기판 왼쪽 위 — 울리는 경고음(ENG OUT · 낮은 RPM)을 끈다. 경고가 풀리면 다시 산다.'],
@@ -168,7 +168,8 @@ const HELP_ITEMS = [
   ['CAUTION LT TEST · MASTER CAUTION', '누르는 동안 등 · 경고음 점검 / 새 주의등을 알았다고 끈다.'],
   ['ENG FAIL (Bell)', '컬렉티브 큰 창 — 교관 훈련용 엔진 고장. 스로틀을 OFF 로 닫았다가 다시 시동하면 풀린다.'],
   ['STARTER (Bell)', '한 번 누르면 ON · 다시 누르면 OFF. N1 12% 넘어 스로틀 IDLE → 58% 넘어 STARTER OFF. 60초 넘기지 않는다.'],
-  ['컬렉티브 · 사이클릭(흰수리 조종석)', '조종석 그림의 컬렉티브(CDU 오른쪽) · 사이클릭을 누르면 크게 뜬다. 컬렉티브: LDG LT(EXT 펼침 · ON/OFF · RET 접음) · SRCH CTR(서치라이트 방향) · COLL TRIM(DN/UP) · SRCH LT. 사이클릭: DISENGAG(AP 해제) · FORCE TRIM · 4-WAY BEEP · PTT · G/SPEED.'],
+  ['컬렉티브 · 사이클릭(흰수리 조종석)', '조종석 그림의 컬렉티브(CDU 오른쪽) · 사이클릭을 누르면 크게 뜬다. 컬렉티브: LDG LT(EXT 펼침 · ON/OFF · RET 접음) · SRCH CTR(서치라이트 방향) · COLL TRIM(DN/UP) · SRCH LT(누르면 ON/OFF · 위아래 광도) · OEI(한 엔진일 때 HI 2.5분 ↔ LOW 10분). 사이클릭: DISENGAG(AP 해제) · 빨간 단추(AP FAST CUT OFF) · 4-WAY BEEP · 손잡이 앞 PTT · FORCE TRIM RELEASE · G/SPEED.'],
+  ['관제 교신(TWR)', 'TWR 주파수로 PTT 를 놓으면 자리에 맞춰 조종사 말(🎙 PILOT)을 보여 주고 타워가 답한다 — 활주로 밖 지상 활주 요청 · 활주로 위 이륙 · 5NM 관제권 떠남 · 접근(inbound) · 5마일 final 착륙 허가. 비행계획이 없으면 장주(pattern) 비행.'],
   ['PTT (Bell 오디오 패널)', '누르는 동안 MIC 로 고른 무전기로 송신. 가까운 공항 TWR · GND · APP 주파수면 관제가 답한다.'],
   ['SOUND', '로터 소리 — 토크에 따라 크기가 바뀐다. 경고음이 울리면 반으로 줄어든다.'],
   ['🧰 도구', '작은 화면에서는 시나리오 · 환경 · 강평 · 교관 화면 · 설정 · 도움말이 이 메뉴 하나로 모인다.'],

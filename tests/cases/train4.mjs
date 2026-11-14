@@ -130,10 +130,24 @@ export async function run(page, t) {
   const [ios] = await Promise.all([page.waitForEvent('popup'), page.evaluate(() => { window._rtcIce = []; document.getElementById('map-ios-btn').click(); })]);
   await ios.waitForFunction(() => !!document.getElementById('ios-root'), null, { timeout: 20000 });
   await page.evaluate(() => { try { _iosCh.close(); } catch (e) { /* 같은 브라우저 통로는 끊고 WebRTC 로만 */ } });
-  // 교육생이 '연결 요청'(짧은 코드 → QR) · 교관이 '수락'(답 코드 → QR) · 교육생이 답을 받아 잇는다
-  const offer = await page.evaluate(async () => await rtcOffer());
-  const answer = await ios.evaluate(async c => { window._rtcIce = []; try { _iosCh.close(); } catch (e) { /* */ } return await rtcAnswer(c); }, offer);
-  await page.evaluate(async c => await rtcAccept(c), answer);
+  // 중계(ntfy)는 같은 브라우저의 BroadcastChannel 로 바꿔 낀다
+  const fakeRelay = () => { window._rtcIce = []; window._rtcRelay = {
+    sub(topic, on) { const c = new BroadcastChannel('relay-' + topic); c.onmessage = e => on(e.data); return () => c.close(); },
+    pub(topic, text) { const c = new BroadcastChannel('relay-' + topic); c.postMessage(text); setTimeout(() => c.close(), 500); return Promise.resolve(); } }; };
+  await page.evaluate(fakeRelay); await ios.evaluate(fakeRelay);
+  await ios.evaluate(() => { try { _iosCh.close(); } catch (e) { /* */ } });
+  // ① 메인이 연결 요청 → ② 태블릿이 QR 을 찍어 청함 → ③ 메인에 수락/거절 창 — 먼저 거절해 본다
+  const q1 = await page.evaluate(async () => await rtcRequest());
+  const j1 = await ios.evaluate(async q => { const r = await rtcJoin(q); return r.sent; }, q1);
+  await page.waitForFunction(() => { const a = document.getElementById('rtc-ask'); return a && getComputedStyle(a).display === 'flex'; }, null, { timeout: 8000 });
+  await page.click('#rtc-ask [data-rtcask="no"]');
+  await ios.waitForFunction(() => rtc.pc === null, null, { timeout: 8000 }).catch(() => {});
+  const rej = await ios.evaluate(() => rtc.pc === null && [...document.querySelectorAll('.ui-toast')].some(e => /거절/.test(e.textContent)));
+  // 다시 — 이번엔 수락
+  const offer = await page.evaluate(async () => await rtcRequest());
+  const j2 = await ios.evaluate(async q => { const r = await rtcJoin(q); return r.sent && /^SS1\|a\|/.test(r.ans); }, offer);
+  await page.waitForFunction(() => { const a = document.getElementById('rtc-ask'); return a && getComputedStyle(a).display === 'flex'; }, null, { timeout: 8000 });
+  await page.click('#rtc-ask [data-rtcask="ok"]');
   // QR 로 그렸다가 다시 읽어도 같은 코드인가(QR 한 장에 들어가는 길이인가)
   const QR = await page.evaluate(async code => {
     const svg = await qrSvg(code), img = new Image();
@@ -142,7 +156,10 @@ export async function run(page, t) {
     g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.imageSmoothingEnabled = false; g.drawImage(img, 0, 0, c.width, c.height);
     return { len: code.length, back: await qrDecode(g.getImageData(0, 0, c.width, c.height)) === code };
   }, offer);
-  t.ok(/^SS1\|o\|/.test(offer) && /^SS1\|a\|/.test(answer) && QR.len < 600 && QR.back, `연결 요청 코드는 짧게(${QR.len}자) — QR 로 그렸다 읽어도 같다`);
+  t.ok(/^SS2\|shinesong-[a-z0-9]+\|[\w-]+\|SS1\|o\|/.test(offer) && QR.len < 700 && QR.back, `연결 요청 QR(방 · 열쇠 · 요청 코드 ${QR.len}자) — QR 로 그렸다 읽어도 같다`);
+  t.ok(j1 && j2 && rej, '태블릿이 QR 을 찍으면 메인에 수락/거절 창 — 거절하면 태블릿에 알린다');
+  const enc = await page.evaluate(async () => { const k = 'AAAAAAAAAAAAAAAAAAAAAA'; const c = await rtcEnc(k, 'SS1|a|x'); let bad = false; try { await rtcDec('BBBBBBBBBBBBBBBBBBBBBB', c); } catch (e) { bad = true; } return !/SS1/.test(c) && (await rtcDec(k, c)) === 'SS1|a|x' && bad; });
+  t.ok(enc, '중계로 가는 답은 QR 의 열쇠로 암호화(다른 열쇠로는 못 푼다)');
   await page.waitForFunction(() => rtc.open, null, { timeout: 10000 }).catch(() => {});
   await page.evaluate(() => iosSend());
   await ios.waitForFunction(() => /Bell 206/.test(document.querySelector('[data-iosv="state"]').textContent), null, { timeout: 5000 }).catch(() => {});
@@ -151,7 +168,7 @@ export async function run(page, t) {
   await page.waitForTimeout(400);
   const nightR = await page.evaluate(() => { const v = env.tod; envSet({ tod: 'DAY' }); return v; });
   await ios.close();
-  t.ok(R.open && /Bell 206/.test(R.st) && nightR === 'NIGHT', '다른 기기 교관 연결 — 교육생 "연결 요청" · 교관 "수락" 으로 이어져 상태를 받고 · 야간 명령이 닿는다');
+  t.ok(R.open && /Bell 206/.test(R.st) && nightR === 'NIGHT', '다른 기기 교관 연결 — 메인 "연결 요청" · 태블릿이 QR 을 찍고 · 메인이 "수락" 하면 이어져 상태를 받고 · 야간 명령이 닿는다');
 
   const errs = (page.errors || []).filter(e => !/Failed to fetch|NetworkError|tile/i.test(e));
   t.ok(errs.length === 0, '오류 없음' + (errs.length ? ' — ' + errs.slice(0, 2).join(' / ') : ''));
