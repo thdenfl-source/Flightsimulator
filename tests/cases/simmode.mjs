@@ -9,6 +9,8 @@ export const name = 'SIM 모드';
 
 // 가짜 패드 + 네 축 배정(0:롤 1:피치 2:요 3:컬렉티브)
 const SETUP = () => {
+  // 시작하면 활주로에 파킹 브레이크 SET 으로 서 있다(09-cdu.js startStateApply) — SIM 조종을 보려면 푼다
+  try { if (typeof ovhdSet === 'function' && ovhdGet('parkBrake') !== 'RELEASE') ovhdSet('parkBrake', 'RELEASE'); } catch (e) { /* 콘솔이 없으면 그만 */ }
   window._pad = {
     index: 0, id: 'SIM STICK', mapping: '',
     buttons: Array.from({ length: 8 }, () => ({ pressed: false, value: 0 })),

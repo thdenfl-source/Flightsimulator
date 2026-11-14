@@ -772,7 +772,7 @@ function _ckLayer() {
   return L;
 }
 // 화면마다 가로/세로 비율 — 팝아웃 칸을 그 비율로 3D 화면 안에 가득(오른쪽 버튼 줄은 비켜) 맞춘다
-const CKPIT_POP_AR = { ovhd: 1000 / 1240, lcon: 1000 / 1400, pfd: 1.6, sysp: 1000 / 630, map: 1.3, cdu: 354 / 567 };
+const CKPIT_POP_AR = { ovhd: 1000 / 1240, lcon: 1000 / 1400, pfd: 1.2, sysp: 1000 / 630, map: 1.3, cdu: 354 / 567 };
 function _ckPopFit() {
   const p = document.getElementById('ck-pop'), L = document.getElementById('ck-layer');
   if (!p || !L || !p.classList.contains('show')) return;
@@ -803,7 +803,6 @@ function _ckPopOk(k) {
 function ckpitConsoleHost(k, ph) {
   if (k === 'cdu') return null;                           // CDU 는 07-sim.js syncCduOverlay 가 ckpitCduSlot 으로 옮긴다
   // PFD 팝아웃 — FCP 아래 칸에 2D 지도(MAP 창 그대로 · 타일 그림이라 캔버스를 더 만들지 않는다)
-  if (ph === 'pop' && k === 'map' && ckConPop === 'pfd' && _ck3dVisible() && _ckPopOk('map')) { _ckPopEl('pfd'); return document.getElementById('ck-pop-mapslot'); }
   if (ph === 'pop') return ckConPop === k && CKPIT_POP[k] && _ck3dVisible() && _ckPopOk(k) ? _ckPopEl(k) : null;
   if (!CKPIT_CON[k]) return null;
   if (ph === 'mini') return ckpitWanted() ? document.getElementById('ck-mini-' + k) : null;
@@ -832,8 +831,8 @@ function _ckPopEl(k) {
 function _ckPopSync() {
   const p = document.getElementById('ck-pop');
   const on = !!ckConPop && _ck3dVisible();
-  // PFD 팝아웃은 옆으로 편다 — 계기(HSI 까지 다)는 왼쪽, FCP 는 오른쪽(03-pfd.js pfdFcpSide)
-  const pw = document.getElementById('pfd-wrap'), side = on && ckConPop === 'pfd';
+  // PFD 팝아웃은 PFD 창 그대로(계기 위 · 소프트키 · FCP 아래) — 종전의 옆으로 편 배치(fcp-side)와 지도 칸은 쓰지 않는다
+  const pw = document.getElementById('pfd-wrap'), side = false;
   if (pw && pw.classList.contains('fcp-side') !== side) { pw.classList.toggle('fcp-side', side); try { resizePFD(); } catch (e) { _swallow(e); } }
   if (p) { p.classList.toggle('show', on); if (on) { _ckLayer(); _ckPopFit(); } }
   const sim = ((typeof simModeOn !== 'undefined') && simModeOn) || ckCamOn();
@@ -1136,6 +1135,14 @@ function ckPopMapSync() {
 setInterval(() => {
   try { ckpitDraw(); _ckWipeSync(); } catch (e) { _swallow(e); }
   try { ckPopMapSync(); } catch (e) { _swallow(e); }
+  // PFD 팝아웃 — 창으로 옮겨진 뒤 크기가 바뀌면 계기 캔버스를 다시 맞춘다(안 하면 옛 크기로 그려 HSI 아래가 잘린다)
+  try {
+    const pw = document.getElementById('pfd-wrap');
+    if (pw && pw.closest('#ck-pop-host') && pw.clientHeight > 40) {
+      const c = document.getElementById('pfd');
+      if (c && (c.height !== pw.clientHeight || c.width !== pfdCanvasW())) { resizePFD(); drawPFD(); }
+    }
+  } catch (e) { _swallow(e); }
   // Cockpit Mode — 비행이 멈춰 있으면 지도가 카메라를 다시 놓지 않는다(updateAcOnMap 이 안 불린다). 여기서 조종석 시야를 붙든다
   try { if (ckCamOn() && !S.running && typeof _follow3d === 'function' && _ml3d) _follow3d(); } catch (e) { _swallow(e); }
 }, 100);

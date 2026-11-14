@@ -106,9 +106,12 @@ export async function run(page, t) {
   t.ok(re.dlg, '브라우저를 다시 열면 지난 상태가 남아 있어도 출발 공항을 다시 묻는다');
   await tab3.click('.start-apt-skip').catch(() => {});
   await tab3.waitForTimeout(200);
-  const re2 = await tab3.evaluate(() => ({ dlg: !!document.querySelector('.start-apt'), lat: S.lat, lon: S.lon }));
-  t.ok(/이어서/.test(re.skip) && !re2.dlg && Math.abs(re2.lat - snap.lat) < 1e-6 && Math.abs(re2.lon - snap.lon) < 1e-6,
-    `그때 건너뛰면 지난 자리에서 이어 간다 (${re.skip})`);
+  const re2 = await tab3.evaluate(() => { const r = startRunwayOf(START_APT_DEF); return { dlg: !!document.querySelector('.start-apt'), d: distance(S.lat, S.lon, r.lat, r.lon), def: START_APT_DEF,
+    ias: iasModeOn(), park: ovhdGet('parkBrake'), flt: ovhdGet('fltArmSw'), nose: ovhdGet('noseLock') }; });
+  t.ok(!re2.dlg && re2.d < 0.01 && re2.def === 'RKSS',
+    `그때 건너뛰면 지난 자리를 잇지 않고 지난번에 고른 공항(${re2.def}) 활주로 바닥에서 시작한다 (${re.skip})`);
+  t.ok(!re2.ias && re2.park === 'SET' && re2.flt === 'ARMED' && re2.nose === 'LOCK',
+    `상위모드는 모두 풀린 채(IAS 꺼짐) · 파킹 브레이크 SET · 비상 부주 ARMED · 앞바퀴 LOCK 으로 시작한다 (${re2.park} · ${re2.flt} · ${re2.nose})`);
   await tab3.close();
 
   // ── 지도의 내 헬기 = 흰수리 평면도 ──
