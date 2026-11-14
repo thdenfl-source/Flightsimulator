@@ -518,7 +518,11 @@ function simEngApply(quiet) {
   });
   if (_simEngBtn === 1) st[2] = 'OFF';                                   // ENG 버튼 OEI — 2번 고장
   if (_simEngBtn === 0) [1, 2].forEach(n => { if (st[n] === 'FLY') st[n] = 'IDLE'; });
-  const t1 = g('trng1') === 'TRNG', t2 = g('trng2') === 'TRNG';
+  // Bell 206 은 단발 — 엔진이 하나뿐이다. 2번 자리는 1번을 그대로 따라(출력 셈은 AEO 와 같이 MTA 를 다 낸다),
+  // OEI · TRAINING 은 없다.
+  const single = typeof acIs === 'function' && acIs('b206');
+  if (single) st[2] = st[1];
+  const t1 = !single && g('trng1') === 'TRNG', t2 = !single && g('trng2') === 'TRNG';
   const tn = (t1 && !t2) ? 1 : (t2 && !t1) ? 2 : 0;
   let trng = false;
   if (tn && st[1] === 'FLY' && st[2] === 'FLY') { st[tn] = 'TRNG'; trng = true; }   // 훈련은 두 엔진이 다 돌 때만
@@ -531,7 +535,14 @@ function simEngApply(quiet) {
   if (quiet) return;
   const changed = simEng !== prev.eng || st[1] !== prev.s1 || st[2] !== prev.s2;
   let msg = null, kind = 'err';
-  if (t1 && t2 && !changed) msg = 'TRNG 두 스위치가 다 올라가 있어 훈련이 걸리지 않습니다(AEO)';
+  if (single) {
+    if (changed) {
+      const air = simModeOn && !_simOnGnd;
+      if (simEng === 2) { msg = '엔진 정상 — FULL OPEN'; kind = ''; }
+      else if (st[1] === 'OFF') msg = air ? 'ENG OUT — 엔진 꺼짐 · 오토로테이션' : 'ENG OFF — 엔진 꺼짐';
+      else { msg = air ? 'ENG IDLE — 동력 없는 오토로테이션' : 'ENG IDLE'; kind = air ? 'err' : ''; }
+    }
+  } else if (t1 && t2 && !changed) msg = 'TRNG 두 스위치가 다 올라가 있어 훈련이 걸리지 않습니다(AEO)';
   else if (changed) {
     if (trng) msg = `ENG ${simEngFail} TRNG — OEI 훈련(ENG ${simEngFail === 1 ? 2 : 1} 이 2.5분 정격)`;
     else if (simEng === 2) { msg = '두 엔진 정상(AEO)'; kind = ''; }
@@ -554,6 +565,8 @@ function cycleSimEng() {
 }
 // 엔진 상태 이름 — AEO · OEI · ENGn TRNG · ENG OFF · ENG IDLE (3D 창의 ENG 버튼은 없앴다 — 상부 콘솔 TQS · 레버로 정한다)
 function engStateLabel() {
+  if (typeof acIs === 'function' && acIs('b206'))                        // 단발 — 엔진 하나
+    return simEng >= 1 ? 'ENG RUN' : simEngSt[1] === 'OFF' ? 'ENG OFF' : 'ENG IDLE';
   return simEng === 2 ? 'ENG AEO' : simEng === 1 ? (simEngTrng ? `ENG${simEngFail} TRNG` : 'ENG OEI')
        : (simEngSt[1] === 'OFF' && simEngSt[2] === 'OFF') ? 'ENG OFF' : 'ENG IDLE';
 }
