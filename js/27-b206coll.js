@@ -16,7 +16,7 @@ const B206C_TH = ['OFF', 'IDLE', 'FULL'];
 const B206C_GOV_MIN = 97, B206C_GOV_MAX = 100, B206C_REL_S = 3;
 const b206c = { th: 'FULL', run: true, idleRel: 0, start: 0, ldg: false, srch: 'OFF', srchExt: false, beep: 0,
                 // 시동 중의 N1(%) · TOT(°C) · 점화(light-off)됐나 · 연료가 든 지 몇 초 · 이번 시동의 TOT 최고 · HOT START · 엔진 고장(훈련)
-                n1: 0, tot: 30, lit: false, litT: 0, peak: 0, totMax: 0, hot: false, fail: false, stT: 0, stWarn: false, cool: 0 };
+                n1: 0, tot: 30, lit: false, litT: 0, peak: 0, totMax: 0, hot: false, fail: false, stT: 0, stWarn: false, cool: 0, govFail: null, chip: false, chipT: 0, thStuck: false };
 // ── 시동 절차(Bell 206B-3 · Allison 250) ──
 //   ① 스로틀 OFF 로 STARTER 를 누른다 — 스타터만으로 N1 이 오른다(약 22% 까지)
 //   ② N1 12% 넘어서 스로틀을 IDLE 로 연다 — 1초 뒤 점화(light-off), TOT 가 치솟았다(최고 약 760~820°C) 가라앉는다
@@ -41,9 +41,24 @@ function _b206cApply() {
       for (const id of ['fuel1', 'fuel2']) if (ovhdGet(id) !== 'OPEN') ovhdSet(id, 'OPEN');
     }
   } catch (e) { _swallow(e); }
-  if (b206c.th !== 'FULL' || !b206c.run) NR_GOV = 100;                 // 거버너는 FULL OPEN 에서만 맞춘다
+  if ((b206c.th !== 'FULL' || !b206c.run) && !b206c.govFail) NR_GOV = 100;                 // 거버너는 FULL OPEN 에서만 맞춘다
+}
+// ── 엔진 계통 고장(교관 · IOS) ──
+//   govFail 'HI' — 거버너가 N2 를 올린다(가벼운 출력에서 106% 까지 넘친다) · 'LO' — 출력을 걸면 92% 까지 처진다
+//      → GOV RPM INCR/DECR 범위가 90 ~ 108% 로 넓어져 조종사가 손으로 맞춘다(실기의 스로틀 수동 조절)
+//   chip — ENG CHIP 주의등. 10분 넘게 출력을 쓰면(토크 50% 넘게) 엔진이 멎는다 — 가까운 곳에 내려앉는다
+//   thStuck — 스로틀이 그 자리에 굳는다(돌려도 움직이지 않는다)
+function b206cEngFail(kind, on) {
+  if (kind === 'gov') { b206c.govFail = on ? (on === 'LO' ? 'LO' : 'HI') : null; }
+  else if (kind === 'chip') { b206c.chip = !!on; b206c.chipT = 0; }
+  else if (kind === 'thStuck') b206c.thStuck = !!on;
+  const nm = { gov: `거버너 고장(${b206c.govFail || ''})`, chip: 'ENG CHIP', thStuck: '스로틀 고착' }[kind];
+  try { if (typeof fdrNote === 'function') fdrNote(`${nm} ${on ? '걸림' : '풀림'}`, on ? 'err' : ''); } catch (e) { _swallow(e); }
+  if (on) _b206cToast(kind === 'gov' ? `거버너 고장(${b206c.govFail}) — GOV RPM INCR/DECR 로 NR 을 손으로 맞추십시오` : kind === 'chip' ? 'ENG CHIP — 가까운 곳에 내려앉으십시오' : '스로틀 고착 — 스로틀이 움직이지 않습니다', 'err');
+  b206cRender();
 }
 function b206cThrottle(d) {
+  if (b206c.thStuck) { _b206cToast('스로틀 고착 — 움직이지 않습니다', 'err'); return; }
   const i = B206C_TH.indexOf(b206c.th), j = Math.max(0, Math.min(2, i + d));
   if (j === i) return;
   // IDLE → OFF(닫기)는 IDLE REL 을 누른 뒤에만
@@ -77,6 +92,20 @@ function b206cFail(on = true) {
   b206c.fail = !!on;
   if (on) { b206c.run = false; b206c.lit = false; b206c.litT = 0; b206c.n1 = B206S.idleN1 + 20; b206c.tot = 600; _b206cQuietApply(); _b206cToast('엔진 고장(훈련) — ENG OUT · 오토로테이션', 'err'); }
   b206cRender();
+}
+function b206cFailStep(dt) {
+  const c = b206c;
+  if (c.govFail && c.run && c.th === 'FULL' && !c.beep) {
+    let tq = 0; try { tq = tqShown(); } catch (e) { _swallow(e); }
+    // HI: 출력이 낮을수록 더 넘친다 · LO: 출력이 높을수록 더 처진다(1.2%/초로 따라간다)
+    const tgt = c.govFail === 'HI' ? 100 + 6 * Math.max(0, 1 - tq / 80) + 2 : 100 - 8 * Math.max(0, (tq - 30) / 60);
+    NR_GOV += Math.sign(tgt - NR_GOV) * Math.min(Math.abs(tgt - NR_GOV), 1.2 * dt);
+  }
+  if (c.chip && c.run) {
+    let tq = 0; try { tq = tqShown(); } catch (e) { _swallow(e); }
+    if (tq > 50) c.chipT = (c.chipT || 0) + dt;
+    if (c.chipT >= 600) { c.chip = false; _b206cToast('ENG CHIP — 엔진이 멎었습니다', 'err'); b206cFail(true); }
+  }
 }
 // 시동 중 계기 값 — 엔진이 서 있지 않을 때만(돌고 있으면 비행 모델 값) · 25-b206panel.js b206Vals
 function b206cStartVals() {
@@ -144,9 +173,11 @@ setInterval(() => {
   { const wasRun = b206c.run, n = Math.round(b206c.n1); b206cStep(dt); if (b206c.run !== wasRun || Math.round(b206c.n1) !== n) b206cRender(); }
   // 연료가 다 떨어지면 엔진이 멎는다(flameout)
   if (b206c.run && typeof b206FuelGal === 'function' && b206FuelGal() <= 0) { b206c.run = false; _b206cQuietApply(); _b206cToast('연료 소진 — 엔진 정지(FLAMEOUT)', 'err'); b206cRender(); }
+  // 거버너 고장 · CHIP 시간
+  b206cFailStep(dt);
   // 거버너 — FULL OPEN 에서 INCR/DECR 를 누르는 동안 1%/초
   if (b206c.beep && b206c.run && b206c.th === 'FULL') {
-    NR_GOV = Math.max(B206C_GOV_MIN, Math.min(B206C_GOV_MAX, NR_GOV + b206c.beep * dt));
+    NR_GOV = Math.max(b206c.govFail ? 90 : B206C_GOV_MIN, Math.min(b206c.govFail ? 108 : B206C_GOV_MAX, NR_GOV + b206c.beep * dt));
   }
   // 엔진 레버가 다른 데서 바뀌었으면(시작 상태 · 되살림) 따른다
   try {

@@ -529,6 +529,8 @@ function pfdMsgs() {
   } catch (e) { _swallow(e); }
   if (ov('noseLock', 'UNLOCK') === 'LOCK') out.push({ t: 'NLG LOCK', c: PFD_MSG_GREEN });
   if (ov('fltArmSw', 'OFF') === 'ARMED') out.push({ t: 'EMER FLOATS ARMED', c: PFD_MSG_GREEN });
+  // TCAS(33-train4.js) — TA 황색 · RA 빨강(올라라 · 내려라)
+  try { if (typeof tcasState !== 'undefined' && tcasState !== 'CLEAR') out.unshift(tcasState === 'RA' ? { t: tcasRaSense > 0 ? 'TCAS RA CLIMB' : 'TCAS RA DESCEND', c: '#ff3030' } : { t: 'TRAFFIC', c: '#ffb000' }); } catch (e) { _swallow(e); }
   return out;
 }
 
@@ -646,7 +648,10 @@ function drawPfdInset(R0) {
     ctx.textAlign = 'right'; ctx.fillStyle = '#ffffff';
     ctx.fillText('TCAS: TA ONLY', R0.x + R0.w - 4, R0.y + fs + 3);
     ctx.textAlign = 'left'; ctx.fillStyle = '#00e5ff'; ctx.fillText('HDG UP', R0.x + 4, R0.y + fs + 3);
-    ctx.textAlign = 'right'; ctx.fillStyle = '#9aa5b0'; ctx.fillText('NO TRAFFIC', R0.x + R0.w - 4, R0.y + R0.h - 5);
+    // 다른 항공기(33-train4.js 교통) — 없으면 NO TRAFFIC
+    const tg = (typeof tcasTargets === 'function') ? tcasTargets().filter(t => t.r <= 6.5) : [];
+    if (tg.length) { try { tcasDrawInset(ctx, cx, cy, r); } catch (e) { _swallow(e); } }
+    else { ctx.textAlign = 'right'; ctx.fillStyle = '#9aa5b0'; ctx.fillText('NO TRAFFIC', R0.x + R0.w - 4, R0.y + R0.h - 5); }
   }
   ctx.restore();
   ctx.strokeStyle = '#5a6672'; ctx.lineWidth = 1; ctx.strokeRect(R0.x + 0.5, R0.y + 0.5, R0.w - 1, R0.h - 1);

@@ -166,9 +166,12 @@ function b206Ptt(on) {
   const t = b206TxTarget();
   if (on && !t.ok) { try { uiToast(`송신 안 됨 — ${t.why}`, 'warn', 2000); } catch (e) { _swallow(e); } return; }
   _b206Tx = on;
+  if (on && typeof atcPttStart === 'function') atcPttStart();     // 리드백이면 듣기 시작(32-callout.js)
   const ac = _adfAudioCtx(), v = b206r.aud.ivol / 10;
   try {
     if (on && ac && ac.state === 'running') _b206TxSnd = _b206TxNoise(ac, 0.012 * v);
+    // 놓았다 — 그 주파수가 가까운 관제 시설이면 답한다(32-callout.js)
+    if (!on && t.f && typeof atcOnTx === 'function') atcOnTx(t.f);
     if (!on && _b206TxSnd) {
       const s0 = _b206TxSnd; _b206TxSnd = null;
       s0.g.gain.setValueAtTime(0.05 * v, ac.currentTime); s0.g.gain.linearRampToValueAtTime(0, ac.currentTime + 0.15);   // 스켈치 꼬리
