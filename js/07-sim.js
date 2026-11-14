@@ -11,6 +11,7 @@
 let iasNsOn = true;
 function iasModeOn() { return (typeof simModeOn !== 'undefined' && simModeOn) ? simIasOn : iasNsOn; }
 function applyDelta(field, d){
+  afcsCmd();
   switch(field){
     case 'spd':
       // SIM 모드에서는 속도를 곧바로 바꾸지 않는다 — IAS 기준 속도를 옮기고(꺼져 있으면
@@ -96,6 +97,7 @@ function hdgRelease() {
 // NAV · HDG · ALT · CRHT · G/S(무장 포함) · IAS(SIM) · GSPD 를 한꺼번에 푼다.
 // 각 모드를 끌 때와 같은 길로 풀어 자세·상승률이 튀지 않는다.
 function afcsReleaseAll() {
+  afcsCmd();
   try { if (navApOn) toggleNavAp(); } catch (e) { _swallow(e); }   // NAV 를 풀면 HDG 로 넘어간다 — 그것도 푼다
   try { if (hdgSelOn || rollApOn) hdgRelease(); } catch (e) { _swallow(e); }
   try { if (altHoldOn) toggleAltHold(); } catch (e) { _swallow(e); }
@@ -114,6 +116,7 @@ function afcsReleaseAll() {
 // - HDG: 헤딩 프리셀렉트(selHdg)를 현재 기수방위로 + 현재 헤딩 유지(롤 AP)
 // - CRS: 현재 위치에서 NAV 소스(VOR/LOC 국·FMS 활성 웨이포인트)로의 코스 세팅(Direct-To)
 function fcpSync(which) {
+  afcsCmd();
   if (which === 'ias') {
     if (simModeOn) simIasToggle();
     else { iasNsOn = !iasNsOn; if (iasNsOn) selSpd = Math.max(0, Math.round(S.spd)); }   // 한 번 더 누르면 푼다

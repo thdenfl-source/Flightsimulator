@@ -81,6 +81,9 @@ let hdgSelOn = false;              // HDG SEL(선회) 모드 인게이지
 // HDG 선회 방향 래치 — 한 번 돌기 시작하면(+1 오른쪽 · −1 왼쪽) 반대쪽이 더 가까워져도 같은 쪽으로 계속 돈다.
 // HDG 마킹(selHdg)을 도는 반대쪽으로 돌리면 풀려 다시 가까운 쪽을 고른다 · 맞추면(포착) 풀린다. 0 = 없음
 let hdgTurnDir = 0;
+// 조종사가 AFCS 를 손댄 때(ms) — 이 직후(0.6초 안)에 풀린 모드는 스스로 푼 것(경보 없음 · 03-pfd.js 모드 풀림 경보)
+let _pilotInT = -1e9;
+function afcsCmd() { _pilotInT = performance.now(); }
 // AFCS가 뱅크를 지령할 때의 롤 프로파일 — 각가속도를 제한해 롤인/롤아웃이 부드럽게
 // (즉시 뱅크가 서지 않고, 목표 뱅크에 오버슛 없이 사그라들며 들어간다)
 let _rollRate = 0;                 // 현재 롤 각속도(°/s)
@@ -187,6 +190,16 @@ const TQ_PER_FPM = 55;         // 남는 토크 1% 당 상승률(fpm)
 const PW_IND  = 0.70;          // 호버 동력 가운데 유도 동력 몫
 const PW_VI0  = 25;            // 호버 유도속도(kt, H 77% 기준 — 무게가 늘면 √ 로 는다)
 const PW_PAR  = 1.874e-5;      // 유해 동력(% / kt³)
+// ── Bell 206B-3 성능(단발 · 토크 눈금 100% = 변속기 이륙 한계 · 85% = 연속 한계) ──
+// 총중량 3,000lb 표준대기 해면 기준. 호버 IGE 72% · OGE 82% · Vy 52kt · 85% 로 약 115kt · 130kt(VNE) 에 약 100%.
+// 남는 토크 1% 당 상승률 24fpm(Vy 에서 100% 로 약 1,300fpm) · 오토로테이션 강하는 흰수리와 같은 셈(38fpm/%).
+// 밀도고도 6,000ft 까지는 변속기 한계(100%)로 평평하고, 그 위는 엔진 출력이 1,000ft 마다 3.5% 준다.
+// 09-cdu.js 의 PERF 접근자(perfHoverTq · perfMta · perfVy · perfTqForVs …)가 이 값을 쓴다 — 흰수리 성능표는 그대로.
+const B206P = { wt: 3000, hovIge: 72, hovOge: 82, vy: 52, vi0: 14, par: 3.51e-5, fpmUp: 24, fpmDn: 38,
+                vne: 130, vneAlt: 3000, vnePerKft: 3.5, mtaMax: 100, mtaFlatDa: 6000, mtaPerKft: 3.5, tqCont: 85 };
+function acB206() { return typeof acIs === 'function' && acIs('b206'); }
+// 밀도고도(ft) — 고도 · 그 고도의 기온(°C)
+function densityAltFt(altFt, oatC) { return altFt + 120 * (oatC - (15 - 2 * altFt / 1000)); }
 const PW_ETL0 = 12, PW_ETL1 = 24;   // 회전익 특성 '속도·TQ 효율' — 이 사이(전이양력 지대)에서 유도 동력이 한꺼번에 준다
 
 // ── 제자리 호버에 필요한 토크 ──
@@ -247,11 +260,13 @@ function pwViRatio(V, vi0) { const v = V / vi0; return Math.sqrt(Math.sqrt(v ** 
 function tqRequiredAt(spd, bnk) {
   const H = hoverTqRef(), V = Math.abs(spd);
   const n = 1 / Math.cos(Math.min(60, Math.abs(bnk)) * D2R);
-  let r = pwViRatio(V, PW_VI0 * Math.sqrt(Math.max(0.3, H / 77)));
+  const b2 = acB206();
+  let r = b2 ? pwViRatio(V, B206P.vi0 * Math.sqrt(Math.max(0.3, H / B206P.hovOge)))
+             : pwViRatio(V, PW_VI0 * Math.sqrt(Math.max(0.3, H / 77)));
   // 회전익 특성 '속도·TQ 효율' — 전이양력(ETL)은 12~24kt 에서 한꺼번에 나타난다(그 아래는 호버와 같다)
   if ((typeof rcOn === 'function') && simModeOn && rcOn('spdTq'))
     r = 1 + (r - 1) * Math.max(0, Math.min(1, (V - PW_ETL0) / (PW_ETL1 - PW_ETL0)));
-  return H * (PW_IND * r * n * n + (1 - PW_IND) * n) + PW_PAR * V * V * V;
+  return H * (PW_IND * r * n * n + (1 - PW_IND) * n) + (b2 ? B206P.par : PW_PAR) * V * V * V;
 }
 // 그날의 MTA(최대 가용 토크, %) — CDU PERF 의 MTA(30)(09-cdu.js perfMta).
 // PERF 의 고도·온도를 기준으로 지금 고도에서 셈한다. PERF 를 못 읽으면 계기 끝.
@@ -289,9 +304,12 @@ function tqShown() {
   try { if (typeof perfTqForVs === 'function') add = perfTqForVs(S.vs || 0); } catch (e) { _swallow(e); }
   return Math.max(0, Math.min(TQ_MAX, tqRequired() + add));
 }
-function tqOver() { return tqShown() > TQ_RED; }
+// 계기 한계 — 흰수리 100(연속) · 113(빨강), Bell 206 85(연속) · 100(빨강)
+function tqLimitCont() { return acB206() ? B206P.tqCont : TQ_LIMIT; }
+function tqLimitRed()  { return acB206() ? B206P.mtaMax : TQ_RED; }
+function tqOver() { return tqShown() > tqLimitRed(); }
 // 지금 토크가 든 구간 — 'green' · 'yellow' · 'red'
-function tqBand(v = tqShown()) { return v > TQ_RED ? 'red' : v > TQ_LIMIT ? 'yellow' : 'green'; }
+function tqBand(v = tqShown()) { return v > tqLimitRed() ? 'red' : v > tqLimitCont() ? 'yellow' : 'green'; }
 
 function toggleGs() {
   if (gsArmed || gsOn) { gsArmed = false; gsOn = false; gsAutoLatch(); }
@@ -540,6 +558,7 @@ function toggleHoverPage() {
 }
 
 function toggleGspd() {
+  afcsCmd();
   gspdOn = !gspdOn;
   if (gspdOn) {
     // Engage. Seed actuals from controlled body-frame intent (no wind drift)
@@ -587,6 +606,7 @@ function toggleGspd() {
 }
 
 function toggleAltHold() {
+  afcsCmd();
   altHoldOn = !altHoldOn;
   if (altHoldOn) {
     // ALT 버튼은 '지금 고도를 지킨다' — 누른 순간의 고도가 기준이다.
@@ -602,6 +622,7 @@ function toggleAltHold() {
 }
 
 function toggleCrht() {
+  afcsCmd();
   crhtOn = !crhtOn;
   if (crhtOn) {
     // Engage CRHT mode and snap the target to the current RADAR altitude (AGL).
@@ -874,6 +895,7 @@ function toggleObs() {
 }
 
 function toggleNavAp() {
+  afcsCmd();
   navApOn = !navApOn;
   _shipNavPhase = null;              // 함정 접근 차례는 걸 때마다 처음부터 고른다
   { const b = document.getElementById('nav-ap-btn'); if (b) b.classList.toggle('on', navApOn); }   // FCP NAV 는 없앴다(SIMPLE 패널 NAVD CPL)

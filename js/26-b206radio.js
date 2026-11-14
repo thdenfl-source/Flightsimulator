@@ -121,6 +121,43 @@ function b206rAct(a) {
   else if (a === 'gns:cdi') { try { if (typeof setNavSrc === 'function') setNavSrc(navSrc === 'FMS' ? 'NAV1' : 'FMS'); } catch (e) { _swallow(e); } }
   _b206rSync(); _b206rSave(); b206rRender();
 }
+// ── 송신(PTT) — MIC 선택 노브가 고른 무전기로 ──
+//   1 = GNS 430 COM(COM1) · 2 = COMM(COM2) · EMG = COM1 로 곧장(오디오 패널이 고장 나도 송신되는 비상 자리)
+//   3 · 4 = 이 기체엔 없는 무전기(송신 안 됨) · PA = 기내 방송
+// 누르는 동안 사이드톤(자기 목소리 대신 옅은 잡음)이 들리고, 놓으면 짧은 스켈치 꼬리가 난다. 실제 교신은 하지 않는다.
+let _b206Tx = false, _b206TxSnd = null;
+function b206TxTarget() {
+  const m = b206r.aud.mic, g = b206r.gns, c = b206r.com;
+  if (m === '1' || m === 'EMG') return g.on ? { name: m === 'EMG' ? 'EMG COM1' : 'COM1', f: g.com[0], unit: '.b2r-gns', ok: true } : { name: 'COM1', ok: false, why: 'GNS 430 전원이 꺼져 있습니다' };
+  if (m === '2') return c.on ? { name: 'COM2', f: c.f[0], unit: '.b2r-rad', ok: true } : { name: 'COM2', ok: false, why: 'COMM 전원이 꺼져 있습니다' };
+  if (m === 'PA') return { name: 'PA', ok: true };
+  return { name: 'COM' + m, ok: false, why: `COM${m} 무전기가 없는 기체입니다` };
+}
+function _b206TxNoise(ac, vol) {
+  const n = Math.floor(ac.sampleRate * 1), buf = ac.createBuffer(1, n, ac.sampleRate), d = buf.getChannelData(0);
+  for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
+  const src = ac.createBufferSource(), bp = ac.createBiquadFilter(), g = ac.createGain();
+  src.buffer = buf; src.loop = true; bp.type = 'bandpass'; bp.frequency.value = 1200; bp.Q.value = 0.8; g.gain.value = vol;
+  src.connect(bp); bp.connect(g); g.connect(ac.destination); src.start();
+  return { src, g };
+}
+function b206Ptt(on) {
+  on = !!on; if (on === _b206Tx) return;
+  const t = b206TxTarget();
+  if (on && !t.ok) { try { uiToast(`송신 안 됨 — ${t.why}`, 'warn', 2000); } catch (e) { _swallow(e); } return; }
+  _b206Tx = on;
+  const ac = _adfAudioCtx(), v = b206r.aud.ivol / 10;
+  try {
+    if (on && ac && ac.state === 'running') _b206TxSnd = _b206TxNoise(ac, 0.012 * v);
+    if (!on && _b206TxSnd) {
+      const s0 = _b206TxSnd; _b206TxSnd = null;
+      s0.g.gain.setValueAtTime(0.05 * v, ac.currentTime); s0.g.gain.linearRampToValueAtTime(0, ac.currentTime + 0.15);   // 스켈치 꼬리
+      s0.src.stop(ac.currentTime + 0.16);
+    }
+  } catch (e) { _swallow(e); }
+  b206rRender();
+}
+function b206TxOn() { return _b206Tx; }
 // ── ADF 가 잡는 NDB — USE 주파수의 NDB(20-navaids.js NAVAID_NDB) 가운데 가장 가까운 국(수신 거리 안) ──
 // ADF 가 꺼졌거나 ANT 모드(방위 없이 듣기만)면 null — RMI 의 ADF 바늘(25-b206panel.js)이 이것을 가리킨다
 const ADF_RANGE_NM = 150;
@@ -223,6 +260,11 @@ function b206rRender() {
   // ① 오디오 패널
   for (const row of ['spk', 'phn']) for (const k of Object.keys(b206r.aud[row])) tog(`[data-act2="aud:${row}:${k}"]`, b206r.aud[row][k]);
   set('mic', b206r.aud.mic); set('ivol', String(b206r.aud.ivol));
+  // 송신 중 — 오디오 패널 TX 와 그 무전기 표시창의 TX
+  { const t = b206TxTarget(); set('tx', _b206Tx ? `TX ${t.name}${t.f ? ' ' + t.f.toFixed(3) : ''}` : '');
+    host.querySelectorAll('.b2r-gns, .b2r-rad').forEach(u => u.classList.remove('tx'));
+    if (_b206Tx && t.unit) { const u = host.querySelector(t.unit); if (u) u.classList.add('tx'); }
+    tog('[data-ptt]', _b206Tx); }
   // ② GNS 430
   const g = b206r.gns, scr = host.querySelector('[data-b2r="gns"]');
   if (scr) {
@@ -284,7 +326,8 @@ function b206rBuild() {
     `<div class="b2r-unit b2r-aud"><div class="b2r-brand">BENDIX/KING</div>${knob('ivol', 'sm', 'INTERCOM VOL — 왼쪽 − · 오른쪽 +')}<div class="b2r-ivl">INTERCOM <b data-b2r="ivol"></b></div>` +
     `<div class="b2r-arow t">${ab('spk')}</div><div class="b2r-alab">1 COM 2 COM 3 COM 4 &nbsp; 1 NAV 2 &nbsp; DME&nbsp; MKR &nbsp; 1 ADF 2</div><div class="b2r-arow b">${ab('phn')}</div>` +
     `<div class="b2r-sl t">SPEAKER</div><div class="b2r-sl b">PHONE</div>` +
-    `${knob('mic', 'mic', 'MIC 선택 — EMG · 1 · 2 · 3 · 4 · PA')}<div class="b2r-micl">MIC <b data-b2r="mic"></b></div></div>` +
+    `${knob('mic', 'mic', 'MIC 선택 — EMG · 1 · 2 · 3 · 4 · PA')}<div class="b2r-micl">MIC <b data-b2r="mic"></b></div>` +
+    `<button class="b2r-ptt" data-ptt="1" title="PTT — 누르고 있는 동안 송신(MIC 로 고른 무전기)">PTT</button><div class="b2r-txl" data-b2r="tx"></div></div>` +
     // ② GNS 430
     `<div class="b2r-unit b2r-gns"><div class="b2r-brand">GARMIN</div><div class="b2r-model">GNS 430</div>` +
     `${pwr('gns:pwr', 'GNS 430 전원(COM VOL)')}<button class="b2r-gk cflip" data-act2="gns:cflip">C↔</button><button class="b2r-gk vflip" data-act2="gns:vflip">V↔</button>` +
@@ -308,6 +351,11 @@ function b206rBuild() {
     `${knob('xmode', 'mode', '모드 — OFF · SBY · TST · ON · ALT')}<div class="b2r-xml">OFF SBY TST ON ALT</div><div class="b2r-xmv" data-b2r="xmode"></div>` +
     `<div class="b2r-xk">${[0, 1, 2, 3].map(i => knob('xd' + i, 'xd', `코드 ${i + 1}째 자리 — 왼쪽 − · 오른쪽 +`)).join('')}</div>` +
     `<button class="b2r-wb vfr" data-act2="xp:vfr">VFR</button><div class="b2r-tag xptag">XPNDR</div></div>`;
+  // PTT — 누르고 있는 동안 송신
+  host.querySelectorAll('[data-ptt]').forEach(b => {
+    b.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); try { b.setPointerCapture(e.pointerId); } catch (er) { /* 그만 */ } b206Ptt(true); });
+    ['pointerup', 'pointercancel', 'lostpointercapture'].forEach(ev => b.addEventListener(ev, () => b206Ptt(false)));
+  });
   host.addEventListener('click', e => {
     const b = e.target.closest('[data-act2]'); if (!b) return;
     e.stopPropagation(); b206rAct(b.dataset.act2);

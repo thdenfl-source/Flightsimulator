@@ -1842,6 +1842,29 @@ function act(name, ...args) {
                       wt: parseFloat(perfData.weight) || 16000 };
         return _hovCache;
     };
+    // ── Bell 206B-3 — 흰수리 성능표 대신 01-state.js B206P 의 단발 성능 ──
+    // 기온은 PERF 의 기온(그 고도 기준)에서 표준 감률로 지금 고도까지 옮긴다. 무게는 3,000lb.
+    // (CDU 가 없는 기체라 PERF 화면 없이 지금 고도에서 바로 셈한다)
+    const _b2 = () => typeof acB206 === 'function' && acB206();
+    const _b2Oat = alt => { const t0 = parseFloat(perfData.temp), a0 = parseFloat(perfData.alt) || 0;
+                            return (Number.isFinite(t0) ? t0 : 15) - 2 * (alt - a0) / 1000; };
+    const _b2Da = altFt => { const a = Number.isFinite(altFt) ? Math.max(0, altFt) : Math.max(0, S.alt || 0); return densityAltFt(a, _b2Oat(a)); };
+    const _awHov = perfHoverTq, _awVy = perfVy, _awMta = perfMta, _awTqVs = perfTqForVs, _awVsTq = perfVsForTq, _awWt = perfWeightLb;
+    perfHoverTq = function () {
+        if (!_b2()) return _awHov();
+        const k = Math.pow(B206P.wt / 3000, 1.5) * (1 + 0.015 * Math.max(-3000, _b2Da()) / 1000);   // 무게^1.5 · 밀도고도
+        return { oge: B206P.hovOge * k, ige: B206P.hovIge * k, wt: 16000 * B206P.wt / 3000 };
+    };
+    perfVy = function () { return _b2() ? B206P.vy : _awVy(); };
+    perfMta = function (altFt) {
+        if (!_b2()) return _awMta(altFt);
+        const da = _b2Da(altFt);
+        return Math.max(0, B206P.mtaMax - B206P.mtaPerKft * Math.max(0, da - B206P.mtaFlatDa) / 1000);
+    };
+    perfTqForVs = function (vs) { return _b2() ? (vs > 0 ? vs / B206P.fpmUp : vs / B206P.fpmDn) : _awTqVs(vs); };
+    perfVsForTq = function (d) { return _b2() ? (d > 0 ? d * B206P.fpmUp : d * B206P.fpmDn) : _awVsTq(d); };
+    // SIM 의 무게 보정 · 자동회전 NR 표는 흰수리 무게(lb) 눈금이라, 같은 비율의 흰수리 무게로 넘긴다
+    perfWeightLb = function () { return _b2() ? 16000 * B206P.wt / 3000 : _awWt(); };
     })();
 
     // --- High-fidelity SVG Icons ---

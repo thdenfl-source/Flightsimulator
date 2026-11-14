@@ -906,11 +906,55 @@ function drawFMA(x, y, w) {
         ctx.stroke();
       }
     } else if (F) _fmaFlash[i] = null;
+    // 풀림 — 황색 칸 깜빡임(5초)
+    _fmaDropCheck(i, on, modes[i], now);
+    const D = _fmaDrop[i];
+    if (D && !D.vol && now - D.t < FMA_DROP_MS) {
+      if (Math.floor((now - D.t) / 400) % 2 === 0) {
+        ctx.strokeStyle = '#ffb000'; ctx.lineWidth = 2; ctx.strokeRect(bx + 1.5, Y0 + 1.5, cellW - 3, BOX_H - 3);
+        ctx.fillStyle = '#ffb000'; ctx.fillText(D.label, bx + cellW / 2, ty);
+      }
+    } else if (D) _fmaDrop[i] = null;
   }
   ctx.restore();
 }
 const FMA_FLASH_MS = 10000;
 const _fmaPrev = [], _fmaFlash = [null, null, null];
+// HDG 선회 방향(화살표) — HDG 가 잡고 돌고 있을 때만
+function pfdHdgTurnDir() {
+  try { return (hdgSelOn && rollApOn && !navApOn && !gspdOn && typeof hdgTurnDir !== 'undefined') ? hdgTurnDir : 0; } catch (e) { return 0; }
+}
+// ── 모드 풀림 경보 — 걸려 있던 칸이 꺼지면 5초 동안 칸 전체가 황색으로 깜빡이고 '딩동'이 울린다 ──
+// 조종사가 막 누르거나 키를 친 직후(0.6초 안)에 풀린 것은 스스로 푼 것으로 보아 경보하지 않는다(소리 · 깜빡임 없음).
+const FMA_DROP_MS = 5000;
+const _fmaDrop = [null, null, null], _fmaOnPrev = [];
+let _fmaAc = null;   // _pilotInT · afcsCmd — 01-state.js
+['pointerdown', 'keydown', 'click'].forEach(ev => window.addEventListener(ev, () => {
+  _pilotInT = performance.now();
+  try { if (_fmaAc && _fmaAc.state === 'suspended') _fmaAc.resume(); } catch (e) { _swallow(e); }
+}, { capture: true, passive: true }));
+function afcsDropTone() {
+  try {
+    if (!_fmaAc) { const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return; _fmaAc = new AC(); }
+    const ac = _fmaAc; if (ac.state !== 'running') return;
+    [[880, 0], [660, 0.22]].forEach(([f, dt]) => {
+      const o = ac.createOscillator(), g = ac.createGain(), t = ac.currentTime + dt;
+      o.type = 'sine'; o.frequency.value = f; g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.08, t + 0.02); g.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
+      o.connect(g); g.connect(ac.destination); o.start(t); o.stop(t + 0.4);
+    });
+  } catch (e) { _swallow(e); }
+}
+let afcsDropCount = 0, afcsAlertCount = 0;   // 풀린 횟수 · 그 가운데 경보(스스로 푼 것 빼고)
+function _fmaDropCheck(i, on, label, now) {
+  if (_fmaOnPrev[i] && !on) {
+    const vol = now - _pilotInT < 600;
+    _fmaDrop[i] = { t: now, label, vol };
+    afcsDropCount++;
+    if (!vol) { afcsAlertCount++; afcsDropTone(); }
+  }
+  if (on) _fmaDrop[i] = null;
+  _fmaOnPrev[i] = on;
+}
 
 // ────────────────────────────────────────
 // CRHT ALTITUDE DISPLAY  (bottom-right of PFD)
@@ -1857,12 +1901,29 @@ function drawHSI(x, y, w, h, cxC) {
     ctx.lineTo(-bw * 0.35, -bR + bh); ctx.lineTo(-bw, -bR + bh);
     ctx.closePath(); ctx.fill();
     ctx.restore();
-    // 선택 헤딩 수치(컴퍼스 상단)
+    // 선택 헤딩 수치(컴퍼스 상단) — 선회 중이면 도는 쪽 화살표(▶ 오른쪽 · ◀ 왼쪽 · 07-sim.js hdgTurnDir)
+    const tDir = pfdHdgTurnDir();
     ctx.fillStyle = hdgSelOn ? '#00e5ff' : '#4a6a72';
     ctx.font = `bold ${Math.max(9, r * 0.115)}px Helvetica Neue, Arial, sans-serif`;
     ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-    ctx.fillText(fmtA(toMag(selHdg)) + '°', -r + 2, -r + 6);
+    const hTxt = fmtA(toMag(selHdg)) + '°';
+    ctx.fillText(hTxt, -r + 2, -r + 6);
+    if (tDir) ctx.fillText(tDir > 0 ? ' ▶' : ' ◀', -r + 2 + ctx.measureText(hTxt).width, -r + 6);
     ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+    // 컴퍼스 안쪽 호 — 기수(위)에서 도는 쪽으로 남은 각만큼(최대 60°) · 끝에 화살촉
+    if (tDir) {
+      let e = normAS(selHdg - Hi);
+      if (Math.sign(e) === -tDir && Math.abs(e) > HDG_ROLLOUT_DEG) e += 360 * tDir;
+      const span = Math.min(60, Math.abs(e)) * D2R * tDir, ar = r * 0.84, a0 = -Math.PI / 2, a1 = a0 + span;
+      if (Math.abs(span) > 2 * D2R) {
+        ctx.save(); ctx.strokeStyle = '#00e5ff'; ctx.fillStyle = '#00e5ff'; ctx.lineWidth = Math.max(1.5, r * 0.02);
+        ctx.beginPath(); ctx.arc(0, 0, ar, Math.min(a0, a1), Math.max(a0, a1)); ctx.stroke();
+        const hx = Math.cos(a1) * ar, hy = Math.sin(a1) * ar, tx = -Math.sin(a1) * tDir, ty = Math.cos(a1) * tDir, hs = Math.max(5, r * 0.06);
+        ctx.beginPath(); ctx.moveTo(hx + tx * hs, hy + ty * hs);
+        ctx.lineTo(hx - ty * hs * 0.5, hy + tx * hs * 0.5); ctx.lineTo(hx + ty * hs * 0.5, hy - tx * hs * 0.5); ctx.closePath(); ctx.fill();
+        ctx.restore();
+      }
+    }
   }
 
   // ── CRS arrow + CDB (Course Deviation Bar) ──
