@@ -1,6 +1,6 @@
 'use strict';
 // ══════════════════════════════════════════════════════
-// Bell 206B-3 컬렉티브 머리(스위치 상자) + 스로틀 그립 — Bell Cockpit Mode(15-heli3d.js #sim-ckpit) 아래 오른쪽
+// Bell 206B-3 컬렉티브 머리(스위치 상자) + 스로틀 그립 — Bell Cockpit Mode(15-heli3d.js #sim-ckpit) 하부 콘솔 오른쪽(흰수리 CDU 자리)에 작게, 누르면 크게(120%)
 // 실기 사진대로: 위 스위치 상자
 //   SRCH LT(ON · OFF · STOW) 단추 · LDG LT(ON · OFF) 토글 · GOV RPM(INCR · DECR) 비프 스위치
 //   SRCH LT 방향(EXT · RETR) 단추 · STARTER 누름 단추
@@ -91,7 +91,7 @@ function _b206cSvg() {
   const twist = { OFF: -26, IDLE: 0, FULL: 26 }[th];                   // 그립 줄무늬가 돌아간 만큼(좌우로 비켜 그린다)
   const lab = (x, y, t, s = 8, a = 'middle', c = '#e9ecef') => `<text x="${x}" y="${y}" font-size="${s}" fill="${c}" text-anchor="${a}" font-family="Arial" font-weight="bold">${t}</text>`;
   const ldgY = b206c.ldg ? 40 : 60;
-  return `<svg viewBox="0 0 175 360" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;display:block;overflow:visible">
+  return `<svg viewBox="0 0 175 380" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;display:block;overflow:visible">
   <defs>
     <linearGradient id="bc-box" x1="0" x2="1" y1="0" y2="1"><stop offset="0" stop-color="#34373b"/><stop offset="1" stop-color="#121315"/></linearGradient>
     <linearGradient id="bc-tube" x1="0" x2="1"><stop offset="0" stop-color="#0c0d0e"/><stop offset="0.35" stop-color="#4a4e53"/><stop offset="0.55" stop-color="#2a2d30"/><stop offset="1" stop-color="#08090a"/></linearGradient>
@@ -143,31 +143,68 @@ function _b206cSvg() {
 </svg>`;
 }
 function b206cRender() {
-  const el = document.getElementById('b206-coll');
-  if (!el) return;
   const h = _b206cSvg();
-  if (el.dataset.h !== h) { el.dataset.h = h; el.innerHTML = h; }
+  for (const id of ['b206-coll', 'b206-coll-pop-body']) {
+    const el = document.getElementById(id);
+    if (el && el.dataset.h !== h) { el.dataset.h = h; el.innerHTML = h; }
+  }
 }
-// Bell Cockpit Mode 조종석 그림(#sim-ckpit)에 붙인다 — 그림 좌표 1600×900 의 (1285, 520) · 175×360
+// ── 자리 ── 조종석 그림(#sim-ckpit · 1600×900) 의 하부 콘솔 오른쪽 — 흰수리의 CDU 칸 자리(15-heli3d.js CKPIT_CDU 근처)에 작게.
+// 작은 것은 누르면 크게 띄울 뿐(조작은 큰 창에서) — 다른 화면(MFD · 콘솔)처럼. 큰 창은 지금 그림 크기(175×360 그림 단위)의 120%,
+// 오른쪽 3D 버튼 줄(#ctl3d)과 겹치지 않게 그 왼쪽에 세로 가운데로 띄운다(#ck-layer 위).
+const B206C_MINI = { x: 896, y: 808, w: 80, h: 165 }, B206C_DESIGN = { w: 175, h: 360 }, B206C_POP_K = 1.2;
+let b206cPopOn = false;
 function _b206cMount() {
   const ck = document.getElementById('sim-ckpit');
-  if (!ck || document.getElementById('b206-coll')) return;
-  const el = document.createElement('div'); el.id = 'b206-coll';
-  el.style.cssText = `position:absolute;left:${1285 / 16}%;top:${520 / 9}%;width:${175 / 16}%;height:${360 / 9}%;pointer-events:auto;touch-action:none;z-index:2`;
-  ck.appendChild(el);
-  el.addEventListener('pointerdown', e => {
-    const t = e.target.closest('[data-bc]'); if (!t) return;
-    e.preventDefault(); e.stopPropagation();
-    const k = t.dataset.bc;
-    if (k === 'grip') { const r = t.getBoundingClientRect(); b206cThrottle(e.clientX < r.left + r.width / 2 ? -1 : 1); }
-    else if (k === 'idlerel') b206cIdleRel();
-    else if (k === 'starter') b206cStarter(true);
-    else if (k === 'incr') b206cBeep(1);
-    else if (k === 'decr') b206cBeep(-1);
-    else b206cToggle(k);
-  });
-  const up = () => { if (b206c.start) b206cStarter(false); if (b206c.beep) b206cBeep(0); };
-  ['pointerup', 'pointercancel', 'pointerleave'].forEach(ev => el.addEventListener(ev, up));
-  el.addEventListener('wheel', e => { e.preventDefault(); e.stopPropagation(); if (e.target.closest('[data-bc="grip"]')) b206cThrottle(e.deltaY > 0 ? -1 : 1); }, { passive: false });
-  _b206cRead(); b206cRender();
+  if (ck && !document.getElementById('b206-coll')) {
+    const el = document.createElement('div'); el.id = 'b206-coll';
+    const m = B206C_MINI;
+    el.style.cssText = `position:absolute;left:${m.x / 16}%;top:${m.y / 9}%;width:${m.w / 16}%;height:${m.h / 9}%;pointer-events:auto;cursor:zoom-in;z-index:2`;
+    el.title = 'COLLECTIVE — 눌러 크게(스로틀 · STARTER · GOV RPM)';
+    el.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); b206cPop(true); });
+    ck.appendChild(el);
+    _b206cRead(); b206cRender();
+  }
+  _b206cPopSync();
+}
+function b206cPop(on) { b206cPopOn = on === undefined ? !b206cPopOn : !!on; _b206cPopSync(); }
+function _b206cPopSync() {
+  const ck = document.getElementById('sim-ckpit');
+  const show = b206cPopOn && !!ck && ck.classList.contains('show') && ck.offsetWidth > 0;
+  let p = document.getElementById('b206-coll-pop');
+  if (!show) { if (p) p.style.display = 'none'; if (!ck || !ck.classList.contains('show')) b206cPopOn = false; return; }
+  const L = typeof _ckLayer === 'function' ? _ckLayer() : null;
+  if (!L) return;
+  if (!p) {
+    p = document.createElement('div'); p.id = 'b206-coll-pop';
+    p.innerHTML = '<div class="bcp-bar"><span>COLLECTIVE</span><button type="button" class="sim-btn bcp-x" title="닫기">✕</button></div><div id="b206-coll-pop-body"></div>';
+    p.querySelector('.bcp-x').addEventListener('click', e => { e.stopPropagation(); b206cPop(false); });
+    const body = p.querySelector('#b206-coll-pop-body');
+    body.addEventListener('pointerdown', e => {
+      const t = e.target.closest('[data-bc]'); if (!t) return;
+      e.preventDefault(); e.stopPropagation();
+      const k = t.dataset.bc;
+      if (k === 'grip') { const r = t.getBoundingClientRect(); b206cThrottle(e.clientX < r.left + r.width / 2 ? -1 : 1); }
+      else if (k === 'idlerel') b206cIdleRel();
+      else if (k === 'starter') b206cStarter(true);
+      else if (k === 'incr') b206cBeep(1);
+      else if (k === 'decr') b206cBeep(-1);
+      else b206cToggle(k);
+    });
+    const up = () => { if (b206c.start) b206cStarter(false); if (b206c.beep) b206cBeep(0); };
+    ['pointerup', 'pointercancel', 'pointerleave'].forEach(ev => body.addEventListener(ev, up));
+    body.addEventListener('wheel', e => { e.preventDefault(); e.stopPropagation(); if (e.target.closest('[data-bc="grip"]')) b206cThrottle(e.deltaY > 0 ? -1 : 1); }, { passive: false });
+  }
+  if (p.parentElement !== L) L.appendChild(p);
+  // 크기 — 종전 그림 크기(조종석 그림 좌표 175×360)의 120% · 위치 — 오른쪽 버튼 줄 왼쪽 12px · 세로 가운데
+  const cw = ck.clientWidth, chh = ck.clientHeight, bar = 26;
+  let w = B206C_DESIGN.w / 1600 * cw * B206C_POP_K, h = B206C_DESIGN.h / 900 * chh * B206C_POP_K;
+  const k = Math.min(1, (L.clientHeight - 16 - bar) / h); w *= k; h *= k;          // 화면이 낮으면 줄인다
+  const lr = L.getBoundingClientRect(), btn = document.getElementById('ctl3d');
+  const br = btn && btn.offsetWidth > 0 ? btn.getBoundingClientRect() : null;
+  const rightEdge = br ? br.left - lr.left - 12 : L.clientWidth - 140;
+  const st = { display: 'flex', width: Math.round(w) + 'px', height: Math.round(h + bar) + 'px',
+               left: Math.round(Math.max(6, rightEdge - w)) + 'px', top: Math.round(Math.max(6, (L.clientHeight - h - bar) / 2)) + 'px' };
+  for (const kk in st) if (p.style[kk] !== st[kk]) p.style[kk] = st[kk];
+  if (!document.getElementById('b206-coll-pop-body').dataset.h) b206cRender();
 }
