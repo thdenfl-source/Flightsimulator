@@ -172,7 +172,7 @@ function aseAutoTrim(k) {
 function aseHoverFollow(a, onGnd, rollRate, pitRate) {
   const was = aseFollowing;
   aseFollowing = false;
-  if (aseOn && simModeOn && !onGnd && Math.abs(S.spd) < ASE_HF_KT) {
+  if (aseOn && simModeOn && !onGnd && Math.abs(S.spd) < ASE_HF_KT && !(typeof acB206 === 'function' && acB206())) {   // Bell 은 HOVER FOLLOW 가 없다
     const axes = [
       // 블로우 백·횡류 효과 몫은 트림에 넣지 않는다(넣으면 그 위에 또 얹힌다 — FORCE TRIM 과 같다)
       ['roll', a.roll, rollRate, !simAfcsLat(), S.bnk - (simTf || 0), SIM_TRIM_MAX_ROLL],

@@ -68,7 +68,8 @@ function afcsGuard() {
   if (mid || pit) rel(() => gspdOn, toggleGspd);
   // ASE(안정화 — 14-simmode.js) — AFCAU 의 AP · TRIM FEEL 이 켜져 있으면 돈다(버튼은 없앴다) · HOVER FOLLOW 는 AUTO TRIM 도 본다
   try {
-    const want = !A.fail && !A.sas[0] && !A.sas[1] && !A.sas[2];
+    // Bell 206 은 AFCS · ASE 가 없다 — 안정화도 HOVER FOLLOW 도 돌지 않는다
+    const want = !(typeof acB206 === 'function' && acB206()) && !A.fail && !A.sas[0] && !A.sas[1] && !A.sas[2];
     if (typeof aseOn !== 'undefined' && aseOn !== want) { aseOn = want; if (!want) aseFollowing = false; try { updateAseBtns(); } catch (e) { _swallow(e); } }
   } catch (e) { _swallow(e); }
   if (did) { try { updateHoverBtns(); updateApInhibit(); } catch (e) { _swallow(e); } }
