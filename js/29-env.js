@@ -156,17 +156,19 @@ function _envDist(la1, lo1, la2, lo2) { const n = (la2 - la1) * 110540, e = (lo2
 function envBeams() {
   const out = []; let agl = 1000; try { agl = radarAltFt(); } catch (e) { _swallow(e); }
   const aglM = Math.max(1, agl * 0.3048), hd = S.hdg * _envD2R;
-  const beam = (downDeg, k) => {
+  const beam = (downDeg, k, az = 0) => {
     const dn = Math.max(4, downDeg + (S.pit || 0) * -1);
     const d = aglM / Math.tan(dn * _envD2R); if (!(d > 0) || d > 600) return;
-    const [la, lo] = _envOff(S.lat, S.lon, d * Math.cos(hd), d * Math.sin(hd));
+    const h = hd + az * _envD2R;
+    const [la, lo] = _envOff(S.lat, S.lon, d * Math.cos(h), d * Math.sin(h));
     out.push({ lat: la, lon: lo, r: Math.max(8, d * 0.18), k: k * Math.max(0, 1 - d / 600) });
   };
   try {
     if (typeof acB206 === 'function' && acB206() && typeof b206c !== 'undefined') {
       if (b206c.ldg) beam(14, 1);
       if (b206c.srch === 'ON') beam(b206c.srchExt ? 30 : 20, 0.9);
-    } else if (env.ldg) beam(14, 1);
+    } else if (typeof kgBeams === 'function') kgBeams().forEach(b => beam(b.down, b.k, b.az));   // 흰수리 — 착륙등(펼침) · 서치라이트(35-kuhgrip.js)
+    else if (env.ldg) beam(14, 1);
   } catch (e) { _swallow(e); }
   return out;
 }

@@ -999,13 +999,7 @@ function _ckpitSvg() {
   <rect x="970" y="530" width="64" height="20" rx="3" fill="#3a0c0c" stroke="#0a0b0c"/><text x="1002" y="544" font-size="10" font-family="Arial" font-weight="bold" fill="#8a2a2a" text-anchor="middle">WARNING</text>
   <rect x="756" y="522" width="88" height="36" rx="4" fill="#0d0f11" stroke="#3a3e43" stroke-width="2"/>
   <rect x="764" y="528" width="72" height="24" fill="#123a5a"/><rect x="764" y="540" width="72" height="12" fill="#5a3a1a"/><line x1="764" y1="540" x2="836" y2="540" stroke="#fff" stroke-width="1.2"/>
-  <!-- 사이클릭(좌 · 우) -->
-  <g><path d="M418 900 C418 868 400 852 404 826" stroke="url(#ck-grip)" stroke-width="26" fill="none" stroke-linecap="round"/>
-     <path d="M372 808 C372 788 440 784 446 806 C450 822 436 834 404 834 C380 834 372 824 372 808 Z" fill="url(#ck-grip)" stroke="#0a0b0c" stroke-width="2"/>
-     <circle cx="430" cy="800" r="5" fill="#b01818"/><circle cx="398" cy="804" r="4" fill="#55595e"/></g>
-  <g><path d="M1182 900 C1182 868 1200 852 1196 826" stroke="url(#ck-grip)" stroke-width="26" fill="none" stroke-linecap="round"/>
-     <path d="M1228 808 C1228 788 1160 784 1154 806 C1150 822 1164 834 1196 834 C1220 834 1228 824 1228 808 Z" fill="url(#ck-grip)" stroke="#0a0b0c" stroke-width="2"/>
-     <circle cx="1170" cy="800" r="5" fill="#b01818"/><circle cx="1202" cy="804" r="4" fill="#55595e"/></g>
+  <!-- 사이클릭(좌 · 우) — 실기 그립 모양으로 35-kuhgrip.js 가 그 자리에 그린다(누르면 크게) -->
 </svg>`;
 }
 function _ckpitEl() {

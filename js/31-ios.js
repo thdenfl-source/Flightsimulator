@@ -168,6 +168,7 @@ const HELP_ITEMS = [
   ['CAUTION LT TEST · MASTER CAUTION', '누르는 동안 등 · 경고음 점검 / 새 주의등을 알았다고 끈다.'],
   ['ENG FAIL (Bell)', '컬렉티브 큰 창 — 교관 훈련용 엔진 고장. 스로틀을 OFF 로 닫았다가 다시 시동하면 풀린다.'],
   ['STARTER (Bell)', '한 번 누르면 ON · 다시 누르면 OFF. N1 12% 넘어 스로틀 IDLE → 58% 넘어 STARTER OFF. 60초 넘기지 않는다.'],
+  ['컬렉티브 · 사이클릭(흰수리 조종석)', '조종석 그림의 컬렉티브(CDU 오른쪽) · 사이클릭을 누르면 크게 뜬다. 컬렉티브: LDG LT(EXT 펼침 · ON/OFF · RET 접음) · SRCH CTR(서치라이트 방향) · COLL TRIM(DN/UP) · SRCH LT. 사이클릭: DISENGAG(AP 해제) · FORCE TRIM · 4-WAY BEEP · PTT · G/SPEED.'],
   ['PTT (Bell 오디오 패널)', '누르는 동안 MIC 로 고른 무전기로 송신. 가까운 공항 TWR · GND · APP 주파수면 관제가 답한다.'],
   ['SOUND', '로터 소리 — 토크에 따라 크기가 바뀐다. 경고음이 울리면 반으로 줄어든다.'],
   ['🧰 도구', '작은 화면에서는 시나리오 · 환경 · 강평 · 교관 화면 · 설정 · 도움말이 이 메뉴 하나로 모인다.'],
