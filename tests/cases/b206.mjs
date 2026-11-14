@@ -242,6 +242,7 @@ export async function run(page, t) {
               cdu: Math.abs(mini.getBoundingClientRect().left - ck.getBoundingClientRect().left - 896 / 1600 * ck.clientWidth) < 2, body: body.height > 100 };
     o.order = [...document.querySelectorAll('#b206-coll-pop-body text[y="248"]')].sort((a, b) => +a.getAttribute('x') - +b.getAttribute('x')).map(e => e.textContent).join('·');
     _b206cRead(); o.start = `${b206c.th}/${pcd()}`;
+    { const ra = window.radarAltFt; window.radarAltFt = () => 500; const sp = S.spd; S.spd = 20; o.vib = ckVibAmp(); S.spd = sp; window.radarAltFt = ra; }
     const _ut = uiToast, toasts = []; uiToast = (m, ...r) => { toasts.push(m); return _ut(m, ...r); };
     b206cThrottle(-1); o.idle = `${b206c.th}/${pcd()}`;                         // FULL → IDLE
     o.single = { toasts: toasts.slice(), lbl: engStateLabel(), st2: simEngSt[2] }; uiToast = _ut;
@@ -264,6 +265,7 @@ export async function run(page, t) {
     `누르면 크게(종전의 ${CL.pop.k}배) · 오른쪽 버튼 줄과 겹치지 않는다`);
   t.ok(CL.start === 'FULL/FLY' && CL.idle === 'IDLE/IDLE' && CL.noRel === 'IDLE/IDLE' && CL.off === 'OFF/OFF/false',
     `스로틀 FULL → IDLE → (IDLE REL 을 눌러야) OFF — 엔진 레버가 따른다 (${CL.start} · ${CL.idle} · ${CL.noRel} · ${CL.off})`);
+  t.ok(CL.vib === 0, `Bell 206 — 조종석 시야 진동 묘사가 없다 (진동 ${CL.vib})`);
   t.ok(CL.order === 'FULL·IDLE·OFF', `스로틀 눈금은 FULL · IDLE · OFF 순(왼→오른) (${CL.order})`);
   t.ok(CL.single.toasts.length && CL.single.toasts.every(m => !/두 엔진|OEI|ENG [12]/.test(m)) && CL.single.lbl === 'ENG IDLE' && CL.single.st2 === 'IDLE',
     `단발 — 스로틀 IDLE 문구가 엔진 하나로 나온다 (${CL.single.toasts.join(' / ')} · ${CL.single.lbl})`);
