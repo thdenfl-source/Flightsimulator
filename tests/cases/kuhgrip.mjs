@@ -1,0 +1,62 @@
+// (누르는 동안 이어지는 조작은 흐른 시간만큼 움직인다 — 머리 없는 3D 는 한 장면이 길어 타이머가 드물게 오므로 한 걸음씩 직접 부른다)
+// 흰수리 컬렉티브 · 사이클릭(35-kuhgrip.js) — 조종석에 작게 · 누르면 크게 · LDG LT · SRCH LT · COLL TRIM · 사이클릭 단추
+export const name = '흰수리 컬렉티브 · 사이클릭';
+
+export async function run(page, t) {
+  await page.evaluate(() => { S.spd = 0; S.alt = 300; cockpitStart(); });
+  await page.waitForFunction(() => !!document.getElementById('kg-mini-coll') && document.getElementById('sim-ckpit').classList.contains('show'), null, { timeout: 15000 });
+  const M = await page.evaluate(() => {
+    const ids = ['kg-mini-coll', 'kg-mini-cycL', 'kg-mini-cycR'].map(i => document.getElementById(i));
+    const cdu = document.getElementById('ck-mini-cdu').getBoundingClientRect(), c = ids[0].getBoundingClientRect();
+    return { all: ids.every(e => e && e.querySelector('svg')), right: c.left >= cdu.right - 2, svgCyc: /DISENGAG/.test(ids[2].innerHTML) && /4-WAY BEEP/.test(ids[2].innerHTML) };
+  });
+  t.ok(M.all && M.right && M.svgCyc, '조종석 — 컬렉티브(CDU 오른쪽) · 좌우 사이클릭(실기 그립 모양)을 그린다');
+  // 작은 컬렉티브를 누르면 큰 창
+  const mc = await page.locator('#kg-mini-coll').boundingBox();
+  await page.mouse.click(mc.x + mc.width / 2, mc.y + 20);
+  await page.waitForTimeout(250);
+  const pop = await page.evaluate(() => { const p = document.getElementById('kg-pop'); return { shown: !!p && getComputedStyle(p).display === 'flex', t: p && p.querySelector('.kgp-t').textContent, h: p && p.getBoundingClientRect().height }; });
+  t.ok(pop.shown && pop.t === 'COLLECTIVE' && pop.h > 300, `작은 컬렉티브를 누르면 크게 뜬다 (높이 ${Math.round(pop.h)}px)`);
+  // 큰 창의 SRCH LT 를 실제로 눌러 본다
+  const sl = await page.locator('#kg-pop-body [data-kg="srchLt"]').boundingBox();
+  await page.mouse.click(sl.x + sl.width / 2, sl.y + sl.height / 2); await page.waitForTimeout(150);
+  const on1 = await page.evaluate(() => kgLt.srch);
+  t.ok(on1 === true, 'SRCH LT 를 누르면 서치라이트가 켜진다');
+  const C = await page.evaluate(async () => {
+    const w = ms => new Promise(r => setTimeout(r, ms)), o = {};
+    const ra = window.radarAltFt; window.radarAltFt = () => 300;
+    // LDG LT — ON/OFF · EXT 누르는 동안 펼친다 · RET 로 접는다
+    envSet({ ldg: false }); kgLt.ext = 0;
+    kgPress('ldgOn'); o.ldgOn = env.ldg === true;
+    kgPress('ldgExt'); _kgHold.tl -= 300; _kgHold.step(); _kgHoldStop(); o.ext = kgLt.ext;
+    kgPress('ldgRet'); _kgHold.tl -= 100; _kgHold.step(); _kgHoldStop(); o.ret = kgLt.ext < o.ext;
+    // SRCH CTR — 오른쪽으로 돌리고 아래로
+    kgLt.az = 0; kgLt.el = 30; kgPress('srchR'); _kgHold.tl -= 300; _kgHold.step(); _kgHoldStop(); kgPress('srchD'); _kgHold.tl -= 300; _kgHold.step(); _kgHoldStop();
+    o.az = kgLt.az; o.el = kgLt.el;
+    o.beams = kgBeams().length; o.env = envBeams().length;
+    // 서치라이트 빛은 기수 오른쪽에 떨어진다
+    const b = envBeams().map(x => { const v = _envDist(S.lat, S.lon, x.lat, x.lon); return ((Math.atan2(v.e, v.n) * 180 / Math.PI - S.hdg) % 360 + 360) % 360; });
+    o.right = b.some(a => a > 5 && a < 90);
+    // COLL TRIM — 누르는 동안 VS ±100 씩
+    const ad = applyDelta, calls = []; applyDelta = (f, d) => calls.push([f, d]);
+    kgPress('collUp'); _kgHold.step(); _kgHold.step(); _kgHoldStop(); kgPress('collDn'); _kgHoldStop();
+    applyDelta = ad; o.coll = { up: calls.filter(c => c[0] === 'vs' && c[1] === 100).length, dn: calls.filter(c => c[0] === 'vs' && c[1] === -100).length };
+    // 사이클릭 — DISENGAG · FORCE TRIM · 4-WAY BEEP · PTT · G/SPEED
+    const log = [], keep = { afcsReleaseAll, forceTrim, forceTrimRelease, startTrimHold, stopTrimHold, radioPtt, toggleGspd };
+    afcsReleaseAll = () => log.push('dis'); forceTrim = () => log.push('ftr'); forceTrimRelease = () => log.push('ftr-'); startTrimHold = d => log.push('beep' + d);
+    stopTrimHold = () => log.push('beep-'); radioPtt = on => log.push('ptt' + (on ? '+' : '-')); toggleGspd = () => log.push('gspd');
+    for (const k of ['apDis', 'ftr', 'beepF', 'beepL', 'ptt', 'gspd']) { kgPress(k); await w(60); _kgHoldStop(); }
+    Object.assign(window, keep); afcsReleaseAll = keep.afcsReleaseAll; forceTrim = keep.forceTrim; forceTrimRelease = keep.forceTrimRelease;
+    startTrimHold = keep.startTrimHold; stopTrimHold = keep.stopTrimHold; radioPtt = keep.radioPtt; toggleGspd = keep.toggleGspd;
+    o.cyc = log.join(',');
+    kgPop('cyc'); await w(200); o.cycPop = document.querySelector('#kg-pop .kgp-t').textContent === 'CYCLIC' && !!document.querySelector('#kg-pop-body [data-kg="apDis"]');
+    kgPop(null); await w(200); o.closed = getComputedStyle(document.getElementById('kg-pop')).display === 'none';
+    kgSrchSet(false); envSet({ ldg: false }); window.radarAltFt = ra;
+    return o;
+  });
+  t.ok(C.ldgOn && C.ext > 0.15 && C.ret, `LDG LT — ON/OFF · EXT 로 펼치고(${Math.round(C.ext * 100)}%) RET 로 접는다`);
+  t.ok(C.az > 10 && C.el > 30 && C.beams === 2 && C.env >= 2 && C.right, `SRCH CTR — 서치라이트를 오른쪽 ${Math.round(C.az)}° · 아래 ${Math.round(C.el)}° 로 돌린다 · 착륙등과 함께 빛 무리 ${C.env}개`);
+  t.ok(C.coll.up === 3 && C.coll.dn === 1, `COLL TRIM — 누르는 동안 VS +100 씩 이어진다(UP ${C.coll.up}번 · DN ${C.coll.dn}번)`);
+  t.eq(C.cyc, 'dis,ftr,ftr-,beepF,beep-,beepL,beep-,ptt+,ptt-,gspd', '사이클릭 — DISENGAG · FORCE TRIM · 4-WAY BEEP · PTT(누르는 동안) · G/SPEED');
+  t.ok(C.cycPop && C.closed, '사이클릭을 크게 띄우고 ✕ 로 닫는다');
+}
