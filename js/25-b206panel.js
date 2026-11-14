@@ -3,7 +3,7 @@
 // Bell 206B-3 아날로그 계기판 — 기종이 b206 일 때(00-aircraft.js) PFD 창 · Cockpit 모드 계기판 자리에 그린다.
 // 배치는 실제 훈련 장치 사진을 따른다(5열):
 //   1열 ENG OIL · XMSN OIL · FUEL QTY · LOAD/FUEL PSI   2열 TORQUE · TOT · N1 · 시계
-//   3열 속도계 · 이중 회전계(ROTOR / POWER TURBINE) · RMI(NAV 2)   4열 자세계 · CDI(VOR) · 방향지시계(DG)
+//   3열 속도계 · 이중 회전계(ROTOR / POWER TURBINE) · RMI(ADF · NAV 2)   4열 자세계 · CDI(VOR) · 방향지시계(DG)
 //   5열 고도계 · 승강계 · 선회경사계(2 MIN TURN)   위: 경고등(ENG OUT · RPM) · 주의등 줄 · 오른쪽 FUEL VALVE
 // 그림 좌표는 1000×600(B206_W×B206_H) — 칸에 맞춰 줄이고 남는 곳은 판 색으로 채운다.
 // 값은 다른 파일의 것을 '있으면' 읽는다(엔진 03-pfd.js engParams · 연료 18-system.js · 항법 03-pfd.js 와 같은 셈).
@@ -65,10 +65,16 @@ function b206Cdi() {
   } catch (e) { /* 항법이 없으면 깃발 */ }
   return { ok: false, dev: 0, crs: _b206Num(() => S.crs, 0), to: true, src: '' };
 }
-// RMI 바늘 — 활성 웨이포인트 쪽(지금 헤딩에서 잰 상대 방위)
+// RMI 바늘 — 지금 기수에서 잰 상대 방위(°)
+//   가는 초록 바늘 = ADF(하부 콘솔 KR-87 의 USE 주파수 NDB — 26-b206radio.js b206AdfStation)
+//   굵은 노랑 두 줄 바늘 = NAV 2(하부 콘솔 NAV 수신기가 잡은 VOR — 01-state.js navRadios.NAV2)
+//   잡은 국이 없으면 그 바늘은 3시 방향에 눕는다(실기 RMI 처럼)
 function b206RmiRel() {
-  try { if (S.awp >= 0 && S.awp < S.wps.length) return normAS(S.brg - S.hdg); } catch (e) { /* 없음 */ }
-  return null;
+  const rel = (lat, lon) => normAS(bearing(S.lat, S.lon, lat, lon) - S.hdg);
+  const o = { adf: null, nav: null, adfId: '', navId: '' };
+  try { const st = typeof b206AdfStation === 'function' ? b206AdfStation() : null; if (st) { o.adf = rel(st.lat, st.lon); o.adfId = st.id; } } catch (e) { /* 없음 */ }
+  try { const r = navRadios.NAV2; if (r && r.lat != null && r.lon != null && !r.loc) { o.nav = rel(r.lat, r.lon); o.navId = r.id || ''; } } catch (e) { /* 없음 */ }
+  return o;
 }
 // 선회율(°/s) — 헤딩이 바뀌는 빠르기를 매끄럽게
 let _b206Turn = { h: null, t: 0, r: 0 };
@@ -353,18 +359,27 @@ function b206CdiGauge(g, cx, cy, R, c) {
   else { g.save(); g.fillStyle = '#e8231c'; g.fillRect(cx - R * 0.45, cy - R * 0.36, R * 0.24, R * 0.13); g.restore(); _b206Text(g, 'NAV', cx - R * 0.33, cy - R * 0.295, R * 0.09, '#fff'); }
   _b206Text(g, c.src || '', cx, cy + R * 0.7, R * 0.1, '#9ad');
 }
-// 13) RMI(NAV 2) — 카드 · 초록 바늘이 활성 웨이포인트 쪽
+// 13) RMI — 카드(기수 위) · 가는 초록 바늘 ADF · 굵은 노랑 두 줄 바늘 NAV 2. 잡은 국이 없으면 3시에 눕는다
 function b206Rmi(g, cx, cy, R, hdg, rel) {
   _b206Case(g, cx, cy, R);
   _b206Card(g, cx, cy, R * 0.88, hdg, R * 0.16);
-  _b206Text(g, 'NAV 2', cx, cy + R * 0.4, R * 0.11);
-  if (rel != null) {
-    g.save(); g.translate(cx, cy); g.rotate(rel * Math.PI / 180);
-    g.strokeStyle = '#7dff3a'; g.fillStyle = '#7dff3a'; g.lineWidth = R * 0.06;
-    g.beginPath(); g.moveTo(0, R * 0.78); g.lineTo(0, -R * 0.6); g.stroke();
-    g.beginPath(); g.moveTo(0, -R * 0.8); g.lineTo(-R * 0.1, -R * 0.58); g.lineTo(R * 0.1, -R * 0.58); g.closePath(); g.fill();
-    g.restore();
-  }
+  rel = (rel && typeof rel === 'object') ? rel : { adf: rel, nav: null };
+  _b206Text(g, 'ADF', cx - R * 0.3, cy + R * 0.42, R * 0.11, '#7dff3a');
+  _b206Text(g, 'NAV2', cx + R * 0.3, cy + R * 0.42, R * 0.11, '#ffd23a');
+  if (rel.adfId) _b206Text(g, rel.adfId.slice(0, 7), cx - R * 0.3, cy + R * 0.56, R * 0.09, '#7dff3a');
+  if (rel.navId) _b206Text(g, rel.navId.slice(0, 5), cx + R * 0.3, cy + R * 0.56, R * 0.09, '#ffd23a');
+  // NAV 2 — 굵은 두 줄(아래에)
+  g.save(); g.translate(cx, cy); g.rotate((rel.nav != null ? rel.nav : 90) * Math.PI / 180);
+  g.strokeStyle = '#ffd23a'; g.fillStyle = '#ffd23a'; g.lineWidth = R * 0.035;
+  for (const dx of [-R * 0.045, R * 0.045]) { g.beginPath(); g.moveTo(dx, R * 0.8); g.lineTo(dx, -R * 0.58); g.stroke(); }
+  g.beginPath(); g.moveTo(0, -R * 0.82); g.lineTo(-R * 0.12, -R * 0.56); g.lineTo(R * 0.12, -R * 0.56); g.closePath(); g.fill();
+  g.restore();
+  // ADF — 가는 한 줄(위에)
+  g.save(); g.translate(cx, cy); g.rotate((rel.adf != null ? rel.adf : 90) * Math.PI / 180);
+  g.strokeStyle = '#7dff3a'; g.fillStyle = '#7dff3a'; g.lineWidth = R * 0.045;
+  g.beginPath(); g.moveTo(0, R * 0.78); g.lineTo(0, -R * 0.6); g.stroke();
+  g.beginPath(); g.moveTo(0, -R * 0.8); g.lineTo(-R * 0.09, -R * 0.58); g.lineTo(R * 0.09, -R * 0.58); g.closePath(); g.fill();
+  g.restore();
   _b206Hub(g, cx, cy, R * 0.07);
 }
 // 경고 · 주의등 — 켜지면 밝게, 꺼지면 어둡게

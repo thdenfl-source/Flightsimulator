@@ -24,7 +24,7 @@ const B206R_DEF = {
   gns: { on: true, page: 'BOOT', foc: 'C', com: [118.85, 124.6], vloc: [111.75, 113.6] },
   com: { on: true, f: [134.9, 126.47] },
   nav: { on: true, f: [111.75, 113.6] },
-  adf: { on: true, f: [266, 440], mode: 'ADF', bfo: false, timer: 'FLT', et: 0 },
+  adf: { on: true, f: [1188, 266], mode: 'ADF', bfo: false, timer: 'FLT', et: 0 },   // 처음 USE 1188 = BANGSAN NDB(김포 남서쪽)
   xpdr: { mode: 'ALT', code: '0000', idt: 0 },
 };
 let b206r = JSON.parse(JSON.stringify(B206R_DEF));
@@ -120,6 +120,21 @@ function b206rAct(a) {
   // CDI — GPS ⇄ VLOC: 계기판 CDI · 항법 소스(navSrc)를 GPS(FMS) 또는 VLOC(NAV1)로
   else if (a === 'gns:cdi') { try { if (typeof setNavSrc === 'function') setNavSrc(navSrc === 'FMS' ? 'NAV1' : 'FMS'); } catch (e) { _swallow(e); } }
   _b206rSync(); _b206rSave(); b206rRender();
+}
+// ── ADF 가 잡는 NDB — USE 주파수의 NDB(20-navaids.js NAVAID_NDB) 가운데 가장 가까운 국(수신 거리 안) ──
+// ADF 가 꺼졌거나 ANT 모드(방위 없이 듣기만)면 null — RMI 의 ADF 바늘(25-b206panel.js)이 이것을 가리킨다
+const ADF_RANGE_NM = 150;
+function b206AdfStation() {
+  const a = b206r.adf;
+  if (!a.on || a.mode !== 'ADF' || typeof NAVAID_NDB === 'undefined') return null;
+  const f = String(a.f[0]);
+  let best = null, bd = Infinity;
+  for (const n of NAVAID_NDB) {
+    if (!String(n.freq || '').split('/').map(x => x.trim()).includes(f)) continue;
+    const d = distance(S.lat, S.lon, n.lat, n.lon);
+    if (d < bd) { bd = d; best = n; }
+  }
+  return best && bd <= ADF_RANGE_NM ? { id: best.id, name: best.name, lat: best.lat, lon: best.lon, freq: f, dist: bd } : null;
 }
 // 비행시간(FLT) · 경과시간(ET) — ADF 창의 타이머
 let _b206rT = 0, _b206rFlt = 0;
