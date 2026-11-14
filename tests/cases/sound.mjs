@@ -28,7 +28,7 @@ const rmsDb = a => 20 * Math.log10(Math.sqrt(a.reduce((s, v) => s + v * v, 0) / 
 
 export async function run(page, t) {
   // ── 소리 파일 — 끊김 없이 되풀이되게 다듬은 WAV ──
-  for (const [f, want] of [['heli-ground.wav', '이륙 전'], ['heli-flight.wav', '이륙 후']]) {
+  for (const [f, want] of [['heli-ground.wav', '이륙 전'], ['heli-flight.wav', '이륙 후'], ['b206-ground.wav', 'Bell 206(단발) 이륙 전'], ['b206-flight.wav', 'Bell 206(단발) 이륙 후']]) {
     const w = readWav(path.join(ROOT, 'sounds', f));
     const sr = w.fmt ? w.fmt.sr : 0, dur = w.x.length / (sr || 1);
     t.ok(w.riff === 'RIFF' && w.wave === 'WAVE' && w.fmt && w.fmt.ch === 1 && w.fmt.bits === 16 && sr === 22050,

@@ -871,7 +871,9 @@ function simTrimEff(k, stick) {
 //   전후 트림: 기준 1kt 씩 · FORCE TRIM: 지금 속도를 새 기준으로
 // 끄면 그 자세를 트림으로 잡아 두어 자세가 튀지 않는다.
 const SIM_IAS_RATE = 5;        // 조종간을 놓았을 때 IAS 자세로 돌아오는 빠르기(°/s)
-function simIasClamp(v) { return Math.max(0, Math.min(SIM_SPD_MAX, Math.round(v))); }
+// Bell 206 은 VNE 130 KIAS(25-b206panel.js B206_LIM.vne) 를 넘겨 고르지 못한다
+function simIasMax() { return (typeof acIs === 'function' && acIs('b206')) ? 130 : SIM_SPD_MAX; }
+function simIasClamp(v) { return Math.max(0, Math.min(simIasMax(), Math.round(v))); }
 function simIasEngage() {
   if (!simModeOn) return;
   // GSPD 도 기수 자세를 쓰는 모드다 — IAS 를 걸면 내려놓는다(풀면서 지금 속도를 이어 받는다)

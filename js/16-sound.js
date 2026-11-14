@@ -14,7 +14,11 @@
 // 브라우저는 사용자가 누르기 전에는 소리를 내지 못하게 한다. 그래서 버튼을 누를 때
 // 소리 장치(AudioContext)를 연다. 켜 둔 채 새로 열면 첫 터치·키 입력 때 이어서 켠다.
 // ─────────────────────────────────────────────────────────────
-const SND_FILES = { gnd: 'sounds/heli-ground.wav', air: 'sounds/heli-flight.wav' };
+const SND_FILES_AW = { gnd: 'sounds/heli-ground.wav', air: 'sounds/heli-flight.wav' };
+// Bell 206 — 단발(Allison 250 한 대) · 두 날개 주로터의 낮은 'whop'(13Hz) · 꼬리로터 버즈를 합성한 소리
+// (같은 6초 되풀이 · 끝과 처음이 끊김 없이 이어진다)
+const SND_FILES_B206 = { gnd: 'sounds/b206-ground.wav', air: 'sounds/b206-flight.wav' };
+function sndFiles() { return (typeof acIs === 'function' && acIs('b206')) ? SND_FILES_B206 : SND_FILES_AW; }
 const SND_XFADE = 2.5;    // 땅 ↔ 공중 소리가 겹쳐 바뀌는 시간(s)
 const SND_LIGHT = 0.3;    // LIGHT ON WHEELS — 바퀴가 떨어지기 직전 미리 섞는 이륙 후 소리의 몫
 const SND_VOL   = 0.8;    // 전체 크기(100% — 두 소리가 겹쳐도 넘치지 않게 조금 낮춰 둔다)
@@ -67,7 +71,7 @@ function sndStart() {
 }
 function _sndLoad() {
   const s = _snd;
-  const get = k => fetch(SND_FILES[k])
+  const files = sndFiles(), get = k => fetch(files[k])
     .then(r => { if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); })
     // 옛 사파리는 decodeAudioData 가 약속(Promise)을 돌려주지 않는다 — 콜백으로 받는다
     .then(ab => new Promise((ok, no) => s.ctx.decodeAudioData(ab, ok, no)))

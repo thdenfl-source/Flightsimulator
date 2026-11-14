@@ -24,6 +24,11 @@ export async function run(page, t) {
     o.an = b206Annun(v);
     o.lowFuel = b206Annun(Object.assign({}, v, { gal: 10 })).lowFuel;
     o.rpmLow = b206Annun(Object.assign({}, v, { nr: 80 })).rpm;
+    // 단발 소리 · FCP 속도는 Bell 206 VNE(130) 안 — 노브로 옮긴 속도와 속도계가 같은 값
+    o.snd = sndFiles();
+    o.iasMax = simIasClamp(200);
+    { const sp = S.spd; S.spd = 125; for (let i = 0; i < 20; i++) applyDelta('spd', 1); o.nsMax = S.spd; S.spd = 100; applyDelta('spd', 3);
+      try { fcpsSync(); } catch (e) { /* 없으면 그만 */ } const el = document.getElementById('fks-ias'); o.fcpIas = el ? +el.textContent : null; o.asi = b206Vals().ias; S.spd = sp; }
     o.cdi = (() => { const c = b206Cdi(); return Number.isFinite(c.dev) && Math.abs(c.dev) <= 1; })();
     return o;
   });
@@ -35,6 +40,9 @@ export async function run(page, t) {
     `엔진 계기 값이 206 한계 안 (TQ ${A.v.tq.toFixed(0)}% · N1 ${A.v.n1.toFixed(0)}% · TOT ${A.v.tot.toFixed(0)}°C · 연료 ${A.v.gal.toFixed(0)} gal)`);
   t.ok(!A.an.engOut && !A.an.rpm && A.lowFuel && A.rpmLow, '경고등 — 정상 비행에는 꺼지고, 연료 20 gal 아래 LOW FUEL · NR 90% 아래 RPM 이 켜진다');
   t.ok(A.cdi, 'CDI 편차는 −1…1');
+  t.ok(/b206-ground/.test(A.snd.gnd) && /b206-flight/.test(A.snd.air), `엔진 소리는 단발(Bell 206) 소리 (${A.snd.gnd} · ${A.snd.air})`);
+  t.ok(A.iasMax === 130 && A.nsMax === 130 && A.fcpIas === 103 && Math.round(A.asi) === 103,
+    `FCP 속도는 VNE 130kt 까지 · FCP 숫자와 속도계가 같다 (최대 ${A.iasMax}/${A.nsMax} · FCP ${A.fcpIas} · 속도계 ${Math.round(A.asi)})`);
 
   // Cockpit 모드 — 화면 넷 대신 아날로그 계기판 하나 · 누르면 크게(PFD 팝아웃)
   const C = await page.evaluate(async () => {
