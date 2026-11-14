@@ -12,6 +12,8 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 export const ROOT = path.resolve(HERE, '..', '..');
 // 판(js/00-edition.js) — Flightsimulator 저장소(경로에 'flightsimulator')면 절차 훈련판으로 띄운다. EDITION=proc|full 로 바꿀 수 있다
 export const EDITION = process.env.EDITION || (/flightsimulator/i.test(ROOT) ? 'proc' : 'full');
+// 기종 — AC=b206|aw189 (기본 aw189: shinesong 에서 가져온 검사들이 유리 조종석을 전제로 한다)
+export const AC = process.env.AC || 'aw189';
 
 export function buildEnv() {
   const vendor = path.join(ROOT, 'vendor');
@@ -25,7 +27,11 @@ export function buildEnv() {
   }
   const file = path.join(dir, 'index.html');
   fs.copyFileSync(path.join(ROOT, 'index.html'), file);
-  return { dir, file, url: 'file://' + file + (EDITION === 'proc' ? '?edition=proc' : '') };
+  // 기종(js/00-aircraft.js) — 기존 검사는 AW189(유리 조종석)를 본다. Bell 206 은 cases/b206.mjs 가 ?ac=b206 으로 다시 띄워 본다
+  const q = [];
+  if (EDITION === 'proc') q.push('edition=proc');
+  q.push('ac=' + AC);
+  return { dir, file, url: 'file://' + file + '?' + q.join('&') };
 }
 
 // 페이지를 띄우고 도움말 오버레이를 닫은 상태로 반환

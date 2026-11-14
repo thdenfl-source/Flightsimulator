@@ -17,8 +17,9 @@
      CDN 을 쓰면 한 번이라도 못 받는 순간 앱이 통째로 죽는다 — 비행 중에는
      그럴 여지를 두지 않는다. -->
 <!-- 패널 새 창(다중 모니터) — 라이브러리가 거는 이벤트까지 받아 적어야 하므로 맨 먼저 -->
-<script src="js/00-edition.js?v=628"></script>
-<script src="js/00-popout.js?v=628"></script>
+<script src="js/00-edition.js?v=630"></script>
+<script src="js/00-aircraft.js?v=630"></script>
+<script src="js/00-popout.js?v=630"></script>
 <link rel="stylesheet" href="vendor/leaflet.css"/>
 <script src="vendor/leaflet.js"></script>
 <link rel="stylesheet" href="vendor/leaflet-velocity.min.css"/>
@@ -1095,6 +1096,8 @@ body.solo-mode .solo-panel-visible {
           z-index: 950; background: #000; border: 1px solid #333; border-radius: 4px;
           overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.6); pointer-events: none; }
 #pfd-ov.show { display: block; }
+/* Bell 206 — 겹친 계기는 다섯 계기 판(25-b206panel.js b206OverlayDraw) · 판이 살짝 비친다 */
+html.ac-b206 #pfd-ov { background: transparent; border: 0; box-shadow: none; min-height: 0; min-width: min(260px, calc(100% - 120px)); }
 #pfd-ov canvas { display: block; width: 100%; height: 100%; }
 /* 3D 가 제 창(3D 탭 · 3D 단독) — 툴바가 없으므로 위에 붙인다 */
 #map3d-wrap > #pfd-ov { top: 8px; }
@@ -2061,6 +2064,11 @@ body.gate-open #gate-overlay { display: none; }
 .gate-mode-btn { display: flex; flex-direction: column; gap: 3px; align-items: center; padding: 12px 10px; border-radius: 8px; cursor: pointer;
                  border: 1px solid #2f5a6a; background: rgba(0,229,255,0.08); color: #e8f6ff; font-size: 15px; }
 .gate-mode-btn span { font-size: 11px; color: #8fa6b6; }
+#gate-ac { display: flex; gap: 8px; }
+.gate-ac-btn { flex: 1; display: flex; flex-direction: column; gap: 3px; align-items: center; padding: 10px 8px; border-radius: 8px; cursor: pointer;
+  background: rgba(255,255,255,0.04); border: 1px solid #3a4a58; color: #d8e4ee; font-size: 14px; }
+.gate-ac-btn span { font-size: 11px; color: #8fa6b6; }
+.gate-ac-btn.on { border-color: #ffd23a; background: rgba(255,210,58,0.16); color: #fff; }
 .gate-mode-btn:hover, .gate-mode-btn:focus { border-color: #00e5ff; background: rgba(0,229,255,0.18); outline: none; }
 #gate-box.shake { animation: gate-shake 0.35s; }
 @keyframes gate-shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-8px); } 75% { transform: translateX(8px); } }
@@ -2402,6 +2410,12 @@ body.simple-mode #simple-view { display: flex; position: fixed; left: 0; right: 
     <div id="gate-msg" role="alert"></div>
     <!-- 비밀번호가 맞으면 화면 고르기 — PC 모드(지금처럼 분할) · Cockpit Mode(3D 조종석으로 바로) · Simple · SIM -->
     <div id="gate-mode">
+      <!-- 기종 — AW189(기본 · 유리 조종석) · Bell 206B-3(아날로그 계기판). 00-aircraft.js · 00-gate.js -->
+      <div class="gate-sub">기종을 고르세요</div>
+      <div id="gate-ac">
+        <button type="button" class="gate-ac-btn" data-ac="aw189"><b>AW189</b><span>흰수리 · 쌍발 · 유리 조종석</span></button>
+        <button type="button" class="gate-ac-btn" data-ac="b206"><b>Bell 206B-3</b><span>JetRanger · 단발 · 아날로그 계기</span></button>
+      </div>
       <div class="gate-sub">화면을 고르세요</div>
       <button type="button" class="gate-mode-btn" id="gate-mode-pc" data-mode="pc"><b>PC 모드</b><span>PFD · 지도 · CDU 를 나눠 봅니다</span></button>
       <button type="button" class="gate-mode-btn" id="gate-mode-cockpit" data-mode="cockpit"><b>Cockpit Mode</b><span>3D 조종석 — 1인칭 조종석 시야에 MFD · 위아래 콘솔 · CDU(누르면 가운데에 크게) · 태블릿에 알맞습니다</span></button>
@@ -2410,7 +2424,7 @@ body.simple-mode #simple-view { display: flex; position: fixed; left: 0; right: 
     </div>
   </form>
 </div>
-<script src="js/00-gate.js?v=628"></script>
+<script src="js/00-gate.js?v=630"></script>
 <!-- ── 단일화면 선택 바 (기본 숨김) ── -->
 <!-- ── 시작 안내(사용법/키보드) 오버레이 ── -->
 <div id="help-overlay" style="display:none;">
@@ -3714,41 +3728,42 @@ body.simple-mode #simple-view { display: flex; position: fixed; left: 0; right: 
 <!-- 앱 코드 — 클래식 스크립트(모듈 아님)라 전역 스코프를 공유한다.
      순서가 곧 실행 순서이므로 임의로 바꾸지 말 것. -->
   <!-- AIP 데이터 — 코드보다 먼저 로드한다 -->
-  <script src="js/data/terminal-fixes.js?v=628"></script>
-  <script src="js/data/ifr-fixes.js?v=628"></script>
-  <script src="js/data/ifr-procedures.js?v=628"></script>
-  <script src="js/data/airfield-info.js?v=628"></script>
-  <script src="js/data/enr-vors.js?v=628"></script>
-  <script src="js/data/loc-stations.js?v=628"></script>
-  <script src="js/data/enr-routes.js?v=628"></script>
-  <script src="js/data/airspace.js?v=628"></script>
-  <script src="js/data/runways.js?v=628"></script>
+  <script src="js/data/terminal-fixes.js?v=630"></script>
+  <script src="js/data/ifr-fixes.js?v=630"></script>
+  <script src="js/data/ifr-procedures.js?v=630"></script>
+  <script src="js/data/airfield-info.js?v=630"></script>
+  <script src="js/data/enr-vors.js?v=630"></script>
+  <script src="js/data/loc-stations.js?v=630"></script>
+  <script src="js/data/enr-routes.js?v=630"></script>
+  <script src="js/data/airspace.js?v=630"></script>
+  <script src="js/data/runways.js?v=630"></script>
   <!-- 앱 코드 -->
-  <script src="js/00-ui.js?v=628"></script>
-  <script src="js/01-state.js?v=628"></script>
-  <script src="js/02-math.js?v=628"></script>
-  <script src="js/03-pfd.js?v=628"></script>
-  <script src="js/04-map.js?v=628"></script>
-  <script src="js/05-gps.js?v=628"></script>
-  <script src="js/06-nav.js?v=628"></script>
-  <script src="js/07-sim.js?v=628"></script>
-  <script src="js/08-ifrdb.js?v=628"></script>
-  <script src="js/09-cdu.js?v=628"></script>
-  <script src="js/10-tools.js?v=628"></script>
-  <script src="js/11-charts.js?v=628"></script>
-  <script src="js/12-joystick.js?v=628"></script>
-  <script src="js/13-joyhid.js?v=628"></script>
-  <script src="js/14-simmode.js?v=628"></script>
-  <script src="js/15-heli3d.js?v=628"></script>
-  <script src="js/16-sound.js?v=628"></script>
-  <script src="js/17-upper.js?v=628"></script>
-  <script src="js/18-system.js?v=628"></script>
-  <script src="js/19-lower.js?v=628"></script>
-  <script src="js/20-navaids.js?v=628"></script>
-  <script src="js/21-c5000.js?v=628"></script>
-  <script src="js/22-npx138.js?v=628"></script>
-  <script src="js/23-afcs.js?v=628"></script>
-  <script src="js/24-sar.js?v=628"></script>
+  <script src="js/00-ui.js?v=630"></script>
+  <script src="js/01-state.js?v=630"></script>
+  <script src="js/02-math.js?v=630"></script>
+  <script src="js/03-pfd.js?v=630"></script>
+  <script src="js/04-map.js?v=630"></script>
+  <script src="js/05-gps.js?v=630"></script>
+  <script src="js/06-nav.js?v=630"></script>
+  <script src="js/07-sim.js?v=630"></script>
+  <script src="js/08-ifrdb.js?v=630"></script>
+  <script src="js/09-cdu.js?v=630"></script>
+  <script src="js/10-tools.js?v=630"></script>
+  <script src="js/11-charts.js?v=630"></script>
+  <script src="js/12-joystick.js?v=630"></script>
+  <script src="js/13-joyhid.js?v=630"></script>
+  <script src="js/14-simmode.js?v=630"></script>
+  <script src="js/15-heli3d.js?v=630"></script>
+  <script src="js/16-sound.js?v=630"></script>
+  <script src="js/17-upper.js?v=630"></script>
+  <script src="js/18-system.js?v=630"></script>
+  <script src="js/19-lower.js?v=630"></script>
+  <script src="js/20-navaids.js?v=630"></script>
+  <script src="js/21-c5000.js?v=630"></script>
+  <script src="js/22-npx138.js?v=630"></script>
+  <script src="js/23-afcs.js?v=630"></script>
+  <script src="js/24-sar.js?v=630"></script>
+  <script src="js/25-b206panel.js?v=630"></script>
 
 <input type="file" id="zipFileInput" accept=".zip,application/zip,application/x-zip-compressed,application/octet-stream" style="display:none" onchange="handleZipFile(this.files[0]); this.value='';"></body>
 </html>
