@@ -17,7 +17,7 @@ function applyDelta(field, d){
       // 지금 속도에서 켠다) 기수 자세가 그 속도로 데려간다(14-simmode.js)
       if (simModeOn) { simIasStep(d); break; }
       iasNsOn = true;
-      S.spd = Math.max(0, Math.min(320, S.spd + d));
+      S.spd = Math.max(0, Math.min((typeof acIs === 'function' && acIs('b206')) ? 130 : 320, S.spd + d));   // Bell 206 은 VNE 130
       S.pit = pitchFromSpd(S.spd);   // auto pitch from speed
       break;
     case 'hdg':
@@ -2049,7 +2049,9 @@ function fcpsSync() {
   const on = (k, v) => { const c = p.querySelector(`[data-k="${k}"]`) || document.getElementById('fks-' + k); if (c && c.classList.contains('on') !== !!v) c.classList.toggle('on', !!v); };
   const g = (f, d) => { try { return f(); } catch (e) { return d; } };
   // 노브가 실제로 옮기는 값을 보인다(applyDelta 와 같은 갈래)
-  set('ias', String(Math.round(simModeOn ? selSpd : S.spd)));
+  // Bell 206 은 AFCS 가 없는 기체 — IAS 가 걸려 있지 않으면 지금 속도(속도계와 같은 값)를 보인다
+  const _b206 = typeof acIs === 'function' && acIs('b206');
+  set('ias', String(Math.round(simModeOn && (!_b206 || simIasOn) ? selSpd : S.spd)));
   set('hdg', String(((Math.round(selHdg) + 359) % 360) + 1).padStart(3, '0') + '°');
   const vsSel = g(() => ((gaOn || vsModeOn) && !altHoldOn && !crhtOn) || altHoldOn || crhtOn, false);
   set('vs', String(Math.round(vsSel ? selVS : S.vs)));
