@@ -694,8 +694,10 @@ async function part2(page, t) {
     const seen = [];
     const proto = CanvasRenderingContext2D.prototype, orig = proto.fillText;
     const cv = document.getElementById('pfd');
+    // 대체 모드 EIS(SYSTEM 창이 없을 때)면 속도계가 EIS 폭만큼 오른쪽에 있다 — 속도계 칸까지 본다
+    const Lp = pfdLayout(cv.width, cv.height, document.querySelector('.ctrl-bar').offsetHeight), xMax = Lp.spd.x + Lp.spd.w;
     proto.fillText = function (tx, px, py, ...a) {
-      if (px < cv.width * 0.2) seen.push({ t: String(tx), x: px, y: py });
+      if (px < Math.max(cv.width * 0.2, xMax)) seen.push({ t: String(tx), x: px, y: py });
       return orig.call(this, tx, px, py, ...a);
     };
     drawPFD();
