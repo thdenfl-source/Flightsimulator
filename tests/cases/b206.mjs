@@ -11,7 +11,7 @@ export async function run(page, t) {
 
   const A = await page.evaluate(() => {
     const o = { ac: AC_TYPE, cls: document.documentElement.classList.contains('ac-b206'), info: acInfo().engines,
-                gate: document.querySelectorAll('.gate-ac-btn').length };
+                gate: document.querySelectorAll('.gate-ac-btn').length, gateTxt: [...document.querySelectorAll('.gate-ac-btn b')].map(b => b.textContent).join('/') };
     // PFD 창 — drawPFD 가 유리 PFD 대신 b206Draw 를 부른다(유리 PFD 의 자세계 drawAI 는 부르지 않는다)
     let nB = 0, nAI = 0; const oB = b206Draw, oAI = drawAI;
     b206Draw = function (...a) { nB++; return oB.apply(this, a); };
@@ -33,7 +33,7 @@ export async function run(page, t) {
     return o;
   });
   t.ok(A.ac === 'b206' && A.cls && A.info === 1, `?ac=b206 — 기종 Bell 206B-3(단발) (${A.ac})`);
-  t.ok(A.gate === 2, '시작 화면에 기종 고르기 버튼 둘(Bell 206B-3 · AW189)');
+  t.ok(A.gate === 2 && /KUH-1CG/.test(A.gateTxt) && !/AW189/.test(A.gateTxt), `시작 화면에 기종 고르기 버튼 둘 — 흰수리는 KUH-1CG (${A.gateTxt})`);
   t.ok(A.nB === 1 && A.nAI === 0, `PFD 창에는 유리 PFD 대신 Bell 206 아날로그 계기판 (b206Draw ${A.nB} · drawAI ${A.nAI})`);
   t.ok(A.v.nr > 95 && A.v.nr < 105 && A.v.n2 > 95 && A.v.n2 <= 100, `회전계 — NR ${A.v.nr.toFixed(0)}% · N2 ${A.v.n2.toFixed(0)}%`);
   t.ok(A.v.tq > 0 && A.v.tq < 100 && A.v.n1 > 60 && A.v.n1 < 106 && A.v.tot > 400 && A.v.tot < 810 && A.v.gal > 0 && A.v.gal <= 91,
@@ -260,6 +260,10 @@ export async function run(page, t) {
     // 시동 절차 — 타이머 대신 b206cStep 을 곧바로 돌린다(0.1초씩)
     const step = (sec, until) => { for (let i = 0; i < sec * 10; i++) { b206cStep(0.1); if (until && until()) break; } };
     b206cIdleRel(); b206cThrottle(-1);                                            // 다시 OFF
+    // STARTER 단추 — 한 번 누르면 ON(손을 떼도 그대로) · 다시 누르면 OFF
+    { const body = document.getElementById('b206-coll-pop-body'), st = () => body.querySelector('[data-bc="starter"]');
+      const tap = () => { st().dispatchEvent(new PointerEvent('pointerdown', { bubbles: true })); body.dispatchEvent(new PointerEvent('pointerup', { bubbles: true })); };
+      tap(); o.stOn = !!b206c.start && /STARTER ON/.test(body.textContent); tap(); o.stOff = !b206c.start; }
     b206cStarter(true); o.cranking = pcd(); step(6); o.crankN1 = b206c.n1;        // 스로틀 OFF 로 돌리기 — N1 약 22%
     b206cThrottle(1); step(1.5); o.lit = b206c.lit;                               // N1 12%↑ 에서 IDLE — 점화
     step(15, () => b206c.n1 >= 58); o.relN1 = b206c.n1; b206cStarter(false);       // 58% 에서 STARTER 놓기
@@ -298,6 +302,7 @@ export async function run(page, t) {
     `단발 — 스로틀 IDLE 문구가 엔진 하나로 나온다 (${CL.single.toasts.join(' / ')} · ${CL.single.lbl})`);
   t.ok(CL.idleNoStart === 'IDLE/OFF' && CL.cranking === 'OFF' && CL.crankN1 > 18 && CL.crankN1 < 23 && CL.lit,
     `시동 ① STARTER(스로틀 OFF) — N1 ${CL.crankN1.toFixed(0)}% · ② N1 12% 넘어 IDLE 로 열면 점화(${CL.lit})`);
+  t.ok(CL.stOn && CL.stOff, 'STARTER 단추 — 한 번 누르면 ON(손을 떼도 그대로) · 다시 누르면 OFF');
   t.ok(CL.relN1 >= 58 && CL.started === 'true/IDLE' && CL.totMax > 700 && CL.totMax < 927 && !CL.hot && CL.startVals === null,
     `시동 ③ N1 ${CL.relN1.toFixed(0)}% 에서 STARTER 를 놓으면 IDLE 로 선다 (${CL.started} · TOT 최고 ${CL.totMax.toFixed(0)}°C)`);
   t.ok(CL.hotStart.hot && CL.hotStart.tot > 927, `HOT START — 스로틀을 먼저 열고 돌리면 TOT 가 927°C 를 넘는다 (${CL.hotStart.tot.toFixed(0)}°C)`);

@@ -20,7 +20,8 @@ const b206c = { th: 'FULL', run: true, idleRel: 0, start: 0, ldg: false, srch: '
 // ── 시동 절차(Bell 206B-3 · Allison 250) ──
 //   ① 스로틀 OFF 로 STARTER 를 누른다 — 스타터만으로 N1 이 오른다(약 22% 까지)
 //   ② N1 12% 넘어서 스로틀을 IDLE 로 연다 — 1초 뒤 점화(light-off), TOT 가 치솟았다(최고 약 760~820°C) 가라앉는다
-//   ③ N1 58% 넘어서 STARTER 를 놓는다 — 엔진 스스로 IDLE(N1 약 63%)로 선다
+//   (STARTER 단추는 한 번 누르면 ON · 다시 누르면 OFF)
+//   ③ N1 58% 넘어서 STARTER 를 놓는다(다시 눌러 OFF) — 엔진 스스로 IDLE(N1 약 63%)로 선다
 //   N1 12% 전에 스로틀을 열면(연료가 먼저) TOT 가 927°C 를 넘는다 — HOT START. 58% 전에 놓으면 HUNG START(N1 이 처지고 TOT 가 오른다).
 const B206S = { lightN1: 12, relN1: 58, idleN1: 63, crankMax: 22, startLim: 927, idleTot: 450 };
 // 지금 엔진 레버(pcd1)에서 처음 상태를 읽는다(시작 상태 — 09-cdu.js startStateApply 는 FLY)
@@ -173,9 +174,9 @@ function _b206cSvg() {
   ${lab(14, 108, 'E', 7)}${lab(14, 117, 'X', 7)}${lab(14, 126, 'T', 7)}${lab(52, 150, 'RETR', 7.5)}
   ${[...'RIGHT'].map((c, i) => lab(86, 100 + i * 9, c, 7)).join('')}
   <!-- STARTER -->
-  <g data-bc="starter" style="cursor:pointer"><circle cx="134" cy="118" r="17" fill="#060707" stroke="#3a3d40" stroke-width="2"/>
+  <g data-bc="starter" style="cursor:pointer"><circle cx="134" cy="118" r="17" fill="#060707" stroke="${b206c.start ? '#7dff3a' : '#3a3d40'}" stroke-width="${b206c.start ? 3 : 2}"/>
     <circle cx="134" cy="${b206c.start ? 120 : 117}" r="10" fill="url(#bc-btn)" stroke="#000"/></g>
-  ${lab(134, 150, 'STARTER', 8)}
+  ${lab(134, 150, b206c.start ? 'STARTER ON' : 'STARTER', b206c.start ? 7 : 8, 'middle', b206c.start ? '#7dff3a' : '#e9ecef')}
   <!-- 목(관) · IDLE REL -->
   <path d="M44 158 H131 L127 236 H48 Z" fill="url(#bc-tube)" stroke="#000"/>
   <rect x="44" y="196" width="87" height="6" fill="#1a1b1d"/>
@@ -239,12 +240,12 @@ function _b206cPopSync() {
       const k = t.dataset.bc;
       if (k === 'grip') { const r = t.getBoundingClientRect(); b206cThrottle(e.clientX < r.left + r.width / 2 ? 1 : -1); }
       else if (k === 'idlerel') b206cIdleRel();
-      else if (k === 'starter') b206cStarter(true);
+      else if (k === 'starter') b206cStarter(!b206c.start);   // 한 번 누르면 ON · 다시 누르면 OFF(마우스로 스로틀을 돌리는 동안 손을 뗄 수 있게)
       else if (k === 'incr') b206cBeep(1);
       else if (k === 'decr') b206cBeep(-1);
       else b206cToggle(k);
     });
-    const up = () => { if (b206c.start) b206cStarter(false); if (b206c.beep) b206cBeep(0); };
+    const up = () => { if (b206c.beep) b206cBeep(0); };   // STARTER 는 눌러 켜고 눌러 끈다(손을 떼도 그대로)
     ['pointerup', 'pointercancel', 'pointerleave'].forEach(ev => body.addEventListener(ev, up));
     body.addEventListener('wheel', e => { e.preventDefault(); e.stopPropagation(); if (e.target.closest('[data-bc="grip"]')) b206cThrottle(e.deltaY > 0 ? -1 : 1); }, { passive: false });
   }
