@@ -226,13 +226,16 @@ export async function run(page, t) {
   t.ok(only.shown && only.label2 === '⛶ Cockpit Mode', `2분할에서도 오른쪽 창 탭에 Cockpit Mode 가 보인다 (${only.label2})`);
   t.ok(only.solo && only.back, `2분할에서 Cockpit Mode 를 누르면 3D 조종석으로 갔다가 돌아온다 (단독 ${only.solo} · 복귀 ${only.back})`);
 
-  // ── PFD 배치: CRHT·NAV 칸은 고도계+승강계 칸과 같은 x·폭(세로 정렬) ──
-  const al = await two.evaluate(() => [1400, 1000, 700, 560].map(W => {
+  // ── PFD 배치: CRHT·NAV 칸은 고도계+승강계와 같은 폭으로 오른쪽 끝 · HSI 오른쪽 끝에 맞닿는다 ──
+  //    (속도계 · 고도계는 가운데로 모아 좌우 대칭 — 자세계 · HSI 가운데가 한 줄. 넓이 420 미만은 종전대로 양끝)
+  const al = await two.evaluate(() => [1400, 1000, 700, 560, 400].map(W => {
     const L = pfdLayout(W, 900, 300);
-    return Math.abs(L.crht.x - L.alt.x) < 0.5 && Math.abs(L.crht.w - (L.alt.w + L.vsi.w)) < 0.5 &&
-           Math.abs(L.navs.x - L.alt.x) < 0.5 && Math.abs(L.hsi.x + L.hsi.w - L.crht.x) < 0.5;
+    const sym = W < 420 || Math.abs(L.spd.x - (W - L.alt.x - L.alt.w)) < 0.5;
+    return Math.abs(L.crht.w - (L.alt.w + L.vsi.w)) < 0.5 && Math.abs(L.crht.x + L.crht.w - (W - L.pad)) < 0.5 &&
+           Math.abs(L.navs.x - L.crht.x) < 0.5 && Math.abs(L.hsi.x + L.hsi.w - L.crht.x) < 0.5 &&
+           L.ai.x === 0 && L.ai.w === W && sym;
   }));
-  t.ok(al.every(Boolean), `CRHT·NAV 칸이 고도계 칸과 세로로 맞는다 (${al.join(' ')})`);
+  t.ok(al.every(Boolean), `CRHT·NAV 칸은 오른쪽 끝 · 자세계 전체 폭 · 속도계/고도계 좌우 대칭 (${al.join(' ')})`);
 
   await ctx1.close();
   await ctx2.close();

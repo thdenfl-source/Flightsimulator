@@ -420,32 +420,20 @@ setInterval(() => {
 }, 500);
 
 // ── HOIST CAM — SYSTEM 창 Video(Channel HOIST) 큰 칸에 붐에서 바로 아래를 보는 3D 지도 ──
-const _sarCam = { map: null, el: null, hud: null, rect: null, timer: null };
+const _sarCam = { map: null, el: null, hud: null, rect: null, timer: null, mode: null, offT: 0 };
 const HOISTCAM_FOV = 60;                                // 가로 화각(°)
 // 18-system.js _sysPaint 가 부른다 — show: 보일 때 · rect: 큰 칸(창 안 px)
 function sarHoistCamSlot(show, rect) {
   const wrap = document.getElementById('sysp-wrap');
-  if (!show || !wrap || typeof maplibregl === 'undefined') { _sarCamDestroy(); return; }
-  if (!_sarCam.el || _sarCam.el.parentElement !== wrap) {
+  // SYSTEM 창이 화면에 없으면(Cockpit Mode 등) 여기서는 손대지 않는다 — 조종석 MFD 가 쓰는 화면 밖 지도(sarHoistCamDrawTo)는 그대로
+  const vis = !!(wrap && wrap.clientWidth > 40 && wrap.clientHeight > 40);
+  if (!show || !wrap || typeof maplibregl === 'undefined') { if (_sarCam.mode === 'slot') _sarCamDestroy(); return; }
+  if (!vis) { if (_sarCam.mode === 'slot') _sarCamDestroy(); return; }
+  if (!_sarCam.el || _sarCam.mode !== 'slot' || _sarCam.el.parentElement !== wrap) {
     _sarCamDestroy();
     const el = document.createElement('div'); el.id = 'sysp-hoist';
-    const mapEl = document.createElement('div'); mapEl.className = 'hcam-map';
-    const hud = document.createElement('canvas'); hud.className = 'hcam-hud';
-    el.appendChild(mapEl); el.appendChild(hud); wrap.appendChild(el);
-    _sarCam.el = el; _sarCam.hud = hud;
-    try {
-      const map = new maplibregl.Map({ container: mapEl, style: _map3dStyle(), center: [S.lon, S.lat], zoom: 19, pitch: 0, bearing: S.hdg,
-        maxZoom: 24, interactive: false, attributionControl: false, pixelRatio: (typeof map3dPixelRatio === 'function') ? map3dPixelRatio(true) : 1 });
-      map.on('error', e => console.warn('[HOIST CAM]', e && e.error ? e.error.message : e));
-      // 꾸밈이 서면 함정 · 요구조자 · 고리를 얹고(타일을 기다리지 않는다), 다 뜨면 지형을 건다
-      map.on('style.load', () => {
-        try { if (typeof _ship3dAddTo === 'function' && !map.getSource('ship-3d')) _ship3dAddTo(map); } catch (e) { _swallow(e); }
-        try { if (!map.getLayer('sar-3d')) map.addLayer(_sarLayer(true)); } catch (e) { _swallow(e); }
-      });
-      map.on('load', () => { try { map.setTerrain({ source: 'terrain', exaggeration: MAP3D_EXAG }); } catch (e) { _swallow(e); } });
-      _sarCam.map = map;
-    } catch (e) { console.warn('[HOIST CAM] map failed:', e); }
-    _sarCam.timer = setInterval(_sarCamUpdate, 50);
+    wrap.appendChild(el);
+    _sarCamCreate(el, 'slot');
   }
   const css = ['left', 'top', 'width', 'height'].map(k => `${k}:${rect[k].toFixed(1)}px`).join(';');
   if (_sarCam.rect !== css) {
@@ -454,11 +442,46 @@ function sarHoistCamSlot(show, rect) {
     try { if (_sarCam.map) _sarCam.map.resize(); } catch (e) { _swallow(e); }
   }
 }
+// 지도 · HUD 를 그 그릇(el)에 만든다 — mode 'slot'(SYSTEM 창 큰 칸) · 'off'(화면 밖 — Cockpit Mode MFD 에 옮겨 그린다)
+function _sarCamCreate(el, mode) {
+  const mapEl = document.createElement('div'); mapEl.className = 'hcam-map';
+  const hud = document.createElement('canvas'); hud.className = 'hcam-hud';
+  el.appendChild(mapEl); el.appendChild(hud);
+  _sarCam.el = el; _sarCam.hud = hud; _sarCam.mode = mode; _sarCam.offT = performance.now();
+  try {
+    const map = new maplibregl.Map({ container: mapEl, style: _map3dStyle(), center: [S.lon, S.lat], zoom: 19, pitch: 0, bearing: S.hdg,
+      maxZoom: 24, interactive: false, attributionControl: false, pixelRatio: (typeof map3dPixelRatio === 'function') ? map3dPixelRatio(true) : 1,
+      canvasContextAttributes: { preserveDrawingBuffer: true } });   // 조종석 MFD 캔버스로 옮겨 그릴 수 있게
+    map.on('error', e => console.warn('[HOIST CAM]', e && e.error ? e.error.message : e));
+    // 꾸밈이 서면 함정 · 요구조자 · 고리를 얹고(타일을 기다리지 않는다), 다 뜨면 지형을 건다
+    map.on('style.load', () => {
+      try { if (typeof _ship3dAddTo === 'function' && !map.getSource('ship-3d')) _ship3dAddTo(map); } catch (e) { _swallow(e); }
+      try { if (!map.getLayer('sar-3d')) map.addLayer(_sarLayer(true)); } catch (e) { _swallow(e); }
+    });
+    map.on('load', () => { try { map.setTerrain({ source: 'terrain', exaggeration: MAP3D_EXAG }); } catch (e) { _swallow(e); } });
+    _sarCam.map = map;
+  } catch (e) { console.warn('[HOIST CAM] map failed:', e); }
+  _sarCam.timer = setInterval(_sarCamUpdate, 50);
+}
+// Cockpit Mode SYSTEM MFD(15-heli3d.js ckpitDraw)가 부른다 — SYSTEM 창이 화면에 없으면 화면 밖에 지도를 두고
+// 그 그림(지도 + HUD)을 MFD 의 큰 칸(x, y, w, h)에 옮겨 그린다. 1.5초 동안 부르지 않으면 거둔다.
+function sarHoistCamDrawTo(g, x, y, w, h) {
+  if (typeof maplibregl === 'undefined') return;
+  if (!_sarCam.map) {
+    const el = document.createElement('div'); el.id = 'hoist-off';
+    el.style.cssText = 'position:fixed;left:-10000px;top:0;width:640px;height:480px;pointer-events:none;overflow:hidden';
+    document.body.appendChild(el);
+    _sarCamCreate(el, 'off');
+  }
+  _sarCam.offT = performance.now();
+  try { const mc = _sarCam.map.getCanvas(); if (mc && mc.width) g.drawImage(mc, x, y, w, h); } catch (e) { _swallow(e); }
+  try { if (_sarCam.hud && _sarCam.hud.width) g.drawImage(_sarCam.hud, x, y, w, h); } catch (e) { _swallow(e); }
+}
 function _sarCamDestroy() {
   clearInterval(_sarCam.timer); _sarCam.timer = null;
   try { if (_sarCam.map) _sarCam.map.remove(); } catch (e) { _swallow(e); }
   try { if (_sarCam.el) _sarCam.el.remove(); } catch (e) { _swallow(e); }
-  _sarCam.map = null; _sarCam.el = null; _sarCam.hud = null; _sarCam.rect = null;
+  _sarCam.map = null; _sarCam.el = null; _sarCam.hud = null; _sarCam.rect = null; _sarCam.mode = null;
 }
 function sarHoistCamOn() { return !!_sarCam.map; }
 // 붐 끝 높이(전파고도 + 붐 높이)에서 가로 화각 60° 로 보이는 넓이에 맞춰 확대 단계를 고른다
@@ -475,6 +498,7 @@ function _sarCamUpdate() {
   const w = el.clientWidth, H = el.clientHeight;
   // SYSTEM 창이 화면에서 내려갔으면(다른 창을 골랐거나 숨겼으면) 지도를 거둔다 — 그래픽 부담
   if (!el.isConnected || !(w > 0 && H > 0) || (typeof sysPage !== 'undefined' && (sysPage !== 'asys_video' || videoCfg.ch !== 'HOIST'))) { _sarCamDestroy(); return; }
+  if (_sarCam.mode === 'off' && performance.now() - _sarCam.offT > 1500) { _sarCamDestroy(); return; }   // 조종석 MFD 가 더는 그리지 않는다
   const [hl, ho] = sarHookLL();
   try { map.jumpTo({ center: [ho, hl], zoom: sarHoistCamZoom(w), bearing: S.hdg, pitch: 0 }); } catch (e) { _swallow(e); }
   // HUD — 가운데 십자(바로 아래 = 고리가 내려가는 자리) · 케이블 · 높이 차 · 거리 · 유지 시간
