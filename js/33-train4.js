@@ -305,11 +305,13 @@ function toggleTools(ev) {
   m.style.top = Math.max(6, below + mh <= window.innerHeight - 6 ? below : above) + 'px';
 }
 
-// ── ⑦ 다른 기기 교관 연결(WebRTC 데이터 통로) — 서버 없이 QR 두 번: '연결 요청' → '수락' ──
-//   ① 교육생 기기(🧰 도구 → ⚙ 설정 → 교관 기기 연결): [① 연결 요청] → 화면에 QR
-//   ② 교관 기기(교관 화면 📱): [② 수락 — 교육생 QR 찍기] → 카메라로 찍으면 교관 화면에 답 QR
-//   ③ 교육생 기기: [③ 교관 QR 찍기] → 카메라로 찍으면 이어진다
-//   카메라가 없으면 아래 '코드로 잇기'로 같은 내용을 글자로 주고받는다.
+// ── ⑦ 다른 기기 교관 연결(WebRTC 데이터 통로) — 메인 기기는 PC 일 수도 있어 카메라를 쓰지 않는다 ──
+//   ① 메인(교육생) 기기(🧰 도구 → 📱 교관 기기와 잇기): [연결 요청] → 화면에 QR
+//   ② 교관 태블릿(교관 화면 📱): [📷 교육생 QR 찍어 잇기] → 카메라로 찍으면 연결을 청한다
+//   ③ 메인 기기에 '교관 기기가 연결을 청합니다 [수락] [거절]' 창 → 수락하면 바로 이어진다
+//   태블릿의 답(연결 정보)은 QR 에 든 일회용 방 이름으로 공개 중계(ntfy.sh)를 거쳐 메인 기기에 닿는다 —
+//   QR 에 든 열쇠로 암호화(AES-GCM)해 보내므로 중계는 내용을 읽지 못한다. 비행 내용은 이어진 뒤 두 기기 사이로만 오간다.
+//   중계가 막혔으면 아래 '코드로 잇기'(글자로 주고받기)로 잇는다.
 //   연결 정보(SDP)는 꼭 필요한 값(ICE 이름 · 암호 · 인증서 지문 · 주소)만 남겨 짧게 줄인다 — QR 한 장에 들어가게.
 //   같은 와이파이면 바로 잇고, 다른 망이면 공개 STUN(구글) 서버로 길만 찾는다(비행 내용은 두 기기 사이로만 오간다)
 const RTC_ICE = () => (Array.isArray(window._rtcIce) ? window._rtcIce : [{ urls: 'stun:stun.l.google.com:19302' }]);
@@ -361,6 +363,78 @@ async function rtcAnswer(code) {
   return sdpPack(pc.localDescription);
 }
 async function rtcAccept(code) { await rtc.pc.setRemoteDescription(_descFrom(code)); }
+// ── 중계(일회용 방) · 암호 ──
+const RTC_RELAY_URL = 'https://ntfy.sh';
+const _ntfyRelay = {
+  sub(topic, on) {
+    const es = new EventSource(`${RTC_RELAY_URL}/${topic}/sse`);
+    es.addEventListener('message', e => { try { const m = JSON.parse(e.data); if (m && typeof m.message === 'string' && (!m.event || m.event === 'message')) on(m.message); } catch (er) { _swallow(er); } });
+    return () => { try { es.close(); } catch (er) { _swallow(er); } };
+  },
+  pub(topic, text) { return fetch(`${RTC_RELAY_URL}/${topic}`, { method: 'POST', body: text }).then(r => { if (!r.ok) throw new Error('중계 ' + r.status); }); },
+};
+const rtcRelay = () => window._rtcRelay || _ntfyRelay;           // 검사는 window._rtcRelay 로 바꿔 낀다
+const _u8b64 = u => btoa(String.fromCharCode(...u)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+const _b64u8 = s => Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
+async function _rtcKey(raw) { return crypto.subtle.importKey('raw', raw, 'AES-GCM', false, ['encrypt', 'decrypt']); }
+async function rtcEnc(keyB64, text) {
+  const iv = crypto.getRandomValues(new Uint8Array(12)), k = await _rtcKey(_b64u8(keyB64));
+  const ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, k, new TextEncoder().encode(text)));
+  const out = new Uint8Array(12 + ct.length); out.set(iv); out.set(ct, 12); return _u8b64(out);
+}
+async function rtcDec(keyB64, b64) {
+  const all = _b64u8(b64), k = await _rtcKey(_b64u8(keyB64));
+  return new TextDecoder().decode(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: all.slice(0, 12) }, k, all.slice(12)));
+}
+// 메인 — 연결 요청: 'SS2|방|열쇠|요청 코드' 를 QR 로 · 방을 듣다가 태블릿의 답이 오면 수락/거절 창
+async function rtcRequest() {
+  rtcRoomClose();
+  const offer = await rtcOffer();
+  const room = 'shinesong-' + _u8b64(crypto.getRandomValues(new Uint8Array(9))).toLowerCase().replace(/[^a-z0-9]/g, 'x');
+  const key = _u8b64(crypto.getRandomValues(new Uint8Array(16)));
+  rtc.room = room; rtc.key = key;
+  rtc.unsub = rtcRelay().sub(room, async msg => {
+    let ans = null; try { ans = await rtcDec(key, msg); } catch (e) { return; }            // 다른 사람 · 잘못된 것은 버린다
+    if (!/^SS1\|a\|/.test(ans) || rtc.open) return;
+    rtcAsk(ans);
+  });
+  return `SS2|${room}|${key}|${offer}`;
+}
+function rtcRoomClose() { try { if (rtc.unsub) rtc.unsub(); } catch (e) { _swallow(e); } rtc.unsub = null; }
+// 메인 — '교관 기기가 연결을 청합니다' [수락] [거절]
+function rtcAsk(ans) {
+  let w = document.getElementById('rtc-ask');
+  if (!w) {
+    w = document.createElement('div'); w.id = 'rtc-ask';
+    w.innerHTML = '<div class="set-box rtc-askbox"><div class="set-bar"><b>📱 교관 기기 연결 요청</b></div><div class="rtc-steps">교관 기기가 이 기기와 연결을 청합니다.<br>수락하면 교관이 고장 · 환경 · 메시지를 걸 수 있습니다.</div>' +
+      '<div class="rtc-btns"><button class="sim-btn on rtc-big" data-rtcask="ok">수락</button><button class="sim-btn rtc-big" data-rtcask="no">거절</button></div></div>';
+    document.body.appendChild(w);
+    w.addEventListener('click', async e => {
+      const b = e.target.closest('[data-rtcask]'); if (!b) return;
+      const a = w._ans; w.style.display = 'none'; w._ans = null;
+      if (b.dataset.rtcask === 'ok' && a) {
+        try { await rtcAccept(a); rtcReply('ok'); } catch (er) { _swallow(er); try { uiToast('잇지 못했습니다 — 처음부터 다시 연결 요청을 누르십시오', 'err'); } catch (e2) { _swallow(e2); } }
+      } else { rtcReply('no'); try { uiToast('교관 기기 연결을 거절했습니다'); } catch (er) { _swallow(er); } }
+      _rtcRender();
+    });
+  }
+  w._ans = ans; w.style.display = 'flex';
+}
+function rtcReply(v) { const room = rtc.room, key = rtc.key; if (!room) return; rtcEnc(key, v).then(t => rtcRelay().pub(room + '-r', t)).catch(_swallow); if (v === 'ok') rtcRoomClose(); }
+// 태블릿 — 찍은 'SS2|…' 로 답을 만들어 중계로 보낸다 · 메인이 거절하면 알린다. 중계가 막혔으면 답 코드를 돌려준다(글자로 잇기)
+async function rtcJoin(qr) {
+  const p = String(qr).trim().split('|'); if (p[0] !== 'SS2' || p.length < 4) throw new Error('교관 연결 QR 이 아닙니다');
+  const room = p[1], key = p[2], offer = p.slice(3).join('|');
+  const ans = await rtcAnswer(offer);
+  rtcRoomClose(); rtc.room = room; rtc.key = key;
+  rtc.unsub = rtcRelay().sub(room + '-r', async msg => {
+    let v = null; try { v = await rtcDec(key, msg); } catch (e) { return; }
+    if (v === 'no') { try { uiToast('교육생 기기가 연결을 거절했습니다', 'warn', 4000); } catch (e) { _swallow(e); } try { rtc.pc.close(); } catch (e) { _swallow(e); } rtc.pc = null; }
+    rtcRoomClose(); _rtcRender();
+  });
+  try { await rtcRelay().pub(room, await rtcEnc(key, ans)); return { sent: true, ans }; }
+  catch (e) { _swallow(e); return { sent: false, ans }; }
+}
 function rtcSend(m) { try { if (rtc.open && rtc.ch && rtc.ch.readyState === 'open') rtc.ch.send(JSON.stringify(m)); } catch (e) { _swallow(e); } }
 
 // ── QR — 만들기(vendor/qrcode.js) · 읽기(BarcodeDetector 가 있으면 그것, 없으면 vendor/jsQR.js) — 필요할 때만 읽어 온다 ──
@@ -380,7 +454,7 @@ async function qrDecode(imgData) {
   return r ? r.data : null;
 }
 let _qrScan = null;
-// 카메라로 'SS1|' 로 시작하는 QR 을 찾을 때까지 본다 — host 안에 화면을 띄운다
+// 카메라로 'SS1|' · 'SS2|' 로 시작하는 QR 을 찾을 때까지 본다 — host 안에 화면을 띄운다
 async function qrScan(host) {
   qrScanStop();
   const v = document.createElement('video'); v.setAttribute('playsinline', ''); v.muted = true; v.className = 'rtc-cam';
@@ -398,7 +472,7 @@ async function qrScan(host) {
         let txt = null;
         if (det) { const r = await det.detect(v); txt = r && r[0] ? r[0].rawValue : null; }
         else if (v.videoWidth) { cv.width = v.videoWidth; cv.height = v.videoHeight; g.drawImage(v, 0, 0); txt = await qrDecode(g.getImageData(0, 0, cv.width, cv.height)); }
-        if (txt && /^SS1\|/.test(txt)) { qrScanStop(); host.innerHTML = ''; ok(txt); return; }
+        if (txt && /^SS[12]\|/.test(txt)) { qrScanStop(); host.innerHTML = ''; ok(txt); return; }
       } catch (e) { _swallow(e); }
       setTimeout(tick, 200);
     };
@@ -416,10 +490,10 @@ function toggleRemoteIos() {
     const ios = typeof IOS_MODE !== 'undefined' && IOS_MODE;
     w.innerHTML = `<div class="set-box rtc-box"><div class="set-bar"><b>${ios ? '📱 교육생 기기와 잇기' : '📱 교관 기기와 잇기'}</b><button class="sim-btn" data-rtc="x">✕</button></div>
       <div class="rtc-steps">${ios
-        ? '<div>교육생 기기에서 <b>🧰 도구 → 📱 교관 기기와 잇기 → [① 연결 요청]</b>을 누르면 QR 이 나옵니다.</div><div>아래 <b>[② 수락]</b>을 누르고 그 QR 을 찍으면 여기에 답 QR 이 나옵니다.</div><div>교육생 기기가 <b>[③ 교관 QR 찍기]</b>로 답 QR 을 찍으면 이어집니다.</div>'
-        : '<div><b>[① 연결 요청]</b>을 누르면 QR 이 나옵니다 — 교관 기기가 <b>[② 수락]</b>으로 찍습니다.</div><div>교관 화면에 답 QR 이 나오면 <b>[③ 교관 QR 찍기]</b>를 누르고 그 QR 을 찍습니다.</div>'}</div>
-      <div class="rtc-btns">${ios ? '<button class="sim-btn on rtc-big" data-rtc="accept">② 수락 — 교육생 QR 찍기 📷</button>'
-        : '<button class="sim-btn on rtc-big" data-rtc="request">① 연결 요청</button><button class="sim-btn on rtc-big" data-rtc="scanAns">③ 교관 QR 찍기 📷</button>'}</div>
+        ? '<div>교육생(메인) 기기에서 <b>🧰 도구 → 📱 교관 기기와 잇기 → [연결 요청]</b>을 누르면 QR 이 나옵니다.</div><div>아래 <b>[📷 교육생 QR 찍어 잇기]</b>를 누르고 그 QR 을 찍습니다.</div><div>교육생 기기에서 <b>[수락]</b>을 누르면 이어집니다.</div>'
+        : '<div><b>[연결 요청]</b>을 누르면 QR 이 나옵니다.</div><div>교관 태블릿의 교관 화면에서 <b>[📷 교육생 QR 찍어 잇기]</b>로 이 QR 을 찍습니다.</div><div>이 기기에 뜨는 창에서 <b>[수락]</b>을 누르면 바로 이어집니다.</div>'}</div>
+      <div class="rtc-btns">${ios ? '<button class="sim-btn on rtc-big" data-rtc="join">📷 교육생 QR 찍어 잇기</button>'
+        : '<button class="sim-btn on rtc-big" data-rtc="request">연결 요청</button>'}</div>
       <div class="rtc-view" data-rtcv="view"></div>
       <div class="set-note rtc-st" data-rtcv="st"></div>
       <details class="rtc-txt"><summary>카메라가 없을 때 — 코드로 잇기</summary>
@@ -436,9 +510,21 @@ function toggleRemoteIos() {
       const k = b.dataset.rtc;
       try {
         if (k === 'x') { qrScanStop(); w.style.display = 'none'; return; }
-        if (k === 'request') { view.innerHTML = '<div class="set-note">요청 QR 을 만드는 중…</div>'; await showQr(await rtcOffer(), '교관 기기의 <b>[② 수락]</b>으로 이 QR 을 찍게 하세요. 찍고 나면 <b>[③ 교관 QR 찍기]</b>를 누릅니다.'); }
-        else if (k === 'scanAns') { if (!rtc.pc) throw new Error('먼저 ① 연결 요청을 누르십시오'); const code = await qrScan(view); view.innerHTML = '<div class="set-note">교관 QR 을 읽었습니다 — 잇는 중…</div>'; await rtcAccept(code); }
-        else if (k === 'accept') { const code = await qrScan(view); view.innerHTML = '<div class="set-note">교육생 QR 을 읽었습니다 — 답 QR 을 만드는 중…</div>'; await showQr(await rtcAnswer(code), '교육생 기기의 <b>[③ 교관 QR 찍기]</b>로 이 QR 을 찍게 하세요.'); }
+        if (k === 'request') {
+          view.innerHTML = '<div class="set-note">요청 QR 을 만드는 중…</div>';
+          const q = await rtcRequest(); await showQr(q, '교관 태블릿의 <b>[📷 교육생 QR 찍어 잇기]</b>로 이 QR 을 찍게 하세요. 찍으면 이 기기에 <b>수락</b> 창이 뜹니다.');
+          out.value = q.split('|').slice(3).join('|');                     // 글자로 잇기 — 요청 코드(SS1)
+        }
+        else if (k === 'join') {
+          const code = await qrScan(view);
+          if (/^SS1\|/.test(code)) { view.innerHTML = ''; await showQr(await rtcAnswer(code), '옛 방식 QR 입니다 — 이 답 QR(코드)을 교육생 기기로 보내세요.'); }
+          else {
+            view.innerHTML = '<div class="set-note">교육생 QR 을 읽었습니다 — 연결을 청하는 중…</div>';
+            const r = await rtcJoin(code);
+            if (r.sent) view.innerHTML = '<div class="set-note">교육생 기기의 <b>수락</b>을 기다리는 중… (교육생 기기 화면에 수락 창이 떴습니다)</div>';
+            else { await showQr(r.ans, '중계에 닿지 못했습니다(인터넷 확인) — 아래 답 코드를 교육생 기기의 "코드로 잇기"에 붙여 넣으십시오.'); const d = w.querySelector('details.rtc-txt'); if (d) d.open = true; }
+          }
+        }
         else if (k === 'acceptTxt') await showQr(await rtcAnswer(inp.value), '이 QR(또는 위 답 코드)을 교육생 기기로 보내세요.');
         else if (k === 'finishTxt') await rtcAccept(inp.value);
         else if (k === 'copy') { await navigator.clipboard.writeText(out.value); uiToast('복사했습니다'); }

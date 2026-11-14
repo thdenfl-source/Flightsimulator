@@ -496,7 +496,18 @@ function simRpmLow() { return simModeOn && simNr < SIM_NR_LOW; }
 // ── 엔진(쌍발) ── 2: 두 엔진(AEO) · 1: 한 엔진 고장(OEI) · 0: 두 엔진 IDLE(동력 없는 오토로테이션 연습)
 // OEI 는 남은 엔진 하나가 2.5분 정격(AEO MTA 의 73%)을 내다가 그 뒤로는 연속 정격(64%)까지 낸다.
 const OEI_25_FRAC = 0.73, OEI_CONT_FRAC = 0.64, OEI_25_SEC = 150;
-let simEng = 2, simOeiT = 0;
+// 컬렉티브 OEI 스위치(35-kuhgrip.js) — 누를 때마다 HI(2.5분 정격) ↔ LOW(10분 정격). 바꾸면 그 정격의 시간을 새로 센다.
+const OEI_LO_FRAC = 0.68, OEI_LO_SEC = 600;
+let simEng = 2, simOeiT = 0, simOeiMode = 'HI';
+function simOeiLim() { return simOeiMode === 'LOW' ? OEI_LO_SEC : OEI_25_SEC; }
+function simOeiToggle() {
+  if (simEng !== 1) { try { uiToast('OEI 출력 전환은 한 엔진 상황(OEI)에서만 씁니다', 'warn', 2500); } catch (e) { _swallow(e); } return false; }
+  simOeiMode = simOeiMode === 'HI' ? 'LOW' : 'HI'; simOeiT = 0;
+  const txt = simOeiMode === 'HI' ? 'OEI HI — 2.5분 정격' : 'OEI LOW — 10분 정격';
+  try { uiToast(txt, '', 2500); } catch (e) { _swallow(e); }
+  try { if (typeof fdrNote === 'function') fdrNote(txt); } catch (e) { _swallow(e); }
+  return true;
+}
 // OEI 일 때 멎은(또는 훈련으로 줄인) 엔진 번호 · 상부 콘솔 TRAINING 스위치로 든 훈련인가
 let simEngFail = 2, simEngTrng = false;
 // ── 엔진마다의 상태 ── 'FLY'(출력을 낸다) · 'IDLE' · 'TRNG'(훈련으로 줄임 — IDLE 로 보인다) · 'OFF'(멎음)
@@ -531,7 +542,7 @@ function simEngApply(quiet) {
   simEng = (st[1] === 'FLY' ? 1 : 0) + (st[2] === 'FLY' ? 1 : 0);
   simEngTrng = trng;
   simEngFail = simEng === 1 ? (st[1] === 'FLY' ? 2 : 1) : 2;
-  if (simEng !== prev.eng || (trng ? simEngFail : 0) !== prev.trng) simOeiT = 0;
+  if (simEng !== prev.eng || (trng ? simEngFail : 0) !== prev.trng) { simOeiT = 0; simOeiMode = 'HI'; }
   updateEngBtn();
   if (quiet) return;
   const changed = simEng !== prev.eng || st[1] !== prev.s1 || st[2] !== prev.s2;
@@ -558,7 +569,7 @@ function simTrngApply(quiet) { simEngApply(quiet); }
 function simEngAvail() {
   const m = mtaNow();
   if (simEng >= 2) return m;
-  if (simEng === 1) return m * (simOeiT < OEI_25_SEC ? OEI_25_FRAC : OEI_CONT_FRAC);
+  if (simEng === 1) return m * (simOeiT < simOeiLim() ? (simOeiMode === 'LOW' ? OEI_LO_FRAC : OEI_25_FRAC) : OEI_CONT_FRAC);
   return 0;
 }
 function cycleSimEng() {
@@ -1621,7 +1632,7 @@ function toggleSimMode(on, opt) {
     try { if (gsOn) toggleGs(); } catch (e) { _swallow(e); }
     hdgSelOn = false; rollApOn = false; altHoldOn = false; crhtOn = false; simIasOn = false; _rcLevPrev = null; simYawRate = 0; _simKePowered = false; _simKeVsF = 0; _rcYawBuf = []; _rcT = 0;
     _simOnDeck = false; _simOnGnd = false;
-    _simEngBtn = 2; simOeiT = 0; simVrs = 0; simNrRel = 0; simNr = 100; simRbs = { r: 0, p: 0 };
+    _simEngBtn = 2; simOeiT = 0; simOeiMode = 'HI'; simVrs = 0; simNrRel = 0; simNr = 100; simRbs = { r: 0, p: 0 };
     try { simEngApply(true); } catch (e) { _swallow(e); }    // 상부 콘솔(TQS · 레버 · TRAINING)대로 엔진 상태
     try { updateHoverBtns(); } catch (e) { _swallow(e); }
     // 손을 떼면 그 자리에서 날던 대로 — 지금 자세를 그대로 이어받는다

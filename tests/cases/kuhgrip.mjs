@@ -51,12 +51,32 @@ export async function run(page, t) {
     o.cyc = log.join(',');
     kgPop('cyc'); await w(200); o.cycPop = document.querySelector('#kg-pop .kgp-t').textContent === 'CYCLIC' && !!document.querySelector('#kg-pop-body [data-kg="apDis"]');
     kgPop(null); await w(200); o.closed = getComputedStyle(document.getElementById('kg-pop')).display === 'none';
+    // SRCH LT — 위아래로 광도 · 빛 무리 세기가 따른다
+    kgLt.br = 1; kgPress('srchDim'); _kgHoldStop(); kgPress('srchDim'); _kgHoldStop(); o.br = kgLt.br; o.brK = kgBeams().find(b => b.az === kgLt.az).k;
+    kgPress('srchBrt'); _kgHoldStop(); o.br2 = kgLt.br; kgLt.br = 1;
+    // AP FAST CUT OFF(빨간 단추) — AP1 · AP2 를 끊는다
+    const a1 = ovhdGet('ap1'), a2 = ovhdGet('ap2');
+    kgPress('apCut'); o.cut = ovhdGet('ap1') === 'IN' && ovhdGet('ap2') === 'IN' && afcsAxes().apOff;
+    ovhdSet('ap1', a1); ovhdSet('ap2', a2);
+    // OEI 스위치 — 한 엔진일 때만 · 누를 때마다 HI ↔ LOW
+    if (typeof simOeiToggle === 'function') {
+      const e0 = simEng, m0 = simOeiMode; simEng = 2; kgPress('oei'); o.oei2 = simOeiMode;
+      simEng = 1; simOeiMode = 'HI'; kgPress('oei'); o.oeiLo = simOeiMode; o.limLo = simOeiLim(); kgPress('oei'); o.oeiHi = simOeiMode; o.limHi = simOeiLim();
+      simEng = e0; simOeiMode = m0;
+    } else o.oeiSkip = true;
+    // 사이클릭 — 왼쪽도 같은 방향 · 4-WAY BEEP 화살표는 왼쪽 30°
+    const L = document.getElementById('kg-mini-cycL').innerHTML;
+    o.cycL = !/scale\(-1 1\)/.test(L) && /rotate\(-30 82 88\)/.test(L) && /data-kg="apCut"/.test(L);
     kgSrchSet(false); envSet({ ldg: false }); window.radarAltFt = ra;
     return o;
   });
   t.ok(C.ldgOn && C.ext > 0.15 && C.ret, `LDG LT — ON/OFF · EXT 로 펼치고(${Math.round(C.ext * 100)}%) RET 로 접는다`);
   t.ok(C.az > 10 && C.el > 30 && C.beams === 2 && C.env >= 2 && C.right, `SRCH CTR — 서치라이트를 오른쪽 ${Math.round(C.az)}° · 아래 ${Math.round(C.el)}° 로 돌린다 · 착륙등과 함께 빛 무리 ${C.env}개`);
   t.ok(C.coll.up === 3 && C.coll.dn === 1, `COLL TRIM — 누르는 동안 VS +100 씩 이어진다(UP ${C.coll.up}번 · DN ${C.coll.dn}번)`);
-  t.eq(C.cyc, 'dis,ftr,ftr-,beepF,beep-,beepL,beep-,ptt+,ptt-,gspd', '사이클릭 — DISENGAG · FORCE TRIM · 4-WAY BEEP · PTT(누르는 동안) · G/SPEED');
+  t.eq(C.cyc, 'dis,ftr,ftr-,beepF,beep-,beepL,beep-,ptt+,ptt-,gspd', '사이클릭 — DISENGAG · FORCE TRIM RELEASE · 4-WAY BEEP · PTT(누르는 동안) · G/SPEED');
+  t.ok(Math.abs(C.br - 0.8) < 1e-9 && Math.abs(C.brK - 0.72) < 1e-9 && Math.abs(C.br2 - 0.9) < 1e-9, `SRCH LT — 위아래로 광도(${Math.round(C.br * 100)}% → ${Math.round(C.br2 * 100)}%) · 누르면 ON/OFF`);
+  t.ok(C.cut, 'AP FAST CUT OFF(사이클릭 빨간 단추) — AP1 · AP2 를 한 번에 끊는다');
+  t.ok(C.oeiSkip || (C.oei2 === 'HI' && C.oeiLo === 'LOW' && C.limLo === 600 && C.oeiHi === 'HI' && C.limHi === 150), 'OEI 스위치 — 한 엔진일 때 누를 때마다 HI(2.5분) ↔ LOW(10분) · 두 엔진이면 바뀌지 않는다');
+  t.ok(C.cycL, '사이클릭 — 왼쪽 좌석도 오른쪽과 같은 방향 · 4-WAY BEEP 화살표는 왼쪽으로 30° 틀어짐');
   t.ok(C.cycPop && C.closed, '사이클릭을 크게 띄우고 ✕ 로 닫는다');
 }

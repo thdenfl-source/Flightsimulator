@@ -47,7 +47,24 @@ export async function run(page, t) {
     const info = AIRFIELD_INFO.find(x => x.code === 'SS'), twr = parseFloat(info.twr);
     o.fac = atcFacility(twr); o.none = atcFacility(129.95);
     o.txt = atcReply(o.fac);
-    window.sndOnGround = () => true; o.txtGnd = atcReply(o.fac);
+    window.sndOnGround = () => true; const onRw0 = window.atcOnRunway; atcOnRunway = () => true; o.txtGnd = atcReply(o.fac); atcOnRunway = onRw0;
+    // 타워 교신 흐름 — 활주로 밖(지상 활주 요청) · 활주로 위(이륙) · 관제권 떠남 · 접근(inbound) · 5마일 final(착륙 허가)
+    const wps0 = S.wps; S.wps = [];
+    const F = {}, at = (nm, deg) => ({ lat: ap.lat + nm / 60 * Math.cos(deg * Math.PI / 180), lon: ap.lon + nm / 60 * Math.sin(deg * Math.PI / 180) / Math.cos(ap.lat * Math.PI / 180) });
+    const call = (pos, old, gnd, onRw) => {
+      Object.assign(S, at(...pos)); window.sndOnGround = () => gnd; atcOnRunway = () => onRw;
+      _atcTrack.length = 0; if (old) _atcTrack.push(Object.assign({ t: Date.now() - 9000 }, at(...old)));
+      const f = atcFacility(twr), t = atcReply(f); return { t, p: atcPilotLast };
+    };
+    F.taxiPat = call([0.3, 0], null, true, false);
+    S.wps = [{ lat: ap.lat + 20 / 60, lon: ap.lon, id: 'N' }];
+    F.taxiN = call([0.3, 0], null, true, false);
+    F.ready = call([0.2, 0], null, true, true);
+    F.leave = call([5, 90], [3, 90], false, false);
+    F.inb = call([12, 240], [15, 240], false, false);
+    F.final = call([5, 240], [7, 240], false, false);
+    atcOnRunway = onRw0; S.wps = wps0; _atcTrack.length = 0; atcTwr.phase = null;
+    o.F = F;
     // APP — 코드를 주고 · 맞추면 레이더 포착
     atcSquawk = null; const app = atcFacility(parseFloat((info.app.match(/1[1-3]\d\.\d+/) || [])[0]));
     o.app = !!app;
@@ -63,9 +80,16 @@ export async function run(page, t) {
     return o;
   });
   t.ok(A.fac && A.fac.kind === 'TWR' && A.fac.icao === 'RKSS' && !A.none && /cleared to land/.test(A.txt) && /cleared for takeoff/.test(A.txtGnd),
-    `관제 — 김포 TWR 주파수: 공중 10NM 안 "착륙 허가" · 땅 위 "이륙 허가" (${A.txt.slice(0, 60)}…)`);
+    `관제 — 김포 TWR 주파수: 공중 관제권 안 "착륙 허가" · 활주로 위 "이륙 허가" (${A.txt.slice(0, 60)}…)`);
+  const F = A.F;
+  t.ok(/request taxi to runway for pattern flight/.test(F.taxiPat.p) && /taxi to runway .*altimeter .*report ready/.test(F.taxiPat.t)
+    && /for departure VFR to north bound/.test(F.taxiN.p), `관제 — 활주로 밖: "request taxi to runway …" → "runway …, taxi to runway …, altimeter …, report ready" (${F.taxiPat.t})`);
+  t.ok(/ready for departure VFR to north bound/.test(F.ready.p) && /wind .* runway .* cleared for takeoff/.test(F.ready.t), `관제 — 활주로 위: "ready for departure …" → "wind …, runway …, cleared for takeoff"`);
+  t.ok(/radial 5 miles, leaving your control zone/.test(F.leave.p) && /frequency change approved/.test(F.leave.t), `관제 — 5NM 관제권을 떠날 때: "${F.leave.p}" → "frequency change approved"`);
+  t.ok(/radial 12 miles, request inbound for landing/.test(F.inb.p) && /report five miles from final/.test(F.inb.t), `관제 — 들어올 때: "${F.inb.p}" → "report five miles from final"`);
+  t.ok(/five miles from final/.test(F.final.p) && /wind .* runway .* cleared to land/.test(F.final.t), `관제 — 5마일 final: → "wind …, runway …, cleared to land"`);
   t.ok(!A.app || (/squawk/.test(A.sq1) && /radar contact/.test(A.sq2)), `APP — 코드를 주고, 맞추면 레이더 포착 (${A.app ? A.sq2.slice(0, 50) : '주파수 없음'})`);
-  t.ok(A.ptt.length === 1 && /Tower/.test(A.ptt[0]), 'PTT 로 송신하고 놓으면 1.5초 뒤 관제가 답한다');
+  t.ok(A.ptt.length === 1 && /cleared|report|approved|taxi/.test(A.ptt[0]), 'PTT 로 송신하고 놓으면 1.5초 뒤 관제가 답한다');
   t.ok(A.cl[3] === null && A.pitotAuto && A.pitotAuto.ok && A.pitotOff && !A.pitotOff.ok && A.pitotOff.now === 'OFF',
     '체크리스트 — 콘솔 스위치 항목은 지금 상태로 자동 확인(맞으면 ✓ · 다르면 지금 값) · 확인할 수 없는 항목은 그대로');
 

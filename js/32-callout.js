@@ -78,6 +78,81 @@ function atcRunway(rwyStr) {
   const diff = h => Math.abs(((wd - h) % 360 + 540) % 360 - 180);
   return diff(hd[0]) <= diff(hd[1]) ? ends[0] : ends[1];
 }
+// ── 타워 교신 흐름(실제 관제 교신 순서대로) — 놓았을 때의 자리 · 움직임으로 조종사가 할 말을 고르고 타워가 답한다 ──
+//   지상 · 활주로 밖  → P: "<공항> Tower, <콜사인>, request taxi to runway for departure VFR <방향> bound"(또는 for pattern flight)
+//                       T: "<콜사인>, runway 06, taxi to runway 06, altimeter 2992, report ready"
+//   지상 · 활주로 위  → P: "… ready for departure VFR <방향> bound"(또는 ready for departure for pattern flight)
+//                       T: "<콜사인>, wind 060 at 8, runway 06, cleared for takeoff"
+//   공중 · 멀어지며 관제권(5NM) 언저리 → P: "… 060 radial 5 miles, leaving your control zone"   T: "<콜사인>, frequency change approved"
+//   공중 · 다가오며    → P: "… 240 radial 12 miles, request inbound for landing"            T: "<콜사인>, report five miles from final"
+//   그 뒤 6NM 안      → P: "… five miles from final"                                       T: "<콜사인>, wind …, runway 06, cleared to land"
+//   방향(north · east · south · west bound)은 비행계획에서 공항 5NM 밖 첫 웨이포인트 쪽 — 비행계획이 없으면 장주(pattern) 비행으로 본다.
+const atcTwr = { icao: null, phase: null };            // phase: 'taxi' · 'ready' · 'left' · 'inbound' · 'final'
+const _atcTrack = [];                                  // 2초마다 자리 — 다가오나 멀어지나
+setInterval(() => { try { _atcTrack.push({ t: Date.now(), lat: S.lat, lon: S.lon }); while (_atcTrack.length > 12) _atcTrack.shift(); } catch (e) { _swallow(e); } }, 2000);
+function atcTrend(ap) {                                 // + 멀어진다 · − 다가온다(NM · 약 10초 사이)
+  const old = _atcTrack.find(p => Date.now() - p.t >= 8000) || _atcTrack[0];
+  if (!old) return 0;
+  return distance(S.lat, S.lon, ap.lat, ap.lon) - distance(old.lat, old.lon, ap.lat, ap.lon);
+}
+function atcOnRunway() { try { const f = typeof rwyFlatAt === 'function' ? rwyFlatAt(S.lat, S.lon) : null; return !!f && f.w >= 0.99; } catch (e) { return false; } }
+function atcRadial(ap) {
+  let b = (Math.atan2((S.lon - ap.lon) * Math.cos(S.lat * Math.PI / 180), S.lat - ap.lat) * 180 / Math.PI + 360) % 360;
+  try { if (typeof toMag === 'function') b = toMag(b); } catch (e) { _swallow(e); }
+  return String(Math.round(b) % 360 || 360).padStart(3, '0');
+}
+function atcAltimeter() { const h = (typeof window._qnhHpa === 'number' && Number.isFinite(window._qnhHpa)) ? window._qnhHpa : 1013.25; return String(Math.round(h * 2.953)).padStart(4, '0'); }
+// 떠날 방향 — 비행계획에서 공항 5NM 밖 첫 웨이포인트 쪽 · 없으면 null(장주 비행)
+function atcDepBound(ap) {
+  const w = (S.wps || []).find(x => x && Number.isFinite(x.lat) && distance(ap.lat, ap.lon, x.lat, x.lon) > 5);
+  if (!w) return null;
+  const b = (Math.atan2((w.lon - ap.lon) * Math.cos(ap.lat * Math.PI / 180), w.lat - ap.lat) * 180 / Math.PI + 360) % 360;
+  return ['north', 'east', 'south', 'west'][Math.round(b / 90) % 4];
+}
+function atcTwrCall(fac, gnd, c) {
+  const cs = atcCs(), tw = `${c.nm} Tower`, d = fac.d, dd = Math.max(1, Math.round(d));
+  if (atcTwr.icao !== fac.icao) { atcTwr.icao = fac.icao; atcTwr.phase = null; }
+  const bound = atcDepBound(fac.ap), dep = bound ? `for departure VFR to ${bound} bound` : 'for pattern flight';
+  const rwT = c.rwy ? _rwyTokens(c.rwy) : [];
+  let pilot, tower;
+  if (gnd && !atcOnRunway()) {
+    pilot = `${tw}, ${cs}, request taxi to runway ${dep}.`;
+    tower = `${cs}, ${c.rw}, taxi to ${c.rw}, altimeter ${_say3(atcAltimeter())}, report ready.`;
+    atcTwr.phase = 'taxi'; atcExpect = { t: Date.now(), items: [['taxi'], rwT, ['report ready', 'ready']] };
+  } else if (gnd) {
+    pilot = bound ? `${tw}, ${cs}, ready for departure VFR to ${bound} bound.` : `${tw}, ${cs}, ready for departure for pattern flight.`;
+    tower = `${cs}, ${c.wind}, ${c.rw}, cleared for takeoff.`;
+    atcTwr.phase = 'ready'; atcExpect = { t: Date.now(), items: [['cleared'], ['takeoff', 'take off'], rwT] };
+  } else {
+    const tr = atcTrend(fac.ap), out = tr > 0.05, inb = tr < -0.05;
+    if (atcTwr.phase === 'inbound' && d <= 6.5) {
+      pilot = `${tw}, ${cs}, five miles from final.`;
+      tower = `${cs}, ${c.wind}, ${c.rw}, cleared to land.`;
+      atcTwr.phase = 'final'; atcExpect = { t: Date.now(), items: [['cleared'], ['land'], rwT] };
+    } else if (out && d >= 3 && d <= 10 && atcTwr.phase !== 'inbound') {
+      pilot = `${tw}, ${cs}, ${_say3(atcRadial(fac.ap))} radial ${dd} miles, leaving your control zone.`;
+      tower = `${cs}, frequency change approved.`;
+      atcTwr.phase = 'left'; atcExpect = null;
+    } else if (d > 6.5 || (inb && atcTwr.phase !== 'final')) {
+      pilot = `${tw}, ${cs}, ${_say3(atcRadial(fac.ap))} radial ${dd} miles, request inbound for landing.`;
+      tower = `${cs}, report five miles from final.`;
+      atcTwr.phase = 'inbound'; atcExpect = { t: Date.now(), items: [['report'], ['five', '5'], ['final']] };
+    } else {                                                            // 관제권 안 · 처음 부름(장주 · 다시 접근) — 착륙 허가
+      pilot = `${tw}, ${cs}, five miles from final.`;
+      tower = `${cs}, ${c.wind}, ${c.rw}, cleared to land.`;
+      atcTwr.phase = 'final'; atcExpect = { t: Date.now(), items: [['cleared'], ['land'], rwT] };
+    }
+  }
+  return { pilot, tower };
+}
+// 조종사가 할 말(안내) — 알림과 강평 기록에 남긴다(조종사는 이 말을 스스로 한다)
+function atcPilotShow(fac, pilot) {
+  if (!pilot) return;
+  atcPilotLast = pilot;
+  try { uiToast(`🎙 PILOT — ${pilot}`, '', 6000); } catch (e) { _swallow(e); }
+  try { if (typeof fdrNote === 'function') fdrNote(`조종사 ${fac.name} ${fac.kind}: ${pilot}`); } catch (e) { _swallow(e); }
+}
+let atcPilotLast = null;
 const _say3 = s => String(s).split('').map(c => ({ L: ' left', R: ' right', C: ' center' }[c] || ' ' + c)).join('').trim();
 let atcSquawk = null, atcLast = null;
 function atcReply(fac) {
@@ -87,9 +162,8 @@ function atcReply(fac) {
   let txt;
   if (fac.kind === 'GND') { txt = `${atcCs()}, ${nm} Ground, taxi to holding point ${rw}.`; atcExpect = { t: Date.now(), items: [['holding', 'hold'], rwy ? _rwyTokens(rwy) : []] }; }
   else if (fac.kind === 'TWR') {
-    if (gnd) { txt = `${atcCs()}, ${nm} Tower, ${wind}, ${rw}, cleared for takeoff.`; atcExpect = { t: Date.now(), items: [['cleared'], ['takeoff', 'take off'], rwy ? _rwyTokens(rwy) : []] }; }
-    else if (fac.d <= 10) { txt = `${atcCs()}, ${nm} Tower, ${wind}, ${rw}, cleared to land.`; atcExpect = { t: Date.now(), items: [['cleared'], ['land'], rwy ? _rwyTokens(rwy) : []] }; }
-    else txt = `${atcCs()}, ${nm} Tower, report five miles final ${rw}.`;
+    const r = atcTwrCall(fac, gnd, { nm, wind, rwy, rw });
+    txt = r.tower; atcPilotShow(fac, r.pilot);
   } else {
     const code = (typeof b206r !== 'undefined') ? b206r.xpdr.code : null, mode = (typeof b206r !== 'undefined') ? b206r.xpdr.mode : 'ALT';
     if (!atcSquawk) {

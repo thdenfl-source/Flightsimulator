@@ -1257,8 +1257,8 @@ function drawAI(x, y, w, h) {
     try {
       if (typeof simEng !== 'undefined' && simModeOn) {
         if (simEng === 1) {
-          const left = Math.max(0, OEI_25_SEC - simOeiT);
-          warns.push([left > 0 ? `OEI 2.5MIN ${Math.floor(left / 60)}:${String(Math.floor(left % 60)).padStart(2, '0')}` : 'OEI CONT', '#ffb000']);
+          const left = Math.max(0, (typeof simOeiLim === 'function' ? simOeiLim() : OEI_25_SEC) - simOeiT);
+          warns.push([left > 0 ? `OEI ${typeof simOeiMode !== 'undefined' && simOeiMode === 'LOW' ? 'LOW 10MIN' : 'HI 2.5MIN'} ${Math.floor(left / 60)}:${String(Math.floor(left % 60)).padStart(2, '0')}` : 'OEI CONT', '#ffb000']);
           if (simEngTrng) warns.push([`ENG ${simEngFail} TRNG`, '#00e5ff']);   // 상부 콘솔 TRAINING 으로 든 OEI 훈련
         } else if (simEng === 0) warns.push([simEngSt[1] === 'OFF' && simEngSt[2] === 'OFF' ? 'ENG OFF' : 'ENG IDLE', '#ff3030']);
         if (simVrsOn()) warns.push(['VRS', '#ff3030']);
