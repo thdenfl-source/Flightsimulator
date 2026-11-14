@@ -245,7 +245,7 @@ function _setRender() {
     <div class="set-row"><span>리드백 확인(음성 인식)</span><div>${tg('readback', appSet.readback)}</div></div>
     <div class="set-row"><span>말 빠르기</span><div>${[0.85, 1.05, 1.3].map(r => `<button class="sim-btn ${appSet.rate === r ? 'on' : ''}" data-set="rate:${r}">${r === 0.85 ? '느리게' : r === 1.05 ? '보통' : '빠르게'}</button>`).join('')}</div></div>
     <div class="set-row"><span>콜사인(관제)</span><div><input type="text" data-setv="callsign" value="${appSet.callsign.replace(/"/g, '&quot;')}"></div></div>
-    <div class="set-row"><span>교관 기기 연결</span><div><button class="sim-btn" data-set="ios">다른 기기와 잇기…</button></div></div>
+    <div class="set-row"><span>교관 기기 연결</span><div><button class="sim-btn" data-set="ios">📱 교관 기기와 잇기(QR)</button></div></div>
     <div class="set-row"><span>모든 설정</span><div><button class="sim-btn" data-set="export">내보내기</button><label class="sim-btn">들여오기<input type="file" accept=".json" data-setv="file" hidden></label><button class="sim-btn" data-set="reset">초기화</button></div></div>
     <div class="set-note">환경(시간대 · 시정 · 바다 · 돌풍 · 구름 · 지면 · 교통량)은 🌙 ENV 에서 고릅니다.</div></div>`;
 }
@@ -264,7 +264,7 @@ function settingsImport(text) {
 function settingsReset() { SET_KEYS.forEach(k => { try { localStorage.removeItem(k); } catch (e) { _swallow(e); } }); try { uiToast('설정을 지웠습니다 — 다시 열면 처음 상태입니다'); } catch (e) { _swallow(e); } }
 
 // ── ⑥ 도구 메뉴(🧰) — 작은 화면(폭 900 · 높이 700 아래)에서는 낱 단추 대신 이 메뉴 하나로 ──
-const TOOLS = [['🎬 시나리오', 'toggleScenario'], ['🌙 환경', 'toggleEnvPanel'], ['📋 강평', 'toggleDebrief'], ['🧑‍✈️ 교관 화면', 'openIos'], ['⚙ 설정', 'toggleSettings'], ['❓ 도움말', 'toggleHelp']];
+const TOOLS = [['🎬 시나리오', 'toggleScenario'], ['🌙 환경', 'toggleEnvPanel'], ['📋 강평', 'toggleDebrief'], ['🧑‍✈️ 교관 화면', 'openIos'], ['📱 교관 기기와 잇기', 'toggleRemoteIos'], ['⚙ 설정', 'toggleSettings'], ['❓ 도움말', 'toggleHelp']];
 function toggleTools(ev) {
   let m = document.getElementById('tools-menu');
   if (m && m.style.display === 'block') { m.style.display = 'none'; return; }
@@ -287,67 +287,159 @@ function toggleTools(ev) {
   m.style.top = Math.max(6, below + mh <= window.innerHeight - 6 ? below : above) + 'px';
 }
 
-// ── ⑦ 다른 기기 교관 연결(WebRTC 데이터 통로) — 서버 없이 연결 코드를 두 번 주고받는다 ──
-//   교관 기기(?ios=1): '연결 코드 만들기' → 코드를 교육생 기기로 보냄(복사 · 공유) → 교육생 기기가 낸 답 코드를 붙여 '연결'
-//   교육생 기기(⚙ 설정 → 다른 기기와 잇기): 교관 코드 붙여 넣기 → 답 코드를 교관 기기로 보냄
-//   같은 와이파이면 바로 잇고, 다른 망이면 공개 STUN(구글) 서버로 길을 찾는다(설정 내용은 서버에 가지 않는다)
+// ── ⑦ 다른 기기 교관 연결(WebRTC 데이터 통로) — 서버 없이 QR 두 번: '연결 요청' → '수락' ──
+//   ① 교육생 기기(🧰 도구 → ⚙ 설정 → 교관 기기 연결): [① 연결 요청] → 화면에 QR
+//   ② 교관 기기(교관 화면 📱): [② 수락 — 교육생 QR 찍기] → 카메라로 찍으면 교관 화면에 답 QR
+//   ③ 교육생 기기: [③ 교관 QR 찍기] → 카메라로 찍으면 이어진다
+//   카메라가 없으면 아래 '코드로 잇기'로 같은 내용을 글자로 주고받는다.
+//   연결 정보(SDP)는 꼭 필요한 값(ICE 이름 · 암호 · 인증서 지문 · 주소)만 남겨 짧게 줄인다 — QR 한 장에 들어가게.
+//   같은 와이파이면 바로 잇고, 다른 망이면 공개 STUN(구글) 서버로 길만 찾는다(비행 내용은 두 기기 사이로만 오간다)
 const RTC_ICE = () => (Array.isArray(window._rtcIce) ? window._rtcIce : [{ urls: 'stun:stun.l.google.com:19302' }]);
 const rtc = { pc: null, ch: null, open: false };
 const _b64 = s => btoa(unescape(encodeURIComponent(s))), _unb64 = s => decodeURIComponent(escape(atob(s.trim())));
 function _rtcWire(ch) {
   rtc.ch = ch;
-  ch.onopen = () => { rtc.open = true; try { uiToast('다른 기기와 이어졌습니다(교관 연결)'); } catch (e) { _swallow(e); } _rtcRender(); };
+  ch.onopen = () => { rtc.open = true; try { uiToast('다른 기기와 이어졌습니다(교관 연결)'); } catch (e) { _swallow(e); } qrScanStop(); _rtcRender(); };
   ch.onclose = () => { rtc.open = false; _rtcRender(); };
   ch.onmessage = e => { let m = null; try { m = JSON.parse(e.data); } catch (er) { return; } if (typeof IOS_MODE !== 'undefined' && IOS_MODE) { if (typeof iosRender === 'function') iosRender(m); } else if (typeof iosHandle === 'function') iosHandle(m); };
 }
 function _rtcGather(pc) { return new Promise(res => { if (pc.iceGatheringState === 'complete') return res(); const t = setTimeout(res, 3000); pc.addEventListener('icegatheringstatechange', () => { if (pc.iceGatheringState === 'complete') { clearTimeout(t); res(); } }); }); }
+// ── 연결 정보 줄이기 — 'SS1|o(또는 a)|ufrag|pwd|지문(base64)|setup|주소:포트:종류,…' ──
+function sdpPack(desc) {
+  const sdp = desc.sdp, g = re => { const m = sdp.match(re); return m ? m[1] : ''; };
+  const fp = g(/a=fingerprint:sha-256 ([0-9A-Fa-f:]+)/), fpB = btoa(String.fromCharCode(...fp.split(':').map(h => parseInt(h, 16))));
+  const cands = [...sdp.matchAll(/a=candidate:\S+ 1 udp \d+ (\S+) (\d+) typ (host|srflx|relay)/gi)].map(m => `${m[1]}:${m[2]}:${m[3][0]}`);
+  return ['SS1', desc.type === 'offer' ? 'o' : 'a', g(/a=ice-ufrag:(\S+)/), g(/a=ice-pwd:(\S+)/), fpB, g(/a=setup:(\S+)/), [...new Set(cands)].join(',')].join('|');
+}
+function sdpUnpack(str) {
+  const p = String(str).trim().split('|'); if (p[0] !== 'SS1' || p.length < 7) throw new Error('연결 코드가 아닙니다');
+  const fp = [...atob(p[4])].map(c => c.charCodeAt(0).toString(16).toUpperCase().padStart(2, '0')).join(':');
+  const cands = (p[6] ? p[6].split(',') : []).map((c, i) => {
+    const k = c.lastIndexOf(':'), j = c.lastIndexOf(':', k - 1), ip = c.slice(0, j), port = c.slice(j + 1, k), t = { h: 'host', s: 'srflx', r: 'relay' }[c.slice(k + 1)] || 'host';
+    return `a=candidate:${i + 1} 1 udp ${2122260223 - i * 1000} ${ip} ${port} typ ${t}${t !== 'host' ? ' raddr 0.0.0.0 rport 0' : ''}`;
+  });
+  const sdp = ['v=0', 'o=- 4611731400430051336 2 IN IP4 127.0.0.1', 's=-', 't=0 0', 'a=group:BUNDLE 0', 'a=msid-semantic: WMS',
+    'm=application 9 UDP/DTLS/SCTP webrtc-datachannel', 'c=IN IP4 0.0.0.0', `a=ice-ufrag:${p[2]}`, `a=ice-pwd:${p[3]}`, 'a=ice-options:trickle',
+    `a=fingerprint:sha-256 ${fp}`, `a=setup:${p[5]}`, 'a=mid:0', 'a=sctp-port:5000', 'a=max-message-size:262144', ...cands, ''].join('\r\n');
+  return { type: p[1] === 'o' ? 'offer' : 'answer', sdp };
+}
+// 종전의 긴 코드(base64 JSON)도 받는다
+const _descFrom = code => /^SS1\|/.test(String(code).trim()) ? sdpUnpack(code) : JSON.parse(_unb64(code));
 async function rtcOffer() {
   try { if (rtc.pc) rtc.pc.close(); } catch (e) { _swallow(e); }
   const pc = new RTCPeerConnection({ iceServers: RTC_ICE() }); rtc.pc = pc; rtc.open = false;
   _rtcWire(pc.createDataChannel('ios'));
+  pc.addEventListener('connectionstatechange', _rtcRender);
   await pc.setLocalDescription(await pc.createOffer()); await _rtcGather(pc);
-  return _b64(JSON.stringify(pc.localDescription));
+  return sdpPack(pc.localDescription);
 }
 async function rtcAnswer(code) {
   try { if (rtc.pc) rtc.pc.close(); } catch (e) { _swallow(e); }
   const pc = new RTCPeerConnection({ iceServers: RTC_ICE() }); rtc.pc = pc; rtc.open = false;
   pc.ondatachannel = e => _rtcWire(e.channel);
-  await pc.setRemoteDescription(JSON.parse(_unb64(code)));
+  pc.addEventListener('connectionstatechange', _rtcRender);
+  await pc.setRemoteDescription(_descFrom(code));
   await pc.setLocalDescription(await pc.createAnswer()); await _rtcGather(pc);
-  return _b64(JSON.stringify(pc.localDescription));
+  return sdpPack(pc.localDescription);
 }
-async function rtcAccept(code) { await rtc.pc.setRemoteDescription(JSON.parse(_unb64(code))); }
+async function rtcAccept(code) { await rtc.pc.setRemoteDescription(_descFrom(code)); }
 function rtcSend(m) { try { if (rtc.open && rtc.ch && rtc.ch.readyState === 'open') rtc.ch.send(JSON.stringify(m)); } catch (e) { _swallow(e); } }
+
+// ── QR — 만들기(vendor/qrcode.js) · 읽기(BarcodeDetector 가 있으면 그것, 없으면 vendor/jsQR.js) — 필요할 때만 읽어 온다 ──
+const _jsLoaded = {};
+function _loadJs(src) {
+  if (_jsLoaded[src]) return _jsLoaded[src];
+  return (_jsLoaded[src] = new Promise((ok, no) => { const s = document.createElement('script'); s.src = src; s.onload = ok; s.onerror = () => { delete _jsLoaded[src]; no(new Error('불러오지 못함: ' + src)); }; document.head.appendChild(s); }));
+}
+async function qrSvg(text) {
+  if (typeof qrcode !== 'function') await _loadJs('vendor/qrcode.js');
+  const q = qrcode(0, 'L'); q.addData(text); q.make();
+  return q.createSvgTag({ cellSize: 4, margin: 3 });
+}
+async function qrDecode(imgData) {
+  if (typeof jsQR !== 'function') await _loadJs('vendor/jsQR.js');
+  const r = jsQR(imgData.data, imgData.width, imgData.height, { inversionAttempts: 'dontInvert' });
+  return r ? r.data : null;
+}
+let _qrScan = null;
+// 카메라로 'SS1|' 로 시작하는 QR 을 찾을 때까지 본다 — host 안에 화면을 띄운다
+async function qrScan(host) {
+  qrScanStop();
+  const v = document.createElement('video'); v.setAttribute('playsinline', ''); v.muted = true; v.className = 'rtc-cam';
+  host.innerHTML = ''; host.appendChild(v);
+  const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
+  v.srcObject = stream; await v.play();
+  const st = { stream, stop: false }; _qrScan = st;
+  const det = ('BarcodeDetector' in window) ? new window.BarcodeDetector({ formats: ['qr_code'] }) : null;
+  const cv = document.createElement('canvas'), g = cv.getContext('2d', { willReadFrequently: true });
+  return new Promise((ok, no) => {
+    st.reject = no;
+    const tick = async () => {
+      if (st.stop) return;
+      try {
+        let txt = null;
+        if (det) { const r = await det.detect(v); txt = r && r[0] ? r[0].rawValue : null; }
+        else if (v.videoWidth) { cv.width = v.videoWidth; cv.height = v.videoHeight; g.drawImage(v, 0, 0); txt = await qrDecode(g.getImageData(0, 0, cv.width, cv.height)); }
+        if (txt && /^SS1\|/.test(txt)) { qrScanStop(); host.innerHTML = ''; ok(txt); return; }
+      } catch (e) { _swallow(e); }
+      setTimeout(tick, 200);
+    };
+    tick();
+  });
+}
+function qrScanStop() { const st = _qrScan; _qrScan = null; if (!st) return; st.stop = true; try { st.stream.getTracks().forEach(t => t.stop()); } catch (e) { _swallow(e); } }
+
+// ── 연결 창 ──
 function toggleRemoteIos() {
   let w = document.getElementById('rtc-wrap');
-  if (w && w.style.display === 'flex') { w.style.display = 'none'; return; }
+  if (w && w.style.display === 'flex') { qrScanStop(); w.style.display = 'none'; return; }
   if (!w) {
     w = document.createElement('div'); w.id = 'rtc-wrap';
     const ios = typeof IOS_MODE !== 'undefined' && IOS_MODE;
-    w.innerHTML = `<div class="set-box"><div class="set-bar"><b>${ios ? '교관 기기 — 교육생 기기와 잇기' : '교육생 기기 — 교관 기기와 잇기'}</b><button class="sim-btn" data-rtc="x">✕</button></div>
-      <div class="set-note">${ios ? '① 코드를 만들어 교육생 기기로 보내고 ② 교육생 기기가 돌려준 답 코드를 붙여 넣어 연결합니다.' : '① 교관 기기의 코드를 붙여 넣고 ② 나온 답 코드를 교관 기기로 보냅니다.'}</div>
-      ${ios ? '<div class="set-row"><button class="sim-btn on" data-rtc="offer">① 연결 코드 만들기</button></div>' : '<div class="set-row"><textarea data-rtcv="in" placeholder="교관 기기의 연결 코드"></textarea></div><div class="set-row"><button class="sim-btn on" data-rtc="answer">② 답 코드 만들기</button></div>'}
-      <div class="set-row"><textarea data-rtcv="out" readonly placeholder="여기 나온 코드를 상대 기기로"></textarea></div>
-      <div class="set-row"><button class="sim-btn" data-rtc="copy">복사</button><button class="sim-btn" data-rtc="share">공유</button></div>
-      ${ios ? '<div class="set-row"><textarea data-rtcv="in" placeholder="교육생 기기의 답 코드"></textarea></div><div class="set-row"><button class="sim-btn on" data-rtc="accept">② 연결</button></div>' : ''}
-      <div class="set-note" data-rtcv="st"></div></div>`;
+    w.innerHTML = `<div class="set-box rtc-box"><div class="set-bar"><b>${ios ? '📱 교육생 기기와 잇기' : '📱 교관 기기와 잇기'}</b><button class="sim-btn" data-rtc="x">✕</button></div>
+      <div class="rtc-steps">${ios
+        ? '<div>교육생 기기에서 <b>🧰 도구 → 📱 교관 기기와 잇기 → [① 연결 요청]</b>을 누르면 QR 이 나옵니다.</div><div>아래 <b>[② 수락]</b>을 누르고 그 QR 을 찍으면 여기에 답 QR 이 나옵니다.</div><div>교육생 기기가 <b>[③ 교관 QR 찍기]</b>로 답 QR 을 찍으면 이어집니다.</div>'
+        : '<div><b>[① 연결 요청]</b>을 누르면 QR 이 나옵니다 — 교관 기기가 <b>[② 수락]</b>으로 찍습니다.</div><div>교관 화면에 답 QR 이 나오면 <b>[③ 교관 QR 찍기]</b>를 누르고 그 QR 을 찍습니다.</div>'}</div>
+      <div class="rtc-btns">${ios ? '<button class="sim-btn on rtc-big" data-rtc="accept">② 수락 — 교육생 QR 찍기 📷</button>'
+        : '<button class="sim-btn on rtc-big" data-rtc="request">① 연결 요청</button><button class="sim-btn on rtc-big" data-rtc="scanAns">③ 교관 QR 찍기 📷</button>'}</div>
+      <div class="rtc-view" data-rtcv="view"></div>
+      <div class="set-note rtc-st" data-rtcv="st"></div>
+      <details class="rtc-txt"><summary>카메라가 없을 때 — 코드로 잇기</summary>
+        <div class="set-row"><textarea data-rtcv="out" readonly placeholder="${ios ? '여기 나온 답 코드를 교육생 기기로' : '여기 나온 요청 코드를 교관 기기로'}"></textarea></div>
+        <div class="set-row"><button class="sim-btn" data-rtc="copy">복사</button><button class="sim-btn" data-rtc="share">공유</button></div>
+        <div class="set-row"><textarea data-rtcv="in" placeholder="${ios ? '교육생 기기의 요청 코드를 붙여 넣기' : '교관 기기의 답 코드를 붙여 넣기'}"></textarea></div>
+        <div class="set-row"><button class="sim-btn" data-rtc="${ios ? 'acceptTxt' : 'finishTxt'}">${ios ? '수락(답 코드 만들기)' : '연결'}</button></div>
+      </details></div>`;
     document.body.appendChild(w);
+    const view = w.querySelector('[data-rtcv="view"]'), out = w.querySelector('[data-rtcv="out"]'), inp = w.querySelector('[data-rtcv="in"]');
+    const showQr = async (code, msg) => { out.value = code; view.innerHTML = `<div class="rtc-qr">${await qrSvg(code)}</div><div class="set-note">${msg}</div>`; };
     w.addEventListener('click', async e => {
-      const b = e.target.closest('[data-rtc]'); if (!b) { if (e.target === w) w.style.display = 'none'; return; }
-      const k = b.dataset.rtc, out = w.querySelector('[data-rtcv="out"]'), inp = w.querySelector('[data-rtcv="in"]');
+      const b = e.target.closest('[data-rtc]'); if (!b) { if (e.target === w) { qrScanStop(); w.style.display = 'none'; } return; }
+      const k = b.dataset.rtc;
       try {
-        if (k === 'x') w.style.display = 'none';
-        else if (k === 'offer') { out.value = '만드는 중…'; out.value = await rtcOffer(); }
-        else if (k === 'answer') { out.value = '만드는 중…'; out.value = await rtcAnswer(inp.value); }
-        else if (k === 'accept') await rtcAccept(inp.value);
+        if (k === 'x') { qrScanStop(); w.style.display = 'none'; return; }
+        if (k === 'request') { view.innerHTML = '<div class="set-note">요청 QR 을 만드는 중…</div>'; await showQr(await rtcOffer(), '교관 기기의 <b>[② 수락]</b>으로 이 QR 을 찍게 하세요. 찍고 나면 <b>[③ 교관 QR 찍기]</b>를 누릅니다.'); }
+        else if (k === 'scanAns') { if (!rtc.pc) throw new Error('먼저 ① 연결 요청을 누르십시오'); const code = await qrScan(view); view.innerHTML = '<div class="set-note">교관 QR 을 읽었습니다 — 잇는 중…</div>'; await rtcAccept(code); }
+        else if (k === 'accept') { const code = await qrScan(view); view.innerHTML = '<div class="set-note">교육생 QR 을 읽었습니다 — 답 QR 을 만드는 중…</div>'; await showQr(await rtcAnswer(code), '교육생 기기의 <b>[③ 교관 QR 찍기]</b>로 이 QR 을 찍게 하세요.'); }
+        else if (k === 'acceptTxt') await showQr(await rtcAnswer(inp.value), '이 QR(또는 위 답 코드)을 교육생 기기로 보내세요.');
+        else if (k === 'finishTxt') await rtcAccept(inp.value);
         else if (k === 'copy') { await navigator.clipboard.writeText(out.value); uiToast('복사했습니다'); }
         else if (k === 'share') { if (navigator.share) await navigator.share({ text: out.value }); else { await navigator.clipboard.writeText(out.value); uiToast('공유를 쓸 수 없어 복사했습니다'); } }
-      } catch (er) { _swallow(er); try { uiToast('연결 코드가 맞지 않습니다', 'err'); } catch (e2) { _swallow(e2); } }
+      } catch (er) {
+        _swallow(er);
+        const msg = /Permission|NotAllowed/i.test(String(er && er.name) + er) ? '카메라를 쓸 수 없습니다 — 브라우저의 카메라 허용을 켜거나 아래 "코드로 잇기"를 쓰십시오'
+          : /NotFound|Devices/i.test(String(er && er.name) + er) ? '카메라가 없습니다 — 아래 "코드로 잇기"를 쓰십시오' : (er && er.message) || '연결 코드가 맞지 않습니다';
+        try { uiToast(msg, 'err', 4000); } catch (e2) { _swallow(e2); }
+      }
       _rtcRender();
     });
   }
   w.style.display = 'flex'; _rtcRender();
 }
-function _rtcRender() { const s = document.querySelector('#rtc-wrap [data-rtcv="st"]'); if (s) s.textContent = rtc.open ? '● 이어짐' : rtc.pc ? `○ ${rtc.pc.connectionState || '기다리는 중'}` : ''; }
-
+function _rtcRender() {
+  const s = document.querySelector('#rtc-wrap [data-rtcv="st"]'); if (!s) return;
+  const cs = rtc.pc ? rtc.pc.connectionState : '';
+  s.textContent = rtc.open ? '● 이어졌습니다 — 이 창을 닫아도 됩니다' : cs === 'failed' ? '✕ 잇지 못했습니다 — 두 기기가 같은 와이파이인지 보고 처음부터 다시' : rtc.pc ? '○ 기다리는 중…' : '';
+  s.classList.toggle('ok', rtc.open);
+}
 try { appRegister({ toggleSettings, toggleTools, toggleRemoteIos, envMetarNearest }); } catch (e) { _swallow(e); }

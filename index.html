@@ -17,9 +17,9 @@
      CDN 을 쓰면 한 번이라도 못 받는 순간 앱이 통째로 죽는다 — 비행 중에는
      그럴 여지를 두지 않는다. -->
 <!-- 패널 새 창(다중 모니터) — 라이브러리가 거는 이벤트까지 받아 적어야 하므로 맨 먼저 -->
-<script src="js/00-edition.js?v=649"></script>
-<script src="js/00-aircraft.js?v=649"></script>
-<script src="js/00-popout.js?v=649"></script>
+<script src="js/00-edition.js?v=650"></script>
+<script src="js/00-aircraft.js?v=650"></script>
+<script src="js/00-popout.js?v=650"></script>
 <link rel="stylesheet" href="vendor/leaflet.css"/>
 <script src="vendor/leaflet.js"></script>
 <link rel="stylesheet" href="vendor/leaflet-velocity.min.css"/>
@@ -1151,6 +1151,15 @@ html.env-rain1 .env-rain { display: block; opacity: 0.45; } html.env-rain2 .env-
 .set-box input[type=text] { flex: 1; min-width: 0; background: #0b1218; color: #fff; border: 1px solid #3a4a58; border-radius: 4px; padding: 5px 8px; font-size: 14px; }
 .set-box textarea { width: 100%; height: 70px; background: #0b1218; color: #cfe; border: 1px solid #3a4a58; border-radius: 4px; font: 11px monospace; }
 .tfc-mk { pointer-events: none; }
+#rtc-wrap .rtc-box { width: min(560px, 96vw); }
+#rtc-wrap .rtc-steps { padding: 6px 14px; line-height: 1.7; font-size: 14px; } #rtc-wrap .rtc-steps b { color: #00e5ff; }
+#rtc-wrap .rtc-btns { display: flex; flex-wrap: wrap; gap: 8px; padding: 6px 12px; }
+#rtc-wrap .rtc-big { flex: 1 1 200px !important; padding: 12px 10px !important; font-size: 16px !important; }
+#rtc-wrap .rtc-view { display: flex; flex-direction: column; align-items: center; padding: 6px 12px; }
+#rtc-wrap .rtc-qr { background: #fff; padding: 8px; border-radius: 6px; line-height: 0; } #rtc-wrap .rtc-qr svg { width: min(320px, 80vw); height: auto; }
+#rtc-wrap .rtc-cam { width: min(360px, 86vw); border-radius: 6px; background: #000; }
+#rtc-wrap .rtc-st { font-size: 14px; } #rtc-wrap .rtc-st.ok { color: #7dff3a; }
+#rtc-wrap .rtc-txt { padding: 4px 12px; color: #8aa0b0; } #rtc-wrap .rtc-txt summary { cursor: pointer; padding: 4px 0; }
 /* 교관 화면(31-ios.js · ?ios=1) — 앱은 감추고 교관 화면만 */
 html.ios-mode body > *:not(#ios-root):not(.ui-toast-wrap):not(#rtc-wrap) { display: none !important; }
 html.ios-mode body { background: #0b1218; overflow: auto; }
@@ -2637,7 +2646,7 @@ body.simple-mode #simple-view { display: flex; position: fixed; left: 0; right: 
     </div>
   </form>
 </div>
-<script src="js/00-gate.js?v=649"></script>
+<script src="js/00-gate.js?v=650"></script>
 <!-- ── 단일화면 선택 바 (기본 숨김) ── -->
 <!-- ── 시작 안내(사용법/키보드) 오버레이 ── -->
 <div id="help-overlay" style="display:none;">
@@ -3952,50 +3961,50 @@ body.simple-mode #simple-view { display: flex; position: fixed; left: 0; right: 
 <!-- 앱 코드 — 클래식 스크립트(모듈 아님)라 전역 스코프를 공유한다.
      순서가 곧 실행 순서이므로 임의로 바꾸지 말 것. -->
   <!-- AIP 데이터 — 코드보다 먼저 로드한다 -->
-  <script src="js/data/terminal-fixes.js?v=649"></script>
-  <script src="js/data/ifr-fixes.js?v=649"></script>
-  <script src="js/data/ifr-procedures.js?v=649"></script>
-  <script src="js/data/airfield-info.js?v=649"></script>
-  <script src="js/data/enr-vors.js?v=649"></script>
-  <script src="js/data/loc-stations.js?v=649"></script>
-  <script src="js/data/enr-routes.js?v=649"></script>
-  <script src="js/data/airspace.js?v=649"></script>
-  <script src="js/data/runways.js?v=649"></script>
+  <script src="js/data/terminal-fixes.js?v=650"></script>
+  <script src="js/data/ifr-fixes.js?v=650"></script>
+  <script src="js/data/ifr-procedures.js?v=650"></script>
+  <script src="js/data/airfield-info.js?v=650"></script>
+  <script src="js/data/enr-vors.js?v=650"></script>
+  <script src="js/data/loc-stations.js?v=650"></script>
+  <script src="js/data/enr-routes.js?v=650"></script>
+  <script src="js/data/airspace.js?v=650"></script>
+  <script src="js/data/runways.js?v=650"></script>
   <!-- 앱 코드 -->
-  <script src="js/00-ui.js?v=649"></script>
-  <script src="js/01-state.js?v=649"></script>
-  <script src="js/02-math.js?v=649"></script>
-  <script src="js/03-pfd.js?v=649"></script>
-  <script src="js/04-map.js?v=649"></script>
-  <script src="js/05-gps.js?v=649"></script>
-  <script src="js/06-nav.js?v=649"></script>
-  <script src="js/07-sim.js?v=649"></script>
-  <script src="js/08-ifrdb.js?v=649"></script>
-  <script src="js/09-cdu.js?v=649"></script>
-  <script src="js/10-tools.js?v=649"></script>
-  <script src="js/11-charts.js?v=649"></script>
-  <script src="js/12-joystick.js?v=649"></script>
-  <script src="js/13-joyhid.js?v=649"></script>
-  <script src="js/14-simmode.js?v=649"></script>
-  <script src="js/15-heli3d.js?v=649"></script>
-  <script src="js/16-sound.js?v=649"></script>
-  <script src="js/17-upper.js?v=649"></script>
-  <script src="js/18-system.js?v=649"></script>
-  <script src="js/19-lower.js?v=649"></script>
-  <script src="js/20-navaids.js?v=649"></script>
-  <script src="js/21-c5000.js?v=649"></script>
-  <script src="js/22-npx138.js?v=649"></script>
-  <script src="js/23-afcs.js?v=649"></script>
-  <script src="js/24-sar.js?v=649"></script>
-  <script src="js/25-b206panel.js?v=649"></script>
-  <script src="js/26-b206radio.js?v=649"></script>
-  <script src="js/27-b206coll.js?v=649"></script>
-  <script src="js/28-debrief.js?v=649"></script>
-  <script src="js/29-env.js?v=649"></script>
-  <script src="js/30-scenario.js?v=649"></script>
-  <script src="js/31-ios.js?v=649"></script>
-  <script src="js/32-callout.js?v=649"></script>
-  <script src="js/33-train4.js?v=649"></script>
+  <script src="js/00-ui.js?v=650"></script>
+  <script src="js/01-state.js?v=650"></script>
+  <script src="js/02-math.js?v=650"></script>
+  <script src="js/03-pfd.js?v=650"></script>
+  <script src="js/04-map.js?v=650"></script>
+  <script src="js/05-gps.js?v=650"></script>
+  <script src="js/06-nav.js?v=650"></script>
+  <script src="js/07-sim.js?v=650"></script>
+  <script src="js/08-ifrdb.js?v=650"></script>
+  <script src="js/09-cdu.js?v=650"></script>
+  <script src="js/10-tools.js?v=650"></script>
+  <script src="js/11-charts.js?v=650"></script>
+  <script src="js/12-joystick.js?v=650"></script>
+  <script src="js/13-joyhid.js?v=650"></script>
+  <script src="js/14-simmode.js?v=650"></script>
+  <script src="js/15-heli3d.js?v=650"></script>
+  <script src="js/16-sound.js?v=650"></script>
+  <script src="js/17-upper.js?v=650"></script>
+  <script src="js/18-system.js?v=650"></script>
+  <script src="js/19-lower.js?v=650"></script>
+  <script src="js/20-navaids.js?v=650"></script>
+  <script src="js/21-c5000.js?v=650"></script>
+  <script src="js/22-npx138.js?v=650"></script>
+  <script src="js/23-afcs.js?v=650"></script>
+  <script src="js/24-sar.js?v=650"></script>
+  <script src="js/25-b206panel.js?v=650"></script>
+  <script src="js/26-b206radio.js?v=650"></script>
+  <script src="js/27-b206coll.js?v=650"></script>
+  <script src="js/28-debrief.js?v=650"></script>
+  <script src="js/29-env.js?v=650"></script>
+  <script src="js/30-scenario.js?v=650"></script>
+  <script src="js/31-ios.js?v=650"></script>
+  <script src="js/32-callout.js?v=650"></script>
+  <script src="js/33-train4.js?v=650"></script>
 
 <input type="file" id="zipFileInput" accept=".zip,application/zip,application/x-zip-compressed,application/octet-stream" style="display:none" onchange="handleZipFile(this.files[0]); this.value='';"></body>
 </html>

@@ -1,6 +1,6 @@
 // VFR Flight Sim — Service Worker
 // 버전을 올리면 캐시가 갱신됩니다
-const CACHE = 'vfr-flight-v649';
+const CACHE = 'vfr-flight-v650';
 const CORE  = [
   './index.html',
   './manifest.json',
@@ -16,6 +16,8 @@ const CORE  = [
   './vendor/jszip.min.js',
   './vendor/pdf.min.js',
   './vendor/pdf.worker.min.js',
+  './vendor/qrcode.js',
+  './vendor/jsQR.js',
   // AIP 데이터 — 코드보다 먼저 로드된다
   './js/data/terminal-fixes.js',
   './js/data/ifr-fixes.js',

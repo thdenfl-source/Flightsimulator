@@ -66,7 +66,7 @@ export async function run(page, t) {
     appSet.callsign = 'Coastguard zero one'; appSetSave(); sw.style.display = 'none';
     // 도구 메뉴 — 누르면 메뉴 · 메뉴에서 설정
     toggleTools(); const tm = document.getElementById('tools-menu');
-    o.tools = getComputedStyle(tm).display === 'block' && tm.querySelectorAll('[data-tool]').length === 6;
+    o.tools = getComputedStyle(tm).display === 'block' && tm.querySelectorAll('[data-tool]').length === 7;
     tm.querySelector('[data-tool="toggleSettings"]').click(); o.toolSet = getComputedStyle(document.getElementById('set-wrap')).display === 'flex'; document.getElementById('set-wrap').style.display = 'none';
     // 브라운아웃 — 모래 · 15ft · 호버 토크
     envSet({ surface: 'sand' }); const ra0 = window.radarAltFt; window.radarAltFt = () => 15; const tq0 = window.tqShown; window.tqShown = () => 70; const s0 = S.spd; S.spd = 3;
@@ -130,9 +130,19 @@ export async function run(page, t) {
   const [ios] = await Promise.all([page.waitForEvent('popup'), page.evaluate(() => { window._rtcIce = []; document.getElementById('map-ios-btn').click(); })]);
   await ios.waitForFunction(() => !!document.getElementById('ios-root'), null, { timeout: 20000 });
   await page.evaluate(() => { try { _iosCh.close(); } catch (e) { /* 같은 브라우저 통로는 끊고 WebRTC 로만 */ } });
-  const offer = await ios.evaluate(async () => { window._rtcIce = []; try { _iosCh.close(); } catch (e) { /* */ } return await rtcOffer(); });
-  const answer = await page.evaluate(async c => await rtcAnswer(c), offer);
-  await ios.evaluate(async c => await rtcAccept(c), answer);
+  // 교육생이 '연결 요청'(짧은 코드 → QR) · 교관이 '수락'(답 코드 → QR) · 교육생이 답을 받아 잇는다
+  const offer = await page.evaluate(async () => await rtcOffer());
+  const answer = await ios.evaluate(async c => { window._rtcIce = []; try { _iosCh.close(); } catch (e) { /* */ } return await rtcAnswer(c); }, offer);
+  await page.evaluate(async c => await rtcAccept(c), answer);
+  // QR 로 그렸다가 다시 읽어도 같은 코드인가(QR 한 장에 들어가는 길이인가)
+  const QR = await page.evaluate(async code => {
+    const svg = await qrSvg(code), img = new Image();
+    await new Promise(r => { img.onload = r; img.src = 'data:image/svg+xml;base64,' + btoa(svg); });
+    const c = document.createElement('canvas'); c.width = img.width * 2; c.height = img.height * 2; const g = c.getContext('2d');
+    g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.imageSmoothingEnabled = false; g.drawImage(img, 0, 0, c.width, c.height);
+    return { len: code.length, back: await qrDecode(g.getImageData(0, 0, c.width, c.height)) === code };
+  }, offer);
+  t.ok(/^SS1\|o\|/.test(offer) && /^SS1\|a\|/.test(answer) && QR.len < 600 && QR.back, `연결 요청 코드는 짧게(${QR.len}자) — QR 로 그렸다 읽어도 같다`);
   await page.waitForFunction(() => rtc.open, null, { timeout: 10000 }).catch(() => {});
   await page.evaluate(() => iosSend());
   await ios.waitForFunction(() => /Bell 206/.test(document.querySelector('[data-iosv="state"]').textContent), null, { timeout: 5000 }).catch(() => {});
@@ -141,7 +151,7 @@ export async function run(page, t) {
   await page.waitForTimeout(400);
   const nightR = await page.evaluate(() => { const v = env.tod; envSet({ tod: 'DAY' }); return v; });
   await ios.close();
-  t.ok(R.open && /Bell 206/.test(R.st) && nightR === 'NIGHT', '다른 기기 교관 연결(WebRTC) — 연결 코드 두 번 주고받아 상태를 받고 · 야간 명령이 닿는다');
+  t.ok(R.open && /Bell 206/.test(R.st) && nightR === 'NIGHT', '다른 기기 교관 연결 — 교육생 "연결 요청" · 교관 "수락" 으로 이어져 상태를 받고 · 야간 명령이 닿는다');
 
   const errs = (page.errors || []).filter(e => !/Failed to fetch|NetworkError|tile/i.test(e));
   t.ok(errs.length === 0, '오류 없음' + (errs.length ? ' — ' + errs.slice(0, 2).join(' / ') : ''));
