@@ -15,6 +15,8 @@
 | maplibre-gl.js · .css | 5.24.0 | 3D 지형 (카메라 180° · 롤 · 하늘) |
 | jszip.min.js | 3.10.1 | AIRAC ZIP 가져오기 |
 | pdf.min.js · pdf.worker.min.js | 3.11.174 | 차트 PDF 뷰어 |
+| qrcode.js (qrcode-generator) | 1.4.4 | 교관 기기 연결 QR 만들기(필요할 때만 읽는다 · 33-train4.js) |
+| jsQR.js | 1.4.0 | 교관 기기 연결 QR 읽기(카메라 · 필요할 때만 읽는다) |
 
 각 라이선스는 `licenses/` 에 원본 그대로 두었다(전부 BSD-2/MIT/Apache-2.0 계열).
 
