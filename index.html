@@ -17,9 +17,9 @@
      CDN 을 쓰면 한 번이라도 못 받는 순간 앱이 통째로 죽는다 — 비행 중에는
      그럴 여지를 두지 않는다. -->
 <!-- 패널 새 창(다중 모니터) — 라이브러리가 거는 이벤트까지 받아 적어야 하므로 맨 먼저 -->
-<script src="js/00-edition.js?v=630"></script>
-<script src="js/00-aircraft.js?v=630"></script>
-<script src="js/00-popout.js?v=630"></script>
+<script src="js/00-edition.js?v=631"></script>
+<script src="js/00-aircraft.js?v=631"></script>
+<script src="js/00-popout.js?v=631"></script>
 <link rel="stylesheet" href="vendor/leaflet.css"/>
 <script src="vendor/leaflet.js"></script>
 <link rel="stylesheet" href="vendor/leaflet-velocity.min.css"/>
@@ -2276,6 +2276,80 @@ html.ed-proc #chin-btn, html.ed-proc #ext-btn, html.ed-proc #extcam-3d, html.ed-
 .lcon-nopwr .ov-lpb.in .ov-sq { color: #555 !important; text-shadow: none !important; }
 .lcon-nopwr .ov-lamp.on .ov-sq { color: #3c4a3c !important; background: #111 !important; box-shadow: none !important; }
 .lcon-nopwr .npx-led { background: radial-gradient(circle at 40% 35%, #c7c9cc, #6c6f73) !important; box-shadow: 0 0 0 2px #222, 0 0 0 3px #888 !important; }
+/* Bell 206 항공전자 스택(js/26-b206radio.js) — 하부 콘솔 자리(980×1400) */
+html.ac-b206 #lcon-wrap .ov-reset-btn, html.ac-b206 #lcon-wrap .ov-zones-btn { display: none; }   /* 스위치 판이 없다 */
+#b206rad { display: flex; flex-direction: column; gap: 6px; background: #121314; font-family: Arial, sans-serif; color: #c9cdd1; }
+#b206rad button { font-family: Arial, sans-serif; cursor: pointer; }
+.b2r-unit { position: relative; background: linear-gradient(#26292c, #16181a); border: 2px solid #3a3f44; border-radius: 6px; box-shadow: inset 0 0 0 3px #0d0e0f; flex: none; }
+.b2r-aud { height: 190px; } .b2r-gns { height: 396px; } .b2r-rad { height: 190px; } .b2r-adf { height: 200px; } .b2r-xp { height: 200px; }
+.b2r-brand { position: absolute; left: 28px; top: 12px; font-size: 15px; font-weight: bold; color: #b9bec3; letter-spacing: 1px; }
+.b2r-model { position: absolute; right: 30px; top: 12px; font-size: 14px; font-weight: bold; color: #b9bec3; }
+.b2r-tag { position: absolute; right: 30px; top: 8px; font-size: 15px; font-weight: bold; color: #b9bec3; letter-spacing: 1px; }
+.b2r-knob { position: absolute; border-radius: 50%; background: radial-gradient(circle at 40% 35%, #3a3e42, #0b0c0d 70%); border: 3px solid #5c6166; touch-action: none; cursor: pointer; }
+.b2r-knob .b2r-kin { position: absolute; inset: 24%; border-radius: 50%; background: radial-gradient(circle at 40% 35%, #44494e, #111 70%); border: 3px solid #6d7378; }
+.b2r-knob.sm { width: 92px; height: 92px; left: 34px; top: 46px; }
+.b2r-knob.mic { width: 104px; height: 104px; right: 70px; top: 44px; }
+.b2r-knob.big { width: 128px; height: 128px; right: 40px; top: 28px; }
+.b2r-knob.big.gl { left: 26px; right: auto; top: auto; bottom: 22px; }
+.b2r-knob.big.gr2 { right: 26px; top: auto; bottom: 22px; }
+.b2r-knob.mode { width: 92px; height: 92px; right: 60px; top: 26px; }
+.b2r-knob.mode .b2r-kin::after { content: ''; position: absolute; left: 50%; top: 6%; width: 4px; height: 40%; margin-left: -2px; background: #ddd; transform-origin: 50% 110%; transform: rotate(var(--a, 0deg)); }
+.b2r-knob.xd { position: relative; width: 76px; height: 76px; display: inline-block; margin: 0 46px; }
+.b2r-ivl, .b2r-micl { position: absolute; font-size: 13px; font-weight: bold; color: #ff9a3a; }
+.b2r-ivl { left: 30px; bottom: 16px; } .b2r-micl { right: 64px; bottom: 16px; } .b2r-ivl b, .b2r-micl b { color: #fff; }
+.b2r-arow { position: absolute; left: 160px; right: 200px; display: flex; justify-content: space-between; }
+.b2r-arow.t { top: 30px; } .b2r-arow.b { top: 112px; }
+.b2r-ab { width: 46px; height: 52px; border-radius: 4px; background: #1d1f21; border: 2px solid #4a4f54; display: flex; align-items: center; justify-content: center; padding: 0; }
+.b2r-ab i { width: 22px; height: 30px; border-radius: 3px; background: #3a2a22; box-shadow: inset 0 0 4px #000; }
+.b2r-ab.on i { background: #ff7a3a; box-shadow: 0 0 10px #ff6a2a, inset 0 0 4px #ffd0a0; }
+.b2r-alab { position: absolute; left: 160px; right: 200px; top: 88px; font-size: 15px; font-weight: bold; color: #ff9a3a; text-align: center; letter-spacing: 1px; white-space: nowrap; }
+.b2r-sl { position: absolute; left: 160px; font-size: 10px; color: #8a8f94; } .b2r-sl.t { top: 16px; } .b2r-sl.b { top: 168px; }
+.b2r-scr { position: absolute; left: 200px; right: 200px; top: 40px; bottom: 70px; background: #1f6fd0; border: 4px solid #0b0c0d; border-radius: 4px; color: #fff; overflow: hidden; font-family: 'Courier New', monospace; font-weight: bold; }
+.b2r-scr.off { background: #050607; }
+.b2r-boot { position: absolute; inset: 0; padding: 10px 14px; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; font-size: 22px; color: #ffe27a; }
+.b2r-boot b { color: #ffe27a; } .b2r-boot i { font-style: normal; color: #9df5c8; font-size: 19px; }
+.b2r-ok { position: absolute; right: 14px; bottom: 10px; background: #ffb300; color: #6b3d00; padding: 2px 10px; border-radius: 3px; font-size: 18px; animation: b2rBlink 1s steps(2) infinite; }
+.b2r-globe { position: absolute; right: 18px; top: 22px; width: 120px; height: 120px; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #8fe64a 0 26%, #2a72d0 27%); border: 3px solid #9df5c8; }
+@keyframes b2rBlink { 50% { opacity: 0.25; } }
+.b2r-gl { position: absolute; left: 0; top: 0; bottom: 0; width: 34%; background: #000; padding: 8px 6px; box-sizing: border-box; }
+.b2r-gf { margin-bottom: 14px; font-size: 22px; } .b2r-gf em { display: block; font-style: normal; font-size: 13px; color: #9aa; }
+.b2r-gf b { display: block; color: #3ef; } .b2r-gf span { display: block; color: #fff; } .b2r-gf.foc span { outline: 2px solid #3ef; outline-offset: 1px; }
+.b2r-gr { position: absolute; left: 34%; right: 0; top: 0; bottom: 0; background: #000; padding: 8px 10px; box-sizing: border-box; }
+.b2r-gnav > div { display: flex; justify-content: space-between; font-size: 21px; } .b2r-gnav em { font-style: normal; color: #9aa; } .b2r-gnav b { color: #f6f; }
+.b2r-gwpt { color: #fff; font-size: 20px; margin-bottom: 4px; } .b2r-gwpt b { color: #f6f; }
+.b2r-cdi { position: absolute; left: 12px; right: 12px; bottom: 10px; height: 18px; border: 2px solid #fff; border-radius: 3px; }
+.b2r-cdi.off { text-align: center; font-size: 13px; color: #888; border-color: #555; }
+.b2r-cdi i { position: absolute; top: -4px; width: 5px; height: 22px; margin-left: -2px; background: #f6f; }
+.b2r-gfpl { font-size: 18px; } .b2r-gfpl em { display: block; font-style: normal; color: #3ef; font-size: 14px; margin-bottom: 4px; } .b2r-gfpl .act { color: #f6f; }
+.b2r-gk { position: absolute; width: 56px; height: 56px; border-radius: 6px; background: #1d1f21; border: 2px solid #4a4f54; color: #ddd; font-size: 15px; font-weight: bold; }
+.b2r-gk.cflip { left: 120px; top: 60px; } .b2r-gk.vflip { left: 120px; top: 136px; } .b2r-gk.cv { left: 160px; bottom: 30px; width: 40px; height: 40px; font-size: 11px; }
+.b2r-gbtm { position: absolute; left: 200px; right: 200px; bottom: 16px; display: flex; justify-content: space-around; }
+.b2r-gb { background: #1d1f21; border: 2px solid #4a4f54; border-radius: 5px; color: #ddd; font-size: 15px; font-weight: bold; padding: 8px 12px; }
+.b2r-gright { position: absolute; right: 22px; top: 40px; width: 160px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.b2r-gright .b2r-gb { padding: 12px 4px; }
+.b2r-pwr { position: absolute; width: 40px; height: 40px; border-radius: 50%; background: radial-gradient(circle, #555, #111); border: 3px solid #777; }
+.b2r-pwr.on { border-color: #3c3; }
+.b2r-gns .b2r-pwr { left: 40px; top: 50px; }
+.b2r-rad .b2r-pwr { right: 236px; top: 80px; }
+.b2r-pl { position: absolute; right: 178px; top: 76px; font-size: 12px; font-weight: bold; color: #aaa; text-align: center; }
+.b2r-disp { position: absolute; left: 50px; right: 300px; top: 34px; height: 92px; background: #080606; border-radius: 4px; border: 2px solid #2a2d30;
+  display: flex; align-items: center; justify-content: space-around; }
+.b2r-seg { font-family: 'Courier New', monospace; font-weight: bold; font-size: 64px; color: #ff4a22; text-shadow: 0 0 10px #ff3a10; letter-spacing: 4px; font-style: italic; }
+.b2r-disp small { font-size: 16px; font-weight: bold; color: #ff4a22; }
+.b2r-ann { position: absolute; left: 8px; top: 8px; } .b2r-fl { position: absolute; left: 10px; bottom: 10px; } .b2r-alt { position: absolute; left: 41%; top: 6px; } .b2r-r { position: absolute; left: 55%; top: 6px; }
+.b2r-ul, .b2r-sl2 { position: absolute; top: 132px; font-size: 13px; font-weight: bold; color: #aaa; }
+.b2r-ul { left: 170px; } .b2r-sl2 { left: 420px; }
+.b2r-flip { position: absolute; left: 270px; bottom: 8px; width: 66px; height: 32px; background: #e8e4da; border: 0; border-radius: 3px; font-size: 18px; font-weight: bold; color: #333; }
+.b2r-abtn { position: absolute; left: 120px; bottom: 6px; display: flex; gap: 20px; }
+.b2r-wb { background: #e8e4da; border: 0; border-radius: 3px; font-size: 13px; font-weight: bold; color: #333; padding: 8px 12px; }
+.b2r-wb.on { background: #ffd27a; }
+.b2r-xp .b2r-disp { left: 150px; right: 220px; top: 20px; }
+.b2r-wb.idt { position: absolute; left: 24px; top: 46px; padding: 14px 16px; }
+.b2r-wb.vfr { position: absolute; right: 40px; bottom: 16px; padding: 12px 16px; }
+.b2r-xk { position: absolute; left: 70px; bottom: 6px; }
+.b2r-xml { position: absolute; right: 30px; top: 122px; font-size: 10px; font-weight: bold; color: #aaa; }
+.b2r-xmv { position: absolute; right: 86px; top: 4px; font-size: 13px; font-weight: bold; color: #ff9a3a; }
+.b2r-xptag { left: 30px; right: auto; top: auto; bottom: 8px; }
 /* NAT NPX138 FM TRANSCEIVER(js/22-npx138.js) — 하부 콘솔 ⑧ */
 #npx { background: linear-gradient(#2a2c2f, #1b1c1f); border-radius: 4px; box-shadow: inset 0 0 0 2px #0c0d0f, inset 0 0 0 3px #3a3e44; color: #e8e8e8; font-family: Arial, sans-serif; }
 .npx-title { position: absolute; left: 14px; width: 290px; top: 1px; text-align: center; font: bold 9px Arial; letter-spacing: .5px; }
@@ -2424,7 +2498,7 @@ body.simple-mode #simple-view { display: flex; position: fixed; left: 0; right: 
     </div>
   </form>
 </div>
-<script src="js/00-gate.js?v=630"></script>
+<script src="js/00-gate.js?v=631"></script>
 <!-- ── 단일화면 선택 바 (기본 숨김) ── -->
 <!-- ── 시작 안내(사용법/키보드) 오버레이 ── -->
 <div id="help-overlay" style="display:none;">
@@ -3728,42 +3802,43 @@ body.simple-mode #simple-view { display: flex; position: fixed; left: 0; right: 
 <!-- 앱 코드 — 클래식 스크립트(모듈 아님)라 전역 스코프를 공유한다.
      순서가 곧 실행 순서이므로 임의로 바꾸지 말 것. -->
   <!-- AIP 데이터 — 코드보다 먼저 로드한다 -->
-  <script src="js/data/terminal-fixes.js?v=630"></script>
-  <script src="js/data/ifr-fixes.js?v=630"></script>
-  <script src="js/data/ifr-procedures.js?v=630"></script>
-  <script src="js/data/airfield-info.js?v=630"></script>
-  <script src="js/data/enr-vors.js?v=630"></script>
-  <script src="js/data/loc-stations.js?v=630"></script>
-  <script src="js/data/enr-routes.js?v=630"></script>
-  <script src="js/data/airspace.js?v=630"></script>
-  <script src="js/data/runways.js?v=630"></script>
+  <script src="js/data/terminal-fixes.js?v=631"></script>
+  <script src="js/data/ifr-fixes.js?v=631"></script>
+  <script src="js/data/ifr-procedures.js?v=631"></script>
+  <script src="js/data/airfield-info.js?v=631"></script>
+  <script src="js/data/enr-vors.js?v=631"></script>
+  <script src="js/data/loc-stations.js?v=631"></script>
+  <script src="js/data/enr-routes.js?v=631"></script>
+  <script src="js/data/airspace.js?v=631"></script>
+  <script src="js/data/runways.js?v=631"></script>
   <!-- 앱 코드 -->
-  <script src="js/00-ui.js?v=630"></script>
-  <script src="js/01-state.js?v=630"></script>
-  <script src="js/02-math.js?v=630"></script>
-  <script src="js/03-pfd.js?v=630"></script>
-  <script src="js/04-map.js?v=630"></script>
-  <script src="js/05-gps.js?v=630"></script>
-  <script src="js/06-nav.js?v=630"></script>
-  <script src="js/07-sim.js?v=630"></script>
-  <script src="js/08-ifrdb.js?v=630"></script>
-  <script src="js/09-cdu.js?v=630"></script>
-  <script src="js/10-tools.js?v=630"></script>
-  <script src="js/11-charts.js?v=630"></script>
-  <script src="js/12-joystick.js?v=630"></script>
-  <script src="js/13-joyhid.js?v=630"></script>
-  <script src="js/14-simmode.js?v=630"></script>
-  <script src="js/15-heli3d.js?v=630"></script>
-  <script src="js/16-sound.js?v=630"></script>
-  <script src="js/17-upper.js?v=630"></script>
-  <script src="js/18-system.js?v=630"></script>
-  <script src="js/19-lower.js?v=630"></script>
-  <script src="js/20-navaids.js?v=630"></script>
-  <script src="js/21-c5000.js?v=630"></script>
-  <script src="js/22-npx138.js?v=630"></script>
-  <script src="js/23-afcs.js?v=630"></script>
-  <script src="js/24-sar.js?v=630"></script>
-  <script src="js/25-b206panel.js?v=630"></script>
+  <script src="js/00-ui.js?v=631"></script>
+  <script src="js/01-state.js?v=631"></script>
+  <script src="js/02-math.js?v=631"></script>
+  <script src="js/03-pfd.js?v=631"></script>
+  <script src="js/04-map.js?v=631"></script>
+  <script src="js/05-gps.js?v=631"></script>
+  <script src="js/06-nav.js?v=631"></script>
+  <script src="js/07-sim.js?v=631"></script>
+  <script src="js/08-ifrdb.js?v=631"></script>
+  <script src="js/09-cdu.js?v=631"></script>
+  <script src="js/10-tools.js?v=631"></script>
+  <script src="js/11-charts.js?v=631"></script>
+  <script src="js/12-joystick.js?v=631"></script>
+  <script src="js/13-joyhid.js?v=631"></script>
+  <script src="js/14-simmode.js?v=631"></script>
+  <script src="js/15-heli3d.js?v=631"></script>
+  <script src="js/16-sound.js?v=631"></script>
+  <script src="js/17-upper.js?v=631"></script>
+  <script src="js/18-system.js?v=631"></script>
+  <script src="js/19-lower.js?v=631"></script>
+  <script src="js/20-navaids.js?v=631"></script>
+  <script src="js/21-c5000.js?v=631"></script>
+  <script src="js/22-npx138.js?v=631"></script>
+  <script src="js/23-afcs.js?v=631"></script>
+  <script src="js/24-sar.js?v=631"></script>
+  <script src="js/25-b206panel.js?v=631"></script>
+  <script src="js/26-b206radio.js?v=631"></script>
 
 <input type="file" id="zipFileInput" accept=".zip,application/zip,application/x-zip-compressed,application/octet-stream" style="display:none" onchange="handleZipFile(this.files[0]); this.value='';"></body>
 </html>

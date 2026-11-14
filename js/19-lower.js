@@ -137,7 +137,10 @@ const LCON_PLATES = [
   ]},
 ];
 
-consoleRegister('lcon', { wrap: 'lcon-wrap', plates: LCON_PLATES, W: LCON_W, H: LCON_H });
+// Bell 206B-3(00-aircraft.js) — 하부 콘솔 자리는 항공전자 스택 한 판(오디오 패널 · GNS 430 · COMM · NAV · ADF · 트랜스폰더 — 26-b206radio.js)
+const LCON_B206 = [{ x: 10, y: 10, w: 980, h: 1400, items: [{ t: 'html', hid: 'b206rad', x: 0, y: 0, w: 980, h: 1400 }] }];
+if (typeof acIs === 'function' && acIs('b206')) consoleRegister('lcon', { wrap: 'lcon-wrap', plates: LCON_B206, W: 1000, H: 1420 });
+else consoleRegister('lcon', { wrap: 'lcon-wrap', plates: LCON_PLATES, W: LCON_W, H: LCON_H });
 // MPP COM2 — 누르면(IN) CDU 의 COM2 주 · 예비 채널을 둘 다 121.500 으로 맞춰 GUARD 교신을 바로 할 수 있게 한다(09-cdu.js cduCom2Guard)
 window.addEventListener('ovhd', e => {
   try { if (e.detail && e.detail.id === 'com2' && e.detail.value === 'IN' && typeof cduCom2Guard === 'function') cduCom2Guard(); } catch (er) { _swallow(er); }
@@ -154,7 +157,7 @@ function avcsActive() {
 }
 // (AVCS 를 처음부터 켜 둔 판보다 먼저 저장된 꺼짐 값은 한 번 켠 쪽으로 맞춘다)
 try { if (!localStorage.getItem('avcsDefOn')) { localStorage.setItem('avcsDefOn', '1'); if (ovhdGet('avcsPower') !== 'IN') ovhdSet('avcsPower', 'IN'); } } catch (e) { _swallow(e); }
-function lconShow() { consoleBuild('lcon'); consoleFit('lcon'); if (typeof c5Build === 'function') c5Build(); if (typeof npxBuild === 'function') npxBuild(); }   // C-5000(21-c5000.js) · NPX138(22-npx138.js)
+function lconShow() { consoleBuild('lcon'); consoleFit('lcon'); if (typeof c5Build === 'function') c5Build(); if (typeof npxBuild === 'function') npxBuild(); if (typeof b206rBuild === 'function') b206rBuild(); }   // C-5000(21-c5000.js) · NPX138(22-npx138.js)
 try {
   const w = document.getElementById('lcon-wrap');
   if (w && !w.classList.contains('page-hidden')) lconShow();

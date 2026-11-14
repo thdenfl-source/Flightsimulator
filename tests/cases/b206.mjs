@@ -105,6 +105,42 @@ export async function run(page, t) {
     '계기 ON — 3D 화면에 자세계(+볼) · 고도계 · 승강계 · 토크 · 방향지시계 다섯이 뜬다');
   t.ok(['b206Airspeed', 'b206Tach', 'b206Rmi', 'b206Turn', 'b206CdiGauge', 'b206DualGauge', 'b206N1', 'b206Clock'].every(k => N[k] === 0),
     `그 밖의 계기(속도계 · 회전계 · RMI · 선회계 · CDI · 엔진 계기 · 시계)는 겹친 계기에 그리지 않는다 (${JSON.stringify(N)})`);
+  // ── LOWER CONSOLE — 항공전자 스택(오디오 · GNS 430 · COMM · NAV · ADF · 트랜스폰더 — 26-b206radio.js) ──
+  const RD = await page.evaluate(async () => {
+    const w = ms => new Promise(r => setTimeout(r, ms));
+    localStorage.removeItem('b206rad');
+    selectPanel('right', 'lcon', true); await w(600);
+    const host = document.getElementById('b206rad'), o = {};
+    o.units = host ? host.querySelectorAll('.b2r-unit').length : 0;
+    o.noAw = !document.querySelector('#lcon-wrap [data-ov="ap1"]') && !document.getElementById('c5k');
+    o.boot = /PACIFIC/.test(host.textContent) && /Cycle 2311/.test(host.textContent);
+    host.querySelector('[data-act2="gns:ent"]').click(); o.nav = /DIS/.test(host.textContent) && /VLOC/.test(host.textContent);
+    // 오디오 버튼 — 눌러 켜고 끈다
+    const ab = host.querySelector('[data-act2="aud:spk:nav1"]'); const a0 = ab.classList.contains('on'); ab.click(); o.aud = ab.classList.contains('on') !== a0;
+    // COMM — 안 노브 + 한 칸(25 kHz) · ⇄ 로 USE 와 바꾼다
+    const s0 = b206r.com.f[1]; b206rKnob('com', 'inner', 1); o.comTune = Math.round((b206r.com.f[1] - s0) * 1000);
+    const st = b206r.com.f[1]; host.querySelector('[data-act2="com:flip"]').click(); o.comFlip = b206r.com.f[0] === st;
+    // NAV — 바꾼 USE 주파수가 시뮬레이터 NAV2 로
+    b206rKnob('nav', 'outer', 1); const nf = b206r.nav.f[1]; host.querySelector('[data-act2="nav:flip"]').click();
+    o.nav2 = Math.abs(parseFloat(navRadios.NAV2.freq) - nf) < 0.001;
+    // GNS VLOC ⇄ → 시뮬레이터 NAV1
+    const vf = b206r.gns.vloc[1]; host.querySelector('[data-act2="gns:vflip"]').click(); o.nav1 = Math.abs(parseFloat(navRadios.NAV1.freq) - vf) < 0.001;
+    // ADF — FRQ 로 바꾼다
+    const af = b206r.adf.f.slice(); host.querySelector('[data-act2="adf:frq"]').click(); o.adf = b206r.adf.f[0] === af[1] && b206r.adf.f[1] === af[0];
+    // 트랜스폰더 — VFR 1200 · 노브로 자리 숫자 · CDU 코드와 같다
+    host.querySelector('[data-act2="xp:vfr"]').click(); o.vfr = b206r.xpdr.code === '1200' && window.cduXpdrCode() === '1200';
+    b206rKnob('xd3', 'outer', 1); o.xd = b206r.xpdr.code === '1201' && window.cduXpdrCode() === '1201';
+    b206rKnob('xd3', 'outer', -1);
+    // 모드 노브 — ALT 에서 FL(기압고도/100)
+    S.alt = 1500; b206r.xpdr.mode = 'ALT'; b206rRender(); o.fl = /015/.test(host.querySelector('[data-b2r="xpdr"]').textContent);
+    selectPanel('right', 'map', true);
+    return o;
+  });
+  t.ok(RD.units === 6 && RD.noAw, `LOWER CONSOLE 은 Bell 항공전자 스택 — 여섯 장비(오디오 · GNS 430 · COMM · NAV · ADF · XPDR) · AW189 콘솔은 없다 (${RD.units})`);
+  t.ok(RD.boot && RD.nav, 'GNS 430 — 데이터베이스 화면(PACIFIC · Cycle 2311) → ENT 로 항법 화면(COM · VLOC · DIS)');
+  t.ok(RD.aud && RD.comTune === 25 && RD.comFlip, `오디오 버튼 켜고 끄기 · COMM 노브 25 kHz · ↔ 로 USE ⇄ STBY (${RD.comTune} kHz)`);
+  t.ok(RD.nav2 && RD.nav1, 'NAV 수신기 USE → 시뮬레이터 NAV2 · GNS 430 VLOC → NAV1');
+  t.ok(RD.adf && RD.vfr && RD.xd && RD.fl, 'ADF FRQ 바꾸기 · 트랜스폰더 VFR 1200 · 코드 노브 · CDU XPDR 코드와 같다 · ALT 모드 FL');
   const errs = (page.errors || []).filter(e => !/Failed to fetch|NetworkError|tile/i.test(e));
   t.ok(errs.length === 0, `오류 없음${errs.length ? ' (' + errs.slice(0, 2).join(' | ') + ')' : ''}`);
 }
