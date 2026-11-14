@@ -4995,6 +4995,16 @@ switchMode('HOME');
     // 하부 콘솔 MPP 의 COM2(19-lower.js) — COM2 주 · 예비 채널을 둘 다 121.500(GUARD)으로 맞춘다
     window.cduCom2Guard      = () => { freqs.com2.act = '121.500'; freqs.com2.stb = '121.500'; monStates.com2 = true; try { renderContent(); } catch (e) { _swallow(e); } };
     window.cduCom2Freqs      = () => ({ act: freqs.com2.act, stb: freqs.com2.stb });
+    // Bell 206 항공전자 스택(26-b206radio.js) — COM1 · COM2 · NAV1 · NAV2 의 주 · 예비 주파수를 그 무전기대로(문자열 · 소수 셋 / 둘)
+    window.cduSetRadio       = (k, act, stb) => {
+        if (!freqs[k]) return null;
+        const d = k.startsWith('nav') ? 2 : 3;
+        if (Number.isFinite(+act)) freqs[k].act = (+act).toFixed(d);
+        if (Number.isFinite(+stb)) freqs[k].stb = (+stb).toFixed(d);
+        try { if (currentMode === 'AUDIO') renderContent(); } catch (e) { _swallow(e); }
+        return { act: freqs[k].act, stb: freqs[k].stb };
+    };
+    window.cduRadio          = k => freqs[k] ? { act: freqs[k].act, stb: freqs[k].stb } : null;
     // Bell 206 트랜스폰더(26-b206radio.js) — 코드를 CDU XPDR 과 같게(넣으면 바꾸고 · 돌려준다)
     window.cduXpdrCode       = c => { if (/^[0-7]{4}$/.test(String(c || ''))) { xpdrState.code = String(c); try { const e = document.getElementById('top-xpdr-code'); if (e) e.innerText = xpdrState.code; if (currentMode === 'XPDR') renderContent(); } catch (e) { _swallow(e); } } return xpdrState.code; };
     window.openAirfield      = openAirfield;       // 지도 공항 팝업 → INFO 열기

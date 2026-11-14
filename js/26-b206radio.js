@@ -48,6 +48,12 @@ function _navTune(f, outer, d) {
 const _fCom = f => f.toFixed(2), _fNav = f => f.toFixed(2);
 // 시뮬레이터 NAV 수신기에 넣는다(VOR · LOC 을 그 주파수로 찾는다)
 function _b206rNavSet(id, f) { try { if (typeof setNavRadio === 'function') setNavRadio(id, f.toFixed(2), null); } catch (e) { _swallow(e); } }
+// 시뮬레이터 무전(CDU 의 COM1 · COM2 · NAV1 · NAV2 주파수)을 이 스택대로 — GNS 430 COM = COM1 · COMM = COM2 · GNS VLOC = NAV1 · NAV = NAV2
+function _b206rSync() {
+  const set = (k, a, s) => { try { if (typeof window.cduSetRadio === 'function') window.cduSetRadio(k, a, s); } catch (e) { _swallow(e); } };
+  set('com1', b206r.gns.com[0], b206r.gns.com[1]); set('com2', b206r.com.f[0], b206r.com.f[1]);
+  set('nav1', b206r.gns.vloc[0], b206r.gns.vloc[1]); set('nav2', b206r.nav.f[0], b206r.nav.f[1]);
+}
 function _b206rXpdrPush() { try { if (typeof window.cduXpdrCode === 'function') window.cduXpdrCode(b206r.xpdr.code); } catch (e) { _swallow(e); } }
 
 // ── GNS 430 기본 항법 화면 값 ──
@@ -85,7 +91,7 @@ function b206rKnob(dev, part, d) {           // part: 'outer' | 'inner'
     const i = +dev[2], c = b206r.xpdr.code.split('');
     c[i] = String(_wrap(+c[i] + d, 0, 7)); b206r.xpdr.code = c.join(''); _b206rXpdrPush();
   }
-  _b206rSave(); b206rRender();
+  _b206rSync(); _b206rSave(); b206rRender();
 }
 function b206rAct(a) {
   const g = b206r.gns;
@@ -111,7 +117,9 @@ function b206rAct(a) {
   else if (a === 'adf:setrst') { if (b206r.adf.timer === 'ET') b206r.adf.et = 0; }
   else if (a === 'xp:idt') { if (b206r.xpdr.mode === 'ON' || b206r.xpdr.mode === 'ALT') b206r.xpdr.idt = performance.now() + 18000; }
   else if (a === 'xp:vfr') { b206r.xpdr.code = '1200'; _b206rXpdrPush(); }
-  _b206rSave(); b206rRender();
+  // CDI — GPS ⇄ VLOC: 계기판 CDI · 항법 소스(navSrc)를 GPS(FMS) 또는 VLOC(NAV1)로
+  else if (a === 'gns:cdi') { try { if (typeof setNavSrc === 'function') setNavSrc(navSrc === 'FMS' ? 'NAV1' : 'FMS'); } catch (e) { _swallow(e); } }
+  _b206rSync(); _b206rSave(); b206rRender();
 }
 // 비행시간(FLT) · 경과시간(ET) — ADF 창의 타이머
 let _b206rT = 0, _b206rFlt = 0;
@@ -153,7 +161,8 @@ function b206rRender() {
           : `<div class="b2r-cdi"><i style="left:${(50 + n.dev * 45).toFixed(1)}%"></i></div>`;
         right = `<div class="b2r-gnav"><div class="b2r-gwpt">GPS&nbsp; <b>${n.wpt}</b></div>${kv('DIS', n.dis + 'nm')}${kv('DTK', n.dtk + '°')}${kv('TRK', n.trk + '°')}${kv('GS', n.gs + 'kt')}${kv('ETE', n.ete)}</div>${cdi}`;
       }
-      html = `<div class="b2r-gl">${left}</div><div class="b2r-gr">${right}</div>`;
+      let cdiSrc = 'GPS'; try { cdiSrc = navSrc === 'FMS' ? 'GPS' : navSrc === 'NAV1' ? 'VLOC' : navSrc; } catch (e) { _swallow(e); }
+      html = `<div class="b2r-gl">${left}<div class="b2r-gcdi">${cdiSrc}</div></div><div class="b2r-gr">${right}</div>`;
     }
     if (scr.dataset.h !== html) { scr.dataset.h = html; scr.innerHTML = html; }
     scr.classList.toggle('off', !g.on);
@@ -239,7 +248,7 @@ function b206rBuild() {
     kn.addEventListener('wheel', e => { e.preventDefault(); e.stopPropagation(); const z = zone(e); b206rKnob(kn.dataset.knob, z.part, e.deltaY > 0 ? -1 : 1); }, { passive: false });
   });
   // 처음 — VLOC · NAV 사용 주파수를 시뮬레이터 NAV1 · NAV2 에 맞추고, 트랜스폰더 코드를 CDU 에
-  _b206rNavSet('NAV1', b206r.gns.vloc[0]); _b206rNavSet('NAV2', b206r.nav.f[0]); _b206rXpdrPush();
+  _b206rNavSet('NAV1', b206r.gns.vloc[0]); _b206rNavSet('NAV2', b206r.nav.f[0]); _b206rXpdrPush(); _b206rSync();
   b206rRender();
 }
 if (document.getElementById('b206rad')) b206rBuild();
