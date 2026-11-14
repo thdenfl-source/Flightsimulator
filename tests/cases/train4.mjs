@@ -100,7 +100,7 @@ export async function run(page, t) {
   const small = await page.evaluate(() => ({ tools: getComputedStyle(document.getElementById('map-tools-btn')).display !== 'none', scn: getComputedStyle(document.getElementById('map-scn-btn')).display === 'none' }));
   await page.setViewportSize(vp); await page.waitForTimeout(200);
   const big = await page.evaluate(() => ({ tools: getComputedStyle(document.getElementById('map-tools-btn')).display === 'none', scn: getComputedStyle(document.getElementById('map-scn-btn')).display !== 'none' }));
-  t.ok(small.tools && small.scn && big.tools && big.scn, '작은 화면에서는 🧰 도구 하나로 모이고, 큰 화면에서는 낱 단추');
+  t.ok(small.tools && small.scn && !big.tools && !big.scn, '훈련 단추는 화면 크기와 상관없이 🧰 도구 하나로 모인다(지도 창 단추 줄이 찌그러지지 않게)');
 
   // ── Bell 엔진 계통 고장 ──
   const u = new URL(page.url()); u.searchParams.set('ac', 'b206');

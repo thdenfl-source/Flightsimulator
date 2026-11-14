@@ -275,12 +275,16 @@ function toggleTools(ev) {
     m.addEventListener('click', e => { const b = e.target.closest('[data-tool]'); if (!b) return; m.style.display = 'none'; try { const fn = window[b.dataset.tool]; if (typeof fn === 'function') fn(); } catch (er) { _swallow(er); } });
     document.addEventListener('pointerdown', e => { if (m.style.display === 'block' && !m.contains(e.target) && !e.target.closest('[data-act="toggleTools"]')) m.style.display = 'none'; }, true);
   }
-  const src = (ev && ev.target && ev.target.closest) ? ev.target.closest('button') : document.querySelector('[data-act="toggleTools"]');
-  const r = src ? src.getBoundingClientRect() : { left: 20, bottom: 60, right: 200 };
+  // 누른 단추 곁에 연다 — 이벤트가 없으면(단추 위임) 지금 보이는 🧰 단추를 찾는다
+  const evT = (ev && ev.target) || (window.event && window.event.target);
+  const src = (evT && evT.closest && evT.closest('[data-act="toggleTools"]')) || [...document.querySelectorAll('[data-act="toggleTools"]')].find(b => b.offsetParent);
+  const r = src ? src.getBoundingClientRect() : { left: 20, top: 60, bottom: 60, right: 200 };
   m.style.display = 'block';
-  const mw = m.offsetWidth || 180;
+  const mw = m.offsetWidth || 180, mh = m.offsetHeight || 260;
   m.style.left = Math.max(6, Math.min(window.innerWidth - mw - 6, r.right - mw)) + 'px';
-  m.style.top = Math.min(window.innerHeight - m.offsetHeight - 6, r.bottom + 4) + 'px';
+  // 아래 자리가 모자라면(지도 창 아래 단추 줄) 단추 위로 연다
+  const below = r.bottom + 4, above = r.top - mh - 4;
+  m.style.top = Math.max(6, below + mh <= window.innerHeight - 6 ? below : above) + 'px';
 }
 
 // ── ⑦ 다른 기기 교관 연결(WebRTC 데이터 통로) — 서버 없이 연결 코드를 두 번 주고받는다 ──
