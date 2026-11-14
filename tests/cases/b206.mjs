@@ -69,19 +69,19 @@ export async function run(page, t) {
   });
   t.ok(Math.abs(R.room - R.want) < 2, `PFD 창 — 판이 소프트키 · FCP 위까지만 (판 높이 ${Math.round(R.room)} · 소프트키 위 ${Math.round(R.want)})`);
 
-  // 오른쪽 창에 UPPER(상부 콘솔)를 띄운 채 Cockpit 모드로 — 상부 콘솔이 조종석 칸으로 옮겨진다(숨은 창에 남아 검게 비던 것)
+  // 오른쪽 창에 LOWER(무전 스택)를 띄운 채 Cockpit 모드로 — 하부 콘솔이 조종석 칸으로 옮겨진다(숨은 창에 남아 검게 비던 것 · Bell 206 은 UPPER 가 없다)
   const U = await page.evaluate(async () => {
     const w = ms => new Promise(r => setTimeout(r, ms));
-    selectPanel('right', 'ovhd'); selectPanel('right', 'lcon'); selectPanel('right', 'ovhd'); await w(400);
+    selectPanel('right', 'map'); selectPanel('right', 'lcon'); await w(400);
     cockpitStart(); await w(1500);
-    const o = { ovhd: document.getElementById('ovhd-wrap').parentElement.id, h: document.getElementById('ovhd-wrap').getBoundingClientRect().height };
+    const o = { ovhd: document.getElementById('lcon-wrap').parentElement.id, h: document.getElementById('lcon-wrap').getBoundingClientRect().height };
     exitSolo(); await w(500);
-    o.back = document.getElementById('ovhd-wrap').parentElement.id;
+    o.back = document.getElementById('lcon-wrap').parentElement.id;
     try { if (simModeOn) toggleSimMode(false); } catch (e) { /* 그만 */ }
     S.alt = 0; S.spd = 0; S.running = false;
     return o;
   });
-  t.ok(U.ovhd === 'ck-mini-ovhd' && U.h > 20, `UPPER 를 띄운 채 Cockpit 모드 — 상부 콘솔이 조종석에 보인다 (${U.ovhd} · 높이 ${Math.round(U.h)})`);
+  t.ok(U.ovhd === 'ck-mini-lcon' && U.h > 20, `LOWER 를 띄운 채 Cockpit 모드 — 하부 콘솔(무전 스택)이 조종석에 보인다 (${U.ovhd} · 높이 ${Math.round(U.h)})`);
   t.ok(U.back === 'right-panel', `분할 화면으로 돌아오면 오른쪽 창으로 돌아간다 (${U.back})`);
 
   // 기종 바꾸기 — 적어 두기만(다시 불러오지 않고)
@@ -141,6 +141,41 @@ export async function run(page, t) {
   t.ok(RD.aud && RD.comTune === 25 && RD.comFlip, `오디오 버튼 켜고 끄기 · COMM 노브 25 kHz · ↔ 로 USE ⇄ STBY (${RD.comTune} kHz)`);
   t.ok(RD.nav2 && RD.nav1, 'NAV 수신기 USE → 시뮬레이터 NAV2 · GNS 430 VLOC → NAV1');
   t.ok(RD.adf && RD.vfr && RD.xd && RD.fl, 'ADF FRQ 바꾸기 · 트랜스폰더 VFR 1200 · 코드 노브 · CDU XPDR 코드와 같다 · ALT 모드 FL');
+  // ── Bell 206 — CDU · UPPER CONSOLE 이 없다 · 무전 스택 튜닝이 시뮬레이터 COM · NAV 로 ──
+  const NO = await page.evaluate(async () => {
+    const w = ms => new Promise(r => setTimeout(r, ms));
+    const vis = e => !!e && getComputedStyle(e).display !== 'none';
+    const o = {};
+    o.tabs = [...document.querySelectorAll('.page-tab[data-sel="cdu"], .page-tab[data-sel="ovhd"], #cdu-solo-btn')].some(vis);
+    o.ok = [acScrOk('cdu'), acScrOk('ovhd'), acScrOk('lcon'), acScrOk('map')].join(',');
+    selectPanel('right', 'cdu', true); await w(200); o.selCdu = rightSel;          // 골라도 들어가지 않는다
+    selectPanel('right', 'ovhd', true); await w(200); o.selOvhd = rightSel;
+    o.simple = SIMPLE_SCREENS.map(x => x[0]).join(','); o.lay = SIM_LAYOUT_ORDER.join(',');
+    cockpitStart(); await w(1500);
+    o.ck = { upMini: !!document.getElementById('ck-mini-ovhd'), cduMini: !!document.getElementById('ck-mini-cdu'),
+             upBtn: vis(document.getElementById('upperc-btn')), cduBtn: vis(document.getElementById('cduov-btn')),
+             lcon: document.getElementById('lcon-wrap').parentElement.id };
+    cockpitExit(); try { if (_soloActive) exitSolo(); } catch (e) { /* 그만 */ }
+    selectPanel('right', 'map', true);
+    // 튜닝 — GNS COM = COM1 · COMM = COM2 · GNS VLOC = NAV1 · NAV = NAV2(CDU 무전 주파수)
+    b206rKnob('gns', 'inner', 1); b206rAct('gns:cflip');
+    b206rKnob('com', 'outer', 1); b206rAct('com:flip');
+    b206rKnob('nav', 'inner', 2); b206rAct('nav:flip');
+    const f = k => window.cduRadio(k);
+    o.r = { com1: f('com1').act === b206r.gns.com[0].toFixed(3), com2: f('com2').act === b206r.com.f[0].toFixed(3),
+            nav1: f('nav1').act === b206r.gns.vloc[0].toFixed(2) && f('nav1').stb === b206r.gns.vloc[1].toFixed(2),
+            nav2: f('nav2').act === b206r.nav.f[0].toFixed(2) && Math.abs(parseFloat(navRadios.NAV2.freq) - b206r.nav.f[0]) < 0.001 };
+    // GNS CDI — GPS ⇄ VLOC(항법 소스)
+    setNavSrc('FMS'); b206rAct('gns:cdi'); o.cdi1 = navSrc; b206rAct('gns:cdi'); o.cdi2 = navSrc;
+    return o;
+  });
+  t.ok(!NO.tabs && NO.ok === 'false,false,true,true' && NO.selCdu !== 'cdu' && NO.selOvhd !== 'ovhd',
+    `Bell 206 — CDU · UPPER 탭이 없고 골라도 들어가지 않는다 (${NO.selCdu} · ${NO.selOvhd})`);
+  t.ok(!/cdu|ovhd/.test(NO.simple) && !/cdu|ovhd/.test(NO.lay), `Simple · 창 배치에도 CDU · UPPER 가 없다 (${NO.simple})`);
+  t.ok(!NO.ck.upMini && !NO.ck.cduMini && !NO.ck.upBtn && !NO.ck.cduBtn && NO.ck.lcon === 'ck-mini-lcon',
+    `Cockpit Mode — 상부 콘솔 · CDU 칸과 UpperC · CDU 버튼이 없고 하부 콘솔(무전 스택)만 (${JSON.stringify(NO.ck)})`);
+  t.ok(Object.values(NO.r).every(Boolean), `무전 스택 튜닝 → 시뮬레이터 COM1 · COM2 · NAV1 · NAV2 (${JSON.stringify(NO.r)})`);
+  t.ok(NO.cdi1 === 'NAV1' && NO.cdi2 === 'FMS', `GNS 430 CDI — GPS ⇄ VLOC 로 항법 소스를 바꾼다 (${NO.cdi1} → ${NO.cdi2})`);
   const errs = (page.errors || []).filter(e => !/Failed to fetch|NetworkError|tile/i.test(e));
   t.ok(errs.length === 0, `오류 없음${errs.length ? ' (' + errs.slice(0, 2).join(' | ') + ')' : ''}`);
 }

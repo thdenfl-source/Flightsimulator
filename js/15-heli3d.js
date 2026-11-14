@@ -755,10 +755,12 @@ const CKPIT_CON = {
   ovhd: { x: 700, y: 10, w: 200, h: 250, name: 'UPPER CONSOLE' },
   lcon: { x: 708, y: 798, w: 184, h: 258, name: 'LOWER CONSOLE' },
 };
+if (typeof acScrOk === 'function' && !acScrOk('ovhd')) delete CKPIT_CON.ovhd;   // Bell 206 — 상부 콘솔이 없다
 // CDU — 하부 콘솔 오른쪽 칸(3D 단독 화면에서 07-sim.js syncCduOverlay 가 CDU 를 넣는다).
 // 다른 화면처럼 누르면 가운데에 크게 띄워(팝아웃) 조작한다.
 const CKPIT_CDU = { x: 888, y: 798, w: 90, h: 146 };
 function ckpitCduSlot() {
+  if (typeof acScrOk === 'function' && !acScrOk('cdu')) return null;            // Bell 206 — CDU 가 없다
   if (ckConPop === 'cdu' && _ck3dVisible()) return _ckPopEl('cdu');
   return ckpitWanted() ? (_ckpitEl(), document.getElementById('ck-mini-cdu')) : null;
 }
@@ -964,7 +966,8 @@ function _ckpitEl() {
     `<canvas class="ck-scr" data-i="${i}" data-no-fcp="1" data-act="toggleConsolePop" data-arg='["${CKPIT_SCR_POP[s.k]}"]' title="${CKPIT_POP[CKPIT_SCR_POP[s.k]]} — 눌러 크게(팝아웃)" style="${pct(s.x, s.y, s.w, s.h)}"></canvas>`).join('') +
     Object.entries(CKPIT_CON).map(([k, c]) =>
       `<div class="ck-con" id="ck-mini-${k}" data-act="toggleConsolePop" data-arg='["${k}"]' title="${c.name} — 눌러 크게(팝아웃)" style="${pct(c.x, c.y, c.w, c.h)}"></div>`).join('') +
-    `<div class="ck-con" id="ck-mini-cdu" data-act="toggleConsolePop" data-arg='["cdu"]' title="CDU — 눌러 크게(팝아웃)" style="${pct(CKPIT_CDU.x, CKPIT_CDU.y, CKPIT_CDU.w, CKPIT_CDU.h)}"></div>`;
+    ((typeof acScrOk === 'function' && !acScrOk('cdu')) ? '' :
+    `<div class="ck-con" id="ck-mini-cdu" data-act="toggleConsolePop" data-arg='["cdu"]' title="CDU — 눌러 크게(팝아웃)" style="${pct(CKPIT_CDU.x, CKPIT_CDU.y, CKPIT_CDU.w, CKPIT_CDU.h)}"></div>`);
   d3.appendChild(el);
   return el;
 }

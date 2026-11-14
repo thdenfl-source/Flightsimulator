@@ -955,11 +955,14 @@ function fixPanelDupes() {
     if (rightSel === 'pfd') rightSel = 'map';
     if (botSel === 'pfd') botSel = 'cdu';
   }
+  // Bell 206 — CDU · UPPER 자리는 LOWER(항공전자 스택)로(00-aircraft.js acScrOk)
+  if (typeof acScrOk === 'function') sides.forEach(k => { if (!acScrOk(panelGet(k))) panelSet(k, k === 'right' ? 'map' : 'lcon'); });
   const seen = new Set();
   sides.forEach(k => {
     let v = panelGet(k);
-    if (seen.has(panelFam(v))) {
-      v = (solo ? ['pfd', 'map', 'cdu', 'm3d'] : ['map', 'cdu', 'm3d']).find(x => !seen.has(panelFam(x))) || 'map';
+    const ok = x => typeof acScrOk !== 'function' || acScrOk(x);   // 기종에 없는 화면(Bell 206 — CDU · UPPER)은 고르지 않는다
+    if (seen.has(panelFam(v)) || !ok(v)) {
+      v = (solo ? ['pfd', 'map', 'cdu', 'm3d', 'lcon', 'sysp'] : ['map', 'cdu', 'lcon', 'm3d', 'sysp']).find(x => ok(x) && !seen.has(panelFam(x))) || 'map';   // Bell 206 은 CDU 자리에 LOWER(무전 · 항법 스택)
       panelSet(k, v);
     }
     seen.add(panelFam(v));
@@ -1013,6 +1016,7 @@ function applyPanels() {
   // 콘솔이 보이지 않는 창에 남아 조종석 안의 작은 콘솔 칸이 검게 비었다. 창이 접혔거나(display:none) #app 째 숨었으면(화면에 자리가 없다) 조종석 칸이 먼저
   const _vis = el => !!el && el.style.display !== 'none' && el.getClientRects().length > 0;
   const hostOf = k => {
+    if (typeof acScrOk === 'function' && !acScrOk(k)) return null;   // 기종에 없는 화면(Bell 206 — CDU · UPPER)은 어디에도 띄우지 않는다
     const pop = ckC(k, 'pop'); if (pop) return pop;
     let h = hostOf0(k);
     if ((k === 'ovhd' || k === 'lcon') && h && [L, M, R, B].includes(h) && !_vis(h)) h = null;
@@ -1645,7 +1649,7 @@ function cduOvAvail() { return _soloActive && _soloCurrent === 'm3d' && !!pfdOvH
 // SIM 3D 조종석(15-heli3d.js)이 켜져 있으면 CDU 를 하부 콘솔 오른쪽 칸에 작게 둔다(CDU ON 이면 원래 겹친 칸이 먼저).
 // 작아도 같은 CDU 라 누르면 그 버튼이 그대로 듣는다.
 function _ckCduSlot() { try { return typeof ckpitCduSlot === 'function' ? ckpitCduSlot() : null; } catch (e) { return null; } }
-function cduOvActive() { return cduOvAvail() && (cduOvOn || !!_ckCduSlot()); }
+function cduOvActive() { return cduOvAvail() && (typeof acScrOk !== 'function' || acScrOk('cdu')) && (cduOvOn || !!_ckCduSlot()); }   // Bell 206 — CDU 가 없다
 function syncCduOverlay() {
   const want = cduOvActive();
   const inCk = want && !cduOvOn;
@@ -1814,7 +1818,7 @@ function exitSolo() {
 // 화면마다 버튼을 누르면 그 화면만 새 창으로 떠서(00-popout.js popoutScreen) 모니터마다 따로 배치한다.
 // 브라우저는 한 번 누를 때 새 창을 하나만 열어 주므로 하나씩 누른다. 본 창은 시뮬을 돌리는 바탕으로 남는다
 // (최소화하면 브라우저가 멈춰 세우니 다른 모니터 구석에 두거나 작게 둔다). 탭 줄의 '⧉ 창 배치' 로 다시 연다.
-const SIM_LAYOUT_ORDER = ['pfd', 'm3d', 'map', 'cdu', 'ovhd', 'lcon', 'sysp'];
+const SIM_LAYOUT_ORDER = ['pfd', 'm3d', 'map', 'cdu', 'ovhd', 'lcon', 'sysp'].filter(k => typeof acScrOk !== 'function' || acScrOk(k));
 function simLayoutShow() {
   let el = document.getElementById('simlay');
   if (!el) {
@@ -1859,7 +1863,8 @@ function simLayoutStart() {
 // ── Simple mode ── 시작 화면에서 'Simple Mode' 를 고르면 창 하나만 화면 가득 본다.
 // 위 막대에 쓸 수 있는 창(PFD · COCKPIT · MAP · CDU · UPPER · LOWER · SYSTEM)이 다 있고, 누른 창 하나만 보인다.
 // 분할 패널(#app)은 감추고, 고른 화면 묶음을 그릇(#simple-host)에 옮긴다(applyPanels 의 hostOf).
-const SIMPLE_SCREENS = [['pfd', 'PFD'], ['map', 'MAP'], ['cdu', 'CDU'], ['ovhd', 'UPPER'], ['lcon', 'LOWER'], ['sysp', 'SYSTEM']];
+const SIMPLE_SCREENS = [['pfd', 'PFD'], ['map', 'MAP'], ['cdu', 'CDU'], ['ovhd', 'UPPER'], ['lcon', 'LOWER'], ['sysp', 'SYSTEM']]
+  .filter(([k]) => typeof acScrOk !== 'function' || acScrOk(k));   // Bell 206 — CDU · UPPER 없음
 // 위 막대의 두 번째 칸은 COCKPIT — Cockpit Mode(3D 조종석)로 들어가고, 끝내면(Split screen) 이 Simple 화면으로 돌아온다.
 // (3D 지도 자체는 MAP 의 '3D' 버튼으로 본다)
 let _ckFromSimple = null;
