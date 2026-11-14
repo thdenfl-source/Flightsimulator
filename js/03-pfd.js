@@ -259,10 +259,12 @@ function drawBaroBox(x, y, w, h) {
 // 엔진 상태로 정해지는 로터 회전(NR %) — 한 엔진이라도 FLY 면 100 · 두 엔진 IDLE 53 · 한 엔진 IDLE(다른 쪽 OFF) 47 · 둘 다 OFF 0
 // (SIM 땅 위 · SIM 이 아닐 때의 NR. SIM 으로 날고 있으면 14-simmode.js 의 로터 운동(오토로테이션)이 정한다)
 const NR_IDLE2 = 53, NR_IDLE1 = 47, NR_SPOOL_UP = 12, NR_SPOOL_DN = 6;   // 오르내리는 빠르기(%/s)
+// 거버너가 지키는 NR(%) — 보통 100. Bell 206 은 컬렉티브의 GOV RPM INCR/DECR 로 97 ~ 100 사이에서 맞춘다(27-b206coll.js)
+let NR_GOV = 100;
 function engNrTarget(st) {
   st = st || (typeof simEngSt !== 'undefined' ? simEngSt : { 1: 'FLY', 2: 'FLY' });
   const fly = [1, 2].some(n => st[n] === 'FLY'), idle = [1, 2].filter(n => st[n] === 'IDLE' || st[n] === 'TRNG').length;
-  return fly ? 100 : idle >= 2 ? NR_IDLE2 : idle === 1 ? NR_IDLE1 : 0;
+  return fly ? NR_GOV : idle >= 2 ? NR_IDLE2 : idle === 1 ? NR_IDLE1 : 0;
 }
 let _nrNs = null, _nrNsT = 0;
 function _nrNoSim() {   // SIM 이 아닐 때 — 엔진 상태의 NR 로 천천히 따라간다
