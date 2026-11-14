@@ -3582,6 +3582,19 @@ function act(name, ...args) {
       }
     }
 
+    // 체크리스트 항목 화면이 떠 있으면 — 스위치 상태가 바뀐 때만 다시 그린다(스크롤은 그대로)
+    let _clSig = '';
+    function clAutoRefresh() {
+      if (currentMode !== 'CHECKLIST') return;
+      const node = _clNode(); if (!node || node.children || typeof clAutoState !== 'function') return;
+      const sig = clPath.join('.') + '|' + (node.items || []).map(it => { const a = clAutoState(it); return a ? (a.ok ? 1 : a.now) : '-'; }).join(',');
+      if (sig === _clSig) return;
+      _clSig = sig;
+      const sc = document.querySelector('#cdu-screen, .cdu-screen'); const top = sc ? sc.scrollTop : 0;
+      switchMode('CHECKLIST');
+      if (sc) sc.scrollTop = top;
+    }
+    window.clAutoRefresh = clAutoRefresh;
     function renderChecklistScreen(container, footer, title) {
       const node = _clNode();
       const col = _clColor();
@@ -3637,15 +3650,18 @@ function act(name, ...args) {
             return `<div style="color:#ffcc44;font-size:10px;font-style:italic;margin:6px 2px 2px;letter-spacing:0.3px;">${it.slice(2)}</div>`;
           }
           const k = clPath.join('.') + '#' + i;
-          const done = !!clChecked[k];
+          // 콘솔 스위치로 확인할 수 있는 항목은 지금 상태로 ✓(32-callout.js clAutoState) · 다르면 지금 값을 곁에 적는다
+          const au = (typeof clAutoState === 'function') ? clAutoState(it) : null;
+          const done = !!clChecked[k] || !!(au && au.ok);
           idx++;
+          const auTag = au ? `<span style="margin-left:6px;font-size:9px;padding:1px 4px;border-radius:3px;border:1px solid ${au.ok ? '#2e7d32' : '#8a5a00'};color:${au.ok ? '#7dff3a' : '#ffb000'};">${au.ok ? 'AUTO ✓' : '지금 ' + au.now}</span>` : '';
           return `<div data-act="clToggle" data-arg='[${i}]' style="display:flex;align-items:center;gap:8px;` +
             `padding:7px 8px;margin-bottom:3px;border:1px solid ${done ? col : '#1e2630'};border-radius:4px;` +
             `background:${done ? col+'18' : '#0a1116'};cursor:pointer;">` +
             `<div style="flex:0 0 18px;width:18px;height:18px;border-radius:3px;border:1.5px solid ${done ? col : '#3a4653'};` +
             `display:flex;align-items:center;justify-content:center;color:${col};font-size:12px;font-weight:bold;">${done ? '✓' : ''}</div>` +
             `<div style="flex:1;color:${done ? '#8fb8bf' : '#cdd6df'};font-size:11px;line-height:1.35;` +
-            `text-decoration:${done ? 'line-through' : 'none'};">${it}</div></div>`;
+            `text-decoration:${done ? 'line-through' : 'none'};">${it}${auTag}</div></div>`;
         }).join('');
         const resetBtn = `<div data-act="clResetLeaf" style="text-align:right;margin-bottom:6px;">` +
           `<span style="display:inline-block;color:#ff8877;font-size:9px;border:1px solid #5a2a2a;border-radius:3px;padding:3px 9px;cursor:pointer;">전체 해제</span></div>`;

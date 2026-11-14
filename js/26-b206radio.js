@@ -169,6 +169,8 @@ function b206Ptt(on) {
   const ac = _adfAudioCtx(), v = b206r.aud.ivol / 10;
   try {
     if (on && ac && ac.state === 'running') _b206TxSnd = _b206TxNoise(ac, 0.012 * v);
+    // 놓았다 — 그 주파수가 가까운 관제 시설이면 답한다(32-callout.js)
+    if (!on && t.f && typeof atcOnTx === 'function') atcOnTx(t.f);
     if (!on && _b206TxSnd) {
       const s0 = _b206TxSnd; _b206TxSnd = null;
       s0.g.gain.setValueAtTime(0.05 * v, ac.currentTime); s0.g.gain.linearRampToValueAtTime(0, ac.currentTime + 0.15);   // 스켈치 꼬리

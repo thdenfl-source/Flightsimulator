@@ -429,7 +429,7 @@ function b206Annun(v) {
 // CAUTION LT TEST 를 누르고 있는 동안 경고 · 주의등이 다 켜지고 경고음이 난다(전구 · 경고음 점검).
 let b206TestOn = false, _b206Ack = new Set();
 function b206Cautions(v, an) {
-  return [['BATT RLY', false], ['GEN FAIL', !v.run], ['ENG CHIP', false], ['XMSN OIL', an.xmsnOil], ['ENG OIL', an.engOil], ['T/R CHIP', false], ['FUEL FILT', false], ['LOW FUEL', an.lowFuel]];
+  return [['HYD PRESS', !b206HydOn()], ['GEN FAIL', !v.run], ['ENG CHIP', false], ['XMSN OIL', an.xmsnOil], ['ENG OIL', an.engOil], ['T/R CHIP', false], ['FUEL FILT', false], ['LOW FUEL', an.lowFuel]];
 }
 function b206MasterCaution(v, an) {
   const on = b206Cautions(v, an).filter(c => c[1]).map(c => c[0]);
@@ -441,7 +441,7 @@ function b206MasterAck() {
   b206Cautions(v, an).forEach(([k, on]) => { if (on) _b206Ack.add(k); });
 }
 // 판 그림 좌표의 단추 — CAUTION LT TEST · MASTER CAUTION · FUEL QTY(재급유)
-const B206_HIT = { test: [888, 22, 52, 52], master: [810, 26, 70, 36], fuel: [94, 340, 112, 112], mute: [12, 24, 44, 40] };
+const B206_HIT = { test: [888, 22, 52, 52], master: [810, 26, 70, 36], fuel: [94, 340, 112, 112], mute: [12, 24, 44, 40], hyd: [890, 108, 80, 100] };
 
 // ── 판 전체 — g 에 (x, y, w, h) 칸으로 그린다 ──
 function b206Draw(g, x, y, w, h) {
@@ -472,6 +472,11 @@ function b206Draw(g, x, y, w, h) {
   // HORN MUTE — 울리는 경고음을 끈다(경고가 풀리면 다시 산다)
   { const m = _b206HornMuted; g.save(); g.fillStyle = '#1a1a1a'; g.fillRect(12, 24, 44, 40); g.strokeStyle = m ? '#ffb21a' : '#444'; g.lineWidth = 2; g.strokeRect(13, 25, 42, 38); g.restore();
     _b206Text(g, 'HORN', 34, 38, 9, m ? '#ffb21a' : '#aaa'); _b206Text(g, 'MUTE', 34, 50, 9, m ? '#ffb21a' : '#aaa'); }
+  // HYD SYS(유압 BOOST) 스위치 — 누를 때마다 ON · OFF(OFF 면 조종이 무겁고 굼뜨다 · HYD PRESS 주의등)
+  { const on = b206Hyd.sw; g.save(); g.fillStyle = '#1a1a1a'; g.fillRect(890, 108, 80, 100);
+    g.fillStyle = '#555'; g.fillRect(922, 128, 16, 60); g.fillStyle = '#ddd'; g.fillRect(918, on ? 128 : 160, 24, 28); g.restore();
+    _b206Text(g, 'HYD SYS', 930, 120, 10, '#ddd'); _b206Text(g, 'ON', 956, 136, 9, '#ccc'); _b206Text(g, 'OFF', 956, 184, 9, '#ccc');
+    if (b206Hyd.fail) _b206Text(g, 'FAIL', 930, 200, 9, '#ff5252'); }
   // 누를 자리를 캔버스에 적어 둔다(아래 b206PanelHit)
   try { const m = g.getTransform(); g.canvas._b206 = { a: m.a, e: m.e, f: m.f }; } catch (e) { /* 그만 */ }
   _b206Text(g, 'CAUTION', 914, 16, 9, '#222'); _b206Text(g, 'LT TEST', 914, 84, 9, '#222');
@@ -588,6 +593,7 @@ document.addEventListener('pointerdown', ev => {
   if (h === 'test') { b206TestOn = true; b206HornAudio(true); }
   else if (h === 'master') b206MasterAck();
   else if (h === 'mute') { if (b206HornCond()) _b206HornMuted = true; }
+  else if (h === 'hyd') b206HydSet(!b206Hyd.sw);
   else if (h === 'fuel') b206WbOpen();
   try { drawPFD(); } catch (e) { /* 그만 */ }
 }, true);
@@ -664,7 +670,16 @@ function b206WbOpen() {
       const o = read(), gal = Math.max(0, Math.min(B206_LIM.fuelCap, o.gal || 0));
       const gw = ['empty', 'pilot', 'copilot', 'rear', 'cargo'].reduce((a, k) => a + (o[k] || 0), 0) + gal * B206_WB.lbPerGal;
       const over = gw > B206_WB.max;
-      w.querySelector('[data-wbv="sum"]').innerHTML = `총중량 <b class="${over ? 'over' : ''}">${gw.toFixed(0)} lb</b> / 최대 ${B206_WB.max} lb` + (over ? ' — <b class="over">최대 총중량 초과</b>' : ` · 여유 ${(B206_WB.max - gw).toFixed(0)} lb`);
+      const cg = b206Cg(o, gal), cgOk = b206CgOk(cg);
+      // 무게중심 막대 — 앞 106 ~ 뒤 114.2
+      const pct = v => Math.max(0, Math.min(100, (v - 103) / (117 - 103) * 100));
+      let hv = '';
+      try { const w0 = Object.assign({}, b206Wb), g0 = b206FuelGal(); b206WbSet(Object.assign({}, o, { gal })); const h = b206HoverCheck(); b206WbSet(Object.assign(w0, { gal: g0 }));
+        hv = `<div class="wb-hv">호버(지금 고도 ${Math.round(S.alt)}ft) — HIGE <b class="${h.igeOk ? '' : 'over'}">${h.ige.toFixed(0)}%</b> · HOGE <b class="${h.ogeOk ? '' : 'over'}">${h.oge.toFixed(0)}%</b> / 가용 ${h.mta.toFixed(0)}%` +
+          ` · 여유 OGE <b class="${h.ogeOk ? '' : 'over'}">${h.ogeMargin.toFixed(0)}%</b>${h.ogeOk ? '' : ' — <b class="over">제자리 호버(OGE) 불가</b>'}</div>`; } catch (er) { /* 그만 */ }
+      w.querySelector('[data-wbv="sum"]').innerHTML = `총중량 <b class="${over ? 'over' : ''}">${gw.toFixed(0)} lb</b> / 최대 ${B206_WB.max} lb` + (over ? ' — <b class="over">최대 총중량 초과</b>' : ` · 여유 ${(B206_WB.max - gw).toFixed(0)} lb`) +
+        `<div class="wb-cg">무게중심 <b class="${cgOk ? '' : 'over'}">${cg.toFixed(1)} in</b> (허용 ${B206_CG.fwd} ~ ${B206_CG.aft})${cgOk ? '' : ' — <b class="over">범위 밖</b>'}` +
+        `<div class="wb-cgbar"><i style="left:${pct(B206_CG.fwd)}%;width:${pct(B206_CG.aft) - pct(B206_CG.fwd)}%"></i><b style="left:${pct(cg)}%" class="${cgOk ? '' : 'over'}"></b></div></div>` + hv;
     };
     w.addEventListener('input', sum);
     w.addEventListener('click', e => {
@@ -674,7 +689,8 @@ function b206WbOpen() {
       else if (b.dataset.wbx === 'ok') {
         b206WbSet(read()); w.style.display = 'none';
         const gw = b206GrossWt();
-        try { uiToast(`총중량 ${gw.toFixed(0)} lb · 연료 ${b206FuelGal().toFixed(0)} gal${gw > B206_WB.max ? ' — 최대 총중량 초과!' : ''}`, gw > B206_WB.max ? 'err' : ''); } catch (er) { /* 그만 */ }
+        const cgOk = b206CgOk();
+        try { uiToast(`총중량 ${gw.toFixed(0)} lb · 무게중심 ${b206Cg().toFixed(1)} in · 연료 ${b206FuelGal().toFixed(0)} gal${gw > B206_WB.max ? ' — 최대 총중량 초과!' : ''}${cgOk ? '' : ' — 무게중심 범위 밖!'}`, gw > B206_WB.max || !cgOk ? 'err' : ''); } catch (er) { /* 그만 */ }
       }
     });
     w._sum = sum;
@@ -715,4 +731,32 @@ function b206ExceedStep(dt) {
   _b206ExHit('n1', v.n1 > 105, 'N1 105% 넘음', v.n1, dt);
   _b206ExHit('n2', v.n2 > 105, 'N2 105% 넘음', v.n2, dt);
   _b206ExHit('nr', v.nr > 107, 'NR 107% 넘음', v.nr, dt);
+}
+
+// ── 유압(HYD SYS · BOOST) — 주 기어박스 펌프(NR 50% 넘게)가 돌고 스위치가 ON 이고 고장이 아니면 선다 ──
+// 없으면 사이클릭 · 페달이 무겁고 굼뜨다(14-simmode.js simHydK) · HYD PRESS 주의등. 고장은 교관(IOS · 31-ios.js)이 건다.
+const b206Hyd = { sw: true, fail: false };
+function b206HydOn() {
+  if (!b206Hyd.sw || b206Hyd.fail) return false;
+  let nr = 100; try { nr = engParams().nr; } catch (e) { /* 그만 */ }
+  return nr > 50;
+}
+function b206HydSet(on) { b206Hyd.sw = !!on; try { uiToast(on ? 'HYD SYS ON' : 'HYD SYS OFF — 조종이 무거워진다', on ? '' : 'warn'); } catch (e) { /* 그만 */ } try { drawPFD(); } catch (e) { /* 그만 */ } }
+function b206HydFail(on) { b206Hyd.fail = !!on; try { if (typeof fdrNote === 'function' && on) fdrNote('유압 고장(HYD PRESS)', 'err'); } catch (e) { /* 그만 */ } }
+
+// ── 무게중심(CG · 세로, 기준선에서 in) — 206B-3 대략 팔 길이 ──
+//   자중 1,950lb @116.5 · 조종석 65 · 뒷좌석 104 · 화물칸 148 · 연료 110.3
+//   허용 — 앞 106.0 · 뒤 114.2(총중량 3,200lb 까지) · 벗어나면 W&B 창에 빨갛게
+const B206_ARM = { empty: 116.5, pilot: 65, copilot: 65, rear: 104, cargo: 148, fuel: 110.3 }, B206_CG = { fwd: 106.0, aft: 114.2 };
+function b206Cg(w = b206Wb, gal = b206FuelGal()) {
+  let m = 0, wt = 0;
+  for (const k of ['empty', 'pilot', 'copilot', 'rear', 'cargo']) { m += w[k] * B206_ARM[k]; wt += w[k]; }
+  const fw = gal * B206_WB.lbPerGal; m += fw * B206_ARM.fuel; wt += fw;
+  return wt > 0 ? m / wt : 110;
+}
+function b206CgOk(cg = b206Cg()) { return cg >= B206_CG.fwd && cg <= B206_CG.aft; }
+// ── 호버 성능 — 지금 고도 · 기온 · 무게에서 HIGE / HOGE 에 드는 토크와 MTA(여유) ──
+function b206HoverCheck() {
+  const p = perfHoverTq(), m = mtaNow();
+  return { ige: p.ige, oge: p.oge, mta: m, igeOk: p.ige <= m, ogeOk: p.oge <= m, igeMargin: m - p.ige, ogeMargin: m - p.oge };
 }

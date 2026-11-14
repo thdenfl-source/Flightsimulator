@@ -120,7 +120,9 @@ function _dbfBuild() {
   w.innerHTML = `<div class="dbf-box">
     <div class="dbf-bar"><b>📋 비행 강평 (DEBRIEF)</b>
       <button class="sim-btn" data-dbf="rec"></button><button class="sim-btn" data-dbf="map">지도에 항적</button>
-      <button class="sim-btn" data-dbf="csv">CSV 저장</button><button class="sim-btn" data-dbf="clr">지우기</button>
+      <button class="sim-btn" data-dbf="csv">CSV 저장</button><button class="sim-btn" data-dbf="save" title="이 기기에 비행을 저장(최대 8개)">비행 저장</button>
+      <button class="sim-btn" data-dbf="list" title="저장한 비행 열기">저장 목록</button><button class="sim-btn" data-dbf="report" title="한 장짜리 강평 보고서(인쇄 · PDF)">보고서</button>
+      <button class="sim-btn" data-dbf="clr">지우기</button>
       <button class="sim-btn dbf-x" data-dbf="close" title="닫기">✕</button></div>
     <div class="dbf-sum" data-dbf-v="sum"></div>
     <div class="dbf-main"><canvas class="dbf-trk" data-dbf-c="trk"></canvas><canvas class="dbf-chart" data-dbf-c="chart"></canvas></div>
@@ -145,6 +147,9 @@ function _dbfBuild() {
     else if (k === 'live') { _dbf.live = true; _dbf.cur = -1; _dbfPlay(false); dbfRender(); }
     else if (k === 'ga' || k === 'gb') { const ci = _dbf.live || _dbf.cur < 0 ? fdr.rows.length - 1 : _dbf.cur; _grade[k === 'ga' ? 'a' : 'b'] = ci; if (k === 'ga') _grade.tgt = { alt: null, ias: null, hdg: null }; _dbfTab('gr'); dbfRender(); }
     else if (k === 'r3d') dbfReplay(true);
+    else if (k === 'save') Promise.resolve(typeof uiPrompt === 'function' ? uiPrompt('저장할 비행 이름', `비행 ${new Date().toLocaleString()}`) : 'flight').then(n => { if (n) fdrSaveFlight(n); });
+    else if (k === 'list') _dbfListOpen();
+    else if (k === 'report') fdrReport();
     else if (k.startsWith('tab:')) _dbfTab(k.slice(4));
   });
   // 채점 — 목표 · 허용 · 쓰기
@@ -326,6 +331,83 @@ function _dbfChart(c, rows, ci) {
     g.fillStyle = '#fff'; g.font = '10px Arial'; g.textAlign = 'center'; g.fillText(_hms(rows[ci].t), Math.min(w - 20, Math.max(L0 + 14, x)), h - 1);
   }
 }
+// ── 비행 저장(이 기기 localStorage 'fdrSaved' · 최대 8개) · 불러오기 · 보고서 ──
+// 표본은 칸 배열로 줄여 담는다. 불러오면 기록은 멈추고(REC 꺼짐) 그 비행을 강평 창에서 본다.
+const FDR_SAVE_KEY = 'fdrSaved', FDR_SAVE_MAX = 8;
+const _FDR_F = ['t', 'lat', 'lon', 'alt', 'ias', 'hdg', 'vs', 'tq', 'nr', 'bnk', 'pit', 'gnd', 'modes', 'eng', 'tqOver', 'vneOver', 'nrLow'];
+function fdrSavedList() { try { const a = JSON.parse(localStorage.getItem(FDR_SAVE_KEY) || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; } }
+function fdrSaveFlight(name) {
+  if (!fdr.rows.length) { try { uiToast('저장할 기록이 없습니다'); } catch (e) { _swallow(e); } return false; }
+  const rec = { name: String(name).slice(0, 60), at: Date.now(), ac: (typeof AC_TYPE !== 'undefined') ? AC_TYPE : '',
+    f: _FDR_F, rows: fdr.rows.map(r => _FDR_F.map(k => typeof r[k] === 'number' ? +r[k].toFixed(k === 'lat' || k === 'lon' ? 6 : 1) : r[k])), ev: fdr.ev, grade: { a: _grade.a, b: _grade.b } };
+  const a = fdrSavedList(); a.unshift(rec); while (a.length > FDR_SAVE_MAX) a.pop();
+  for (;;) {
+    try { localStorage.setItem(FDR_SAVE_KEY, JSON.stringify(a)); break; }
+    catch (e) { if (a.length > 1) { a.pop(); continue; } try { uiToast('저장 공간이 모자랍니다 — CSV 로 저장하십시오', 'err'); } catch (er) { _swallow(er); } return false; }
+  }
+  try { uiToast(`비행 "${rec.name}" 저장 (${fdr.rows.length}초)`); } catch (e) { _swallow(e); }
+  return true;
+}
+function fdrLoadFlight(i) {
+  const r = fdrSavedList()[i]; if (!r) return false;
+  fdr.on = false; fdr.rows = r.rows.map(v => { const o = {}; r.f.forEach((k, j) => { o[k] = v[j]; }); return o; });
+  fdr.ev = r.ev || []; fdr.prev = fdr.rows[fdr.rows.length - 1] || null; fdr.t = fdr.prev ? fdr.prev.t : 0; fdr.nextT = fdr.t + 1;
+  _grade.a = r.grade ? r.grade.a : -1; _grade.b = r.grade ? r.grade.b : -1;
+  _dbf.live = false; _dbf.cur = 0; _dbf.loaded = r.name;
+  try { uiToast(`저장한 비행 "${r.name}" — 기록은 멈췄습니다(● REC 로 다시 켭니다)`); } catch (e) { _swallow(e); }
+  dbfRender(); return true;
+}
+function fdrDeleteFlight(i) { const a = fdrSavedList(); a.splice(i, 1); try { localStorage.setItem(FDR_SAVE_KEY, JSON.stringify(a)); } catch (e) { _swallow(e); } }
+function _dbfListOpen() {
+  const a = fdrSavedList();
+  let w = document.getElementById('dbf-list');
+  if (!w) {
+    w = document.createElement('div'); w.id = 'dbf-list'; document.body.appendChild(w);
+    w.addEventListener('click', e => {
+      if (e.target === w) { w.style.display = 'none'; return; }
+      const b = e.target.closest('[data-fl]'); if (!b) return;
+      const [k, i] = b.dataset.fl.split(':');
+      if (k === 'x') w.style.display = 'none';
+      else if (k === 'open') { fdrLoadFlight(+i); w.style.display = 'none'; }
+      else if (k === 'del') { fdrDeleteFlight(+i); _dbfListOpen(); }
+    });
+  }
+  const fmt = t => new Date(t).toLocaleString();
+  w.innerHTML = `<div class="dbf-lbox"><div class="dbf-bar"><b>저장한 비행</b><button class="sim-btn" data-fl="x">✕</button></div>` +
+    (a.length ? a.map((r, i) => `<div class="dbf-litem"><div><b>${String(r.name).replace(/</g, '&lt;')}</b><small>${r.ac === 'b206' ? 'Bell 206' : 'KUH-1CG'} · ${_hms(r.rows.length ? r.rows[r.rows.length - 1][0] - r.rows[0][0] : 0)} · ${fmt(r.at)}</small></div>` +
+      `<button class="sim-btn" data-fl="open:${i}">열기</button><button class="sim-btn" data-fl="del:${i}">✕</button></div>`).join('') : '<div class="dbf-litem">저장한 비행이 없습니다.</div>') + '</div>';
+  w.style.display = 'flex';
+}
+// 보고서 — 새 창에 요약 · 항적 · 그래프 · 채점 · 사건을 한 장으로(인쇄 → PDF 로 저장)
+function fdrReport() {
+  if (!fdr.rows.length) { try { uiToast('기록이 없습니다'); } catch (e) { _swallow(e); } return null; }
+  const w = document.getElementById('dbf-wrap'); if (!w || !_dbf.open) dbfOpen();
+  dbfRender();
+  const box = document.getElementById('dbf-wrap');
+  const trk = box.querySelector('[data-dbf-c="trk"]').toDataURL('image/png'), ch = box.querySelector('[data-dbf-c="chart"]').toDataURL('image/png');
+  const s = fdrSummary(), G = fdrGrade(), esc = x => String(x).replace(/[<&]/g, c => c === '<' ? '&lt;' : '&amp;');
+  const row = (k, v) => `<tr><th>${k}</th><td>${v}</td></tr>`;
+  const html = `<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>비행 강평 보고서</title><style>
+    body{font:13px -apple-system,'Segoe UI','Malgun Gothic',Arial,sans-serif;color:#111;margin:18px;} h1{font-size:20px;margin:0 0 4px} .sub{color:#555;margin-bottom:10px}
+    table{border-collapse:collapse;margin:6px 0 12px} th,td{border:1px solid #bbb;padding:3px 8px;text-align:left} th{background:#eef2f5}
+    .imgs{display:flex;gap:8px} .imgs img{width:49%;border:1px solid #bbb;background:#0b1218} .ev div{padding:1px 0} .err{color:#c00} .warn{color:#b60}
+    @media print{.noprint{display:none}}</style></head><body>
+    <div class="noprint" style="text-align:right"><button onclick="print()">🖨 인쇄 / PDF 저장</button></div>
+    <h1>비행 강평 보고서</h1><div class="sub">${esc(_dbf.loaded || '이번 비행')} · ${(typeof AC_TYPE !== 'undefined' && AC_TYPE === 'b206') ? 'Bell 206B-3' : 'KUH-1CG'} · 작성 ${new Date().toLocaleString()}</div>
+    <table>${row('기록 · 비행', `${_hms(s.dur)} · ${_hms(s.airS)}`)}${row('최고 고도 · 속도 · 토크', `${s.maxAlt.toFixed(0)} ft · ${s.maxIas.toFixed(0)} kt · ${s.maxTq.toFixed(0)}%`)}
+      ${row('토크 연속/최대 한계 넘음', `${_hms(s.tqContS)} / ${_hms(s.tqOverS)}`)}${row('VNE 넘음 · 낮은 NR', `${_hms(s.vneS)} · ${_hms(s.nrLowS)}`)}
+      ${row('착륙(거친)', `${s.landings} (${s.hardLdg})`)}${row('AFCS 풀림 · 점검 필요', `${s.drops} · ${s.exceed || 0}건`)}</table>
+    ${G ? `<h3>채점 — 구간 ${_hms(fdr.rows[G.a].t)} ~ ${_hms(fdr.rows[G.b].t)} · 점수 ${G.score.toFixed(0)} (${G.grade})</h3><table><tr><th>항목</th><th>목표</th><th>±허용</th><th>안(%)</th><th>최대</th><th>RMS</th></tr>` +
+      G.items.map(x => `<tr><td>${x.name}</td><td>${x.tgt.toFixed(0)}${x.unit}</td><td>${x.tol}</td><td>${x.inPct.toFixed(0)}</td><td>${x.maxDev.toFixed(0)}</td><td>${x.rms.toFixed(0)}</td></tr>`).join('') + '</table>' : ''}
+    <div class="imgs"><img src="${trk}" alt="항적"><img src="${ch}" alt="그래프"></div>
+    <h3>사건</h3><div class="ev">${fdr.ev.map(e => `<div class="${e.kind}">${_hms(e.t)} — ${esc(e.txt)}</div>`).join('') || '없음'}</div>
+    <p style="color:#777;margin-top:14px">서명(교관) ______________________ &nbsp; 서명(교육생) ______________________</p></body></html>`;
+  // 새 탭에 연다 — 홈 화면 앱(PWA)에서도 앱 창을 덮지 않게 앵커로(00-ui.js uiOpenExternal)
+  const url = URL.createObjectURL(new Blob([html], { type: 'text/html' }));
+  uiOpenExternal(url); setTimeout(() => URL.revokeObjectURL(url), 60000);
+  return html;
+}
+
 // ── 3D 다시 보기 — 기록한 자리 · 고도 · 자세를 비행 상태(S)에 얹어 3D 화면(조종석 · 외부)이 그대로 따라 그린다 ──
 // 비행은 멈추고(PAUSE), 강평 창은 화면 아래 작은 막대로 줄어든다. 끝내면 다시 보기 전 상태로 돌아간다.
 const _rp = { on: false, snap: null };

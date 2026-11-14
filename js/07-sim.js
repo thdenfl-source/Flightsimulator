@@ -1937,8 +1937,9 @@ function cockpitStart() {
   try { if (typeof ckpitSet === 'function') ckpitSet(true); } catch (e) { _swallow(e); }
   // 종합판(shinesong)은 SIM 을 켠 채로 시작한다 — 절차 훈련판(SIM_ENABLED 거짓)은 SIM 없이 AFCS 로 나는 조종석 시야
   try { if ((typeof SIM_ENABLED === 'undefined' || SIM_ENABLED) && !simModeOn) toggleSimMode(true); } catch (e) { _swallow(e); }
-  const kick = () => { try { if (_ml3d) { _ml3d.resize(); _follow3d(); } } catch (e) { _swallow(e); } };
-  kick(); setTimeout(kick, 200); setTimeout(kick, 800);
+  // 3D 캔버스 크기를 다시 잰다 — 조종석 틀 · 계기 칸이 늦게 자리 잡으면 캔버스 일부가 검은 상자로 남던 일(크기가 바뀌면 사라졌다)
+  const kick = () => { try { if (_ml3d) { _ml3d.resize(); _follow3d(); _ml3d.triggerRepaint(); } } catch (e) { _swallow(e); } };
+  kick(); setTimeout(kick, 200); setTimeout(kick, 800); setTimeout(kick, 2000);
 }
 // 오른쪽 창 탭의 '⛶ Cockpit Mode' — 들어가고(3D 조종석) · 나온다(분할)
 function cockpitToggle() {

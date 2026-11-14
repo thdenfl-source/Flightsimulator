@@ -592,7 +592,23 @@ const LOWG_N = 0.5, LOWG_ROLL = 30, LOWG_BUMP_S = 0.8, LTE_YAW = 35;
 const simLowG = { n: 1, r: 0, t: 0, bump: 0, warned: false, pit0: null, vs0: null };
 const simLte = { yaw: 0, risk: 0, warned: false };
 function _bump(x, c, w) { const d = Math.abs(((x - c + 540) % 360) - 180); return Math.max(0, 1 - d / w); }
+// ── 돌풍 난류 · 유압 · 무게중심 ──
+// 돌풍(29-env.js env.gust kt): 바람 세기가 흔들리고(simWindRel) 자세도 조금씩 흔들린다 — 공중에서만
+const simTurb = { r: 0, p: 0, ph: Math.random() * 100 };
+function simTurbStep(dt, onGnd) {
+  const g = (typeof envGustKt === 'function') ? envGustKt() : 0;
+  if (!(g > 0) || onGnd) { simTurb.r *= 0.9; simTurb.p *= 0.9; return; }
+  simTurb.ph += dt;
+  const t = simTurb.ph, k = Math.min(1, g / 25);
+  simTurb.r = k * 6 * (0.6 * Math.sin(t * 1.3) + 0.3 * Math.sin(t * 3.1 + 1) + 0.1 * Math.sin(t * 7.7));
+  simTurb.p = k * 2.5 * (0.6 * Math.sin(t * 0.9 + 2) + 0.4 * Math.sin(t * 2.7));
+}
+// 유압(Bell HYD BOOST — 25-b206panel.js b206HydOn) — 없으면 1 보다 작게(조종 반응 · 굼뜸)
+function simHydK() { try { return (typeof acB206 === 'function' && acB206() && typeof b206HydOn === 'function' && !b206HydOn()) ? 0.35 : 1; } catch (e) { return 1; } }
+// 무게중심(Bell W&B) — 기준(110in)보다 뒤면 기수가 들리고, 앞이면 숙는다(°)
+function simCgPitch() { try { return (typeof acB206 === 'function' && acB206() && typeof b206Cg === 'function') ? Math.max(-4, Math.min(4, (b206Cg() - 110) * 0.6)) : 0; } catch (e) { return 0; } }
 function simB206Hazards(dt, a, onGnd) {
+  try { simTurbStep(dt, onGnd); simAutoTrack(onGnd); } catch (e) { _swallow(e); }
   const L = simLowG;
   if (!(typeof acB206 === 'function' && acB206()) || onGnd || !(dt > 0)) {
     L.n = 1; L.r *= Math.max(0, 1 - dt * 2); L.t = 0; L.bump = 0; L.warned = false; L.pit0 = S.pit; L.vs0 = S.vs; simLte.yaw = 0; simLte.risk = 0; simLte.warned = false; return;
@@ -1014,7 +1030,26 @@ let _simOnGnd = false;              // 마지막 적분 구간에 땅에 붙어 
 const TD_SOFT = 360, TD_HARD = 600;
 const TD_QUIET = 100;               // 이보다 살며시 내려앉으면(호버에서 내려놓기) 알리지 않는다
 let simLastTouchdown = null;        // 마지막 접지 { vs(fpm, 양수), spd(kt), grade }
+// ── 오토로테이션 착지 평가 — 동력 없이(엔진 고장 · IDLE · 고장 훈련) 내려앉으면 ──
+// 플레어 시작 높이(전파고도 300ft 아래에서 기수를 5° 넘게 든 첫 순간) · 접지 강하율 · 접지 속도 · 접지 NR 로 판정한다.
+//   좋음 — 300fpm 이하 · 15kt 이하 · NR 90% 이상 / 거침 — 600fpm · 25kt 이하 / 그 밖은 손상
+const simAuto = { flareAgl: null, nrMin: 100, last: null };
+function simAutoTrack(onGnd) {
+  if (simEng !== 0 || onGnd) { if (simEng !== 0) { simAuto.flareAgl = null; simAuto.nrMin = 100; } return; }
+  let agl = 1000; try { agl = radarAltFt(); } catch (e) { _swallow(e); }
+  if (agl < 300) { simAuto.nrMin = Math.min(simAuto.nrMin, simNr); if (simAuto.flareAgl == null && S.pit > 5) simAuto.flareAgl = agl; }
+}
+function simAutoTouchdown(vs, spd) {
+  const v = Math.max(0, -vs), g = Math.max(0, spd), nr = simNr;
+  const grade = v <= 300 && g <= 15 && nr >= 90 ? '좋음' : v <= 600 && g <= 25 ? '거침' : '손상';
+  simAuto.last = { vs: v, spd: g, nr, flare: simAuto.flareAgl, nrMin: simAuto.nrMin, grade };
+  const txt = `오토로테이션 착지 — ${grade} · 강하 ${Math.round(v)}fpm · ${Math.round(g)}kt · NR ${Math.round(nr)}% · 플레어 ${simAuto.flareAgl == null ? '없음' : Math.round(simAuto.flareAgl) + 'ft'}`;
+  try { uiToast(txt, grade === '좋음' ? '' : 'err', 6000); } catch (e) { _swallow(e); }
+  try { if (typeof fdrNote === 'function') fdrNote(txt, grade === '좋음' ? '' : grade === '거침' ? 'warn' : 'err'); } catch (e) { _swallow(e); }
+  simAuto.flareAgl = null; simAuto.nrMin = 100;
+}
 function simTouchdown(vs, spd) {
+  if (simEng === 0) { simAutoTouchdown(vs, spd); simLastTouchdown = { vs: Math.max(0, -vs), spd, grade: simAuto.last.grade }; return; }
   const v = Math.max(0, -vs);
   const grade = v <= TD_SOFT ? '부드러운 접지' : v <= TD_HARD ? '단단한 접지' : '충격 착륙';
   simLastTouchdown = { vs: v, spd, grade };
@@ -1612,8 +1647,10 @@ function simTqForVs(vs) {
 function simWindRel(air) {
   const f = (air === undefined) ? windEffectFactor() : (air ? 1 : 0);
   if (!f || !(windSpd > 0)) return { fwd: 0, lat: 0 };
-  const r = (windDir - S.hdg) * D2R;
-  return { fwd: f * windSpd * Math.cos(r), lat: f * windSpd * Math.sin(r) };
+  // 돌풍(29-env.js) — 세기 · 방향이 흔들린다
+  const gu = (typeof envGustNow === 'function') ? envGustNow() : { dk: 0, dd: 0 };
+  const ws = Math.max(0, windSpd + gu.dk), r = (windDir + gu.dd - S.hdg) * D2R;
+  return { fwd: f * ws * Math.cos(r), lat: f * ws * Math.sin(r) };
 }
 // 대기속도(kt) — 필요 동력·VRS·VNE 가 쓴다. GSPD 중에는 S.spd 가 땅에 대한 속도라 바람을 더한다.
 function simAirspeed() {
@@ -1692,9 +1729,10 @@ function simFly(dt) {
     // HDG·NAV 가 걸려 있으면 뱅크는 AFCS 가 잡는다(07-sim.js) — 조종간 좌우는 무시한다.
     if (!simAfcsLat()) {
       simTf = (rcOn('transverse') && !onGnd) ? -rotorSign() * RC_TF_BANK * rcTransverseK(simAirspeed()) * (aseOn ? RC_TF_ASE : 1) : 0;
-      const bTgt = (gnd3 ? 0 : roll * SIM_BANK_MAX) + deckAtt.bank + rotorSign() * simRbs.r + simTf + simLowG.r;   // simLowG — Bell 206 저중력 오른쪽 롤
+      const hk = simHydK();
+      const bTgt = (gnd3 ? 0 : roll * SIM_BANK_MAX * (hk < 1 ? 0.7 : 1)) + deckAtt.bank + rotorSign() * simRbs.r + simTf + simLowG.r + (onGnd ? 0 : simTurb.r);   // simLowG — Bell 206 저중력 오른쪽 롤 · simTurb — 돌풍 난류
       const dB = bTgt - S.bnk;
-      S.bnk += Math.sign(dB) * Math.min(Math.abs(dB), SIM_ROLL_RATE * dt);
+      S.bnk += Math.sign(dB) * Math.min(Math.abs(dB), SIM_ROLL_RATE * hk * dt);   // 유압이 없으면(Bell HYD BOOST) 조종이 무겁고 굼뜨다
       bankTarget = S.bnk;           // 모드를 빠져나가도 자세가 튀지 않게
     }
 
@@ -1719,9 +1757,10 @@ function simFly(dt) {
     pTgt += deckAtt.pitch;               // 흔들리는 갑판 위에서는 갑판 자세를 따른다
     pTgt += simRbs.p;                    // 후퇴익 실속 — 기수가 든다
     // 땅 위에서는 바퀴가 받치므로 위아래 10° 까지만 기운다
+    if (!onGnd) pTgt += simTurb.p + simCgPitch();   // 돌풍 난류 · Bell 무게중심(뒤면 기수가 든다)
     if (onGnd) pTgt = Math.max(-GND_PITCH_MAX, Math.min(GND_PITCH_MAX, pTgt));
     const dP = pTgt - S.pit;
-    S.pit += Math.sign(dP) * Math.min(Math.abs(dP), pRate * dt);
+    S.pit += Math.sign(dP) * Math.min(Math.abs(dP), pRate * simHydK() * dt);
     aseHoverFollow(a, onGnd, (S.bnk - bnk0) / dt, (S.pit - pit0) / dt);
 
     // ── 피치 → 속도 ──
