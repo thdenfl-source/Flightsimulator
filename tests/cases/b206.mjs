@@ -176,6 +176,28 @@ export async function run(page, t) {
     `Cockpit Mode — 상부 콘솔 · CDU 칸과 UpperC · CDU 버튼이 없고 하부 콘솔(무전 스택)만 (${JSON.stringify(NO.ck)})`);
   t.ok(Object.values(NO.r).every(Boolean), `무전 스택 튜닝 → 시뮬레이터 COM1 · COM2 · NAV1 · NAV2 (${JSON.stringify(NO.r)})`);
   t.ok(NO.cdi1 === 'NAV1' && NO.cdi2 === 'FMS', `GNS 430 CDI — GPS ⇄ VLOC 로 항법 소스를 바꾼다 (${NO.cdi1} → ${NO.cdi2})`);
+  // ── RMI — ADF 바늘 = 하부 콘솔 ADF 의 USE 주파수 NDB · NAV2 바늘 = NAV 수신기의 VOR ──
+  const RM = await page.evaluate(() => {
+    const o = {};
+    const ap = AIRPORTS.find(a => a.ident === 'RKSS'); S.lat = ap.lat; S.lon = ap.lon; S.hdg = 90;
+    Object.assign(b206r.adf, { on: true, mode: 'ADF', f: [1188, 266] });
+    const st = b206AdfStation(), r = b206RmiRel();
+    o.st = st && st.id; o.adf = r.adf; o.want = normAS(bearing(S.lat, S.lon, st.lat, st.lon) - S.hdg); o.id = r.adfId;
+    b206r.adf.mode = 'ANT'; o.ant = b206RmiRel().adf; b206r.adf.mode = 'ADF';
+    b206r.adf.on = false; o.off = b206RmiRel().adf; b206r.adf.on = true;
+    b206r.adf.f[0] = 199; o.none = b206RmiRel().adf; b206r.adf.f[0] = 1188;
+    // NAV2 — VOR 를 NAV 수신기로 잡으면 굵은 바늘이 그쪽
+    const v = (typeof ENR_VORS !== 'undefined' ? ENR_VORS : []).find(x => x.freq && Math.abs(distance(S.lat, S.lon, x.lat, x.lon)) < 80);
+    if (v) { b206r.nav.f = [+parseFloat(v.freq).toFixed(2), b206r.nav.f[1]]; b206rAct('nav:flip'); b206rAct('nav:flip'); }
+    const r2 = b206RmiRel(); o.nav = r2.nav; o.navId = r2.navId; o.vor = v && v.id;
+    o.navWant = v ? normAS(bearing(S.lat, S.lon, navRadios.NAV2.lat, navRadios.NAV2.lon) - S.hdg) : null;
+    return o;
+  });
+  t.ok(RM.st === 'BANGSAN' && Math.abs(RM.adf - RM.want) < 0.01 && RM.id === 'BANGSAN',
+    `RMI ADF 바늘 — ADF 1188 kHz 를 맞추면 BANGSAN NDB 쪽을 가리킨다 (상대 방위 ${RM.adf.toFixed(1)}°)`);
+  t.ok(RM.ant === null && RM.off === null && RM.none === null, 'ANT 모드 · ADF 꺼짐 · NDB 없는 주파수면 ADF 바늘은 3시에 눕는다(방위 없음)');
+  t.ok(RM.vor ? (RM.nav !== null && Math.abs(RM.nav - RM.navWant) < 0.01) : true,
+    `RMI NAV2 바늘 — NAV 수신기로 잡은 VOR 쪽 (${RM.vor || '근처 VOR 없음'} ${RM.nav != null ? RM.nav.toFixed(1) + '°' : ''})`);
   const errs = (page.errors || []).filter(e => !/Failed to fetch|NetworkError|tile/i.test(e));
   t.ok(errs.length === 0, `오류 없음${errs.length ? ' (' + errs.slice(0, 2).join(' | ') + ')' : ''}`);
 }
