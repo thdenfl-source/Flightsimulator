@@ -231,11 +231,13 @@ export async function run(page, t) {
   const al = await two.evaluate(() => [1400, 1000, 700, 560, 400].map(W => {
     const L = pfdLayout(W, 900, 300);
     const sym = W < 420 || Math.abs(L.spd.x - (W - L.alt.x - L.alt.w)) < 0.5;
-    return Math.abs(L.crht.w - (L.alt.w + L.vsi.w)) < 0.5 && Math.abs(L.crht.x + L.crht.w - (W - L.pad)) < 0.5 &&
+    const rightEnd = L.insetOn ? L.inset.x + L.inset.w : L.crht.x + L.crht.w;   // MAP · TCAS 창이 있으면 그 창이 오른쪽 끝
+    return Math.abs(L.crht.w - (L.alt.w + L.vsi.w)) < 0.5 && Math.abs(rightEnd - (W - L.pad)) < 0.5 &&
+           (!L.insetOn || L.inset.x > L.crht.x + L.crht.w) &&
            Math.abs(L.navs.x - L.crht.x) < 0.5 && Math.abs(L.hsi.x + L.hsi.w - L.crht.x) < 0.5 &&
            L.ai.x === 0 && L.ai.w === W && sym;
   }));
-  t.ok(al.every(Boolean), `CRHT·NAV 칸은 오른쪽 끝 · 자세계 전체 폭 · 속도계/고도계 좌우 대칭 (${al.join(' ')})`);
+  t.ok(al.every(Boolean), `CRHT·NAV 칸은 HSI 옆(오른쪽 끝은 MAP·TCAS 창) · 자세계 전체 폭 · 속도계/고도계 좌우 대칭 (${al.join(' ')})`);
 
   await ctx1.close();
   await ctx2.close();

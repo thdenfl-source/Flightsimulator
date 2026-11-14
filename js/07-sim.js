@@ -1008,7 +1008,10 @@ function applyPanels() {
   const sysMapHost = () => { try { return (typeof sysMapSlot === 'function' && (ckC('sysp', 'pop') || hostOf0('sysp'))) ? sysMapSlot() : null; } catch (e) { return null; } };
   // SIM 3D 조종석(15-heli3d.js) — 콘솔 팝아웃(LowerC · UpperC)은 무엇보다 먼저, 조종석 안의 작은 콘솔은 다른 창에 없을 때만
   const ckC = (k, ph) => { try { return typeof ckpitConsoleHost === 'function' ? ckpitConsoleHost(k, ph) : null; } catch (e) { return null; } };
-  const hostOf = k => ckC(k, 'pop') || hostOf0(k) || (k === 'map' ? sysMapHost() : null) || ckC(k, 'mini');
+  // 콘솔(UPPER · LOWER)은 단독 화면(Cockpit Mode 등)에서 접힌 창(display:none)을 그릇으로 삼지 않는다 — 그 창 탭이
+  // LOWER 였으면 하부 콘솔이 보이지 않는 창에 남아 조종석 안의 작은 하부 콘솔 칸이 검게 비었다
+  const hostCon = k => { const h = hostOf0(k); return ((k === 'ovhd' || k === 'lcon') && h && h.style.display === 'none') ? null : h; };
+  const hostOf = k => ckC(k, 'pop') || hostCon(k) || (k === 'map' ? sysMapHost() : null) || ckC(k, 'mini');
   ['pfd', 'map', 'cdu', 'm3d', 'plan', 'ovhd', 'sysp', 'lcon'].forEach(k => {
     const el = document.getElementById(wrapIds[k]);
     if (!el) return;

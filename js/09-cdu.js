@@ -195,6 +195,8 @@ function init(){
     const py   = (clientY - rect.top)  * scY;
     // 스톱워치 버튼(HSI 오른쪽 아래 — 03-pfd.js drawStopwatch)
     try { if (typeof swHitTest === 'function' && swHitTest(px, py)) return; } catch (e) { _swallow(e); }
+    // 오른쪽 아래 MAP · TCAS 창 — 누르면 서로 바꾼다(03-pfd.js drawPfdInset)
+    try { if (typeof pfdInsetHit === 'function' && pfdInsetHit(px, py)) return; } catch (e) { _swallow(e); }
 
     // Mirror drawPFD geometry
     const ctrlEl = document.querySelector('.ctrl-bar');
