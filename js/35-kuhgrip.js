@@ -267,4 +267,12 @@ setInterval(() => {
   if (sig !== _kgLastH) { _kgLastH = sig; kgRender(); }
 }, 100);
 setInterval(() => { if (_kgHold && /^srch|^ldg/.test(_kgHold.k)) kgRender(); }, 120);
+// 큰 창 바깥을 누르면 닫는다(✕ 를 찾지 않아도) — 조종석의 작은 그림을 누른 것은 빼고(그것은 열거나 바꾼다)
+document.addEventListener('pointerdown', e => {
+  const t = e.target;
+  const kg = document.getElementById('kg-pop'), bc = document.getElementById('b206-coll-pop');
+  const open = el => el && el.style.display !== 'none' && el.offsetParent !== null;
+  if (open(kg) && !kg.contains(t) && !(t.closest && t.closest('.kg-mini'))) kgPop(null);
+  if (open(bc) && !bc.contains(t) && !(t.closest && t.closest('#b206-coll')) && typeof b206cPop === 'function') b206cPop(false);
+}, true);
 try { appRegister({ kgPop }); } catch (e) { _swallow(e); }

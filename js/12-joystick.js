@@ -20,6 +20,9 @@ const JOY_REPEAT_DELAY = 350, JOY_REPEAT_INT = 80;   // 화면 버튼 홀드와 
 // kind — press: 누를 때 한 번 · hold: 누르는 동안 · repeat: 누른 뒤 연속
 // 트림(4방향 트림·햇)은 SIM 모드에서 딸깍 한 번에 뱅크 1° · 피치 0.5°, 누르고
 // 있으면 이어서 옮긴다. GSPD 가 걸려 있으면 기준속도를 옮긴다(01-state.js startTrimHold).
+// 흰수리 컬렉티브 · 사이클릭 조작(35-kuhgrip.js 가 뒤에 읽혀도 누를 때 찾는다)
+function _joyKg(k) { if (typeof kgPress === 'function') kgPress(k); }
+function _joyKgOff() { if (typeof _kgHoldStop === 'function') _kgHoldStop(); }
 const JOY_ACTIONS = [
   { id: 'sim',    grp: '운항',   label: 'FLY / PAUSE',   kind: 'press',
     run: () => toggleSim() },
@@ -38,6 +41,19 @@ const JOY_ACTIONS = [
   // 무전 송신 — 누르고 있는 동안(Bell: 오디오 패널 MIC · 흰수리: CDU AUDIO 의 MIC) · 32-callout.js radioPtt
   { id: 'ptt', grp: '운항', label: 'PTT (무전 송신 · 누르는 동안)', kind: 'hold',
     on: () => { if (typeof radioPtt === 'function') radioPtt(true); }, off: () => { if (typeof radioPtt === 'function') radioPtt(false); } },
+  // 흰수리 컬렉티브 · 사이클릭(35-kuhgrip.js) — 손을 떼지 않고 조이스틱 단추로
+  { id: 'kgCollUp', grp: '컬렉티브 · 사이클릭', label: 'COLL TRIM UP (누르는 동안)', kind: 'hold', on: () => _joyKg('collUp'), off: () => _joyKgOff() },
+  { id: 'kgCollDn', grp: '컬렉티브 · 사이클릭', label: 'COLL TRIM DN (누르는 동안)', kind: 'hold', on: () => _joyKg('collDn'), off: () => _joyKgOff() },
+  { id: 'kgSrchLt', grp: '컬렉티브 · 사이클릭', label: 'SRCH LT ON/OFF', kind: 'press', run: () => _joyKg('srchLt') },
+  { id: 'kgSrchL', grp: '컬렉티브 · 사이클릭', label: 'SRCH CTR ◀ (서치라이트 왼쪽)', kind: 'hold', on: () => _joyKg('srchL'), off: () => _joyKgOff() },
+  { id: 'kgSrchR', grp: '컬렉티브 · 사이클릭', label: 'SRCH CTR ▶ (서치라이트 오른쪽)', kind: 'hold', on: () => _joyKg('srchR'), off: () => _joyKgOff() },
+  { id: 'kgSrchU', grp: '컬렉티브 · 사이클릭', label: 'SRCH CTR ▲ (서치라이트 위)', kind: 'hold', on: () => _joyKg('srchU'), off: () => _joyKgOff() },
+  { id: 'kgSrchD', grp: '컬렉티브 · 사이클릭', label: 'SRCH CTR ▼ (서치라이트 아래)', kind: 'hold', on: () => _joyKg('srchD'), off: () => _joyKgOff() },
+  { id: 'kgLdgLt', grp: '컬렉티브 · 사이클릭', label: 'LDG LT ON/OFF', kind: 'press', run: () => _joyKg('ldgOn') },
+  { id: 'kgLdgExt', grp: '컬렉티브 · 사이클릭', label: 'LDG LT EXT (누르는 동안 펼침)', kind: 'hold', on: () => _joyKg('ldgExt'), off: () => _joyKgOff() },
+  { id: 'kgLdgRet', grp: '컬렉티브 · 사이클릭', label: 'LDG LT RET (누르는 동안 접음)', kind: 'hold', on: () => _joyKg('ldgRet'), off: () => _joyKgOff() },
+  { id: 'kgApCut', grp: '컬렉티브 · 사이클릭', label: 'AP FAST CUT OFF', kind: 'press', run: () => _joyKg('apCut') },
+  { id: 'kgOei', grp: '컬렉티브 · 사이클릭', label: 'OEI HI ↔ LOW', kind: 'press', run: () => _joyKg('oei') },
   // SIM 에서 1인칭 ↔ 외부 시점(뒤에서 내 헬기를 본다 · 15-heli3d.js)
   { id: 'extView', grp: '운항', label: '외부 시점 (SIM 1인칭 ↔ 3인칭)', kind: 'press',
     run: () => toggleExtView() },
