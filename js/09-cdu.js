@@ -1990,7 +1990,7 @@ function act(name, ...args) {
 
     // Waypoint Info — 하위 화면 묶음(지금은 INFO · 차차 더한다). 그림은 실기 CDU 사진(자홍 마름모 · 하늘색 육각 · 삼각)
     const wptInfoBtn = { id: 'wptinfo', text: 'Waypoint<br>Info', icon: '<svg viewBox="2 26 96 48"><g transform="rotate(-30 22 50)"><rect x="8" y="36" width="28" height="28" rx="6" fill="#e020d0"/><rect x="19" y="40" width="6" height="20" rx="2" fill="#fff"/></g><polygon points="50,36 62,36 68,50 62,64 50,64 44,50" fill="#00d8ff"/><circle cx="56" cy="50" r="6" fill="#000"/><polygon points="80,36 94,62 66,62" fill="#00d8ff"/></svg>' };
-    // Waypoint Info 하위 — 실기 CDU 사진의 자리(3칸씩): Airport · INT · VOR / NDB · VRP · User Waypoint / Create Waypoint · Airport INFO
+    // Waypoint Info 하위 — 실기 CDU 사진의 자리(3칸씩): Airport · INT · VOR / NDB · VRP · User Waypoint / Create Waypoint
     // Airport INFO(비행장 정보) 말고는 아직 '준비 중' 화면(renderWptPage)
     const WPT_SUB_BTNS = [
         { id: 'wpt_apt', text: 'Airport', icon: '<svg viewBox="0 0 100 100"><g fill="#c0158f"><rect x="45" y="10" width="10" height="16"/><rect x="45" y="74" width="10" height="16"/><rect x="10" y="45" width="16" height="10"/><rect x="74" y="45" width="16" height="10"/></g><circle cx="50" cy="50" r="28" fill="#c0158f"/><g stroke="#fff" stroke-width="5" stroke-linecap="round"><line x1="32" y1="56" x2="68" y2="44"/><line x1="40" y1="44" x2="44" y2="54"/></g></svg>' },
@@ -2001,7 +2001,7 @@ function act(name, ...args) {
         { id: 'wpt_user', text: 'User<br>Waypoint', icon: '<svg viewBox="0 0 100 100"><rect x="26" y="20" width="48" height="48" fill="#f08c1e"/></svg>' },
         { id: 'wpt_create', text: 'Create<br>Waypoint', icon: '<svg viewBox="0 0 100 100"><rect x="24" y="16" width="46" height="46" fill="#f08c1e"/><g stroke="#ffe000" stroke-width="3"><path d="M20 24 V12 H32"/><path d="M62 12 H74 V24"/><path d="M20 54 V66 H32"/></g><polygon points="52,26 56,36 67,37 59,44 61,55 52,49 43,55 45,44 37,37 48,36" fill="#fff" stroke="#333" stroke-width="1.5"/><line x1="58" y1="46" x2="86" y2="72" stroke="#111" stroke-width="4" stroke-linecap="round"/><line x1="58" y1="46" x2="86" y2="72" stroke="#888" stroke-width="1.5"/></svg>' }
     ];
-    const WPT_INFO_IDS = ['wpt_apt', 'wpt_int', 'wpt_vor', 'wpt_ndb', 'wpt_vrp', 'wpt_user', 'wpt_create', 'afld'];
+    const WPT_INFO_IDS = ['wpt_apt', 'wpt_int', 'wpt_vor', 'wpt_ndb', 'wpt_vrp', 'wpt_user', 'wpt_create'];   // Airport INFO 는 홈 맨 아랫줄로 옮겼다
     let _wptPage = 'wpt_apt';
     function wptOpen(id) {
         // Create Waypoint — Flight Plan 의 Add WPT 와 같은 화면(ADD WAYPOINT)을 연다
@@ -2061,9 +2061,9 @@ function act(name, ...args) {
         footer.innerHTML = cduFooter("switchMode('WPTINFO')");
     }
     // 홈 배열(사용자 지정) — 4칸씩: MAP·Aircraft Systems·PERF·Charts / Flight Plan·PROC·VNAV·Waypoint Info /
-    // NOTAM·Track & Point·Services·Utilities / SkyVector·Tide·ER·Wildfire / Weather·Checklist
+    // NOTAM·Track & Point·Services·Utilities / SkyVector·Tide·ER·Wildfire / Weather·Checklist·Airport INFO
     const HOME_ORDER = ['map', 'acsys', 'perf', 'charts', 'fpl', 'proc', 'vnav', 'wptinfo',
-                        'notam', 'sys', 'serv', 'util', 'skyvector', 'tide', 'eravail', 'wildfire', 'wxgrp', 'check'];
+                        'notam', 'sys', 'serv', 'util', 'skyvector', 'tide', 'eravail', 'wildfire', 'wxgrp', 'check', 'afld'];
     function renderHomeScreen(container, footer, title) {
         title.innerText = "Home";
         const all = [wxGroupBtn, acSysGroupBtn, wptInfoBtn].concat(homeButtons);
@@ -4653,7 +4653,7 @@ function act(name, ...args) {
               ${allBtn}
             </div>
             ${rows}</div>`;
-        footer.innerHTML = cduFooter("switchMode('WPTINFO')");
+        footer.innerHTML = cduFooter("switchMode('HOME')");              // Airport INFO 는 홈 맨 아랫줄에서 연다
     }
     function renderAirfieldDetailScreen(container, footer, title) {
         const list = (typeof AIRFIELD_INFO !== 'undefined' ? AIRFIELD_INFO : []);

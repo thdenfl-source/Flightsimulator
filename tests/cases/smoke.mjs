@@ -127,8 +127,8 @@ export async function runDegenerate(page, t) {
     return { home, wxTitle, wxLabels, hrefs, cctv, back };
   });
   t.eq(wx.home.join('|'),
-    'MAP|AircraftSystems|PERF|Charts|Flight Plan|PROC|VNAV|WaypointInfo|NOTAM|Track &Point|Services|Utilities|SkyVector|Tideforecast|ERavailability|Wildfirestatus|Weather|Checklist',
-    `CDU 홈 배열 — 4칸씩 MAP… / Flight Plan… / NOTAM… / SkyVector… / Weather · Checklist (${wx.home.join(' · ')})`);
+    'MAP|AircraftSystems|PERF|Charts|Flight Plan|PROC|VNAV|WaypointInfo|NOTAM|Track &Point|Services|Utilities|SkyVector|Tideforecast|ERavailability|Wildfirestatus|Weather|Checklist|AirportINFO',
+    `CDU 홈 배열 — 4칸씩 MAP… / Flight Plan… / NOTAM… / SkyVector… / Weather · Checklist · Airport INFO (${wx.home.join(' · ')})`);
   // Waypoint Info — 누르면 INFO, INFO 의 Back 은 Waypoint Info 로
   const wpt = await page.evaluate(async () => {
     const wait = ms => new Promise(r => setTimeout(r, ms));
@@ -136,10 +136,13 @@ export async function runDegenerate(page, t) {
     CDU_ACT.switchMode('HOME'); await wait(50);
     document.querySelector('#mainContentArea [data-arg=\'["WPTINFO"]\']').click(); await wait(60);
     const t1 = title(), labels = [...document.querySelectorAll('#mainContentArea .icon-label')].map(e => e.textContent.trim());
+    // Airport INFO — 이제 홈 맨 아랫줄에서 열고, Back 은 홈으로
+    CDU_ACT.switchMode('HOME'); await wait(50);
     document.querySelector('#mainContentArea [data-arg=\'["AIRFIELD"]\']').click(); await wait(60);
     const t2 = title();
     [...document.querySelectorAll('#footerNav .nav-btn')].pop().click(); await wait(60);
     const t3 = title();
+    document.querySelector('#mainContentArea [data-arg=\'["WPTINFO"]\']').click(); await wait(60);
     document.querySelector('#mainContentArea [data-act="wptOpen"][data-arg=\'["wpt_vrp"]\']').click(); await wait(60);
     const t4 = title(); [...document.querySelectorAll('#footerNav .nav-btn')].pop().click(); await wait(60);
     const t5 = title();
@@ -164,8 +167,8 @@ export async function runDegenerate(page, t) {
     CDU_ACT.switchMode('HOME'); await wait(50);
     return { t1, labels, t2, t3, t4, t5, add, nav };
   });
-  t.ok(wpt.t1 === 'Waypoint Info' && wpt.labels.join('|') === 'Airport|INT|VOR|NDB|VRP|UserWaypoint|CreateWaypoint|AirportINFO' && wpt.t2 === '비행장 정보' && wpt.t3 === 'Waypoint Info',
-    `Waypoint Info → Airport·INT·VOR·NDB·VRP·User·Create·Airport INFO, Airport INFO 의 Back 은 Waypoint Info 로 (${wpt.t1} · ${wpt.labels.join(',')} · ${wpt.t2} → ${wpt.t3})`);
+  t.ok(wpt.t1 === 'Waypoint Info' && wpt.labels.join('|') === 'Airport|INT|VOR|NDB|VRP|UserWaypoint|CreateWaypoint' && wpt.t2 === '비행장 정보' && wpt.t3 === 'Home',
+    `Waypoint Info → Airport·INT·VOR·NDB·VRP·User·Create · Airport INFO 는 홈 맨 아랫줄(Back 은 홈) (${wpt.t1} · ${wpt.labels.join(',')} · ${wpt.t2} → ${wpt.t3})`);
   t.ok(wpt.add.title === 'ADD WAYPOINT' && wpt.add.shown, `Create Waypoint 는 Flight Plan 의 ADD WAYPOINT 화면을 연다 (${wpt.add.title} · ${wpt.add.shown})`);
   t.ok(wpt.nav.vor.title === 'VOR' && wpt.nav.vor.n === NAV_N.vor && wpt.nav.vor.first === 'CHJ' && wpt.nav.vor.wp === 'CHJ',
     `VOR 목록 — ${wpt.nav.vor.n}곳, 거리순 첫째 ${wpt.nav.vor.first}(청주 근처), 누르면 Flight Plan 에 ${wpt.nav.vor.wp} (${wpt.nav.vor.fp})`);
