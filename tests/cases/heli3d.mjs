@@ -314,7 +314,7 @@ export async function run(page, t) {
     out.op = +getComputedStyle(document.querySelector('#sim-ckpit svg')).opacity;
     out.on = { panel: vis('sim-ckpit'), nose: vis('sim-nose'), label: btn.textContent, lit };
     // HEELS 등 — 스위치 ON 이면 조종석 테두리에 녹색 띠, OFF 면 꺼짐(ARM 은 발전기 · NR 을 따른다)
-    { const h0 = ovhdGet('heels'); ovhdSet('heels', 'ON'); _ckHeelsSync(); out.heelsOn = document.getElementById('ck-heels').classList.contains('on') && vis('ck-heels');
+    { const h0 = ovhdGet('heels'); ovhdSet('heels', 'ON'); _ckHeelsSync(); out.heelsOn = document.getElementById('ck-heels').classList.contains('on') && vis('ck-heels'); out.heelsN = document.querySelectorAll('#ck-heels path').length;
       ovhdSet('heels', 'OFF'); _ckHeelsSync(); out.heelsOff = !vis('ck-heels'); ovhdSet('heels', h0 || 'OFF'); }
     toggleExtView(true); await w(100); out.ext = vis('sim-ckpit');
     toggleExtView(false); { const t0 = performance.now(); await w(SIM_CAM_TX_MS); while (!vis('sim-ckpit') && performance.now() - t0 < 5000) await w(100); } out.back = vis('sim-ckpit');   // 바쁘면 넘어가기가 늦다 — 5초까지 기다린다
@@ -330,7 +330,7 @@ export async function run(page, t) {
   t.ok(ck.kinds === 'pfd,sys,map,pfd' && ck.pgKeep, `MFD(왼쪽부터) — PFD · CDU 가 고른 SYSTEM 화면 · 지도 · PFD (${ck.kinds})`);
   t.ok(ck.op > 0.2 && ck.op < 0.7, `스크린을 뺀 틀·구조는 반투명이다 (불투명도 ${ck.op})`);
   t.ok(!ck.ext && ck.back, '외부 시점에서는 숨기고, 조종석으로 돌아오면 다시 보인다');
-  t.ok(ck.heelsOn && ck.heelsOff, 'HEELS 등 — 켜지면 조종석 테두리에 녹색 띠가 켜지고, 꺼지면 사라진다');
+  t.ok(ck.heelsOn && ck.heelsOff && ck.heelsN === 2, `HEELS 등 — 켜지면 좌우 문 기둥 두 곳에만 녹색 띠(${ck.heelsN}줄), 꺼지면 사라진다`);
   t.ok(!ck.off.panel && ck.off.nose && ck.off.label === '조종석 OFF' && !ck.exit, '끄면 패널이 사라지고 기수가 돌아온다 · SIM 을 끄면 버튼도 숨는다');
 
   // ── 조종석 안 작은 콘솔 · LowerC / UpperC 팝아웃 ──
