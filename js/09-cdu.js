@@ -2322,6 +2322,7 @@ function act(name, ...args) {
                 ${renderAudioRow('COM1', 'com1')} 
                 ${renderAudioRow('COM2', 'com2')} 
                 ${renderAudioRow('U/VHF', 'uvhf')}
+                ${renderPttRow()}
                 <div class="volume-row">
                     <div class="item-btn">▶<br>Playback</div>
                     <div class="wedge-slider" style="grid-column: span 2;" data-act="handleVol" data-on="pointerdown" data-arg='["pb","$event","$el"]'>
@@ -4456,6 +4457,19 @@ function act(name, ...args) {
     }
 
     // --- Render Helpers ---
+    // 🎙 PTT — 고른 MIC 의 무전기(COM1 · COM2 는 그 주 주파수 · U/VHF 는 C-5000 RT1)로 누르는 동안 송신(32-callout.js kuhPtt)
+    function micFreqText() {
+        if (micSelected === 'COM1' || micSelected === 'COM2') return freqs[micSelected.toLowerCase()].act;
+        if (micSelected === 'U/VHF') { try { const uv = typeof c5UvhfInfo === 'function' ? c5UvhfInfo() : null; return uv && uv.on ? uv.f : 'OFF'; } catch (e) { return ''; } }
+        return '';
+    }
+    function renderPttRow() {
+        const f = micFreqText(), on = micSelected && micSelected !== 'OFF';
+        return `<div style="display:flex; padding: 4px 5px 6px;">
+            <div class="item-btn cdu-ptt" data-ptt-kuh="1" title="누르고 있는 동안 MIC 로 고른 무전기(${micSelected || 'OFF'})의 주파수로 송신 — 사이클릭 PTT · 조이스틱 PTT 도 같다" style="flex:1; height:34px; touch-action:none;">
+                <span style="font-size:10px; font-weight:bold;">🎙 PTT · ${on ? micSelected + (f ? ' ' + f : '') : 'MIC OFF'}</span><div class="status-line"></div>
+            </div></div>`;
+    }
     function renderAudioRow(label, id) {
         let isMicOn = (micSelected === label);
         // U/VHF — 하부 콘솔 C-5000(21-c5000.js) 의 RT1: 채널 · 주파수를 보이고, 음량은 C-5000 VOL 과 같다
@@ -5051,6 +5065,7 @@ switchMode('HOME');
     window.cduRadio          = k => freqs[k] ? { act: freqs[k].act, stb: freqs[k].stb } : null;
     // 흰수리 PTT(32-callout.js kuhPtt) — 지금 고른 MIC(COM1 · COM2 · U/VHF · VHF-FM · PA · OFF)
     window.cduMic            = () => micSelected;
+    window.cduMicFreq        = () => micFreqText();
     // Bell 206 트랜스폰더(26-b206radio.js) — 코드를 CDU XPDR 과 같게(넣으면 바꾸고 · 돌려준다)
     window.cduXpdrCode       = c => { if (/^[0-7]{4}$/.test(String(c || ''))) { xpdrState.code = String(c); try { const e = document.getElementById('top-xpdr-code'); if (e) e.innerText = xpdrState.code; if (currentMode === 'XPDR') renderContent(); } catch (e) { _swallow(e); } } return xpdrState.code; };
     window.openAirfield      = openAirfield;       // 지도 공항 팝업 → INFO 열기

@@ -374,6 +374,7 @@ function kuhPtt(on) {
     const t = kuhTxTarget();
     if (!t.ok) { try { uiToast(`송신 안 됨 — ${t.why}`, 'warn', 2000); } catch (e) { _swallow(e); } return; }
     _kuhTx = true; _kuhTxTgt = t;
+    try { uiToast(`🎙 송신 — ${t.name}${t.f ? ' ' + t.f.toFixed(3) : ''}`, '', 1500); } catch (e) { _swallow(e); }
     try { atcPttStart(); } catch (e) { _swallow(e); }
     try { const ac = typeof _adfAudioCtx === 'function' ? _adfAudioCtx() : null; if (ac && ac.state === 'running' && typeof _b206TxNoise === 'function') _kuhTxSnd = _b206TxNoise(ac, 0.01); } catch (e) { _swallow(e); }
   } else {
