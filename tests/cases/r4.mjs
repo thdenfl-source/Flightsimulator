@@ -38,6 +38,13 @@ export async function run(page, t) {
     const ot = atcOnTx; let got = null; atcOnTx = f => { got = f; return null; };
     const tg = kuhTxTarget(); kuhPtt(true); const on = kuhTxOn(); kuhPtt(false);
     o.ptt = { name: tg.name, f: tg.f, on, got, off: !kuhTxOn(), joy: JOY_ACTIONS.some(x => x.id === 'ptt' && x.kind === 'hold') };
+    // CDU AUDIO — COM2 에 MIC 를 고르면 COM2 주 주파수로 송신 · COM 탭에 PTT 단추(주파수가 적힌다)
+    switchMode('AUDIO'); await w(200);
+    const c2 = cduRadio('com2'); cduSetRadio('com2', 118.1);
+    document.querySelector('#cdu-wrap [data-act="setMic"][data-arg=\'["COM2"]\']').click(); await w(150);
+    got = null; kuhPtt(true); kuhPtt(false);
+    o.cduCom2 = { mic: cduMic(), got, btn: (document.querySelector('#cdu-wrap .cdu-ptt') || {}).textContent || '' };
+    document.querySelector('#cdu-wrap [data-act="setMic"][data-arg=\'["COM1"]\']').click(); cduSetRadio('com2', c2.act, c2.stb); await w(100);
     atcOnTx = ot;
     // ⑦ 산 뒤 불빛 — 가운데 지형이 시선보다 높으면 가린다
     const fake = h => ({ queryTerrainElevation: ([lo, la]) => (Math.abs(la - 37.05) < 0.02 ? h : 0) });
@@ -64,6 +71,8 @@ export async function run(page, t) {
   t.ok(A.banner, "새 버전 알림 — '새 버전이 있습니다 [새로고침] [나중에]'");
   t.ok(A.ptt.name === 'COM1' && A.ptt.f > 118 && A.ptt.on && Math.abs(A.ptt.got - A.ptt.f) < 1e-6 && A.ptt.off && A.ptt.joy,
     `흰수리 PTT — MIC ${A.ptt.name} ${A.ptt.f} 로 송신 · 놓으면 관제(atcOnTx) · 조이스틱 PTT(누르는 동안)`);
+  t.ok(A.cduCom2.mic === 'COM2' && Math.abs(A.cduCom2.got - 118.1) < 1e-6 && /PTT · COM2 118\.100/.test(A.cduCom2.btn),
+    `CDU AUDIO — COM2 에 MIC 를 고르면 COM2 주파수(118.100)로 송신 · COM 탭 PTT 단추 "${A.cduCom2.btn.trim()}"`);
   t.ok(A.occ.hidden && A.occ.seen, '야간 불빛 — 산(시선보다 높은 지형) 뒤는 가리고, 낮으면 보인다');
   t.ok(A.water.sea && A.water.lowland && A.water.land && A.water.unknown, '물 판정 — 바다(수심)는 물 · 들쭉날쭉한 해수면 근처 낮은 땅 · 높은 땅 · 모르는 곳은 물이 아니다');
 
