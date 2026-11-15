@@ -293,6 +293,7 @@ function envFxFrame() {
   // 다른 항공기 — 낮에는 작은 점 · 밤에는 충돌방지등(빨강 깜빡 · 흰 번쩍)
   for (const tr of tfc) {
     const f = inFront(tr.lat, tr.lon); if (!f.ok || f.d > 20000) continue;
+    if (!dark && f.d < 4000 && typeof TFC3D_LAYER !== 'undefined') continue;   // 낮 · 4km 안은 실제 모형(15-heli3d.js)이 보인다 — 점은 먼 데만
     const p = m.project([tr.lon, tr.lat]); const dy = ((tr.alt - S.alt) * 0.3048) / Math.max(50, f.d) * r.height * 0.9;
     const y = p.y - dy - 4; if (!(p.x > -20 && p.x < r.width + 20 && y > -20 && y < r.height + 20)) continue;
     const blink = Math.floor(t * 1.5 + tr.id) % 2 === 0;
