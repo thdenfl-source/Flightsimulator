@@ -100,4 +100,27 @@ export async function run(page, t) {
   t.ok(fm.gsOn && !fm.altOn, 'GSPD 를 걸어도 ALT · CRHT 는 저절로 물리지 않는다(조종사가 걸 때만)');
   t.ok(!fm.iasAfter && !fm.iasLit && !fm.iasAgain, 'GSPD 를 걸고 풀어도(몇 번이고) IAS 가 저절로 물리지 않는다');
   t.ok(fm.altWhenSet, 'ALT 를 걸어 둔 채 GSPD 를 걸면 FMA 에 ALT 가 그대로 켜져 있다');
+  // ── FMA — ALT 단독은 Vy 이상이면 피치 칸(오른쪽), Vy 아래면 컬렉티브 칸(왼쪽) · CRHT 는 늘 컬렉티브 칸 ──
+  const ax = await page.evaluate(() => {
+    const shot = () => { const seen = [], o = CanvasRenderingContext2D.prototype.fillText;
+      CanvasRenderingContext2D.prototype.fillText = function (x, ...a) { seen.push(String(x)); return o.call(this, x, ...a); };
+      try { drawPFD(); } finally { CanvasRenderingContext2D.prototype.fillText = o; } return seen; };
+    const k = { a: altHoldOn, c: crhtOn, g: gspdOn, s: S.spd, sel: selAlt, i: iasNsOn };
+    iasNsOn = false;                                                 // ALT 단독
+    if (gspdOn) toggleGspd();
+    const mid = () => { const s = shot(), i = s.findIndex(x => /^(HDG|NAV|GS)/.test(x)); return { alt: s.indexOf('ALT'), ias: s.includes('IAS'), mid: i }; };
+    const o = {};
+    altHoldOn = true; crhtOn = false; selAlt = S.alt;
+    S.spd = 50; o.lo = { p: afcsAltPitch(), ...mid() };
+    S.spd = 110; o.hi = { p: afcsAltPitch(), ...mid() };
+    S.spd = simVyKt() - 3; o.hys = afcsAltPitch();                 // Vy 바로 밑 — 아직 피치 축(오락가락 막기)
+    iasNsOn = true; S.spd = 110; o.withIas = { p: afcsAltPitch(), ...mid() }; iasNsOn = false;   // IAS 도 걸려 있으면 IAS 가 피치 축
+    altHoldOn = false; crhtOn = true; S.spd = 110; o.crht = afcsAltPitch();
+    altHoldOn = k.a; crhtOn = k.c; S.spd = k.s; selAlt = k.sel; iasNsOn = k.i; if (gspdOn !== k.g) toggleGspd();
+    return o;
+  });
+  t.ok(!ax.lo.p && ax.lo.ias && ax.lo.alt >= 0 && ax.lo.alt < ax.lo.mid, 'ALT 단독 · Vy 아래 — FMA 컬렉티브 칸(왼쪽)에 ALT · 피치 칸 IAS');
+  t.ok(ax.hi.p && !ax.hi.ias && ax.hi.alt > ax.hi.mid, 'ALT 단독 · Vy 이상(110kt) — FMA 피치 칸(오른쪽)에 ALT · 컬렉티브 칸은 비어 조종사 손');
+  t.ok(!ax.withIas.p && ax.withIas.ias && ax.withIas.alt < ax.withIas.mid, 'ALT + IAS 면 Vy 이상이어도 IAS 가 피치 칸 · ALT 는 컬렉티브 칸');
+  t.ok(ax.hys && !ax.crht, 'Vy 바로 밑에서는 피치 축 그대로(Vy−5kt 아래로 내려와야 풀림) · CRHT 는 늘 컬렉티브');
 }
