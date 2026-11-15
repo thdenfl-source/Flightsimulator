@@ -136,9 +136,10 @@ export async function run(page, t) {
     const at = (deg, dM) => { S.lat = td[0] - dM / 110540; S.lon = td[1]; S.alt = SHIP3D_DECK / 0.3048 + Math.tan(deg * Math.PI / 180) * dM / 0.3048; _envLightPts(0.25); return envHapi && envHapi.col; };
     o.hapi = [at(3.5, 1500), at(2, 1500), at(6, 1500), at(0.5, 1500)];
     // 착륙등 빛 무리 — 흰수리 ENV 착륙등
-    envSet({ ldg: true, tod: 'NIGHT' }); S.alt = 200; o.beams = envBeams().length; envSet({ ldg: false }); o.beams0 = envBeams().length;
+    envSet({ ldg: true, tod: 'NIGHT' }); if (typeof kgLt !== 'undefined') { kgLt.ldgE = KG_LDG.on; kgLt.ldgTgt = null; }   S.alt = 200;   // 흰수리 착륙등은 펼친 뒤에 빛이 나온다
+    o.beams = envBeams().length; envSet({ ldg: false }); o.beams0 = envBeams().length;
     // 요구조자 — 서치라이트(착륙등) 안이면 반사판
-    envSet({ ldg: true }); const b = envBeams()[0]; sar.on = true; sar.state = 'wait'; sar.lat = b.lat; sar.lon = b.lon; _envLightPts(0.5); o.sarLit = envSarLit; sar.on = false; envSet({ ldg: false });
+    envSet({ ldg: true }); if (typeof kgLt !== 'undefined') { kgLt.ldgE = KG_LDG.on; kgLt.ldgTgt = null; } const b = envBeams()[0]; sar.on = true; sar.state = 'wait'; sar.lat = b.lat; sar.lon = b.lon; _envLightPts(0.5); o.sarLit = envSarLit; sar.on = false; envSet({ ldg: false });
     // 구름 — 밑면 1,000ft · 1,500ft 두께
     envSet({ ceil: 1000 }); S.alt = 1600; envFxFrame(); const cl = document.querySelector('#map3d .env-cloud'); o.cloudIn = +cl.style.opacity;
     S.alt = 600; envFxFrame(); o.cloudOut = +cl.style.opacity; envSet({ ceil: 0, tod: 'DAY' });

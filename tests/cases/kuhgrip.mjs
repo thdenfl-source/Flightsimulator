@@ -33,10 +33,29 @@ export async function run(page, t) {
     const w = ms => new Promise(r => setTimeout(r, ms)), o = {};
     const ra = window.radarAltFt; window.radarAltFt = () => 300;
     // LDG LT — ON/OFF · EXT 누르는 동안 펼친다 · RET 로 접는다
-    envSet({ ldg: false }); kgLt.ext = 0;
+    envSet({ ldg: false }); kgLt.ldgE = 0; kgLt.ldgTgt = null;
     kgPress('ldgOn'); o.ldgOn = env.ldg === true;
-    kgPress('ldgExt'); _kgHold.tl -= 300; _kgHold.step(); _kgHoldStop(); o.ext = kgLt.ext;
-    kgPress('ldgRet'); _kgHold.tl -= 100; _kgHold.step(); _kgHoldStop(); o.ret = kgLt.ext < o.ext;
+    // 접혀 있다가 켜면 저절로 전방 30°(아래로 30°)까지 펼친다
+    for (let i = 0; i < 60 && kgLt.ldgTgt !== null; i++) await w(50);
+    o.auto = kgLdgDown();
+    // 착륙등은 서치라이트보다 밝고 더 멀리 닿는다
+    { const L = kgBeams().find(b => b.az === 0 && b.k > 1); o.ldgBeam = L ? { k: L.k, reach: L.reach } : null; }
+    kgPress('ldgExt'); _kgHold.tl -= 300; _kgHold.step(); _kgHoldStop(); o.ext = kgLdgDown();
+    kgPress('ldgRet'); _kgHold.tl -= 100; _kgHold.step(); _kgHoldStop(); o.ret = kgLdgDown() > o.ext;
+    // 켜고 끄기는 자리를 그대로 둔다
+    const e0 = kgLt.ldgE; kgPress('ldgOn'); kgPress('ldgOn'); await w(150); o.keep = Math.abs(kgLt.ldgE - e0) < 1e-6 && env.ldg === true;
+    // 높이 1500ft · 아래로 5° — 종전(600m)에는 닿지 않던 먼 앞도 비춘다
+    { const p0 = S.pit; S.pit = 0; window.radarAltFt = () => 1500; kgLt.ldgE = 75; o.far = envBeams().some(b => _envDist(S.lat, S.lon, b.lat, b.lon).d > 1200); window.radarAltFt = () => 300; kgLt.ldgE = e0; S.pit = p0; }
+    o.srchMin = KG_SRCH.elMin;
+    // 상부 콘솔 STOW SEL — 3방향 스프링(가운데) · LDG 로 젖히면 착륙등 OFF · 접기 / SRCH 로 젖히면 서치라이트 OFF · 원위치
+    { const d = _ovhdDefs.stowSel; o.stowDef = d.t + '|' + d.pos.join(',') + '|' + ovhdGet('stowSel'); }
+    kgSrchSet(true); kgLt.az = 40; kgLt.el = 50;
+    ovhdSet('stowSel', 'LDG'); ovhdSet('stowSel', 'CTR');
+    for (let i = 0; i < 80 && kgLt.ldgTgt !== null; i++) await w(50);
+    o.stowL = { off: env.ldg === false, e: kgLt.ldgE, srch: kgLt.srch };
+    ovhdSet('stowSel', 'SRCH'); ovhdSet('stowSel', 'CTR');
+    o.stowS = { off: !kgLt.srch, az: kgLt.az, el: kgLt.el, sw: ovhdGet('stowSel') };
+    kgPress('ldgOn'); for (let i = 0; i < 60 && kgLt.ldgTgt !== null; i++) await w(50); o.reOn = kgLdgDown(); kgSrchSet(true);
     // SRCH CTR — 오른쪽으로 돌리고 아래로
     kgLt.az = 0; kgLt.el = 30; kgPress('srchR'); _kgHold.tl -= 300; _kgHold.step(); _kgHoldStop(); kgPress('srchD'); _kgHold.tl -= 300; _kgHold.step(); _kgHoldStop();
     o.az = kgLt.az; o.el = kgLt.el;
@@ -77,7 +96,14 @@ export async function run(page, t) {
     kgSrchSet(false); envSet({ ldg: false }); window.radarAltFt = ra;
     return o;
   });
-  t.ok(C.ldgOn && C.ext > 0.15 && C.ret, `LDG LT — ON/OFF · EXT 로 펼치고(${Math.round(C.ext * 100)}%) RET 로 접는다`);
+  t.ok(C.ldgOn && Math.abs(C.auto - 30) < 0.5, `LDG LT ON — 접혀 있던 착륙등이 저절로 전방 30° 로 펼쳐진다 (${C.auto.toFixed(1)}°↓)`);
+  t.ok(C.ldgBeam && C.ldgBeam.k > 0.9 && C.ldgBeam.reach === 2400 && C.far, `착륙등은 서치라이트(0.9)보다 밝고(${C.ldgBeam && C.ldgBeam.k}) 두 배 멀리(${C.ldgBeam && C.ldgBeam.reach}m) 비춘다`);
+  t.ok(C.ext < 30 && C.ret && C.keep, `EXT 로 더 앞(${C.ext.toFixed(0)}°↓) · RET 로 접는 쪽 · ON/OFF 는 자리를 그대로 둔다`);
+  t.ok(C.stowDef === 'mom|LDG,CTR,SRCH|CTR', `STOW SEL — 3방향 스프링 스위치 · 평소 가운데 (${C.stowDef})`);
+  t.ok(C.stowL.off && C.stowL.e === 0 && C.stowL.srch, 'STOW SEL → LDG — 착륙등이 꺼지고 접힌다(서치라이트는 그대로)');
+  t.ok(C.stowS.off && C.stowS.az === 0 && C.stowS.el === 30 && C.stowS.sw === 'CTR', 'STOW SEL → SRCH — 서치라이트가 꺼지고 원위치(정면 · 아래 30°) · 스위치는 가운데로');
+  t.ok(Math.abs(C.reOn - 30) < 0.5, '접은 뒤 컬렉티브 LDG LT 로 다시 켜면 다시 전방 30° 로 펼친다');
+  t.ok(C.srchMin === 2.5, '서치라이트 — 아래로 2.5° 까지(종전의 두 배 앞)');
   t.ok(C.az > 10 && C.el > 30 && C.beams === 2 && C.env >= 2 && C.right, `SRCH CTR — 서치라이트를 오른쪽 ${Math.round(C.az)}° · 아래 ${Math.round(C.el)}° 로 돌린다 · 착륙등과 함께 빛 무리 ${C.env}개`);
   t.ok(C.coll.up === 3 && C.coll.dn === 1, `COLL TRIM — 누르는 동안 VS +100 씩 이어진다(UP ${C.coll.up}번 · DN ${C.coll.dn}번)`);
   t.eq(C.cyc, 'dis,ftr,ftr-,beepF,beep-,beepL,beep-,ptt+,ptt-,gspd', '사이클릭 — DISENGAG · FORCE TRIM RELEASE · 4-WAY BEEP · PTT(누르는 동안) · G/SPEED');
