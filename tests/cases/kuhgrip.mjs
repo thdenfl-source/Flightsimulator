@@ -11,6 +11,13 @@ export async function run(page, t) {
     return { all: ids.every(e => e && e.querySelector('svg')), right: c.left >= cdu.right - 2, svgCyc: /DISENGAG/.test(ids[2].innerHTML) && /4-WAY BEEP/.test(ids[2].innerHTML) };
   });
   t.ok(M.all && M.right && M.svgCyc, '조종석 — 컬렉티브(CDU 오른쪽) · 좌우 사이클릭(실기 그립 모양)을 그린다');
+  // 부조종사석(왼쪽) 컬렉티브 — 왼쪽 사이클릭 왼쪽에 · 누르면 같은 컬렉티브 큰 창
+  const L = await page.evaluate(() => { const l = document.getElementById('kg-mini-collL'), c = document.getElementById('kg-mini-cycL');
+    return { has: !!l && /SRCH/.test(l.innerHTML), left: !!l && !!c && l.getBoundingClientRect().right <= c.getBoundingClientRect().left + 2 }; });
+  const ml = await page.locator('#kg-mini-collL').boundingBox();
+  await page.mouse.click(ml.x + ml.width / 2, ml.y + 20); await page.waitForTimeout(250);
+  const LP = await page.evaluate(() => { const p = document.getElementById('kg-pop'); const r = { shown: !!p && getComputedStyle(p).display === 'flex', t: p && p.querySelector('.kgp-t').textContent }; kgPop(null); return r; });
+  t.ok(L.has && L.left && LP.shown && LP.t === 'COLLECTIVE', '부조종사석(왼쪽)에도 컬렉티브 — 누르면 같은 컬렉티브 큰 창');
   // 작은 컬렉티브를 누르면 큰 창
   const mc = await page.locator('#kg-mini-coll').boundingBox();
   await page.mouse.click(mc.x + mc.width / 2, mc.y + 20);

@@ -199,12 +199,14 @@ function kgCyclicSvg(id = '', flip = false) {
 }
 
 // ── 조종석 자리(1600×900 그림 좌표) — 컬렉티브는 CDU 오른쪽(Bell 컬렉티브와 같은 크기) · 사이클릭은 좌 · 우 사이클릭 자리 ──
-const KG_MINI = { coll: { x: 986, y: 808, w: 80, h: 165 }, cycR: { x: 1146, y: 742, w: 96, h: 182 }, cycL: { x: 358, y: 742, w: 96, h: 182 } };
+// 컬렉티브 — 기장석(오른쪽) 은 CDU 오른쪽 · 부조종사석(왼쪽)은 왼쪽 사이클릭에서 같은 거리만큼 왼쪽(기능은 같다)
+const KG_MINI = { coll: { x: 986, y: 808, w: 80, h: 165 }, collL: { x: 198, y: 808, w: 80, h: 165 }, cycR: { x: 1146, y: 742, w: 96, h: 182 }, cycL: { x: 358, y: 742, w: 96, h: 182 } };
 const KG_AR = { coll: 175 / 380, cyc: 200 / 380 };
 let kgPopK = null;               // 'coll' | 'cyc' | null
 function kgRender() {
   const set = (id, h) => { const el = document.getElementById(id); if (el && el.dataset.h !== h) { el.dataset.h = h; el.innerHTML = h; } };
   set('kg-mini-coll', kgCollSvg('m'));
+  set('kg-mini-collL', kgCollSvg('n'));
   set('kg-mini-cycR', kgCyclicSvg('r'));
   set('kg-mini-cycL', kgCyclicSvg('l'));          // 왼쪽 좌석 사이클릭도 같은 방향(실기와 같다)
   const b = document.getElementById('kg-pop-body');
@@ -217,8 +219,8 @@ function _kgMount() {
     if (document.getElementById('kg-mini-' + k)) continue;
     const el = document.createElement('div'); el.id = 'kg-mini-' + k; el.className = 'kg-mini';
     el.style.cssText = `position:absolute;left:${m.x / 16}%;top:${m.y / 9}%;width:${m.w / 16}%;height:${m.h / 9}%;pointer-events:auto;cursor:zoom-in;z-index:2`;
-    el.title = k === 'coll' ? 'COLLECTIVE — 눌러 크게(LDG LT · SRCH LT · COLL TRIM)' : 'CYCLIC — 눌러 크게(DISENGAG · FORCE TRIM · 4-WAY BEEP · PTT · G/SPEED)';
-    el.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); kgPop(k === 'coll' ? 'coll' : 'cyc'); });
+    el.title = k.startsWith('coll') ? 'COLLECTIVE — 눌러 크게(LDG LT · SRCH LT · COLL TRIM)' : 'CYCLIC — 눌러 크게(DISENGAG · FORCE TRIM · 4-WAY BEEP · PTT · G/SPEED)';
+    el.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); kgPop(k.startsWith('coll') ? 'coll' : 'cyc'); });
     ck.appendChild(el);
   }
   kgRender();
