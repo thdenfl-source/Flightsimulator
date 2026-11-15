@@ -623,9 +623,11 @@ function b206HornAudio(on) {
     if (on && !_b206Horn) {
       const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
       const ctx = new AC(), o = ctx.createOscillator(), lfo = ctx.createOscillator(), lg = ctx.createGain(), g = ctx.createGain();
-      o.type = 'square'; o.frequency.value = 700;
-      lfo.type = 'square'; lfo.frequency.value = 4; lg.gain.value = 0.05; g.gain.value = 0.05;   // 0.25초 끊음
-      lfo.connect(lg); lg.connect(g.gain); o.connect(g); g.connect(ctx.destination); o.start(); lfo.start();
+      // 경고음 — 700Hz 삼각파(네모파는 높은 배음이 날카로워 귀가 아프다) · 1.2kHz 위는 덜어 낸다
+      const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1200; lp.Q.value = 0.7;
+      o.type = 'triangle'; o.frequency.value = 700;
+      lfo.type = 'square'; lfo.frequency.value = 4; lg.gain.value = 0.06; g.gain.value = 0.06;   // 0.25초 끊음
+      lfo.connect(lg); lg.connect(g.gain); o.connect(lp); lp.connect(g); g.connect(ctx.destination); o.start(); lfo.start();
       _b206Horn = { ctx, o, lfo };
     } else if (!on && _b206Horn) {
       const h = _b206Horn; _b206Horn = null;
