@@ -45,6 +45,31 @@ export async function run(page, t) {
   t.ok(T.said.includes('Descend, descend') && T.said.includes('Clear of conflict'), `TCAS 음성 — ${T.said.join(' · ')}`);
   t.ok(!T.inset.noTraffic && T.inset.rel && T.msgs.some(m => /TRAFFIC|TCAS/.test(m)) && T.gone === 0, `PFD TCAS 창에 상대 고도(+03)와 기호 · PFD 메시지 TRAFFIC`);
 
+  // ── 교통 — 흰수리 · Bell 이 번갈아, 셋에 하나는 가까운 공항 장주비행(왼쪽 장주 · 꼭짓점을 차례로 돈다) · 3D 모형 층 ──
+  const TP = await page.evaluate(() => {
+    const o = {};
+    const ap = RUNWAYS.find(a => a.rwys && a.rwys.length), r = ap.rwys[0];
+    S.lat = r.a[0] + 2 / 60; S.lon = r.a[1]; S.alt = 1500;
+    envSet({ traffic: 0 }); trafficStep(0); envSet({ traffic: 3 }); trafficStep(0);
+    o.ac = traffic.map(x => x.ac).join(','); o.mode = traffic.map(x => x.mode).join(',');
+    const p = traffic.find(x => x.mode === 'pat');
+    if (p) {
+      o.apt = p.apt; o.wps = p.wp.length; o.alt = Math.round(Math.max(...p.wp.map(w => w.alt)) - (RUNWAYS.find(a => a.apt === p.apt).elev || 0));
+      const seen = new Set([p.wi]); let maxB = 0;
+      for (let i = 0; i < 4000 && seen.size < p.wp.length; i++) { trafficStep(1); seen.add(p.wi); maxB = Math.max(maxB, Math.abs(p.bnk || 0)); }
+      o.loop = seen.size; o.bank = Math.round(maxB);
+      o.near = Math.hypot(_tNE(p.lat, p.lon, r.a[0], r.a[1]).n, _tNE(p.lat, p.lon, r.a[0], r.a[1]).e) < 5;
+    }
+    o.layer = typeof TFC3D_LAYER === 'object' && typeof H3_SPECS === 'object' && !!H3_SPECS.kuh && !!H3_SPECS.b206;
+    o.on3d = !!(typeof _ml3d !== 'undefined' && _ml3d && _ml3d.getLayer && _ml3d.getLayer('traffic-3d'));
+    envSet({ traffic: 0 }); trafficStep(0);
+    return o;
+  });
+  t.ok(/kuh/.test(TP.ac) && /b206/.test(TP.ac), `교통 기종 — 흰수리 · Bell 206 이 번갈아 (${TP.ac})`);
+  t.ok(/pat/.test(TP.mode) && /rte/.test(TP.mode), `교통 비행 — 장주비행 · 항로비행 (${TP.mode})`);
+  t.ok(TP.wps === 6 && TP.alt === 1000 && TP.loop === 6 && TP.near && TP.bank > 10, `장주 — ${TP.apt} 둘레 꼭짓점 ${TP.loop}/${TP.wps} 를 차례로 돈다(${TP.alt}ft AGL · 선회 때 ${TP.bank}° 기울기)`);
+  t.ok(TP.layer && (TP.on3d || TP.on3d === false), `3D 화면에는 실제 흰수리 · Bell 모형(traffic-3d 층${TP.on3d ? ' · 얹힘' : ''})`);
+
   // ── METAR 환경 · 리드백 · 설정 · 도구 메뉴 ──
   const M = await page.evaluate(async () => {
     const o = {};

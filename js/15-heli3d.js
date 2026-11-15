@@ -20,10 +20,16 @@
 
 // 기종(00-aircraft.js) — Bell 206B-3 은 따로 그린다: 전장 11.8m · 주로터 지름 10.16m(2날개) · 꼬리로터 1.65m(2날개 · 왼쪽) · 스키드
 const H3_B206 = typeof acIs === 'function' && acIs('b206');
-const HELI3D_LEN = H3_B206 ? 11.8 : 20;      // 전장(m)
-const HELI3D_ROTOR = H3_B206 ? { x: 0.6, z: 2.86, r: 5.08, blades: 2 } : { x: 2.95, z: 5.45, r: 7.05, blades: 4 };          // 주로터
-const HELI3D_TAIL  = H3_B206 ? { x: -5.22, y: -0.30, z: 1.78, r: 0.83, blades: 2 } : { x: -8.55, y: 0.42, z: 4.35, r: 1.45, blades: 4 };  // 꼬리로터(흰수리 오른쪽 · Bell 왼쪽)
-const HELI3D_RPS   = H3_B206 ? 6.5 : 4.4;    // 주로터 회전(초당 — 흰수리 265rpm · Bell 394rpm)
+// 기종별 치수 — 내 기체와 교통(다른 흰수리 · Bell — 33-train4.js traffic)이 함께 쓴다
+const H3_SPECS = {
+  kuh:  { len: 20,   rotor: { x: 2.95, z: 5.45, r: 7.05, blades: 4 }, tail: { x: -8.55, y: 0.42, z: 4.35, r: 1.45, blades: 4 }, rps: 4.4 },   // 꼬리로터 오른쪽 · 265rpm
+  b206: { len: 11.8, rotor: { x: 0.6, z: 2.86, r: 5.08, blades: 2 },  tail: { x: -5.22, y: -0.30, z: 1.78, r: 0.83, blades: 2 }, rps: 6.5 },  // 꼬리로터 왼쪽 · 394rpm
+};
+const H3_OWN = H3_B206 ? 'b206' : 'kuh';
+const HELI3D_LEN = H3_SPECS[H3_OWN].len;      // 전장(m)
+const HELI3D_ROTOR = H3_SPECS[H3_OWN].rotor;  // 주로터
+const HELI3D_TAIL  = H3_SPECS[H3_OWN].tail;   // 꼬리로터(흰수리 오른쪽 · Bell 왼쪽)
+const HELI3D_RPS   = H3_SPECS[H3_OWN].rps;    // 주로터 회전(초당)
 const HELI3D_TAIL_RPS = 3.1;                 // 꼬리로터 — 눈에 도는 것이 보이게 늦춰 그린다
 const HELI3D_MARKER_PX = 14;                 // 모형이 이보다 작게 보이면 삼각형 표식도 띄운다
 
@@ -220,8 +226,8 @@ const H3B_FUSE = [
   [-5.60, 0.11, 1.55, 1.73, 2.0],
   [-5.70, 0.02, 1.62, 1.66, 2.0],
 ];
-function _h3BuildBodyB206() {
-  const m = _h3New(), R = HELI3D_ROTOR;
+function _h3BuildBodyB206(SP = H3_SPECS.b206) {
+  const m = _h3New(), R = SP.rotor, HELI3D_TAIL = SP.tail;
   _h3Loft(m, H3B_FUSE, H3C.white, 2, false);
   // 변속기 · 엔진 덮개(지붕 위)
   _h3Loft(m, [[1.65, 0.28, 1.90, 1.96, 2.4], [1.30, 0.48, 1.90, 2.20, 2.6], [0.60, 0.55, 1.90, 2.42, 2.8], [-0.40, 0.50, 1.90, 2.36, 2.8],
@@ -244,8 +250,9 @@ function _h3BuildBodyB206() {
   _h3Pod(m, HELI3D_TAIL.x - 0.22, HELI3D_TAIL.x + 0.22, Math.sign(HELI3D_TAIL.y) * 0.10, HELI3D_TAIL.z, 0.11, 0.15, H3C.dark, 3, 2);
   return m;
 }
-function _h3BuildBody() {
-  if (H3_B206) return _h3BuildBodyB206();
+function _h3BuildBody(ty = H3_OWN) {
+  if (ty === 'b206') return _h3BuildBodyB206();
+  const SP = H3_SPECS.kuh, HELI3D_ROTOR = SP.rotor, HELI3D_TAIL = SP.tail;
   const m = _h3New();
   _h3Loft(m, H3_FUSE, H3C.white, 1, false);
   _h3Loft(m, H3_COWL, H3C.white, 1, false);
@@ -300,8 +307,8 @@ function _h3BuildBody() {
   return m;
 }
 // 주로터(허브 가운데가 원점, Z 축으로 돈다)
-function _h3BuildRotor() {
-  const m = _h3New(), R = HELI3D_ROTOR.r;
+function _h3BuildRotor(SP = H3_SPECS[H3_OWN]) {
+  const HELI3D_ROTOR = SP.rotor, m = _h3New(), R = HELI3D_ROTOR.r;
   _h3Lathe(m, [0, 0, -0.10], H3Z, [[0, 0], [0.55, 0], [0.55, 0.14], [0, 0.14]], H3C.dark, 18);        // 허브 판
   _h3Lathe(m, [0, 0, 0.10], H3Z, [[0.56, 0], [0.50, 0.12], [0.34, 0.24], [0, 0.30]], H3C.dark, 18);   // 덮개
   for (let k = 0; k < HELI3D_ROTOR.blades; k++) {
@@ -313,8 +320,8 @@ function _h3BuildRotor() {
   return m;
 }
 // 꼬리로터(허브 가운데가 원점, Y 축으로 돈다). 꼬리날개 바깥쪽(s: 오른쪽 +1)에 붙는다.
-function _h3BuildTail() {
-  const m = _h3New(), R = HELI3D_TAIL.r, s = Math.sign(HELI3D_TAIL.y) || 1;
+function _h3BuildTail(SP = H3_SPECS[H3_OWN]) {
+  const HELI3D_TAIL = SP.tail, m = _h3New(), R = HELI3D_TAIL.r, s = Math.sign(HELI3D_TAIL.y) || 1;
   _h3Lathe(m, [0, -0.12 * s, 0], [0, s, 0], [[0, 0], [0.20, 0], [0.20, 0.16], [0, 0.20]], H3C.dark, 14);
   for (let k = 0; k < HELI3D_TAIL.blades; k++) {
     const a = k / HELI3D_TAIL.blades * 2 * Math.PI;
@@ -429,9 +436,17 @@ function _h3Init(gl) {
     const ext = gl.getExtension('OES_vertex_array_object');
     if (ext) vao = { create: () => ext.createVertexArrayOES(), bind: v => ext.bindVertexArrayOES(v) };
   }
+  _h3 = { gl, prog, loc, vao, sets: {} };
+  _h3.parts = _h3Set(_h3, H3_OWN);
+  return _h3;
+}
+// 기종 하나의 부품(몸통 · 주로터 · 꼬리로터 · 도는 원판 둘)을 올려 둔다 — 처음 쓸 때 한 번
+function _h3Set(h, ty) {
+  if (h.sets[ty]) return h.sets[ty];
+  const gl = h.gl, loc = h.loc, vao = h.vao, SP = H3_SPECS[ty];
   const parts = {
-    body: _h3Upload(gl, _h3BuildBody()), rotor: _h3Upload(gl, _h3BuildRotor()), tail: _h3Upload(gl, _h3BuildTail()),
-    disc: _h3Upload(gl, _h3BuildDisc(HELI3D_ROTOR.r, 'z')), tdisc: _h3Upload(gl, _h3BuildDisc(HELI3D_TAIL.r, 'y')),
+    body: _h3Upload(gl, _h3BuildBody(ty)), rotor: _h3Upload(gl, _h3BuildRotor(SP)), tail: _h3Upload(gl, _h3BuildTail(SP)),
+    disc: _h3Upload(gl, _h3BuildDisc(SP.rotor.r, 'z')), tdisc: _h3Upload(gl, _h3BuildDisc(SP.tail.r, 'y')),
   };
   Object.values(parts).forEach(p => {
     if (vao) { p.vao = vao.create(); vao.bind(p.vao); }
@@ -443,8 +458,8 @@ function _h3Init(gl) {
     });
     if (vao) vao.bind(null);
   });
-  _h3 = { gl, prog, loc, parts, vao };
-  return _h3;
+  h.sets[ty] = parts;
+  return parts;
 }
 function _h3Draw(h, part, mvp, rot, alpha) {
   const gl = h.gl, loc = h.loc;
@@ -570,43 +585,83 @@ const HELI3D_LAYER = {
 
     const pc = _h3PoseNow;
     const pose = (pc && simExtView && now - pc.t < 60) ? pc.pose : heli3dPose(this.map);
-    const mc = maplibregl.MercatorCoordinate.fromLngLat([pose.lon, pose.lat], pose.alt);
-    const s = mc.meterInMercatorCoordinateUnits();
-    const R = heli3dRot(pose.hdg, pose.pit, pose.bnk);
-    const toMerc = [[s, 0, 0], [0, -s, 0], [0, 0, s]];
-    const base = _m4Mul(main, _m4From(_m3Mul(toMerc, R), [mc.x, mc.y, mc.z]));
-    const rot3 = new Float32Array([R[0][0], R[1][0], R[2][0], R[0][1], R[1][1], R[2][1], R[0][2], R[1][2], R[2][2]]);
-    const ca = Math.cos(-_h3Phase), sa = Math.sin(-_h3Phase);   // 위에서 볼 때 시계 방향
-    const rotorM = _m4Mul(base, _m4From([[ca, -sa, 0], [sa, ca, 0], [0, 0, 1]], [HELI3D_ROTOR.x, 0, HELI3D_ROTOR.z]));
-    const discM  = _m4Mul(base, _m4From([[1, 0, 0], [0, 1, 0], [0, 0, 1]], [HELI3D_ROTOR.x, 0, HELI3D_ROTOR.z + 0.01]));
-    const cb = Math.cos(_h3TPhase), sb = Math.sin(_h3TPhase);
-    const tailM  = _m4Mul(base, _m4From([[cb, 0, sb], [0, 1, 0], [-sb, 0, cb]], [HELI3D_TAIL.x, HELI3D_TAIL.y, HELI3D_TAIL.z]));
-    const tdiscM = _m4Mul(base, _m4From([[1, 0, 0], [0, 1, 0], [0, 0, 1]],
-                                        [HELI3D_TAIL.x, HELI3D_TAIL.y + 0.06 * Math.sign(HELI3D_TAIL.y), HELI3D_TAIL.z]));
-    const rotR = (Rm) => {   // 부품의 회전까지 얹은 법선 회전
-      const M = _m3Mul(R, Rm);
-      return new Float32Array([M[0][0], M[1][0], M[2][0], M[0][1], M[1][1], M[2][1], M[0][2], M[1][2], M[2][2]]);
-    };
-    gl.useProgram(h.prog);
-    gl.uniform3fv(h.loc.light, H3_LIGHT);
-    const f32 = a => new Float32Array(a);
-    _h3Draw(h, h.parts.body, f32(base), rot3, 1);
-    _h3Draw(h, h.parts.rotor, f32(rotorM), rotR([[ca, -sa, 0], [sa, ca, 0], [0, 0, 1]]), 1);
-    _h3Draw(h, h.parts.tail, f32(tailM), rotR([[cb, 0, sb], [0, 1, 0], [-sb, 0, cb]]), 1);
-    // 도는 원판은 흐리게 — 깊이는 쓰지 않는다(뒤의 것을 가리지 않게)
-    if (k > 0) {
-      gl.depthMask(false);
-      _h3Draw(h, h.parts.disc, f32(discM), rot3, 0.08);
-      _h3Draw(h, h.parts.tdisc, f32(tdiscM), rot3, 0.16);
-      gl.depthMask(true);
-    }
+    _h3DrawHeli(h, h.parts, H3_SPECS[H3_OWN], main, pose, _h3Phase, _h3TPhase, k > 0);
   },
 };
 
+// 헬기 한 대 그리기 — 부품(parts) · 치수(SP) · 자리(pose: lon · lat · alt(m, 화면 속) · hdg · pit · bnk) · 로터 위상
+function _h3DrawHeli(h, parts, SP, main, pose, ph, tph, spin) {
+  const gl = h.gl, RO = SP.rotor, TA = SP.tail;
+  const mc = maplibregl.MercatorCoordinate.fromLngLat([pose.lon, pose.lat], pose.alt);
+  const s = mc.meterInMercatorCoordinateUnits();
+  const R = heli3dRot(pose.hdg, pose.pit, pose.bnk);
+  const toMerc = [[s, 0, 0], [0, -s, 0], [0, 0, s]];
+  const base = _m4Mul(main, _m4From(_m3Mul(toMerc, R), [mc.x, mc.y, mc.z]));
+  const rot3 = new Float32Array([R[0][0], R[1][0], R[2][0], R[0][1], R[1][1], R[2][1], R[0][2], R[1][2], R[2][2]]);
+  const ca = Math.cos(-ph), sa = Math.sin(-ph);   // 위에서 볼 때 시계 방향
+  const rotorM = _m4Mul(base, _m4From([[ca, -sa, 0], [sa, ca, 0], [0, 0, 1]], [RO.x, 0, RO.z]));
+  const discM  = _m4Mul(base, _m4From([[1, 0, 0], [0, 1, 0], [0, 0, 1]], [RO.x, 0, RO.z + 0.01]));
+  const cb = Math.cos(tph), sb = Math.sin(tph);
+  const tailM  = _m4Mul(base, _m4From([[cb, 0, sb], [0, 1, 0], [-sb, 0, cb]], [TA.x, TA.y, TA.z]));
+  const tdiscM = _m4Mul(base, _m4From([[1, 0, 0], [0, 1, 0], [0, 0, 1]], [TA.x, TA.y + 0.06 * Math.sign(TA.y), TA.z]));
+  const rotR = (Rm) => {   // 부품의 회전까지 얹은 법선 회전
+    const M = _m3Mul(R, Rm);
+    return new Float32Array([M[0][0], M[1][0], M[2][0], M[0][1], M[1][1], M[2][1], M[0][2], M[1][2], M[2][2]]);
+  };
+  gl.useProgram(h.prog);
+  gl.uniform3fv(h.loc.light, H3_LIGHT);
+  const f32 = a => new Float32Array(a);
+  _h3Draw(h, parts.body, f32(base), rot3, 1);
+  _h3Draw(h, parts.rotor, f32(rotorM), rotR([[ca, -sa, 0], [sa, ca, 0], [0, 0, 1]]), 1);
+  _h3Draw(h, parts.tail, f32(tailM), rotR([[cb, 0, sb], [0, 1, 0], [-sb, 0, cb]]), 1);
+  // 도는 원판은 흐리게 — 깊이는 쓰지 않는다(뒤의 것을 가리지 않게)
+  if (spin) {
+    gl.depthMask(false);
+    _h3Draw(h, parts.disc, f32(discM), rot3, 0.08);
+    _h3Draw(h, parts.tdisc, f32(tdiscM), rot3, 0.16);
+    gl.depthMask(true);
+  }
+}
+
+// ── 교통(33-train4.js traffic) — 다른 흰수리 · Bell 을 실제 모형으로 그린다(장주비행 · 항로비행) ──
+//   위치는 250ms 마다 나아가므로(trafficStep) 그 사이는 속도 · 기수로 앞질러 그려 매끄럽게 한다.
+//   높이는 내 기체와 같은 셈 — 그려진 땅(과장 배율) + 그 자리의 AGL. 15km 밖은 그리지 않는다(밤 불빛 · 점은 29-env.js).
+const TFC3D_MAX_M = 15000;
+function tfc3dActive() { return typeof traffic !== 'undefined' && traffic.length > 0; }
+const TFC3D_LAYER = {
+  id: 'traffic-3d', type: 'custom', renderingMode: '3d',
+  onAdd(map) { this.map = map; },
+  render(gl, args) {
+    if (!tfc3dActive()) return;
+    let h;
+    try { h = _h3Init(gl); } catch (e) { _swallow(e); return; }
+    const main = (args && args.defaultProjectionData && args.defaultProjectionData.mainMatrix)
+              || (args && args.modelViewProjectionMatrix) || args;
+    if (!main || main.length !== 16) return;
+    const now = performance.now();
+    let k = 0; try { k = S.running ? (typeof simSpeed === 'number' ? simSpeed : 1) : 0; } catch (e) { k = 0; }
+    const ahead = (typeof _tfcT !== 'undefined' && _tfcT) ? Math.min(1, (now - _tfcT) / 1000) * k : 0;   // 지난 걸음 뒤로 흐른 시뮬 초
+    const sec = now / 1000, ex = (typeof MAP3D_EXAG === 'number' && MAP3D_EXAG > 0) ? MAP3D_EXAG : 1;
+    for (const t of traffic) {
+      const d = ahead * t.spd / 3600, hr = t.hdg * D2R;                // NM
+      const lat = t.lat + d * Math.cos(hr) / 60, lon = t.lon + d * Math.sin(hr) / 60 / Math.cos(t.lat * D2R);
+      const dn = (lat - S.lat) * 110540, de = (lon - S.lon) * 111320 * Math.cos(S.lat * D2R);
+      if (Math.hypot(dn, de) > TFC3D_MAX_M) continue;
+      let drawn = null; try { drawn = this.map.queryTerrainElevation([lon, lat]); } catch (e) { drawn = null; }
+      if (!Number.isFinite(drawn)) drawn = 0;
+      const phys = Math.max(0, drawn / ex), altM = (t.alt + (t.vs || 0) * ahead / 60) * 0.3048;
+      const alt = Math.max(drawn, drawn + (altM - phys));
+      const ty = t.ac === 'b206' ? 'b206' : 'kuh', SP = H3_SPECS[ty];
+      const ph = (sec * SP.rps * 2 * Math.PI + t.id) % (2 * Math.PI), tph = (sec * HELI3D_TAIL_RPS * 2 * Math.PI) % (2 * Math.PI);
+      try { _h3DrawHeli(h, _h3Set(h, ty), SP, main, { lon, lat, alt, hdg: t.hdg, pit: t.pit || 0, bnk: t.bnk || 0 }, ph, tph, true); } catch (e) { _swallow(e); }
+    }
+  },
+};
 // 3D 지도가 뜨면(04-map.js 의 load) 한 번 얹는다
 function heli3dAddTo(map) {
-  if (!map || map.getLayer('heli-3d')) return;
-  try { map.addLayer(Object.assign({}, HELI3D_LAYER)); } catch (e) { console.warn('[3D] heli layer:', e); }
+  if (!map) return;
+  if (!map.getLayer('heli-3d')) try { map.addLayer(Object.assign({}, HELI3D_LAYER)); } catch (e) { console.warn('[3D] heli layer:', e); }
+  if (!map.getLayer('traffic-3d')) try { map.addLayer(Object.assign({}, TFC3D_LAYER)); } catch (e) { console.warn('[3D] traffic layer:', e); }
 }
 // 화면에 보이는 모형의 길이(px) — 너무 작으면 삼각형 표식을 같이 띄운다
 function heli3dScreenLen(map) {
@@ -621,6 +676,8 @@ function heli3dScreenLen(map) {
 // 매 프레임(04-map.js _update3dMarker) — 모형이 화면에 있으면 다시 그리게 한다
 // (기체가 움직이거나 로터가 도는 동안 지도 카메라가 가만히 있어도 그림이 따라오게)
 function heli3dTick() {
+  // 교통 모형이 날고 있으면 매 프레임 다시 그린다(내 모형이 안 보이는 1인칭 · 조종석에서도)
+  try { if (tfc3dActive() && S.running && _map3dShown()) { _ml3d.triggerRepaint(); return; } } catch (e) { _swallow(e); }
   if (!heli3dShown() || !_map3dShown()) return;
   const sim = (typeof simModeOn !== 'undefined') && simModeOn;
   if (!(S.running || gpsMode || _fdrPlaying || sim)) return;

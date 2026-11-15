@@ -96,21 +96,78 @@ setInterval(() => { try { envDustStep(); } catch (e) { _swallow(e); } }, 100);
 const traffic = [];
 let _tfcT = 0, _tfcSeq = 0;
 const _tNE = (la1, lo1, la2, lo2) => ({ n: (la2 - la1) * 60, e: (lo2 - lo1) * 60 * Math.cos(la1 * Math.PI / 180) });   // NM
-function _tfcSpawn(toward) {
+//   기종 — 흰수리 · Bell 206 을 번갈아(3D 화면에는 실제 모형 — 15-heli3d.js TFC3D_LAYER)
+//   비행 — 셋에 하나(1 · 4 …번째)는 가까운 공항(15NM 안)에서 장주비행(왼쪽 장주 · 1,000ft AGL · 접지 후 이륙),
+//          나머지는 항로비행(곧게 · 교통 연습용으로 셋에 하나는 내 쪽으로)
+const TFC_SPD = { kuh: [125, 140], b206: [100, 110] }, TFC_PAT_SPD = { kuh: 90, b206: 80 };
+const TFC_PAT = { off: 1.0, ext: 0.8, up: 0.6, alt: 1000, turn: 6, vsMax: 800 };   // NM · NM · NM · ft AGL · °/s · fpm
+const _tfcR2D = 180 / Math.PI;
+function _tfcBrg(la1, lo1, la2, lo2) { const v = _tNE(la1, lo1, la2, lo2); return (Math.atan2(v.e, v.n) * _tfcR2D + 360) % 360; }
+// 가까운 활주로(15NM 안) — { ap, r }
+function _tfcNearRwy() {
+  let best = null, bd = 15;
+  try {
+    for (const ap of (typeof RUNWAYS !== 'undefined' ? RUNWAYS : [])) for (const r of (ap.rwys || [])) {
+      const v = _tNE(S.lat, S.lon, r.a[0], r.a[1]), d = Math.hypot(v.n, v.e);
+      if (d < bd) { bd = d; best = { ap, r }; }
+    }
+  } catch (e) { _swallow(e); }
+  return best;
+}
+// 장주 꼭짓점 — a → b 로 이륙, 왼쪽으로 돌아 a 로 내려와 활주로 가운데에서 접지 후 다시 이륙
+function _tfcPatWps(ap, r) {
+  const el = ap.elev || 0, v = _tNE(r.a[0], r.a[1], r.b[0], r.b[1]), L = Math.hypot(v.n, v.e) || 0.5;
+  const u = { n: v.n / L, e: v.e / L }, lf = { n: u.e, e: -u.n };          // 활주로 방향 · 왼쪽
+  const P = (base, au, al, agl) => {
+    const n = au * u.n + al * lf.n, e = au * u.e + al * lf.e;
+    return { lat: base[0] + n / 60, lon: base[1] + e / 60 / Math.cos(base[0] * Math.PI / 180), alt: el + agl };
+  };
+  const C = TFC_PAT;
+  return [P(r.b, C.up, 0, 600), P(r.b, C.up, C.off, C.alt), P(r.a, -C.ext, C.off, C.alt), P(r.a, -C.ext, 0, 600),
+          P(r.a, 0, 0, 50), P(r.a, L / 2, 0, 15)];
+}
+function _tfcSpawn(toward, i) {
+  const ac = _tfcSeq % 2 === 0 ? 'kuh' : 'b206';
+  const id = ++_tfcSeq;
+  if (!toward && i % 3 === 1) {                                         // 장주비행
+    const nr = _tfcNearRwy();
+    if (nr) {
+      const wp = _tfcPatWps(nr.ap, nr.r), wi = Math.floor(Math.random() * wp.length), pv = wp[(wi + wp.length - 1) % wp.length];
+      return { id, ac, mode: 'pat', apt: nr.ap.apt, wp, wi, lat: pv.lat, lon: pv.lon, alt: pv.alt,
+               hdg: _tfcBrg(pv.lat, pv.lon, wp[wi].lat, wp[wi].lon), spd: TFC_PAT_SPD[ac], vs: 0, bnk: 0, pit: 0, st: 'OT' };
+    }
+  }
   const b = Math.random() * 2 * Math.PI, r = 6 + Math.random() * 6;
   const la = S.lat + r * Math.cos(b) / 60, lo = S.lon + r * Math.sin(b) / 60 / Math.cos(S.lat * Math.PI / 180);
   const hd = toward ? ((b * 180 / Math.PI + 180) % 360 + (Math.random() - 0.5) * 20) : Math.random() * 360;
-  return { id: ++_tfcSeq, lat: la, lon: lo, alt: Math.max(500, S.alt + (toward ? (Math.random() - 0.5) * 600 : (Math.random() - 0.5) * 3000)), hdg: hd, spd: 90 + Math.random() * 60, vs: 0, st: 'OT' };
+  const sp = TFC_SPD[ac];
+  return { id, ac, mode: 'rte', lat: la, lon: lo, alt: Math.max(500, S.alt + (toward ? (Math.random() - 0.5) * 600 : (Math.random() - 0.5) * 3000)),
+           hdg: (hd + 360) % 360, spd: sp[0] + Math.random() * (sp[1] - sp[0]), vs: 0, bnk: 0, pit: -3, st: 'OT' };
+}
+// 장주 한 걸음 — 다음 꼭짓점 쪽으로 초당 6° 까지 돌고(그만큼 기울고) 높이를 맞춘다
+function _tfcPatStep(t, dt) {
+  const w = t.wp[t.wi], want = _tfcBrg(t.lat, t.lon, w.lat, w.lon);
+  let dh = ((want - t.hdg + 540) % 360) - 180;
+  const turn = Math.max(-TFC_PAT.turn * dt, Math.min(TFC_PAT.turn * dt, dh));
+  t.hdg = (t.hdg + turn + 360) % 360;
+  const rate = dt > 0 ? turn / dt : 0;                                   // °/s
+  t.bnk = Math.atan(t.spd * 0.5144 * rate * Math.PI / 180 / 9.81) * _tfcR2D;
+  const v = _tNE(t.lat, t.lon, w.lat, w.lon), dist = Math.hypot(v.n, v.e);
+  const tLeft = dist / Math.max(1, t.spd) * 60;                          // 분
+  t.vs = Math.max(-TFC_PAT.vsMax, Math.min(TFC_PAT.vsMax, (w.alt - t.alt) / Math.max(0.2, tLeft)));
+  t.pit = t.vs > 200 ? 4 : t.vs < -200 ? -2 : 0;
+  if (dist < Math.max(0.12, t.spd * dt / 3600 * 1.5)) t.wi = (t.wi + 1) % t.wp.length;
 }
 function trafficStep(dtSim) {
   const want = (typeof env !== 'undefined') ? (env.traffic || 0) : 0;
   while (traffic.length > want) traffic.pop();
-  while (traffic.length < want) traffic.push(_tfcSpawn(traffic.length % 3 === 0));
-  for (const t of traffic) {
+  while (traffic.length < want) traffic.push(_tfcSpawn(traffic.length % 3 === 0, traffic.length));
+  traffic.forEach((t, i) => {
+    if (t.mode === 'pat' && dtSim > 0) _tfcPatStep(t, dtSim);
     const d = t.spd * dtSim / 3600, h = t.hdg * Math.PI / 180;
     t.lat += d * Math.cos(h) / 60; t.lon += d * Math.sin(h) / 60 / Math.cos(t.lat * Math.PI / 180); t.alt += t.vs * dtSim / 60;
-    const v = _tNE(S.lat, S.lon, t.lat, t.lon); if (Math.hypot(v.n, v.e) > 16) Object.assign(t, _tfcSpawn(Math.random() < 0.4), { id: t.id });
-  }
+    const v = _tNE(S.lat, S.lon, t.lat, t.lon); if (Math.hypot(v.n, v.e) > 16) { const id = t.id; for (const k in t) delete t[k]; Object.assign(t, _tfcSpawn(Math.random() < 0.4, i), { id }); }
+  });
   tcasEval();
 }
 // 하나하나 — 거리(NM) · 상대 고도(ft) · 다가오는 빠르기(kt) · 상태(OT 다른 · PT 가까운 · TA · RA)
