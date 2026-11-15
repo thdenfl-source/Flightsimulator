@@ -939,7 +939,6 @@ function _ship3dEnsure() {
 // 함정 레이어가 얹힌 지도들 — 3D 본 화면 + 열려 있는 CHIN 창
 function _ship3dMaps() {
   const a = (_ml3d && _ship3dReady) ? [_ml3d] : [];
-  if (typeof _chinMaps !== 'undefined') _chinMaps.forEach(c => { if (c.ship) a.push(c.map); });
   return a;
 }
 function _ship3dTrailGeo() {

@@ -170,7 +170,6 @@ export async function run(page, t) {
     const el = document.getElementById('sim-nose');
     const out = { off: getComputedStyle(el).display };
     S.alt = 1000; S.spd = 80; S.hdg = 40;
-    chinL = true; chinR = true; chinViewOn = true;     // CHIN 창은 처음에 꺼져 있다 — 조종사가 켜 둔 상태로 본다
     toggleSimMode(true); S.alt = 1000;
     await w(300);
     const box = () => {
@@ -208,8 +207,7 @@ export async function run(page, t) {
     btn.click();
     await w(300);
     out.ov = getComputedStyle(document.getElementById('pfd-ov')).display;
-    out.on = { ext: simExtView, cls: btn.classList.contains('on'), model: heli3dShown(), chin: _chinMaps.length,
-               chinOn: document.getElementById('map3d').classList.contains('chin-on') };
+    out.on = { ext: simExtView, cls: btn.classList.contains('on'), model: heli3dShown() };
     // 카메라 자리 — 헬기 뒤(기수 방향의 반대)에서 내려다본다
     heli3dExtCamera();
     const cam = _ml3d.transform.getCameraLngLat(), camAlt = _ml3d.transform.getCameraAltitude();
@@ -234,12 +232,12 @@ export async function run(page, t) {
     heli3dExtCamera();
     out.look = (_ml3d.getBearing() + 360) % 360;
     simLookHold(false); simLookReset();
-    // 한 번 더 누르면 1인칭으로 — CHIN 창이 돌아온다
+    // 한 번 더 누르면 1인칭으로
     btn.click();
     await w(300 + SIM_CAM_TX_MS);                       // 조종석으로 들어가는 전환이 끝난 뒤
-    // 검사를 여럿 함께 돌리면 전환 · CHIN 창 만들기가 늦다 — 3초 더 기다린다
-    for (let i = 0; i < 15 && (simExtView || heli3dShown() || _chinMaps.length !== 2); i++) await w(200);
-    out.back = { ext: simExtView, model: heli3dShown(), chin: _chinMaps.length };
+    // 검사를 여럿 함께 돌리면 전환이 늦다 — 3초 더 기다린다
+    for (let i = 0; i < 15 && (simExtView || heli3dShown()); i++) await w(200);
+    out.back = { ext: simExtView, model: heli3dShown() };
     // 외부 시점에서 SIM 을 나가면 다음에는 1인칭부터
     toggleExtView(true);
     toggleSimMode(false);
@@ -256,13 +254,12 @@ export async function run(page, t) {
   t.ok(ext.ecShow !== 'none', 'EXT 에서는 카메라 조작 버튼이 보인다');
   t.ok(Math.abs(ext.ec.db - 10) < 0.6 && ext.ec.farther > 1.1 && ext.ec.dp < 0 && ext.ec.back < 0.6,
     `◀▶ 1° 씩 돌고(10번 ${ext.ec.db.toFixed(1)}°) · 거리 + 로 멀어지고(×${ext.ec.farther.toFixed(2)}) · ▲ 로 더 내려다보고 · DEFAULT 로 돌아온다`);
-  t.ok(ext.on.chin === 0 && !ext.on.chinOn, '외부 시점에서는 CHIN 창을 닫는다');
   t.ok(ext.cam.horiz > 25 && ext.cam.horiz < 200 && Math.abs(((ext.cam.brg - 40 + 540) % 360) - 180) < 3,
     `카메라는 헬기 뒤에 있다 (${ext.cam.horiz.toFixed(0)}m · 헬기 쪽 방위 ${ext.cam.brg.toFixed(0)}°)`);
   t.ok(ext.cam.above > 3 && ext.cam.pitch < 90 && Math.abs(ext.cam.bearing - 40) < 1,
     `조금 위에서 기수 방향으로 내려다본다 (위 ${ext.cam.above.toFixed(0)}m · 기울기 ${ext.cam.pitch.toFixed(0)}°)`);
   t.ok(Math.abs(((ext.look - 130 + 540) % 360) - 180) < 1, `둘러보기(◀▶)로 헬기 둘레를 돈다 (카메라 방위 ${ext.look.toFixed(0)}°)`);
-  t.ok(!ext.back.ext && !ext.back.model && ext.back.chin === 2, '다시 누르면 1인칭 — CHIN 창이 돌아온다');
+  t.ok(!ext.back.ext && !ext.back.model, '다시 누르면 1인칭으로 돌아온다');
   t.ok(!ext.exit.ext && ext.exit.model && ext.exit.btn === 'none', 'SIM 을 나가면 외부 시점도 풀리고 3D 지도에 모형이 보인다');
   t.ok(ext.joy, '조이스틱 버튼에 「외부 시점」을 배정할 수 있다');
   await page.evaluate(() => { pfdOvOn = window.__pfdOvWas !== false; pfdOverlaySync(); });
@@ -271,17 +268,16 @@ export async function run(page, t) {
   const tx = await page.evaluate(async () => {
     const wait = ms => new Promise(r => setTimeout(r, ms));
     if (!simModeOn) toggleSimMode(true);
-    if (!chinViewOn) { chinL = true; chinR = true; chinViewOn = true; try { syncChinView(); } catch (e) {} }   // 켜 둔 CHIN 창이 돌아오는지 본다
     if (simExtView) { toggleExtView(false); await wait(1300); }
     const camD = () => { const ll = _ml3d.transform.getCameraLngLat(); return distance(ll.lat, ll.lng, S.lat, S.lon) * 1852; };
     const run = async (to) => {
       _applyFollow(); await new Promise(r => requestAnimationFrame(r)); _applyFollow();
       const d0 = camD(); toggleExtView(to);
       const rec = [], t0 = performance.now();
-      let state = { ext: simExtView, tx: !!simCamTx, model: heli3dShown(), nose: document.getElementById('sim-nose').classList.contains('show'), chin: _chinMaps.length };
+      let state = { ext: simExtView, tx: !!simCamTx, model: heli3dShown(), nose: document.getElementById('sim-nose').classList.contains('show') };
       while (simCamTx && performance.now() - t0 < 3000) { await new Promise(r => requestAnimationFrame(r)); if (simCamTx) rec.push(camD()); }
       await wait(100);
-      return { d0, rec, d1: camD(), state, end: { model: heli3dShown(), nose: document.getElementById('sim-nose').classList.contains('show'), chin: _chinMaps.length } };
+      return { d0, rec, d1: camD(), state, end: { model: heli3dShown(), nose: document.getElementById('sim-nose').classList.contains('show') } };
     };
     const out = await run(true), back = await run(false);
     toggleSimMode(false);
@@ -292,10 +288,10 @@ export async function run(page, t) {
     `→ EXT: 시점은 곧바로 바뀌고 카메라가 조종석(${tx.out.d0.toFixed(0)}m)에서 헬기 뒤(${tx.out.d1.toFixed(0)}m)로 물러난다`);
   // 바쁜 검사 기계(여러 묶음을 함께)에서는 넘어가는 동안 그림이 몇 장 안 나온다 — 3장 넘게 그려졌을 때만 중간 자리를 본다
   t.ok(mid(tx.out) >= 1 || tx.out.rec.length < 3, `그 사이를 부드럽게 지난다(중간 자리 ${mid(tx.out)}번 · 그림 ${tx.out.rec.length}장)`);
-  t.ok(!tx.back.state.ext && tx.back.state.tx && tx.back.state.model && !tx.back.state.nose && tx.back.state.chin === 0,
-    '→ 1인칭: 조종석으로 들어가는 동안은 헬기 모형이 보이고, 기수·CHIN 창은 아직 없다');
-  t.ok(tx.back.d0 > 20 && tx.back.d1 < 2 && !tx.back.end.model && tx.back.end.nose && tx.back.end.chin > 0,
-    `조종석에 들어서면(${tx.back.d1.toFixed(0)}m) 모형이 사라지고 기수·CHIN 창이 열린다 (전환 ${tx.ms}ms)`);
+  t.ok(!tx.back.state.ext && tx.back.state.tx && tx.back.state.model && !tx.back.state.nose,
+    '→ 1인칭: 조종석으로 들어가는 동안은 헬기 모형이 보이고, 기수는 아직 없다');
+  t.ok(tx.back.d0 > 20 && tx.back.d1 < 2 && !tx.back.end.model && tx.back.end.nose,
+    `조종석에 들어서면(${tx.back.d1.toFixed(0)}m) 모형이 사라지고 기수가 보인다 (전환 ${tx.ms}ms)`);
 
   // ── 조종석 패널 — 1인칭에서 '조종석' 버튼으로 차양 · MFD 넷 · 콘솔을 겹친다(기수는 감춘다) ──
   const ck = await page.evaluate(async () => {
@@ -304,12 +300,10 @@ export async function run(page, t) {
     const vis = id => { const e = document.getElementById(id); return !!e && getComputedStyle(e).display !== 'none'; };
     const out = { offBtn: vis('ckpit-btn') };
     if (ckpitOn) toggleCockpitView();
-    S.alt = 1000; S.spd = 80; chinL = true; chinR = true; chinViewOn = true;
+    S.alt = 1000; S.spd = 80;
     toggleSimMode(true); S.alt = 1000; await w(300);
     out.simBtn = vis('ckpit-btn'); out.offPanel = vis('sim-ckpit');
     btn.click(); await w(400);
-    const d3 = document.getElementById('map3d');
-    const row = document.getElementById('chin-row').getBoundingClientRect(), m = d3.getBoundingClientRect();
     const lit = [...document.querySelectorAll('#sim-ckpit canvas.ck-scr')].map(c => {
       const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data; let n = 0;
       for (let i = 0; i < d.length; i += 64) if (d[i] + d[i + 1] + d[i + 2] > 60) n++;
@@ -318,7 +312,7 @@ export async function run(page, t) {
     const pg0 = sysPage; sysPageSet('map'); ckpitDraw(); out.pgKeep = sysPage === 'map'; sysPageSet(pg0);
     out.kinds = CKPIT_SCR.map(x => x.k).join(',');
     out.op = +getComputedStyle(document.querySelector('#sim-ckpit svg')).opacity;
-    out.on = { panel: vis('sim-ckpit'), nose: vis('sim-nose'), label: btn.textContent, lit, chinTop: (row.top - m.top) / m.height };
+    out.on = { panel: vis('sim-ckpit'), nose: vis('sim-nose'), label: btn.textContent, lit };
     toggleExtView(true); await w(100); out.ext = vis('sim-ckpit');
     toggleExtView(false); { const t0 = performance.now(); await w(SIM_CAM_TX_MS); while (!vis('sim-ckpit') && performance.now() - t0 < 5000) await w(100); } out.back = vis('sim-ckpit');   // 바쁘면 넘어가기가 늦다 — 5초까지 기다린다
     btn.click(); await w(100);
@@ -332,7 +326,6 @@ export async function run(page, t) {
     `켜면 패널이 겹치고 기수는 감춘다 — MFD 넷이 그려진다 (${ck.on.lit.join('/')})`);
   t.ok(ck.kinds === 'pfd,sys,map,pfd' && ck.pgKeep, `MFD(왼쪽부터) — PFD · CDU 가 고른 SYSTEM 화면 · 지도 · PFD (${ck.kinds})`);
   t.ok(ck.op > 0.2 && ck.op < 0.7, `스크린을 뺀 틀·구조는 반투명이다 (불투명도 ${ck.op})`);
-  t.ok(Math.abs(ck.on.chinTop - 0.89) < 0.02, `CHIN 창은 패널 아래(발밑)로 내려간다 (${(ck.on.chinTop * 100).toFixed(0)}%)`);
   t.ok(!ck.ext && ck.back, '외부 시점에서는 숨기고, 조종석으로 돌아오면 다시 보인다');
   t.ok(!ck.off.panel && ck.off.nose && ck.off.label === '조종석 OFF' && !ck.exit, '끄면 패널이 사라지고 기수가 돌아온다 · SIM 을 끄면 버튼도 숨는다');
 

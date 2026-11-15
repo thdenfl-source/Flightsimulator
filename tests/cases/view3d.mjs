@@ -136,12 +136,11 @@ export async function run(page, t) {
        !bov.show && back.host === 'map-wrap' && bov.main === 'pfd-wrap',
     `HALF 를 누르면 들어가기 전 배치(${before.l} · ${before.tri ? before.m + ' · ' : ''}${before.r})로 돌아온다`);
 
-  // ── 3D 화면의 FCP L · R — 3D 단독에서만, 연 쪽 CHIN 창은 닫힌다 ──
+  // ── 3D 화면의 FCP L · R — 3D 단독에서만 ──
   const fcp = await page.evaluate(async () => {
     const wait = ms => new Promise(r => setTimeout(r, ms));
     const total = document.querySelectorAll('#pfd-wrap .ctrl-bar > .ctrl-sub-row > :not(.ctrl-div)').length + 2;   // + 소프트키 · FCP 패널
     if (!simModeOn) toggleSimMode(true);
-    chinL = chinR = true; chinViewOn = true;
     const o = { split: fcp3dAvail() };
     toggleFcp3d(); o.splitRefused = !document.getElementById('fcp3d-l') || !document.getElementById('fcp3d-l').classList.contains('show');
     fcpL = false;
@@ -150,16 +149,14 @@ export async function run(page, t) {
     o.oneBtn = !document.getElementById('fcp-r-btn');
     document.getElementById('fcp-l-btn').click(); await wait(150);   // 화면 버튼 그대로 눌러 본다
     const box = document.getElementById('fcp3d-l'), rc = box.getBoundingClientRect(), r3 = document.getElementById('map3d').getBoundingClientRect();
-    o.on = { show: box.classList.contains('show'), chinL, chinR, btn: document.getElementById('fcp-l-btn').textContent,
+    o.on = { show: box.classList.contains('show'), btn: document.getElementById('fcp-l-btn').textContent,
              all: box.querySelectorAll('.ctrl-sub-row > :not(.ctrl-div)').length, total,   // SIMPLE 패널도 첫 줄의 한 칸
              ias: !!box.querySelector('#fcp-simple [data-k="ias"]'), sim: !!box.querySelector('#fcp-simple [data-k="hdg"]'),
              sk: (() => { const k = box.querySelector('#pfd-sk'), f = box.querySelector('#fcp-simple'); return !!(k && f && k.getBoundingClientRect().bottom <= f.getBoundingClientRect().top + 2); })(),
              left: Math.round(rc.left - r3.left), bottom: Math.round(r3.bottom - rc.bottom),
              w: rc.width / r3.width, h: rc.height / r3.height,
              fit: [...box.querySelectorAll('.ctrl-sub-row > *')].every(e => { const q = e.getBoundingClientRect(); return q.right <= rc.right + 1 && q.bottom <= rc.bottom + 1; }) };
-    toggleChinView('L'); o.chinRefused = !chinL;
     document.getElementById('fcp-l-btn').click(); await wait(100);
-    toggleChinView('L'); o.chinBack = chinL;
     o.offHome = document.querySelectorAll('#pfd-wrap .ctrl-bar > .ctrl-sub-row > :not(.ctrl-div)').length + (document.querySelector('#pfd-wrap .ctrl-bar > #fcp-simple') ? 1 : 0) + (document.querySelector('#pfd-wrap .ctrl-bar > #pfd-sk') ? 1 : 0);
     document.getElementById('fcp-l-btn').click(); await wait(100);
     exitSolo(); await wait(400);
@@ -173,9 +170,7 @@ export async function run(page, t) {
   t.ok(fcp.avail && fcp.on.show && fcp.on.all === fcp.on.total && fcp.on.ias && fcp.on.sim && fcp.on.left <= 2 && fcp.on.bottom <= 2 &&
        fcp.on.w <= 0.51 && fcp.on.h <= 0.46 && fcp.on.fit,
     `3D 단독에서 FCP 를 켜면 FCP 전체(${fcp.on.all}칸)가 왼쪽 아래 한 창(너비 ${(fcp.on.w * 100).toFixed(0)}% · 높이 ${(fcp.on.h * 100).toFixed(0)}%)으로 뜬다`);
-  t.ok(!fcp.on.chinL && fcp.on.chinR, 'FCP 를 켜면 L CHIN 창이 닫히고 R CHIN 은 그대로다');
-  t.ok(fcp.chinRefused, 'FCP 가 켜져 있으면 L CHIN 을 열 수 없다');
-  t.ok(fcp.chinBack && fcp.offHome === fcp.on.total, 'FCP 를 끄면 FCP 가 제자리로 돌아가고 L CHIN 을 다시 켤 수 있다');
+  t.ok(fcp.offHome === fcp.on.total, 'FCP 를 끄면 FCP 가 제자리로 돌아간다');
   t.ok(fcp.back.home === fcp.back.total && !fcp.back.show, `3D 단독을 빠져나가면 FCP 가 PFD 아래 제자리로 돌아간다 (${fcp.back.home}/${fcp.back.total})`);
 
   // ── 3D 단독 화면의 CDU 겹치기 — 3D 버튼 줄 바로 왼쪽, 계기 칸 크기 ──
@@ -264,18 +259,17 @@ export async function run(page, t) {
   // ── 화면 조종간(3D 단독 · SIM) — 컬렉티브 · 페달 · 16방향 사이클릭 ──
   const vs0 = await page.evaluate(async () => {
     const o = { split: vStickAvail() };
-    toggleSimMode(true); fcpL = false; chinL = chinR = true; chinViewOn = true; vStickOn = false;
+    toggleSimMode(true); fcpL = false; vStickOn = false;
     panelSolo('m3d'); await new Promise(r => setTimeout(r, 600));
     document.getElementById('vstick-btn').click(); await new Promise(r => setTimeout(r, 100));
     const R = q => { const r = document.querySelector(q).getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height, r: r.right, b: r.bottom }; };
     const d3 = R('#map3d');
     o.box = R('#vstick'); o.d3 = d3; o.cyc = R('#vstick .vs-cyc'); o.ped = R('#vstick .vs-ped'); o.coll = R('#vstick-coll .vs-coll');
-    o.chinR = chinR; o.chinL = chinL; o.btn = document.getElementById('vstick-btn').textContent;
+    o.btn = document.getElementById('vstick-btn').textContent;
     const ctl = R('#ctl3d'); o.ctlClear = ctl.b <= o.box.y + 1;
     { const c = o.coll, top = document.elementFromPoint(c.x + c.w / 2, c.y + c.h / 2); o.collTop = !!(top && top.closest('#vstick-coll')); }
     // FCP 를 켜면 컬렉티브 오른쪽으로 비킨다
     toggleFcp3d(); await new Promise(r => setTimeout(r, 150)); o.fcpL = R('#fcp3d-l').x; o.collR = R('#vstick-coll').r; toggleFcp3d();
-    chinL = true; chinViewOn = true;
     return o;
   });
   const vsm = async (x0, y0, x1, y1, probe) => {
@@ -296,17 +290,16 @@ export async function run(page, t) {
   const coll = await page.evaluate(() => {
     S.running = true; let ts = 1000; S.lastT = ts; for (let i = 0; i < 40; i++) { ts += 50; simStep(ts); } S.running = false;
     const o = { coll: vStick.coll, cmd: simTqCmd };
-    toggleChinView('R'); o.chinRefused = !chinR;
-    document.getElementById('vstick-btn').click(); toggleChinView('R'); o.chinBack = chinR;
+    document.getElementById('vstick-btn').click(); o.off = !vStickOn;
     exitSolo(); toggleSimMode(false);
     return o;
   });
   t.ok(!vs0.split, 'SIM 3D 단독이 아니면 화면 조종간을 쓰지 않는다');
   t.ok(vs0.btn === 'STICK ON' && Math.abs(vs0.box.r - (vs0.d3.x + vs0.d3.w)) < 3 && Math.abs(vs0.box.b - (vs0.d3.y + vs0.d3.h)) < 3 &&
-       Math.abs(vs0.box.w / vs0.d3.w - 1 / 3) < 0.03 && !vs0.chinR && vs0.chinL && vs0.ctlClear,
-    'STICK ON — R CHIN 자리(오른쪽 아래 · 너비 1/3)에 조종간 셋이 뜨고 R CHIN 이 닫힌다(3D 버튼 줄은 그 위에서 끝난다)');
+       Math.abs(vs0.box.w / vs0.d3.w - 1 / 3) < 0.03 && vs0.ctlClear,
+    'STICK ON — 오른쪽 아래(너비 1/3)에 조종간 셋이 뜬다(3D 버튼 줄은 그 위에서 끝난다)');
   t.ok(vs0.coll.x - vs0.d3.x < 16 && vs0.d3.y + vs0.d3.h - vs0.coll.b < 16 && vs0.coll.h > vs0.coll.w && vs0.collTop,
-    `컬렉티브(위아래)는 화면 왼쪽 아래 끝(왼손)에 있고 L CHIN 창 위에 보인다 (왼쪽 ${Math.round(vs0.coll.x - vs0.d3.x)}px)`);
+    `컬렉티브(위아래)는 화면 왼쪽 아래 끝(왼손)에 있고 3D 화면 위에 보인다 (왼쪽 ${Math.round(vs0.coll.x - vs0.d3.x)}px)`);
   t.ok(vs0.ped.x < vs0.cyc.x && vs0.ped.w > vs0.ped.h && Math.abs(vs0.cyc.w - vs0.cyc.h) < 1,
     '오른쪽 아래에는 좌우(페달)와 원형(사이클릭)이 있다');
   t.ok(vs0.fcpL >= vs0.collR - 1, 'FCP 를 켜면 FCP 창이 컬렉티브 오른쪽으로 비켜 뜬다');
@@ -318,7 +311,7 @@ export async function run(page, t) {
     `피치 감도는 가운데에서 반 — 10% 밀면 ${lim.small.pitch.toFixed(2)}°(곧게면 1°) · 반 밀면 ${lim.half.pitch.toFixed(2)}°`);
   t.ok(ped.held < -0.9 && ped.rel.yaw === 0, `페달 — 왼쪽 끝은 −1 언저리(${ped.held.toFixed(2)}), 놓으면 가운데로`);
   t.ok(coll.coll > 0.97 && coll.cmd > 135, `컬렉티브 — 위 끝으로 올리면 레버 ${coll.cmd.toFixed(0)}%(놓아도 그 자리)`);
-  t.ok(coll.chinRefused && coll.chinBack, '조종간이 켜져 있으면 R CHIN 을 열 수 없고, 끄면 다시 열 수 있다');
+  t.ok(coll.off, 'STICK 버튼을 다시 누르면 조종간이 꺼진다');
 
   // ── GYRO — 기기 기울기로 16방향 사이클릭(ALIGN 한 때부터) ──
   const gy = await page.evaluate(async () => {

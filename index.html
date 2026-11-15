@@ -17,11 +17,11 @@
      CDN 을 쓰면 한 번이라도 못 받는 순간 앱이 통째로 죽는다 — 비행 중에는
      그럴 여지를 두지 않는다. -->
 <!-- 패널 새 창(다중 모니터) — 라이브러리가 거는 이벤트까지 받아 적어야 하므로 맨 먼저 -->
-<script src="js/00-edition.js?v=665"></script>
-<script src="js/00-aircraft.js?v=665"></script>
-<script src="js/00-params.js?v=665"></script>
-<script src="js/00-sched.js?v=665"></script>
-<script src="js/00-popout.js?v=665"></script>
+<script src="js/00-edition.js?v=666"></script>
+<script src="js/00-aircraft.js?v=666"></script>
+<script src="js/00-params.js?v=666"></script>
+<script src="js/00-sched.js?v=666"></script>
+<script src="js/00-popout.js?v=666"></script>
 <link rel="stylesheet" href="vendor/leaflet.css"/>
 <script src="vendor/leaflet.js"></script>
 <link rel="stylesheet" href="vendor/leaflet-velocity.min.css"/>
@@ -606,35 +606,6 @@ html, body {
 #map3d.panel-3d .maplibregl-ctrl-bottom-right { bottom: 10px; }
 #map3d.panel-3d .vfr-scale { bottom: 10px; }
 /* 확대·나침반 · 기울기 버튼은 축척(왼쪽 아래 · 축척은 bottom 62px 로 직접 놓인다 — 04-map.js) 바로 위 — 아래 #map3d 규칙 그대로 */
-/* ── CHIN BUBBLE(SIM 1인칭) — 정면 시야는 3D 창 가득, 발밑 창은 그 위 아래 좌·우 모서리 ──
-   #chin-row 는 #map3d 바로 뒤에 붙어 다니며 3D 가 보일 때만 보인다.
-   발밑 창 하나는 3D 창 너비의 약 1/3 · 높이의 2/9 다(종전 '아래 1/3 을 좌·우 반씩' 의 2/3).
-   좌·우 가장자리에 붙여 정면 시야 위에 겹친다 — 가운데(앞쪽 아래)는 가리지 않는다.
-   줄 자체는 비어 있고 손 입력을 그대로 통과시킨다. */
-#chin-row {
-  display: none; position: absolute; left: 0; right: 0; z-index: 801;
-  justify-content: space-between; pointer-events: none;
-}
-#map3d.chin-on.active + #chin-row { display: flex; }
-.chin-pane {
-  flex: none; width: calc((100% - 18px) / 3); position: relative; overflow: hidden; min-width: 0;
-  border-radius: 10px 10px 42px 42px / 10px 10px 34px 34px;   /* 아래가 둥근 창 */
-  border: 2px solid #1d232b; background: #0b2638; box-sizing: border-box;
-  box-shadow: 0 0 10px rgba(0,0,0,0.6);                       /* 정면 시야와 갈라 보이게 */
-}
-.chin-pane::after {               /* 창틀 안쪽 그늘 — 정면 시야와 구분된다 */
-  content: ''; position: absolute; inset: 0; pointer-events: none; z-index: 2;
-  border-radius: inherit; box-shadow: inset 0 0 14px rgba(0,0,0,0.55);
-}
-/* 2D 위에 겹쳐 쓸 때: 3D 창(높이 80%, T-CUT 꺼짐이면 100%)의 아래 2/9 */
-#map3d.chin-on + #chin-row { top: calc(80% * 7 / 9); height: calc(80% * 2 / 9); }
-#map-wrap.tcut-off #map3d.chin-on + #chin-row { top: calc(100% * 7 / 9); height: calc(100% * 2 / 9); }
-/* 3D 가 제 창을 쓸 때 */
-#map3d.panel-3d.chin-on + #chin-row { top: calc(100% * 7 / 9); height: calc(100% * 2 / 9); z-index: 2; }
-#q3d-btn { position: absolute; top: 8px; right: 8px; z-index: 900; padding: 5px 10px; }
-#chin-btn { display: none; position: absolute; top: 40px; right: 8px; z-index: 900; padding: 5px 10px; }
-#chin-btn.show { display: block; }
-#chin-btn.on { color: #00e5ff; border-color: #00e5ff; }
 #ext-btn { display: none; position: absolute; top: 72px; right: 8px; z-index: 900; padding: 5px 10px; }
 /* SIM 1인칭 — 화면 아래 가운데의 기수(높이 1/10 · 둘러보기를 하면 그만큼 비켜 간다) */
 #sim-nose { display: none; position: absolute; left: 50%; bottom: 0; width: 34%; height: 10%;
@@ -696,7 +667,6 @@ html, body {
 .start-apt-skip { padding: 7px 12px; }
 /* 2D 위에 겹쳐 쓸 때는 지도 툴바 아래로 */
 #map-wrap #q3d-btn { top: 48px; }
-#map-wrap #chin-btn { top: 80px; }
 #map-wrap #ext-btn { top: 112px; }
 #map-wrap #fly3d-btn { top: 144px; }
 #map-wrap #snd-btn { top: 176px; }
@@ -717,11 +687,10 @@ html, body {
 #ctl3d-body > * { flex-shrink: 0; }
 #ctl3d.collapsed #ctl3d-body { display: none; }
 #ctl3d-tog { padding: 3px 4px; font-size: 11px; color: #9aa4ae; }
-#ctl3d .sim-btn, #ctl3d #chin-btn, #ctl3d .hdgref, #ctl3d #rotor-3d, #ctl3d #ase-3d {
+#ctl3d .sim-btn, #ctl3d .hdgref, #ctl3d #rotor-3d, #ctl3d #ase-3d {
   position: static !important; top: auto !important; right: auto !important;
   width: 100%; box-sizing: border-box; margin: 0; }
 #ctl3d > #ctl3d-body > .sim-btn, #ctl3d-tog { padding: 5px 4px; text-align: center; }
-#ctl3d #chin-btn { display: none; gap: 3px; }
 #ctl3d .fcp-btn-row { display: flex; gap: 3px; }
 #ctl3d .fcp-btn-row .sim-btn { flex: 1; width: auto; padding: 5px 0; }
 #ctl3d .fcp-btn-row .sim-btn.on { color: #ffb000; border-color: #ffb000; }
@@ -737,10 +706,6 @@ html, body {
 .fcp3d-r .fcp3d-in { right: 0; transform-origin: top right; }
 .fcp3d .ctrl-sub-row { flex-wrap: nowrap; }
 .fcp3d .ctrl-sub-row > #pfd-sk { flex: 1 1 100%; min-width: 0; }   /* 소프트키 줄은 FCP 패널 폭에 맞춘다 */
-#ctl3d #chin-btn.show { display: flex; }
-#ctl3d #chin-btn .sim-btn { flex: 1; width: auto; padding: 5px 0; font-size: 10px; }
-#ctl3d #chin-btn .sim-btn.on { color: #00e5ff; border-color: #00e5ff; }
-#ctl3d #chin-btn .sim-btn:not(.on) { color: #777; border-color: #444; }
 #ctl3d #ckpit-btn { display: none; }
 #ctl3d #ckpit-op { display: none; align-items: center; }
 #ctl3d #ckpit-op.show { display: flex; }
@@ -749,10 +714,6 @@ html, body {
 #ctl3d #ckpit-btn.on { color: #00e5ff; border-color: #00e5ff; }
 /* 조종석 패널(15-heli3d.js) — 3D 지도 안에 겹친다(버튼 줄 아래). 바닥 쪽은 비어 땅이 보인다 */
 #sim-ckpit { display: none; position: absolute; inset: 0; z-index: 4; pointer-events: none; }
-/* 조종석 패널이 켜지면 CHIN 창은 패널 아래(발밑) 좌·우 — 3D 창 높이의 89% 아래 · 너비 22% */
-#map3d.chin-on.ckpit-on + #chin-row { top: calc(80% * 0.89); height: calc(80% * 0.11); }
-#map-wrap.tcut-off #map3d.chin-on.ckpit-on + #chin-row, #map3d.panel-3d.chin-on.ckpit-on + #chin-row { top: 89%; height: 11%; }
-#map3d.ckpit-on + #chin-row .chin-pane { width: 22%; border-radius: 8px 8px 30px 30px / 8px 8px 22px 22px; }
 #sim-ckpit.show { display: block; }
 #sim-ckpit > svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; opacity: 0.45; }   /* 틀·구조는 반투명 — 스크린(canvas)만 또렷하다 */
 #sim-ckpit canvas.ck-scr { position: absolute; display: block; background: #000; }
@@ -850,8 +811,6 @@ html, body {
 #map3d .maplibregl-ctrl-bottom-right { bottom: 44px; }
 /* 좌하단: 축척(bottom 62px) 바로 위에 확대·나침반 버튼 */
 #map3d .maplibregl-ctrl-bottom-left { bottom: 108px; }
-/* CHIN 창이 아래 모서리를 덮으므로 3D 확대·기울기 버튼을 그 위로 올린다 */
-#map3d.chin-on .maplibregl-ctrl-bottom-right { bottom: calc(100% * 2 / 9 + 8px); }
 /* 3D 축척(.vfr-scale)은 #map3d에 직접 절대배치(left:10px, bottom:62px).
    maplibre 기본값이 섞이지 않도록 박스 스타일을 2D와 동일하게 명시 */
 #map3d .vfr-scale {
@@ -971,7 +930,7 @@ body.solo-mode #solo-bar { display: none !important; }
 }
 #solo-half-btn:active { background: #1a3a5a; color: #fff; }
 body.solo-mode #solo-half-btn.show { display: block; }
-/* 3D 단독 — 오른쪽 위는 3D 버튼(화질·CHIN·EXT·FLY·SOUND·MG/DG) 자리라 위 가운데에 띄운다 */
+/* 3D 단독 — 오른쪽 위는 3D 버튼(화질·EXT·FLY·SOUND·MG/DG) 자리라 위 가운데에 띄운다 */
 body.solo-mode #solo-half-btn.show.m3d { top: calc(env(safe-area-inset-top) + 8px); right: auto; left: 50%; transform: translateX(-50%); }
 /* Solo mode: one panel fills everything */
 body.solo-mode #left-panel,
@@ -1300,7 +1259,7 @@ html.ac-b206 #pfd-ov { background: transparent; border: 0; box-shadow: none; min
 #ctl3d #vstick-btn.dim { opacity: 0.45; }
 #ctl3d #gyro-btn.on, #ctl3d #gyro-align-btn.on { color: #ffb000; border-color: #ffb000; }
 #ctl3d #gyro-btn.dim { opacity: 0.45; }
-/* 화면 조종간 — R CHIN 창 자리(오른쪽 아래, 너비 1/3) */
+/* 화면 조종간 — 오른쪽 아래(너비 1/3) */
 #vstick { display: none; position: absolute; right: 0; bottom: 0; width: calc((100% - 18px) / 3);
           height: max(calc(100% * 2 / 9), 170px); z-index: 803; box-sizing: border-box; padding: 10px 12px 8px;
           background: rgba(10,12,15,0.82); border: 2px solid #1d232b; border-radius: 10px 10px 0 0;
@@ -1308,7 +1267,7 @@ html.ac-b206 #pfd-ov { background: transparent; border: 0; box-shadow: none; min
 #vstick.show { display: flex; }
 /* 조종간이 떠 있으면 오른쪽 3D 버튼 줄은 그 위에서 끝나고 스크롤된다 */
 #map3d.vstick-on #ctl3d { max-height: calc(100% - max(calc(100% * 2 / 9), 170px) - 24px); }
-/* 컬렉티브 — 왼쪽 아래 끝(L CHIN 창 왼쪽 가장자리 위) */
+/* 컬렉티브 — 왼쪽 아래 끝 */
 #vstick-coll { display: none; position: absolute; left: 0; bottom: 0; width: 84px; height: max(calc(100% * 2 / 9), 170px);
                z-index: 803; box-sizing: border-box; padding: 10px 10px 8px; background: rgba(10,12,15,0.82);
                border: 2px solid #1d232b; border-radius: 10px 10px 0 0; touch-action: none; user-select: none; -webkit-user-select: none; }
@@ -2219,7 +2178,7 @@ html.ac-b206 #pfd-ov { background: transparent; border: 0; box-shadow: none; min
 .ship-ent { background: radial-gradient(circle at 35% 35%, #0d1f4a, #060e20) !important; border-color: #3355bb !important; color: #88aaff !important; font-size: 9px !important; }
 .sim-btn.ship-active { background: #1a3050; border-color: #7ab8f5; color: #7ab8f5; }
 /* ── 야간(Night) 모드: 밝은 지도/차트를 어둡게, 붉은 딤 오버레이 ── */
-body.night-mode #map, body.night-mode #map3d, body.night-mode #chin-row { filter: brightness(0.5) contrast(1.05); }
+body.night-mode #map, body.night-mode #map3d { filter: brightness(0.5) contrast(1.05); }
 body.night-mode #pfd { filter: brightness(0.72); }
 body.night-mode #pdfViewArea, body.night-mode #cdu-wrap { filter: brightness(0.72); }
 body.night-mode::after {
@@ -2430,7 +2389,7 @@ body.gate-open #gate-overlay { display: none; }
 /* 절차 훈련판(js/00-edition.js · Flightsimulator) — SIM 모드와 그 조작 버튼을 감춘다 */
 html.ed-proc #sim3d-btn, html.ed-proc #simmap-btn, html.ed-proc #rotor-3d, html.ed-proc #ase-3d, html.ed-proc #eng-3d,
 html.ed-proc #vstick-btn, html.ed-proc #gyro-btn, html.ed-proc #gyro-align-btn,
-html.ed-proc #chin-btn, html.ed-proc #ext-btn, html.ed-proc #extcam-3d, html.ed-proc #gate-mode-sim { display: none !important; }
+html.ed-proc #ext-btn, html.ed-proc #extcam-3d, html.ed-proc #gate-mode-sim { display: none !important; }
 /* CDU 실기 GTC 화면(18-system.js — Fuel Configuration · Video Settings) */
 /* 칸이 넘치면 위아래로 밀어 본다(터치 · 휠) — 스크롤 막대를 보여 넘친 칸이 있음을 알린다 */
 #mainContentArea { touch-action: pan-y; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
@@ -2702,7 +2661,7 @@ body.simple-mode #simple-view { display: flex; position: fixed; left: 0; right: 
     </div>
   </form>
 </div>
-<script src="js/00-gate.js?v=665"></script>
+<script src="js/00-gate.js?v=666"></script>
 <!-- ── 단일화면 선택 바 (기본 숨김) ── -->
 <!-- ── 시작 안내(사용법/키보드) 오버레이 ── -->
 <div id="help-overlay" style="display:none;">
@@ -2754,7 +2713,7 @@ body.simple-mode #simple-view { display: flex; position: fixed; left: 0; right: 
             화면 가득 띄웁니다. 계기비행 연습처럼 PFD 만 크게 보거나, 지도·CDU 를 넓게 볼 때 쓰십시오.
             버튼을 <b>한 번 더 누르면</b>(또는 떠 있는 <b>✥ HALF</b> · 상단 막대의 <b>✕</b>)
             <b>들어가기 전 배치 그대로</b> 돌아옵니다. 단독 중에는 <b>상단 막대</b>에서 다른 창으로 바로 넘어갈 수 있습니다.<br>
-            <b>⛶ Cockpit Mode</b>(오른쪽 창 탭 줄 — 2분할·3분할 모두) — 3D 조종석(3D 를 화면 가득 · 조종석 시야 · MFD · 콘솔 · CDU)으로 들어갑니다(종합판은 SIM 을 켠 채로). 빠져나갈 때는 오른쪽 위 <b>Split screen</b>.<br>
+            <b>⛶ Cockpit</b>(오른쪽 창 탭 줄 — 2분할·3분할 모두) — 3D 조종석(3D 를 화면 가득 · 조종석 시야 · MFD · 콘솔 · CDU)으로 들어갑니다(종합판은 SIM 을 켠 채로). 빠져나갈 때는 오른쪽 위 <b>Split screen</b>.<br>
             <b>계기 크기 − / +</b>(3D 단독 화면, 계기 버튼 아래) — 왼쪽 위 PFD 계기를 60 % ~ 160 % 사이로 10 % 씩 줄이고 키웁니다(크기는 기억됩니다).<br>
             <b>LOWER</b>(UPPER 옆 탭) — 실기 <b>하부 콘솔</b>: 왼쪽 열 ⑰ AHRS · ⑯ AFCAU(AUTO TRIM · TRIM FEEL · AP1/AP2) · ⑮ 비디오 컨버터 · ⑭ 비상부주(EMERG FLOATS) ·
             ⑬ 호이스트 · ⑫ CPI CONTROLLER · ⑪ PA, 오른쪽 열 ⑥ FUEL(X-FEED · FT1/BP1 · XFER · FT2/BP2 · AUX1/F5/AUX2 XFER) · ⑦ U/VHF-AM/FM · ⑧ VHF-FM · ⑨ AVCS · ⑩ MPP ·
@@ -2942,28 +2901,23 @@ body.simple-mode #simple-view { display: flex; position: fixed; left: 0; right: 
             겹친 CDU 의 <b>MAP</b> 버튼도 이 지도를 켭니다(3D 단독은 그대로). MAP 단독 화면에서는 지도 아래 <b>3D</b> 버튼으로 3D 단독에 돌아갑니다.<br>
             <b>CDU ON/OFF</b>(3D 오른쪽 버튼 묶음, 계기 버튼 아래) — <b>Cockpit Mode 화면</b>에서 CDU 를 <b>3D 버튼 줄 바로 왼쪽</b>에
             계기 칸과 같은 높이(3/5)로 겹쳐 띄웁니다(너비는 CDU 비율대로 — 좌우 빈 여백 없이). CDU 창 그대로라 키·화면이 같고, 끄거나 단독을 나오면 제자리로 돌아갑니다(이 기기에 기억).<br>
-            <b>STICK ON/OFF</b>(FCP 버튼 아래) — SIM 모드의 3D 단독 화면에서 <b>오른쪽 아래(R CHIN 자리)</b>에 화면 조종간 셋을 띄웁니다:
+            <b>STICK ON/OFF</b>(FCP 버튼 아래) — SIM 모드의 3D 단독 화면에서 <b>오른쪽 아래</b>에 화면 조종간 셋을 띄웁니다:
             <b>컬렉티브</b>(위아래 · 놓아도 그 자리 · 아래 0% … 위 140%)는 <b>화면 왼쪽 아래 끝</b>(왼손), 오른쪽 아래에는 <b>페달</b>(좌우 · 놓으면 가운데)과
-            <b>사이클릭</b>(원형 · 16방향으로 맞춰 민 만큼 · 끝까지 밀면 <b>피치 ±10° · 롤 ±20°</b>(트림 자세 위에) · 피치는 가운데 감도 반 · 놓으면 가운데 — 트림이 자세를 지킵니다). 켜면 R CHIN 창은 닫히고,
+            <b>사이클릭</b>(원형 · 16방향으로 맞춰 민 만큼 · 끝까지 밀면 <b>피치 ±10° · 롤 ±20°</b>(트림 자세 위에) · 피치는 가운데 감도 반 · 놓으면 가운데 — 트림이 자세를 지킵니다).
             켤 때 컬렉티브는 지금 토크 자리에서 시작합니다. 실물 조종간과 함께 쓸 수 있습니다(화면 조종간을 쥔 동안은 그 값).<br>
             <b>GYRO ON/OFF · GYRO ALIGN</b>(STICK 버튼 아래) — 태블릿·휴대폰을 <b>기울여 사이클릭</b>을 몹니다(SIM 3D 단독).
             GYRO ON 을 누르면 기울기 센서를 켜고(아이폰·아이패드는 허락을 묻습니다), <b>GYRO ALIGN 을 누른 그때의 자세가 가운데</b>가 되어 그때부터 조종합니다.
             기기를 25° 기울이면 끝 — 화면 사이클릭과 같이 <b>16방향 · 피치 ±10° · 롤 ±20°</b>(피치는 가운데 감도 반)입니다. 화면 사이클릭을 손으로 쥐면 손이 앞서고,
             화면을 가로·세로로 돌리면 다시 ALIGN 해야 합니다.<br>
             <b>FCP ON/OFF</b>(3D 오른쪽 버튼 묶음) — <b>Cockpit Mode 화면</b>에서 PFD 소프트키(위) + FCP 패널(아래)을 <b>3D 화면 왼쪽 아래에 한 창</b>으로 띄웁니다
-            (화면 너비의 반 · 높이의 45% 안으로 줄여 그림). 버튼 그대로라 기능이 같고, 켜면 L CHIN 창은 닫힙니다. 분할 화면에서는 PFD 아래에 FCP 가 있으므로 열지 않습니다.<br>
-            <b>CHIN BUBBLE</b> — 1인칭에서는 <b>정면 시야가 3D 창 가득</b> 차고, 좌·우 발밑 창은 그 위
-            <b>아래 왼쪽·오른쪽 모서리에 붙어 겹쳐</b> 뜹니다(창 하나가 너비 약 1/3 · 높이 2/9).
-            가운데 앞쪽 아래는 가리지 않아 전방을 넓게 봅니다. 발밑 창은 헬기의 CHIN BUBBLE 처럼 <b>정면보다 50° 아래</b>를 좌·우로 15° 벌려 보며,
-            기체 자세를 따라 돕니다(고개 돌리기는 따르지 않습니다). 함정도 그려지므로 착함할 때 갑판을
-            내려다볼 수 있습니다. 3D 창 오른쪽 위 <b>CHIN</b> 버튼으로 끄고 켭니다.<br>
-            <b>외부 시점(EXT)</b> — CHIN 아래 <b>EXT</b> 버튼을 누르면 <b>뒤에서 따라가며 내 헬기(흰수리)</b>를 봅니다
+            (화면 너비의 반 · 높이의 45% 안으로 줄여 그림). 버튼 그대로라 기능이 같습니다. 분할 화면에서는 PFD 아래에 FCP 가 있으므로 열지 않습니다.<br>
+            <b>외부 시점(EXT)</b> — 3D 오른쪽 버튼 묶음의 <b>EXT</b> 버튼을 누르면 <b>뒤에서 따라가며 내 헬기(흰수리)</b>를 봅니다
             (한 번 더 누르면 1인칭 · 조이스틱 버튼에 「외부 시점」을 배정할 수도 있습니다). 헬기 뒤 조금 위(12°)에서
             기수 방향으로 내려다보고, <b>시야 둘러보기(B0 + 햇)</b>로 ◀▶ 는 헬기 둘레를 돌고 ▲▼ 는 위아래로
             오르내립니다(놓으면 다시 뒤로). 창이 좁으면 헬기 전체가 들어오게 그만큼 물러섭니다.
-            외부 시점에서는 CHIN 창을 닫고, SIM 을 나갔다 들어오면 1인칭부터 시작합니다.
+            SIM 을 나갔다 들어오면 1인칭부터 시작합니다.
             바꿀 때는 <b>0.9초 동안 카메라가 옮겨 갑니다</b> — EXT 로는 조종석 시선 그대로 <b>뒤로 쑥 물러나며 헬기가 앞으로 나오고</b>,
-            1인칭으로는 헬기 뒤에서 <b>조종석으로 쑥 빨려 들어간 뒤</b> 기수·CHIN 창이 나타납니다.<br>
+            1인칭으로는 헬기 뒤에서 <b>조종석으로 쑥 빨려 들어간 뒤</b> 기수가 나타납니다.<br>
             <b>흰수리 3D 모형</b> — 입면도·평면도·측면도를 바탕으로 <b>실제 크기(전장 20m — 주로터 앞 끝에서
             꼬리로터 뒤 끝까지)</b>로 그립니다: 주로터 지름 14.1m · 꼬리로터 3m · 동체 약 18.8m, 흰 동체에 붉은 엔진 덮개,
             뒤로 노랑 → 파랑 띠, 붉은 수평 꼬리날개(왼쪽에만), 꼬리로터는 오른쪽. 자세(기수·피치·뱅크)를 그대로 따르고 로터가 돕니다
@@ -2972,8 +2926,8 @@ body.simple-mode #simple-view { display: flex; position: fixed; left: 0; right: 
             <b>3D 화질(상·중·하)</b> — 3D 창 오른쪽 위 <b>화질</b> 버튼을 누를 때마다 상 → 중 → 하 로 바뀝니다
             (기본 <b>중</b>, 고른 값은 이 기기에 남습니다). 낮출수록 그리는 해상도와 받는 타일이 줄어
             <b>저고도에서도 부드럽습니다</b> — 상: 기기 해상도 · 사진 19 · 지형 15 단계 / 중: 1.25배 · 17 · 14 /
-            하: 0.8배 · 15 · 12. CHIN 창은 중에서 1초에 30번, 하에서 15번만 다시 그립니다.<br>
-            <b>지형·사진은 20NM 안의 것을 들고 있습니다</b> — 3D 와 CHIN 창이 같은 타일을 함께 쓰고(한 번 받고 한 번
+            하: 0.8배 · 15 · 12.<br>
+            <b>지형·사진은 20NM 안의 것을 들고 있습니다</b> — 3D 가 받은 타일을 다시 쓰고(한 번 받고 한 번
             고친다), 20NM 안의 덜 자세한 단계와 발밑 4NM 의 지형은 미리 받아 둡니다. 20NM 밖으로 벗어난 것은 지웁니다.<br>
             땅 위에서는 그려진 지형 위로 눈높이(8m)만큼 떠 있습니다.
             끄면 <b>원래 보던 창으로 되돌아옵니다</b>.<br>
@@ -3570,7 +3524,7 @@ body.simple-mode #simple-view { display: flex; position: fixed; left: 0; right: 
     <div id="mid-tabs" class="panel-tabs">
       <button class="page-tab" data-sel="cdu" data-act="selectPanel" data-arg='["mid", "cdu"]'>CDU</button>
       <button class="page-tab" data-sel="map" data-act="selectPanel" data-arg='["mid", "map"]'>MAP</button>
-      <button class="page-tab ck-mode-tab" data-act="cockpitToggle" title="Cockpit Mode — 3D 조종석(3D 를 화면 가득 · 1인칭 조종석 시야 · MFD · 콘솔 · CDU). 한 번 더 누르면 원래 배치">⛶ Cockpit Mode</button>
+      <button class="page-tab ck-mode-tab" data-act="cockpitToggle" title="Cockpit Mode — 3D 조종석(3D 를 화면 가득 · 1인칭 조종석 시야 · MFD · 콘솔 · CDU). 한 번 더 누르면 원래 배치">⛶ Cockpit</button>
       <button class="page-tab" data-sel="ovhd" data-act="selectPanel" data-arg='["mid", "ovhd"]' title="UPPER CONSOLE — 상부 콘솔 스위치(시뮬레이터 연동 예정)">UPPER</button>
       <button class="page-tab" data-sel="lcon" data-act="selectPanel" data-arg='["mid", "lcon"]' title="LOWER CONSOLE — 하부 콘솔(AHRS · AFCAU · FUEL · MPP · PARKING BRAKE 등)">LOWER</button>
       <button class="page-tab" data-sel="sysp" data-act="selectPanel" data-arg='["mid", "sysp"]' title="SYSTEM — MFD 계통 화면(CDU 의 Aircraft Systems 버튼으로 화면을 고른다)">SYSTEM</button>
@@ -3589,7 +3543,7 @@ body.simple-mode #simple-view { display: flex; position: fixed; left: 0; right: 
       <button class="page-tab" data-sel="ovhd" data-act="selectPanel" data-arg='["right", "ovhd"]' title="UPPER CONSOLE — 상부 콘솔 스위치(시뮬레이터 연동 예정)">UPPER</button>
       <button class="page-tab" data-sel="lcon" data-act="selectPanel" data-arg='["right", "lcon"]' title="LOWER CONSOLE — 하부 콘솔(AHRS · AFCAU · FUEL · MPP · PARKING BRAKE 등)">LOWER</button>
       <button class="page-tab" data-sel="sysp" data-act="selectPanel" data-arg='["right", "sysp"]' title="SYSTEM — MFD 계통 화면(CDU 의 Aircraft Systems 버튼으로 화면을 고른다)">SYSTEM</button>
-      <button class="page-tab split-tab ck-mode-tab" id="m3d-only-btn" data-act="cockpitToggle" title="Cockpit Mode — 3D 조종석(3D 를 화면 가득 · 1인칭 조종석 시야 · MFD · 콘솔 · CDU). 한 번 더 누르면 원래 배치">⛶ Cockpit Mode</button>
+      <button class="page-tab split-tab ck-mode-tab" id="m3d-only-btn" data-act="cockpitToggle" title="Cockpit Mode — 3D 조종석(3D 를 화면 가득 · 1인칭 조종석 시야 · MFD · 콘솔 · CDU). 한 번 더 누르면 원래 배치">⛶ Cockpit</button>
       <button class="page-tab split-tab" id="cdu-solo-btn" data-act="panelSolo" data-arg='["cdu"]' title="CDU 단독 — CDU 만 화면 가득(한 번 더 누르면 원래 배치)">⛶ CDU 단독</button>
       <button class="page-tab po-btn" data-act="popoutToggle" data-arg='["right"]' title="이 패널을 새 창으로 띄운다(다중 모니터에 따로 배치)">⧉ POP UP</button>
       <button class="page-tab po-top-btn" data-act="popoutTop" data-arg='["right", "$el"]' title="Top — 이 창을 다른 창들보다 늘 위에 띄운다(한 번 더 누르면 본 창으로)">📌 Top</button>
@@ -3647,11 +3601,6 @@ body.simple-mode #simple-view { display: flex; position: fixed; left: 0; right: 
             <button class="sim-btn" id="dbf3d-btn" data-act="toggleDebrief" title="비행 기록 · 사후 강평">📋 DEBRIEF</button>
           <!-- 3D 화질 — 상 → 중 → 하(낮출수록 부드럽다 · 04-map.js) -->
           <button class="sim-btn" id="q3d-btn" data-act="cycleMap3dQuality" title="3D 화질 — 누를 때마다 상 → 중 → 하. 낮출수록 저고도에서도 부드럽습니다">화질 중</button>
-          <!-- SIM 1인칭에서만 보인다 — 아래 좌·우 CHIN 창을 끄고 켠다 -->
-          <div id="chin-btn">
-            <button class="sim-btn" id="chin-l-btn" data-act="toggleChinView" data-arg='["L"]' title="L CHIN — 왼쪽 발밑 창 켜기/끄기">L CHIN</button>
-            <button class="sim-btn" id="chin-r-btn" data-act="toggleChinView" data-arg='["R"]' title="R CHIN — 오른쪽 발밑 창 켜기/끄기">R CHIN</button>
-          </div>
           <!-- SIM 에서만 보인다 — 1인칭 ↔ 외부 시점(뒤에서 내 헬기를 본다) -->
           <button class="sim-btn" id="ext-btn" data-act="toggleExtView" title="외부 시점 — 뒤에서 따라가며 내 헬기(흰수리)를 봅니다. 시야 둘러보기(B0 + 햇)로 둘레를 돌아봅니다">EXT</button>
           <!-- SIM 1인칭에서만 보인다 — 조종석 패널(차양 · MFD 넷 · 콘솔 · 사이클릭)을 3D 화면에 겹친다(15-heli3d.js) -->
@@ -3691,9 +3640,9 @@ body.simple-mode #simple-view { display: flex; position: fixed; left: 0; right: 
           <!-- MAP ON/OFF — 3D 단독 화면에서 2D 지도를 계기 칸 크기로 겹쳐 띄운다(CDU 칸 왼쪽 · 07-sim.js) -->
           <button class="sim-btn" id="mapov-btn" data-act="toggleMapOverlay" title="MAP — Cockpit Mode 화면에서 2D 지도를 계기 칸 크기(가로 1/4 · 높이 3/5)로 CDU 칸 왼쪽에 보이기/감추기(CDU 의 MAP 버튼과 같다)">MAP OFF</button>
           <!-- FCP ON/OFF — PFD 아래 FCP 전체를 3D 화면 왼쪽 아래에 한 창으로(3D 단독에서만 · 04-map.js) -->
-          <div id="fcp-btn" class="fcp-btn-row"><button class="sim-btn" id="fcp-l-btn" data-act="toggleFcp3d" title="FCP — PFD 아래 FCP 전체를 3D 화면 왼쪽 아래에 한 창으로 보이기/감추기(L CHIN 창은 닫힘 · 3D 단독 화면에서만)">FCP OFF</button></div>
-          <!-- STICK — 3D 단독 · SIM 에서 오른쪽 아래(R CHIN 자리)에 화면 조종간 셋(컬렉티브 · 페달 · 16방향 사이클릭) · 14-simmode.js -->
-          <button class="sim-btn" id="vstick-btn" data-act="toggleVStick" title="화면 조종간 — 3D 단독(SIM)에서 오른쪽 아래에 컬렉티브(위아래) · 페달(좌우) · 사이클릭(16방향 원형)을 띄운다(R CHIN 창은 닫힘)">STICK OFF</button>
+          <div id="fcp-btn" class="fcp-btn-row"><button class="sim-btn" id="fcp-l-btn" data-act="toggleFcp3d" title="FCP — PFD 아래 FCP 전체를 3D 화면 왼쪽 아래에 한 창으로 보이기/감추기(3D 단독 화면에서만)">FCP OFF</button></div>
+          <!-- STICK — 3D 단독 · SIM 에서 오른쪽 아래에 화면 조종간 셋(컬렉티브 · 페달 · 16방향 사이클릭) · 14-simmode.js -->
+          <button class="sim-btn" id="vstick-btn" data-act="toggleVStick" title="화면 조종간 — 3D 단독(SIM)에서 오른쪽 아래에 컬렉티브(위아래) · 페달(좌우) · 사이클릭(16방향 원형)을 띄운다">STICK OFF</button>
           <!-- GYRO — 태블릿·휴대폰 기울기로 16방향 사이클릭(3D 단독 · SIM). ALIGN 을 누른 그때를 가운데로 · 14-simmode.js -->
           <button class="sim-btn" id="gyro-btn" data-act="toggleGyro" title="GYRO — 기기를 기울여 사이클릭(16방향 · 피치 ±10° · 롤 ±20°)을 몬다. 켠 뒤 GYRO ALIGN 을 누른 그때의 자세가 가운데">GYRO OFF</button>
           <button class="sim-btn" id="gyro-align-btn" data-act="gyroAlign" style="display:none" title="GYRO ALIGN — 지금 기기 자세를 가운데로 잡고 그때부터 기울기로 조종">GYRO ALIGN</button>
@@ -3732,9 +3681,6 @@ body.simple-mode #simple-view { display: flex; position: fixed; left: 0; right: 
           <button data-act="tiltAdj" data-arg='[5]'  title="Tilt down">▼</button>
         </div>
       </div>
-      <!-- CHIN BUBBLE — SIM 1인칭에서 3D 창의 아래 좌·우 모서리에 발밑 창을 겹쳐 띄운다(04-map.js).
-           3D 지도(#map3d) 바로 뒤에 붙어 다닌다(제 창으로 옮겨 갈 때도) -->
-      <div id="chin-row"><div id="chin-l" class="chin-pane"></div><div id="chin-r" class="chin-pane"></div></div>
       <div id="map-top-bar">
         <button id="gps-btn" data-act="toggleGPS">GPS</button>
         <button id="wx-btn" data-act="toggleWxPanel">WX</button>
@@ -4012,7 +3958,7 @@ body.simple-mode #simple-view { display: flex; position: fixed; left: 0; right: 
     <div id="bot-tabs" class="panel-tabs">
       <button class="page-tab" data-sel="cdu" data-act="selectPanel" data-arg='["bot", "cdu"]'>CDU</button>
       <button class="page-tab" data-sel="map" data-act="selectPanel" data-arg='["bot", "map"]'>MAP</button>
-      <button class="page-tab ck-mode-tab" data-act="cockpitToggle" title="Cockpit Mode — 3D 조종석(3D 를 화면 가득 · 1인칭 조종석 시야 · MFD · 콘솔 · CDU). 한 번 더 누르면 원래 배치">⛶ Cockpit Mode</button>
+      <button class="page-tab ck-mode-tab" data-act="cockpitToggle" title="Cockpit Mode — 3D 조종석(3D 를 화면 가득 · 1인칭 조종석 시야 · MFD · 콘솔 · CDU). 한 번 더 누르면 원래 배치">⛶ Cockpit</button>
       <button class="page-tab" data-sel="ovhd" data-act="selectPanel" data-arg='["bot", "ovhd"]' title="UPPER CONSOLE — 상부 콘솔 스위치(시뮬레이터 연동 예정)">UPPER</button>
       <button class="page-tab" data-sel="lcon" data-act="selectPanel" data-arg='["bot", "lcon"]' title="LOWER CONSOLE — 하부 콘솔(AHRS · AFCAU · FUEL · MPP · PARKING BRAKE 등)">LOWER</button>
       <button class="page-tab" data-sel="sysp" data-act="selectPanel" data-arg='["bot", "sysp"]' title="SYSTEM — MFD 계통 화면(CDU 의 Aircraft Systems 버튼으로 화면을 고른다)">SYSTEM</button>
@@ -4029,54 +3975,54 @@ body.simple-mode #simple-view { display: flex; position: fixed; left: 0; right: 
 <!-- 앱 코드 — 클래식 스크립트(모듈 아님)라 전역 스코프를 공유한다.
      순서가 곧 실행 순서이므로 임의로 바꾸지 말 것. -->
   <!-- AIP 데이터 — 코드보다 먼저 로드한다 -->
-  <script src="js/data/terminal-fixes.js?v=665"></script>
-  <script src="js/data/ifr-fixes.js?v=665"></script>
-  <script src="js/data/ifr-procedures.js?v=665"></script>
-  <script src="js/data/airfield-info.js?v=665"></script>
-  <script src="js/data/enr-vors.js?v=665"></script>
-  <script src="js/data/loc-stations.js?v=665"></script>
-  <script src="js/data/enr-routes.js?v=665"></script>
-  <script src="js/data/airspace.js?v=665"></script>
-  <script src="js/data/runways.js?v=665"></script>
+  <script src="js/data/terminal-fixes.js?v=666"></script>
+  <script src="js/data/ifr-fixes.js?v=666"></script>
+  <script src="js/data/ifr-procedures.js?v=666"></script>
+  <script src="js/data/airfield-info.js?v=666"></script>
+  <script src="js/data/enr-vors.js?v=666"></script>
+  <script src="js/data/loc-stations.js?v=666"></script>
+  <script src="js/data/enr-routes.js?v=666"></script>
+  <script src="js/data/airspace.js?v=666"></script>
+  <script src="js/data/runways.js?v=666"></script>
   <!-- 앱 코드 -->
-  <script src="js/00-ui.js?v=665"></script>
-  <script src="js/01-state.js?v=665"></script>
-  <script src="js/02-math.js?v=665"></script>
-  <script src="js/03-pfd.js?v=665"></script>
-  <script src="js/04-map.js?v=665"></script>
-  <script src="js/05-gps.js?v=665"></script>
-  <script src="js/06-nav.js?v=665"></script>
-  <script src="js/07-sim.js?v=665"></script>
-  <script src="js/08-ifrdb.js?v=665"></script>
-  <script src="js/09a-start.js?v=665"></script>
-  <script src="js/09-cdu.js?v=665"></script>
-  <script src="js/09b-cdu-screens.js?v=665"></script>
-  <script src="js/10-tools.js?v=665"></script>
-  <script src="js/11-charts.js?v=665"></script>
-  <script src="js/12-joystick.js?v=665"></script>
-  <script src="js/13-joyhid.js?v=665"></script>
-  <script src="js/14-simmode.js?v=665"></script>
-  <script src="js/15-heli3d.js?v=665"></script>
-  <script src="js/16-sound.js?v=665"></script>
-  <script src="js/17-upper.js?v=665"></script>
-  <script src="js/18-system.js?v=665"></script>
-  <script src="js/19-lower.js?v=665"></script>
-  <script src="js/20-navaids.js?v=665"></script>
-  <script src="js/21-c5000.js?v=665"></script>
-  <script src="js/22-npx138.js?v=665"></script>
-  <script src="js/23-afcs.js?v=665"></script>
-  <script src="js/24-sar.js?v=665"></script>
-  <script src="js/25-b206panel.js?v=665"></script>
-  <script src="js/26-b206radio.js?v=665"></script>
-  <script src="js/27-b206coll.js?v=665"></script>
-  <script src="js/28-debrief.js?v=665"></script>
-  <script src="js/29-env.js?v=665"></script>
-  <script src="js/30-scenario.js?v=665"></script>
-  <script src="js/31-ios.js?v=665"></script>
-  <script src="js/32-callout.js?v=665"></script>
-  <script src="js/33-train4.js?v=665"></script>
-  <script src="js/34-infra.js?v=665"></script>
-  <script src="js/35-kuhgrip.js?v=665"></script>
+  <script src="js/00-ui.js?v=666"></script>
+  <script src="js/01-state.js?v=666"></script>
+  <script src="js/02-math.js?v=666"></script>
+  <script src="js/03-pfd.js?v=666"></script>
+  <script src="js/04-map.js?v=666"></script>
+  <script src="js/05-gps.js?v=666"></script>
+  <script src="js/06-nav.js?v=666"></script>
+  <script src="js/07-sim.js?v=666"></script>
+  <script src="js/08-ifrdb.js?v=666"></script>
+  <script src="js/09a-start.js?v=666"></script>
+  <script src="js/09-cdu.js?v=666"></script>
+  <script src="js/09b-cdu-screens.js?v=666"></script>
+  <script src="js/10-tools.js?v=666"></script>
+  <script src="js/11-charts.js?v=666"></script>
+  <script src="js/12-joystick.js?v=666"></script>
+  <script src="js/13-joyhid.js?v=666"></script>
+  <script src="js/14-simmode.js?v=666"></script>
+  <script src="js/15-heli3d.js?v=666"></script>
+  <script src="js/16-sound.js?v=666"></script>
+  <script src="js/17-upper.js?v=666"></script>
+  <script src="js/18-system.js?v=666"></script>
+  <script src="js/19-lower.js?v=666"></script>
+  <script src="js/20-navaids.js?v=666"></script>
+  <script src="js/21-c5000.js?v=666"></script>
+  <script src="js/22-npx138.js?v=666"></script>
+  <script src="js/23-afcs.js?v=666"></script>
+  <script src="js/24-sar.js?v=666"></script>
+  <script src="js/25-b206panel.js?v=666"></script>
+  <script src="js/26-b206radio.js?v=666"></script>
+  <script src="js/27-b206coll.js?v=666"></script>
+  <script src="js/28-debrief.js?v=666"></script>
+  <script src="js/29-env.js?v=666"></script>
+  <script src="js/30-scenario.js?v=666"></script>
+  <script src="js/31-ios.js?v=666"></script>
+  <script src="js/32-callout.js?v=666"></script>
+  <script src="js/33-train4.js?v=666"></script>
+  <script src="js/34-infra.js?v=666"></script>
+  <script src="js/35-kuhgrip.js?v=666"></script>
 
 <input type="file" id="zipFileInput" accept=".zip,application/zip,application/x-zip-compressed,application/octet-stream" style="display:none" onchange="handleZipFile(this.files[0]); this.value='';"></body>
 </html>

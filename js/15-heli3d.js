@@ -692,7 +692,7 @@ function _simCamTxStart(toExt) {
     try { _applyFollow(); } catch (e) { _swallow(e); }
     if (performance.now() - simCamTx.t0 >= SIM_CAM_TX_MS) {
       simCamTx = null;
-      try { syncChinView(); } catch (e) { _swallow(e); }          // 조종석에 들어선 뒤에 CHIN 창·기수
+      try { syncChinView(); } catch (e) { _swallow(e); }          // 조종석에 들어선 뒤에 기수
       try { _applyFollow(); } catch (e) { _swallow(e); }
       return;
     }
@@ -1039,12 +1039,8 @@ function ckpitSync(tf) {
     const op = document.getElementById('ckpit-op');               // 투명도 −/+ — 조종석이 켜져 있을 때
     if (op && op.classList.contains('show') !== (sim && ckpitOn)) op.classList.toggle('show', sim && ckpitOn);
   }
-  // CHIN 창은 패널 아래(발밑)로 줄여 내린다(index.html #map3d.ckpit-on + #chin-row) — 줄면 그 지도들을 다시 잰다
   const d3 = document.getElementById('map3d');
-  if (d3 && d3.classList.contains('ckpit-on') !== want) {
-    d3.classList.toggle('ckpit-on', want);
-    setTimeout(() => { try { (typeof _chinMaps !== 'undefined' ? _chinMaps : []).forEach(m => m && m.resize && m.resize()); } catch (e) { _swallow(e); } }, 30);
-  }
+  if (d3 && d3.classList.contains('ckpit-on') !== want) d3.classList.toggle('ckpit-on', want);
   if (!el) return;
   if (el.classList.contains('show') !== want) {
     el.classList.toggle('show', want);
