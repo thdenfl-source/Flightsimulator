@@ -424,8 +424,12 @@ export async function run(page, t) {
   // 작은 CDU 를 실제로 누르면 팝아웃 — 그 안의 PERF 를 실제로 누르면 CDU 화면이 바뀐다
   const mb = await page.locator('#ck-mini-cdu').boundingBox();
   await page.mouse.click(mb.x + mb.width / 2, mb.y + mb.height / 2); await page.waitForTimeout(400);
-  const popc = await page.evaluate(() => ({ pop: ckConPop, par: document.getElementById('cdu-ov').parentElement.id, title: document.getElementById('ck-pop-title').textContent }));
-  t.ok(popc.pop === 'cdu' && popc.par === 'ck-pop-host' && popc.title === 'CDU', `작은 CDU 를 누르면 가운데에 크게 띄운다 (${popc.par})`);
+  const popc = await page.evaluate(() => {
+    const p = document.getElementById('ck-pop').getBoundingClientRect(), c = document.getElementById('ctl3d'), cr = c && c.offsetWidth > 0 ? c.getBoundingClientRect() : null;
+    return { pop: ckConPop, par: document.getElementById('cdu-ov').parentElement.id, title: document.getElementById('ck-pop-title').textContent, gap: cr ? cr.left - p.right : null };
+  });
+  t.ok(popc.pop === 'cdu' && popc.par === 'ck-pop-host' && popc.title === 'CDU', `작은 CDU 를 누르면 크게 띄운다 (${popc.par})`);
+  t.ok(popc.gap === null || (popc.gap >= 0 && popc.gap <= 8), `팝아웃은 오른쪽 버튼 줄 바로 왼쪽에 바짝 붙는다 (틈 ${popc.gap === null ? '-' : Math.round(popc.gap)}px)`);
   const perf = page.locator('#ck-pop [data-act="switchMode"][data-arg=\'["PERF"]\']').first();
   const html0 = await page.evaluate(() => document.getElementById('cdu-wrap').innerHTML.length);
   const pb = await perf.boundingBox();

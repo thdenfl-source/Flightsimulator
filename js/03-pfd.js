@@ -529,6 +529,13 @@ function pfdMsgs() {
   } catch (e) { _swallow(e); }
   if (ov('noseLock', 'UNLOCK') === 'LOCK') out.push({ t: 'NLG LOCK', c: PFD_MSG_GREEN });
   if (ov('fltArmSw', 'OFF') === 'ARMED') out.push({ t: 'EMER FLOATS ARMED', c: PFD_MSG_GREEN });
+  // 흰수리 착륙등 · 서치라이트(35-kuhgrip.js) — 켜져 있으면 녹색 조언
+  try {
+    if (typeof kgOn === 'function' && kgOn()) {
+      if (typeof _kgLdg === 'function' && _kgLdg()) out.push({ t: 'LANDING LT ON', c: PFD_MSG_GREEN });
+      if (typeof kgLt !== 'undefined' && kgLt.srch) out.push({ t: 'SEARCH LT ON', c: PFD_MSG_GREEN });
+    }
+  } catch (e) { _swallow(e); }
   // TCAS(33-train4.js) — TA 황색 · RA 빨강(올라라 · 내려라)
   try { if (typeof tcasState !== 'undefined' && tcasState !== 'CLEAR') out.unshift(tcasState === 'RA' ? { t: tcasRaSense > 0 ? 'TCAS RA CLIMB' : 'TCAS RA DESCEND', c: '#ff3030' } : { t: 'TRAFFIC', c: '#ffb000' }); } catch (e) { _swallow(e); }
   return out;

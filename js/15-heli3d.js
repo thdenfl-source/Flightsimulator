@@ -811,7 +811,7 @@ const CKPIT_CON = {
 };
 if (typeof acScrOk === 'function' && !acScrOk('ovhd')) delete CKPIT_CON.ovhd;   // Bell 206 — 상부 콘솔이 없다
 // CDU — 하부 콘솔 오른쪽 칸(3D 단독 화면에서 07-sim.js syncCduOverlay 가 CDU 를 넣는다).
-// 다른 화면처럼 누르면 가운데에 크게 띄워(팝아웃) 조작한다.
+// 다른 화면처럼 누르면 크게 띄워(팝아웃 — 오른쪽 버튼 줄 바로 옆) 조작한다.
 const CKPIT_CDU = { x: 888, y: 798, w: 90, h: 146 };
 function ckpitCduSlot() {
   if (typeof acScrOk === 'function' && !acScrOk('cdu')) return null;            // Bell 206 — CDU 가 없다
@@ -837,10 +837,13 @@ function _ckPopFit() {
   if (!p || !L || !p.classList.contains('show')) return;
   const W = L.clientWidth, H = L.clientHeight, bar = 28, a = CKPIT_POP_AR[p.dataset.k] || 0.75;
   if (!(W > 0 && H > 0)) return;
-  const room = W - 130;                                   // 오른쪽 3D 버튼 줄(약 110px)을 비킨다
-  const w = Math.max(160, Math.min(room - 12, (H * 0.96 - bar) * a)), h = w / a + bar;
+  // 오른쪽 3D 버튼 줄(#ctl3d) 바로 왼쪽에 바짝 붙인다(틈 4px) — 줄이 안 보이면 오른쪽 130px 을 비킨다
+  const lr = L.getBoundingClientRect(), btn = document.getElementById('ctl3d');
+  const br = btn && btn.offsetWidth > 0 ? btn.getBoundingClientRect() : null;
+  const room = br ? Math.min(W - 4, br.left - lr.left - 4) : W - 130;
+  const w = Math.max(160, Math.min(room - 6, (H * 0.96 - bar) * a)), h = w / a + bar;
   const st = { width: Math.round(w) + 'px', height: Math.round(h) + 'px',
-               left: Math.round(Math.max(6, (room - w) / 2)) + 'px', top: Math.round(Math.max(4, (H - h) / 2)) + 'px' };
+               left: Math.round(Math.max(6, room - w)) + 'px', top: Math.round(Math.max(4, (H - h) / 2)) + 'px' };
   for (const k in st) if (p.style[k] !== st[k]) p.style[k] = st[k];
 }
 // 콘솔 팝아웃 — LowerC · UpperC 버튼(또는 작은 콘솔을 누르면)으로 3D 화면 가운데에 크게 띄워 조작한다

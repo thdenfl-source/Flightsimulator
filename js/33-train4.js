@@ -272,7 +272,7 @@ function _setRender() {
     })()}</select><button class="sim-btn" data-set="voiceTest:1">▶ 들어 보기</button></div></div>
     <div class="set-row"><span>임무(Watchman 교신)</span><div>${[['patrol', 'Sea patrol'], ['medevac', 'MEDEVAC'], ['sar', 'Search and Rescue']].map(([v, l]) => `<button class="sim-btn ${appSet.mission === v ? 'on' : ''}" data-set="mission:${v}">${l}</button>`).join('')}</div></div>
     <div class="set-row"><span>콜사인(관제)</span><div><input type="text" data-setv="callsign" value="${appSet.callsign.replace(/"/g, '&quot;')}"></div></div>
-    <div class="set-row"><span>교관 기기 연결</span><div><button class="sim-btn" data-set="ios">📱 교관 기기와 잇기(QR)</button></div></div>
+    <div class="set-row"><span>교관 기기 연결</span><div><button class="sim-btn" data-set="ios">📱 Instructor Sync(QR)</button></div></div>
     <div class="set-row"><span>모든 설정</span><div><button class="sim-btn" data-set="export">내보내기</button><label class="sim-btn">들여오기<input type="file" accept=".json" data-setv="file" hidden></label><button class="sim-btn" data-set="reset">초기화</button></div></div>
     <div class="set-note">환경(시간대 · 시정 · 바다 · 돌풍 · 구름 · 지면 · 교통량)은 🌙 ENV 에서 고릅니다.</div></div>`;
 }
@@ -292,7 +292,7 @@ function settingsImport(text) {
 function settingsReset() { SET_KEYS.forEach(k => { try { localStorage.removeItem(k); } catch (e) { _swallow(e); } }); try { if (typeof fdrSavedReplace === 'function') fdrSavedReplace([]); } catch (e) { _swallow(e); } try { uiToast('설정을 지웠습니다 — 다시 열면 처음 상태입니다'); } catch (e) { _swallow(e); } }
 
 // ── ⑥ 도구 메뉴(🧰) — 작은 화면(폭 900 · 높이 700 아래)에서는 낱 단추 대신 이 메뉴 하나로 ──
-const TOOLS = [['🎬 시나리오', 'toggleScenario'], ['🌙 환경', 'toggleEnvPanel'], ['📋 강평', 'toggleDebrief'], ['🧑‍✈️ 교관 화면', 'openIos'], ['📱 교관 기기와 잇기', 'toggleRemoteIos'], ['⚙ 설정', 'toggleSettings'], ['🩺 진단 기록', 'toggleDiag'], ['📘 교관 교범', 'openManual'], ['❓ 도움말', 'toggleHelp']];
+const TOOLS = [['🎬 시나리오', 'toggleScenario'], ['🌙 환경', 'toggleEnvPanel'], ['📋 강평', 'toggleDebrief'], ['🧑‍✈️ Instructor View', 'openIos'], ['📱 Instructor Sync', 'toggleRemoteIos'], ['⚙ 설정', 'toggleSettings'], ['🩺 진단 기록', 'toggleDiag'], ['📘 교관 교범', 'openManual'], ['❓ 도움말', 'toggleHelp']];
 function toggleTools(ev) {
   let m = document.getElementById('tools-menu');
   if (m && m.style.display === 'block') { m.style.display = 'none'; return; }
@@ -316,7 +316,7 @@ function toggleTools(ev) {
 }
 
 // ── ⑦ 다른 기기 교관 연결(WebRTC 데이터 통로) — 메인 기기는 PC 일 수도 있어 카메라를 쓰지 않는다 ──
-//   ① 메인(교육생) 기기(🧰 도구 → 📱 교관 기기와 잇기): [연결 요청] → 화면에 QR
+//   ① 메인(교육생) 기기(🧰 도구 → 📱 Instructor Sync): [연결 요청] → 화면에 QR
 //   ② 교관 태블릿(교관 화면 📱): [📷 교육생 QR 찍어 잇기] → 카메라로 찍으면 연결을 청한다
 //   ③ 메인 기기에 '교관 기기가 연결을 청합니다 [수락] [거절]' 창 → 수락하면 바로 이어진다
 //   태블릿의 답(연결 정보)은 QR 에 든 일회용 방 이름으로 공개 중계(ntfy.sh)를 거쳐 메인 기기에 닿는다 —
@@ -595,9 +595,9 @@ function toggleRemoteIos() {
   if (!w) {
     w = document.createElement('div'); w.id = 'rtc-wrap';
     const ios = typeof IOS_MODE !== 'undefined' && IOS_MODE;
-    w.innerHTML = `<div class="set-box rtc-box"><div class="set-bar"><b>${ios ? '📱 교육생 기기와 잇기' : '📱 교관 기기와 잇기'}</b><button class="sim-btn" data-rtc="x">✕</button></div>
+    w.innerHTML = `<div class="set-box rtc-box"><div class="set-bar"><b>${ios ? '📱 교육생 기기와 잇기' : '📱 Instructor Sync'}</b><button class="sim-btn" data-rtc="x">✕</button></div>
       <div class="rtc-steps">${ios
-        ? '<div>교육생(메인) 기기에서 <b>🧰 도구 → 📱 교관 기기와 잇기 → [연결 요청]</b>을 누르면 QR 이 나옵니다.</div><div>아래 <b>[📷 교육생 QR 찍어 잇기]</b>를 누르고 그 QR 을 찍습니다.</div><div>교육생 기기에서 <b>[수락]</b>을 누르면 이어집니다.</div>'
+        ? '<div>교육생(메인) 기기에서 <b>🧰 도구 → 📱 Instructor Sync → [연결 요청]</b>을 누르면 QR 이 나옵니다.</div><div>아래 <b>[📷 교육생 QR 찍어 잇기]</b>를 누르고 그 QR 을 찍습니다.</div><div>교육생 기기에서 <b>[수락]</b>을 누르면 이어집니다.</div>'
         : '<div><b>[연결 요청]</b>을 누르면 QR 이 나옵니다.</div><div>교관 태블릿의 교관 화면에서 <b>[📷 교육생 QR 찍어 잇기]</b>로 이 QR 을 찍습니다.</div><div>이 기기에 뜨는 창에서 <b>[수락]</b>을 누르면 바로 이어집니다.</div>'}</div>
       <div class="rtc-btns">${ios ? '<button class="sim-btn on rtc-big" data-rtc="join">📷 교육생 QR 찍어 잇기</button>'
         : '<button class="sim-btn on rtc-big" data-rtc="request">연결 요청</button>'}</div>
