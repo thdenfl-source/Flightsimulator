@@ -14,10 +14,32 @@
 // ══════════════════════════════════════════════════════
 
 // ── 말하기 ──
+// 목소리를 고르지 않으면 브라우저 · 기기 기본 목소리가 나온다(PC 에 따라 거친 남성 합성음). 그래서 영어 목소리 가운데
+// 자연스러운 여성 목소리를 먼저 고른다 — ⚙ 설정 '관제 목소리'에서 직접 고르면(appSet.voice) 그것을 쓴다.
+const VOICE_PREF = [/Google US English/i, /Aria.*Natural|Jenny.*Natural|Ava.*Natural|Emma.*Natural|Michelle.*Natural/i, /Natural.*\(English/i,
+  /Samantha|Karen|Moira|Tessa|Serena|Allison|Ava|Susan|Victoria|Fiona/i, /Zira|Hazel|Aria|Jenny|Libby|Sonia|Clara|Catherine|Heera/i, /female|woman/i, /Google UK English Female/i];
+const VOICE_BAD = /espeak|eSpeak|mbrola|robot|whisper|novelty|Albert|Bad News|Bahh|Bells|Boing|Bubbles|Cellos|Deranged|Fred|Hysterical|Junior|Ralph|Trinoids|Zarvox|Jester|Organ|Superstar|Wobble|Grandpa|Grandma|Rocko|Shelley|Reed|Eddy|Flo/i;
+let _voices = [];
+function speakVoices() {
+  try { const v = window.speechSynthesis ? window.speechSynthesis.getVoices() : []; if (v && v.length) _voices = v; } catch (e) { _swallow(e); }
+  return _voices.filter(v => /^en(-|_|$)/i.test(v.lang || ''));
+}
+try { if (window.speechSynthesis) { speakVoices(); window.speechSynthesis.addEventListener('voiceschanged', speakVoices); } } catch (e) { _swallow(e); }
+// 쓸 목소리 — 설정에서 고른 것 · 없으면 VOICE_PREF 순서로 · 그래도 없으면 이상한 것을 뺀 첫 영어 목소리
+function speakVoice() {
+  const en = speakVoices(); if (!en.length) return null;
+  const want = typeof appSet !== 'undefined' && appSet.voice;
+  if (want) { const v = en.find(x => x.name === want); if (v) return v; }
+  const ok = en.filter(v => !VOICE_BAD.test(v.name));
+  for (const re of VOICE_PREF) { const v = ok.find(x => re.test(x.name) && /^en-(US|GB|AU|IE|CA)/i.test(x.lang)) || ok.find(x => re.test(x.name)); if (v) return v; }
+  return ok.find(v => /en-US/i.test(v.lang)) || ok[0] || en[0];
+}
 function speak(text, lang = 'en-US', rate = (typeof appSet !== 'undefined' ? appSet.rate : 1.05)) {
   try {
     if (!('speechSynthesis' in window)) return false;
-    const u = new SpeechSynthesisUtterance(text); u.lang = lang; u.rate = rate; u.volume = 1;
+    const u = new SpeechSynthesisUtterance(text), v = speakVoice();
+    if (v) { u.voice = v; u.lang = v.lang; } else u.lang = lang;
+    u.rate = rate; u.pitch = 1; u.volume = 1;
     window.speechSynthesis.speak(u); return true;
   } catch (e) { _swallow(e); return false; }
 }
