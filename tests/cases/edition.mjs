@@ -13,7 +13,7 @@ export async function run(page, t) {
     const o = { ed: APP_EDITION, sim: SIM_ENABLED, cls: document.documentElement.classList.contains('ed-proc'), pw: window.lockCheck('thdenfl') };
     toggleSimMode(true); o.on1 = simModeOn; simModeBtnPress(); o.on2 = simModeOn;
     const hidden = id => { const e = document.getElementById(id); return !e || getComputedStyle(e).display === 'none'; };
-    o.hidden = ['sim3d-btn', 'simmap-btn', 'rotor-3d', 'ase-3d', 'eng-3d', 'vstick-btn', 'gyro-btn'].filter(id => !hidden(id));
+    o.hidden = ['sim3d-btn', 'simmap-btn', 'rotor-3d', 'ase-3d', 'eng-3d', 'gyro-btn'].filter(id => !hidden(id));
     o.snd = (() => { const e = document.getElementById('snd-btn'); return !!e && getComputedStyle(e).display !== 'none'; })();
     o.sk = [...document.querySelectorAll('#pfd-sk .pfd-sk, #pfd-sk [data-sk]')].map(e => e.textContent.trim()).includes('SIM');
     o.pfd = typeof drawPFD === 'function' && (drawPFD(), true);
