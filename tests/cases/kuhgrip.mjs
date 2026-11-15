@@ -34,7 +34,10 @@ export async function run(page, t) {
     const ra = window.radarAltFt; window.radarAltFt = () => 300;
     // LDG LT — ON/OFF · EXT 누르는 동안 펼친다 · RET 로 접는다
     envSet({ ldg: false }); kgLt.ldgE = 0; kgLt.ldgTgt = null;
+    const msg = () => pfdMsgs().filter(m => /LANDING LT|SEARCH LT/.test(m.t)).map(m => m.t + ':' + m.c).join(',');
+    { const sr = kgLt.srch; kgSrchSet(false); o.msg0 = msg(); kgSrchSet(true); o.msgS = msg(); kgSrchSet(sr); }
     kgPress('ldgOn'); o.ldgOn = env.ldg === true;
+    { const sr = kgLt.srch; kgSrchSet(false); o.msgL = msg(); kgSrchSet(sr); }
     // 접혀 있다가 켜면 저절로 전방 30°(아래로 30°)까지 펼친다
     for (let i = 0; i < 60 && kgLt.ldgTgt !== null; i++) await w(50);
     o.auto = kgLdgDown();
@@ -46,7 +49,7 @@ export async function run(page, t) {
     const e0 = kgLt.ldgE; kgPress('ldgOn'); kgPress('ldgOn'); await w(150); o.keep = Math.abs(kgLt.ldgE - e0) < 1e-6 && env.ldg === true;
     // 높이 1500ft · 아래로 5° — 종전(600m)에는 닿지 않던 먼 앞도 비춘다
     { const p0 = S.pit; S.pit = 0; window.radarAltFt = () => 1500; kgLt.ldgE = 75; o.far = envBeams().some(b => _envDist(S.lat, S.lon, b.lat, b.lon).d > 1200); window.radarAltFt = () => 300; kgLt.ldgE = e0; S.pit = p0; }
-    o.srchMin = KG_SRCH.elMin;
+    o.srchMin = KG_SRCH.elMin; o.grn = PFD_MSG_GREEN;
     // 상부 콘솔 STOW SEL — 3방향 스프링(가운데) · LDG 로 젖히면 착륙등 OFF · 접기 / SRCH 로 젖히면 서치라이트 OFF · 원위치
     { const d = _ovhdDefs.stowSel; o.stowDef = d.t + '|' + d.pos.join(',') + '|' + ovhdGet('stowSel'); }
     kgSrchSet(true); kgLt.az = 40; kgLt.el = 50;
@@ -103,6 +106,7 @@ export async function run(page, t) {
   t.ok(C.stowL.off && C.stowL.e === 0 && C.stowL.srch, 'STOW SEL → LDG — 착륙등이 꺼지고 접힌다(서치라이트는 그대로)');
   t.ok(C.stowS.off && C.stowS.az === 0 && C.stowS.el === 30 && C.stowS.sw === 'CTR', 'STOW SEL → SRCH — 서치라이트가 꺼지고 원위치(정면 · 아래 30°) · 스위치는 가운데로');
   t.ok(Math.abs(C.reOn - 30) < 0.5, '접은 뒤 컬렉티브 LDG LT 로 다시 켜면 다시 전방 30° 로 펼친다');
+  t.ok(C.msg0 === '' && C.msgS === 'SEARCH LT ON:' + C.grn && C.msgL === 'LANDING LT ON:' + C.grn, `PFD 메시지 시현창 — 켜지면 녹색 조언 (${C.msgS} · ${C.msgL})`);
   t.ok(C.srchMin === 2.5, '서치라이트 — 아래로 2.5° 까지(종전의 두 배 앞)');
   t.ok(C.az > 10 && C.el > 30 && C.beams === 2 && C.env >= 2 && C.right, `SRCH CTR — 서치라이트를 오른쪽 ${Math.round(C.az)}° · 아래 ${Math.round(C.el)}° 로 돌린다 · 착륙등과 함께 빛 무리 ${C.env}개`);
   t.ok(C.coll.up === 3 && C.coll.dn === 1, `COLL TRIM — 누르는 동안 VS +100 씩 이어진다(UP ${C.coll.up}번 · DN ${C.coll.dn}번)`);

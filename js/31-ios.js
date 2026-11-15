@@ -100,7 +100,7 @@ function iosBuild() {
   document.documentElement.classList.add('ios-mode');
   const R = document.createElement('div'); R.id = 'ios-root';
   const grp = (t, k, opts) => `<div class="ios-row"><span>${t}</span><div>${opts.map(([v, l]) => `<button data-ios="env:${k}:${v}">${l}</button>`).join('')}</div></div>`;
-  R.innerHTML = `<h1>🧑‍✈️ 교관 화면 (IOS)</h1><div class="ios-link" data-iosv="link">교육생 창을 기다리는 중…</div>
+  R.innerHTML = `<h1>🧑‍✈️ Instructor View (IOS)</h1><div class="ios-link" data-iosv="link">교육생 창을 기다리는 중…</div>
     <div class="ios-btns"><button data-ios="rtc">📷 교육생 QR 찍어 잇기(다른 기기)</button></div>
     <div class="ios-state" data-iosv="state"></div>
     <div class="ios-btns"><button data-ios="run">▶ 비행</button><button data-ios="pause">❚❚ 멈춤</button><button data-ios="debrief">📋 강평 열기</button></div>

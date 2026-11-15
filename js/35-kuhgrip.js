@@ -22,11 +22,13 @@ function _kgToast(t, k) { try { uiToast(t, k || '', 2200); } catch (e) { _swallo
 function _kgLdg() { return typeof env !== 'undefined' && !!env.ldg; }
 function kgLdgSet(on) {
   if (on && kgLt.ldgE < 1) kgLt.ldgTgt = KG_LDG.on;              // 접혀 있으면 켜는 대로 전방 30° 까지 펼친다(펼쳐 둔 자리면 그대로)
-  try { if (typeof envSet === 'function') envSet({ ldg: !!on }); else env.ldg = !!on; } catch (e) { _swallow(e); } kgRender(); }
+  try { if (typeof envSet === 'function') envSet({ ldg: !!on }); else env.ldg = !!on; } catch (e) { _swallow(e); } kgRender(); _kgPfd(); }
+// PFD 메시지 시현창(LANDING LT ON · SEARCH LT ON — 03-pfd.js pfdMsgs)을 곧바로
+function _kgPfd() { try { if (typeof drawPFD === 'function') drawPFD(); } catch (e) { _swallow(e); } }
 function kgSrchSet(on) {
   kgLt.srch = !!on;
   try { if (typeof fdrNote === 'function') fdrNote(`서치라이트 ${kgLt.srch ? 'ON' : 'OFF'}`); } catch (e) { _swallow(e); }
-  kgRender();
+  kgRender(); _kgPfd();
 }
 // 착륙등 · 서치라이트 빛 무리(29-env.js envBeams 가 부른다) — [{ az(°) · down(°) · k }]
 function kgBeams() {
@@ -278,12 +280,12 @@ function _kgPopSync() {
   }
   if (p.parentElement !== L) L.appendChild(p);
   if (p.dataset.k !== kgPopK) { p.dataset.k = kgPopK; p.querySelector('.kgp-t').textContent = kgPopK === 'coll' ? 'COLLECTIVE' : 'CYCLIC'; document.getElementById('kg-pop-body').dataset.h = ''; kgRender(); }
-  // 크기 — 3D 창 높이의 80%(버튼을 누르기 좋게) · 오른쪽 3D 버튼 줄 왼쪽 · 세로 가운데
+  // 크기 — 3D 창 높이의 80%(버튼을 누르기 좋게) · 오른쪽 3D 버튼 줄 바로 왼쪽(틈 4px) · 세로 가운데
   const bar = 26, H = L.clientHeight, a = KG_AR[kgPopK];
   let h = Math.max(160, H * 0.8 - bar), w = h * a;
   const lr = L.getBoundingClientRect(), btn = document.getElementById('ctl3d');
   const br = btn && btn.offsetWidth > 0 ? btn.getBoundingClientRect() : null;
-  const rightEdge = br ? br.left - lr.left - 12 : L.clientWidth - 140;
+  const rightEdge = br ? br.left - lr.left - 4 : L.clientWidth - 140;
   if (w > rightEdge - 12) { w = Math.max(120, rightEdge - 12); h = w / a; }
   const st = { display: 'flex', width: Math.round(w) + 'px', height: Math.round(h + bar) + 'px',
                left: Math.round(Math.max(6, rightEdge - w)) + 'px', top: Math.round(Math.max(6, (H - h - bar) / 2)) + 'px' };
