@@ -909,7 +909,7 @@ function _follow3d() {
     //  밀어 흉내 내던 종전 방식은 더 쓰지 않는다.)
     // Cockpit Mode(07-sim.js) — SIM 이 꺼져 있어도(AFCS 로 나는 비행 · 절차 훈련판) 같은 1인칭 조종석 시야
     if (simModeOn || (typeof ckCamOn === 'function' && ckCamOn())) {
-      try { syncChinView(); } catch (e) { _swallow(e); }   // 아래 좌·우 CHIN 창(04-map.js)
+      try { syncChinView(); } catch (e) { _swallow(e); }   // 1인칭 화면 상태(04-map.js)
       _ml3dSimCamera();
       _apply3dRoll();
       return;
@@ -1052,36 +1052,8 @@ function _ml3dSimCamera() {
   }
   _ml3d.jumpTo(o);
   _simEye = { lon: S.lon, lat: S.lat, alt: camAlt, agl: aglM };
-  _ml3dChinCamera();
 }
-// ── CHIN 창의 카메라(SIM 1인칭) ──
-// 눈 자리는 정면 시야와 같다(_ml3dSimCamera 가 잰 자리). 기체 바닥에 난 창이므로
-// 기체 자세를 따라 돌고(고개 돌리기는 따르지 않는다), 좌우로 벌려 앞아래를 본다.
-// 정면 시야(±18°)와 계기판에 가린 틈을 건너 그 아래를 보여 준다.
-const CHIN_YAW   = 15;    // 좌우로 벌린 각(°)
-const CHIN_PITCH = -50;   // 기체 기준으로 내려다보는 각(°)
 let _simEye = null;       // 마지막으로 놓은 눈 자리 { lon, lat, alt(m, 그려진 높이), agl(m) }
-let _chinCamT = 0;
-function _ml3dChinCamera(force) {
-  if (typeof _chinMaps === 'undefined' || !_chinMaps.length || !_simEye) return;
-  // 화질에 따라 덜 자주 그린다(04-map.js MAP3D_QUALITY.chinHz)
-  const hz = (typeof map3dQuality !== 'undefined') ? MAP3D_QUALITY[map3dQuality].chinHz : 0;
-  const now = performance.now();
-  if (!force && hz && now - _chinCamT < 1000 / hz - 2) return;
-  _chinCamT = now;
-  const eye = _simEye;
-  _chinMaps.forEach(c => {
-    const m = c.map;
-    if (!m || !m.transform || !(m.transform.height > 0)) return;
-    const r = _ml3dCamRot(S.hdg, S.pit, S.bnk, c.side * CHIN_YAW, CHIN_PITCH);
-    const pitch = Math.max(0, Math.min(180, 90 + r.pitch));
-    // 화면 중심은 내려다보는 땅 — 지평선 아래로 보는 각이 얕으면 멀리(최대 10km)
-    const down = Math.max(5, -r.pitch);
-    const dist = Math.max(30, Math.min(10000, eye.agl / Math.sin(down * D2R)));
-    try { m.jumpTo(_ml3dCamOptions(eye.lon, eye.lat, eye.alt, r.yaw, pitch, r.roll, dist, m)); }
-    catch (e) { _swallow(e); }
-  });
-}
 // 카메라를 '이 자리 · 이 높이 · 이 방향' 에 놓는 지도 카메라 값.
 // maplibre 의 calculateCameraOptionsFromCameraLngLatAltRotation 과 같은 셈이다. 다만
 // 거의 수평으로 볼 때 그 함수는 화면 중심을 10km 밖에 두어(줌 ≈ 13) 가까운 클립면이

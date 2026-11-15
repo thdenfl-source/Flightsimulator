@@ -279,7 +279,6 @@
   function popoutRedrawMaps(win) {
     const maps = [];
     try { if (typeof _ml3d !== 'undefined' && _ml3d) maps.push(_ml3d); } catch (e) { /* 무시 */ }
-    try { if (typeof _chinMaps !== 'undefined') _chinMaps.forEach(c => maps.push(c.map)); } catch (e) { /* 무시 */ }
     maps.forEach(m => {
       try { const c = m.getContainer(); if (c && c.ownerDocument === win.document && m.redraw) m.redraw(); }
       catch (e) { /* 무시 */ }

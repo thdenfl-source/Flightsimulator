@@ -920,8 +920,6 @@ function syncMap3dHost(toPanel) {
   if (!d3 || !w3 || !mw) return;
   if (toPanel) {
     if (d3.parentElement !== w3) w3.appendChild(d3);
-    const chin = document.getElementById('chin-row');    // CHIN 창은 3D 지도 바로 뒤에 붙어 다닌다
-    if (chin && chin.previousElementSibling !== d3) d3.after(chin);
     d3.classList.add('panel-3d', 'active');
     mw.classList.remove('map3d-on');          // 2D 는 제 창에서 그대로 보인다
     if (tilt) tilt.classList.add('active');
@@ -931,8 +929,6 @@ function syncMap3dHost(toPanel) {
     });
   } else {
     if (d3.parentElement !== mw) mw.insertBefore(d3, mw.firstElementChild.nextSibling);
-    const chin = document.getElementById('chin-row');
-    if (chin && chin.previousElementSibling !== d3) d3.after(chin);
     d3.classList.remove('panel-3d');
     // 3D 창 안에서 열었던 함정 메뉴·설정창은 2D 지도 창으로 돌려보낸다
     try { if (typeof shipUiHome === 'function') shipUiHome(false); } catch (e) { _swallow(e); }
@@ -1042,7 +1038,7 @@ function applyPanels() {
   if (hostOf('ovhd')) { try { if (typeof ovhdShow === 'function') ovhdShow(); } catch (e) { _swallow(e); } }
   if (hostOf('lcon')) { try { if (typeof lconShow === 'function') lconShow(); } catch (e) { _swallow(e); } }
   if (hostOf('sysp')) { try { if (typeof sysShow === 'function') requestAnimationFrame(sysShow); } catch (e) { _swallow(e); } }
-  try { syncChinView(); } catch (e) { _swallow(e); }   // CHIN 창도 3D 지도를 따라간다
+  try { syncChinView(); } catch (e) { _swallow(e); }
 
   // PFD 호스트 패널은 FCP 조작부가 다 보이도록 넓게(2분할 55% / 3분할 1.4배)
   L.classList.toggle('pfd-host', leftSel === 'pfd');
@@ -1387,7 +1383,7 @@ function updateSoloBtn() {
   });  const ob = document.getElementById('m3d-only-btn');
   // Cockpit Mode 탭(오른쪽 창 · 가운데 · 아래 창 — 3D 탭 자리)
   { const on = _soloActive && _soloCurrent === 'm3d';
-    document.querySelectorAll('.ck-mode-tab').forEach(b => { const t = on ? '✥ 분할' : '⛶ Cockpit Mode'; if (b.textContent !== t) b.textContent = t; b.classList.toggle('active', on); }); }
+    document.querySelectorAll('.ck-mode-tab').forEach(b => { const t = on ? '✥ 분할' : '⛶ Cockpit'; if (b.textContent !== t) b.textContent = t; b.classList.toggle('active', on); }); }
   try { if (typeof syncFcp3d === 'function') syncFcp3d(); } catch (e) { _swallow(e); }   // 3D 단독에서만 FCP L·R
   try { syncCduOverlay(); } catch (e) { _swallow(e); }   // 3D 단독에서만 CDU 겹치기
   try { syncMapOverlay(); } catch (e) { _swallow(e); }   // 3D 단독에서만 MAP 겹치기

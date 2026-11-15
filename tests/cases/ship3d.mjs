@@ -395,77 +395,19 @@ export async function run(page, t) {
   t.ok(steady.shipY > 0 && steady.shipY < steady.H,
     `300m 앞 수면의 함정이 화면 안에 있다 (y ${steady.shipY.toFixed(0)} / ${steady.H})`);
 
-  // ── CHIN BUBBLE — SIM 1인칭에서 3D 창 아래 좌·우 모서리에 발밑 창을 겹쳐 띄운다 ──
-  // 정면 시야는 창 가득 그대로 두고(전방을 넓게), 두 창은 좌·우 가장자리에 붙어 그 위에
-  // 겹친다 — 크기는 종전(아래 1/3 을 반씩)의 2/3. 헬기 발밑의 둥근 창처럼 정면보다 더
-  // 아래를 보고, 같은 바탕(위성·지형)과 함정을 그리며, 기체 자세를 따라 돈다.
+  // ── SIM 3D 버튼 묶음 — 축척 · 확대 버튼은 감추고, 묶음은 접었다 편다 · 낮으면 묶음 안에서 스크롤 ──
+  // (종전의 CHIN BUBBLE — 발밑 창 — 은 없앴다: Cockpit 모드가 대신한다)
   const chin = await page.evaluate(async () => {
     const wait = ms => new Promise(r => setTimeout(r, ms));
-    const box = id => { const r = document.getElementById(id).getBoundingClientRect();
-                        return { x: r.left, y: r.top, w: r.width, h: r.height }; };
-    if (!shipVisible) shipToggleOn();
-    shipLat = 37.0; shipLon = 126.0; shipHdg = 0; shipSpd = 0; updateShipMarker();
     if (!simModeOn) toggleSimMode(true);
-    if (!chinViewOn) { chinL = true; chinR = true; chinViewOn = true; try { syncChinView(); } catch (e) {} }   // CHIN 창은 처음에 꺼져 있다 — 켜고 본다
     if (S.running) toggleSim();
-    S.lat = 37.0 - 60 / 111320; S.lon = 126.0; S.hdg = 0; S.alt = 150; S.spd = 0; S.vs = 0; S.pit = 0; S.bnk = 0;
-    _applyFollow();
-    let n = 0;
-    while ((_chinMaps.length < 2 || !_chinMaps.every(c => c.ship)) && n < 200) { await wait(50); n++; _applyFollow(); }
-    await wait(100); _applyFollow();
-    const out = { n: _chinMaps.length, ship: _chinMaps.map(c => !!c.map.getLayer('ship-3d')),
-                  main: box('map3d'), row: box('chin-row'), l: box('chin-l'), r: box('chin-r'),
-                  rowShown: getComputedStyle(document.getElementById('chin-row')).display,
-                  rowPe: getComputedStyle(document.getElementById('chin-row')).pointerEvents,
-                  btn: getComputedStyle(document.getElementById('chin-btn')).display,
-                  ctrl: (() => { const e = document.querySelector('#map3d .maplibregl-ctrl-bottom-left'); if (!e) return null;
-                                 const r = e.getBoundingClientRect(); return { b: r.bottom, h: r.height }; })(),
-                  tilt: (() => { const r = document.getElementById('tilt-ctrl').getBoundingClientRect(); return { b: r.bottom, h: r.height }; })(),
-                  mainPitch: _ml3d.getPitch(), mainH: _ml3d.transform.height,
-                  cam: _chinMaps.map(c => ({ side: c.side, pitch: c.map.getPitch(), bearing: c.map.getBearing() })) };
-    // 함정이 발밑 창에도 보인다(앞 60m 의 함정 — 갑판 높이)
-    out.shipIn = _chinMaps.map(c => {
-      const p = c.map.project([shipLon, 37.0 - 40 / 111320]), cv = c.map.getCanvas();
-      return p.x > 0 && p.x < cv.clientWidth && p.y > 0 && p.y < cv.clientHeight;
-    });
-    // 오른쪽으로 20° 기울이면 오른쪽 창은 더 아래를, 왼쪽 창은 덜 아래를 본다
-    // (CHIN 창은 화질에 따라 덜 자주 그리므로 여기서는 바로 그리게 한다)
-    S.bnk = 20; _applyFollow(); _ml3dChinCamera(true);
-    out.bank = _chinMaps.map(c => ({ side: c.side, pitch: c.map.getPitch() }));
-    S.bnk = 0; _applyFollow(); _ml3dChinCamera(true);
-    // 화질에 따라 CHIN 창을 덜 자주 그린다 — '하' 는 1초에 15번, '상' 은 매 프레임
-    const moves = c => { let k = 0; const f = () => k++; c.map.on('move', f); return () => { c.map.off('move', f); return k; }; };
-    const burst = () => {
-      _ml3dChinCamera(true);
-      const done = moves(_chinMaps[0]);
-      for (let i = 0; i < 5; i++) { S.hdg = (S.hdg + 1) % 360; _ml3dChinCamera(); }
-      return done();
-    };
-    setMap3dQuality('low'); await wait(400); _applyFollow();
-    out.throttle = { low: burst() };
-    setMap3dQuality('high'); await wait(400); _applyFollow();
-    out.throttle.high = burst();
-    setMap3dQuality('mid'); await wait(400); S.hdg = 0; _applyFollow();
-    out.chinRatio = _chinMaps.map(c => c.map.getPixelRatio());
-    // CHIN 버튼으로 끄고 켠다
-    toggleChinView(); await wait(50);
-    out.off = { n: _chinMaps.length, main: box('map3d'), rowShown: getComputedStyle(document.getElementById('chin-row')).display };
-    toggleChinView(); await wait(50); _applyFollow();
-    out.on = _chinMaps.length;
-    // L CHIN 만 끄면 오른쪽만 남는다 · 둘 다 끄면 닫힌다
-    const vis = id => getComputedStyle(document.getElementById(id)).visibility;
-    toggleChinView('L'); await wait(50);
-    out.lr = { l: vis('chin-l'), r: vis('chin-r'), n: _chinMaps.length,
-               lBtn: document.getElementById('chin-l-btn').classList.contains('on') };
-    toggleChinView('R'); await wait(50); out.lr.none = _chinMaps.length;
-    toggleChinView('L'); toggleChinView('R'); await wait(50); _applyFollow();
-    // SIM 이면 축척·3D 확대 버튼이 감춰지고, 버튼 묶음은 접었다 편다
+    _applyFollow(); await wait(100);
+    const out = { gone: !document.getElementById('chin-btn') && !document.getElementById('chin-row') && typeof toggleChinView === 'undefined' };
     const sc = document.querySelector('#map3d .vfr-scale');
     out.ui = { scale: sc ? getComputedStyle(sc).display : 'none',
                tilt: getComputedStyle(document.getElementById('tilt-ctrl')).display };
     toggleCtl3d(); out.ui.fold = getComputedStyle(document.getElementById('ctl3d-body')).display;
     toggleCtl3d(); out.ui.unfold = getComputedStyle(document.getElementById('ctl3d-body')).display;
-    // 창이 낮으면 묶음 안에서 스크롤해 아래 버튼까지 누른다
     { const box = document.getElementById('ctl3d'), body = document.getElementById('ctl3d-body');
       const h0 = box.style.maxHeight; box.style.maxHeight = '200px';
       body.scrollTop = 0; body.scrollTop = 9999;
@@ -473,60 +415,14 @@ export async function run(page, t) {
       out.ui.scroll = { ov: getComputedStyle(body).overflowY, over: body.scrollHeight > body.clientHeight, top: body.scrollTop,
                         inBox: r.bottom <= br.bottom + 1 && r.top >= br.top };
       body.scrollTop = 0; box.style.maxHeight = h0; }
-    // SIM 을 끄면 닫힌다
     toggleSimMode(false); await wait(50);
-    out.exit = { n: _chinMaps.length, cls: document.getElementById('map3d').classList.contains('chin-on'),
-                 rowShown: getComputedStyle(document.getElementById('chin-row')).display,
-                 btn: getComputedStyle(document.getElementById('chin-btn')).display };
     return out;
   });
-  t.eq(chin.n, 2, 'SIM 1인칭에서 3D 창 아래에 CHIN 창 두 개가 열린다');
-  t.ok(chin.rowShown === 'flex' && chin.btn !== 'none', `CHIN 창과 CHIN 버튼이 보인다 (${chin.rowShown} · ${chin.btn})`);
-  t.ok(chin.lr.l === 'hidden' && chin.lr.r === 'visible' && chin.lr.n === 2 && !chin.lr.lBtn,
-    `L CHIN 을 끄면 오른쪽 창만 보인다 (${chin.lr.l} · ${chin.lr.r})`);
-  t.eq(chin.lr.none, 0, 'L·R CHIN 을 모두 끄면 CHIN 창이 닫힌다');
+  t.ok(chin.gone, 'CHIN BUBBLE(발밑 창 · L/R CHIN 버튼)은 없앴다 — Cockpit 모드가 대신한다');
   t.ok(chin.ui.scale === 'none' && chin.ui.tilt === 'none', `SIM 에서는 축척·3D 확대/기울기 버튼이 없다 (${chin.ui.scale} · ${chin.ui.tilt})`);
   t.ok(chin.ui.fold === 'none' && chin.ui.unfold === 'flex', '3D 버튼 묶음을 접고 편다');
   t.ok(chin.ui.scroll.ov === 'auto' && chin.ui.scroll.over && chin.ui.scroll.top > 0 && chin.ui.scroll.inBox,
     `창이 낮아 버튼이 넘치면 묶음 안에서 스크롤해 맨 아래 버튼까지 보인다 (${JSON.stringify(chin.ui.scroll)})`);
-  const M = chin.main, mBot = M.y + M.h;
-  t.ok(Math.abs(chin.mainH - M.h) < 2 && Math.abs(chin.off.main.h - M.h) < 1,
-    `정면 시야는 창 가득 그대로다 — CHIN 을 켜도 줄지 않는다 (${M.h.toFixed(0)}px · 끄면 ${chin.off.main.h.toFixed(0)}px)`);
-  t.ok(Math.abs(chin.l.x - M.x) < 1 && Math.abs(chin.r.x + chin.r.w - (M.x + M.w)) < 1,
-    `좌·우 가장자리에 붙는다 (왼쪽 ${(chin.l.x - M.x).toFixed(1)} · 오른쪽 ${(M.x + M.w - chin.r.x - chin.r.w).toFixed(1)}px)`);
-  t.ok(Math.abs(chin.l.y + chin.l.h - mBot) < 1 && Math.abs(chin.r.y + chin.r.h - mBot) < 1 && chin.l.y > M.y + M.h / 2,
-    '정면 시야의 아래 모서리 위에 겹친다');
-  // 종전 한 창 = 너비 (W − 18)/2 · 높이 H/3 − 10 → 그 2/3
-  const oldW = (M.w - 18) / 2, oldH = M.h / 3 - 10;
-  t.ok(Math.abs(chin.l.w / oldW - 2 / 3) < 0.02 && Math.abs(chin.r.w - chin.l.w) < 1 && Math.abs(chin.l.h / oldH - 2 / 3) < 0.05,
-    `크기는 종전의 2/3 (${chin.l.w.toFixed(0)}×${chin.l.h.toFixed(0)}px · 종전 ${oldW.toFixed(0)}×${oldH.toFixed(0)}px)`);
-  t.ok(chin.r.x - (chin.l.x + chin.l.w) > M.w * 0.25,
-    `가운데 앞쪽 아래는 가리지 않는다 (사이 ${(chin.r.x - chin.l.x - chin.l.w).toFixed(0)}px)`);
-  t.eq(chin.rowPe, 'none', '겹친 줄이 정면 지도의 손 입력을 막지 않는다');
-  t.ok(chin.ctrl && chin.ctrl.b <= chin.r.y + 1 && chin.tilt.b <= chin.r.y + 1,
-    `3D 확대·기울기 버튼은 CHIN 창 위로 올라간다 (버튼 아래 ${chin.ctrl && chin.ctrl.b.toFixed(0)} · ${chin.tilt.b.toFixed(0)} ≤ 창 위 ${chin.r.y.toFixed(0)})`);
-  const cl = chin.cam.find(c => c.side < 0), cr = chin.cam.find(c => c.side > 0);
-  const nA = d => ((d % 360) + 540) % 360 - 180;
-  t.ok(chin.mainPitch - cl.pitch > 40 && chin.mainPitch - cr.pitch > 40,
-    `정면보다 50° 아래를 본다 (정면 ${chin.mainPitch.toFixed(0)}° · CHIN ${cl.pitch.toFixed(0)}° / ${cr.pitch.toFixed(0)}°)`);
-  t.ok(nA(cl.bearing) < -5 && nA(cr.bearing) > 5,
-    `왼쪽 창은 왼쪽 앞, 오른쪽 창은 오른쪽 앞을 본다 (${nA(cl.bearing).toFixed(0)}° · ${nA(cr.bearing).toFixed(0)}°)`);
-  t.ok(chin.ship.every(Boolean) && chin.shipIn.some(Boolean),
-    `함정도 CHIN 창에 그린다 (레이어 ${chin.ship} · 화면 안 ${chin.shipIn})`);
-  const bl = chin.bank.find(c => c.side < 0), br = chin.bank.find(c => c.side > 0);
-  // (오른쪽 창은 이미 거의 아래를 보고 있어 조금만 더 내려가고, 왼쪽 창은 눈에 띄게 들린다)
-  t.ok(br.pitch < cr.pitch - 0.5 && bl.pitch > cl.pitch + 5,
-    `기체를 따라 돈다 — 오른쪽 뱅크면 오른쪽 창은 더 아래, 왼쪽 창은 덜 아래를 본다 ` +
-    `(오른쪽 ${cr.pitch.toFixed(0)}→${br.pitch.toFixed(0)}° · 왼쪽 ${cl.pitch.toFixed(0)}→${bl.pitch.toFixed(0)}°)`);
-  t.ok(chin.throttle.low === 0 && chin.throttle.high === 5,
-    `화질 '하' 는 CHIN 창을 덜 자주 그리고 '상' 은 매번 그린다 (곧바로 5번 → 하 ${chin.throttle.low} · 상 ${chin.throttle.high})`);
-  t.ok(chin.chinRatio.length === 2 && chin.chinRatio.every(r => r <= 1),
-    `화질 '중' 의 CHIN 창은 1배 해상도까지만 그린다 (${chin.chinRatio.join(' · ')})`);
-  t.ok(chin.off.n === 0 && chin.off.rowShown === 'none',
-    'CHIN 버튼으로 끄면 발밑 창이 사라진다');
-  t.eq(chin.on, 2, '다시 누르면 CHIN 창이 열린다');
-  t.ok(chin.exit.n === 0 && !chin.exit.cls && chin.exit.rowShown === 'none' && chin.exit.btn === 'none',
-    'SIM 을 끄면 CHIN 창과 버튼이 사라진다');
 
   // ── 끄면 3D 에서도 사라진다 ──
   const off = await page.evaluate(async () => {

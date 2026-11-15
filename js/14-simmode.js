@@ -1368,7 +1368,6 @@ function syncVStick() {
   { const d3 = document.getElementById('map3d'); if (d3) d3.classList.toggle('vstick-on', want); }   // 3D 버튼 줄이 조종간 위에서 끝나게
   if (want) {
     vStickRender();
-    if (typeof chinR !== 'undefined' && chinR) { chinR = false; chinViewOn = chinL || chinR; try { syncChinView(); } catch (e) { _swallow(e); } }
   }
 }
 // ── GYRO — 태블릿·휴대폰을 기울여 16방향 사이클릭을 몬다(3D 단독 · SIM) ──
@@ -1692,13 +1691,13 @@ function simEnterView() {
   if (v.side) { try { selectPanel(v.side, 'm3d', true); } catch (e) { _swallow(e); } }
   // 조종석 시야이므로 항공기를 따라가야 한다
   try { if (!followMode) toggleFollow(); } catch (e) { _swallow(e); }
-  try { syncChinView(); } catch (e) { _swallow(e); }   // 아래 좌·우 CHIN 창
+  try { syncChinView(); } catch (e) { _swallow(e); }
 }
 function simExitView() {
   const v = _simView; _simView = null;
   try { if (typeof simExtView !== 'undefined') simExtView = false; } catch (e) { _swallow(e); }   // 다음에는 1인칭부터
   try { _apply3dRoll(); } catch (e) { _swallow(e); }
-  try { syncChinView(); } catch (e) { _swallow(e); }       // CHIN 창을 닫는다
+  try { syncChinView(); } catch (e) { _swallow(e); }
   try { _ml3dSimCameraOff(); } catch (e) { _swallow(e); }   // 1인칭 카메라(롤·90° 너머)를 되돌린다
   try { _update3dMarker(); } catch (e) { _swallow(e); }     // 제 마커를 다시 보인다
   if (!v) return;

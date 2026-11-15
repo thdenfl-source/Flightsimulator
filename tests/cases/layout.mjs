@@ -227,7 +227,7 @@ export async function run(page, t) {
     try { if (simModeOn) toggleSimMode(false); } catch (e) { /* 절차 훈련판 */ }
     return { shown, solo, back: !_soloActive, label, label2: b.textContent };
   });
-  t.ok(only.shown && only.label2 === '⛶ Cockpit Mode', `2분할에서도 오른쪽 창 탭에 Cockpit Mode 가 보인다 (${only.label2})`);
+  t.ok(only.shown && only.label2 === '⛶ Cockpit', `2분할에서도 오른쪽 창 탭에 Cockpit Mode 가 보인다 (${only.label2})`);
   t.ok(only.solo && only.back, `2분할에서 Cockpit Mode 를 누르면 3D 조종석으로 갔다가 돌아온다 (단독 ${only.solo} · 복귀 ${only.back})`);
 
   // ── PFD 배치: CRHT·NAV 칸은 고도계+승강계와 같은 폭으로 오른쪽 끝 · HSI 오른쪽 끝에 맞닿는다 ──

@@ -220,7 +220,7 @@ function toggle3dMap() {
     div3d.classList.remove('active');
     wrap.classList.remove('map3d-on');
     if (tiltCtrl) tiltCtrl.classList.remove('active');
-    try { syncChinView(); } catch (e) { _swallow(e); }   // 3D 를 닫으면 CHIN 창도 닫는다
+    try { syncChinView(); } catch (e) { _swallow(e); }
     // Returning to 2D — Leaflet needs to recompute its size; apply follow immediately
     setTimeout(() => {
       try { leafMap.invalidateSize(); } catch (e) { _swallow(e); }
@@ -619,8 +619,6 @@ function setMap3dQuality(q) {
   try { localStorage.setItem('map3dQuality', q); } catch (e) { _swallow(e); }
   _q3dBtnSync();
   if (_ml3d) { try { _map3dApplyQuality(_ml3d, false); } catch (e) { _swallow(e); } }
-  // CHIN 창은 새로 연다(작은 지도라 금방이다)
-  if (_chinMaps.length) { _chinDestroy(); try { syncChinView(); } catch (e) { _swallow(e); } }
   _pfAt = null;                                  // 미리 받을 목록도 새 화질로
   requestAnimationFrame(() => { try { if (_ml3d) _applyFollow(); } catch (e) { _swallow(e); } });
 }
@@ -742,43 +740,16 @@ function _init3dMap() {
   _ml3d.getContainer().appendChild(_sc3dEl);
 }
 
-// ── CHIN BUBBLE(SIM 1인칭) ──
-// 헬기 조종석 발밑의 둥근 창처럼, 3D 창(정면 시야) 아래 왼쪽·오른쪽 모서리에 작은
-// CHIN 창을 겹쳐 띄운다 — 정면 시야는 창 가득 그대로 두어 전방을 넓게 본다
-// (창 하나가 너비 약 1/3 · 높이 2/9 · index.html). CHIN 창은 같은 바탕(위성·지형·함정)을 그리는 작은 3D 지도
-// 두 장이다 — 카메라는 같은 눈 자리에서 기체를 따라 앞아래를 본다(05-gps.js 의
-// _ml3dChinCamera). SIM 1인칭에서만 쓰고, 나오면 지도를 지워 그래픽 자원을 돌려준다.
-let chinL = false, chinR = false;   // L CHIN · R CHIN — 왼쪽만·오른쪽만·둘 다·모두 끔(처음에는 꺼 둔다)
-let chinViewOn = false;            // 둘 중 하나라도 켜져 있는가(chinL || chinR)
-let _chinMaps = [];               // [{ map, side: -1 왼쪽 · +1 오른쪽, ship: 함정 레이어를 얹었나 }]
-function _chinWanted() {
-  // 외부 시점(15-heli3d.js)에서는 조종석 창이 뜻이 없다 — 닫는다
-  const ext = (typeof simExtView !== 'undefined') && simExtView;
-  const tx = (typeof simCamTx !== 'undefined') && simCamTx;   // 시점이 바뀌는 동안은 닫아 둔다(조종석에 들어선 뒤 연다)
-  return chinViewOn && !ext && !tx && (typeof simModeOn !== 'undefined') && simModeOn && !!_ml3d && _map3dShown();
-}
-// 지금 상태에 맞춰 CHIN 창을 열고 닫는다 — SIM 진입·해제, 3D 창 옮기기, 버튼에서 부른다
-// (1인칭 카메라가 매 프레임 부르지만 바뀐 것이 없으면 아무것도 하지 않는다)
+// ── 3D 1인칭 화면 상태 맞추기 ── (종전의 CHIN BUBBLE — 발밑 창 두 장 — 은 없앴다: Cockpit 모드가 대신한다)
+// SIM 진입 · 해제, 3D 창 옮기기, 시점 바꾸기에서 부른다 — 축척 · 확대 버튼(sim3d) · 기수 · EXT 버튼을 맞춘다.
 function syncChinView() {
   const d3 = document.getElementById('map3d');
-  const row = document.getElementById('chin-row');
-  if (!d3 || !row) return;
+  if (!d3) return;
   const sim = (typeof simModeOn !== 'undefined') && simModeOn;
-  const btn = document.getElementById('chin-btn');
-  if (btn) {
-    if (btn.classList.contains('show') !== sim) btn.classList.toggle('show', sim);
-    const bl = document.getElementById('chin-l-btn'), br = document.getElementById('chin-r-btn');
-    if (bl && bl.classList.contains('on') !== chinL) bl.classList.toggle('on', chinL);
-    if (br && br.classList.contains('on') !== chinR) br.classList.toggle('on', chinR);
-  }
   // SIM 이면 축척·3D 확대/기울기 버튼을 감춘다(index.html #map3d.sim3d)
   // (Cockpit Mode 의 조종석 시야도 같다 — 07-sim.js cockpitStart · 15-heli3d.js ckCamOn)
   const fp = sim || (typeof ckCamOn === 'function' && ckCamOn());
   if (d3.classList.contains('sim3d') !== fp) d3.classList.toggle('sim3d', fp);
-  // 켜진 쪽 CHIN 창만 보인다
-  const pl = document.getElementById('chin-l'), pr = document.getElementById('chin-r');
-  if (pl) pl.style.visibility = chinL ? '' : 'hidden';
-  if (pr) pr.style.visibility = chinR ? '' : 'hidden';
   // 1인칭의 기수(15-heli3d.js) — 외부 시점·SIM 해제면 숨긴다
   try { if (typeof heli3dNoseSync === 'function' && !(sim && !((typeof simExtView !== 'undefined') && simExtView))) heli3dNoseSync(null); }
   catch (e) { _swallow(e); }
@@ -792,61 +763,6 @@ function syncChinView() {
   // 외부 시점 카메라 버튼 — SIM 의 EXT 일 때만
   const ec = document.getElementById('extcam-3d');
   if (ec && ec.classList.contains('show') !== (sim && extOn)) ec.classList.toggle('show', sim && extOn);
-  // 3D 지도 바로 뒤에 붙어 다닌다(2D 위에 겹쳐 쓰든, 제 창으로 옮겨 가든)
-  if (row.previousElementSibling !== d3) d3.after(row);
-  const want = _chinWanted();
-  // 정면 시야의 크기는 그대로다(CHIN 창은 그 위에 겹친다) — 다시 잴 것이 없다
-  if (d3.classList.contains('chin-on') !== want) d3.classList.toggle('chin-on', want);
-  if (want && !_chinMaps.length) _chinCreate();
-  else if (!want && _chinMaps.length) _chinDestroy();
-}
-function _chinCreate() {
-  if (typeof maplibregl === 'undefined') return;
-  [['chin-l', -1], ['chin-r', 1]].forEach(([id, side]) => {
-    const el = document.getElementById(id);
-    if (!el) return;
-    let map;
-    try {
-      map = new maplibregl.Map({
-        container: el, style: _map3dStyle(),
-        center: [S.lon, S.lat], zoom: 14, pitch: 45, bearing: S.hdg, maxPitch: 180,
-        interactive: false, attributionControl: false,
-        // 작은 창이다 — 화질(상 1.5배 · 중 1배 · 하 0.6배)을 넘지 않게 그려 그래픽 부담을 줄인다
-        pixelRatio: map3dPixelRatio(true)
-      });
-    } catch (e) { console.warn('[3D] chin view failed:', e); return; }
-    const c = { map, side, ship: false };
-    map.on('error', (e) => console.warn('[3D] chin error:', e && e.error ? e.error.message : e));
-    map.on('load', () => {
-      try { map.setTerrain({ source: 'terrain', exaggeration: MAP3D_EXAG }); } catch (e) { _swallow(e); }
-      try { map.setSky(MAP3D_SKY); } catch (e) { _swallow(e); }
-      // 함정도 같이 보인다(발밑 창으로 갑판을 보며 내려앉는다)
-      try { if (typeof _ship3dAddTo === 'function') { _ship3dAddTo(map); c.ship = true; } } catch (e) { _swallow(e); }
-    });
-    // 카메라가 눈 자리에 있어야 하므로 화면 중심을 지면에 묶지 않는다
-    try { if (map.setCenterClampedToGround) map.setCenterClampedToGround(false); } catch (e) { _swallow(e); }
-    _chinMaps.push(c);
-  });
-  try { if (typeof _ml3dChinCamera === 'function') _ml3dChinCamera(true); } catch (e) { _swallow(e); }
-}
-function _chinDestroy() {
-  _chinMaps.forEach(c => { try { c.map.remove(); } catch (e) { _swallow(e); } });
-  _chinMaps = [];
-}
-function toggleChinView(side) {
-  // FCP 가 그 자리(같은 쪽 아래 모서리)를 쓰고 있으면 CHIN 창을 켤 수 없다
-  // (R 자리는 화면 조종간 — 14-simmode.js vStickActive)
-  const busy = k => k === 'L' ? (fcpL && fcp3dAvail()) : ((fcpR && fcp3dAvail()) || (typeof vStickActive === 'function' && vStickActive()));
-  if ((side === 'L' || side === 'R') && busy(side) && !(side === 'L' ? chinL : chinR)) {
-    try { uiToast(side === 'L' ? 'FCP 가 켜져 있어 L CHIN 을 열 수 없습니다' : '화면 조종간이 켜져 있어 R CHIN 을 열 수 없습니다', '', 2000); } catch (e) { _swallow(e); }
-    return;
-  }
-  if (side === 'L') chinL = !chinL;
-  else if (side === 'R') chinR = !chinR;
-  else { const v = !(chinL || chinR); chinL = v && !busy('L'); chinR = v && !busy('R'); }
-  chinViewOn = chinL || chinR;
-  syncChinView();
-  requestAnimationFrame(() => { try { if (_ml3d) _applyFollow(); } catch (e) { _swallow(e); } });
 }
 
 // ── 3D 화면의 FCP ──
@@ -950,11 +866,6 @@ function syncFcp3d() {
     box.classList.toggle('show', on);
     if (on) requestAnimationFrame(() => _fcpFit(box));
   });
-  // FCP 를 연 쪽의 CHIN 창은 닫는다
-  let ch = false;
-  if (wantL && chinL) { chinL = false; ch = true; }
-  if (wantR && chinR) { chinR = false; ch = true; }
-  if (ch) { chinViewOn = chinL || chinR; try { syncChinView(); } catch (e) { _swallow(e); } }
 }
 function toggleFcp3d(side) {
   if (!fcp3dAvail()) {

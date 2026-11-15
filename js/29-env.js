@@ -40,7 +40,6 @@ function envSky() {
 function envApply3d() {
   const maps = [];
   try { if (typeof _ml3d !== 'undefined' && _ml3d) maps.push(_ml3d); } catch (e) { _swallow(e); }
-  try { if (typeof _chinMaps !== 'undefined' && Array.isArray(_chinMaps)) maps.push(..._chinMaps.map(c => c.map)); } catch (e) { _swallow(e); }
   const sky = envSky();
   maps.forEach(m => { try { if (m && m.setSky && m.style && m.style._loaded) m.setSky(sky); } catch (e) { _swallow(e); } });
 }
