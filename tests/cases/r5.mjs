@@ -60,6 +60,34 @@ export async function run(page, t) {
   const back = await pg('ios');
   t.ok(back.ios && !back.ck, '교관 페이지로 돌아오면 원래 교관 화면');
   await page.evaluate(() => { kgSrchSet(false); });
+
+  // ── 다른 네트워크 — 직접 통로(WebRTC)가 막혀도 인터넷 중계(MQTT · 암호화)로 이어진다 ──
+  // 중계(ntfy · MQTT)는 같은 브라우저의 BroadcastChannel 로 바꿔 끼고, 직접 통로는 쓰지 않게(_rtcForceRelay) 한다
+  const setup = () => {
+    window._rtcIce = []; window._rtcForceRelay = true; try { _iosCh.close(); } catch (e) { /* 같은 기기 통로는 끊는다 */ }
+    window._rtcRelay = { sub(topic, on) { const c = new BroadcastChannel('relay-' + topic); c.onmessage = e => on(e.data); return () => c.close(); },
+      pub(topic, text) { const c = new BroadcastChannel('relay-' + topic); c.postMessage(text); setTimeout(() => c.close(), 500); return Promise.resolve(); } };
+    window._rtcLinkFactory = (rx, tx, onText) => { const c = new BroadcastChannel('mq-' + rx); c.onmessage = e => onText(e.data);
+      const L = { ready: true, pub(t) { const o = new BroadcastChannel('mq-' + tx); o.postMessage(t); setTimeout(() => o.close(), 500); }, close() { c.close(); } }; return L; };
+  };
+  await page.evaluate(setup); await ios.evaluate(setup);
+  const q = await page.evaluate(async () => await rtcRequest());
+  await ios.evaluate(async q => { await rtcJoin(q); }, q);
+  await page.waitForFunction(() => { const a = document.getElementById('rtc-ask'); return a && getComputedStyle(a).display === 'flex'; }, null, { timeout: 8000 });
+  await page.click('#rtc-ask [data-rtcask="ok"]');
+  await page.waitForFunction(() => rtc.linkPeer && rtc.open, null, { timeout: 10000 }).catch(() => {});
+  await ios.waitForFunction(() => rtc.linkPeer && rtc.open, null, { timeout: 10000 }).catch(() => {});
+  await page.evaluate(() => { S.alt = 3456; iosSend(); });
+  await ios.waitForFunction(() => /3456/.test(document.querySelector('[data-iosv="state"]').textContent), null, { timeout: 6000 }).catch(() => {});
+  const RL = await ios.evaluate(() => ({ peer: rtc.linkPeer, open: rtc.open, p2p: rtcP2pOpen(), st: /3456/.test(document.querySelector('[data-iosv="state"]').textContent) }));
+  await ios.evaluate(() => iosCmd('env', { o: { tod: 'DUSK' } }));
+  await page.waitForFunction(() => env.tod === 'DUSK', null, { timeout: 6000 }).catch(() => {});
+  const tod = await page.evaluate(() => { const v = env.tod; envSet({ tod: 'DAY' }); return v; });
+  t.ok(RL.peer && RL.open && !RL.p2p && RL.st && tod === 'DUSK', '다른 네트워크 — 직접 통로 없이 인터넷 중계로 이어져 상태를 받고 · 교관 명령(황혼)이 닿는다');
+  // MQTT 패킷 — 보낸 것을 다시 풀면 같은 방 · 같은 글
+  const MQ = await page.evaluate(() => { const pk = _mq.publish('shinesong/abc/m2i', '가나다 xyz'); const st = { buf: new Uint8Array([...pk, ..._mq.publish('t2', 'b')]) }; const ps = _mq.parse(st);
+    return ps.length === 2 && ps[0].topic === 'shinesong/abc/m2i' && ps[0].text === '가나다 xyz' && ps[1].text === 'b' && st.buf.length === 0 && _mq.connect('x')[0] === 0x10 && _mq.subscribe('a')[0] === 0x82; });
+  t.ok(MQ, 'MQTT 중계 패킷 — CONNECT · SUBSCRIBE · PUBLISH 를 만들고 이어 붙은 패킷도 나눠 읽는다');
   await ios.close();
   const errs = (page.errors || []).filter(e => !/Failed to fetch|NetworkError|tile/i.test(e));
   t.ok(errs.length === 0, '오류 없음' + (errs.length ? ' — ' + errs.slice(0, 2).join(' / ') : ''));

@@ -322,6 +322,7 @@ function toggleTools(ev) {
 //   태블릿의 답(연결 정보)은 QR 에 든 일회용 방 이름으로 공개 중계(ntfy.sh)를 거쳐 메인 기기에 닿는다 —
 //   QR 에 든 열쇠로 암호화(AES-GCM)해 보내므로 중계는 내용을 읽지 못한다. 비행 내용은 이어진 뒤 두 기기 사이로만 오간다.
 //   중계가 막혔으면 아래 '코드로 잇기'(글자로 주고받기)로 잇는다.
+//   같은 네트워크가 아니어도(다른 와이파이 · LTE) 온라인이면 이어진다 — 직접 통로가 막히면 인터넷 중계(MQTT · 암호화)로 주고받는다.
 //   연결 정보(SDP)는 꼭 필요한 값(ICE 이름 · 암호 · 인증서 지문 · 주소)만 남겨 짧게 줄인다 — QR 한 장에 들어가게.
 //   같은 와이파이면 바로 잇고, 다른 망이면 공개 STUN(구글) 서버로 길만 찾는다(비행 내용은 두 기기 사이로만 오간다)
 const RTC_ICE = () => (Array.isArray(window._rtcIce) ? window._rtcIce : [{ urls: 'stun:stun.l.google.com:19302' }]);
@@ -330,8 +331,14 @@ const _b64 = s => btoa(unescape(encodeURIComponent(s))), _unb64 = s => decodeURI
 function _rtcWire(ch) {
   rtc.ch = ch;
   ch.onopen = () => { rtc.open = true; try { uiToast('다른 기기와 이어졌습니다(교관 연결)'); } catch (e) { _swallow(e); } qrScanStop(); _rtcRender(); };
-  ch.onclose = () => { rtc.open = false; _rtcRender(); };
-  ch.onmessage = e => { let m = null; try { m = JSON.parse(e.data); } catch (er) { return; } if (typeof IOS_MODE !== 'undefined' && IOS_MODE) { if (m && m.type === 'mirror') { if (typeof iosMirrorApply === 'function') iosMirrorApply(m); } else if (typeof iosRender === 'function') iosRender(m); } else if (typeof iosHandle === 'function') iosHandle(m); };
+  ch.onclose = () => { rtc.open = !!rtc.linkPeer; _rtcRender(); };   // 직접 통로가 끊겨도 중계가 있으면 이어진 채
+  ch.onmessage = e => { let m = null; try { m = JSON.parse(e.data); } catch (er) { return; } _rtcOnData(m); };
+}
+// 받은 것 — 직접 통로(WebRTC)든 인터넷 중계든 같은 곳으로
+function _rtcOnData(m) {
+  if (!m) return;
+  if (typeof IOS_MODE !== 'undefined' && IOS_MODE) { if (m.type === 'mirror') { if (typeof iosMirrorApply === 'function') iosMirrorApply(m); } else if (typeof iosRender === 'function') iosRender(m); }
+  else if (typeof iosHandle === 'function') iosHandle(m);
 }
 function _rtcGather(pc) { return new Promise(res => { if (pc.iceGatheringState === 'complete') return res(); const t = setTimeout(res, 3000); pc.addEventListener('icegatheringstatechange', () => { if (pc.iceGatheringState === 'complete') { clearTimeout(t); res(); } }); }); }
 // ── 연결 정보 줄이기 — 'SS1|o(또는 a)|ufrag|pwd|지문(base64)|setup|주소:포트:종류,…' ──
@@ -423,7 +430,7 @@ function rtcAsk(ans) {
       const b = e.target.closest('[data-rtcask]'); if (!b) return;
       const a = w._ans; w.style.display = 'none'; w._ans = null;
       if (b.dataset.rtcask === 'ok' && a) {
-        try { await rtcAccept(a); rtcReply('ok'); } catch (er) { _swallow(er); try { uiToast('잇지 못했습니다 — 처음부터 다시 연결 요청을 누르십시오', 'err'); } catch (e2) { _swallow(e2); } }
+        try { await rtcAccept(a); rtcReply('ok'); rtcLinkStart(); } catch (er) { _swallow(er); try { uiToast('잇지 못했습니다 — 처음부터 다시 연결 요청을 누르십시오', 'err'); } catch (e2) { _swallow(e2); } }
       } else { rtcReply('no'); try { uiToast('교관 기기 연결을 거절했습니다'); } catch (er) { _swallow(er); } }
       _rtcRender();
     });
@@ -440,12 +447,93 @@ async function rtcJoin(qr) {
   rtc.unsub = rtcRelay().sub(room + '-r', async msg => {
     let v = null; try { v = await rtcDec(key, msg); } catch (e) { return; }
     if (v === 'no') { try { uiToast('교육생 기기가 연결을 거절했습니다', 'warn', 4000); } catch (e) { _swallow(e); } try { rtc.pc.close(); } catch (e) { _swallow(e); } rtc.pc = null; }
+    else if (v === 'ok') rtcLinkStart();                                   // 수락 — 직접 통로가 막혀도 인터넷 중계로 이어지게
     rtcRoomClose(); _rtcRender();
   });
   try { await rtcRelay().pub(room, await rtcEnc(key, ans)); return { sent: true, ans }; }
   catch (e) { _swallow(e); return { sent: false, ans }; }
 }
-function rtcSend(m) { try { if (rtc.open && rtc.ch && rtc.ch.readyState === 'open') rtc.ch.send(JSON.stringify(m)); } catch (e) { _swallow(e); } }
+function rtcP2pOpen() { return !window._rtcForceRelay && !!rtc.ch && rtc.ch.readyState === 'open'; }
+function rtcSend(m) {
+  try {
+    if (rtcP2pOpen()) { rtc.ch.send(JSON.stringify(m)); return; }
+    if (rtc.link && rtc.link.ready) {                                    // 직접 통로가 없으면 인터넷 중계로 — 미러는 0.6초에 한 번으로 줄인다
+      if (m && m.type === 'mirror') { const now = Date.now(); if (now - (rtc._mirT || 0) < 600) return; rtc._mirT = now; }
+      rtcEnc(rtc.key, JSON.stringify(m)).then(t => rtc.link.pub(t)).catch(_swallow);
+    }
+  } catch (e) { _swallow(e); }
+}
+
+// ── 인터넷 중계(다른 네트워크) — 두 기기가 같은 와이파이가 아니면 WebRTC 직접 연결이 통신사 NAT · 방화벽에 막히곤 한다 ──
+//   짝을 맺은 뒤(QR · 수락) 두 기기가 공개 MQTT 중계(웹소켓)의 같은 방 이름에 붙어 서로 주고받는다.
+//   내용은 QR 의 열쇠로 암호화(AES-GCM)해 중계는 읽지 못한다. 직접 통로가 열리면 그쪽을 쓰고, 막히면 중계로 계속 간다.
+const RTC_MQTT_URLS = ['wss://broker.hivemq.com:8884/mqtt', 'wss://broker.emqx.io:8084/mqtt', 'wss://test.mosquitto.org:8081'];
+// MQTT 3.1.1(QoS 0) 아주 작은 부분만 — CONNECT · SUBSCRIBE · PUBLISH · PINGREQ
+const _mq = {
+  str(t) { const b = new TextEncoder().encode(t); return [b.length >> 8, b.length & 255, ...b]; },
+  len(n) { const o = []; do { let d = n % 128; n = Math.floor(n / 128); if (n > 0) d |= 128; o.push(d); } while (n > 0); return o; },
+  pkt(type, body) { return new Uint8Array([type, ..._mq.len(body.length), ...body]); },
+  connect(id) { return _mq.pkt(0x10, [..._mq.str('MQTT'), 4, 0x02, 0, 60, ..._mq.str(id)]); },
+  subscribe(topic) { return _mq.pkt(0x82, [0, 1, ..._mq.str(topic), 0]); },
+  publish(topic, text) { return _mq.pkt(0x30, [..._mq.str(topic), ...new TextEncoder().encode(text)]); },
+  // 받은 바이트를 패킷으로 — [{ type, topic, text }] · 남은 조각은 buf 에 둔다
+  parse(st) {
+    const out = [], b = st.buf;
+    let i = 0;
+    while (i + 2 <= b.length) {
+      let mul = 1, n = 0, j = i + 1, d;
+      do { if (j >= b.length) return out; d = b[j++]; n += (d & 127) * mul; mul *= 128; } while (d & 128);
+      if (j + n > b.length) break;
+      const type = b[i] & 0xf0, body = b.subarray(j, j + n);
+      if (type === 0x30) { const tl = (body[0] << 8) | body[1]; out.push({ type, topic: new TextDecoder().decode(body.subarray(2, 2 + tl)), text: new TextDecoder().decode(body.subarray(2 + tl)) }); }
+      else out.push({ type });
+      i = j + n;
+    }
+    st.buf = b.slice(i);
+    return out;
+  },
+};
+// 링크 하나 — rx 방을 듣고 tx 방으로 보낸다. 검사는 window._rtcLinkFactory 로 바꿔 낀다
+function rtcLinkOpen(rx, tx, onText) {
+  if (typeof window._rtcLinkFactory === 'function') return window._rtcLinkFactory(rx, tx, onText);
+  const L = { ready: false, closed: false, ws: null, ping: null, pub(t) { if (L.ready) try { L.ws.send(_mq.publish(tx, t)); } catch (e) { _swallow(e); } },
+    close() { L.closed = true; clearInterval(L.ping); try { L.ws.close(); } catch (e) { _swallow(e); } } };
+  let k = 0;
+  const go = () => {
+    if (L.closed) return;
+    if (k >= RTC_MQTT_URLS.length) { k = 0; setTimeout(go, 5000); return; }      // 모두 안 되면 5초 뒤 처음부터
+    let ws; try { ws = new WebSocket(RTC_MQTT_URLS[k++], ['mqtt']); } catch (e) { _swallow(e); go(); return; }
+    L.ws = ws; ws.binaryType = 'arraybuffer';
+    const st = { buf: new Uint8Array(0) };
+    ws.onopen = () => ws.send(_mq.connect('ss' + Math.random().toString(36).slice(2, 12)));
+    ws.onmessage = e => {
+      const nb = new Uint8Array(e.data), m = new Uint8Array(st.buf.length + nb.length); m.set(st.buf); m.set(nb, st.buf.length); st.buf = m;
+      for (const p of _mq.parse(st)) {
+        if (p.type === 0x20) { ws.send(_mq.subscribe(rx)); L.ready = true; clearInterval(L.ping); L.ping = setInterval(() => { try { ws.send(new Uint8Array([0xc0, 0])); } catch (er) { _swallow(er); } }, 30000); _rtcRender(); }
+        else if (p.type === 0x30 && p.topic === rx) onText(p.text);
+      }
+    };
+    ws.onclose = () => { const was = L.ready; L.ready = false; clearInterval(L.ping); if (!L.closed) setTimeout(go, was ? 1000 : 0); _rtcRender(); };   // 끊기면 다시(다음 중계로)
+    ws.onerror = () => { try { ws.close(); } catch (e) { _swallow(e); } };
+  };
+  go();
+  return L;
+}
+// 짝을 맺은 뒤 두 기기가 중계에 붙는다(메인: 수락할 때 · 태블릿: 수락 알림을 받을 때)
+function rtcLinkStart() {
+  if (!rtc.room || !rtc.key) return;
+  try { if (rtc.link) rtc.link.close(); } catch (e) { _swallow(e); }
+  const ios = typeof IOS_MODE !== 'undefined' && IOS_MODE, base = 'shinesong/' + rtc.room;
+  rtc.linkPeer = false;
+  rtc.link = rtcLinkOpen(base + (ios ? '/m2i' : '/i2m'), base + (ios ? '/i2m' : '/m2i'), async text => {
+    let m = null; try { m = JSON.parse(await rtcDec(rtc.key, text)); } catch (e) { return; }
+    if (!rtc.linkPeer) { rtc.linkPeer = true; if (!rtcP2pOpen()) { rtc.open = true; try { uiToast('다른 기기와 이어졌습니다(인터넷 중계)'); } catch (e) { _swallow(e); } qrScanStop(); } _rtcRender(); }
+    if (m.type === 'hello') return;
+    if (!rtcP2pOpen()) _rtcOnData(m);                                    // 직접 통로가 열려 있으면 그쪽 것만 쓴다(겹침 방지)
+  });
+  // 서로 있음을 알린다(중계로만 이어질 때 첫 소식)
+  let n = 0; const hi = setInterval(() => { if (rtc.linkPeer || ++n > 30 || !rtc.link) { clearInterval(hi); return; } if (rtc.link.ready) rtcEnc(rtc.key, JSON.stringify({ type: 'hello' })).then(t => rtc.link && rtc.link.pub(t)).catch(_swallow); }, 1000);
+}
 
 // ── QR — 만들기(vendor/qrcode.js) · 읽기(BarcodeDetector 가 있으면 그것, 없으면 vendor/jsQR.js) — 필요할 때만 읽어 온다 ──
 const _jsLoaded = {};
@@ -553,7 +641,10 @@ function toggleRemoteIos() {
 function _rtcRender() {
   const s = document.querySelector('#rtc-wrap [data-rtcv="st"]'); if (!s) return;
   const cs = rtc.pc ? rtc.pc.connectionState : '';
-  s.textContent = rtc.open ? '● 이어졌습니다 — 이 창을 닫아도 됩니다' : cs === 'failed' ? '✕ 잇지 못했습니다 — 두 기기가 같은 와이파이인지 보고 처음부터 다시' : rtc.pc ? '○ 기다리는 중…' : '';
+  const via = rtcP2pOpen() ? '직접 연결' : rtc.linkPeer ? '인터넷 중계' : '';
+  s.textContent = rtc.open ? `● 이어졌습니다${via ? '(' + via + ')' : ''} — 이 창을 닫아도 됩니다`
+    : cs === 'failed' && !(rtc.link && rtc.link.ready) ? '✕ 잇지 못했습니다 — 두 기기가 인터넷에 이어져 있는지 보고 처음부터 다시'
+    : rtc.link && rtc.link.ready ? '○ 인터넷 중계로 잇는 중…' : rtc.pc ? '○ 기다리는 중…' : '';
   s.classList.toggle('ok', rtc.open);
 }
 try { appRegister({ toggleSettings, toggleTools, toggleRemoteIos, envMetarNearest }); } catch (e) { _swallow(e); }
