@@ -128,33 +128,25 @@ export async function run(page, t) {
   t.ok(X.on.ext && X.on.model && !X.on.panel && X.on.ec && X.on.follow && X.on.d > 10 && Math.abs(((X.on.brg - 90 + 540) % 360) - 180) < 5,
     `EXT — 조종석 패널을 걷고 헬기 뒤(${Math.round(X.on.d)}m · 헬기 쪽 ${Math.round(X.on.brg)}°)에서 모형을 본다 · 카메라 버튼이 뜬다`);
   t.ok(!X.back.ext && X.back.first && !X.back.model, '다시 누르면 조종석 시야로 돌아온다');
-  // ── STICK — SIM 밖(절차 훈련판 · AFCS 비행)에서도 화면 조종간으로 뱅크 · 속도 · 기수 · 승강률 ──
+  // ── STICK — 절차 훈련판에서도 종합판과 똑같이 SIM 비행 모델로(켜는 동안만) ──
   const ST = await page.evaluate(async () => {
     const w = ms => new Promise(r => setTimeout(r, ms));
-    try { if (simModeOn) toggleSimMode(false); } catch (e) { /* 절차 훈련판 */ }
     if (simExtView) toggleExtView(false);
-    S.alt = 1500; S.spd = 100; S.hdg = 90; S.vs = 0; bankTarget = 0;
+    S.alt = 1500; S.spd = 100; S.hdg = 90;
     cockpitStart(); await w(800);
-    try { if (simModeOn) toggleSimMode(false); } catch (e) { /* 절차 훈련판 */ }   // 종합판은 Cockpit 이 SIM 을 켠다 — 끄고 AFCS 비행으로
-    await w(200);
-    const o = { avail: vStickAvail() };
+    const proc = typeof SIM_ENABLED !== 'undefined' && !SIM_ENABLED;
+    const o = { proc, sim0: simModeOn, avail: vStickAvail() };
     if (vStickOn) toggleVStick();
-    document.getElementById('vstick-btn').click(); await w(150);
-    o.on = vStickActive() && getComputedStyle(document.getElementById('vstick')).display !== 'none' && vStick.coll === 0.5;
-    const run0 = S.running; S.running = true;
-    const spd0 = S.spd, hdg0 = S.hdg;
-    vStick.roll = 1; vStick.pitch = 1; vStick.yaw = 1; vStick.coll = 1;
-    for (let i = 0; i < 12; i++) { await w(60); vStickNsStep(); }
-    o.held = { bank: bankTarget, spd: S.spd - spd0, hdg: ((S.hdg - hdg0 + 540) % 360) - 180, vs: S.vs, alt: altHoldOn, lbl: document.querySelector('#vstick-coll .vs-lbl').textContent };
-    vStick.roll = 0; vStick.pitch = 0; vStick.yaw = 0; vStick.coll = 0.5;
-    await w(60); vStickNsStep(); await w(60); vStickNsStep();
-    o.rel = { bank: bankTarget, vs: S.vs };
-    S.running = run0;
-    toggleVStick(); o.off = !vStickActive();
+    document.getElementById('vstick-btn').click(); await w(200);
+    o.on = { active: vStickActive(), sim: simModeOn, shown: getComputedStyle(document.getElementById('vstick')).display !== 'none' };
+    vStick.roll = 1; vStick.pitch = 0; vStick.yaw = 0;
+    const ax = simModeAxes(); o.ax = { roll: ax.roll, lbl: document.querySelector('#vstick-coll .vs-lbl').textContent };
+    vStick.roll = 0;
+    document.getElementById('vstick-btn').click(); await w(200);
+    o.off = { active: vStickActive(), sim: simModeOn };
     return o;
   });
-  t.ok(ST.avail && ST.on, 'SIM 밖에서도 Cockpit Mode 화면에 STICK(화면 조종간)이 뜬다 · 컬렉티브는 가운데(수평)부터');
-  t.ok(ST.held.bank === 30 && ST.held.spd > 1 && ST.held.hdg > 2 && ST.held.vs === 2000 && !ST.held.alt,
-    `STICK — 사이클릭 오른쪽 끝 뱅크 ${ST.held.bank}° · 앞으로 밀면 +${ST.held.spd.toFixed(1)}kt · 페달 +${ST.held.hdg.toFixed(1)}° · 컬렉티브 위 끝 ${ST.held.vs}fpm(ALT 풀림 · ${ST.held.lbl})`);
-  t.ok(ST.rel.bank === 0 && ST.rel.vs === 0 && ST.off, '놓으면 수평 · 컬렉티브를 가운데로 두면 승강률 0 · STICK 을 끈다');
+  t.ok(ST.avail && ST.on.active && ST.on.sim && ST.on.shown, `STICK — Cockpit Mode 화면에서 화면 조종간이 뜨고 SIM 비행 모델로 조종한다${ST.proc ? '(절차 훈련판 — 켜는 동안만 SIM)' : ''}`);
+  t.ok(ST.ax.roll > 0.3 && /^COLL \d+%$/.test(ST.ax.lbl), `STICK — 사이클릭이 종합판과 같은 조종 입력(롤 ${ST.ax.roll.toFixed(2)} · ${ST.ax.lbl})`);
+  t.ok(!ST.off.active && (ST.proc ? !ST.off.sim : ST.off.sim), ST.proc ? '절차 훈련판 — STICK 을 끄면 SIM 을 내려놓고 AFCS 비행으로' : '종합판 — STICK 을 꺼도 SIM 은 그대로');
 }
