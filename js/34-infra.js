@@ -87,6 +87,7 @@ function toggleDiag() {
       else if (k === 'clear') { if (typeof _SWALLOW_LOG !== 'undefined') _SWALLOW_LOG.length = 0; _DIAG_ERR.length = 0; _diagRender(); }
       else if (k === 'tune') { tuneReset(); uiToast('조정값을 기본으로 돌렸습니다 — 다시 열면 반영됩니다'); }
       else if (k === 'refresh') _diagRender();
+      else if (k === 'offline') { b.disabled = true; b.textContent = '받는 중…'; offlinePrepare().then(r => { uiToast(r.missing.length ? `${r.missing.length}개를 받지 못했습니다(인터넷 확인)` : '오프라인 준비 완료 — 인터넷 없이도 앱이 열립니다'); _diagRender(); }); }
     });
   }
   w.style.display = 'flex'; _diagRender();
@@ -98,6 +99,7 @@ function _diagRender() {
   w.innerHTML = `<div class="set-box diag-box"><div class="set-bar"><b>🩺 진단 기록</b><button class="sim-btn" data-diag="x">✕</button></div>
     ${row('판 · 기종', `${_dgEsc(r.ver)} · ${_dgEsc(r.ac)} · ${_dgEsc(r.edition)}`)}
     ${row('저장 공간', '<span id="diag-quota">재는 중…</span>')}
+    ${row('오프라인 준비', '<span id="diag-offline">확인 중…</span> <button class="sim-btn" data-diag="offline">지금 모두 받아 두기</button>')}
     ${row('저장 비행', `${typeof fdrSavedList === 'function' ? fdrSavedList().length : 0}개 · ${typeof _fdrIdb !== 'undefined' && _fdrIdb ? 'IndexedDB' : 'localStorage'}`)}
     ${row('타이머', r.timers ? `${r.timers.tasks}개를 한 박자로 · 오류 ${r.timers.list.reduce((a, t) => a + t.err, 0)}` : '—')}
     ${row('바꾼 조정값', td.length ? td.map(([k, v]) => `${_dgEsc(k)}=${_dgEsc(v)}`).join(' · ') + ' <button class="sim-btn" data-diag="tune">기본으로</button>' : '없음(00-params.js 기본)')}
@@ -108,6 +110,7 @@ function _diagRender() {
     <div class="set-row"><span></span><div><button class="sim-btn" data-diag="refresh">새로</button><button class="sim-btn" data-diag="copy">📋 복사</button><button class="sim-btn" data-diag="clear">지우기</button></div></div>
     <textarea readonly style="display:none"></textarea></div>`;
   storageEstimate().then(q => { const el = document.getElementById('diag-quota'); if (el) el.textContent = storageText(q); });
+  offlineCheck().then(r => { const el = document.getElementById('diag-offline'); if (el) el.textContent = r.cache ? (r.missing.length ? `${r.total - r.missing.length}/${r.total} — ${r.missing.length}개 아직 없음` : `준비됨(${r.total}개)`) : '서비스 워커 캐시 없음(처음 열었거나 지원 안 함)'; });
 }
 
 // ── ③ 저장 공간 ──
@@ -128,6 +131,31 @@ function storageText(q) {
   return a.join(' · ');
 }
 
+// ── 오프라인 준비 — 서비스 워커의 앱 파일 목록(sw.js CORE)이 모두 캐시에 있는지 · 없으면 지금 받아 둔다 ──
+//   (QR 읽기 jsQR · QR 만들기 · 교관 교범까지. 관제 음성은 기기에 깔린 목소리라 인터넷이 없어도 된다)
+async function _swCore() {
+  const t = await (await fetch('sw.js', { cache: 'no-store' })).text();
+  const name = (t.match(/const CACHE\s*=\s*'([^']+)'/) || [])[1];
+  const core = (t.match(/const CORE\s*=\s*\[([\s\S]*?)\]/) || [, ''])[1].match(/'\.\/[^']*'/g) || [];
+  return { name, core: core.map(x => x.slice(1, -1)) };
+}
+async function offlineCheck() {
+  try {
+    if (!('caches' in window)) return { cache: false, total: 0, missing: [] };
+    const { name, core } = await _swCore();
+    if (!name || !(await caches.has(name))) return { cache: false, total: core.length, missing: core };
+    const c = await caches.open(name), missing = [];
+    for (const u of core) if (!(await c.match(u))) missing.push(u);
+    return { cache: true, name, total: core.length, missing };
+  } catch (e) { _swallow(e); return { cache: false, total: 0, missing: [] }; }
+}
+async function offlinePrepare() {
+  try {
+    const { name, core } = await _swCore(); const c = await caches.open(name), missing = [];
+    for (const u of core) { try { const r = await fetch(u, { cache: 'reload' }); if (r && r.ok) await c.put(u, r); else missing.push(u); } catch (e) { missing.push(u); } }
+    return { missing };
+  } catch (e) { _swallow(e); return { missing: ['(캐시를 쓸 수 없음)'] }; }
+}
 // ── ④ 새 버전 알림 ──
 function swUpdateBanner() {
   if (document.getElementById('sw-update')) return;

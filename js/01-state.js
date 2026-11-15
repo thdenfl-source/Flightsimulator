@@ -298,14 +298,14 @@ function tqAtVy() {
 // 계기에 보일 토크. SIM 모드에서는 실제 레버 값, 평소에는 지금 비행 상태에서
 // 들 법한 값을 거꾸로 셈해 보여 준다(계기가 비어 보이지 않게).
 function tqShown() {
-  if (simModeOn) return S.tq;
+  if (simModeOn) return (typeof simEng !== 'undefined' && simEng === 1) ? S.tq * 2 : S.tq;   // OEI — 남은 엔진 하나의 토크
   let add = (S.vs || 0) / TQ_PER_FPM;
   try { if (typeof perfTqForVs === 'function') add = perfTqForVs(S.vs || 0); } catch (e) { _swallow(e); }
   return Math.max(0, Math.min(TQ_MAX, tqRequired() + add));
 }
 // 계기 한계 — 흰수리 100(연속) · 113(빨강), Bell 206 85(연속) · 100(빨강)
 function tqLimitCont() { return acB206() ? B206P.tqCont : TQ_LIMIT; }
-function tqLimitRed()  { return acB206() ? B206P.mtaMax : TQ_RED; }
+function tqLimitRed()  { if (acB206()) return B206P.mtaMax; try { if (simModeOn && typeof simEng !== 'undefined' && simEng === 1 && typeof simOeiTqLim === 'function') return Math.max(TQ_RED, simOeiTqLim()); } catch (e) { _swallow(e); } return TQ_RED; }   // OEI — 그 정격까지
 function tqOver() { return tqShown() > tqLimitRed(); }
 // 지금 토크가 든 구간 — 'green' · 'yellow' · 'red'
 function tqBand(v = tqShown()) { return v > tqLimitRed() ? 'red' : v > tqLimitCont() ? 'yellow' : 'green'; }

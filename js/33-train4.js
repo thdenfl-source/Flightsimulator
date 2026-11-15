@@ -458,7 +458,16 @@ function rtcSend(m) {
   try {
     if (rtcP2pOpen()) { rtc.ch.send(JSON.stringify(m)); return; }
     if (rtc.link && rtc.link.ready) {                                    // 직접 통로가 없으면 인터넷 중계로 — 미러는 0.6초에 한 번으로 줄인다
-      if (m && m.type === 'mirror') { const now = Date.now(); if (now - (rtc._mirT || 0) < 600) return; rtc._mirT = now; }
+      if (m && m.type === 'mirror') {                                     // 미러는 바뀐 것만 오니 버리지 않고 모아서 0.6초에 한 번
+        const P = rtc._mirPend || (rtc._mirPend = { type: 'mirror', S: {}, g: {}, ov: {} });
+        Object.assign(P.S, m.S || {}); Object.assign(P.g, m.g || {}); Object.assign(P.ov, m.ov || {}); if (m.full) P.full = true;
+        if (!rtc._mirTimer) rtc._mirTimer = setTimeout(() => {
+          const out = rtc._mirPend; rtc._mirPend = null; rtc._mirTimer = null; rtc._mirT = Date.now();
+          if (out && rtc.link && rtc.link.ready) rtcEnc(rtc.key, JSON.stringify(out)).then(t => rtc.link.pub(t)).catch(_swallow);
+        }, Math.max(0, 600 - (Date.now() - (rtc._mirT || 0))));
+        rtc._mirT = rtc._mirT || 0;
+        return;
+      }
       rtcEnc(rtc.key, JSON.stringify(m)).then(t => rtc.link.pub(t)).catch(_swallow);
     }
   } catch (e) { _swallow(e); }

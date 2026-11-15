@@ -17,11 +17,11 @@
      CDN 을 쓰면 한 번이라도 못 받는 순간 앱이 통째로 죽는다 — 비행 중에는
      그럴 여지를 두지 않는다. -->
 <!-- 패널 새 창(다중 모니터) — 라이브러리가 거는 이벤트까지 받아 적어야 하므로 맨 먼저 -->
-<script src="js/00-edition.js?v=661"></script>
-<script src="js/00-aircraft.js?v=661"></script>
-<script src="js/00-params.js?v=661"></script>
-<script src="js/00-sched.js?v=661"></script>
-<script src="js/00-popout.js?v=661"></script>
+<script src="js/00-edition.js?v=663"></script>
+<script src="js/00-aircraft.js?v=663"></script>
+<script src="js/00-params.js?v=663"></script>
+<script src="js/00-sched.js?v=663"></script>
+<script src="js/00-popout.js?v=663"></script>
 <link rel="stylesheet" href="vendor/leaflet.css"/>
 <script src="vendor/leaflet.js"></script>
 <link rel="stylesheet" href="vendor/leaflet-velocity.min.css"/>
@@ -1189,6 +1189,9 @@ html.ios-win:not(.ios-mode) #ios-root { display: none !important; }
 .ios-grip .ios-gcell { height: calc(100vh - 80px); max-height: 760px; aspect-ratio: 200 / 400; display: flex; flex-direction: column; }
 .ios-grip .ios-gt { color: #8aa0b0; font: bold 12px Arial; letter-spacing: 1px; text-align: center; margin-bottom: 4px; }
 .ios-grip svg { flex: 1; min-height: 0; }
+@media (orientation: portrait) { .ios-grip .ios-gcell { height: calc(50vh - 56px); } }   /* 태블릿 세로 — 컬렉티브 · 사이클릭을 위아래로 한 화면에 */
+/* 태블릿 세로 — 조종석의 컬렉티브 · 사이클릭 큰 창도 화면 폭 안에 */
+@media (orientation: portrait) { #kg-pop, #b206-coll-pop { max-width: calc(100vw - 130px); } }
 html.ios-mode body { background: #0b1218; overflow: auto; }
 #ios-root { color: #dfe6ec; font: 14px -apple-system, 'Segoe UI', Arial, sans-serif; padding: 12px; max-width: 640px; margin: 0 auto; }
 #ios-root h1 { font-size: 18px; margin: 4px 0 8px; } #ios-root h2 { font-size: 14px; color: #8aa0b0; margin: 14px 0 6px; border-bottom: 1px solid #22313d; }
@@ -2699,7 +2702,7 @@ body.simple-mode #simple-view { display: flex; position: fixed; left: 0; right: 
     </div>
   </form>
 </div>
-<script src="js/00-gate.js?v=661"></script>
+<script src="js/00-gate.js?v=663"></script>
 <!-- ── 단일화면 선택 바 (기본 숨김) ── -->
 <!-- ── 시작 안내(사용법/키보드) 오버레이 ── -->
 <div id="help-overlay" style="display:none;">
@@ -2878,7 +2881,7 @@ body.simple-mode #simple-view { display: flex; position: fixed; left: 0; right: 
             가라앉습니다(MTA +8% 면 1,000fpm 넘게). 레버를 <b>MTA 아래로 내리면 NR 이 돌아옵니다</b>.
             레버가 MTA 를 넘겨 있으면 그 자리에 흰 삼각형이 섭니다.
             <b>엔진(ENG 버튼 · 3D 오른쪽 묶음)</b> — 누를 때마다 <b>AEO</b>(정상) → <b>OEI</b>(ENG 2 고장) → <b>IDLE</b>(두 엔진, 동력 없는 오토로테이션 연습).
-            OEI 면 남은 엔진이 <b>2.5분 정격(AEO MTA 의 73%)</b>을 내다가 그 뒤로는 <b>연속 정격(64%)</b>까지 냅니다(PFD 에 <b>OEI 2.5MIN</b> 남은 시간).<br>
+            OEI 면 남은 엔진이 CDU PERF 의 <b>MTA(2.5)</b>(OEI HI · 2.5분) 또는 <b>MTA(10)</b>(OEI LOW · 10분 — 컬렉티브 OEI 단추로 바꿈)까지 내다가 시간이 지나면 <b>MTA(30)</b>까지 냅니다(PFD 에 <b>OEI HI 2.5MIN</b> · <b>OEI LOW 10MIN</b> 남은 시간 · 계기 TQ 는 남은 엔진의 토크).<br>
             <b>오토로테이션과 NR</b> — 엔진이 레버가 요구하는 만큼을 못 내면 모자란 몫을 로터 회전(NR)이 냅니다. 엔진이 멎었는데
             레버를 그대로 두면 <b>NR 이 1~2초 만에 처집니다</b>(RPM LOW) — 곧 레버를 내리십시오. 강하가 자리 잡으면 흘러드는 바람이
             로터를 돌려, 레버 <b>약 12%</b> 에서 NR 100%, <b>다 내리면 넘칩니다</b>(<b>NR HIGH</b> · 노랑). 강하율은 필요 동력 곡선을 따라
@@ -3295,8 +3298,8 @@ body.simple-mode #simple-view { display: flex; position: fixed; left: 0; right: 
 
       <h3>5. CDU 홈 (20개 기능)</h3>
       <ul>
-        <li><b>배열</b>(4칸씩): MAP · Aircraft Systems · PERF · Charts / Flight Plan · PROC · VNAV · Waypoint Info / NOTAM · Track &amp; Point · Services · Utilities / SkyVector · Tide forecast · ER availability · Wildfire status / Weather · Checklist.
-          <b>Waypoint Info</b>를 누르면 실기처럼 3칸씩 <b>Airport · INT · VOR / NDB · VRP · User Waypoint / Create Waypoint · Airport INFO</b>가 나옵니다. <b>Airport INFO</b>는 비행장 정보(Back 은 Waypoint Info 로), <b>Create Waypoint</b>는 Flight Plan 의 <b>Add WPT</b> 와 같은 ADD WAYPOINT 화면을 엽니다. <b>Airport</b> · <b>INT</b> · <b>VOR</b> · <b>NDB</b>는 ICAO 비행장(28곳) · Fix(146곳) · VOR(41곳) · ADF/NDB(113곳) 목록을 보입니다(지금 자리에서 방위·거리, <b>거리순/이름순</b> 버튼). 줄을 누르면 그 시설을 Flight Plan 끝에 넣고 Flight Plan 을 엽니다. 나머지는 차차 갖춥니다(지금은 준비 중 화면).</li>
+        <li><b>배열</b>(4칸씩): MAP · Aircraft Systems · PERF · Charts / Flight Plan · PROC · VNAV · Waypoint Info / NOTAM · Track &amp; Point · Services · Utilities / SkyVector · Tide forecast · ER availability · Wildfire status / Weather · Checklist · <b>Airport INFO</b> · <b>조종장치</b>.
+          <b>Waypoint Info</b>를 누르면 실기처럼 3칸씩 <b>Airport · INT · VOR / NDB · VRP · User Waypoint / Create Waypoint</b>가 나옵니다. <b>Airport INFO</b>(홈 맨 아랫줄)는 비행장 정보(Back 은 홈으로), <b>조종장치</b>는 조이스틱 · 게임패드 사용 · 버튼/축 배정 · 키보드 단축키(아래 10항), <b>Create Waypoint</b>는 Flight Plan 의 <b>Add WPT</b> 와 같은 ADD WAYPOINT 화면을 엽니다. <b>Airport</b> · <b>INT</b> · <b>VOR</b> · <b>NDB</b>는 ICAO 비행장(28곳) · Fix(146곳) · VOR(41곳) · ADF/NDB(113곳) 목록을 보입니다(지금 자리에서 방위·거리, <b>거리순/이름순</b> 버튼). 줄을 누르면 그 시설을 Flight Plan 끝에 넣고 Flight Plan 을 엽니다. 나머지는 차차 갖춥니다(지금은 준비 중 화면).</li>
         <li><b>기상</b>: 홈의 <b>Weather</b> 버튼을 누르면 <b>Windy · 저고도 날씨 · CCTV · METAR/TAF</b> 네 버튼이 나옵니다(CCTV 의 Back 은 Weather 로). Tide forecast 는 홈에 그대로 있습니다.</li>
         <li><b>Aircraft Systems</b>(홈 둘째 버튼): 누르면 <b>AFCS · Aircraft Status · Electrical · Engines · Fuel · RA Self Test · HOCAS · System Tests · Lighting Config · Video · Maintenance</b>
             버튼이 나옵니다. 누른 버튼이 <b>SYSTEM 창</b>(창 탭의 SYSTEM)의 화면도 고릅니다. Back 은 Aircraft Systems 로 돌아옵니다.</li>
@@ -3360,8 +3363,8 @@ body.simple-mode #simple-view { display: flex; position: fixed; left: 0; right: 
       <h3>8. 설정 (하단 Setting)</h3>
       <ul>
         <li><b>단위</b>: 고도 ft/m · 거리 NM/km · 속도 kt/km·h · 온도 °C/°F — PFD 계기까지 함께 전환됩니다.</li>
-        <li>야간 모드, 레인지 링, 자동 METAR, 공역·HTAWS 경보, <b>조종 장치</b>·<b>키보드 단축키</b> on/off.</li>
-        <li><b>조종 장치 버튼 배정</b>: 조이스틱·게임패드 버튼을 동작에 잇습니다(아래 10항).</li>
+        <li>야간 모드, 레인지 링, 자동 METAR, 공역·HTAWS 경보 on/off.</li>
+        <li><b>조종 장치</b>(조이스틱 · 게임패드 · 버튼 배정 · 키보드 단축키)는 <b>CDU 홈 맨 아랫줄의 조종장치</b>로 옮겼습니다(설정에서도 한 줄로 갑니다).</li>
         <li>홈 화면에 추가(PWA 설치), 주변 지도 캐시 저장, 사용 안내 다시 보기.</li>
       </ul>
 
@@ -3383,12 +3386,13 @@ body.simple-mode #simple-view { display: flex; position: fixed; left: 0; right: 
             ③ 아래 <b>입력 진단</b>에 장치 이름이 뜨는지 확인합니다 — 이름이 뜨는데 값이 안 움직이면 ①번입니다.</li>
         <li>스틱 하나가 <b>여러 대로 잡히는</b> 기종(복합 HID)에서는 <b>값을 내는 장치</b>로 자동으로 옮겨 붙습니다.
             진단에 연결된 장치가 모두 나오고 사용 중인 것에 <b>←사용</b> 이 붙습니다.</li>
-        <li><b>설정 → 조종 장치 버튼 배정</b>에서 동작을 누르면 <b>입력 대기</b>가 되고,
+        <li><b>CDU 홈 → 조종장치 → 버튼 · 축 배정</b>에서 동작을 누르면 <b>입력 대기</b>가 되고,
             그때 누른 버튼이 그 동작에 잡힙니다. 배정은 기기에 저장되어 다음에도 그대로입니다.</li>
         <li>배정할 수 있는 동작: <b>FLY/PAUSE · FORCE TRIM · G/S·GSPD(지상속도) · HOVER POSITION</b>,
             <b>트림 ▲▼◀▶ · 페달</b>, <b>HDG · IAS · ALT · CRHT · VS · CRS</b> 증감,
             <b>ALT/CRHT 유지 · NAV · SUSP · OBS</b>, <b>HOVER PAGE</b>,
-            지도 <b>추종 · HDG↑/N↑ · 확대/축소</b>.</li>
+            지도 <b>추종 · HDG↑/N↑ · 확대/축소</b>, <b>PTT</b>,
+            흰수리 <b>컬렉티브 · 사이클릭</b>(COLL TRIM · SRCH LT · SRCH CTR · LDG LT ON/EXT/RET · AP CUT · OEI HI/LOW).</li>
         <li>동작 성격에 따라 <b>누르는 순간 한 번</b>(FLY/PAUSE 등), <b>누르는 동안 유지</b>(트림),
             <b>누르고 있으면 연속</b>(HDG·IAS 등, 화면 버튼과 같은 리듬)으로 동작합니다.</li>
         <li><b>햇(HAT) 스위치</b>: 8방향 햇을 <b>축 하나</b>로 올려 보내는 기종(대개 축 9)은
@@ -3412,11 +3416,22 @@ body.simple-mode #simple-view { display: flex; position: fixed; left: 0; right: 
             잡히지 않는 입력이 무엇으로 올라오는지 여기서 확인할 수 있습니다
             (<b>HAT</b> 로 표시된 축은 8방향 햇으로 풀어 씁니다).</li>
       </ul>
-      <div class="help-note">※ 아직 <b>버튼</b>만 연동합니다. 사이클릭·컬렉티브·페달의 <b>아날로그 축</b>을
-      직접 조종하는 기능은 넣지 않았습니다(현재 비행 모델이 AFCS 목표값 기반입니다).</div>
+      <div class="help-note">※ SIM 모드에서는 사이클릭 · 컬렉티브 · 페달의 <b>아날로그 축</b>도 배정해 직접 조종합니다(버튼 · 축 배정 화면).</div>
 
       <div class="help-note">※ 숫자·트림 키는 누르고 있으면 연속 조작됩니다. 입력창 타이핑 중에는 동작하지 않습니다.<br>
-      ※ DeX·데스크톱에서 물리 키보드로 입력할 때 계기가 움직이면 <b>설정 → 키보드 단축키</b>를 끄십시오.</div>
+      ※ DeX·데스크톱에서 물리 키보드로 입력할 때 계기가 움직이면 <b>CDU 홈 → 조종장치 → 키보드 단축키</b>를 끄십시오.</div>
+
+      <h3>11. 흰수리 Cockpit · 교신 · 교관 화면</h3>
+      <ul>
+        <li><b>Cockpit Mode</b>: 조종석 그림의 화면 · 콘솔 · CDU · <b>컬렉티브</b>(CDU 오른쪽) · <b>사이클릭</b>(좌우)을 누르면 크게 뜹니다(바깥을 누르면 닫힘).
+            컬렉티브 — LDG LT(EXT · ON/OFF · RET) · SRCH CTR(서치라이트 방향) · COLL TRIM · SRCH LT(누르면 ON/OFF · 위아래 광도) · OEI(한 엔진일 때 HI 2.5분 ↔ LOW 10분).
+            사이클릭 — DISENGAG · AP CUT(빨간 단추) · 4-WAY BEEP · 손잡이 앞 PTT · FORCE TRIM RELEASE · G/SPEED.</li>
+        <li><b>교신</b>: CDU AUDIO 에서 MIC(COM1 · COM2 · U/VHF)를 고르고 <b>🎙 PTT</b>(또는 사이클릭 · 조이스틱 PTT)를 누르는 동안 송신합니다.
+            놓으면 그 주파수의 TWR · GND · APP 또는 Watchman(125.3 · 278.4)이 답하고, 화면에 조종사가 할 말(🎙 PILOT)이 뜹니다.
+            관제 목소리 · 콜사인 · 임무(Sea patrol · MEDEVAC · SAR)는 🧰 도구 → ⚙ 설정에서 고릅니다.</li>
+        <li><b>교관 화면</b>: 🧰 도구 → 📱 교관 기기와 잇기 → <b>연결 요청</b>(QR) → 교관 태블릿이 찍으면 이 기기에서 <b>수락</b>.
+            다른 네트워크여도 인터넷이면 이어집니다(막히면 인터넷 중계 · 암호화). 교관 화면 위 막대로 교관 · PFD · UPPER · LOWER · CYC · COLL · MAP · COCKPIT 를 넘겨 봅니다.</li>
+      </ul>
     </div>
     <div id="help-foot">
       <label><input type="checkbox" id="help-dontshow"> 다시 보지 않기</label>
@@ -4014,52 +4029,54 @@ body.simple-mode #simple-view { display: flex; position: fixed; left: 0; right: 
 <!-- 앱 코드 — 클래식 스크립트(모듈 아님)라 전역 스코프를 공유한다.
      순서가 곧 실행 순서이므로 임의로 바꾸지 말 것. -->
   <!-- AIP 데이터 — 코드보다 먼저 로드한다 -->
-  <script src="js/data/terminal-fixes.js?v=661"></script>
-  <script src="js/data/ifr-fixes.js?v=661"></script>
-  <script src="js/data/ifr-procedures.js?v=661"></script>
-  <script src="js/data/airfield-info.js?v=661"></script>
-  <script src="js/data/enr-vors.js?v=661"></script>
-  <script src="js/data/loc-stations.js?v=661"></script>
-  <script src="js/data/enr-routes.js?v=661"></script>
-  <script src="js/data/airspace.js?v=661"></script>
-  <script src="js/data/runways.js?v=661"></script>
+  <script src="js/data/terminal-fixes.js?v=663"></script>
+  <script src="js/data/ifr-fixes.js?v=663"></script>
+  <script src="js/data/ifr-procedures.js?v=663"></script>
+  <script src="js/data/airfield-info.js?v=663"></script>
+  <script src="js/data/enr-vors.js?v=663"></script>
+  <script src="js/data/loc-stations.js?v=663"></script>
+  <script src="js/data/enr-routes.js?v=663"></script>
+  <script src="js/data/airspace.js?v=663"></script>
+  <script src="js/data/runways.js?v=663"></script>
   <!-- 앱 코드 -->
-  <script src="js/00-ui.js?v=661"></script>
-  <script src="js/01-state.js?v=661"></script>
-  <script src="js/02-math.js?v=661"></script>
-  <script src="js/03-pfd.js?v=661"></script>
-  <script src="js/04-map.js?v=661"></script>
-  <script src="js/05-gps.js?v=661"></script>
-  <script src="js/06-nav.js?v=661"></script>
-  <script src="js/07-sim.js?v=661"></script>
-  <script src="js/08-ifrdb.js?v=661"></script>
-  <script src="js/09-cdu.js?v=661"></script>
-  <script src="js/10-tools.js?v=661"></script>
-  <script src="js/11-charts.js?v=661"></script>
-  <script src="js/12-joystick.js?v=661"></script>
-  <script src="js/13-joyhid.js?v=661"></script>
-  <script src="js/14-simmode.js?v=661"></script>
-  <script src="js/15-heli3d.js?v=661"></script>
-  <script src="js/16-sound.js?v=661"></script>
-  <script src="js/17-upper.js?v=661"></script>
-  <script src="js/18-system.js?v=661"></script>
-  <script src="js/19-lower.js?v=661"></script>
-  <script src="js/20-navaids.js?v=661"></script>
-  <script src="js/21-c5000.js?v=661"></script>
-  <script src="js/22-npx138.js?v=661"></script>
-  <script src="js/23-afcs.js?v=661"></script>
-  <script src="js/24-sar.js?v=661"></script>
-  <script src="js/25-b206panel.js?v=661"></script>
-  <script src="js/26-b206radio.js?v=661"></script>
-  <script src="js/27-b206coll.js?v=661"></script>
-  <script src="js/28-debrief.js?v=661"></script>
-  <script src="js/29-env.js?v=661"></script>
-  <script src="js/30-scenario.js?v=661"></script>
-  <script src="js/31-ios.js?v=661"></script>
-  <script src="js/32-callout.js?v=661"></script>
-  <script src="js/33-train4.js?v=661"></script>
-  <script src="js/34-infra.js?v=661"></script>
-  <script src="js/35-kuhgrip.js?v=661"></script>
+  <script src="js/00-ui.js?v=663"></script>
+  <script src="js/01-state.js?v=663"></script>
+  <script src="js/02-math.js?v=663"></script>
+  <script src="js/03-pfd.js?v=663"></script>
+  <script src="js/04-map.js?v=663"></script>
+  <script src="js/05-gps.js?v=663"></script>
+  <script src="js/06-nav.js?v=663"></script>
+  <script src="js/07-sim.js?v=663"></script>
+  <script src="js/08-ifrdb.js?v=663"></script>
+  <script src="js/09a-start.js?v=663"></script>
+  <script src="js/09-cdu.js?v=663"></script>
+  <script src="js/09b-cdu-screens.js?v=663"></script>
+  <script src="js/10-tools.js?v=663"></script>
+  <script src="js/11-charts.js?v=663"></script>
+  <script src="js/12-joystick.js?v=663"></script>
+  <script src="js/13-joyhid.js?v=663"></script>
+  <script src="js/14-simmode.js?v=663"></script>
+  <script src="js/15-heli3d.js?v=663"></script>
+  <script src="js/16-sound.js?v=663"></script>
+  <script src="js/17-upper.js?v=663"></script>
+  <script src="js/18-system.js?v=663"></script>
+  <script src="js/19-lower.js?v=663"></script>
+  <script src="js/20-navaids.js?v=663"></script>
+  <script src="js/21-c5000.js?v=663"></script>
+  <script src="js/22-npx138.js?v=663"></script>
+  <script src="js/23-afcs.js?v=663"></script>
+  <script src="js/24-sar.js?v=663"></script>
+  <script src="js/25-b206panel.js?v=663"></script>
+  <script src="js/26-b206radio.js?v=663"></script>
+  <script src="js/27-b206coll.js?v=663"></script>
+  <script src="js/28-debrief.js?v=663"></script>
+  <script src="js/29-env.js?v=663"></script>
+  <script src="js/30-scenario.js?v=663"></script>
+  <script src="js/31-ios.js?v=663"></script>
+  <script src="js/32-callout.js?v=663"></script>
+  <script src="js/33-train4.js?v=663"></script>
+  <script src="js/34-infra.js?v=663"></script>
+  <script src="js/35-kuhgrip.js?v=663"></script>
 
 <input type="file" id="zipFileInput" accept=".zip,application/zip,application/x-zip-compressed,application/octet-stream" style="display:none" onchange="handleZipFile(this.files[0]); this.value='';"></body>
 </html>

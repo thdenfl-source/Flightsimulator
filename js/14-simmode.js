@@ -497,7 +497,17 @@ function simRpmLow() { return simModeOn && simNr < SIM_NR_LOW; }
 // OEI 는 남은 엔진 하나가 2.5분 정격(AEO MTA 의 73%)을 내다가 그 뒤로는 연속 정격(64%)까지 낸다.
 const OEI_25_FRAC = 0.73, OEI_CONT_FRAC = 0.64, OEI_25_SEC = 150;
 // 컬렉티브 OEI 스위치(35-kuhgrip.js) — 누를 때마다 HI(2.5분 정격) ↔ LOW(10분 정격). 바꾸면 그 정격의 시간을 새로 센다.
-const OEI_LO_FRAC = 0.68, OEI_LO_SEC = 600;
+// 정격 토크는 CDU PERF 의 표(09-cdu.js) — 남은 엔진 하나의 토크: HI = MTA(2.5) · LOW = MTA(10) · 시간이 지나면 MTA(30).
+//   PERF 화면이 MTA(10) = MTA(30) + 7 · MTA(2.5) = MTA(30) + 11 로 셈한다(같은 고도 · 기온).
+//   SIM 의 토크(S.tq)는 두 엔진이 나눠 내는 몫(엔진 하나의 토크)이라, 엔진 하나가 다 내는 OEI 의 출력은 그 절반이다.
+//   계기(TQ)는 남은 엔진의 토크를 보인다(01-state.js tqShown — OEI 면 S.tq × 2).
+const OEI_LO_FRAC = 0.68, OEI_LO_SEC = 600, OEI_HI_ADD = 11, OEI_LO_ADD = 7;
+// 남은 엔진 하나가 지금 낼 수 있는 토크(%) — PERF 의 MTA(2.5) · MTA(10) · MTA(30)
+function simOeiTqLim() {
+  const m = mtaNow();
+  if (simOeiT >= simOeiLim()) return m;
+  return m + (simOeiMode === 'LOW' ? OEI_LO_ADD : OEI_HI_ADD);
+}
 let simEng = 2, simOeiT = 0, simOeiMode = 'HI';
 function simOeiLim() { return simOeiMode === 'LOW' ? OEI_LO_SEC : OEI_25_SEC; }
 function simOeiToggle() {
@@ -569,7 +579,7 @@ function simTrngApply(quiet) { simEngApply(quiet); }
 function simEngAvail() {
   const m = mtaNow();
   if (simEng >= 2) return m;
-  if (simEng === 1) return m * (simOeiT < simOeiLim() ? (simOeiMode === 'LOW' ? OEI_LO_FRAC : OEI_25_FRAC) : OEI_CONT_FRAC);
+  if (simEng === 1) return simOeiTqLim() / 2;                          // 엔진 하나가 둘의 몫을 다 낸다
   return 0;
 }
 function cycleSimEng() {

@@ -248,6 +248,22 @@ function envLightVisible(m, eye, la, lo, hM) {
   if (_envOcc.size > 4000) { for (const [k2, c2] of _envOcc) if (now - c2.t > ENV_OCC_TTL) _envOcc.delete(k2); }
   return v;
 }
+// 빛줄기 — 등(1인칭이면 화면 아래 가운데 · 밖에서 보면 헬기 자리 위)에서 빛 무리까지 엷은 원뿔
+function envBeamCone(g, r, m, p, rp, b, first) {
+  let s;
+  if (first) s = { x: r.width / 2, y: r.height + 10 };
+  else {                                                                // 헬기 자리 — 땅 위 점을 높이만큼(화면 축척) 위로
+    const a = m.project([S.lon, S.lat]), [la3, lo3] = _envOff(S.lat, S.lon, 0, 100), a2 = m.project([lo3, la3]);
+    const ppm = Math.hypot(a2.x - a.x, a2.y - a.y) / 100, agl = (typeof radarAltFt === 'function' ? radarAltFt() : S.alt || 0) * 0.3048;
+    s = { x: a.x, y: a.y - Math.min(r.height * 0.6, Math.max(6, agl * ppm * Math.sin(((m.getPitch ? m.getPitch() : 60)) * Math.PI / 180))) };
+  }
+  const ang = Math.atan2(p.y - s.y, p.x - s.x), w = Math.max(4, rp * 0.9), nx = -Math.sin(ang), ny = Math.cos(ang);
+  const gr = g.createLinearGradient(s.x, s.y, p.x, p.y);
+  gr.addColorStop(0, `rgba(255,250,225,${0.30 * b.k})`); gr.addColorStop(1, `rgba(255,250,225,${0.06 * b.k})`);
+  g.fillStyle = gr; g.beginPath(); g.moveTo(s.x - nx * 2, s.y - ny * 2); g.lineTo(s.x + nx * 2, s.y + ny * 2);
+  g.lineTo(p.x + nx * w, p.y + ny * w); g.lineTo(p.x - nx * w, p.y - ny * w); g.closePath(); g.fill();
+  if (!first) { const hg = g.createRadialGradient(s.x, s.y, 0, s.x, s.y, 10); hg.addColorStop(0, `rgba(255,255,240,${0.95 * b.k})`); hg.addColorStop(1, 'rgba(255,255,240,0)'); g.fillStyle = hg; g.beginPath(); g.arc(s.x, s.y, 10, 0, 7); g.fill(); }   // 밖에서 보면 등 자체도 빛난다
+}
 function envFxFrame() {
   const fx = _envFxEls(); if (!fx) return;
   // 구름 속
@@ -286,11 +302,13 @@ function envFxFrame() {
   g.globalAlpha = 1;
   if (!dark) return;
   g.globalCompositeOperation = 'lighter';
-  // 빛 무리
+  // 빛 무리 — 땅에 떨어진 빛 · 그 위로 헬기에서 내려오는 빛줄기(원뿔)
+  const first = typeof _ckFirst === 'function' && _ckFirst();
   for (const b of envBeams()) {
     const f = inFront(b.lat, b.lon); if (!f.ok) continue;
     const p = m.project([b.lon, b.lat]), [la2, lo2] = _envOff(b.lat, b.lon, 0, b.r), p2 = m.project([lo2, la2]);
     const rp = Math.max(6, Math.min(400, Math.hypot(p2.x - p.x, p2.y - p.y)));
+    try { envBeamCone(g, r, m, p, rp, b, first); } catch (e) { _swallow(e); }
     const gr = g.createRadialGradient(p.x, p.y, 0, p.x, p.y, rp);
     gr.addColorStop(0, `rgba(255,248,220,${0.55 * b.k})`); gr.addColorStop(1, 'rgba(255,248,220,0)');
     g.save(); g.translate(p.x, p.y); g.scale(1, 0.55); g.translate(-p.x, -p.y); g.fillStyle = gr; g.beginPath(); g.arc(p.x, p.y, rp, 0, 7); g.fill(); g.restore();

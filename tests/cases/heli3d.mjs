@@ -290,7 +290,8 @@ export async function run(page, t) {
   const mid = a => a.rec.filter(d => d > Math.min(a.d0, a.d1) + 1 && d < Math.max(a.d0, a.d1) - 1).length;
   t.ok(tx.out.state.ext && tx.out.state.tx && tx.out.state.model && !tx.out.state.nose && tx.out.d0 < 2 && tx.out.d1 > 20,
     `→ EXT: 시점은 곧바로 바뀌고 카메라가 조종석(${tx.out.d0.toFixed(0)}m)에서 헬기 뒤(${tx.out.d1.toFixed(0)}m)로 물러난다`);
-  t.ok(mid(tx.out) >= 1 || tx.out.rec.length === 0, `그 사이를 부드럽게 지난다(중간 자리 ${mid(tx.out)}번)`);
+  // 바쁜 검사 기계(여러 묶음을 함께)에서는 넘어가는 동안 그림이 몇 장 안 나온다 — 3장 넘게 그려졌을 때만 중간 자리를 본다
+  t.ok(mid(tx.out) >= 1 || tx.out.rec.length < 3, `그 사이를 부드럽게 지난다(중간 자리 ${mid(tx.out)}번 · 그림 ${tx.out.rec.length}장)`);
   t.ok(!tx.back.state.ext && tx.back.state.tx && tx.back.state.model && !tx.back.state.nose && tx.back.state.chin === 0,
     '→ 1인칭: 조종석으로 들어가는 동안은 헬기 모형이 보이고, 기수·CHIN 창은 아직 없다');
   t.ok(tx.back.d0 > 20 && tx.back.d1 < 2 && !tx.back.end.model && tx.back.end.nose && tx.back.end.chin > 0,
@@ -319,7 +320,7 @@ export async function run(page, t) {
     out.op = +getComputedStyle(document.querySelector('#sim-ckpit svg')).opacity;
     out.on = { panel: vis('sim-ckpit'), nose: vis('sim-nose'), label: btn.textContent, lit, chinTop: (row.top - m.top) / m.height };
     toggleExtView(true); await w(100); out.ext = vis('sim-ckpit');
-    toggleExtView(false); await w(SIM_CAM_TX_MS + 300); out.back = vis('sim-ckpit');
+    toggleExtView(false); { const t0 = performance.now(); await w(SIM_CAM_TX_MS); while (!vis('sim-ckpit') && performance.now() - t0 < 5000) await w(100); } out.back = vis('sim-ckpit');   // 바쁘면 넘어가기가 늦다 — 5초까지 기다린다
     btn.click(); await w(100);
     out.off = { panel: vis('sim-ckpit'), nose: vis('sim-nose'), label: btn.textContent };
     toggleSimMode(false); await w(100); out.exit = vis('ckpit-btn');

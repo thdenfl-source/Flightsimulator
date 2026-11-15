@@ -34,10 +34,12 @@ function speakVoice() {
   for (const re of VOICE_PREF) { const v = ok.find(x => re.test(x.name) && /^en-(US|GB|AU|IE|CA)/i.test(x.lang)) || ok.find(x => re.test(x.name)); if (v) return v; }
   return ok.find(v => /en-US/i.test(v.lang)) || ok[0] || en[0];
 }
+// 비행장 ICAO(RKSS 등)는 음성 문자로 읽는다 — "Romeo Kilo Sierra Sierra"
+function atcIcaoWords(text) { return String(text).replace(/\b(RK[A-Z]{2})\b/g, m => [...m].map(c => (typeof _NATO !== 'undefined' && _NATO[c]) ? _NATO[c][0].toUpperCase() + _NATO[c].slice(1) : c).join(' ')); }
 function speak(text, lang = 'en-US', rate = (typeof appSet !== 'undefined' ? appSet.rate : 1.05)) {
   try {
     if (!('speechSynthesis' in window)) return false;
-    const u = new SpeechSynthesisUtterance(text), v = speakVoice();
+    const u = new SpeechSynthesisUtterance(atcIcaoWords(text)), v = speakVoice();
     if (v) { u.voice = v; u.lang = v.lang; } else u.lang = lang;
     u.rate = rate; u.pitch = 1; u.volume = 1;
     window.speechSynthesis.speak(u); return true;
@@ -172,10 +174,24 @@ function atcTwrCall(fac, gnd, c) {
 function atcPilotShow(fac, pilot) {
   if (!pilot) return;
   atcPilotLast = pilot;
-  try { uiToast(`🎙 PILOT — ${pilot}`, '', 6000); } catch (e) { _swallow(e); }
+  const ph = (String(pilot).match(/\bRK[A-Z]{2}\b/) || [])[0];
+  try { uiToast(`🎙 PILOT — ${pilot}${ph ? ` (${ph} = ${atcIcaoWords(ph)})` : ''}`, '', 6000); } catch (e) { _swallow(e); }
   try { if (typeof fdrNote === 'function') fdrNote(`조종사 ${fac.name} ${fac.kind}: ${pilot}`); } catch (e) { _swallow(e); }
 }
 let atcPilotLast = null;
+// 접근 관제 — 레이더 포착 뒤 유도 단계 · 주파수 읽기(118.1 → "one one eight decimal one")
+const atcApp = { contact: false, icao: null };
+const _sayF = f => { const t = (+f).toFixed(3).replace(/0+$/, '').replace(/\.$/, ''); return t.split('').map(c => c === '.' ? 'decimal' : ({ 0: 'zero', 1: 'one', 2: 'two', 3: 'tree', 4: 'four', 5: 'fife', 6: 'six', 7: 'seven', 8: 'eight', 9: 'niner' })[c]).join(' '); };
+// 레이더 유도 — 활주로 연장선 위 5NM 지점(최종 진입 시작)으로 가는 기수 · 그쪽으로 도는 방향
+function atcVector(fac, rwy) {
+  const rh = rwy ? parseInt(rwy, 10) * 10 : 0, back = (rh + 180) % 360;
+  const tgt = { lat: fac.ap.lat + 5 / 60 * Math.cos(back * Math.PI / 180), lon: fac.ap.lon + 5 / 60 * Math.sin(back * Math.PI / 180) / Math.cos(fac.ap.lat * Math.PI / 180) };
+  let h = (Math.atan2((tgt.lon - S.lon) * Math.cos(S.lat * Math.PI / 180), tgt.lat - S.lat) * 180 / Math.PI + 360) % 360;
+  try { if (typeof toMag === 'function') h = toMag(h); } catch (e) { _swallow(e); }
+  h = Math.round(h / 10) * 10 % 360 || 360;
+  const cur = (typeof toMag === 'function' ? toMag(S.hdg) : S.hdg), d = ((h - cur) % 360 + 540) % 360 - 180;
+  return { hdg: String(h).padStart(3, '0'), turn: d < 0 ? 'left' : 'right' };
+}
 
 // ── Watchman(VHF 125.3 · UHF 278.4) — 관제 전담 기관은 아니지만 APP · TMA 밖 VFR 항공기에 레이더 조력을 준다 ──
 //   관제권을 벗어나 레이더 조력 요청
@@ -235,18 +251,46 @@ function atcReply(fac) {
   let txt;
   if (fac.kind === 'WATCHMAN') {
     const r = atcWatchmanCall(); txt = r.tower; atcPilotShow(fac, r.pilot);
-  } else if (fac.kind === 'GND') { txt = `${atcCs()}, ${nm} Ground, taxi to holding point ${rw}.`; atcExpect = { t: Date.now(), items: [['holding', 'hold'], rwy ? _rwyTokens(rwy) : []] }; }
+  } else if (fac.kind === 'GND') {
+    // 지상 관제 — 땅 위면 지상 이동(활주로 앞 대기점까지) · 떠 있으면 타워로 넘긴다
+    const twrF = (_fr(((typeof AIRFIELD_INFO !== 'undefined' ? AIRFIELD_INFO.find(a => 'RK' + a.code === fac.icao) : null) || {}).twr) || [])[0];
+    const bound = atcDepBound(fac.ap);
+    if (gnd) {
+      atcPilotShow(fac, `${nm} Ground, ${atcCs()}, request taxi ${bound ? `for departure VFR to ${bound} bound` : 'for pattern flight'}.`);
+      txt = `${atcCs()}, ${nm} Ground, taxi to holding point ${rw}, altimeter ${_say3(atcAltimeter())}${twrF ? `, contact tower ${_sayF(twrF)} when ready` : ''}.`;
+      atcExpect = { t: Date.now(), items: [['holding', 'hold'], rwy ? _rwyTokens(rwy) : [], ['tower', 'ready']] };
+    } else {
+      atcPilotShow(fac, `${nm} Ground, ${atcCs()}, airborne.`);
+      txt = `${atcCs()}, ${nm} Ground, contact tower${twrF ? ' ' + _sayF(twrF) : ''}.`;
+      atcExpect = { t: Date.now(), items: [['tower']] };
+    }
+  }
   else if (fac.kind === 'TWR') {
     const r = atcTwrCall(fac, gnd, { nm, wind, rwy, rw });
     txt = r.tower; atcPilotShow(fac, r.pilot);
   } else {
     const code = (typeof b206r !== 'undefined') ? b206r.xpdr.code : null, mode = (typeof b206r !== 'undefined') ? b206r.xpdr.mode : 'ALT';
     if (!atcSquawk) {
+      atcApp.contact = false;
       atcSquawk = String(Math.floor(Math.random() * 8)) + [0, 0, 0].map(() => Math.floor(Math.random() * 8)).join('');
       if (atcSquawk === '7700' || atcSquawk === '7600' || atcSquawk === '7500' || atcSquawk === '1200') atcSquawk = '4521';
       txt = `${atcCs()}, ${nm} Approach, squawk ${_say3(atcSquawk)}.`;
       atcExpect = { t: Date.now(), items: [['squawk'], atcSquawk.split('')] };
+    } else if (code === atcSquawk && (mode === 'ALT' || mode === 'ON') && atcApp.contact && atcApp.icao === fac.icao) {
+      // 레이더 포착 뒤 — 들어오면 레이더 유도(기수 · 고도 · 접근 예상) · 10NM 안이면 타워로 넘긴다
+      const twrF = (_fr(((typeof AIRFIELD_INFO !== 'undefined' ? AIRFIELD_INFO.find(a => 'RK' + a.code === fac.icao) : null) || {}).twr) || [])[0];
+      if (fac.d <= 10) {
+        atcPilotShow(fac, `${nm} Approach, ${atcCs()}, ${Math.round(fac.d)} miles, field in sight.`);
+        txt = `${atcCs()}, ${nm} Approach, contact tower${twrF ? ' ' + _sayF(twrF) : ''}.`;
+        atcExpect = { t: Date.now(), items: [['tower']] }; atcApp.contact = false; atcSquawk = null;
+      } else {
+        const vec = atcVector(fac, rwy), alt = Math.max(1500, Math.min(4000, Math.round(fac.d * 300 / 500) * 500));
+        atcPilotShow(fac, `${nm} Approach, ${atcCs()}, request vectors for ${rwy ? 'runway ' + rwy : 'landing'}.`);
+        txt = `${atcCs()}, ${nm} Approach, turn ${vec.turn} heading ${_say3(vec.hdg)}, ${S.alt > alt + 100 ? 'descend and maintain' : 'maintain'} ${_altWords(alt)} feet, expect ${rwy ? `runway ${_say3(rwy)}` : 'visual approach'}.`;
+        atcExpect = { t: Date.now(), items: [['heading'], vec.hdg.split(''), _altWords(alt).split(' ')] };
+      }
     } else if (code === atcSquawk && (mode === 'ALT' || mode === 'ON')) {
+      atcApp.contact = true; atcApp.icao = fac.icao;
       const brg = Math.round((Math.atan2((S.lon - fac.ap.lon) * Math.cos(S.lat * Math.PI / 180), S.lat - fac.ap.lat) * 180 / Math.PI + 360) % 360);
       const dir = ['north', 'northeast', 'east', 'southeast', 'south', 'southwest', 'west', 'northwest'][Math.round(brg / 45) % 8];
       const malt = Math.max(1000, Math.round((S.alt || 0) / 500) * 500);

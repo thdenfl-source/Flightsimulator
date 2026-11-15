@@ -102,7 +102,7 @@ export async function run(page, t) {
   const tr = await page.evaluate(`(() => {
     (${SIM_SETUP_SRC})();
     const st = () => { const p = engParams(); return { eng: simEng, fail: simEngFail, trng: simEngTrng,
-      e1: Math.round(p.e1.ng), e2: Math.round(p.e2.ng), t1: Math.round(p.e1.tq), avail: simEngAvail() / mtaNow(),
+      e1: Math.round(p.e1.ng), e2: Math.round(p.e2.ng), t1: Math.round(p.e1.tq), avail: simEngAvail() / mtaNow(), mta: mtaNow(),
       btn: engStateLabel() }; };
     const o = { aeo: st() };
     ovhdSet('trng1', 'TRNG'); o.t1 = st();
@@ -115,8 +115,8 @@ export async function run(page, t) {
     return o;
   })()`);
   t.ok(tr.aeo.eng === 2 && !tr.aeo.trng, `처음은 두 엔진 정상(AEO)`);
-  t.ok(tr.t1.eng === 1 && tr.t1.fail === 1 && tr.t1.trng && Math.abs(tr.t1.avail - 0.73) < 0.01,
-    `TRNG 1 을 올리면 ENG 1 OEI 훈련 — 남은 엔진 2.5분 정격(MTA 의 ${(tr.t1.avail * 100).toFixed(0)}%)`);
+  t.ok(tr.t1.eng === 1 && tr.t1.fail === 1 && tr.t1.trng && Math.abs(tr.t1.avail - (tr.t1.mta + 11) / 2 / tr.t1.mta) < 0.01,
+    `TRNG 1 을 올리면 ENG 1 OEI 훈련 — 남은 엔진 2.5분 정격 PERF MTA(2.5)(AEO 출력의 ${(tr.t1.avail * 100).toFixed(0)}%)`);
   t.ok(tr.t1.e1 === 62 && tr.t1.t1 === 0 && tr.t1.e2 > 62 && tr.t1.btn === 'ENG1 TRNG',
     `엔진 계기: 1번은 IDLE(NG ${tr.t1.e1} · TQ ${tr.t1.t1}), 2번이 다 낸다(NG ${tr.t1.e2}) · 버튼 ${tr.t1.btn}`);
   t.ok(tr.both.eng === 2 && !tr.both.trng, '두 스위치가 다 올라가면 훈련이 걸리지 않는다(AEO)');

@@ -217,19 +217,45 @@ const IOS_MIRROR_G = ['selSpd', 'selAlt', 'selHht', 'selCrht', 'selHdg', 'selVS'
   'holdOn', 'hoverPageOn', 'hoverPosOn', 'simNr', 'simEng', 'simOeiT', 'simOeiMode', 'NR_GOV', 'simTq', 'env', 'kgLt',
   'b206c', 'b206r', 'b206Wb', '_b206Gal', 'b206Hyd', 'c5', 'npx', 'instFail', 'shipVisible', 'shipLat', 'shipLon', 'shipHdg'];
 const _iosGet = n => { try { return (0, eval)(n); } catch (e) { return undefined; } };
+// 다른 파일이 미러할 이름을 더한다 — iosMirrorAdd(['이름', …]) (있으면 부른다)
+function iosMirrorAdd(names) { for (const n of [].concat(names || [])) if (!IOS_MIRROR_G.includes(n)) IOS_MIRROR_G.push(n); }
+// 이름이 바뀌어 조용히 빠지는 것을 막는다 — 처음 한 번 읽어 보고 없는 이름은 진단 기록(🩺)에 남긴다
+function iosMirrorCheck() {
+  const missing = IOS_MIRROR_G.filter(n => _iosGet(n) === undefined);
+  const b2 = typeof acB206 === 'function' && acB206();
+  // 기종 · 판에 따라 없는 것이 맞는 이름(Bell 계통은 흰수리에도 있다 — 둘 다 읽힌다)
+  const real = missing.filter(n => !/^ship(Lat|Lon|Hdg)$/.test(n) && !(n === 'simTq'));
+  if (real.length) try { _swallow(new Error('교관 미러 — 없는 이름: ' + real.join(', ') + (b2 ? ' (Bell)' : ''))); } catch (e) { /* 무시 */ }
+  return real;
+}
+// 보낼 것 — 지난번과 달라진 것만(가볍게) · full 이면 다 보낸다(2초마다 · 처음)
+const _iosMirLast = { S: {}, g: {}, ov: {} };
+function _iosDiff(cur, last, out) {
+  let n = 0;
+  for (const [k, v] of Object.entries(cur)) {
+    if (typeof v === 'function') continue;
+    let j; try { j = JSON.stringify(v); } catch (e) { continue; }
+    if (j === undefined || last[k] === j) continue;
+    last[k] = j; out[k] = JSON.parse(j); n++;
+  }
+  return n;
+}
 function iosMirror(full) {
+  if (full) { _iosMirLast.S = {}; _iosMirLast.g = {}; _iosMirLast.ov = {}; }
   const g = {};
   for (const n of IOS_MIRROR_G) { const v = _iosGet(n); if (v !== undefined && typeof v !== 'function') g[n] = v; }
   const s = Object.assign({}, S); delete s.trail;
-  const m = { type: 'mirror', S: s, g };
-  if (full && typeof ovhdState !== 'undefined') m.ov = Object.assign({}, ovhdState);
-  try { return JSON.parse(JSON.stringify(m)); } catch (e) { _swallow(e); return null; }
+  const m = { type: 'mirror', full: !!full, S: {}, g: {} };
+  let n = _iosDiff(s, _iosMirLast.S, m.S) + _iosDiff(g, _iosMirLast.g, m.g);
+  if (typeof ovhdState !== 'undefined') { m.ov = {}; n += _iosDiff(ovhdState, _iosMirLast.ov, m.ov); }
+  return (n || full) ? m : null;
 }
 // 교육생 창 — 교관 창이 있다고 알려 오면(ping) 0.2초마다 보낸다(콘솔은 1초마다)
 let _iosPeerT = 0, _iosMirN = 0;
 if (!IOS_MODE) setInterval(() => {
   if (Date.now() - _iosPeerT > 3000) return;
-  const m = iosMirror(_iosMirN++ % 5 === 0); if (!m) return;
+  if (_iosMirN === 0) iosMirrorCheck();
+  const m = iosMirror(_iosMirN++ % 10 === 0); if (!m) return;          // 바뀐 것만 · 2초마다 전부
   try { if (_iosCh) _iosCh.postMessage(m); } catch (e) { _swallow(e); }
   try { if (typeof rtcSend === 'function') rtcSend(m); } catch (e) { _swallow(e); }
 }, 200);

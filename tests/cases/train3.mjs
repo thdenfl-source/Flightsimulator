@@ -53,6 +53,7 @@ export async function run(page, t) {
     window.sndOnGround = () => false;
     const info = AIRFIELD_INFO.find(x => x.code === 'SS'), twr = parseFloat(info.twr);
     o.fac = atcFacility(twr); o.none = atcFacility(129.95);
+    _atcTrack.length = 0; atcTwr.phase = null;                       // 앞 검사에서 옮긴 자리(2초 간격 기록)가 '멀어짐'으로 읽히지 않게
     o.txt = atcReply(o.fac);
     window.sndOnGround = () => true; const onRw0 = window.atcOnRunway; atcOnRunway = () => true; o.txtGnd = atcReply(o.fac); atcOnRunway = onRw0;
     // 타워 교신 흐름 — 활주로 밖(지상 활주 요청) · 활주로 위(이륙) · 관제권 떠남 · 접근(inbound) · 5마일 final(착륙 허가)
@@ -83,6 +84,12 @@ export async function run(page, t) {
     atcSquawk = null; const app = atcFacility(parseFloat((info.app.match(/1[1-3]\d\.\d+/) || [])[0]));
     o.app = !!app;
     if (app) { o.sq1 = atcReply(app); b206r.xpdr.code = atcSquawk; b206r.xpdr.mode = 'ALT'; o.sq2 = atcReply(app); }
+    // APP 레이더 유도 — 포착 뒤 20NM 에서 부르면 기수 · 고도 · 접근 예상, 10NM 안이면 타워로
+    if (app) { const keep = { lat: S.lat, lon: S.lon }; S.lat = ap.lat + 20 / 60; S.lon = ap.lon; o.vec = atcReply(atcFacility(parseFloat((info.app.match(/1[1-3]\d\.\d+/) || [])[0])));
+      S.lat = ap.lat + 8 / 60; o.twr = atcReply(atcFacility(parseFloat((info.app.match(/1[1-3]\d\.\d+/) || [])[0]))); Object.assign(S, keep); }
+    // GND — 땅 위면 대기점까지 지상 이동 · 타워 주파수
+    { const g0 = window.sndOnGround; window.sndOnGround = () => true; const gf = _fr(info.gnd)[0]; o.gnd = gf ? atcReply(atcFacility(gf)) : null; o.gndP = atcPilotLast; window.sndOnGround = g0; }
+    o.icao = atcIcaoWords('landing assured to RKSS');
     // PTT 를 놓으면 그 주파수로 답한다
     window.sndOnGround = () => false;
     b206r.aud.mic = '1'; b206r.gns.on = true; b206r.gns.com[0] = twr; speakLog.length = 0; atcExpect = null;
@@ -108,6 +115,9 @@ export async function run(page, t) {
     `Watchman(125.3) — 레이더 조력 요청: "${F.wm1.p}" → "radar contact, maintain VFR"`);
   t.ok(/landing assured to RK[A-Z]{2}, request frequency change/.test(F.wm2.p) && /radar frequency change approved\. Have a good day!/.test(F.wm2.t) && !F.wm2.contact && /for MEDEVAC\./.test(F.wm3),
     `Watchman(UHF 278.4) — 관제권에 들어오며 "${F.wm2.p}" → "radar frequency change approved" · 임무 MEDEVAC`);
+  t.ok(!A.app || (/turn (left|right) heading .* feet, expect runway/.test(A.vec) && /contact tower/.test(A.twr)), `APP 레이더 유도 — ${A.app ? A.vec : ''} → 10NM 안 "contact tower"`);
+  t.ok(!A.gnd || (/taxi to holding point runway .* altimeter .* contact tower/.test(A.gnd) && /request taxi/.test(A.gndP)), `GND — ${A.gnd || '주파수 없음'}`);
+  t.ok(A.icao === 'landing assured to Romeo Kilo Sierra Sierra', `ICAO 는 음성 문자로 읽는다 (${A.icao})`);
   t.ok(!A.app || (/squawk/.test(A.sq1) && /radar contact/.test(A.sq2)), `APP — 코드를 주고, 맞추면 레이더 포착 (${A.app ? A.sq2.slice(0, 50) : '주파수 없음'})`);
   t.ok(A.ptt.length === 1 && /cleared|report|approved|taxi/.test(A.ptt[0]), 'PTT 로 송신하고 놓으면 1.5초 뒤 관제가 답한다');
   t.ok(A.cl[3] === null && A.pitotAuto && A.pitotAuto.ok && A.pitotOff && !A.pitotOff.ok && A.pitotOff.now === 'OFF',

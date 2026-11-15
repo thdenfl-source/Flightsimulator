@@ -2739,7 +2739,7 @@ async function part5(page, t) {
     lever(0); fly(8); o.high = { nr: simNr, warn: simRotorHigh(), chart: autoNrChart() };
     simEng = 2; lever(tqRequired()); fly(4);
     // OEI 정격
-    simEng = 1; simOeiT = 0; o.oei25 = simEngAvail() / mtaNow(); simOeiT = 200; o.oeiCont = simEngAvail() / mtaNow(); simEng = 2; simOeiT = 0;
+    simEng = 1; simOeiT = 0; simOeiMode = 'HI'; o.want25 = (mtaNow() + 11) / 2 / mtaNow(); o.oei25 = simEngAvail() / mtaNow(); simOeiT = 200; o.oeiCont = simEngAvail() / mtaNow(); simEng = 2; simOeiT = 0;
     // 꼬리로터 — 제자리에서 반토크 페달을 끝까지 차면 토크가 더 든다(레버는 그대로)
     hold(0); S.alt = 3000; S.vs = 0; simVsAcc = 0; simFlareVs = 0; simNr = 100; S.tq = tqRequired(); lever(tqRequired()); fly(8); const tq0 = S.tq;
     _ax(2, rotorSign()); fly(2); o.tr = { d: S.tq - tq0, vs: S.vs }; _ax(2, 0); fly(2);
@@ -2767,8 +2767,8 @@ async function part5(page, t) {
     `레버를 내려 오토로테이션 — NR ${aero.auto.nr.toFixed(0)}% · 강하 ${aero.auto.vs.toFixed(0)}fpm`);
   t.ok(Math.abs(aero.high.nr - aero.high.chart) < 1.5 && aero.high.warn === (aero.high.nr > 110),
     `레버를 다 내리면 NR 이 자동회전 RPM 수정표 값까지 오르고, 110% 를 넘으면 NR HIGH (${aero.high.nr.toFixed(1)} · 표 ${aero.high.chart.toFixed(1)}%)`);
-  t.ok(Math.abs(aero.oei25 - 0.73) < 0.01 && Math.abs(aero.oeiCont - 0.64) < 0.01,
-    `OEI — 2.5분 정격 ${Math.round(aero.oei25 * 100)}% · 그 뒤 연속 ${Math.round(aero.oeiCont * 100)}%(AEO MTA 대비)`);
+  t.ok(Math.abs(aero.oei25 - aero.want25) < 0.002 && Math.abs(aero.oeiCont - 0.5) < 0.002,
+    `OEI — 남은 엔진이 PERF MTA(2.5) 까지(AEO 출력의 ${Math.round(aero.oei25 * 100)}%) · 시간이 지나면 MTA(30)(${Math.round(aero.oeiCont * 100)}%)`);
   t.ok(aero.tr.d > 4 && aero.tr.d < 7 && Math.abs(aero.tr.vs) < 60,
     `꼬리로터 — 제자리에서 반토크 페달을 다 차면 토크 +${aero.tr.d.toFixed(1)}%(고도는 그대로 ${aero.tr.vs.toFixed(0)}fpm)`);
   t.ok(aero.vrsIn.on && aero.vrsIn.vs < -1500, `제자리에서 출력을 건 채 빠르게 가라앉으면 VRS (${aero.vrsIn.vs.toFixed(0)}fpm)`);

@@ -25,6 +25,37 @@ export async function run(page, t) {
     `기수 위(HDG 090) — 오른쪽으로 끌면 화면 오른쪽(남쪽)으로 (위도 −${(p1.lat - pH.lat).toFixed(4)} · 경도 ${(pH.lon - p1.lon).toFixed(4)})`);
   await page.evaluate(() => { if (mapHdgUp) toggleMapOrient(); });
 
+  // ── 보강: 미러는 바뀐 것만 · 없는 이름 감지 · 조이스틱 컬렉티브 동작 · 큰 창 바깥 닫기 · 빛줄기 · 오프라인 확인 ──
+  const X = await page.evaluate(async () => {
+    const o = {};
+    const m1 = iosMirror(true), m2 = iosMirror(false); S.alt = (S.alt || 0) + 7; const m3 = iosMirror(false);
+    o.mir = { full: Object.keys(m1.S).length > 10 && Object.keys(m1.g).length > 10, none: m2 === null, one: m3 && Object.keys(m3.S).join(',') === 'alt' && Object.keys(m3.g).length === 0 };
+    o.missing = iosMirrorCheck();
+    o.joy = ['kgCollUp', 'kgSrchLt', 'kgSrchL', 'kgLdgExt', 'kgApCut', 'kgOei'].every(id => JOY_ACTIONS.some(a => a.id === id));
+    kgLt.srch = false; JOY_ACTIONS.find(a => a.id === 'kgSrchLt').run(); o.joySrch = kgLt.srch; kgSrchSet(false);
+    // 빛줄기 — 원뿔을 그린다(1인칭 · 밖에서)
+    const cv = document.createElement('canvas'); cv.width = 300; cv.height = 200; const g = cv.getContext('2d');
+    let n = 0; const f0 = g.fill.bind(g); g.fill = (...a) => { n++; return f0(...a); };
+    const fakeM = { project: ([lo, la]) => ({ x: 150 + (lo - S.lon) * 1e4, y: 100 - (la - S.lat) * 1e4 }), getPitch: () => 60 };
+    envBeamCone(g, { width: 300, height: 200 }, fakeM, { x: 150, y: 150 }, 20, { k: 1 }, true);
+    envBeamCone(g, { width: 300, height: 200 }, fakeM, { x: 150, y: 150 }, 20, { k: 1 }, false);
+    o.cone = n >= 3;
+    o.off = await offlineCheck(); o.off = typeof o.off.total === 'number' && Array.isArray(o.off.missing);
+    return o;
+  });
+  t.ok(X.mir.full && X.mir.none && X.mir.one, '교관 미러 — 처음은 전부 · 바뀐 것이 없으면 보내지 않고 · 고도만 바뀌면 고도만');
+  t.eq(X.missing.join(','), '', '교관 미러 — 옮길 이름이 모두 있다(이름이 바뀌면 진단 기록에 남는다)');
+  t.ok(X.joy && X.joySrch, '조이스틱 — 컬렉티브 · 사이클릭 동작(COLL TRIM · SRCH LT · SRCH CTR · LDG LT · AP CUT · OEI) 배정 · SRCH LT 가 켜진다');
+  t.ok(X.cone && X.off, '서치라이트 · 착륙등 빛줄기(원뿔)를 그린다 · 오프라인 준비 확인');
+  await page.evaluate(() => { S.spd = 0; S.alt = 300; cockpitStart(); });
+  await page.waitForFunction(() => !!document.getElementById('kg-mini-coll'), null, { timeout: 15000 });
+  await page.evaluate(() => kgPop('coll')); await page.waitForTimeout(300);
+  const before = await page.evaluate(() => getComputedStyle(document.getElementById('kg-pop')).display);
+  await page.mouse.click(30, 300); await page.waitForTimeout(300);
+  const after = await page.evaluate(() => { const v = getComputedStyle(document.getElementById('kg-pop')).display; cockpitExit(); if (S.running) toggleSim(); if (typeof simModeOn !== 'undefined' && simModeOn) toggleSimMode(false); return v; });
+  t.ok(before === 'flex' && after === 'none', '컬렉티브 · 사이클릭 큰 창 — 바깥을 누르면 닫힌다');
+  await page.waitForTimeout(300);
+
   // ── 교관 화면 페이지 ──
   const [ios] = await Promise.all([page.waitForEvent('popup'), page.evaluate(() => document.getElementById('map-ios-btn').click())]);
   await ios.waitForFunction(() => !!document.getElementById('ios-pages') && !!document.getElementById('ios-root'), null, { timeout: 20000 });
