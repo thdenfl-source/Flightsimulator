@@ -65,7 +65,7 @@ export async function run(page, t) {
   await page.evaluate(() => selectPanel('right', 'cdu'));
   await page.waitForTimeout(250);
   const modes = ['HOME', 'AIRFIELD', 'CHARTS', 'UTIL', 'PERF', 'AUDIO', 'INTERCOM',
-                 'XPDR_MODE', 'TRACKPOINT', 'SETTINGS', 'CHECKLIST'];
+                 'XPDR_MODE', 'TRACKPOINT', 'SETTINGS', 'CONTROLS', 'CHECKLIST'];
   page.errors.length = 0;
   for (const m of modes) {
     await page.evaluate(mm => { try { switchMode(mm); } catch (e) { throw e; } }, m);
@@ -127,8 +127,25 @@ export async function runDegenerate(page, t) {
     return { home, wxTitle, wxLabels, hrefs, cctv, back };
   });
   t.eq(wx.home.join('|'),
-    'MAP|AircraftSystems|PERF|Charts|Flight Plan|PROC|VNAV|WaypointInfo|NOTAM|Track &Point|Services|Utilities|SkyVector|Tideforecast|ERavailability|Wildfirestatus|Weather|Checklist|AirportINFO',
-    `CDU 홈 배열 — 4칸씩 MAP… / Flight Plan… / NOTAM… / SkyVector… / Weather · Checklist · Airport INFO (${wx.home.join(' · ')})`);
+    'MAP|AircraftSystems|PERF|Charts|Flight Plan|PROC|VNAV|WaypointInfo|NOTAM|Track &Point|Services|Utilities|SkyVector|Tideforecast|ERavailability|Wildfirestatus|Weather|Checklist|AirportINFO|조종장치',
+    `CDU 홈 배열 — 4칸씩 MAP… / Flight Plan… / NOTAM… / SkyVector… / Weather · Checklist · Airport INFO · 조종장치 (${wx.home.join(' · ')})`);
+  // 조종장치 — 홈 맨 아랫줄 · 조종 장치 사용 · 버튼/축 배정 · 키보드 단축키(설정에 있던 것) · 배정 화면의 Back 은 조종장치로
+  const ctl = await page.evaluate(async () => {
+    const wait = ms => new Promise(r => setTimeout(r, ms));
+    const title = () => document.getElementById('modeTitle').textContent.trim();
+    CDU_ACT.switchMode('HOME'); await wait(50);
+    document.querySelector('#mainContentArea [data-arg=\'["CONTROLS"]\']').click(); await wait(60);
+    const t1 = title(), txt = document.getElementById('mainContentArea').textContent;
+    document.querySelector('#mainContentArea [data-arg=\'["JOYSTICK"]\']').click(); await wait(60);
+    const t2 = title(); document.querySelector('#mainContentArea [data-arg=\'["CONTROLS"]\']').click(); await wait(60);
+    const t3 = title();
+    CDU_ACT.switchMode('SETTINGS'); await wait(60);
+    const set = document.getElementById('mainContentArea').textContent;
+    CDU_ACT.switchMode('HOME'); await wait(50);
+    return { t1, t2, t3, has: /조종 장치 사용/.test(txt) && /버튼 · 축 배정/.test(txt) && /키보드 단축키/.test(txt), setMoved: !/방향키로 계기|DeX/.test(set) && /조종 장치/.test(set) };
+  });
+  t.ok(ctl.t1 === '조종장치' && ctl.has && ctl.t2 === 'Joystick' && ctl.t3 === '조종장치' && ctl.setMoved,
+    `CDU 홈 조종장치 — 조종 장치 사용 · 버튼/축 배정 · 키보드 단축키 · 배정 화면 Back 은 조종장치로 (${ctl.t1} → ${ctl.t2} → ${ctl.t3})`);
   // Waypoint Info — 누르면 INFO, INFO 의 Back 은 Waypoint Info 로
   const wpt = await page.evaluate(async () => {
     const wait = ms => new Promise(r => setTimeout(r, ms));
