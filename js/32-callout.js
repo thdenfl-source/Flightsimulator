@@ -14,10 +14,32 @@
 // ══════════════════════════════════════════════════════
 
 // ── 말하기 ──
+// 목소리를 고르지 않으면 브라우저 · 기기 기본 목소리가 나온다(PC 에 따라 거친 남성 합성음). 그래서 영어 목소리 가운데
+// 자연스러운 여성 목소리를 먼저 고른다 — ⚙ 설정 '관제 목소리'에서 직접 고르면(appSet.voice) 그것을 쓴다.
+const VOICE_PREF = [/Google US English/i, /Aria.*Natural|Jenny.*Natural|Ava.*Natural|Emma.*Natural|Michelle.*Natural/i, /Natural.*\(English/i,
+  /Samantha|Karen|Moira|Tessa|Serena|Allison|Ava|Susan|Victoria|Fiona/i, /Zira|Hazel|Aria|Jenny|Libby|Sonia|Clara|Catherine|Heera/i, /female|woman/i, /Google UK English Female/i];
+const VOICE_BAD = /espeak|eSpeak|mbrola|robot|whisper|novelty|Albert|Bad News|Bahh|Bells|Boing|Bubbles|Cellos|Deranged|Fred|Hysterical|Junior|Ralph|Trinoids|Zarvox|Jester|Organ|Superstar|Wobble|Grandpa|Grandma|Rocko|Shelley|Reed|Eddy|Flo/i;
+let _voices = [];
+function speakVoices() {
+  try { const v = window.speechSynthesis ? window.speechSynthesis.getVoices() : []; if (v && v.length) _voices = v; } catch (e) { _swallow(e); }
+  return _voices.filter(v => /^en(-|_|$)/i.test(v.lang || ''));
+}
+try { if (window.speechSynthesis) { speakVoices(); window.speechSynthesis.addEventListener('voiceschanged', speakVoices); } } catch (e) { _swallow(e); }
+// 쓸 목소리 — 설정에서 고른 것 · 없으면 VOICE_PREF 순서로 · 그래도 없으면 이상한 것을 뺀 첫 영어 목소리
+function speakVoice() {
+  const en = speakVoices(); if (!en.length) return null;
+  const want = typeof appSet !== 'undefined' && appSet.voice;
+  if (want) { const v = en.find(x => x.name === want); if (v) return v; }
+  const ok = en.filter(v => !VOICE_BAD.test(v.name));
+  for (const re of VOICE_PREF) { const v = ok.find(x => re.test(x.name) && /^en-(US|GB|AU|IE|CA)/i.test(x.lang)) || ok.find(x => re.test(x.name)); if (v) return v; }
+  return ok.find(v => /en-US/i.test(v.lang)) || ok[0] || en[0];
+}
 function speak(text, lang = 'en-US', rate = (typeof appSet !== 'undefined' ? appSet.rate : 1.05)) {
   try {
     if (!('speechSynthesis' in window)) return false;
-    const u = new SpeechSynthesisUtterance(text); u.lang = lang; u.rate = rate; u.volume = 1;
+    const u = new SpeechSynthesisUtterance(text), v = speakVoice();
+    if (v) { u.voice = v; u.lang = v.lang; } else u.lang = lang;
+    u.rate = rate; u.pitch = 1; u.volume = 1;
     window.speechSynthesis.speak(u); return true;
   } catch (e) { _swallow(e); return false; }
 }
@@ -54,6 +76,7 @@ const _apEn = { 인천: 'Incheon', 김포: 'Gimpo', 김해: 'Gimhae', 제주: 'J
 const _fr = s => (String(s || '').match(/\b1[1-3]\d\.\d{1,3}\b/g) || []).map(Number);
 // 주파수 → 시설(가까운 공항의 TWR · GND · APP)
 function atcFacility(freq) {
+  if (atcIsWatchman(freq)) return { kind: 'WATCHMAN', name: 'Watchman', en: 'Watchman', icao: 'WATCHMAN', d: 0, ap: null, rwy: null };
   if (!(freq > 0) || typeof AIRFIELD_INFO === 'undefined') return null;
   let best = null;
   for (const a of AIRFIELD_INFO) {
@@ -153,6 +176,56 @@ function atcPilotShow(fac, pilot) {
   try { if (typeof fdrNote === 'function') fdrNote(`조종사 ${fac.name} ${fac.kind}: ${pilot}`); } catch (e) { _swallow(e); }
 }
 let atcPilotLast = null;
+
+// ── Watchman(VHF 125.3 · UHF 278.4) — 관제 전담 기관은 아니지만 APP · TMA 밖 VFR 항공기에 레이더 조력을 준다 ──
+//   관제권을 벗어나 레이더 조력 요청
+//     P: "Watchman, <콜사인>, 240 radial 12 miles from RKSS, direct to <다음 지점> for sea patrol(MEDEVAC · search and rescue)"
+//     W: "<콜사인>, radar contact, maintain VFR"
+//   관제권(공항 10NM 안)에 들어가며 끝냄(termination)
+//     P: "Watchman, <콜사인>, landing assured to RKSS, request frequency change"
+//     W: "<콜사인>, radar frequency change approved. Have a good day!"
+//   임무(sea patrol · MEDEVAC · search and rescue)는 ⚙ 설정에서 고른다(appSet.mission).
+const WATCHMAN_FREQ = [125.3, 278.4];
+const ATC_MISSIONS = { patrol: 'sea patrol', medevac: 'MEDEVAC', sar: 'search and rescue' };
+const atcWm = { contact: false };
+function atcIsWatchman(f) { return f > 0 && WATCHMAN_FREQ.some(x => Math.abs(x - f) < 0.006); }
+const _NATO = { A: 'alpha', B: 'bravo', C: 'charlie', D: 'delta', E: 'echo', F: 'foxtrot', G: 'golf', H: 'hotel', I: 'india', J: 'juliett', K: 'kilo', L: 'lima', M: 'mike',
+  N: 'november', O: 'oscar', P: 'papa', Q: 'quebec', R: 'romeo', S: 'sierra', T: 'tango', U: 'uniform', V: 'victor', W: 'whiskey', X: 'x-ray', Y: 'yankee', Z: 'zulu' };
+function _nearestAp(maxNm = 999) {
+  if (typeof AIRPORTS_KR === 'undefined') return null;
+  let best = null;
+  for (const a of AIRPORTS_KR) { const d = distance(S.lat, S.lon, a.lat, a.lon); if (d <= maxNm && (!best || d < best.d)) best = { a, d }; }
+  return best;
+}
+// 다음에 갈 곳 — 활성 웨이포인트(없으면 비행계획 마지막)
+function atcNextFix() {
+  const w = (S.wps || [])[S.awp >= 0 ? S.awp : 0] || null;
+  return w ? (w.ident || w.name || 'next waypoint') : null;
+}
+// 끝낼 공항 — 비행계획 마지막 지점이 공항이면 그곳, 아니면 가장 가까운 공항
+function atcLandingAp() {
+  const last = (S.wps || [])[S.wps ? S.wps.length - 1 : -1];
+  if (last && typeof AIRPORTS_KR !== 'undefined') { const a = AIRPORTS_KR.find(x => x.icao === last.ident || distance(last.lat, last.lon, x.lat, x.lon) < 1); if (a) return a; }
+  const n = _nearestAp(); return n ? n.a : null;
+}
+function atcWatchmanCall() {
+  const cs = atcCs(), mis = ATC_MISSIONS[(typeof appSet !== 'undefined' && appSet.mission) || 'patrol'] || 'sea patrol';
+  const near = _nearestAp(10), land = atcLandingAp();
+  let pilot, tower;
+  if (atcWm.contact && near) {                                         // 관제권(공항 10NM 안)으로 들어간다 — 끝냄
+    const ap = land && distance(S.lat, S.lon, land.lat, land.lon) <= 15 ? land : near.a;
+    pilot = `Watchman, ${cs}, landing assured to ${ap.icao}, request frequency change.`;
+    tower = `${cs}, radar frequency change approved. Have a good day!`;
+    atcWm.contact = false; atcExpect = null;
+  } else {
+    const ref = _nearestAp(), fix = atcNextFix();
+    const where = ref ? `${atcRadial(ref.a)} radial ${Math.max(1, Math.round(ref.d))} miles from ${ref.a.icao}` : 'position unknown';
+    pilot = `Watchman, ${cs}, ${where}${fix ? `, direct to ${fix}` : ''} for ${mis}.`;
+    tower = `${cs}, radar contact, maintain VFR.`;
+    atcWm.contact = true; atcExpect = { t: Date.now(), items: [['radar contact', 'contact'], ['VFR', 'V F R', 'vfr']] };
+  }
+  return { pilot, tower };
+}
 const _say3 = s => String(s).split('').map(c => ({ L: ' left', R: ' right', C: ' center' }[c] || ' ' + c)).join('').trim();
 let atcSquawk = null, atcLast = null;
 function atcReply(fac) {
@@ -160,7 +233,9 @@ function atcReply(fac) {
   const nm = fac.en, wind = (() => { try { return windSpd > 0 ? `wind ${_say3(String(Math.round(windDir)).padStart(3, '0'))} at ${Math.round(windSpd)}` : 'wind calm'; } catch (e) { return 'wind calm'; } })();
   const rwy = atcRunway(fac.rwy), rw = rwy ? `runway ${_say3(rwy)}` : 'the active runway';
   let txt;
-  if (fac.kind === 'GND') { txt = `${atcCs()}, ${nm} Ground, taxi to holding point ${rw}.`; atcExpect = { t: Date.now(), items: [['holding', 'hold'], rwy ? _rwyTokens(rwy) : []] }; }
+  if (fac.kind === 'WATCHMAN') {
+    const r = atcWatchmanCall(); txt = r.tower; atcPilotShow(fac, r.pilot);
+  } else if (fac.kind === 'GND') { txt = `${atcCs()}, ${nm} Ground, taxi to holding point ${rw}.`; atcExpect = { t: Date.now(), items: [['holding', 'hold'], rwy ? _rwyTokens(rwy) : []] }; }
   else if (fac.kind === 'TWR') {
     const r = atcTwrCall(fac, gnd, { nm, wind, rwy, rw });
     txt = r.tower; atcPilotShow(fac, r.pilot);
@@ -181,7 +256,7 @@ function atcReply(fac) {
   }
   atcLast = { kind: fac.kind, icao: fac.icao, txt };
   _say(txt, true);
-  try { uiToast(`📻 ${fac.name} ${fac.kind} — ${txt}`, '', 6000); } catch (e) { _swallow(e); }
+  try { uiToast(`📻 ${fac.kind === 'WATCHMAN' ? 'Watchman' : fac.name + ' ' + fac.kind} — ${txt}`, '', 6000); } catch (e) { _swallow(e); }
   try { if (typeof fdrNote === 'function') fdrNote(`관제 ${fac.name} ${fac.kind}: ${txt}`); } catch (e) { _swallow(e); }
   return txt;
 }
@@ -283,7 +358,7 @@ function kuhTxTarget() {
   if (!dc) return { name: mic, ok: false, why: '전원(DC 버스)이 없습니다' };
   if (mic === 'COM1' || mic === 'COM2') { const r = typeof cduRadio === 'function' ? cduRadio(mic.toLowerCase()) : null; return r ? { name: mic, f: +r.act, ok: true } : { name: mic, ok: false, why: `${mic} 주파수를 읽지 못했습니다` }; }
   if (mic === 'U/VHF') {
-    try { if (typeof c5 !== 'undefined' && c5 && c5.on) { const ch = c5.ch[c5.r[0].ch] || {}; return { name: 'U/VHF', f: +ch.tx || null, ok: true, noAtc: true }; } } catch (e) { _swallow(e); }
+    try { if (typeof c5 !== 'undefined' && c5 && c5.on) { const ch = c5.ch[c5.r[0].ch] || {}; return { name: 'U/VHF', f: +ch.tx || null, ok: true, noAtc: !atcIsWatchman(+ch.tx) }; } } catch (e) { _swallow(e); }   // UHF 278.4 는 Watchman
     return { name: 'U/VHF', ok: false, why: 'C-5000 이 꺼져 있습니다' };
   }
   if (mic === 'VHF-FM') {
