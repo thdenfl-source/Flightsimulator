@@ -62,7 +62,10 @@ function sndStart() {
       master.gain.value = 0;
       const [a, b] = sndGains(sndMix);
       gGnd.gain.value = a; gAir.gain.value = b;
-      gGnd.connect(master); gAir.connect(master); master.connect(ctx.destination);
+      gGnd.connect(master); gAir.connect(master);
+      // Bell 206 — 2kHz 위는 덜어 낸다(귀가 아픈 고주파를 막는 안전장치 · 소리 파일도 1.8kHz 아래로 만들었다)
+      if (typeof acIs === 'function' && acIs('b206')) { const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 2000; lp.Q.value = 0.7; master.connect(lp); lp.connect(ctx.destination); }
+      else master.connect(ctx.destination);
       _snd = { ctx, master, gGnd, gAir, buf: {}, src: [] };
       _sndLoad();
     }
