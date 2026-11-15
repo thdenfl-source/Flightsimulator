@@ -51,7 +51,7 @@ const OVHD_PLATES = [
       ang: [-120, -80, -40, 0, 40, 80], def: 'OFF' },
     { t: 'tg', id: 'cabinLts', x: 170, y: 228, title: 'CABIN LTS', pos: ['OFF', 'ON'], def: 'OFF' },
     { t: 'tg', id: 'heels', x: 265, y: 228, title: 'HEELS', pos: ['OFF', 'ARM', 'ON'], side: true, def: 'OFF' },
-    { t: 'tg', id: 'stowSel', x: 55, y: 332, title: 'STOW SEL', pos: ['LDG', 'SRCH'], def: 'LDG' },
+    { t: 'mom', id: 'stowSel', x: 55, y: 332, title: 'STOW SEL', pos: ['LDG', 'CTR', 'SRCH'], def: 'CTR' },   // 3방향 · 스프링으로 가운데 — LDG/SRCH 로 젖히면 그 등 OFF · 원위치(35-kuhgrip.js kgStow)
     { t: 'tg', id: 'srchLt', x: 160, y: 332, title: 'SRCH LT', pos: ['NORM', 'IR'], def: 'NORM' },
     { t: 'tg', id: 'navLts', x: 265, y: 332, title: 'NAV LTS', pos: ['NORM', 'IR'], def: 'NORM' },
     { t: 'br', x: 105, y: 388, w: 175, text: 'POSITION LTS' },
@@ -377,7 +377,7 @@ function _ovhdDown(e) {
       const up = e.clientY < bez.top + bez.height / 2;
       j = Math.max(0, Math.min(n - 1, i + (up ? -1 : 1)));
     }
-    if (d.t === 'mom' && j === 0) return;               // 스프링 스위치는 아래(TEST)로만 누른다
+    if (d.t === 'mom' && d.pos[j] === d.def) return;    // 스프링 스위치는 제자리가 아닌 쪽(TEST · LDG · SRCH)으로만 누른다
     ovhdSet(id, d.pos[j]);
     if (d.t === 'mom') _ovhdMom = id;
   } else if (d.t === 'lv') {

@@ -7,14 +7,22 @@
 //   사이클릭: 좌 · 우 사이클릭 자리에 실기 모양으로(두 좌석 같은 방향) 그리고, 누르면 크게 띄워 조작한다.
 //     DISENGAG(AP 상위모드 해제) · 빨간 단추(AP FAST CUT OFF — AP1 · AP2 끊음) · 4-WAY BEEP(4방향 트림 · 실기처럼 왼쪽 30° 틀어짐) ·
 //     손잡이 앞 위부터 PTT(실기는 뒤편) · FORCE TRIM RELEASE(누르는 동안) · G/SPEED · DMS · BEEP CTL · 검은 단추(표시만)
-//   빛: 착륙등은 ENV 의 착륙등(env.ldg)과 같은 것 — 펼친 만큼(EXT) 아래로 비춘다. 서치라이트는 SRCH CTR 로 돌린 쪽을 비춘다(29-env.js envBeams).
+//   빛: 착륙등은 ENV 의 착륙등(env.ldg)과 같은 것 — 접혀 있다가 켜면 저절로 펼쳐 전방 30°(아래로 30°)를 비춘다.
+//       EXT 는 더 앞(수평 쪽)으로 · RET 는 접는 쪽으로. 켜고 끄기(LDG LT ON/OFF)는 그 자리를 그대로 둔다.
+//       서치라이트는 SRCH CTR 로 돌린 쪽을 비춘다(29-env.js envBeams). 착륙등이 더 밝고 두 배 멀리 닿는다.
+//   상부 콘솔 STOW SEL(LDG · 가운데 · SRCH — 스프링으로 가운데 복귀) — 그쪽 등을 끄고 접는다(원위치)를 한 동작으로.
 // ══════════════════════════════════════════════════════
-const KG_SRCH = { azMax: 120, elMin: 5, elMax: 80, azRate: 45, elRate: 25 };
-const kgLt = { ext: 0, srch: false, az: 0, el: 30, br: 1 };     // 착륙등 펼침(0 접힘 ~ 1 다 펼침) · 서치라이트 켬 · 방향(기수 기준 ° · 아래로 °) · 광도(0.2~1)
+const KG_SRCH = { azMax: 120, elMin: 2.5, elMax: 80, azRate: 45, elRate: 25, el0: 30, reach: 1200 };   // 서치라이트 — 아래로 2.5°까지(종전 5° — 두 배 앞) · 빛이 닿는 거리 1200m
+// 착륙등 — 펼친 각(0 접힘 · 아래로 똑바로 ~ 87 거의 수평). 켜면 60(= 전방 아래로 30°)까지 저절로 펼친다 · 닿는 거리는 서치라이트의 두 배
+const KG_LDG = { on: 60, max: 87.5, rate: 40, reach: 2400, k: 1.4 };
+const kgLt = { ldgE: 0, ldgTgt: null, srch: false, az: 0, el: 30, br: 1 };   // 착륙등 펼친 각(°) · 저절로 가는 목표 · 서치라이트 켬 · 방향(기수 기준 ° · 아래로 °) · 광도(0.2~1)
+const kgLdgDown = () => 90 - kgLt.ldgE;                        // 착륙등이 비추는 아래쪽 각(°)
 function kgOn() { return !(typeof acB206 === 'function' && acB206()); }
 function _kgToast(t, k) { try { uiToast(t, k || '', 2200); } catch (e) { _swallow(e); } }
 function _kgLdg() { return typeof env !== 'undefined' && !!env.ldg; }
-function kgLdgSet(on) { try { if (typeof envSet === 'function') envSet({ ldg: !!on }); else env.ldg = !!on; } catch (e) { _swallow(e); } kgRender(); }
+function kgLdgSet(on) {
+  if (on && kgLt.ldgE < 1) kgLt.ldgTgt = KG_LDG.on;              // 접혀 있으면 켜는 대로 전방 30° 까지 펼친다(펼쳐 둔 자리면 그대로)
+  try { if (typeof envSet === 'function') envSet({ ldg: !!on }); else env.ldg = !!on; } catch (e) { _swallow(e); } kgRender(); }
 function kgSrchSet(on) {
   kgLt.srch = !!on;
   try { if (typeof fdrNote === 'function') fdrNote(`서치라이트 ${kgLt.srch ? 'ON' : 'OFF'}`); } catch (e) { _swallow(e); }
@@ -24,10 +32,31 @@ function kgSrchSet(on) {
 function kgBeams() {
   if (!kgOn()) return [];
   const out = [];
-  if (_kgLdg()) out.push({ az: 0, down: 14 + 31 * kgLt.ext, k: 1 });
-  if (kgLt.srch) out.push({ az: kgLt.az, down: kgLt.el, k: 0.9 * kgLt.br });
+  if (_kgLdg() && kgLt.ldgE >= 1) out.push({ az: 0, down: kgLdgDown(), k: KG_LDG.k, reach: KG_LDG.reach, wide: 0.26 });   // 접혀 있으면 빛이 밖으로 나오지 않는다
+  if (kgLt.srch) out.push({ az: kgLt.az, down: kgLt.el, k: 0.9 * kgLt.br, reach: KG_SRCH.reach });
   return out;
 }
+// STOW SEL — LDG 쪽: 착륙등 끄고 접기 · SRCH 쪽: 서치라이트 끄고 원위치(정면 · 아래 30°)
+function kgStow(which) {
+  if (which === 'LDG') { kgLt.ldgTgt = 0; if (_kgLdg()) kgLdgSet(false); }
+  else if (which === 'SRCH') { if (kgLt.srch) kgSrchSet(false); kgLt.az = 0; kgLt.el = KG_SRCH.el0; }
+  try { if (typeof fdrNote === 'function') fdrNote(`STOW SEL ${which} — ${which === 'LDG' ? '착륙등' : '서치라이트'} OFF · 원위치`); } catch (e) { _swallow(e); }
+  kgRender();
+}
+try { if (typeof ovhdOn === 'function') ovhdOn((id, v) => { if (id === 'stowSel' && (v === 'LDG' || v === 'SRCH')) kgStow(v); }); } catch (e) { _swallow(e); }
+// 착륙등 모터 — 목표 각까지 초당 40°(켜면 펼치고 STOW 면 접는다). ENV 등 다른 곳에서 켜도 접혀 있으면 펼친다
+let _kgLdgT = 0, _kgLdgWas = false;
+function kgLdgTick() {
+  const now = performance.now(), dt = _kgLdgT ? Math.min(0.3, (now - _kgLdgT) / 1000) : 0.05; _kgLdgT = now;
+  const on = _kgLdg();
+  if (on && !_kgLdgWas && kgLt.ldgE < 1 && kgLt.ldgTgt === null) kgLt.ldgTgt = KG_LDG.on;   // 켜진 순간 접혀 있었으면
+  _kgLdgWas = on;
+  if (kgLt.ldgTgt === null) return;
+  const d = kgLt.ldgTgt - kgLt.ldgE, st = KG_LDG.rate * dt;
+  if (Math.abs(d) <= st) { kgLt.ldgE = kgLt.ldgTgt; kgLt.ldgTgt = null; } else kgLt.ldgE += Math.sign(d) * st;
+  kgRender();
+}
+setInterval(() => { try { kgLdgTick(); } catch (e) { _swallow(e); } }, 50);
 
 // AP FAST CUT OFF(사이클릭 빨간 단추) — AP1 · AP2 를 한 번에 끊는다(하부 콘솔 AFCAU 의 AP1 · AP2 OFF 와 같다 — 상위모드 · 자세 유지 모두 풀리고 세 축 SAS)
 function kgApCut() {
@@ -68,8 +97,9 @@ function kgPress(k) {
     // 컬렉티브
     case 'collDn': return _kgHoldStart(k, () => applyDelta('vs', -100));
     case 'collUp': return _kgHoldStart(k, () => applyDelta('vs', 100));
-    case 'ldgExt': return _kgHoldStart(k, () => { if (!_kgLdg()) kgLdgSet(true); kgLt.ext = Math.min(1, kgLt.ext + _kgDt() / 1.5); }, 0, 50);   // 1.5초에 다 펼친다
-    case 'ldgRet': return _kgHoldStart(k, () => { kgLt.ext = Math.max(0, kgLt.ext - _kgDt() / 1.5); }, 0, 50);
+    // EXT — 누르는 동안 더 펼쳐 앞(수평 쪽)으로 · RET — 접는 쪽으로(끝까지 접으면 빛이 들어간다). 초당 40°
+    case 'ldgExt': return _kgHoldStart(k, () => { kgLt.ldgTgt = null; kgLt.ldgE = Math.min(KG_LDG.max, kgLt.ldgE + KG_LDG.rate * _kgDt()); }, 0, 50);
+    case 'ldgRet': return _kgHoldStart(k, () => { kgLt.ldgTgt = null; kgLt.ldgE = Math.max(0, kgLt.ldgE - KG_LDG.rate * _kgDt()); }, 0, 50);
     case 'ldgOn': return kgLdgSet(!_kgLdg());
     case 'srchLt': return kgSrchSet(!kgLt.srch);                                   // 누르면(PUSH) ON · OFF
     case 'srchBrt': case 'srchDim': { const s = k === 'srchBrt' ? 0.1 : -0.1;        // 위아래로 밀면 광도
@@ -108,7 +138,7 @@ const _kgDefs = id => `<defs>
   </defs>`;
 // 컬렉티브 머리(첫 사진) — 175×380
 function kgCollSvg(id = '') {
-  const ldg = _kgLdg(), ext = kgLt.ext, srch = kgLt.srch, oeiOn = typeof simEng !== 'undefined' && simEng === 1 && typeof simOeiMode !== 'undefined';
+  const ldg = _kgLdg(), srch = kgLt.srch, oeiOn = typeof simEng !== 'undefined' && simEng === 1 && typeof simOeiMode !== 'undefined';
   const hot = k => _kgOnK(k) ? '#5d636a' : '#222528';
   const arrow = (k, pts) => `<polygon data-kg="${k}" points="${pts}" fill="${_kgOnK(k) ? '#7dff3a' : '#e9ecef'}" style="cursor:pointer"/>`;
   return `<svg viewBox="0 0 175 380" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;display:block;overflow:visible">${_kgDefs(id)}
@@ -154,7 +184,7 @@ function kgCollSvg(id = '') {
   <g data-kg="srchLt" style="cursor:pointer"><circle cx="152" cy="116" r="10" fill="url(#kg-knob${id})" stroke="${srch ? '#ffd23a' : '#000'}" stroke-width="${srch ? 2.5 : 1}"/>${_kgLab(152, 118, 'PUSH', 4.5, 'middle', srch ? '#ffd23a' : '#9aa0a6')}</g>
   <rect data-kg="srchDim" x="141" y="127" width="22" height="12" rx="3" fill="${_kgOnK('srchDim') ? '#5d636a' : '#222528'}" stroke="#555" style="cursor:pointer"/>${_kgLab(152, 136, '▼ DIM', 5.5, 'middle', '#cfd4d9')}
   <!-- 상태 -->
-  ${_kgLab(88, 186, `LDG ${ldg ? 'ON' : 'OFF'} · EXT ${Math.round(ext * 100)}%`, 7.5, 'middle', ldg ? '#7dff3a' : '#9aa0a6')}
+  ${_kgLab(88, 186, `LDG ${ldg ? 'ON' : 'OFF'} · ${kgLt.ldgE < 1 ? 'STOWED' : Math.round(kgLdgDown()) + '°↓'}`, 7.5, 'middle', ldg ? '#7dff3a' : '#9aa0a6')}
   ${_kgLab(88, 198, `SRCH ${srch ? 'ON' : 'OFF'} ${Math.round(kgLt.br * 100)}% · ${Math.abs(Math.round(kgLt.az))}°${kgLt.az >= 0 ? 'R' : 'L'} · ${Math.round(kgLt.el)}°↓`, 7.5, 'middle', srch ? '#ffd23a' : '#9aa0a6')}
 </svg>`;
 }
