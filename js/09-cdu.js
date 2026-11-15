@@ -2063,10 +2063,12 @@ function act(name, ...args) {
     // 홈 배열(사용자 지정) — 4칸씩: MAP·Aircraft Systems·PERF·Charts / Flight Plan·PROC·VNAV·Waypoint Info /
     // NOTAM·Track & Point·Services·Utilities / SkyVector·Tide·ER·Wildfire / Weather·Checklist·Airport INFO
     const HOME_ORDER = ['map', 'acsys', 'perf', 'charts', 'fpl', 'proc', 'vnav', 'wptinfo',
-                        'notam', 'sys', 'serv', 'util', 'skyvector', 'tide', 'eravail', 'wildfire', 'wxgrp', 'check', 'afld'];
+                        'notam', 'sys', 'serv', 'util', 'skyvector', 'tide', 'eravail', 'wildfire', 'wxgrp', 'check', 'afld', 'ctrl'];
+    // 조종장치 — 조이스틱 · 게임패드 · 키보드(설정에 있던 조종 장치 항목을 모았다)
+    const ctrlBtn = { id: 'ctrl', text: '조종장치', icon: '<svg viewBox="0 0 100 100"><rect x="20" y="70" width="60" height="16" rx="5" fill="#9e9e9e"/><rect x="45" y="36" width="10" height="36" rx="3" fill="#cfd8dc"/><ellipse cx="50" cy="30" rx="15" ry="17" fill="#00e5ff"/><circle cx="44" cy="22" r="3.5" fill="#ff5252"/><circle cx="31" cy="78" r="4" fill="#ff5252"/><circle cx="69" cy="78" r="4" fill="#ffca28"/></svg>' };
     function renderHomeScreen(container, footer, title) {
         title.innerText = "Home";
-        const all = [wxGroupBtn, acSysGroupBtn, wptInfoBtn].concat(homeButtons);
+        const all = [wxGroupBtn, acSysGroupBtn, wptInfoBtn, ctrlBtn].concat(homeButtons);
         container.innerHTML = homeGridHtml(HOME_ORDER.map(id => all.find(b => b.id === id)).filter(Boolean));
         footer.innerHTML = cduFooter('', `<div class="nav-btn" data-act="openUbikais"><span>🛰</span>UBIKAIS</div>`);
     }
@@ -2137,7 +2139,7 @@ function act(name, ...args) {
                 'wildfire': "https://fd.forest.go.kr/ffas/"
             };
 
-            let isActiveBtn = btn.id.startsWith('asys_') || btn.id.startsWith('wpt_') || ['wxgrp', 'acsys', 'wptinfo', 'weather', 'charts', 'notam', 'metar', 'directTo', 'map', 'fpl', 'serv', 'sys', 'perf', 'util', 'proc', 'cctv', 'vnav', 'check', 'afld', 'skyvector', 'tide', 'eravail', 'wildfire'].includes(btn.id);
+            let isActiveBtn = btn.id.startsWith('asys_') || btn.id.startsWith('wpt_') || ['wxgrp', 'acsys', 'wptinfo', 'weather', 'charts', 'notam', 'metar', 'directTo', 'map', 'fpl', 'serv', 'sys', 'perf', 'util', 'proc', 'cctv', 'vnav', 'check', 'afld', 'ctrl', 'skyvector', 'tide', 'eravail', 'wildfire'].includes(btn.id);
             let boxClass = isActiveBtn ? 'icon-box func-active' : 'icon-box';
 
             if (links[btn.id]) {
@@ -2160,6 +2162,7 @@ function act(name, ...args) {
                                   btn.id === 'map'  ? `data-act="cduOpenMap"` :
                                   btn.id === 'check' ? `data-act="clOpen"` :
                                   btn.id === 'afld' ? `data-act="switchMode" data-arg='["AIRFIELD"]'` :
+                                  btn.id === 'ctrl' ? `data-act="switchMode" data-arg='["CONTROLS"]'` :
                                   btn.id === 'cctv' ? `data-act="switchMode" data-arg='["CCTV"]'` :
                                   btn.id === 'vnav' ? `data-act="utilOpen" data-arg='["VNAV"]'` :
                                   btn.id === 'charts' ? `data-act="switchMode" data-arg='["CHARTS"]'` : '';
@@ -3685,7 +3688,7 @@ function act(name, ...args) {
       else if (which === 'taws') toggleInhib('taws');
       else if (which === 'kbd') toggleKbdShortcuts();
       else if (which === 'joy') toggleJoy();
-      switchMode('SETTINGS');
+      switchMode(which === 'joy' || which === 'kbd' ? 'CONTROLS' : 'SETTINGS');   // 조종 장치 · 키보드는 조종장치 화면에 있다
     }
 
     // ── 조종 장치(조이스틱 · 게임패드) 배정 화면 ──
@@ -3721,9 +3724,9 @@ function act(name, ...args) {
     function renderJoystickScreen(container, footer, title) {
       title.innerText = 'Joystick';
       if (_joyTick) { clearInterval(_joyTick); _joyTick = null; }
-      const back = `<div data-act="switchMode" data-arg='["SETTINGS"]' style="display:inline-flex;align-items:center;gap:4px;` +
+      const back = `<div data-act="switchMode" data-arg='["CONTROLS"]' style="display:inline-flex;align-items:center;gap:4px;` +
         `padding:5px 10px;margin-bottom:8px;border:1px solid #2a4a5a;border-radius:4px;background:#0a1620;color:#00cfff;` +
-        `font-size:10px;font-weight:bold;cursor:pointer;">‹ 설정</div>`;
+        `font-size:10px;font-weight:bold;cursor:pointer;">‹ 조종장치</div>`;
       const conn = joyPadName
         ? `<span style="color:#00ff88;">연결됨</span> · <span style="color:#8a97a5;">${joyPadName}</span>`
         : `<span style="color:#ff8877;">장치 없음</span> — 연결 후 <b>아무 버튼이나 한 번</b> 누르십시오`;
@@ -3811,7 +3814,7 @@ function act(name, ...args) {
         `<div style="color:#4a5563;font-size:9px;margin:4px 2px 0;line-height:1.4;">` +
         `버튼·축을 움직이면 값이 바뀝니다. <b>HAT</b> 로 표시된 축은 8방향 햇으로 풀어 씁니다.</div>`;
       container.innerHTML = back + head + hidRow + rows.join('') + mon + foot;
-      footer.innerHTML = cduFooter("switchMode('SETTINGS')");
+      footer.innerHTML = cduFooter("switchMode('CONTROLS')");
       // 화면에 있는 동안 진단을 갱신한다(배정이 잡히면 목록도 다시 그린다)
       _joyTick = setInterval(() => {
         if (currentMode !== 'JOYSTICK') { clearInterval(_joyTick); _joyTick = null; return; }
@@ -3857,27 +3860,43 @@ function act(name, ...args) {
       }, 120);
       _joyCapWas = !!(joyCapture || joyAxCapture);
     }
+    // 설정 행(켬/끔 · 들어가기) — 설정 화면 · 조종장치 화면이 함께 쓴다
+    function _setRowTog(which, label, sub, on) { return (
+      `<div data-act="_setToggle" data-arg='["${which}"]' style="display:flex;align-items:center;justify-content:space-between;` +
+        `padding:9px 10px;margin-bottom:5px;border:1px solid ${on ? '#00e5ff66' : '#1e2630'};border-radius:5px;` +
+        `background:#0a1116;cursor:pointer;">` +
+        `<div><div style="color:#cdd6df;font-size:12px;font-weight:bold;">${label}</div>` +
+        `<div style="color:#567;font-size:9px;margin-top:1px;">${sub}</div></div>` +
+        `<div style="flex:0 0 auto;width:46px;height:22px;border-radius:11px;background:${on ? '#00485a' : '#20262e'};` +
+        `border:1px solid ${on ? '#00e5ff' : '#3a4653'};position:relative;">` +
+        `<div style="position:absolute;top:1px;${on ? 'right:1px' : 'left:1px'};width:18px;height:18px;border-radius:50%;` +
+        `background:${on ? '#00e5ff' : '#6b7683'};"></div></div></div>`); }
+    function _setRowAct(attrs, label, sub) { return (
+      `<div ${attrs} style="display:flex;align-items:center;justify-content:space-between;` +
+        `padding:9px 10px;margin-bottom:5px;border:1px solid #2a3a4a;border-radius:5px;background:#0a1420;cursor:pointer;">` +
+        `<div><div style="color:#8ac6ff;font-size:12px;font-weight:bold;">${label}</div>` +
+        `<div style="color:#567;font-size:9px;margin-top:1px;">${sub}</div></div>` +
+        `<div style="color:#4a7aaa;font-size:14px;">›</div></div>`); }
+    // ── 조종장치(CDU 홈) — 조이스틱 · 게임패드 사용 · 버튼/축 배정 · 키보드 단축키 ──
+    function renderControlsScreen(container, footer, title) {
+      title.innerText = '조종장치';
+      const st = joyOn ? (joyPadName ? `연결됨 — ${joyPadName}` : '켜짐 — 장치를 꽂고 아무 버튼이나 한 번 누르십시오') : '해제됨';
+      container.innerHTML =
+        `<div style="color:#556;font-size:9px;letter-spacing:1px;margin:2px 0 5px;">조이스틱 · 게임패드</div>` +
+        _setRowTog('joy', '조종 장치 사용', st, joyOn) +
+        _setRowAct(act('switchMode', 'JOYSTICK'), '버튼 · 축 배정', '버튼별 동작(FORCE TRIM · PTT · 외부 시점 …) · SIM 조종간 축 · 입력 진단') +
+        `<div style="color:#556;font-size:9px;letter-spacing:1px;margin:10px 0 5px;">키보드</div>` +
+        _setRowTog('kbd', '키보드 단축키', kbdShortcuts ? '숫자 · 방향키로 계기 조작' : '해제됨(DeX 등 물리 키보드 오작동 방지)', kbdShortcuts) +
+        `<div style="color:#4a5563;font-size:9px;margin:8px 2px 0;line-height:1.5;">조이스틱을 꽂은 뒤 아무 버튼이나 한 번 누르면 연결됩니다. ` +
+        `게임패드로 잡히지 않는 장치는 '버튼 · 축 배정' 화면에서 직접 엽니다.</div>`;
+      footer.innerHTML = cduFooter("switchMode('HOME')");
+    }
     function renderSettingsScreen(container, footer, title) {
       title.innerText = 'Settings';
       const back = `<div data-act="switchMode" data-arg='["HOME"]' style="display:inline-flex;align-items:center;gap:4px;` +
         `padding:5px 10px;margin-bottom:8px;border:1px solid #2a4a5a;border-radius:4px;background:#0a1620;color:#00cfff;` +
         `font-size:10px;font-weight:bold;cursor:pointer;">🏠 홈</div>`;
-      const TOG = (which, label, sub, on) =>
-        `<div data-act="_setToggle" data-arg='["${which}"]' style="display:flex;align-items:center;justify-content:space-between;` +
-          `padding:9px 10px;margin-bottom:5px;border:1px solid ${on ? '#00e5ff66' : '#1e2630'};border-radius:5px;` +
-          `background:#0a1116;cursor:pointer;">` +
-          `<div><div style="color:#cdd6df;font-size:12px;font-weight:bold;">${label}</div>` +
-          `<div style="color:#567;font-size:9px;margin-top:1px;">${sub}</div></div>` +
-          `<div style="flex:0 0 auto;width:46px;height:22px;border-radius:11px;background:${on ? '#00485a' : '#20262e'};` +
-          `border:1px solid ${on ? '#00e5ff' : '#3a4653'};position:relative;">` +
-          `<div style="position:absolute;top:1px;${on ? 'right:1px' : 'left:1px'};width:18px;height:18px;border-radius:50%;` +
-          `background:${on ? '#00e5ff' : '#6b7683'};"></div></div></div>`;
-      const ACT = (attrs, label, sub) =>
-        `<div ${attrs} style="display:flex;align-items:center;justify-content:space-between;` +
-          `padding:9px 10px;margin-bottom:5px;border:1px solid #2a3a4a;border-radius:5px;background:#0a1420;cursor:pointer;">` +
-          `<div><div style="color:#8ac6ff;font-size:12px;font-weight:bold;">${label}</div>` +
-          `<div style="color:#567;font-size:9px;margin-top:1px;">${sub}</div></div>` +
-          `<div style="color:#4a7aaa;font-size:14px;">›</div></div>`;
+      const TOG = _setRowTog, ACT = _setRowAct;
       // 단위 선택(2지선다) 행
       const UNI = (kind, label, opts, cur) =>
         `<div style="display:flex;align-items:center;justify-content:space-between;` +
@@ -3904,9 +3923,7 @@ function act(name, ...args) {
         TOG('metar', '자동 METAR', '근처 공항 METAR로 OAT 자동 반영', autoMetarOn) +
         TOG('aspc', '공역 경보', inhibAspc ? 'INHIBIT(억제됨)' : '접근/진입 경보 사용', !inhibAspc) +
         TOG('taws', 'HTAWS 지형경보', inhibTaws ? 'INHIBIT(억제됨)' : '전방 지형 경보 사용', !inhibTaws) +
-        TOG('joy', '조종 장치', joyOn ? (joyPadName ? `연결됨 — ${joyPadName}` : '조이스틱·게임패드 버튼 사용') : '해제됨', joyOn) +
-        ACT(act('switchMode', 'JOYSTICK'), '조종 장치 버튼 배정', '버튼별 동작 지정(조이스틱·게임패드)') +
-        TOG('kbd', '키보드 단축키', kbdShortcuts ? '숫자·방향키로 계기 조작' : '해제됨(DeX 등 물리 키보드 오작동 방지)', kbdShortcuts) +
+        ACT(act('switchMode', 'CONTROLS'), '조종 장치', '조이스틱 · 게임패드 · 버튼 배정 · 키보드 단축키 — CDU 홈의 조종장치') +
         `<div style="color:#556;font-size:9px;letter-spacing:1px;margin:10px 0 5px;">앱 / 오프라인</div>` +
         ACT(act('pwaInstall'), '홈 화면에 추가', 'PWA 설치(앱처럼 실행)') +
         ACT(act('prefetchTiles'), '주변 지도 캐시', '현재 화면 주변 타일 미리 저장') +
@@ -4448,6 +4465,7 @@ function act(name, ...args) {
             case 'UTIL': renderUtilScreen(container, footer, title); break;
             case 'CHECKLIST': renderChecklistScreen(container, footer, title); break;
             case 'SETTINGS': renderSettingsScreen(container, footer, title); break;
+            case 'CONTROLS': renderControlsScreen(container, footer, title); break;
             case 'JOYSTICK': renderJoystickScreen(container, footer, title); break;
             case 'TRACKPOINT': renderTrackPointScreen(container, footer, title); break;
             case 'CHARTS': renderChartsScreen(container, footer, title); break;
