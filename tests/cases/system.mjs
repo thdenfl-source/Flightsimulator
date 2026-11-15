@@ -220,4 +220,24 @@ export async function run(page, t) {
   t.ok(nh.ac && nh.emer[1] === 3020 && nh.emer[2] === 0 && nh.auto === 0,
     `APU + APU GEN(AC 전원)에서 EMERG PUMP ON → #1 유압 ${nh.emer[1]}psi(#2 는 ${nh.emer[2]}) · AUTO 로 두면 0`);
   t.ok(nh.back === 100, '두 엔진 FLY 로 되돌리면 100%');
+  // ── HEELS 등 — OFF 꺼짐 · ON 켜짐 · ARM 은 배터리가 붙은 채 주 발전기 둘이 끊기거나 NR 84% 미만이면 켜짐 ──
+  const he = await page.evaluate(() => {
+    const keep = engParams, sv = { heels: ovhdGet('heels'), batt: ovhdGet('batt'), gen1: ovhdGet('gen1'), gen2: ovhdGet('gen2') };
+    const fake = (ng, nr) => () => { const P = keep(); return { ...P, nr, e1: { ...P.e1, ng }, e2: { ...P.e2, ng } }; };
+    const o = {};
+    window.engParams = fake(95, 100); ovhdSet('batt', 'ON'); ovhdSet('gen1', 'ON'); ovhdSet('gen2', 'ON');
+    ovhdSet('heels', 'OFF'); o.off = heelsLit();
+    ovhdSet('heels', 'ON'); o.on = heelsLit();
+    ovhdSet('heels', 'ARM'); o.armGen = heelsLit();
+    ovhdSet('gen1', 'OFF'); o.armOne = heelsLit();
+    ovhdSet('gen2', 'OFF'); o.armBoth = heelsLit();
+    ovhdSet('batt', 'OFF'); o.armNoBatt = heelsLit(); ovhdSet('batt', 'ON');
+    ovhdSet('gen1', 'ON'); ovhdSet('gen2', 'ON'); window.engParams = fake(95, 83); o.armNr = heelsLit();
+    window.engParams = fake(95, 84); o.armNr84 = heelsLit();
+    window.engParams = keep; for (const k in sv) ovhdSet(k, sv[k]);
+    return o;
+  });
+  t.ok(!he.off && he.on, 'HEELS — OFF 면 꺼짐 · ON 이면 켜짐');
+  t.ok(!he.armGen && !he.armOne && he.armBoth && !he.armNoBatt, 'HEELS ARM — 주 발전기 둘이 모두 끊기면 켜짐(하나라도 살아 있거나 배터리가 없으면 꺼짐)');
+  t.ok(he.armNr && !he.armNr84, 'HEELS ARM — NR 84% 미만이면 켜짐');
 }

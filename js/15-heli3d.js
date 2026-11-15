@@ -1013,7 +1013,7 @@ function _ckpitEl() {
   el = document.createElement('div');
   el.id = 'sim-ckpit'; el.setAttribute('aria-hidden', 'true');
   const pct = (x, y, w, h) => `left:${(x / 16).toFixed(3)}%;top:${(y / 9).toFixed(3)}%;width:${(w / 16).toFixed(3)}%;height:${(h / 9).toFixed(3)}%`;
-  el.innerHTML = _ckpitSvg() + CKPIT_SCR.map((s, i) =>
+  el.innerHTML = _ckpitSvg() + _ckHeelsSvg() + CKPIT_SCR.map((s, i) =>
     `<canvas class="ck-scr" data-i="${i}" data-no-fcp="1" data-act="toggleConsolePop" data-arg='["${CKPIT_SCR_POP[s.k]}"]' title="${CKPIT_POP[CKPIT_SCR_POP[s.k]]} — 눌러 크게(팝아웃)" style="${pct(s.x, s.y, s.w, s.h)}"></canvas>`).join('') +
     Object.entries(CKPIT_CON).map(([k, c]) =>
       `<div class="ck-con" id="ck-mini-${k}" data-act="toggleConsolePop" data-arg='["${k}"]' title="${c.name} — 눌러 크게(팝아웃)" style="${pct(c.x, c.y, c.w, c.h)}"></div>`).join('') +
@@ -1052,7 +1052,7 @@ function ckpitSync(tf) {
     try { syncCduOverlay(); } catch (e) { _swallow(e); } // CDU 도 하부 콘솔 오른쪽으로(3D 단독에서)
   }
   if (want && tf != null && el.style.transform !== tf) el.style.transform = tf;
-  if (want) _ckWipeSync();
+  if (want) { _ckWipeSync(); _ckHeelsSync(); }
   // 작은 CDU 를 줄이는 배율(index.html .ck-con > #cdu-ov.ck-in) — 칸 너비 / CDU 제 너비(354)
   if (want) {
     const m = document.getElementById('ck-mini-cdu');
@@ -1250,6 +1250,22 @@ function _ckWipeSync() {
     el.dataset.wipe = cls;
   }
 }
+// HEELS 등 — 조종석 테두리(앞유리 위 띠 · 좌우 문 기둥)를 따라 길게 녹색으로 켜진다(18-system.js heelsLit).
+//   반투명 틀(#sim-ckpit > svg)과 따로 두어 투명도와 상관없이 또렷하다. 흰수리 조종석만(Bell 은 HEELS 스위치가 없다)
+function _ckHeelsSvg() {
+  if (CKPIT_SCR[0].k === 'b206') return '';
+  return `<div id="ck-heels"><svg viewBox="0 0 1600 900" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M6 22 Q800 40 1594 22" />
+    <path d="M6 160 L6 246 L200 594" /><path d="M1594 160 L1594 246 L1400 594" /></svg></div>`;
+}
+function _ckHeelsSync() {
+  const h = document.getElementById('ck-heels'); if (!h) return;
+  let on = false;
+  try { on = typeof heelsLit === 'function' && heelsLit(); } catch (e) { _swallow(e); }
+  if (h.classList.contains('on') !== on) h.classList.toggle('on', on);
+}
+window.addEventListener('ovhd', () => { try { _ckHeelsSync(); } catch (er) { _swallow(er); } });
+setInterval(() => { try { _ckHeelsSync(); } catch (e) { _swallow(e); } }, 500);   // 발전기 · NR 은 스위치 없이도 바뀐다
 // (17-upper.js 가 이 파일보다 늦게 읽혀 ovhdOn 은 아직 없다 — ovhdSet 이 내는 'ovhd' 알림을 듣는다)
 window.addEventListener('ovhd', e => { try { if (e.detail && e.detail.id === 'wiper') _ckWipeSync(); } catch (er) { _swallow(er); } });
 // 조종석 투명도(틀 · 구조 — 스크린 · 콘솔은 그대로) — 3D 버튼 줄의 −/+ 로 10% 씩(0 = 불투명 · 100 = 투명 · 처음 50%)
