@@ -522,6 +522,7 @@ function heli3dPose(map) {
 function heli3dShown() {
   if (typeof _ml3d === 'undefined' || !_ml3d || !_ml3dReady) return false;
   if (typeof simModeOn !== 'undefined' && simModeOn) return !!simExtView || !!simCamTx;   // 시점이 바뀌는 동안에도 보인다
+  if (simExtView || simCamTx) return true;                                               // SIM 밖(절차 훈련판 · AFCS 비행)의 외부 시점
   if (ckCamOn()) return false;                                                           // Cockpit Mode 조종석 시야 — 제 몸 안이다
   return true;
 }
@@ -558,7 +559,7 @@ function ckCamOn() {
 // 지금 1인칭 조종석 시야인가 — SIM 1인칭(외부 시점 · 전환 중 빼고) 또는 Cockpit Mode
 function _ckFirst() {
   if (typeof simModeOn !== 'undefined' && simModeOn) return !simExtView && !simCamTx;
-  return ckCamOn();
+  return ckCamOn() && !simExtView && !simCamTx;
 }
 
 const HELI3D_LAYER = {
@@ -679,7 +680,7 @@ function heli3dTick() {
   // 교통 모형이 날고 있으면 매 프레임 다시 그린다(내 모형이 안 보이는 1인칭 · 조종석에서도)
   try { if (tfc3dActive() && S.running && _map3dShown()) { _ml3d.triggerRepaint(); return; } } catch (e) { _swallow(e); }
   if (!heli3dShown() || !_map3dShown()) return;
-  const sim = (typeof simModeOn !== 'undefined') && simModeOn;
+  const sim = ((typeof simModeOn !== 'undefined') && simModeOn) || simExtView;
   if (!(S.running || gpsMode || _fdrPlaying || sim)) return;
   // 화면 밖에 있으면 다시 그릴 까닭이 없다(지도를 손으로 옮겨 다른 곳을 볼 때)
   if (!sim) {
@@ -742,7 +743,7 @@ function simCamTxK() {
   return x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;   // 천천히 시작해 천천히 멎는다
 }
 function _simCamTxStart(toExt) {
-  if (!(typeof simModeOn !== 'undefined' && simModeOn && _ml3d && (typeof _map3dShown !== 'function' || _map3dShown()))) { simCamTx = null; return; }
+  if (!(((typeof simModeOn !== 'undefined' && simModeOn) || ckCamOn()) && _ml3d && (typeof _map3dShown !== 'function' || _map3dShown()))) { simCamTx = null; return; }
   simCamTx = { toExt, t0: performance.now() };
   const tick = () => {
     if (!simCamTx) return;
@@ -761,6 +762,8 @@ function toggleExtView(on) {
   const was = simExtView;
   simExtView = (typeof on === 'boolean') ? on : !simExtView;
   if (simExtView !== was) _simCamTxStart(simExtView);
+  // SIM 밖에서도 쓴다(절차 훈련판 · AFCS 로 나는 비행) — 카메라가 헬기를 따라가야 하므로 추종을 켠다
+  try { if (simExtView && typeof followMode !== 'undefined' && !followMode && typeof toggleFollow === 'function') toggleFollow(); } catch (e) { _swallow(e); }
   try { if (typeof simLookReset === 'function') simLookReset(); } catch (e) { _swallow(e); }
   try { syncChinView(); } catch (e) { _swallow(e); }
   try { if (typeof pfdOverlaySync === 'function') pfdOverlaySync(); } catch (e) { _swallow(e); }

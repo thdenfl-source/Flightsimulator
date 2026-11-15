@@ -104,4 +104,28 @@ export async function run(page, t) {
   });
   t.ok(con.lcon.par === 'ck-mini-lcon' && con.lcon.w > 40 && con.ovhd.par === 'ck-mini-ovhd' && con.ovhd.w > 40,
     `탭이 LOWER · UPPER 였어도 조종석의 작은 콘솔 칸에 들어온다 (${con.lcon.par} ${con.lcon.w}px · ${con.ovhd.par} ${con.ovhd.w}px)`);
+  // ── 외부 시점(EXT) — SIM 이 아니어도(절차 훈련판 · Cockpit) 뒤에서 내 헬기를 본다 ──
+  const X = await page.evaluate(async () => {
+    const w = ms => new Promise(r => setTimeout(r, ms));
+    try { if (simModeOn) toggleSimMode(false); } catch (e) { /* 절차 훈련판 */ }
+    S.alt = 1500; S.spd = 100; S.hdg = 90;
+    cockpitStart(); await w(1200);
+    const vis = id => { const e = document.getElementById(id); return !!e && getComputedStyle(e).display !== 'none' && e.offsetWidth > 0; };
+    const o = { btn: vis('ext-btn'), first: _ckFirst(), model0: heli3dShown() };
+    document.getElementById('ext-btn').click(); await w(SIM_CAM_TX_MS + 400);
+    for (let i = 0; i < 10 && simCamTx; i++) await w(200);
+    try { _applyFollow(); } catch (e) {}
+    const cam = _ml3d.transform.getCameraLngLat(), pose = heli3dPose();
+    const dn = (pose.lat - cam.lat) * 111320, de = (pose.lon - cam.lng) * 111320 * Math.cos(pose.lat * Math.PI / 180);
+    o.on = { ext: simExtView, model: heli3dShown(), panel: vis('sim-ckpit'), ec: vis('extcam-3d'), follow: followMode,
+             d: Math.hypot(dn, de), brg: (Math.atan2(de, dn) * 180 / Math.PI + 360) % 360 };
+    document.getElementById('ext-btn').click(); await w(SIM_CAM_TX_MS + 400);
+    for (let i = 0; i < 10 && simCamTx; i++) await w(200);
+    o.back = { ext: simExtView, first: _ckFirst(), model: heli3dShown() };
+    return o;
+  });
+  t.ok(X.btn && X.first && !X.model0, 'SIM 이 아니어도 3D 버튼 줄에 EXT 버튼이 있다(조종석 시야에서 시작)');
+  t.ok(X.on.ext && X.on.model && !X.on.panel && X.on.ec && X.on.follow && X.on.d > 10 && Math.abs(((X.on.brg - 90 + 540) % 360) - 180) < 5,
+    `EXT — 조종석 패널을 걷고 헬기 뒤(${Math.round(X.on.d)}m · 헬기 쪽 ${Math.round(X.on.brg)}°)에서 모형을 본다 · 카메라 버튼이 뜬다`);
+  t.ok(!X.back.ext && X.back.first && !X.back.model, '다시 누르면 조종석 시야로 돌아온다');
 }
