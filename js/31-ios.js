@@ -62,6 +62,18 @@ function iosHandle(m) {
     else if (c === 'scn' && typeof scnApply === 'function') scnApply(scnList()[+m.i]);
     else if (c === 'sar' && typeof sarPlaceAhead === 'function') { if (m.on) sarPlaceAhead(); else if (sar.on) sarToggleOn(); }
     else if (c === 'debrief' && typeof dbfOpen === 'function') dbfOpen();
+    else if (c === 'ping') { _iosPeerT = Date.now(); return; }                 // 교관 창이 있다 — 미러를 보낸다
+    else if (c === 'ovhd' && typeof ovhdSet === 'function') ovhdSet(m.id, m.v);  // 교관 창에서 바꾼 콘솔 스위치
+    else if (c === 'kg' && typeof kgPress === 'function') { if (m.on) kgPress(m.k); else if (typeof _kgHoldStop === 'function') _kgHoldStop(); }
+    else if (c === 'bc' && typeof b206c !== 'undefined') {                         // Bell 컬렉티브
+      const k = m.k;
+      if (k === 'up') { if (b206c.beep) b206cBeep(0); }
+      else if (k === 'grip') b206cThrottle(m.dir > 0 ? 1 : -1);
+      else if (k === 'idlerel') b206cIdleRel();
+      else if (k === 'starter') b206cStarter(!b206c.start);
+      else if (k === 'incr') b206cBeep(1); else if (k === 'decr') b206cBeep(-1);
+      else b206cToggle(k);
+    }
     else if (c === 'wb' && typeof b206WbSet === 'function' && typeof acB206 === 'function' && acB206()) {
       b206WbSet(m.o || {});
       try { if (typeof b206WbRender === 'function') b206WbRender(); } catch (e) { _swallow(e); }
@@ -73,7 +85,7 @@ function iosHandle(m) {
 // 같은 브라우저(BroadcastChannel)와 다른 기기(WebRTC — 33-train4.js rtcSend) 둘 다로 보낸다
 function iosSend() { if (IOS_MODE) return; const m = iosState(); try { if (_iosCh) _iosCh.postMessage(m); } catch (e) { _swallow(e); } try { if (typeof rtcSend === 'function') rtcSend(m); } catch (e) { _swallow(e); } }
 function iosCmd(c, o = {}) { const m = Object.assign({ type: 'cmd', c }, o); try { if (_iosCh) _iosCh.postMessage(m); } catch (e) { _swallow(e); } try { if (typeof rtcSend === 'function') rtcSend(m); } catch (e) { _swallow(e); } }
-if (_iosCh) _iosCh.onmessage = e => { if (IOS_MODE) iosRender(e.data); else iosHandle(e.data); };
+if (_iosCh) _iosCh.onmessage = e => { if (IOS_MODE) { if (e.data && e.data.type === 'mirror') iosMirrorApply(e.data); else iosRender(e.data); } else iosHandle(e.data); };
 if (!IOS_MODE) setInterval(iosSend, 500);
 function openIos() {
   const q = new URLSearchParams(location.search); q.set('ios', '1');
@@ -192,3 +204,112 @@ function toggleHelp() {
   w.style.display = 'flex';
 }
 try { appRegister({ openIos, toggleHelp }); } catch (e) { _swallow(e); }
+
+// ══════════════════════════════════════════════════════
+// ⑧ 교관 화면 페이지 — 위 막대: 교관 · PFD · UPPER · LOWER · CYC · COLL · MAP · COCKPIT
+//   교관 창도 같은 앱이라, 교육생 창의 상태를 0.2초마다 그대로 받아(미러) 제 화면(PFD · 콘솔 · 지도 · 3D 조종석)에 그린다.
+//   교관 창은 스스로 계산하지 않는다(S.running 꺼 둠) — 보이는 값은 모두 교육생 창의 것.
+//   교관이 콘솔 스위치 · 컬렉티브 · 사이클릭을 누르면 교육생 창으로 보내 그쪽에서 조작한다.
+// ══════════════════════════════════════════════════════
+// 그대로 옮겨 올 전역(계기 · 모드 · 콘솔 · 무전기 · Bell 계통 · 흰수리 컬렉티브)
+const IOS_MIRROR_G = ['selSpd', 'selAlt', 'selHht', 'selCrht', 'selHdg', 'selVS', 'hdgSelOn', 'altHoldOn', 'gsArmed', 'gsOn', 'simModeOn', 'simIasOn',
+  'gspdOn', 'crhtOn', 'navApOn', 'rollApOn', 'iasNsOn', 'vsModeOn', 'gaOn', 'windDir', 'windSpd', 'obsOn', 'vorObsCrs', 'hdgRef', 'dgErr', 'slipBall', 'spdTrend',
+  'holdOn', 'hoverPageOn', 'hoverPosOn', 'simNr', 'simEng', 'simOeiT', 'simOeiMode', 'NR_GOV', 'simTq', 'env', 'kgLt',
+  'b206c', 'b206r', 'b206Wb', '_b206Gal', 'b206Hyd', 'c5', 'npx', 'instFail', 'shipVisible', 'shipLat', 'shipLon', 'shipHdg'];
+const _iosGet = n => { try { return (0, eval)(n); } catch (e) { return undefined; } };
+function iosMirror(full) {
+  const g = {};
+  for (const n of IOS_MIRROR_G) { const v = _iosGet(n); if (v !== undefined && typeof v !== 'function') g[n] = v; }
+  const s = Object.assign({}, S); delete s.trail;
+  const m = { type: 'mirror', S: s, g };
+  if (full && typeof ovhdState !== 'undefined') m.ov = Object.assign({}, ovhdState);
+  try { return JSON.parse(JSON.stringify(m)); } catch (e) { _swallow(e); return null; }
+}
+// 교육생 창 — 교관 창이 있다고 알려 오면(ping) 0.2초마다 보낸다(콘솔은 1초마다)
+let _iosPeerT = 0, _iosMirN = 0;
+if (!IOS_MODE) setInterval(() => {
+  if (Date.now() - _iosPeerT > 3000) return;
+  const m = iosMirror(_iosMirN++ % 5 === 0); if (!m) return;
+  try { if (_iosCh) _iosCh.postMessage(m); } catch (e) { _swallow(e); }
+  try { if (typeof rtcSend === 'function') rtcSend(m); } catch (e) { _swallow(e); }
+}, 200);
+// 교관 창 — 받은 상태를 제 앱에 넣는다
+let _iosApplying = false, iosMirrorN = 0;
+function iosMirrorApply(m) {
+  if (!m || m.type !== 'mirror') return;
+  _iosApplying = true; iosMirrorN++;
+  try {
+    if (m.S) { Object.assign(S, m.S); S.running = false; }
+    for (const [n, v] of Object.entries(m.g || {})) {
+      try {
+        const cur = _iosGet(n);
+        if (cur && typeof cur === 'object' && !Array.isArray(cur) && v && typeof v === 'object' && !Array.isArray(v)) Object.assign(cur, v);
+        else { window.__iosV = v; (0, eval)(n + ' = window.__iosV'); }
+      } catch (e) { /* const 이거나 없는 이름 — 넘어간다 */ }
+    }
+    if (m.ov && typeof ovhdSet === 'function') for (const [id, v] of Object.entries(m.ov)) { try { if (ovhdState[id] !== v) ovhdSet(id, v); } catch (e) { _swallow(e); } }
+  } finally { _iosApplying = false; }
+  try { if (typeof updateAcOnMap === 'function') updateAcOnMap(); } catch (e) { _swallow(e); }
+  try { if (typeof updateNav === 'function') updateNav(); } catch (e) { _swallow(e); }
+  if (iosPage === 'grip') iosGripRender();
+}
+// 교관 창에서 콘솔 스위치를 바꾸면 교육생 창으로
+if (IOS_MODE) try { ovhdOn((id, v) => { if (!_iosApplying) iosCmd('ovhd', { id, v }); }); } catch (e) { _swallow(e); }
+if (IOS_MODE) setInterval(() => iosCmd('ping'), 1000);
+
+// ── 페이지 ──
+const IOS_PAGES = [['ios', '교관'], ['pfd', 'PFD'], ['ovhd', 'UPPER'], ['lcon', 'LOWER'], ['grip', 'CYC · COLL'], ['map', 'MAP'], ['cockpit', 'COCKPIT']]
+  .filter(([k]) => !(k === 'ovhd' && typeof acScrOk === 'function' && !acScrOk('ovhd')));
+let iosPage = 'ios';
+function iosPagesBuild() {
+  if (document.getElementById('ios-pages')) return;
+  document.documentElement.classList.add('ios-win');
+  const bar = document.createElement('div'); bar.id = 'ios-pages';
+  bar.innerHTML = IOS_PAGES.map(([k, n]) => `<button type="button" data-iosp="${k}">${n}</button>`).join('');
+  bar.addEventListener('click', e => { const b = e.target.closest('[data-iosp]'); if (b) iosPageSet(b.dataset.iosp); });
+  document.body.appendChild(bar);
+  iosPageSet('ios');
+}
+function iosPageSet(k) {
+  if (!IOS_PAGES.some(p => p[0] === k)) return;
+  const H = document.documentElement, prev = iosPage; iosPage = k;
+  try { if (k !== 'cockpit' && window._cockpitOn && typeof cockpitExit === 'function') cockpitExit(); } catch (e) { _swallow(e); }
+  if (k === 'ios' || k === 'grip') {
+    H.classList.add('ios-mode');
+    const R = document.getElementById('ios-root');
+    if (R) { R.classList.toggle('ios-grip-on', k === 'grip'); }
+    if (k === 'grip') iosGripRender(true);
+  } else {
+    H.classList.remove('ios-mode');
+    try { if (k === 'cockpit') { if (typeof cockpitStart === 'function') cockpitStart(); } else if (typeof simpleSet === 'function') simpleSet(k); } catch (e) { _swallow(e); }
+  }
+  document.querySelectorAll('#ios-pages [data-iosp]').forEach(b => b.classList.toggle('on', b.dataset.iosp === k));
+  if (prev !== k) setTimeout(() => { try { window.dispatchEvent(new Event('resize')); } catch (e) { _swallow(e); } }, 80);
+}
+// CYC · COLL 페이지 — 흰수리: 컬렉티브 · 사이클릭(35-kuhgrip.js) · Bell: 컬렉티브(27-b206coll.js)
+function iosGripRender(force) {
+  const R = document.getElementById('ios-root'); if (!R) return;
+  let g = R.querySelector('[data-iosv="grip"]');
+  if (!g) {
+    g = document.createElement('div'); g.dataset.iosv = 'grip'; g.className = 'ios-grip'; R.appendChild(g);
+    g.addEventListener('pointerdown', e => {
+      const t = e.target.closest('[data-kg],[data-bc]'); if (!t) return;
+      e.preventDefault(); try { g.setPointerCapture(e.pointerId); } catch (er) { /* 그만 */ }
+      if (t.dataset.kg) iosCmd('kg', { k: t.dataset.kg, on: true });
+      else { const r = t.getBoundingClientRect(); iosCmd('bc', { k: t.dataset.bc, dir: e.clientX < r.left + r.width / 2 ? 1 : -1 }); }
+    });
+    ['pointerup', 'pointercancel', 'lostpointercapture'].forEach(ev => g.addEventListener(ev, () => { iosCmd('kg', { on: false }); iosCmd('bc', { k: 'up' }); }));
+  }
+  const b2 = typeof acB206 === 'function' && acB206();
+  let h = '';
+  try {
+    h = b2 ? `<div class="ios-gcell"><div class="ios-gt">COLLECTIVE</div>${typeof _b206cSvg === 'function' ? _b206cSvg() : ''}</div>`
+           : `<div class="ios-gcell"><div class="ios-gt">COLLECTIVE</div>${kgCollSvg('ic')}</div><div class="ios-gcell"><div class="ios-gt">CYCLIC</div>${kgCyclicSvg('iy')}</div>`;
+  } catch (e) { _swallow(e); }
+  if (force || g.dataset.h !== h) { g.dataset.h = h; g.innerHTML = h; }
+}
+if (IOS_MODE) {
+  const go = () => { try { iosPagesBuild(); } catch (e) { _swallow(e); } };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', go); else setTimeout(go, 0);
+}
+try { appRegister({ iosPageSet }); } catch (e) { _swallow(e); }
