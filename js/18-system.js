@@ -712,6 +712,20 @@ function apuGenOn() {
   try { g = typeof ovhdGet === 'function' && ovhdGet('apuGen') === 'APU GEN'; } catch (e) { _swallow(e); }
   return g && apuRunning();
 }
+// HEELS 등(상부 콘솔 HEELS: OFF · ARM · ON) — OFF 꺼짐 · ON 켜짐 ·
+//   ARM 이면 배터리가 연결된 채 주 발전기 둘이 모두 끊기면(NR 84% 미만도 — 발전기가 버스에서 떨어진다) 켜진다
+const HEELS_NR_MIN = 84;
+function heelsLit() {
+  let sw = 'OFF';
+  try { if (typeof ovhdGet === 'function') sw = ovhdGet('heels') || 'OFF'; } catch (e) { _swallow(e); }
+  if (sw === 'ON') return true;
+  if (sw !== 'ARM') return false;
+  let E = null, nr = 100;
+  try { E = elecState(); } catch (e) { _swallow(e); }
+  try { const P = engParams(); if (P && Number.isFinite(P.nr)) nr = P.nr; } catch (e) { _swallow(e); }
+  if (!E || !E.batt) return false;
+  return !(E.gen1 || E.gen2) || nr < HEELS_NR_MIN;
+}
 function elecState() {
   let P = null;
   try { P = engParams(); } catch (e) { P = null; }
