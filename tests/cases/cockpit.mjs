@@ -16,7 +16,7 @@ export async function run(page, t) {
                 ovhd: (document.getElementById('ovhd-wrap').parentElement || {}).id, lcon: (document.getElementById('lcon-wrap').parentElement || {}).id,
                 cdu: ((document.getElementById('cdu-ov') || {}).parentElement || {}).id, scale: document.getElementById('map3d').classList.contains('sim3d'),
                 btns: ['ckpit-btn', 'lconc-btn', 'upperc-btn'].every(vis),
-                fly: ['vstick-btn', 'gyro-btn', 'rotor-3d', 'sim3d-btn'].map(id => vis(id)) };
+                fly: ['gyro-btn', 'rotor-3d', 'sim3d-btn'].map(id => vis(id)), stick: vis('vstick-btn') };
     // 화면을 누르면 크게(팝아웃)
     document.querySelector('#sim-ckpit canvas.ck-scr[data-i="0"]').click(); await w(300);
     o.pop = ckConPop; toggleConsolePop(null); await w(200);
@@ -35,8 +35,8 @@ export async function run(page, t) {
   else t.ok(A.sim, '종합판 — SIM 을 켠 채로 시작한다');
   t.ok(A.panel && A.mfd === 4 && A.ovhd === 'ck-mini-ovhd' && A.lcon === 'ck-mini-lcon' && A.cdu === 'ck-mini-cdu' && A.btns,
     `조종석 패널 — MFD 넷 · 위아래 콘솔 · CDU 가 제자리에, 조종석 · LowerC · UpperC 버튼 (${A.ovhd} · ${A.lcon} · ${A.cdu})`);
-  if (procEd) t.ok(A.fly.every(v => !v), '절차 훈련판 — 스틱 · 자이로 · 회전익 특성 · SIM 처럼 비행하는 버튼은 없다');
-  else t.ok(A.fly.every(v => v), '종합판 — 스틱 · 자이로 · 회전익 특성 · SIM 버튼을 모두 쓸 수 있다');
+  if (procEd) t.ok(A.fly.every(v => !v) && A.stick, '절차 훈련판 — STICK 은 있고, 자이로 · 회전익 특성 · SIM 버튼은 없다');
+  else t.ok(A.fly.every(v => v) && A.stick, '종합판 — 스틱 · 자이로 · 회전익 특성 · SIM 버튼을 모두 쓸 수 있다');
   t.ok(A.pop === 'pfd', '화면(MFD)을 누르면 가운데에 크게 뜬다');
   // (종합판은 SIM 이 켜진 채로 나온다 — 분할 화면의 3D 창에서 SIM 1인칭이면 조종석 패널이 계속 보일 수 있다)
   t.ok(!A.exit.ck && !A.exit.cam && (A.sim || !A.exit.panel) && A.exit.mode === 'pc' && A.exit.app !== 'none', 'Split screen — 분할 화면(PC 모드)으로 끝낸다');
@@ -128,4 +128,33 @@ export async function run(page, t) {
   t.ok(X.on.ext && X.on.model && !X.on.panel && X.on.ec && X.on.follow && X.on.d > 10 && Math.abs(((X.on.brg - 90 + 540) % 360) - 180) < 5,
     `EXT — 조종석 패널을 걷고 헬기 뒤(${Math.round(X.on.d)}m · 헬기 쪽 ${Math.round(X.on.brg)}°)에서 모형을 본다 · 카메라 버튼이 뜬다`);
   t.ok(!X.back.ext && X.back.first && !X.back.model, '다시 누르면 조종석 시야로 돌아온다');
+  // ── STICK — SIM 밖(절차 훈련판 · AFCS 비행)에서도 화면 조종간으로 뱅크 · 속도 · 기수 · 승강률 ──
+  const ST = await page.evaluate(async () => {
+    const w = ms => new Promise(r => setTimeout(r, ms));
+    try { if (simModeOn) toggleSimMode(false); } catch (e) { /* 절차 훈련판 */ }
+    if (simExtView) toggleExtView(false);
+    S.alt = 1500; S.spd = 100; S.hdg = 90; S.vs = 0; bankTarget = 0;
+    cockpitStart(); await w(800);
+    try { if (simModeOn) toggleSimMode(false); } catch (e) { /* 절차 훈련판 */ }   // 종합판은 Cockpit 이 SIM 을 켠다 — 끄고 AFCS 비행으로
+    await w(200);
+    const o = { avail: vStickAvail() };
+    if (vStickOn) toggleVStick();
+    document.getElementById('vstick-btn').click(); await w(150);
+    o.on = vStickActive() && getComputedStyle(document.getElementById('vstick')).display !== 'none' && vStick.coll === 0.5;
+    const run0 = S.running; S.running = true;
+    const spd0 = S.spd, hdg0 = S.hdg;
+    vStick.roll = 1; vStick.pitch = 1; vStick.yaw = 1; vStick.coll = 1;
+    for (let i = 0; i < 12; i++) { await w(60); vStickNsStep(); }
+    o.held = { bank: bankTarget, spd: S.spd - spd0, hdg: ((S.hdg - hdg0 + 540) % 360) - 180, vs: S.vs, alt: altHoldOn, lbl: document.querySelector('#vstick-coll .vs-lbl').textContent };
+    vStick.roll = 0; vStick.pitch = 0; vStick.yaw = 0; vStick.coll = 0.5;
+    await w(60); vStickNsStep(); await w(60); vStickNsStep();
+    o.rel = { bank: bankTarget, vs: S.vs };
+    S.running = run0;
+    toggleVStick(); o.off = !vStickActive();
+    return o;
+  });
+  t.ok(ST.avail && ST.on, 'SIM 밖에서도 Cockpit Mode 화면에 STICK(화면 조종간)이 뜬다 · 컬렉티브는 가운데(수평)부터');
+  t.ok(ST.held.bank === 30 && ST.held.spd > 1 && ST.held.hdg > 2 && ST.held.vs === 2000 && !ST.held.alt,
+    `STICK — 사이클릭 오른쪽 끝 뱅크 ${ST.held.bank}° · 앞으로 밀면 +${ST.held.spd.toFixed(1)}kt · 페달 +${ST.held.hdg.toFixed(1)}° · 컬렉티브 위 끝 ${ST.held.vs}fpm(ALT 풀림 · ${ST.held.lbl})`);
+  t.ok(ST.rel.bank === 0 && ST.rel.vs === 0 && ST.off, '놓으면 수평 · 컬렉티브를 가운데로 두면 승강률 0 · STICK 을 끈다');
 }

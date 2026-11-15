@@ -1277,7 +1277,8 @@ function vStickCyclic() {
 }
 let vStickOn = false;
 const vStick = { coll: 0, yaw: 0, roll: 0, pitch: 0 };
-function vStickAvail() { return simModeOn && typeof fcp3dAvail === 'function' && fcp3dAvail(); }
+// SIM 밖(절차 훈련판 · AFCS 비행)에서도 쓴다 — Cockpit Mode(3D 단독) 화면이면 된다. 그때는 비행 모델 대신 AFCS 기준을 움직인다(vStickNsStep)
+function vStickAvail() { return typeof fcp3dAvail === 'function' && fcp3dAvail(); }
 function vStickActive() { return vStickOn && vStickAvail(); }
 function _vStickBox() {
   const d3 = document.getElementById('map3d');
@@ -1353,7 +1354,8 @@ function vStickRender() {
   if (kc) kc.style.bottom = `calc(${(vStick.coll * 100).toFixed(1)}% - 9px)`;
   if (kp) kp.style.left = `calc(${((vStick.yaw + 1) * 50).toFixed(1)}% - 9px)`;
   if (ky) { ky.style.left = `calc(${(50 + vStick.roll * 50).toFixed(1)}% - 14px)`; ky.style.top = `calc(${(50 - vStick.pitch * 50).toFixed(1)}% - 14px)`; }
-  const l = q('.vs-coll .vs-lbl'); if (l) l.textContent = `COLL ${Math.round(vStick.coll * SIM_LEVER_TOP)}%`;
+  const l = q('.vs-coll .vs-lbl');
+  if (l) l.textContent = simModeOn ? `COLL ${Math.round(vStick.coll * SIM_LEVER_TOP)}%` : `VS ${_vsNsVs(vStick.coll) > 0 ? '+' : ''}${_vsNsVs(vStick.coll)}`;
 }
 function syncVStick() {
   const avail = vStickAvail(), want = vStickOn && avail;
@@ -1453,14 +1455,43 @@ function gyroAlign() {
 }
 function toggleVStick() {
   if (!vStickAvail()) {
-    try { uiToast('화면 조종간은 SIM 모드의 Cockpit Mode 화면에서 씁니다', '', 2500); } catch (e) { _swallow(e); }
+    try { uiToast('화면 조종간은 Cockpit Mode 화면에서 씁니다', '', 2500); } catch (e) { _swallow(e); }
     return;
   }
   vStickOn = !vStickOn;
-  // 켤 때 컬렉티브는 지금 토크 자리에서 시작한다(튀지 않게)
-  if (vStickOn) { vStick.coll = Math.max(0, Math.min(1, (S.tq || 0) / SIM_LEVER_TOP)); vStick.yaw = vStick.roll = vStick.pitch = 0; }
+  // 켤 때 컬렉티브는 지금 토크 자리에서 시작한다(튀지 않게) — SIM 밖이면 가운데(수평 비행)
+  if (vStickOn) {
+    vStick.coll = simModeOn ? Math.max(0, Math.min(1, (S.tq || 0) / SIM_LEVER_TOP)) : 0.5;
+    vStick.yaw = vStick.roll = vStick.pitch = 0; _vsNs.coll = vStick.coll; _vsNs.roll = false;
+  }
   syncVStick();
 }
+
+// ── SIM 밖(절차 훈련판 · AFCS 비행)의 화면 조종간 ── 비행 모델이 없으므로 AFCS 기준을 움직인다
+//   사이클릭 좌우 — 뱅크(끝까지 30° · 놓으면 수평으로, 횡축 모드는 풀린다)
+//   사이클릭 앞뒤 — 속도(앞으로 밀면 빨라진다 · 끝까지 초당 8kt)
+//   페달 — 기수(끝까지 초당 12°)   ·   컬렉티브 — 승강률(가운데 0 · 위 끝 +2,000 · 아래 끝 −2,000fpm,
+//   가운데를 벗어나면 ALT · CRHT 를 풀고, 가운데로 돌아오면 수평)
+const VS_NS = { dead: 0.05, bank: 30, spd: 8, yaw: 12, vs: 2000, collDead: 0.04 };
+const _vsNs = { t: 0, coll: 0.5, roll: false };
+function _vsNsVs(c) { const d = c - 0.5; return Math.abs(d) < VS_NS.collDead ? 0 : Math.round(d * 2 * VS_NS.vs / 50) * 50; }
+function vStickNsStep() {
+  if (simModeOn || !vStickActive()) { _vsNs.t = 0; return; }
+  const now = performance.now(), dt = _vsNs.t ? Math.min(0.2, (now - _vsNs.t) / 1000) : 0; _vsNs.t = now;
+  if (!S.running || !(dt > 0)) return;
+  const k = typeof simSpeed === 'number' ? simSpeed : 1, D = VS_NS.dead;
+  if (Math.abs(vStick.roll) > D) { bankTarget = vStick.roll * VS_NS.bank; rollApOn = false; hdgSelOn = false; _vsNs.roll = true; }
+  else if (_vsNs.roll) { bankTarget = 0; _vsNs.roll = false; }
+  if (Math.abs(vStick.pitch) > D && !gspdOn) applyDelta('spd', vStick.pitch * VS_NS.spd * dt * k);
+  if (Math.abs(vStick.yaw) > D) applyDelta('yaw', vStick.yaw * VS_NS.yaw * dt * k);
+  const c = vStick.coll, moved = Math.abs(c - _vsNs.coll) > 1e-3, vs = _vsNsVs(c);
+  if (vs !== 0 || moved) {
+    if (vs !== 0) { altHoldOn = false; crhtOn = false; }
+    S.vs = vs;
+  }
+  _vsNs.coll = c;
+}
+setInterval(() => { try { vStickNsStep(); } catch (e) { _swallow(e); } }, 50);
 
 function updateSimModeBtn() {
   const b = document.getElementById('sim-mode-btn');   // FCP 버튼은 없앴다(PFD 소프트키 SIM) — 있으면만
