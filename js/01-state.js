@@ -572,6 +572,7 @@ function toggleGspd() {
       gspdActFwd = S.spd - w.fwd;
     }
     simIasOn = false;   // SIM 의 IAS 도 기수 자세를 쓰는 모드다 — GSPD 가 넘겨 받는다
+    try { iasNsOn = false; } catch (e) { _swallow(e); }   // SIM 밖(AFCS 비행)의 IAS 도 — 풀 때 저절로 다시 물리지 않는다
     // References default to 0,0; the slew loop will decelerate.
     gspdRefLat = 0;
     gspdRefFwd = 0;

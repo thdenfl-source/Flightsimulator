@@ -79,4 +79,25 @@ export async function run(page, t) {
   t.ok(Math.abs(ramp.fwd.end - 35) < 1.1, `5초 동안 5kt 를 따라왔다 (${ramp.fwd.end.toFixed(1)}kt)`);
   t.ok(ramp.lat.maxStep <= 0.051 && ramp.lat.still <= 5,
     `좌우 15kt 도 같다 (프레임당 최대 ${ramp.lat.maxStep.toFixed(3)}kt · 멈춘 프레임 ${ramp.lat.still})`);
+  // ── GSPD 는 컬렉티브 축(ALT · CRHT)을 저절로 물리지 않고, 풀어도 IAS 가 저절로 물리지 않는다 ──
+  const fm = await page.evaluate(() => {
+    const shot = () => { const seen = [], o = CanvasRenderingContext2D.prototype.fillText;
+      CanvasRenderingContext2D.prototype.fillText = function (x, ...a) { seen.push([String(x), String(this.fillStyle)]); return o.call(this, x, ...a); };
+      try { drawPFD(); } finally { CanvasRenderingContext2D.prototype.fillText = o; } return seen; };
+    const lit = (seen, t) => seen.some(([x, c]) => x === t && c !== '#3a3a3a');
+    const a0 = altHoldOn, c0 = crhtOn, g0 = gspdOn;
+    if (gspdOn) toggleGspd();
+    altHoldOn = false; crhtOn = false; S.spd = 30;
+    toggleGspd(); const on = shot();
+    const o = { altOn: lit(on, 'ALT') || lit(on, 'ALT.A') || lit(on, 'CRHT'), gsOn: gspdOn };
+    toggleGspd(); const off = shot();
+    o.iasAfter = iasModeOn(); o.iasLit = lit(off, 'IAS');
+    toggleGspd(); toggleGspd(); o.iasAgain = iasModeOn();
+    altHoldOn = true; toggleGspd(); o.altWhenSet = lit(shot(), 'ALT') || lit(shot(), 'ALT.A'); toggleGspd();
+    altHoldOn = a0; crhtOn = c0; if (gspdOn !== g0) toggleGspd();
+    return o;
+  });
+  t.ok(fm.gsOn && !fm.altOn, 'GSPD 를 걸어도 ALT · CRHT 는 저절로 물리지 않는다(조종사가 걸 때만)');
+  t.ok(!fm.iasAfter && !fm.iasLit && !fm.iasAgain, 'GSPD 를 걸고 풀어도(몇 번이고) IAS 가 저절로 물리지 않는다');
+  t.ok(fm.altWhenSet, 'ALT 를 걸어 둔 채 GSPD 를 걸면 FMA 에 ALT 가 그대로 켜져 있다');
 }

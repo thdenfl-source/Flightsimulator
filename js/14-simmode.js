@@ -215,7 +215,25 @@ function simAfcsAny() {
   return simModeOn && !!(hdgSelOn || navApOn || altHoldOn || crhtOn || simIasOn || gspdOn || gsOn ||
     (typeof holdOn !== 'undefined' && holdOn));
 }
-function simAfcsVert() { return simModeOn && (altHoldOn || crhtOn || (gsOn && !!_simGs()) || gaOn || vsModeOn || tdOn); }
+// ALT 는 Vy 아래에서는 컬렉티브 축(출력으로 고도), Vy 이상에서는 피치 축(자세로 고도 — 컬렉티브는 조종사 손)에 물린다.
+//   경계에서 오락가락하지 않게 Vy 에서 올라타고 Vy−ALT_PITCH_HYS 아래로 떨어져야 내려온다. CRHT 는 늘 컬렉티브 축.
+const ALT_PITCH_HYS = 5;          // kt
+let _altPitch = false;
+function simAltPitch() {
+  const can = simModeOn && altHoldOn && !crhtOn && !tdOn && !gaOn && !gspdOn && !(gsOn && _simGs());
+  if (!can) { _altPitch = false; return false; }
+  const vy = simVyKt();
+  if (!_altPitch && S.spd >= vy) _altPitch = true;
+  else if (_altPitch && S.spd < vy - ALT_PITCH_HYS) _altPitch = false;
+  return _altPitch;
+}
+// 피치 축 ALT — 지금 속도의 수평 자세에 원하는 상승률과의 차이만큼 기수를 들고 숙인다(1,000fpm 에 2.5° · ±4°)
+const ALT_PITCH_K = 0.0025, ALT_PITCH_MAX = 4;
+function simAltPitchTgt() {
+  const err = simAfcsVsCmd() - (S.vs || 0);
+  return pitchFromSpd(Math.max(0, S.spd)) + Math.max(-ALT_PITCH_MAX, Math.min(ALT_PITCH_MAX, err * ALT_PITCH_K));
+}
+function simAfcsVert() { return simModeOn && (altHoldOn || crhtOn || (gsOn && !!_simGs()) || gaOn || vsModeOn || tdOn) && !simAltPitch(); }
 // ── G/A(복행) ── FCP 의 G/A 버튼. 누르면 컬렉티브·피치 축이 GA 가 되어 두 단계로 간다.
 //   ① 가속(40kt 미만에서 눌렀을 때): 기수를 지금 자세에서 7.5° 숙여 증속하고, 컬렉티브는 고도가 떨어지지 않게 쓴다
 //      (누른 고도 아래로 내려가지 않는다 · 아직 오르지는 않는다)
@@ -414,7 +432,8 @@ function simAfcsVsCmd() {
   return Math.max(-rate, Math.min(rate, (tgt - ahead) * SIM_AFCS_ALT_K));
 }
 // GSPD 가 걸려 있으면 GSPD 가 자세와 속도를 맡는다
-function simAfcsPitch() { return simModeOn && simIasOn && !gspdOn; }
+// (Vy 이상의 ALT 도 피치 축 모드다 — simAltPitch)
+function simAfcsPitch() { return simModeOn && (simIasOn || simAltPitch()) && !gspdOn; }
 // HDG SEL 을 손으로 넘겨 받는다(좌우 트림을 누를 때) — 지금 뱅크를 트림으로 잡아
 // 두어 놓는 순간 자세가 튀지 않게 한다(조종간이 가운데가 아니면 그 몫은 뺀다).
 function simAfcsLatRelease() {
@@ -1081,7 +1100,7 @@ function simIasToggle() { afcsCmd(); if (simIasOn) simIasRelease(); else simIasE
 // 기준 속도를 d(kt)만큼 옮긴다 — 꺼져 있으면 지금 속도에서 켜고 옮긴다
 function simIasStep(d) {
   if (!simModeOn) return;
-  if (!simAfcsPitch()) simIasEngage();
+  if (!simIasOn) simIasEngage();
   selSpd = simIasClamp(selSpd + d);
 }
 // 선택 속도에 서는 자세 — 아래 simFly 의 '피치 → 속도' 식을 거꾸로 푼다
@@ -1856,7 +1875,7 @@ function simFly(dt) {
     // 놓으면 그 자세로 천천히 돌아온다.
     let pTgt = -pitch * SIM_PITCH_MAX, pRate = SIM_PITCH_RATE;
     if (simAfcsPitch()) {
-      pTgt = Math.max(-SIM_PITCH_MAX, Math.min(SIM_PITCH_MAX, simIasPitch() - a.pitch * SIM_PITCH_MAX));
+      pTgt = Math.max(-SIM_PITCH_MAX, Math.min(SIM_PITCH_MAX, (simAltPitch() ? simAltPitchTgt() : simIasPitch()) - a.pitch * SIM_PITCH_MAX));
       if (!a.pitch) pRate = SIM_IAS_RATE;
     }
     // 회전익 특성 — 컬렉티브·페달이 피치로 옮겨 간다. IAS·G/A·T/D 처럼 AFCS 가 자세를 잡고 있으면 AFCS 가 메운다
