@@ -1704,6 +1704,8 @@ async function part4(page, t) {
     _ax(0, 0); fly(3);
     // ALT — 선택 고도 3,300ft · 500fpm. 레버를 끝까지 내려도 오르고, 닿으면 선다
     S.alt = 3000; S.vs = 0; simVsAcc = 0;   // 선회하며 가라앉은 만큼 되돌려 놓고 시작한다
+    // (ALT 가 컬렉티브 축에 물리는 것은 Vy 아래에서다 — 60kt 로 늦춰 두고 건다)
+    S.spd = 60; S.pit = pitchFromSpd(60); simTrimHoldSpeed(); simAcc = 0;
     selAlt = 3300; selVS = 500; altHoldOn = true; crhtOn = false;
     _ax(3, -1);
     const a0 = S.alt; fly(10); out.alt10 = S.alt - a0;
@@ -1734,7 +1736,7 @@ async function part4(page, t) {
   t.ok(upper.rel.b0 > 3 && Math.abs(upper.rel.b1 - upper.rel.b0) < 1.5,
     `풀린 자리의 뱅크를 이어 잡는다 (${upper.rel.b0.toFixed(1)}° → ${upper.rel.b1.toFixed(1)}°)`);
   t.ok(upper.manual < -15, `풀린 뒤에는 조종간이 다시 뱅크를 잡는다 (${upper.manual.toFixed(1)}°)`);
-  t.ok(upper.vert, 'ALT 를 걸면 컬렉티브 축은 AFCS 몫이다');
+  t.ok(upper.vert, 'ALT 를 걸면(Vy 아래) 컬렉티브 축은 AFCS 몫이다');
   t.ok(upper.alt10 > 40 && upper.alt10 < 90,
     `레버를 끝까지 내려도 출력을 올려 선택 상승률로 오른다 (10초 +${upper.alt10.toFixed(0)}ft · 500fpm)`);
   t.ok(Math.abs(upper.alt50 - 3300) < 2, `선택 고도에 닿으면 선다 (${upper.alt50.toFixed(0)}ft)`);
@@ -1784,9 +1786,10 @@ async function part4(page, t) {
     _ax(1, -0.25); fly(4); out.pull = { pit: S.pit, spd: S.spd };
     _ax(1, 0); fly(40); out.back2 = S.spd;
     // 오르는 동안에도 그 속도에 선다(오르내림으로 어긋나는 몫을 메운다)
-    toggleCrht(); selAlt = 6000; selVS = 1000; altHoldOn = true;
+    // (Vy 위의 ALT 는 피치 축이라 IAS 와 겹친다 — 컬렉티브 축 VS 로 오른다)
+    const cr0 = crhtOn, ah0 = altHoldOn; crhtOn = false; altHoldOn = false; vsModeOn = true; selVS = 1000;
     fly(20); out.climb = { spd: S.spd, vs: S.vs };
-    altHoldOn = false; toggleCrht(); S.vs = 0; simVsAcc = 0; fly(20);
+    vsModeOn = false; crhtOn = cr0; altHoldOn = ah0; S.vs = 0; simVsAcc = 0; fly(20);
     // 전후 트림 = 기준 1kt
     startTrimHold('F'); stopTrimHold(); out.trimF = selSpd;
     startTrimHold('A'); stopTrimHold(); startTrimHold('A'); stopTrimHold(); out.trimA = selSpd;
@@ -1857,7 +1860,9 @@ async function part4(page, t) {
     const bank = { bnk: S.bnk, tq: S.tq, tq0, minB, end: S.alt - c0 };
     _ax(0, 0); step(4); toggleCrht();
     // ALT — 3,000 → 3,300ft · 500fpm 로 잡아 넘치지 않고 선다
-    S.alt = 3000; S.vs = 0; simVsAcc = 0; selAlt = 3300; selVS = 500; altHoldOn = true; crhtOn = false;
+    S.alt = 3000; S.vs = 0; simVsAcc = 0; selAlt = 3300; selVS = 500;
+    S.spd = 60; S.pit = pitchFromSpd(60); simTrimHoldSpeed(); simAcc = 0;   // Vy 아래 — 컬렉티브 축 ALT
+    altHoldOn = true; crhtOn = false;
     let maxAlt = 0;
     step(70, () => { maxAlt = Math.max(maxAlt, S.alt); });
     const alt = { maxAlt, end: S.alt };
@@ -1876,7 +1881,24 @@ async function part4(page, t) {
   t.ok(hold.bank.bnk > 25 && hold.bank.tq > hold.bank.tq0 + 2.5 && hold.bank.minB > -8 && Math.abs(hold.bank.end) < 2,
     `30° 뱅크 — 필요한 만큼 토크를 더 써서 고도를 지킨다 (${hold.bank.tq0.toFixed(0)} → ${hold.bank.tq.toFixed(0)}% · 최저 ${hold.bank.minB.toFixed(1)}ft)`);
   t.ok(hold.alt.maxAlt < 3302 && Math.abs(hold.alt.end - 3300) < 2,
-    `ALT 는 선택 고도를 넘치지 않고 잡는다 (최고 ${hold.alt.maxAlt.toFixed(0)} · 끝 ${hold.alt.end.toFixed(0)}ft)`);
+    `ALT(Vy 아래 · 컬렉티브 축)는 선택 고도를 넘치지 않고 잡는다 (최고 ${hold.alt.maxAlt.toFixed(0)} · 끝 ${hold.alt.end.toFixed(0)}ft)`);
+  // ALT 의 축 — Vy 아래는 컬렉티브 · Vy 이상은 피치(컬렉티브는 조종사 손) · CRHT 는 늘 컬렉티브
+  const axis = await page.evaluate(`(() => {
+    (${SETUP.toString()})();
+    const step = sec => { S.running = true; let ts = 1000; S.lastT = ts; for (let i = 1; i <= sec * 20; i++) { ts += 50; simStep(ts); } S.running = false; };
+    const vy = simVyKt(), o = { vy };
+    const at = spd => { S.alt = 3000; S.spd = spd; S.pit = pitchFromSpd(spd); simTrimHoldSpeed(); simAcc = 0; S.vs = 0; simVsAcc = 0; S.tq = tqRequired();
+      selAlt = 3000; altHoldOn = true; crhtOn = false; step(10);
+      return { pitch: simAltPitch(), vert: simAfcsVert(), afcsP: simAfcsPitch(), dAlt: S.alt - 3000 }; };
+    o.lo = at(Math.round(vy - 20)); o.hi = at(Math.round(vy + 40));
+    altHoldOn = false; crhtOn = true; selCrht = 1000; o.crht = { pitch: simAltPitch(), vert: simAfcsVert() };
+    crhtOn = false; simTrimReset();
+    return o;
+  })()`);
+  t.ok(!axis.lo.pitch && axis.lo.vert, `ALT — Vy(${axis.vy.toFixed(0)}kt) 아래에서는 컬렉티브 축에 물린다`);
+  t.ok(axis.hi.pitch && !axis.hi.vert && axis.hi.afcsP && Math.abs(axis.hi.dAlt) < 15,
+    `ALT — Vy 이상에서는 피치 축에 물리고(컬렉티브는 조종사 손) 고도를 지킨다 (${axis.hi.dAlt.toFixed(1)}ft)`);
+  t.ok(!axis.crht.pitch && axis.crht.vert, 'CRHT 는 속도와 상관없이 늘 컬렉티브 축이다');
 
   // ── HDG 버튼 · 상위모드 모두 해제(B1) · FMA 의 HDG ──
   // HDG 는 IAS·ALT 처럼 한 번 더 누르면 풀린다. FMA 는 걸려 있는 동안만 초록 'HDG' 다.

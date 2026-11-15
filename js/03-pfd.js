@@ -802,7 +802,9 @@ function drawFMA(x, y, w) {
   if (gspdOn) {
     // GSPD engaged: both yaw/roll (mid) and pitch (right) are driven by
     // body-frame ground speed; capture GS on both axes.
-    left   = crhtOn ? 'CRHT' : 'ALT'; leftOn = true;
+    // 컬렉티브 축은 조종사가 ALT · CRHT 를 걸었을 때만 물린다(GSPD 가 저절로 걸지 않는다)
+    left   = crhtOn ? 'CRHT' : (altHoldOn && Math.abs(selAlt - S.alt) > 20 ? 'ALT.A' : 'ALT');
+    leftOn = altHoldOn || crhtOn;
     // GSPD 는 요/롤 축을 가져간다. NAV·HDG SEL 이 켜져 있어도 조향하지 못하므로
     // 켜진 채 방치하지 말고 "대기"임을 분명히 적는다.
     // (버튼은 초록인데 기체가 안 도는 상황을 화면만 보고 알 수 있어야 한다)
