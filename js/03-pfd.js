@@ -824,6 +824,8 @@ function drawFMA(x, y, w) {
     if (td) { left = 'TDH'; leftOn = true; right = 'TDH'; rightOn = true; }   // T/D to H
     else if (ga) { left = 'GA'; leftOn = true; right = 'GA'; rightOn = true; }
     else if (vsm && !altHoldOn && !crhtOn) { left = 'VS ' + Math.round(selVS); leftOn = true; }
+    // Vy 이상에서 ALT 단독이면 ALT 는 피치 축(오른쪽 칸) — 컬렉티브 칸은 비고 조종사 손이다(14-simmode.js afcsAltPitch)
+    else if (typeof afcsAltPitch === 'function' && afcsAltPitch()) { right = left; rightOn = true; left = ''; leftOn = false; }
   }
 
   // ── G/S (ILS 강하선) ──

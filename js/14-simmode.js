@@ -215,12 +215,13 @@ function simAfcsAny() {
   return simModeOn && !!(hdgSelOn || navApOn || altHoldOn || crhtOn || simIasOn || gspdOn || gsOn ||
     (typeof holdOn !== 'undefined' && holdOn));
 }
-// ALT 는 Vy 아래에서는 컬렉티브 축(출력으로 고도), Vy 이상에서는 피치 축(자세로 고도 — 컬렉티브는 조종사 손)에 물린다.
+// ALT 단독(IAS 없이)이면 Vy 아래에서는 컬렉티브 축(출력으로 고도), Vy 이상에서는 피치 축(자세로 고도 — 컬렉티브는 조종사 손)에 물린다.
 //   경계에서 오락가락하지 않게 Vy 에서 올라타고 Vy−ALT_PITCH_HYS 아래로 떨어져야 내려온다. CRHT 는 늘 컬렉티브 축.
 const ALT_PITCH_HYS = 5;          // kt
 let _altPitch = false;
 function simAltPitch() {
-  const can = simModeOn && altHoldOn && !crhtOn && !tdOn && !gaOn && !gspdOn && !(gsOn && _simGs());
+  // ALT 단독일 때만 — IAS 가 걸려 있으면 IAS 가 피치 축이고 ALT 는 컬렉티브 축에 남는다
+  const can = simModeOn && altHoldOn && !simIasOn && !crhtOn && !tdOn && !gaOn && !gspdOn && !(gsOn && _simGs());
   if (!can) { _altPitch = false; return false; }
   const vy = simVyKt();
   if (!_altPitch && S.spd >= vy) _altPitch = true;
@@ -232,6 +233,18 @@ const ALT_PITCH_K = 0.0025, ALT_PITCH_MAX = 4;
 function simAltPitchTgt() {
   const err = simAfcsVsCmd() - (S.vs || 0);
   return pitchFromSpd(Math.max(0, S.spd)) + Math.max(-ALT_PITCH_MAX, Math.min(ALT_PITCH_MAX, err * ALT_PITCH_K));
+}
+// ALT 가 지금 피치 축에 물려 있나 — SIM 은 simAltPitch, SIM 밖(AFCS 비행 · 절차 훈련판)도 같은 규칙(Vy 이상 · Vy−5kt 아래로 내려와야 풀림)
+//   FMA 가 이것을 보고 ALT 를 피치 칸(오른쪽)에 적는다
+let _altPitchNs = false;
+function afcsAltPitch() {
+  if (simModeOn) return simAltPitch();
+  const can = altHoldOn && !iasNsOn && !crhtOn && !gspdOn && !(typeof gsOn !== 'undefined' && gsOn);
+  if (!can) { _altPitchNs = false; return false; }
+  const vy = simVyKt();
+  if (!_altPitchNs && S.spd >= vy) _altPitchNs = true;
+  else if (_altPitchNs && S.spd < vy - ALT_PITCH_HYS) _altPitchNs = false;
+  return _altPitchNs;
 }
 function simAfcsVert() { return simModeOn && (altHoldOn || crhtOn || (gsOn && !!_simGs()) || gaOn || vsModeOn || tdOn) && !simAltPitch(); }
 // ── G/A(복행) ── FCP 의 G/A 버튼. 누르면 컬렉티브·피치 축이 GA 가 되어 두 단계로 간다.

@@ -1888,9 +1888,10 @@ async function part4(page, t) {
     const step = sec => { S.running = true; let ts = 1000; S.lastT = ts; for (let i = 1; i <= sec * 20; i++) { ts += 50; simStep(ts); } S.running = false; };
     const vy = simVyKt(), o = { vy };
     const at = spd => { S.alt = 3000; S.spd = spd; S.pit = pitchFromSpd(spd); simTrimHoldSpeed(); simAcc = 0; S.vs = 0; simVsAcc = 0; S.tq = tqRequired();
-      selAlt = 3000; altHoldOn = true; crhtOn = false; step(10);
+      selAlt = 3000; altHoldOn = true; crhtOn = false; simIasOn = false; step(10);   // ALT 단독
       return { pitch: simAltPitch(), vert: simAfcsVert(), afcsP: simAfcsPitch(), dAlt: S.alt - 3000 }; };
     o.lo = at(Math.round(vy - 20)); o.hi = at(Math.round(vy + 40));
+    { S.spd = Math.round(vy + 40); simIasEngage(); altHoldOn = true; crhtOn = false; o.ias = { pitch: simAltPitch(), vert: simAfcsVert() }; simIasOn = false; }
     altHoldOn = false; crhtOn = true; selCrht = 1000; o.crht = { pitch: simAltPitch(), vert: simAfcsVert() };
     crhtOn = false; simTrimReset();
     return o;
@@ -1899,6 +1900,7 @@ async function part4(page, t) {
   t.ok(axis.hi.pitch && !axis.hi.vert && axis.hi.afcsP && Math.abs(axis.hi.dAlt) < 15,
     `ALT — Vy 이상에서는 피치 축에 물리고(컬렉티브는 조종사 손) 고도를 지킨다 (${axis.hi.dAlt.toFixed(1)}ft)`);
   t.ok(!axis.crht.pitch && axis.crht.vert, 'CRHT 는 속도와 상관없이 늘 컬렉티브 축이다');
+  t.ok(!axis.ias.pitch && axis.ias.vert, 'ALT + IAS 면 Vy 이상이어도 IAS 가 피치 축 · ALT 는 컬렉티브 축');
 
   // ── HDG 버튼 · 상위모드 모두 해제(B1) · FMA 의 HDG ──
   // HDG 는 IAS·ALT 처럼 한 번 더 누르면 풀린다. FMA 는 걸려 있는 동안만 초록 'HDG' 다.
