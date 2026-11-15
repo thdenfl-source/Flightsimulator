@@ -1250,12 +1250,11 @@ function _ckWipeSync() {
     el.dataset.wipe = cls;
   }
 }
-// HEELS 등 — 조종석 테두리(앞유리 위 띠 · 좌우 문 기둥)를 따라 길게 녹색으로 켜진다(18-system.js heelsLit).
+// HEELS 등 — 문이 있는 곳을 알리는 등: 좌우 문 기둥을 따라 길게 녹색으로 켜진다(앞쪽은 없다)(18-system.js heelsLit).
 //   반투명 틀(#sim-ckpit > svg)과 따로 두어 투명도와 상관없이 또렷하다. 흰수리 조종석만(Bell 은 HEELS 스위치가 없다)
 function _ckHeelsSvg() {
   if (CKPIT_SCR[0].k === 'b206') return '';
   return `<div id="ck-heels"><svg viewBox="0 0 1600 900" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M6 22 Q800 40 1594 22" />
     <path d="M6 160 L6 246 L200 594" /><path d="M1594 160 L1594 246 L1400 594" /></svg></div>`;
 }
 function _ckHeelsSync() {
