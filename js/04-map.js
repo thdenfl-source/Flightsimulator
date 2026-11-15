@@ -1331,21 +1331,42 @@ function makeAircraftIcon(hdg) {
 
 let acMarker = L.marker([S.lat,S.lon],{icon:makeAircraftIcon(S.hdg),draggable:true,zIndexOffset:1000}).addTo(leafMap);
 let acDragging = false;
+let _acPtrDown = null;
 let _acEl = null; // track DOM element to avoid duplicate listeners
 
 function _bindAcPointerDown() {
   const el = acMarker.getElement();
   if (!el || el === _acEl) return;
   _acEl = el;
-  const onDown = () => { acDragging = true; };
+  const onDown = ev => { acDragging = true; _acPtrDown = _acPtr(ev); };   // 끌기 시작 손가락 자리(HDG↑ 끌기 보정)
   el.addEventListener('mousedown',  onDown);
   el.addEventListener('touchstart', onDown, {passive: true});
 }
 setTimeout(_bindAcPointerDown, 0);
 
 // dragstart is too late (after Leaflet detects movement threshold), so we use DOM events above
-acMarker.on('drag',    e => { const p=e.target.getLatLng(); S.lat=p.lat; S.lon=p.lng; updateNav(); });
-acMarker.on('dragend', () => { acDragging=false; S.trail=[]; updateTrail(); updateNav(); });
+// 기수 위(HDG↑) 지도는 #map 을 CSS 로 돌려 그린다(05-gps.js) — Leaflet 은 돌리기 전 좌표로 끌기를 셈해서
+// 손가락을 오른쪽으로 끌어도 항공기는 기수 기준 오른쪽(화면에선 엉뚱한 쪽)으로 갔다.
+// 그래서 끌기 시작점부터의 화면 이동량을 지도 회전만큼 되돌려 놓는다 — 북쪽 위든 기수 위든 끈 쪽으로 그대로 간다.
+let _acDrag0 = null;
+function _acPtr(ev) { const t = ev && ((ev.touches && ev.touches[0]) || (ev.changedTouches && ev.changedTouches[0])) || ev; return t && Number.isFinite(t.clientX) ? { x: t.clientX, y: t.clientY } : null; }
+acMarker.on('dragstart', e => {
+  _acDrag0 = { ll: acMarker.getLatLng(), lp: leafMap.latLngToLayerPoint(acMarker.getLatLng()), ptr: _acPtrDown };
+});
+function acDragCorrect(e) {
+  if (typeof mapHdgUp === 'undefined' || !mapHdgUp || !_acDrag0) return null;
+  const ptr = _acPtr(e && e.originalEvent);
+  if (!ptr) return null;
+  if (!_acDrag0.ptr) { _acDrag0.ptr = ptr; return null; }               // 첫 움직임에서 시작 손가락 자리를 잡는다
+  const h = (S.hdg || 0) * Math.PI / 180, dx = ptr.x - _acDrag0.ptr.x, dy = ptr.y - _acDrag0.ptr.y;
+  // 화면 = 지도를 −hdg 만큼 돌린 것 → 지도 쪽 이동량은 화면 이동량을 +hdg 만큼 돌린 것
+  const mx = dx * Math.cos(h) - dy * Math.sin(h), my = dx * Math.sin(h) + dy * Math.cos(h);
+  const ll = leafMap.layerPointToLatLng(L.point(_acDrag0.lp.x + mx, _acDrag0.lp.y + my));
+  acMarker.setLatLng(ll);
+  return ll;
+}
+acMarker.on('drag',    e => { const p = acDragCorrect(e) || e.target.getLatLng(); S.lat=p.lat; S.lon=p.lng; updateNav(); });
+acMarker.on('dragend', () => { acDragging=false; _acDrag0 = null; S.trail=[]; updateTrail(); updateNav(); });
 
 // Fallback reset in case dragend doesn't fire
 document.addEventListener('mouseup',  () => { acDragging = false; });

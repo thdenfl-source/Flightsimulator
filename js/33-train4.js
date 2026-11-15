@@ -331,7 +331,7 @@ function _rtcWire(ch) {
   rtc.ch = ch;
   ch.onopen = () => { rtc.open = true; try { uiToast('다른 기기와 이어졌습니다(교관 연결)'); } catch (e) { _swallow(e); } qrScanStop(); _rtcRender(); };
   ch.onclose = () => { rtc.open = false; _rtcRender(); };
-  ch.onmessage = e => { let m = null; try { m = JSON.parse(e.data); } catch (er) { return; } if (typeof IOS_MODE !== 'undefined' && IOS_MODE) { if (typeof iosRender === 'function') iosRender(m); } else if (typeof iosHandle === 'function') iosHandle(m); };
+  ch.onmessage = e => { let m = null; try { m = JSON.parse(e.data); } catch (er) { return; } if (typeof IOS_MODE !== 'undefined' && IOS_MODE) { if (m && m.type === 'mirror') { if (typeof iosMirrorApply === 'function') iosMirrorApply(m); } else if (typeof iosRender === 'function') iosRender(m); } else if (typeof iosHandle === 'function') iosHandle(m); };
 }
 function _rtcGather(pc) { return new Promise(res => { if (pc.iceGatheringState === 'complete') return res(); const t = setTimeout(res, 3000); pc.addEventListener('icegatheringstatechange', () => { if (pc.iceGatheringState === 'complete') { clearTimeout(t); res(); } }); }); }
 // ── 연결 정보 줄이기 — 'SS1|o(또는 a)|ufrag|pwd|지문(base64)|setup|주소:포트:종류,…' ──
