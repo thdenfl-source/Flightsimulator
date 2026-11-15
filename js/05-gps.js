@@ -908,7 +908,7 @@ function _follow3d() {
     //  정말로 하늘을 보고, 기울이면 지평선이 그대로 기운다. 화면을 돌리거나
     //  밀어 흉내 내던 종전 방식은 더 쓰지 않는다.)
     // Cockpit Mode(07-sim.js) — SIM 이 꺼져 있어도(AFCS 로 나는 비행 · 절차 훈련판) 같은 1인칭 조종석 시야
-    if (simModeOn || (typeof ckCamOn === 'function' && ckCamOn())) {
+    if (simModeOn || (typeof ckCamOn === 'function' && ckCamOn()) || (typeof simExtView !== 'undefined' && simExtView)) {
       try { syncChinView(); } catch (e) { _swallow(e); }   // 1인칭 화면 상태(04-map.js)
       _ml3dSimCamera();
       _apply3dRoll();

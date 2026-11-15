@@ -247,7 +247,7 @@ export async function run(page, t) {
     S.alt = 0; S.spd = 0; S.running = false;
     return out;
   });
-  t.eq(ext.off.shown, 'none', 'SIM 이 아닐 때는 EXT 버튼이 없다');
+  t.ok(ext.off.shown !== 'none', 'SIM 이 아니어도 EXT 버튼이 있다(절차 훈련판 · Cockpit 에서도 외부 시점)');
   t.ok(ext.fp.btn !== 'none' && !ext.fp.ext && !ext.fp.model, 'SIM 1인칭 — EXT 버튼이 보이고, 눈이 기체 안이라 모형은 그리지 않는다');
   t.ok(ext.on.ext && ext.on.cls && ext.on.model, 'EXT 를 누르면 외부 시점 — 모형을 그린다');
   t.ok(ext.ov !== 'none', '외부 시점에서도 계기 ON 이면 계기(PFD 겹침)가 보인다');
@@ -260,7 +260,7 @@ export async function run(page, t) {
     `조금 위에서 기수 방향으로 내려다본다 (위 ${ext.cam.above.toFixed(0)}m · 기울기 ${ext.cam.pitch.toFixed(0)}°)`);
   t.ok(Math.abs(((ext.look - 130 + 540) % 360) - 180) < 1, `둘러보기(◀▶)로 헬기 둘레를 돈다 (카메라 방위 ${ext.look.toFixed(0)}°)`);
   t.ok(!ext.back.ext && !ext.back.model, '다시 누르면 1인칭으로 돌아온다');
-  t.ok(!ext.exit.ext && ext.exit.model && ext.exit.btn === 'none', 'SIM 을 나가면 외부 시점도 풀리고 3D 지도에 모형이 보인다');
+  t.ok(!ext.exit.ext && ext.exit.model && ext.exit.btn !== 'none', 'SIM 을 나가면 외부 시점도 풀리고 3D 지도에 모형이 보인다(EXT 버튼은 그대로)');
   t.ok(ext.joy, '조이스틱 버튼에 「외부 시점」을 배정할 수 있다');
   await page.evaluate(() => { pfdOvOn = window.__pfdOvWas !== false; pfdOverlaySync(); });
 

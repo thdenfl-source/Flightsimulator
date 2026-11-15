@@ -753,16 +753,16 @@ function syncChinView() {
   // 1인칭의 기수(15-heli3d.js) — 외부 시점·SIM 해제면 숨긴다
   try { if (typeof heli3dNoseSync === 'function' && !(sim && !((typeof simExtView !== 'undefined') && simExtView))) heli3dNoseSync(null); }
   catch (e) { _swallow(e); }
-  // 외부 시점 버튼(EXT) — SIM 에서만 보인다
+  // 외부 시점 버튼(EXT) — 3D 버튼 줄에 늘 보인다(SIM · Cockpit · 절차 훈련판 모두)
   const ext = document.getElementById('ext-btn');
   const extOn = (typeof simExtView !== 'undefined') && simExtView;
   if (ext) {
-    if (ext.classList.contains('show') !== sim) ext.classList.toggle('show', sim);
+    if (!ext.classList.contains('show')) ext.classList.add('show');
     if (ext.classList.contains('on') !== extOn) ext.classList.toggle('on', extOn);
   }
-  // 외부 시점 카메라 버튼 — SIM 의 EXT 일 때만
+  // 외부 시점 카메라 버튼 — EXT 일 때만
   const ec = document.getElementById('extcam-3d');
-  if (ec && ec.classList.contains('show') !== (sim && extOn)) ec.classList.toggle('show', sim && extOn);
+  if (ec && ec.classList.contains('show') !== extOn) ec.classList.toggle('show', extOn);
 }
 
 // ── 3D 화면의 FCP ──
