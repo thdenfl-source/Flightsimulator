@@ -1,4 +1,5 @@
-// HOCAS — CDU 의 Aircraft Systems → HOCAS 칸(PFD 표시 켜기 · CTR · DEFAULT). 켜면 HSI 오른쪽 아래에 사이클릭·페달이 가운데인지·치우쳤는지 보인다.
+// HOCAS — CDU 의 Aircraft Systems → HOCAS 칸(켜기 · CTR · DEFAULT). 켜면 SYSTEM 창에 HOCAS 화면(Cyclic Stick Position · 페달 · 컬렉티브 · Co-Pilot/Pilot 표)이 뜬다.
+// SYSTEM 창 FULL/HALF(CDU 푸터) · HALF 에서 HOCAS 옆 TCAS · CDU 아래 노브 셋(가운데 = 왼쪽 ⇄ 오른쪽 고르기)
 import { SIM_SETUP_SRC } from './simmode.mjs';
 export const name = 'HOCAS';
 
@@ -10,10 +11,11 @@ export async function run(page, t) {
     const shot = () => {
       const proto = CanvasRenderingContext2D.prototype, orig = proto.fillText, seen = [];
       proto.fillText = function (tx, ...a) { seen.push([String(tx), String(this.fillStyle)]); return orig.call(this, tx, ...a); };
-      try { drawPFD(); } finally { proto.fillText = orig; }
+      try { const cv = document.createElement('canvas'); cv.width = 1000; cv.height = 630; sysDrawTo(cv); } finally { proto.fillText = orig; }
       return seen;
     };
     o.fcpBtn = !!document.getElementById('hocas-btn') || !!document.getElementById('hocas-ctr-btn');
+    localStorage.removeItem('sysLayout'); sysLayout = 'FULL'; sysPageSet('asys_fuel');
     o.off = shot().some(x => x[0] === 'HOCAS');
     // CDU — Aircraft Systems → HOCAS 칸
     selectPanel('mid', 'cdu', true); CDU_ACT.switchMode('ACSYS'); CDU_ACT.acSysOpen('asys_hocas');
@@ -43,14 +45,30 @@ export async function run(page, t) {
     CDU_ACT.switchMode('HOME');
     toggleSimMode(false);
     // SIM 을 켜기 전(레버 배정 없이)에도 컬렉티브 막대가 보인다 — 지금 토크를 레버 자리로
-    const keep = joyAxes.coll; delete joyAxes.coll; S.tq = 62; hocasOn = true;
-    o.nsCol = shot().find(x => x[0].startsWith('COL')); hocasOn = false; if (keep) joyAxes.coll = keep;
+    const keep = joyAxes.coll; delete joyAxes.coll; S.tq = 62; hocasOn = true; sysPageSet('asys_hocas');
+    o.nsCol = shot().find(x => x[0].startsWith('COL')); o.table = ['Cyclic Stick Position', 'Co-Pilot', 'Pilot', 'MEPCTL', 'Cursor Enable', 'PTT- SEL(2nd)'].every(n => shot().some(x => x[0] === n));
+    hocasOn = false; if (keep) joyAxes.coll = keep;
+    // FULL/HALF — Aircraft Systems 푸터 단추 · HALF 면 왼쪽 HOCAS · 오른쪽 TCAS
+    o.pageAfterOff = sysPage;
+    CDU_ACT.switchMode('ACSYS');
+    const lb = document.querySelector('#footerNav [data-act="sysLayoutToggle"]'); o.layoutBtn = !!lb && lb.textContent.includes('FULL/HALF');
+    sysPageSet('asys_hocas'); lb.click(); o.half = sysLayout; o.halves = sysHalf.L + '|' + sysHalf.R;
+    const own = []; { const proto = CanvasRenderingContext2D.prototype, orig = proto.fillText; proto.fillText = function (tx, ...a) { own.push(String(tx)); return orig.call(this, tx, ...a); };
+      try { const cv = document.createElement('canvas'); cv.width = 1000; cv.height = 630; _sysPaint(cv.getContext('2d'), cv, 1000, 630, 1, true); } finally { proto.fillText = orig; } }
+    o.halfDraw = own.includes('HOCAS') && own.includes('TCAS') && own.includes('Cyclic Stick Position') && own.some(x => /^TCAS : /.test(x));
+    // 노브 셋 — 가운데는 왼쪽 ⇄ 오른쪽
+    const kn = [...document.querySelectorAll('#cdu-knobs [data-act="cduKnob"]')]; o.knobs = kn.length;
+    o.sel0 = sysSel; kn[1].click(); o.sel1 = sysSel; o.selTxt = document.getElementById('cdu-knob-sel').textContent;
+    sysPageSet('asys_fuel'); o.halves2 = sysHalf.L + '|' + sysHalf.R;
+    kn[0].click(); o.selKeep = sysSel;
+    document.querySelector('#footerNav [data-act="sysLayoutToggle"]').click(); o.full = sysLayout;
+    localStorage.removeItem('sysLayout'); sysSel = 'L'; sysHalf = { L: 'asys_hocas', R: 'tcas' }; sysPageSet('asys_fuel'); CDU_ACT.switchMode('HOME');
     return o;
   })()`);
   t.ok(r.hoverGone && !r.fcpBtn, 'FCP 에 HOCAS · CTR 버튼이 없다(CDU 로 옮겼다) — HOVER 칸도 소프트키로 옮겨 없앴다');
   t.ok(r.cduBtns, 'CDU Aircraft Systems → HOCAS 칸에 PFD 표시 · CTR · DEFAULT 버튼이 있다');
-  t.eq(r.off, false, '평소에는 HSI 에 그리지 않는다');
-  t.ok(r.on && r.cls && r.title, '누르면 켜지고 HSI 에 HOCAS 창이 뜬다');
+  t.eq(r.off, false, '평소(Fuel 화면)에는 HOCAS 를 그리지 않는다');
+  t.ok(r.on && r.cls && r.title, '누르면 켜지고 SYSTEM 창에 HOCAS 화면이 뜬다');
   t.ok(r.cyc0 && r.cyc0[0] === 'CYC 0 · 0' && r.cyc0[1] === '#00ff88', `가운데면 0 · 초록 (${r.cyc0 && r.cyc0.join(' ')})`);
   t.ok(r.ped0 && r.ped0[0] === 'PED 0', `페달 가운데 (${r.ped0 && r.ped0[0]})`);
   t.ok(r.cyc1 && /^CYC F\d+ · L\d+$/.test(r.cyc1[0]) && r.cyc1[1] === '#ffb74d', `밀고 왼쪽으로 치우치면 F·L 과 호박색 (${r.cyc1 && r.cyc1.join(' ')})`);
@@ -60,6 +78,14 @@ export async function run(page, t) {
   t.ok(r.saved && /있음/.test(r.savedTxt), 'CTR 은 그 장치의 가운데를 저장한다(칸에 "있음")');
   t.ok(r.cleared && /없음\(기본값\)/.test(r.clearedTxt), 'DEFAULT 는 저장한 가운데를 지운다(칸에 "없음(기본값)")');
   t.ok(r.col0 && r.col0[0] === `COL ${Math.round(r.col0v)}%`, `컬렉티브 막대 — 레버가 요구하는 토크를 함께 보인다 (${r.col0 && r.col0[0]})`);
-  t.ok(!r.after && !r.offAgain, '다시 누르면 꺼진다');
+  t.ok(!r.after && !r.offAgain, '다시 누르면 꺼지고 앞 화면으로 돌아간다');
   t.ok(r.nsCol && r.nsCol[0] === 'COL 62%', `SIM 을 켜기 전에도 컬렉티브가 보인다 — 지금 토크 (${r.nsCol && r.nsCol[0]})`);
+  t.ok(r.table, 'HOCAS 화면 — Cyclic Stick Position · Co-Pilot/Pilot 표(MEPCTL · Cursor Enable · PTT-SEL)');
+  t.ok(r.layoutBtn, 'Aircraft Systems 푸터에 SYSTEM FULL/HALF 단추');
+  t.ok(r.half === 'HALF' && r.halves === 'asys_hocas|tcas', `HALF — 왼쪽 HOCAS · 오른쪽 TCAS (${r.half} ${r.halves})`);
+  t.ok(r.halfDraw, 'HALF 그림 — 두 반쪽 이름표(HOCAS · TCAS)와 TCAS 머리글');
+  t.ok(r.knobs === 3 && r.sel0 === 'L' && r.sel1 === 'R' && /R/.test(r.selTxt), `CDU 아래 노브 셋 — 가운데가 왼쪽 ⇄ 오른쪽 (${r.knobs} ${r.sel0}→${r.sel1} ${r.selTxt})`);
+  t.eq(r.halves2, 'asys_hocas|asys_fuel', '고른 쪽(오른쪽)에 다음 계통 화면이 들어간다');
+  t.eq(r.selKeep, 'R', '왼쪽 노브는 아직 기능 없음 — 고른 쪽 그대로');
+  t.eq(r.full, 'FULL', '다시 누르면 FULL');
 }

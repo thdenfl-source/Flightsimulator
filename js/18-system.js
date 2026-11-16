@@ -10,10 +10,49 @@ const SYS_W = 1000, SYS_H = 630;
 const SYS_PAGES = {
   asys_afcs: 'AFCS', asys_status: 'Aircraft Status', asys_elec: 'Electrical', asys_eng: 'Engines',
   asys_fuel: 'Fuel', map: 'Map', asys_ratest: 'RA Self Test', asys_hocas: 'HOCAS', asys_tests: 'System Tests', asys_light: 'Lighting Config', asys_video: 'Video', asys_maint: 'Maintenance',
+  tcas: 'TCAS',
 };
 let sysPage = 'asys_fuel';
+// ── 큰 칸 나누기 — FULL(한 화면) · HALF(왼쪽 · 오른쪽 반쪽 둘). CDU Aircraft Systems 아래 FULL/HALF 단추로 바꾼다 ──
+//   HALF 에서는 CDU 아래 가운데 노브로 고른 쪽(sysSel — 청록 테두리)에 다음에 고른 계통 화면이 들어간다.
+//   HOCAS 는 반쪽 크기 화면이라 HALF 에서 다른 쪽이 비거나 같은 HOCAS 면 TCAS(교통)를 띄운다.
+let sysLayout = 'FULL', sysHalf = { L: 'asys_hocas', R: 'tcas' }, sysSel = 'L';
+try { const v = JSON.parse(localStorage.getItem('sysLayout') || 'null'); if (v) { if (v.layout === 'FULL' || v.layout === 'HALF') sysLayout = v.layout; if (v.half && SYS_PAGES[v.half.L] && SYS_PAGES[v.half.R]) sysHalf = v.half; if (v.sel === 'R') sysSel = 'R'; } } catch (e) { _swallow(e); }
+if (sysLayout === 'HALF') sysPage = sysHalf[sysSel];
+function _sysLayoutSave() { try { localStorage.setItem('sysLayout', JSON.stringify({ layout: sysLayout, half: sysHalf, sel: sysSel })); } catch (e) { _swallow(e); } }
+function sysLayoutToggle() {
+  sysLayout = sysLayout === 'FULL' ? 'HALF' : 'FULL';
+  if (sysLayout === 'HALF' && sysHalf[sysSel] !== sysPage) sysHalf[sysSel] = sysPage;
+  if (sysLayout === 'HALF' && sysHalf.L === sysHalf.R) sysHalf[sysSel === 'L' ? 'R' : 'L'] = sysHalf[sysSel] === 'tcas' ? 'asys_hocas' : 'tcas';
+  _sysLayoutSave();
+  try { applyPanels(); } catch (e) { _swallow(e); }
+  try { sysDraw(); } catch (e) { _swallow(e); }
+  try { if (typeof cduRerender === 'function') cduRerender(); } catch (e) { _swallow(e); }
+  cduKnobSync();
+}
+// 가운데 노브 — 왼쪽 ⇄ 오른쪽 반쪽 고르기(HALF 일 때만) · 양 끝 노브는 아직 기능 없음
+function cduKnob(k) {
+  if (k === 'C') {
+    if (sysLayout !== 'HALF') { try { uiToast('가운데 노브 — SYSTEM 화면이 HALF 일 때 왼쪽 · 오른쪽 반쪽을 고릅니다', '', 2200); } catch (e) { _swallow(e); } return; }
+    sysSel = sysSel === 'L' ? 'R' : 'L'; sysPage = sysHalf[sysSel]; _sysLayoutSave();
+    try { sysDraw(); } catch (e) { _swallow(e); }
+  } else { try { uiToast(`${k === 'L' ? '왼쪽' : '오른쪽'} 노브 — 기능은 다음에 추가합니다`, '', 1800); } catch (e) { _swallow(e); } }
+  cduKnobSync();
+}
+setTimeout(() => { try { cduKnobSync(); } catch (e) { _swallow(e); } }, 0);
+function cduKnobSync() {
+  const el = document.getElementById('cdu-knob-sel'); if (!el) return;
+  const t = sysLayout === 'HALF' ? `SEL ${sysSel === 'L' ? '◀ L' : 'R ▶'}` : 'FULL';
+  if (el.textContent !== t) el.textContent = t;
+}
 function sysPageSet(id) {
   if (!SYS_PAGES[id]) return;
+  if (sysLayout === 'HALF') {
+    sysHalf[sysSel] = id;
+    const o = sysSel === 'L' ? 'R' : 'L';
+    if (sysHalf[o] === id) sysHalf[o] = id === 'tcas' ? 'asys_hocas' : 'tcas';   // 같은 화면 둘은 두지 않는다 — HOCAS 옆은 TCAS
+    _sysLayoutSave();
+  }
   const wasMap = sysPage === 'map';
   sysPage = id;
   // Map 화면 — 큰 칸에 2D 지도(#map-wrap)를 옮겨 넣는다(07-sim.js applyPanels 가 #sysp-map 을 그릇으로 쓴다)
@@ -22,7 +61,7 @@ function sysPageSet(id) {
 }
 // SYSTEM 창의 Map 화면이 지도를 담고 있나 — 지도가 다른 창에 보이지 않을 때만(07-sim.js applyPanels)
 function sysMapSlot() {
-  if (sysPage !== 'map') return null;
+  if (sysPage !== 'map' || sysLayout === 'HALF') return null;      // 반쪽에는 지도를 담지 않는다(지도는 제 창에)
   const w = document.getElementById('sysp-wrap');
   if (!w) return null;
   let slot = document.getElementById('sysp-map');
@@ -285,6 +324,7 @@ function _sysPaint(g, c, W, H, dpr, own) {
   const F = fuelFlow();
   _sysLeftStrip(g, F);
   _sysTopBar(g, F);
+  if (own && sysLayout === 'HALF') { _sysPaintHalf(g, F, W, H, k); return; }
   // 큰 칸 — 청록 테두리와 위 가운데 화면 이름
   const name = SYS_PAGES[sysPage] || '';
   g.strokeStyle = SYS_CYAN; g.lineWidth = 4;
@@ -316,6 +356,8 @@ function _sysPaint(g, c, W, H, dpr, own) {
     try { if (typeof sarHoistCamSlot === 'function') sarHoistCamSlot(camOn, { left: ox + 227 * k, top: oy + 49 * k, width: 766 * k, height: 574 * k }); } catch (e) { _swallow(e); }
   }
   if (sysPage === 'map') { /* 지도는 #sysp-map 이 그린다 */ }
+  else if (sysPage === 'asys_hocas') _sysHocasPage(g, 404, 32, 412, 594);   // 반쪽 크기 화면 — FULL 에서는 가운데에
+  else if (sysPage === 'tcas') _sysTcasPage(g, 224, 32, 772, 594);
   else if (sysPage === 'asys_fuel') _sysFuelPage(g, F);
   else if (sysPage === 'asys_elec') _sysElecPage(g, F);
   else if (sysPage === 'asys_afcs') _sysAfcsPage(g);
@@ -339,9 +381,122 @@ function _sysPaint(g, c, W, H, dpr, own) {
     g.fillStyle = '#4a6a7a'; g.font = 'bold 26px Helvetica Neue, Arial, sans-serif';
     g.fillText(name.toUpperCase(), 610, 310);
     g.font = '14px Helvetica Neue, Arial, sans-serif'; g.fillStyle = '#567';
-    g.fillText(sysPage === 'asys_hocas' ? 'HOCAS 는 PFD(HSI 오른쪽 아래)에 보입니다 — 켜기 · CTR · DEFAULT 는 CDU 의 HOCAS 칸'
-                                     : '준비 중 — 이 계통 화면은 차차 갖춥니다', 610, 340);
+    g.fillText('준비 중 — 이 계통 화면은 차차 갖춥니다', 610, 340);
   }
+}
+// 칸 테두리 · 위 가운데 이름표
+function _sysBoxTag(g, x, y, w, h, name, sel) {
+  g.strokeStyle = sel ? SYS_CYAN : '#3a4a56'; g.lineWidth = sel ? 4 : 2;
+  g.strokeRect(x, y, w, h);
+  g.font = 'bold 11px Helvetica Neue, Arial, sans-serif';
+  const tw = g.measureText(name).width + 12, cx = x + w / 2;
+  g.fillStyle = '#000'; g.fillRect(cx - tw / 2, y + 1, tw, 14);
+  g.strokeStyle = '#ccc'; g.lineWidth = 1; g.strokeRect(cx - tw / 2 + 0.5, y + 1.5, tw - 1, 13);
+  g.fillStyle = '#fff'; g.textAlign = 'center'; g.fillText(name, cx, y + 12);
+}
+// HALF — 큰 칸을 왼쪽 · 오른쪽 반쪽으로(고른 쪽은 청록 테두리). HOCAS · TCAS 는 반쪽에 맞춰 그리고, 나머지는 큰 칸 그림을 반으로 줄여 넣는다
+function _sysPaintHalf(g, F) {
+  const slot = document.getElementById('sysp-map'); if (slot) slot.style.display = 'none';
+  try { if (typeof sarHoistCamSlot === 'function') sarHoistCamSlot(false, null); } catch (e) { _swallow(e); }
+  [['L', 224], ['R', 612]].forEach(([sd, x]) => {
+    const id = sysHalf[sd], y = 32, w = 384, h = 594;
+    g.save(); g.beginPath(); g.rect(x, y, w, h); g.clip();
+    if (id === 'asys_hocas') _sysHocasPage(g, x, y, w, h);
+    else if (id === 'tcas') _sysTcasPage(g, x, y, w, h);
+    else if (id === 'map' || id === 'asys_video') {
+      g.fillStyle = '#4a6a7a'; g.textAlign = 'center'; g.font = 'bold 20px Helvetica Neue, Arial, sans-serif';
+      g.fillText((SYS_PAGES[id] || '').toUpperCase(), x + w / 2, y + h / 2 - 8);
+      g.font = '12px Helvetica Neue, Arial, sans-serif'; g.fillStyle = '#789'; g.fillText('FULL 에서 보입니다', x + w / 2, y + h / 2 + 16);
+    } else {
+      const sc = w / 772, oy = y + (h - 594 * sc) / 2, p0 = sysPage;
+      g.translate(x - 224 * sc, oy - 32 * sc); g.scale(sc, sc);
+      sysPage = id;
+      try {
+        if (id === 'asys_fuel') _sysFuelPage(g, F); else if (id === 'asys_elec') _sysElecPage(g, F); else if (id === 'asys_afcs') _sysAfcsPage(g);
+        else if (id === 'asys_eng') _sysEnginePage(g, F); else if (id === 'asys_status') _sysStatusPage(g, F);
+        else { g.fillStyle = '#4a6a7a'; g.textAlign = 'center'; g.font = 'bold 26px Helvetica Neue, Arial, sans-serif'; g.fillText((SYS_PAGES[id] || '').toUpperCase(), 610, 310); }
+      } finally { sysPage = p0; }
+    }
+    g.restore();
+    _sysBoxTag(g, x, y, w, h, SYS_PAGES[id] || '', sysSel === sd);
+  });
+}
+// ── HOCAS 화면(KUH-1CG MFD 사진) — 위: Cyclic Stick Position(원 · FWD/Left/Right/Aft · 십자 · 초록 점 = 지금 사이클릭 · 흰 고리 = 트림)
+//    그 옆 · 아래: 컬렉티브 막대(레버가 요구하는 토크 · 흰 눈금 호버) · 페달 막대 · 수치(CYC · PED · COL)
+//    아래: Co-Pilot · Pilot 표 — Cyclic(MEPCTL · DMS · Warn Reset) · Collective(Cursor X · Y · Enable) · Push to talk(PTT-ICS · PTT-SEL)
+function _sysHocasPage(g, x, y, w, h) {
+  let ax = { roll: 0, pitch: 0, yaw: 0, trim: null, coll: null };
+  try { if (typeof hocasAxes === 'function') ax = hocasAxes(); } catch (e) { _swallow(e); }
+  const cl = v => Math.max(-1, Math.min(1, v || 0)), dead = typeof HOCAS_DEAD === 'number' ? HOCAS_DEAD : 0.05;
+  const colr = v => Math.abs(v) <= dead ? '#00ff88' : '#ffb74d';
+  const pct = (v, p, n) => Math.abs(v) <= dead ? '0' : (v > 0 ? p : n) + Math.round(Math.abs(v) * 100);
+  const cx = x + w / 2, r = Math.min(w * 0.30, h * 0.20), cy = y + 46 + r;
+  g.textAlign = 'center'; g.fillStyle = '#fff'; g.font = '13px Helvetica Neue, Arial, sans-serif';
+  g.fillText('Cyclic Stick Position', cx, y + 30);
+  g.font = 'bold 11px Helvetica Neue, Arial, sans-serif'; g.fillText('FWD', cx, cy - r - 4); g.fillText('Aft', cx, cy + r + 13);
+  g.textAlign = 'right'; g.fillText('Left', cx - r - 6, cy + 4); g.textAlign = 'left'; g.fillText('Right', cx + r + 6, cy + 4);
+  g.strokeStyle = '#e8e8e8'; g.lineWidth = 1.5;
+  g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2); g.stroke();
+  g.beginPath(); g.moveTo(cx - r, cy); g.lineTo(cx + r, cy); g.moveTo(cx, cy - r); g.lineTo(cx, cy + r); g.stroke();
+  [0.2, 0.4].forEach(f => { const d = r * f, l = 7; g.beginPath(); g.moveTo(cx - d, cy - l); g.lineTo(cx - d, cy + l); g.moveTo(cx + d, cy - l); g.lineTo(cx + d, cy + l);
+    g.moveTo(cx - l, cy - d); g.lineTo(cx + l, cy - d); g.moveTo(cx - l, cy + d); g.lineTo(cx + l, cy + d); g.stroke(); });
+  if (ax.trim) { g.strokeStyle = '#ffffff'; g.lineWidth = 1.5; g.beginPath(); g.arc(cx + cl(ax.trim.roll) * (r - 8), cy - cl(ax.trim.pitch) * (r - 8), 9, 0, Math.PI * 2); g.stroke(); }
+  const dev = Math.max(Math.abs(ax.roll), Math.abs(ax.pitch)), px = cx + cl(ax.roll) * (r - 8), py = cy - cl(ax.pitch) * (r - 8);
+  g.fillStyle = '#fff'; g.beginPath(); g.arc(px, py, 8, 0, Math.PI * 2); g.fill();
+  g.fillStyle = colr(dev); g.beginPath(); g.arc(px, py, 6, 0, Math.PI * 2); g.fill();
+  g.font = '12px Helvetica Neue, Arial, sans-serif'; g.textAlign = 'center'; g.fillStyle = colr(dev);
+  g.fillText(`CYC ${pct(ax.pitch, 'F', 'A')} · ${pct(ax.roll, 'R', 'L')}`, cx, cy + r + 30);
+  // 페달 — 원 아래 가로 막대
+  const pw = r * 1.6, pyb = cy + r + 40;
+  g.strokeStyle = '#777'; g.lineWidth = 1; g.strokeRect(cx - pw / 2, pyb, pw, 10);
+  g.beginPath(); g.moveTo(cx, pyb - 3); g.lineTo(cx, pyb + 13); g.stroke();
+  g.fillStyle = colr(ax.yaw); g.fillRect(cx + cl(ax.yaw) * (pw / 2 - 4) - 4, pyb - 2, 8, 14);
+  g.fillText(`PED ${pct(ax.yaw, 'R', 'L')}`, cx, pyb + 28);
+  // 컬렉티브 — 원 왼쪽 세로 막대(아래 0 · 위 140%)
+  if (ax.coll) {
+    const kx = x + 18, kh = r * 2, ky = cy - r, f = Math.max(0, Math.min(1, ax.coll.frac));
+    g.strokeStyle = '#777'; g.strokeRect(kx, ky, 12, kh);
+    g.fillStyle = '#8ac6ff'; g.fillRect(kx + 1, ky + kh - 1 - f * (kh - 2), 10, f * (kh - 2));
+    if (ax.coll.hov != null) { const hy = ky + kh - Math.max(0, Math.min(1, ax.coll.hov)) * kh; g.strokeStyle = '#fff'; g.beginPath(); g.moveTo(kx - 3, hy); g.lineTo(kx + 15, hy); g.stroke(); }
+    g.fillStyle = '#8ac6ff'; g.textAlign = 'left'; g.font = '11px Helvetica Neue, Arial, sans-serif';
+    g.fillText(`COL ${Math.round(ax.coll.tq != null ? ax.coll.tq : f * 100)}%`, kx - 4, ky + kh + 16);
+  }
+  // 아래 표 — Co-Pilot · Pilot
+  let ty = pyb + 52;
+  g.strokeStyle = '#ddd'; g.lineWidth = 1; g.beginPath(); g.moveTo(x + 10, ty); g.lineTo(x + w - 10, ty); g.stroke();
+  const colL = x + w * 0.06, colLv = x + w * 0.45, colR = x + w * 0.56, colRv = x + w * 0.95, mid = x + w / 2;
+  g.font = 'bold 12px Helvetica Neue, Arial, sans-serif'; g.fillStyle = '#fff'; g.textAlign = 'center';
+  g.fillText('Co-Pilot', x + w * 0.27, ty - 8); g.fillText('Pilot', x + w * 0.75, ty - 8);
+  let ptt = false; try { ptt = typeof kuhTxOn === 'function' && kuhTxOn(); } catch (e) { _swallow(e); }
+  const sec = (head, rows) => {
+    ty += 20; g.font = '12px Helvetica Neue, Arial, sans-serif'; g.fillStyle = '#ddd'; g.textAlign = 'center'; g.fillText(head, mid, ty);
+    const y0 = ty + 4;
+    rows.forEach(([nm, cp, pl], i) => {
+      ty += 15; g.font = (i === 0 ? 'bold ' : '') + '11px Helvetica Neue, Arial, sans-serif';
+      g.textAlign = 'left'; g.fillStyle = '#fff'; g.fillText(nm, colL, ty); g.fillText(nm, colR, ty);
+      g.textAlign = 'right'; g.fillStyle = '#3ad13a'; g.fillText(cp, colLv, ty); g.fillText(pl, colRv, ty);
+    });
+    g.strokeStyle = '#bbb'; g.beginPath(); g.moveTo(mid, y0); g.lineTo(mid, ty + 4); g.stroke();
+  };
+  sec('Cyclic', [['MEPCTL', 'Off', 'Off'], ['DMS', 'Off', 'Off'], ['Warn Reset', 'Off', 'Off']]);
+  sec('Collective', [['Cursor X', 'Off', 'Off'], ['Cursor Y', 'Off', 'Off'], ['Cursor Enable', 'Off', 'Off']]);
+  sec('Push to talk', [['PTT- ICS(1st)', 'Off', ptt ? 'On' : 'Off'], ['PTT- SEL(2nd)', 'Off', 'Off']]);
+}
+// ── TCAS 화면 — 기수 위 교통 지도(6NM 고리 · 2NM 점 고리) · 머리글 TCAS : TA/RA · ADS-B · 교통(33-train4.js tcasDrawInset — 모드 · 고도 범위 · 시험 그림 그대로)
+function _sysTcasPage(g, x, y, w, h) {
+  const cx = x + w / 2, cy = y + h * 0.48, r = Math.min(w, h) * 0.40;
+  g.strokeStyle = '#d8dde2'; g.lineWidth = 1.4; g.setLineDash([6, 6]); g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2); g.stroke(); g.setLineDash([]);
+  for (let i = 0; i < 12; i++) { const a = i / 12 * Math.PI * 2; g.fillStyle = '#d8dde2'; g.beginPath(); g.arc(cx + Math.cos(a) * r / 3, cy + Math.sin(a) * r / 3, 2, 0, Math.PI * 2); g.fill(); }
+  g.fillStyle = '#fff'; g.beginPath(); g.moveTo(cx, cy - 12); g.lineTo(cx + 9, cy + 9); g.lineTo(cx, cy + 4); g.lineTo(cx - 9, cy + 9); g.closePath(); g.fill();
+  const am = typeof tcasActMode === 'function' ? tcasActMode() : 'TA', test = typeof tcasTesting === 'function' && tcasTesting();
+  g.font = 'bold 13px Helvetica Neue, Arial, sans-serif'; g.textAlign = 'right'; g.fillStyle = '#fff';
+  g.fillText(`TCAS : ${test ? 'TEST' : am === 'STBY' ? 'STBY' : am === 'TA' ? 'TA ONLY' : 'TA/RA'}`, x + w - 10, y + 32);
+  if (typeof tcasCfg !== 'undefined' && tcasCfg.adsb) g.fillText('ADS-B : AIRB', x + w - 10, y + 50);
+  g.textAlign = 'left'; g.fillStyle = '#00e5ff'; g.fillText('6NM', cx - r * 0.75, cy + r * 0.8);
+  if (typeof tcasCfg !== 'undefined') { g.textAlign = 'right'; g.fillStyle = tcasCfg.motion ? '#00e5ff' : '#9aa5b0'; g.fillText(`Motion: ${tcasCfg.motion ? Math.round(tcasCfg.vect / 60 * 10) / 10 + 'MIN' : 'Off'}`, x + w - 10, y + h - 12); }
+  const tg = (typeof tcasTargets === 'function') ? tcasTargets().filter(t => t.r <= 6.5 && (typeof tcasShow !== 'function' || tcasShow(t))) : [];
+  if (tg.length || test) { try { g.save(); tcasDrawInset(g, cx, cy, r); g.restore(); } catch (e) { _swallow(e); } }
+  else { g.textAlign = 'left'; g.fillStyle = '#9aa5b0'; g.font = 'bold 13px Helvetica Neue, Arial, sans-serif'; g.fillText(am === 'STBY' ? 'TCAS STBY' : 'NO TRAFFIC', x + 10, y + h - 12); }
 }
 const _f = (sz, b = true) => `${b ? 'bold ' : ''}${sz}px Helvetica Neue, Arial, sans-serif`;
 // 둥근 테두리 칸 + 위 가운데 제목(테두리를 비우고)
@@ -1195,8 +1350,8 @@ function sysCduHtml(id) {
   if (id === 'asys_hocas') {
     const b = (act, txt, extra) => `<div class="nav-btn" data-act="${act}" ${extra || ''} style="flex:1;min-width:0;max-width:none;width:auto;height:auto;min-height:54px;padding:8px 4px;font-size:13px;line-height:16px;text-align:center">${txt}</div>`;
     return `<div style="padding:12px 8px;color:#cde;font-size:12px">` +
-      `<div style="color:#567;font-size:10px;margin-bottom:6px">HOCAS — 조종간(사이클릭)·페달·컬렉티브가 가운데인지 PFD(HSI 오른쪽 아래)에 보입니다.</div>` +
-      `<div style="display:flex;gap:6px;margin-bottom:8px">${b('toggleHocas', 'PFD 표시 <b id="hocasc-on"></b>')}</div>` +
+      `<div style="color:#567;font-size:10px;margin-bottom:6px">HOCAS — 조종간(사이클릭)·페달·컬렉티브 자리를 SYSTEM 창에 보입니다(HALF 면 다른 쪽은 TCAS).</div>` +
+      `<div style="display:flex;gap:6px;margin-bottom:8px">${b('toggleHocas', 'SYSTEM 표시 <b id="hocasc-on"></b>')}</div>` +
       `<div style="color:#567;font-size:10px;margin:8px 0 4px">가운데(중립) — 조종간·페달에서 손을 뗀 채 누릅니다</div>` +
       `<div style="display:flex;gap:6px;margin-bottom:10px">${b('hocasCenter', 'CTR<span style="font-size:10px;line-height:13px;height:auto;color:#9ab">가운데 맞춤 · 저장</span>')}` +
       `${b('hocasDefault', 'DEFAULT<span style="font-size:10px;line-height:13px;height:auto;color:#9ab">저장한 가운데 지우기</span>')}</div>` +
@@ -1249,7 +1404,7 @@ function _hocasCduRefresh() {
 
 // 창이 보일 때(applyPanels 가 부른다)
 function sysShow() { sysDraw(); }
-try { appRegister({ fuelAdjust, fuelSetTotal, fuelReset, sysPageSet, afcsTestStart, fuelTypeCycle, fuelEauxToggle, fuelReturnSet, videoChanOpen, videoChanSet, videoSrcToggle, videoDefault, videoAdj }); } catch (e) { _swallow(e); }
+try { appRegister({ sysLayoutToggle, cduKnob, fuelAdjust, fuelSetTotal, fuelReset, sysPageSet, afcsTestStart, fuelTypeCycle, fuelEauxToggle, fuelReturnSet, videoChanOpen, videoChanSet, videoSrcToggle, videoDefault, videoAdj }); } catch (e) { _swallow(e); }
 try { window.addEventListener('resize', () => { try { sysDraw(); } catch (e) { _swallow(e); } }); } catch (e) { _swallow(e); }
 // 상부 콘솔 스위치가 바뀌면 곧바로 다시 그린다(발전기·TRU·배터리 → Electrical)
 try { if (typeof ovhdOn === 'function') ovhdOn(() => { try { sysDraw(); } catch (e) { _swallow(e); } }); } catch (e) { _swallow(e); }
