@@ -115,7 +115,7 @@ function iceEngK() { return 1 - 0.03 * (envIce.eng[1] + envIce.eng[2]); }
 // PFD 메시지(03-pfd.js pfdMsgs) — ICE DETECTED · n ENG ICING(황)
 function iceCas() {
   const out = [];
-  if (envIce.cond) out.push({ t: 'ICE DETECTED', c: '#ffb000' });
+  if (envIce.cond) out.push({ t: 'ICE DETECD', c: '#ffb000' });
   [1, 2].forEach(n => { if (envIce.eng[n] > 0.2) out.push({ t: `${n} ENG ICING`, c: '#ffb000' }); });
   if (envIce.pitot) out.push({ t: 'PITOT ICING', c: '#ffb000' });
   return out;

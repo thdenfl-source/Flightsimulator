@@ -202,6 +202,8 @@ function init(){
     if (typeof acIs === 'function' && acIs('b206')) return;   // Bell 206 아날로그 계기판에는 누를 칸(FMA · ALT 칸 · MAP/TCAS 창 등)이 없다
     // 오른쪽 아래 MAP · TCAS 창 — 누르면 서로 바꾼다(03-pfd.js drawPfdInset)
     try { if (typeof pfdInsetHit === 'function' && pfdInsetHit(px, py)) return; } catch (e) { _swallow(e); }
+    // MWP 램프(WARN · CAUT — 누르면 승인) · MSG(시스템 메시지) — 03-pfd.js drawMwp
+    try { if (typeof pfdMwpHit === 'function' && pfdMwpHit(px, py)) return; } catch (e) { _swallow(e); }
 
     // Mirror drawPFD geometry
     const ctrlEl = document.querySelector('#pfd-wrap > .ctrl-bar') || document.querySelector('.ctrl-bar');

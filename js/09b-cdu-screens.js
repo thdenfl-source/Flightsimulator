@@ -2227,6 +2227,27 @@
       if (sc) sc.scrollTop = top;
     }
     window.clAutoRefresh = clAutoRefresh;
+    // ── Checklist > CAS — 지금 켜진 CAS 메시지 전부(20줄 제한 없음 · 경고 > 주의 > 조언 · 최근 것 위)
+    //    검은 바탕에 등급 색 글자, 승인하지 않은 경고 · 주의는 청색 테두리. 아래 ACK 로 승인
+    let _casSig = '';
+    function _casRows() { try { return casSorted(); } catch (e) { return []; } }
+    function renderCasListScreen(container, footer, title) {
+        title.innerText = 'CAS';
+        const rows = _casRows();
+        _casSig = rows.map(m => m.t + (m.ack ? 1 : 0)).join('|');
+        const lv = ['', 'WARNING', 'CAUTION', 'ADVISORY'];
+        container.innerHTML = (rows.length ? rows.map(m => {
+            const un = !m.ack && m.lvl < 3;
+            return `<div class="cas-row" data-lvl="${m.lvl}" data-un="${un ? 1 : 0}" style="display:flex;justify-content:space-between;align-items:center;padding:6px 9px;margin-bottom:4px;background:#000;` +
+                `border:${un ? '2px solid #2a8cff' : '1px solid #222'};border-radius:3px;">` +
+                `<span style="color:${m.c};font-size:13px;font-weight:bold;font-family:Helvetica Neue,Arial,sans-serif;">${m.t}</span>` +
+                `<span style="color:#567;font-size:8px;">${lv[m.lvl]}</span></div>`;
+        }).join('') : `<div style="color:#567;text-align:center;margin-top:30px;font-size:12px;">CAS 메시지 없음</div>`);
+        footer.innerHTML = cduFooter("switchMode('CHECKLIST')", `<div class="nav-btn" data-act="casAckAll" data-arg='["CDU"]'><span>✔</span>ACK</div>`);
+    }
+    // 03-pfd.js 가 0.25 초마다 부른다 — 목록이 바뀌었을 때만 다시 그린다
+    window.cduCasSync = () => { if (currentMode !== 'CAS_LIST') return; const sig = _casRows().map(m => m.t + (m.ack ? 1 : 0)).join('|'); if (sig !== _casSig) renderContent(); };
+
     function renderChecklistScreen(container, footer, title) {
       const node = _clNode();
       const col = _clColor();
@@ -2273,7 +2294,16 @@
             (cnt ? `<div style="color:#567;font-size:9px;margin-top:1px;">${cnt}</div>` : '') + `</div>` +
             `<div style="color:${c2}aa;font-size:14px;">›</div></div>`;
         }).join('');
-        container.innerHTML = crumbBar + sibBar + listHtml;
+        // 맨 위 — CAS(Checklist > CAS · 승무원 경고 목록 — 03-pfd.js casSorted)
+        let casBtn = '';
+        if (!clPath.length) {
+          let n = 0, un = 0; try { n = casSorted().length; un = casSorted().filter(m => !m.ack && m.lvl < 3).length; } catch (e) { _swallow(e); }
+          casBtn = `<div data-act="switchMode" data-arg='["CAS_LIST"]' style="display:flex;align-items:center;justify-content:space-between;` +
+            `padding:9px 10px;margin-bottom:7px;border:${un ? '2px solid #2a8cff' : '1px solid #2a8cff66'};border-radius:5px;background:#000;cursor:pointer;">` +
+            `<div><div style="color:#fff;font-size:12px;font-weight:bold;">CAS</div><div style="color:#567;font-size:9px;margin-top:1px;">메시지 ${n}개${un ? ` · 승인 대기 ${un}` : ''}</div></div>` +
+            `<div style="color:#2a8cff;font-size:14px;">›</div></div>`;
+        }
+        container.innerHTML = crumbBar + sibBar + casBtn + listHtml;
       } else {
         // 체크리스트 항목 화면
         let idx = 0;
@@ -3089,6 +3119,7 @@
             case 'XPDR_CODE': renderXpdrCodeScreen(container, footer, title); break;
             case 'UTIL': renderUtilScreen(container, footer, title); break;
             case 'CHECKLIST': renderChecklistScreen(container, footer, title); break;
+            case 'CAS_LIST': renderCasListScreen(container, footer, title); break;
             case 'TCAS': renderTcasScreen(container, footer, title); break;
             case 'TCAS_XPDR': renderTcasXpdrScreen(container, footer, title); break;
             case 'SETTINGS': renderSettingsScreen(container, footer, title); break;

@@ -23,7 +23,7 @@ export async function run(page, t) {
     hocasOn = true; ovhdSet('parkBrake', 'SET'); skState.tfcMap = false;
     const t0 = seen(), RC = pfdRightCol(L, c.width);
     o.side = { on: L.sideOn, inset: L.insetOn, msgX: L.side.x, altR: L.alt.x + L.alt.w + L.vsi.w, hsiR: L.hsi.x + L.hsi.w, crX: L.crht.x,
-               swIn: RC.left >= L.side.x && RC.swY + RC.swH <= L.side.y + L.side.h + 1, hocas: t0.includes('HOCAS'), park: t0.includes('PARKING BRAKE SET') };
+               swIn: RC.left >= L.side.x && RC.swY + RC.swH <= L.side.y + L.side.h + 1, hocas: t0.includes('HOCAS'), park: t0.includes('PRK ON') };
     o.side.msgRight = _pfdMsgBottom >= L.side.y && _pfdMsgBottom < L.side.y + L.side.h;
     // 창을 누르면 MAP ⇄ TCAS
     // 창이 없는 좁은 PFD 에서도 그리기 · 누르기를 본다(넓은 PFD 의 자리를 빌려)

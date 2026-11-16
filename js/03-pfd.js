@@ -148,6 +148,7 @@ function drawPFD() {
   ctx.beginPath(); ctx.moveTo(0, L.aiH); ctx.lineTo(W, L.aiH); ctx.stroke();
   ctx.beginPath(); ctx.moveTo(L.hsi.x + 0.5, L.aiH); ctx.lineTo(L.hsi.x + 0.5, L.usableH); ctx.stroke();
   ctx.beginPath(); ctx.moveTo(L.crht.x + 0.5, L.aiH); ctx.lineTo(L.crht.x + 0.5, L.usableH); ctx.stroke();
+  try { drawMwp(L); } catch (e) { _swallow(e); }
   const RC = pfdRightCol(L, W);
   if (L.sideOn) drawPfdSideMsgs(L.side, RC.swY);
   if (L.insetOn) drawPfdInset(L.inset);
@@ -499,15 +500,14 @@ function pfdMsgs() {
   let P = null;
   try { P = engParams(); } catch (e) { _swallow(e); }
   const out = [];
-  if (ov('pitotHeat', 'AUTO') === 'OFF') out.push({ t: 'PITOT OFF', c: PFD_MSG_AMBER });
-  // CDU 키 고착 — 노브를 누른 채 10 초가 넘으면(SDS 31-42-01 · 18-system.js cduKeyStuck)
-  if (typeof cduKeyStuck !== 'undefined' && cduKeyStuck) out.push({ t: 'CDU KEY STUCK', c: PFD_MSG_AMBER });
+  if (ov('pitotHeat', 'AUTO') === 'OFF') out.push({ t: 'PITOT HEAT', c: PFD_MSG_AMBER });
+  // (CDU 키 고착은 CAS 가 아니라 System Message — PFD 왼쪽 위 MSG · pfdSysMsgs)
   // 1 · 2 GEN OFF(황) — 그 발전기가 버스에 없을 때(UPPER GEN 스위치 OFF, 또는 엔진이 멎어 발전하지 못함 — 18-system.js elecState)
   let E = null;
   try { if (typeof elecState === 'function') E = elecState(); } catch (e) { _swallow(e); }
   [1, 2].forEach(n => {
     const on = E ? E['gen' + n] : ov('gen' + n, 'ON') === 'ON';
-    if (!on) out.push({ t: `${n} GEN OFF`, c: PFD_MSG_AMBER });
+    if (!on) out.push({ t: `${n} GEN`, c: PFD_MSG_AMBER });
   });
   // AFCS CAS(23-afcs.js afcsCas) — AFCS FAIL(적) · 1 · 2 APM OFF · AFCS DEGRADED · BOTH ON AHRS/ADC(황)
   try { if (typeof afcsCas === 'function') out.unshift(...afcsCas()); } catch (e) { _swallow(e); }
@@ -517,7 +517,7 @@ function pfdMsgs() {
   let park = ov('parkBrake', 'RELEASE') === 'SET', parkWarn = false;
   try { if (typeof simParkBrakeOn === 'function' && simParkBrakeOn()) park = true; } catch (e) { _swallow(e); }
   try { parkWarn = park && typeof simParkWarnOn === 'function' && simParkWarnOn(); } catch (e) { _swallow(e); }
-  if (park) out.push({ t: 'PARKING BRAKE SET', c: parkWarn ? '#ff3030' : PFD_MSG_GREEN });
+  if (park) out.push({ t: 'PRK ON', c: parkWarn ? '#ff3030' : PFD_MSG_GREEN });
   [1, 2].forEach(n => {
     const ng = P ? (n === 1 ? P.e1 : P.e2).ng : 100;
     if (ov('engAi' + n, 'OFF') === 'ON' || ng <= PFD_AI_NGR) out.push({ t: `${n} ENG A/I ON`, c: PFD_MSG_GREEN });
@@ -534,8 +534,8 @@ function pfdMsgs() {
   // 흰수리 착륙등 · 서치라이트(35-kuhgrip.js) — 켜져 있으면 녹색 조언
   try {
     if (typeof kgOn === 'function' && kgOn()) {
-      if (typeof _kgLdg === 'function' && _kgLdg()) out.push({ t: 'LANDING LT ON', c: PFD_MSG_GREEN });
-      if (typeof kgLt !== 'undefined' && kgLt.srch) out.push({ t: 'SEARCH LT ON', c: PFD_MSG_GREEN });
+      if (typeof _kgLdg === 'function' && _kgLdg()) out.push({ t: 'LDG LT ON', c: PFD_MSG_GREEN });
+      if (typeof kgLt !== 'undefined' && kgLt.srch) out.push({ t: 'SRCH LT ON', c: PFD_MSG_GREEN });
     }
   } catch (e) { _swallow(e); }
   // 결빙(29-env.js) — ICE DETECTED · n ENG ICING · PITOT ICING(황)
@@ -543,6 +543,15 @@ function pfdMsgs() {
   // VRS(소용돌이 고리 · SIM) — 저속 · 큰 강하율에서 들어가면 맨 위에 황색 경고(음성은 14-simmode.js)
   try { if (typeof simVrsOn === 'function' && simVrsOn()) out.unshift({ t: 'VORTEX RING', c: PFD_MSG_AMBER }); } catch (e) { _swallow(e); }
   // TCAS(33-train4.js) — TA 황색 · RA 빨강(올라라 · 내려라)
+  // SIM 경고 · 주의(KUH-1CG SDS 31-50-04) — n ENG OUT · LOW ROTOR RPM(적) · IAS(황 · VNE 넘김)
+  try {
+    if (simModeOn && typeof simEngSt !== 'undefined') {
+      const air = typeof _simOnGnd !== 'undefined' ? !_simOnGnd : true;
+      [1, 2].forEach(n => { if (simEngSt[n] === 'OFF' && (air || simEngSt[3 - n] === 'FLY')) out.push({ t: `${n} ENG OUT`, c: '#ff3030' }); });
+      if (typeof simRpmLow === 'function' && simRpmLow()) out.push({ t: 'LOW ROTOR RPM', c: '#ff3030' });
+      if (typeof simOverVne === 'function' && simOverVne()) out.push({ t: 'IAS', c: PFD_MSG_AMBER });
+    }
+  } catch (e) { _swallow(e); }
   try { if (typeof tcasState !== 'undefined' && tcasState !== 'CLEAR') out.unshift(tcasState === 'RA' ? { t: tcasRaSense > 0 ? 'TCAS RA CLIMB' : 'TCAS RA DESCEND', c: '#ff3030' } : { t: 'TRAFFIC', c: '#ffb000' }); } catch (e) { _swallow(e); }
   return out;
 }
@@ -605,43 +614,169 @@ function hocasAxes() {
 // HSI 오른쪽 아래 칸의 자리 — HOCAS 창과 그 아래 스톱워치가 같은 왼쪽 · 폭으로 선다
 // ── 자세계 오른쪽 칸(실기 PFD 의 오른쪽 위) — 메시지 시현창(위) · HOCAS · 스톱워치(아래) ──
 let _pfdSideMsgs = false;
-// ── CAS 쪽넘김 — 메시지가 창에 들어가는 줄(pfdCasLines)을 넘으면 넘치는 것은 숨기고, 소프트키 CAS 가 살아나 CAS UP · CAS DN 으로 넘겨 본다 ──
-//   창은 스톱워치 바로 위까지 내려온다(HOCAS 가 SYSTEM 창으로 옮겨 그 자리를 메시지에 준다) — 줄 수는 그 높이로 그때마다 정한다
-const PFD_CAS_LINES = 5;            // 창 높이를 아직 모를 때의 기본값
-let pfdCasLines = PFD_CAS_LINES;
-let pfdCasPage = 0;
-function pfdCasPages(n) { return n <= pfdCasLines ? 1 : Math.ceil(n / Math.max(1, pfdCasLines - 1)); }
-function pfdCasOverflow() { try { return pfdMsgs().length > pfdCasLines; } catch (e) { return false; } }
-function pfdCasStep(d) {
-  const pages = pfdCasPages(pfdMsgs().length);
-  pfdCasPage = Math.max(0, Math.min(pages - 1, pfdCasPage + d));
+// ════════ CAS(승무원 경고 · KUH-1CG CWS — SDS 31-50-04 · FLM) ════════
+//   pfdMsgs() 가 계통마다 지금 켜진 메시지를 내면, 여기서 등급(경고 적 · 주의 황 · 조언 녹) · 발생 시각 · 승인(ACK)을 붙여 관리한다
+//   · 정렬: 경고 > 주의 > 조언, 같은 등급은 최근 것이 위
+//   · 창: 한 번에 최대 20줄(창 높이에 들어가는 만큼) — 넘치면 맨 아래 'n↑ m↓', 소프트키 CAS 의 UP · DN 으로 한 줄씩 넘긴다.
+//     경고는 넘기지 않고 늘 맨 위에 고정, 주의 · 조언만 넘어간다
+//   · 새 경고 · 주의는 점멸 + MWP WARN/CAUT 램프 + 소프트키 12 WARN ACK/CAUT ACK 점멸 + 음성(ICS)
+//     승인(MWP 램프 · 소프트키 12 · 사이클릭 MEP/RST) → 모두 점멸 멈춤 · 램프 끔 · 음성 멈춤. 메시지는 원인이 풀릴 때까지 남는다
+//   · 조언은 점멸 · 램프 · 음성 없음
+const CAS_MAX_LINES = 20;
+const CAS_W = new Set(['1 ENGINE FIRE', '2 ENGINE FIRE', 'APU FIRE', 'MGB FIRE', '1 ENG OUT', '2 ENG OUT', 'LOW ROTOR RPM', 'LOW ALTITUDE', 'MGB TOT P', 'AFCS FAIL']);
+const CAS_A = new Set(['APU GEN', 'APU ON', 'EXT PWR', '1 ENG STRT', '2 ENG STRT', 'E-PUMP ON', 'PRK ON', 'NLG LOCK', 'SRCH LT ON', 'LDG LT ON',
+  'FIRE EXTG M', 'FIRE EXTG R', '1 ENG A/I ON', '2 ENG A/I ON', 'FUEL XFEED', 'EMER FLOATS ARMED']);
+// 음성(ICS) — [말, 되풀이]. 여기에 없는 주의는 "CAUTION, CAUTION"(되풀이) · 없는 경고 · 조언은 음성 없음
+const CAS_VOICE = {
+  '1 ENGINE FIRE': ['ENGINE 1 FIRE, ENGINE 1 FIRE', true], '2 ENGINE FIRE': ['ENGINE 2 FIRE, ENGINE 2 FIRE', true],
+  'APU FIRE': ['APU FIRE, APU FIRE', true], 'MGB FIRE': ['MGB FIRE, MGB FIRE', true],
+  '1 ENG OUT': ['ENGINE 1 OUT, ENGINE 1 OUT', true], '2 ENG OUT': ['ENGINE 2 OUT, ENGINE 2 OUT', true],
+  'LOW ROTOR RPM': ['ROTOR LOW, ROTOR LOW', true], 'LOW ALTITUDE': ['ALTITUDE, ALTITUDE', false],
+  'AFCS FAIL': ['AFCS FAIL, AFCS FAIL', true], 'MGB TOT P': ['MGB PRESSURE, MGB PRESSURE', true],
+  'IAS': ['AIRSPEED, AIRSPEED', true], 'STALL': ['STALL, STALL', true], 'R-FUEL': ['BINGO, BINGO', true], 'BLADE': ['BLADE, BLADE', true],
+};
+// 제 음성을 따로 내는 것(TCAS · VRS — 33-train4.js · 14-simmode.js) — CAS 음성에서 뺀다
+const CAS_NOVOICE = /^(TRAFFIC|TCAS RA|VORTEX RING)/;
+const CAS_REPEAT_MS = 3500;
+const casAct = new Map();          // 글자 → { t, c, lvl, seq, ack, spoken }
+let casSeq = 0, casScroll = 0, casLastView = { up: 0, dn: 0 }, casMepT = 0, casVoiceT = 0, casVoiceOn = true;
+let pfdCasLines = CAS_MAX_LINES;   // 창에 들어가는 줄 — 그릴 때 창 높이로 정한다
+function casLevel(t, c) {
+  const s = String(c || '').toLowerCase();
+  if (CAS_W.has(t) || s === '#ff3030') return 1;
+  if (CAS_A.has(t) || s === String(PFD_MSG_GREEN).toLowerCase()) return 3;
+  return 2;
+}
+function casUpdate() {
+  let raw = [];
+  try { raw = pfdMsgs(); } catch (e) { _swallow(e); }
+  const seen = new Set();
+  raw.forEach(m => {
+    if (!m || !m.t || seen.has(m.t)) return;
+    seen.add(m.t);
+    const lvl = casLevel(m.t, m.c), o = casAct.get(m.t);
+    if (!o) casAct.set(m.t, { t: m.t, c: m.c, lvl, seq: ++casSeq, ack: lvl === 3, spoken: false });
+    else { o.c = m.c; if (o.lvl !== lvl) { o.lvl = lvl; if (lvl < 3) o.ack = false; } }
+  });
+  [...casAct.keys()].forEach(k => { if (!seen.has(k)) casAct.delete(k); });   // 원인이 풀리면 바로 지운다
+}
+function casSorted() { return [...casAct.values()].sort((a, b) => a.lvl - b.lvl || b.seq - a.seq); }
+// 창에 보일 줄 — 경고 고정 · 주의 · 조언은 casScroll 부터
+function casView(lines) {
+  casUpdate();
+  const L = Math.max(2, Math.min(CAS_MAX_LINES, lines | 0));
+  const all = casSorted(), W = all.filter(m => m.lvl === 1), R = all.filter(m => m.lvl !== 1);
+  if (W.length + R.length <= L) { casScroll = 0; casLastView = { up: 0, dn: 0 }; return { list: all, tag: '', up: 0, dn: 0 }; }
+  const w = W.slice(0, Math.min(W.length, L - 1));
+  const slots = Math.max(0, L - 1 - w.length);
+  casScroll = Math.max(0, Math.min(casScroll, R.length - slots));
+  const up = casScroll, dn = Math.max(0, R.length - casScroll - slots);
+  casLastView = { up, dn };
+  return { list: [...w, ...R.slice(casScroll, casScroll + slots)], tag: `${up ? up + '↑' : ''}${up && dn ? '  ' : ''}${dn ? dn + '↓' : ''}`, up, dn };
+}
+function pfdCasOverflow() { try { const v = casView(pfdCasLines); return v.up + v.dn > 0; } catch (e) { return false; } }
+function pfdCasStep(d) { casScroll = Math.max(0, casScroll + d); try { casView(pfdCasLines); drawPFD(); } catch (e) { _swallow(e); } }
+function pfdCasCanUp() { return casLastView.up > 0; }
+function pfdCasCanDn() { return casLastView.dn > 0; }
+// 승인 대기 — 'W'(경고 · 적) · 'C'(주의 · 황) · ''
+function casAckPending() {
+  casUpdate();
+  let c = false;
+  for (const m of casAct.values()) { if (m.ack) continue; if (m.lvl === 1) return 'W'; if (m.lvl === 2) c = true; }
+  return c ? 'C' : '';
+}
+// 승인 — MWP 램프 · 소프트키 12(WARN ACK/CAUT ACK) · 사이클릭 MEP/RST 가 모두 여기로
+function casAckAll(src) {
+  casUpdate();
+  casAct.forEach(m => { if (m.lvl < 3) m.ack = true; });
+  if (src === 'MEP') casMepT = performance.now();
+  try { if (window.speechSynthesis) window.speechSynthesis.cancel(); } catch (e) { _swallow(e); }
   try { drawPFD(); } catch (e) { _swallow(e); }
+  try { if (typeof pfdSkRender === 'function') pfdSkRender(); } catch (e) { _swallow(e); }
+  try { if (typeof cduMode === 'function' && cduMode() === 'CAS_LIST' && typeof cduRerender === 'function') cduRerender(); } catch (e) { _swallow(e); }
 }
-// 지금 쪽의 메시지 · 넘김 표시(▲▼ 쪽/쪽수) — 넘치지 않으면 모두
-function pfdCasView(msgs) {
-  const pages = pfdCasPages(msgs.length);
-  if (pages <= 1) { pfdCasPage = 0; return { list: msgs, tag: '' }; }
-  pfdCasPage = Math.min(pfdCasPage, pages - 1);
-  const per = Math.max(1, pfdCasLines - 1);   // 넘기는 쪽은 한 줄을 쪽 표시(▲▼ CAS n/m)에 쓴다
-  const list = msgs.slice(pfdCasPage * per, (pfdCasPage + 1) * per);
-  return { list, tag: `${pfdCasPage > 0 ? '▲' : ' '}${pfdCasPage < pages - 1 ? '▼' : ' '} CAS ${pfdCasPage + 1}/${pages}` };
+// 음성 — 승인하지 않은 것 중 가장 높은 것 하나를 3.5 초마다(되풀이), 한 번만인 것(LOW ALTITUDE)은 처음 한 번
+function casVoiceStep(now) {
+  if (!casVoiceOn) return;
+  const c = casSorted().filter(m => !m.ack && m.lvl < 3 && !CAS_NOVOICE.test(m.t)).map(m => ({ m, v: CAS_VOICE[m.t] || (m.lvl === 2 ? ['CAUTION, CAUTION', true] : null) }))
+    .filter(x => x.v && (x.v[1] || !x.m.spoken));
+  if (!c.length) return;
+  const top = c[0];
+  if (!top.m.spoken || (top.v[1] && now - casVoiceT >= CAS_REPEAT_MS)) {
+    top.m.spoken = true; casVoiceT = now;
+    try { if (typeof _say === 'function') _say(top.v[0]); } catch (e) { _swallow(e); }
+  }
 }
+// System Message(PFL/MFL — 항전장비 자체진단) — CAS 창이 아니라 PFD 왼쪽 위 MSG 로
+function pfdSysMsgs() {
+  const out = [];
+  if (typeof cduKeyStuck !== 'undefined' && cduKeyStuck) out.push('CDU KEY STUCK');
+  return out;
+}
+let _mwpR = null;
+// MWP(주 경고 패널) — FMA 오른쪽에 WARN · CAUT · REV 램프, 그 옆에 MSG(시스템 메시지). 램프를 누르면 승인
+function drawMwp(L) {
+  const fc = fmaCells(L.ai.x, L.ai.w), y = L.ai.y + FMA_MARGIN, h = FMA_BOX_H, bw = 34, gap = 3;
+  const pend = casAckPending(), x0 = fc.x0 + fc.total + 8;
+  if (x0 + bw * 3 + gap * 2 > L.ai.x + L.ai.w - 2) return;
+  const msgFits = x0 + bw * 4 + gap * 3 <= L.ai.x + L.ai.w - 2;
+  const lamps = [['WARN', pend === 'W' || [...casAct.values()].some(m => m.lvl === 1 && !m.ack), '#e01818', '#fff'],
+                 ['CAUT', [...casAct.values()].some(m => m.lvl === 2 && !m.ack), '#ffb000', '#000'],
+                 ['REV', !!L.revOn, '#ffb000', '#000']];
+  ctx.save();
+  ctx.font = `bold ${Math.max(8, h * 0.45)}px Helvetica Neue, Arial, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  const R = {};
+  lamps.forEach(([t, on, bg, fg], i) => {
+    const x = x0 + i * (bw + gap);
+    ctx.fillStyle = on ? bg : '#1a1d20'; ctx.fillRect(x, y, bw, h);
+    ctx.strokeStyle = on ? bg : '#3a4048'; ctx.lineWidth = 1; ctx.strokeRect(x + 0.5, y + 0.5, bw - 1, h - 1);
+    ctx.fillStyle = on ? fg : '#555c64'; ctx.fillText(t, x + bw / 2, y + h / 2 + 1);
+    R[t] = { x, y, w: bw, h };
+  });
+  // MSG — 시스템 메시지가 있으면 점멸
+  const sm = pfdSysMsgs();
+  if (sm.length && msgFits) {                    // REV 오른쪽(왼쪽 EIS 칸과 겹치지 않게)
+    const x = x0 + 3 * (bw + gap), bl = Math.floor(performance.now() / 500) % 2 === 0;
+    ctx.fillStyle = bl ? '#ffffff' : '#000'; ctx.fillRect(x, y, bw, h);
+    ctx.strokeStyle = '#fff'; ctx.strokeRect(x + 0.5, y + 0.5, bw - 1, h - 1);
+    ctx.fillStyle = bl ? '#000' : '#fff'; ctx.fillText('MSG', x + bw / 2, y + h / 2 + 1);
+    R.MSG = { x, y, w: bw, h };
+  }
+  ctx.restore();
+  if (!cvs.dataset.noFcp) _mwpR = R;
+}
+function pfdMwpHit(px, py) {
+  const R = _mwpR; if (!R) return false;
+  const inR = r => r && px >= r.x && px <= r.x + r.w && py >= r.y && py <= r.y + r.h;
+  if (inR(R.WARN) || inR(R.CAUT)) { casAckAll('MWP'); return true; }
+  if (inR(R.MSG)) { try { uiToast('SYSTEM MESSAGE — ' + pfdSysMsgs().join(' · '), 'warn', 3000); } catch (e) { _swallow(e); } return true; }
+  return false;
+}
+// 점멸 — 승인하지 않은 경고 · 주의는 글자가 0.5 초마다 흐려진다(색은 그대로)
+function casBlinkAlpha(m) { return m && m.lvl < 3 && m.ack === false && Math.floor(performance.now() / 500) % 2 === 1 ? 0.25 : 1; }
+setInterval(() => {
+  try {
+    casUpdate(); casVoiceStep(performance.now());
+    if (typeof cduMode === 'function' && cduMode() === 'CAS_LIST' && typeof cduCasSync === 'function') cduCasSync();
+  } catch (e) { _swallow(e); }
+}, 250);
 function drawPfdSideMsgs(S0, swY) {
   const all = pfdMsgs();
   _pfdMsgBottom = S0.y;
   ctx.save();
   let mfs = Math.max(8, Math.min(11, S0.w * 0.085));
   ctx.font = `bold ${mfs}px Helvetica Neue, Arial, sans-serif`;
-  const widest = Math.max(ctx.measureText('▲▼ CAS 9/9').width, ...all.map(m => ctx.measureText(m.t).width));
+  const widest = Math.max(ctx.measureText('20↑  20↓').width, ...all.map(m => ctx.measureText(m.t).width));
   if (widest > S0.w - 8) { mfs = Math.max(6, mfs * (S0.w - 8) / widest); ctx.font = `bold ${mfs}px Helvetica Neue, Arial, sans-serif`; }
   // 창 높이 — 스톱워치 위 4px 까지(HOCAS 가 있던 자리까지)
   const bh = Math.max(mfs * 1.3 + 6, (Number.isFinite(swY) ? swY - 4 : S0.y + S0.h) - S0.y);
-  pfdCasLines = Math.max(2, Math.floor((bh - 6) / (mfs * 1.3)));
-  const V = pfdCasView(all), msgs = V.tag ? [...V.list, { t: V.tag, c: '#ffffff' }] : V.list;
+  pfdCasLines = Math.max(2, Math.min(CAS_MAX_LINES, Math.floor((bh - 6) / (mfs * 1.3))));
+  const V = casView(pfdCasLines), msgs = V.tag ? [...V.list, { t: V.tag, c: '#ffffff' }] : V.list;
   ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(S0.x, S0.y, S0.w, bh);
   ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
   let my = S0.y + 3 + mfs;
-  msgs.forEach(m => { ctx.fillStyle = m.c; ctx.fillText(m.t, S0.x + 4, my); my += mfs * 1.3; });
+  msgs.forEach(m => { ctx.globalAlpha = casBlinkAlpha(m); ctx.fillStyle = m.c; ctx.fillText(m.t, S0.x + 4, my); my += mfs * 1.3; });
+  ctx.globalAlpha = 1;
   _pfdMsgBottom = S0.y + bh;
   ctx.restore();
 }
@@ -1839,9 +1974,9 @@ function drawHSI(x, y, w, h, cxC) {
     // 창은 스톱워치 위까지 — 들어가는 줄 수로 쪽을 나눈다(HOCAS 자리를 메시지에)
     if (!_pfdSideMsgs) {
       const mfs0 = Math.max(7, Math.min(10, r * 0.085)), RC0 = hsiRightCol(x, y, w, h, cxC);
-      pfdCasLines = Math.max(2, Math.floor(((RC0.swY - 4) - (wdY + fs * 1.1 + 6)) / (mfs0 * 1.3)));
+      pfdCasLines = Math.max(2, Math.min(CAS_MAX_LINES, Math.floor(((RC0.swY - 4) - (wdY + fs * 1.1 + 6)) / (mfs0 * 1.3))));
     }
-    const _V = _pfdSideMsgs ? { list: [], tag: '' } : pfdCasView(_all), msgs = _V.tag ? [..._V.list, { t: _V.tag, c: '#ffffff' }] : _V.list;   // 넘치면 쪽넘김(CAS UP · DN) · 옆 칸이면 거기서
+    const _V = _pfdSideMsgs ? { list: [], tag: '' } : casView(pfdCasLines), msgs = _V.tag ? [..._V.list, { t: _V.tag, c: '#ffffff' }] : _V.list;   // 넘치면 쪽넘김(CAS UP · DN) · 옆 칸이면 거기서
     if (!_pfdSideMsgs) _pfdMsgBottom = wdY + fs * 1.1 + 4;    // 바람 글자 아래끝(메시지가 없을 때)
     if (msgs.length) {
       ctx.save();
@@ -1852,7 +1987,8 @@ function drawHSI(x, y, w, h, cxC) {
       if (widest > mw - 4) { mfs = Math.max(6, mfs * (mw - 4) / widest); ctx.font = `bold ${mfs}px Helvetica Neue, Arial, sans-serif`; }
       ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
       let my = wdY + fs * 1.1 + 6 + mfs * 1.25;
-      msgs.forEach(m => { ctx.fillStyle = m.c; ctx.fillText(m.t, mx0 + 2, my); my += mfs * 1.3; });
+      msgs.forEach(m => { ctx.globalAlpha = casBlinkAlpha(m); ctx.fillStyle = m.c; ctx.fillText(m.t, mx0 + 2, my); my += mfs * 1.3; });
+      ctx.globalAlpha = 1;
       _pfdMsgBottom = my - mfs * 1.3 + mfs * 0.35;
       ctx.restore();
     }

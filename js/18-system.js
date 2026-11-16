@@ -388,7 +388,7 @@ function fuelCas() {
   const out = [];
   [1, 2].forEach(n => { if (fuelPresLow(n)) out.push({ t: `${n} F/L PRES`, amber: true }); });
   if (fuelSys.imb) out.push({ t: 'FUEL IMBALANCE', amber: true });
-  [1, 2].forEach(n => { if (fuel['ft' + n] < FUEL_LOW_LBS) out.push({ t: `FUEL ${n} LOW`, amber: true }); });
+  [1, 2].forEach(n => { if (fuel['ft' + n] < FUEL_LOW_LBS) out.push({ t: `${n} FUEL LOW`, amber: true }); });
   if (fuelXfeedOn()) out.push({ t: 'FUEL XFEED', amber: false });
   return out;
 }
@@ -624,7 +624,8 @@ function _sysHocasPage(g, x, y, w, h) {
     });
     g.strokeStyle = '#bbb'; g.beginPath(); g.moveTo(mid, y0); g.lineTo(mid, ty + 4); g.stroke();
   };
-  sec('Cyclic', [['MEPCTL', 'Off', 'Off'], ['DMS', 'Off', 'Off'], ['Warn Reset', 'Off', 'Off']]);
+  const wr = typeof casMepT !== 'undefined' && casMepT && performance.now() - casMepT < 1500;   // 사이클릭 MEP/RST 를 막 눌렀다
+  sec('Cyclic', [['MEPCTL', 'Off', 'Off'], ['DMS', 'Off', 'Off'], ['Warn Reset', 'Off', wr ? 'On' : 'Off']]);
   sec('Collective', [['Cursor X', 'Off', 'Off'], ['Cursor Y', 'Off', 'Off'], ['Cursor Enable', 'Off', 'Off']]);
   sec('Push to talk', [['PTT- ICS(1st)', 'Off', ptt ? 'On' : 'Off'], ['PTT- SEL(2nd)', 'Off', 'Off']]);
 }
@@ -1548,7 +1549,7 @@ function _hocasCduRefresh() {
 
 // 창이 보일 때(applyPanels 가 부른다)
 function sysShow() { sysDraw(); }
-try { appRegister({ sysLayoutToggle, fuelAdjust, fuelSetTotal, fuelReset, sysPageSet, afcsTestStart, fuelTypeCycle, fuelEauxToggle, fuelReturnSet, videoChanOpen, videoChanSet, videoSrcToggle, videoDefault, videoAdj }); } catch (e) { _swallow(e); }
+try { appRegister({ sysLayoutToggle, casAckAll, fuelAdjust, fuelSetTotal, fuelReset, sysPageSet, afcsTestStart, fuelTypeCycle, fuelEauxToggle, fuelReturnSet, videoChanOpen, videoChanSet, videoSrcToggle, videoDefault, videoAdj }); } catch (e) { _swallow(e); }
 try { window.addEventListener('resize', () => { try { sysDraw(); } catch (e) { _swallow(e); } }); } catch (e) { _swallow(e); }
 // 상부 콘솔 스위치가 바뀌면 곧바로 다시 그린다(발전기·TRU·배터리 → Electrical)
 try { if (typeof ovhdOn === 'function') ovhdOn(() => { try { sysDraw(); } catch (e) { _swallow(e); } }); } catch (e) { _swallow(e); }

@@ -34,7 +34,7 @@ export async function run(page, t) {
     const ra = window.radarAltFt; window.radarAltFt = () => 300;
     // LDG LT — ON/OFF · EXT 누르는 동안 펼친다 · RET 로 접는다
     envSet({ ldg: false }); kgLt.ldgE = 0; kgLt.ldgTgt = null;
-    const msg = () => pfdMsgs().filter(m => /LANDING LT|SEARCH LT/.test(m.t)).map(m => m.t + ':' + m.c).join(',');
+    const msg = () => pfdMsgs().filter(m => /^(LDG|SRCH) LT ON$/.test(m.t)).map(m => m.t + ':' + m.c).join(',');
     { const sr = kgLt.srch; kgSrchSet(false); o.msg0 = msg(); kgSrchSet(true); o.msgS = msg(); kgSrchSet(sr); }
     kgPress('ldgOn'); o.ldgOn = env.ldg === true;
     { const sr = kgLt.srch; kgSrchSet(false); o.msgL = msg(); kgSrchSet(sr); }
@@ -106,7 +106,7 @@ export async function run(page, t) {
   t.ok(C.stowL.off && C.stowL.e === 0 && C.stowL.srch, 'STOW SEL → LDG — 착륙등이 꺼지고 접힌다(서치라이트는 그대로)');
   t.ok(C.stowS.off && C.stowS.az === 0 && C.stowS.el === 30 && C.stowS.sw === 'CTR', 'STOW SEL → SRCH — 서치라이트가 꺼지고 원위치(정면 · 아래 30°) · 스위치는 가운데로');
   t.ok(Math.abs(C.reOn - 30) < 0.5, '접은 뒤 컬렉티브 LDG LT 로 다시 켜면 다시 전방 30° 로 펼친다');
-  t.ok(C.msg0 === '' && C.msgS === 'SEARCH LT ON:' + C.grn && C.msgL === 'LANDING LT ON:' + C.grn, `PFD 메시지 시현창 — 켜지면 녹색 조언 (${C.msgS} · ${C.msgL})`);
+  t.ok(C.msg0 === '' && C.msgS === 'SRCH LT ON:' + C.grn && C.msgL === 'LDG LT ON:' + C.grn, `PFD 메시지 시현창 — 켜지면 녹색 조언 (${C.msgS} · ${C.msgL})`);
   t.ok(C.srchMin === 2.5, '서치라이트 — 아래로 2.5° 까지(종전의 두 배 앞)');
   t.ok(C.az > 10 && C.el > 30 && C.beams === 2 && C.env >= 2 && C.right, `SRCH CTR — 서치라이트를 오른쪽 ${Math.round(C.az)}° · 아래 ${Math.round(C.el)}° 로 돌린다 · 착륙등과 함께 빛 무리 ${C.env}개`);
   t.ok(C.coll.up === 3 && C.coll.dn === 1, `COLL TRIM — 누르는 동안 VS +100 씩 이어진다(UP ${C.coll.up}번 · DN ${C.coll.dn}번)`);

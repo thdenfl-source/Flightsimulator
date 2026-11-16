@@ -52,6 +52,7 @@ const JOY_ACTIONS = [
   { id: 'kgLdgLt', grp: '컬렉티브 · 사이클릭', label: 'LDG LT ON/OFF', kind: 'press', run: () => _joyKg('ldgOn') },
   { id: 'kgLdgExt', grp: '컬렉티브 · 사이클릭', label: 'LDG LT EXT (누르는 동안 펼침)', kind: 'hold', on: () => _joyKg('ldgExt'), off: () => _joyKgOff() },
   { id: 'kgLdgRet', grp: '컬렉티브 · 사이클릭', label: 'LDG LT RET (누르는 동안 접음)', kind: 'hold', on: () => _joyKg('ldgRet'), off: () => _joyKgOff() },
+  { id: 'mepRst', grp: '컬렉티브 · 사이클릭', label: 'MEP/RST (경고 · 주의 승인)', kind: 'press', run: () => { try { casAckAll('MEP'); } catch (e) { _swallow(e); } } },
   { id: 'kgApCut', grp: '컬렉티브 · 사이클릭', label: 'AP FAST CUT OFF', kind: 'press', run: () => _joyKg('apCut') },
   { id: 'kgOei', grp: '컬렉티브 · 사이클릭', label: 'OEI HI ↔ LOW', kind: 'press', run: () => _joyKg('oei') },
   // SIM 에서 1인칭 ↔ 외부 시점(뒤에서 내 헬기를 본다 · 15-heli3d.js)
