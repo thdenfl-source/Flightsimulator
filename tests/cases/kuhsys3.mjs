@@ -99,5 +99,27 @@ export async function run(page, t) {
   t.ok(g.oneEng, 'NO1 엔진을 꺼도 NR 이 84% 이상이면 GEN 1 · 2 모두 정상(GEN 은 MGB 에 물려 있다)');
   t.ok(g.lowNr, 'NR 이 84% 아래면 두 GEN 모두 떨어진다');
   t.ok(g.cas, '3D 위 PFD · 팝아웃처럼 다른 캔버스에 그려도 본 PFD 의 CAS 줄 수 · 소프트키 CAS 가 흔들리지 않는다');
+  // ── 계통 소리 — APU 17초 시동 · 엔진 약 25초 시동 · 스위치를 끄면 소리도 꺼진다 ──
+  const sd = await page.evaluate(() => {
+    const o = {}, now = performance.now();
+    ovhdSet('apuContr', 'ON'); _apuOnT = now - 2000; const a1 = sysSndState().apu;
+    _apuOnT = now - 10000; const a2 = sysSndState().apu;
+    _apuOnT = now - 18000; const a3 = sysSndState().apu;
+    o.apu = a1.phase === 'START' && a1.spool < 0.3 && a2.phase === 'START' && a2.spool > a1.spool && a2.spool < 1 && a3.phase === 'RUN' && a3.spool === 1;
+    ovhdSet('apuContr', 'OFF'); _apuOnT = null; const a4 = sysSndState().apu; o.apuOff = a4.phase === 'OFF' && a4.spool === 0;
+    ovhdSet('apuContr', 'ON'); _apuOnT = now - 20000;   // 시동 공압원
+    const ra0 = window.radarAltFt; window.radarAltFt = () => 0;
+    ovhdSet('pcd1', 'OFF'); fadecStep(0.1); Object.assign(fadec.e[1], { stCool: 0, consec: 0, post5: 0, lock: 0, ng: 0, tgt: 20 });
+    ovhdSet('pcd1', 'IDLE'); fadecStep(0.1); o.crank = sysSndState().eng[1].starter && !sysSndState().eng[1].ign;
+    let n = 0, ign = false; for (; n < 400 && fadec.e[1].ph !== 'RUN'; n++) { fadecStep(0.1); if (sysSndState().eng[1].ign) ign = true; }
+    o.secs = n / 10; o.ign = ign; o.run = !sysSndState().eng[1].starting;
+    ovhdSet('pcd1', 'OFF'); fadecStep(0.1); o.engOff = sysSndState().eng[1].ph === 'OFF' && !sysSndState().eng[1].starting;
+    try { sysSndTick(0.1); o.tick = true; } catch (e) { o.tick = false; }
+    ovhdSet('pcd1', 'FLY'); fadecSync(); ovhdSet('apuContr', 'OFF'); _apuOnT = null; window.radarAltFt = ra0;
+    return o;
+  });
+  t.ok(sd.apu && sd.apuOff, `APU 소리 — CONTR ON 뒤 17초 동안 시동 소리가 차오르고 작동 소리로 · OFF 면 꺼진다 (${JSON.stringify(sd)})`);
+  t.ok(sd.crank && sd.ign && sd.run && sd.secs >= 22 && sd.secs <= 28, `엔진 시동 소리 — 시동기 → 점화 → 분리까지 약 25초 (${sd.secs}초)`);
+  t.ok(sd.engOff && sd.tick, 'PCD OFF 면 엔진 시동 소리도 꺼진다 · 소리 장치가 없어도 오류 없음');
   t.ok(r.battOnly && r.cduDead && r.mfd3 && r.back, '배터리 단독 — 기장 자리면 CDU2 꺼짐 · 부기장 자리면 MFD3 꺼짐(PFD 대체 EIS) · 전원이 돌아오면 되살아난다');
 }

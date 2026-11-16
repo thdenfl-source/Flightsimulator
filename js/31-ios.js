@@ -204,7 +204,7 @@ const HELP_ITEMS = [
   ['Watchman(VHF 125.3 · UHF 278.4)', '관제권 밖에서 레이더 조력 요청 — "… radial … miles from RKxx, direct to … for sea patrol(MEDEVAC · SAR)" → "radar contact, maintain VFR". 공항 10NM 안으로 들어오며 다시 부르면 "landing assured to RKxx, request frequency change" → "radar frequency change approved". 임무는 ⚙ 설정에서.'],
   ['관제 교신(TWR)', 'TWR 주파수로 PTT 를 놓으면 자리에 맞춰 조종사 말(🎙 PILOT)을 보여 주고 타워가 답한다 — 활주로 밖 지상 활주 요청 · 활주로 위 이륙 · 5NM 관제권 떠남 · 접근(inbound) · 5마일 final 착륙 허가. 비행계획이 없으면 장주(pattern) 비행.'],
   ['PTT (Bell 오디오 패널)', '누르는 동안 MIC 로 고른 무전기로 송신. 가까운 공항 TWR · GND · APP 주파수면 관제가 답한다.'],
-  ['SOUND', '로터 소리 — 토크에 따라 크기가 바뀐다. 경고음이 울리면 반으로 줄어든다.'],
+  ['SOUND', '로터 소리 — 토크에 따라 크기가 바뀐다. 경고음이 울리면 반으로 줄어든다. 계통 소리도 함께 — APU CONTR ON 뒤 17초 시동 소리 → 작동 소리, PCD IDLE 엔진 시동(시동기 · 점화 딸깍 · 터빈, 약 25초). 스위치를 끄면 잦아든다.'],
   ['🧰 도구', '작은 화면에서는 시나리오 · 환경 · 강평 · 교관 화면 · 설정 · 도움말이 이 메뉴 하나로 모인다.'],
   ['⚙ 설정', '소리 · RA 콜아웃 · 관제 음성 · 리드백 확인 · 말 빠르기 · 콜사인 · 다른 기기 교관 연결 · 모든 설정 내보내기/들여오기/초기화.'],
   ['TCAS 교통', 'ENV 교통량 — 둘레에 다른 항공기. TA "Traffic" · RA(흰수리) "Climb/Descend". PFD TCAS 창 · 지도 · 3D 에 보인다.'],

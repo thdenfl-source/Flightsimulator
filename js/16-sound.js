@@ -151,3 +151,98 @@ function sndFrame() {
 
 try { appRegister({ toggleSound }); } catch (e) { _swallow(e); }
 try { updateSoundBtn(); } catch (e) { _swallow(e); }
+
+// ══════════ 계통 소리 — APU 시동 · 작동 · 엔진 시동(16-sound.js · 실시간 합성, 파일 없음) ══════════
+//   SOUND 가 켜져 있으면(비행 PAUSE 와 상관없이 — 시동은 땅에서 멈춰 있을 때 한다)
+//   APU: 상부 콘솔 APU CONTR ON → 17초 동안 시동(시동기 윙 · 점화 뒤 터빈이 차오르는 소리) → 작동(고른 터빈 휘파람) · OFF → 4초에 걸쳐 잦아듦
+//   엔진: TQS PCD OFF → IDLE/FLY(36-kuhsys.js 시동 약 25초) → 시동기 윙 · 점화 딸깍 · 연소 울림 · 터빈이 NG 따라 오름 →
+//         분리 뒤 낮은 터빈 소리 · PCD OFF(또는 시동 실패) → 잦아듦
+//   크기는 로터 소리와 따로 — 계통 소리 버스(sysBus)
+const SYS_SND_VOL = 0.55;
+let _ss = null;   // { bus, apu: voice, e: {1: voice, 2: voice}, noise }
+function _ssNoise(ctx) {
+  const n = ctx.sampleRate * 2, b = ctx.createBuffer(1, n, ctx.sampleRate), d = b.getChannelData(0);
+  for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
+  return b;
+}
+// 소리 한 묶음 — 터빈 휘파람(sine) · 시동기 윙(sawtooth→저역) · 연소/공기 울림(잡음→대역)
+function _ssVoice(ctx, bus, noiseBuf) {
+  const out = ctx.createGain(); out.gain.value = 0; out.connect(bus);
+  const whine = ctx.createOscillator(); whine.type = 'sine'; const gW = ctx.createGain(); gW.gain.value = 0; whine.connect(gW); gW.connect(out); whine.start();
+  const st = ctx.createOscillator(); st.type = 'sawtooth'; const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 900;
+  const gS = ctx.createGain(); gS.gain.value = 0; st.connect(lp); lp.connect(gS); gS.connect(out); st.start();
+  const nz = ctx.createBufferSource(); nz.buffer = noiseBuf; nz.loop = true; const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 400; bp.Q.value = 0.8;
+  const gN = ctx.createGain(); gN.gain.value = 0; nz.connect(bp); bp.connect(gN); gN.connect(out); nz.start();
+  return { out, whine, gW, st, gS, bp, gN };
+}
+function _ssEnsure() {
+  if (!_snd || _ss) return _ss;
+  const ctx = _snd.ctx, bus = ctx.createGain(); bus.gain.value = SYS_SND_VOL;
+  const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 4500; bus.connect(lp); lp.connect(ctx.destination);
+  const noise = _ssNoise(ctx);
+  _ss = { bus, noise, apu: _ssVoice(ctx, bus, noise), e: { 1: _ssVoice(ctx, bus, noise), 2: _ssVoice(ctx, bus, noise) }, apuSpool: 0, eSpool: { 1: 0, 2: 0 }, clickT: { 1: 0, 2: 0 } };
+  return _ss;
+}
+// 지금 낼 소리 — 검사도 이것을 본다(소리 장치 없이)
+let _ssApu = 0;
+function sysSndState() {
+  const o = { apu: { on: false, phase: 'OFF', spool: 0 }, eng: {} };
+  try {
+    const on = typeof ovhdGet === 'function' && ovhdGet('apuContr') === 'ON';
+    const t = on && typeof _apuOnT !== 'undefined' && _apuOnT !== null ? (performance.now() - _apuOnT) / 1000 : 0;
+    o.apu.on = on;
+    o.apu.phase = !on ? 'OFF' : t < 17 ? 'START' : 'RUN';
+    // 시동 — 처음 4초는 시동기만(0 → 0.3), 점화 뒤 17초까지 1 로 차오름
+    o.apu.spool = !on ? 0 : t < 4 ? 0.3 * t / 4 : Math.min(1, 0.3 + 0.7 * (t - 4) / 13);
+  } catch (e) { _swallow(e); }
+  [1, 2].forEach(n => {
+    let ph = 'RUN', ng = 0;
+    try { const f = typeof fadec !== 'undefined' ? fadec.e[n] : null; ph = f && f.ph ? f.ph : 'RUN'; const P = engParams(); ng = (n === 1 ? P.e1 : P.e2).ng || 0; } catch (e) { _swallow(e); }
+    o.eng[n] = { ph, ng, starter: ph === 'CRANK' || ph === 'IGN', ign: ph === 'IGN', starting: ph === 'CRANK' || ph === 'IGN' };
+  });
+  return o;
+}
+function sysSndTick(dt) {
+  if (typeof acIs === 'function' && acIs('b206')) return;          // Bell 은 제 소리(27-b206coll.js)
+  if (!_snd || !sndOn) { if (_ss) { try { _ss.bus.gain.setTargetAtTime(0, _snd.ctx.currentTime, 0.1); } catch (e) { _swallow(e); } } return; }
+  const ss = _ssEnsure(); if (!ss) return;
+  const ctx = _snd.ctx, t = ctx.currentTime, st = sysSndState();
+  try { ss.bus.gain.setTargetAtTime(SYS_SND_VOL, t, 0.2); } catch (e) { _swallow(e); }
+  // APU — 끄면 4초에 걸쳐 잦아든다
+  const aTgt = st.apu.spool;
+  ss.apuSpool = aTgt >= ss.apuSpool ? aTgt : Math.max(aTgt, ss.apuSpool - dt / 4);
+  const a = ss.apuSpool, A = ss.apu;
+  try {
+    A.out.gain.setTargetAtTime(a > 0.01 ? 1 : 0, t, 0.3);
+    A.whine.frequency.setTargetAtTime(500 + 2300 * a, t, 0.2); A.gW.gain.setTargetAtTime(0.05 + 0.10 * a * (a > 0.01 ? 1 : 0), t, 0.2);
+    A.st.frequency.setTargetAtTime(90 + 260 * Math.min(1, a / 0.3), t, 0.2); A.gS.gain.setTargetAtTime(st.apu.phase === 'START' && a < 0.45 ? 0.10 : 0, t, 0.4);
+    A.bp.frequency.setTargetAtTime(600 + 1400 * a, t, 0.3); A.gN.gain.setTargetAtTime(0.22 * Math.max(0, a - 0.25), t, 0.3);
+  } catch (e) { _swallow(e); }
+  // 엔진 — 시동 중 소리를 크게, 돌고 나면 낮은 터빈 소리(로터 소리에 묻힌다) · 멎으면 잦아듦
+  [1, 2].forEach(n => {
+    const E = st.eng[n], V = ss.e[n], f = Math.max(0, Math.min(1, E.ng / 100));
+    const tgt = E.starting ? 1 : E.ph === 'RUN' ? 0.35 : 0;
+    ss.eSpool[n] = tgt >= ss.eSpool[n] ? tgt : Math.max(tgt, ss.eSpool[n] - dt / 4);
+    const lv = ss.eSpool[n] * (E.ph === 'RUN' && !E.starting ? 1 : Math.max(0.25, f * 1.4));
+    try {
+      V.out.gain.setTargetAtTime(Math.min(1, lv), t, 0.3);
+      V.whine.frequency.setTargetAtTime(350 + 2600 * f, t, 0.15); V.gW.gain.setTargetAtTime(0.03 + 0.09 * f, t, 0.2);
+      V.st.frequency.setTargetAtTime(70 + 380 * Math.min(1, E.ng / 54), t, 0.15); V.gS.gain.setTargetAtTime(E.starter ? 0.12 : 0, t, 0.25);
+      V.bp.frequency.setTargetAtTime(250 + 900 * f, t, 0.3); V.gN.gain.setTargetAtTime(E.ign || E.ph === 'RUN' ? 0.10 + 0.18 * f : 0.02, t, 0.3);
+    } catch (e) { _swallow(e); }
+    // 점화 딸깍(초당 약 3번) — 점화기가 도는 동안
+    if (E.ign) {
+      ss.clickT[n] -= dt;
+      if (ss.clickT[n] <= 0) {
+        ss.clickT[n] = 0.33;
+        try {
+          const src = ctx.createBufferSource(), g = ctx.createGain(), hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 2500;
+          src.buffer = ss.noise; g.gain.setValueAtTime(0.25, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.03);
+          src.connect(hp); hp.connect(g); g.connect(ss.bus); src.start(t, Math.random()); src.stop(t + 0.04);
+        } catch (e) { _swallow(e); }
+      }
+    } else ss.clickT[n] = 0;
+  });
+}
+let _ssT = performance.now();
+setInterval(() => { const now = performance.now(), dt = Math.min(0.5, (now - _ssT) / 1000); _ssT = now; try { sysSndTick(dt); } catch (e) { _swallow(e); } }, 60);
