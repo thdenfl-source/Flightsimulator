@@ -30,20 +30,166 @@ function sysLayoutToggle() {
   try { if (typeof cduRerender === 'function') cduRerender(); } catch (e) { _swallow(e); }
   cduKnobSync();
 }
-// 가운데 노브 — 왼쪽 ⇄ 오른쪽 반쪽 고르기(HALF 일 때만) · 양 끝 노브는 아직 기능 없음
-function cduKnob(k) {
-  if (k === 'C') {
-    if (sysLayout !== 'HALF') { try { uiToast('가운데 노브 — SYSTEM 화면이 HALF 일 때 왼쪽 · 오른쪽 반쪽을 고릅니다', '', 2200); } catch (e) { _swallow(e); } return; }
-    sysSel = sysSel === 'L' ? 'R' : 'L'; sysPage = sysHalf[sysSel]; _sysLayoutSave();
-    try { sysDraw(); } catch (e) { _swallow(e); }
-  } else { try { uiToast(`${k === 'L' ? '왼쪽' : '오른쪽'} 노브 — 기능은 다음에 추가합니다`, '', 1800); } catch (e) { _swallow(e); } }
+// ── CDU 아래 노브 셋(KUH-1CG FLM 7.15 · 7.16 · SDS 31-42-00) — 라벨 바가 노브마다 지금 맡은 일을 보인다 ──
+//   왼쪽 조이스틱(회전 · 누름 · 8방향): 돌리면 지도 범위(− Range +), 누르면 지도 포인터 켜기/끄기(끄면 지도가 기체로 돌아온다),
+//     포인터가 켜져 있으면 8방향으로 포인터를 옮기고(가장자리면 지도를 민다) · 공항 · VOR · 픽스 위면 그 ID 를 보인다.
+//     포인터가 꺼져 있으면 좌 · 우로 기울여 SYSTEM HALF 의 왼쪽 · 오른쪽 판(←☐→ Pane)을 고른다
+//   가운데 노브(회전 · 누름): 고른 무전기 볼륨 · 누르면 COM 스켈치(NAV 탭이면 NAV ID) — 09b-cdu-screens.js cduKnobRadio
+//   오른쪽 이중 노브(큰 · 작은 회전 · 작은 노브 누름/1.5 초 길게): COM 대기 주파수 1 MHz · 25 kHz · Push:1-2 · Hold:↕ / 데이터 입력
+//   누른 채 10 초가 넘으면 키 고착(KEY STUCK) — PFD 메시지에 보인다(SDS 31-42-01)
+//   화면 조작: 바깥 고리 = 돌리기(끌기 · 휠 · 왼쪽/오른쪽 반을 톡), 가운데 = 누름(1.5 초 누르고 있으면 길게) · 조이스틱 가운데를 끌면 8방향
+let cduKeyStuck = false;
+const knobPtr = { on: false, x: 0, y: 0, follow: false };
+function cduKnobOp(k, op, a) {
+  const R = typeof cduKnobRadio === 'object' ? cduKnobRadio : null;
+  if (k === 'L') {
+    if (op === 'rot') { try { if (a > 0) leafMap.zoomIn(1, { animate: false }); else leafMap.zoomOut(1, { animate: false }); } catch (e) { _swallow(e); } }
+    else if (op === 'push') knobPtrToggle();
+    else if (op === 'tilt') {
+      if (knobPtr.on) knobPtrMove(a.x, a.y);
+      else if (a.x && sysLayout === 'HALF') { sysSel = a.x < 0 ? 'L' : 'R'; sysPage = sysHalf[sysSel]; _sysLayoutSave(); try { sysDraw(); } catch (e) { _swallow(e); } }
+    }
+  } else if (k === 'C' && R) {
+    if (op === 'rot') R.vol(a); else if (op === 'push') R.midPush();
+  } else if (k === 'R' && R) {
+    if (op === 'rot') R.tune(true, a); else if (op === 'rotIn') R.tune(false, a);
+    else if (op === 'push') R.push(); else if (op === 'hold') R.hold();
+  }
   cduKnobSync();
 }
-setTimeout(() => { try { cduKnobSync(); } catch (e) { _swallow(e); } }, 0);
+// 지도 포인터 — 지도 창 가운데에서 시작, 8방향 한 번에 12px · 가장자리 30px 안이면 지도를 민다
+function _knobMapWrap() { return document.getElementById('map-wrap'); }
+function knobPtrToggle() {
+  knobPtr.on = !knobPtr.on;
+  if (knobPtr.on) {
+    knobPtr.x = 0; knobPtr.y = 0;
+    knobPtr.follow = typeof followMode !== 'undefined' && followMode;
+    if (knobPtr.follow) followMode = false;          // 포인터를 쓰는 동안은 지도가 기체를 따라가지 않는다
+  } else {
+    if (knobPtr.follow) followMode = true;
+    try { leafMap.panTo([S.lat, S.lon]); if (typeof _applyFollow === 'function') _applyFollow(); } catch (e) { _swallow(e); }
+  }
+  knobPtrDraw();
+}
+function _knobPtrLatLng() {
+  const z = leafMap.getZoom(), c = leafMap.project(leafMap.getCenter(), z);
+  let dx = knobPtr.x, dy = knobPtr.y;
+  if (typeof mapHdgUp !== 'undefined' && mapHdgUp) {       // HDG↑ — 화면 위가 기수 방향
+    const h = (S.hdg || 0) * Math.PI / 180;
+    [dx, dy] = [dx * Math.cos(h) - dy * Math.sin(h), dx * Math.sin(h) + dy * Math.cos(h)];
+  }
+  return leafMap.unproject(c.add([dx, dy]), z);
+}
+function knobPtrMove(sx, sy) {
+  const w = _knobMapWrap(); if (!w) return;
+  const W = w.clientWidth / 2 - 30, H = w.clientHeight / 2 - 30, st = 12;
+  let nx = knobPtr.x + sx * st, ny = knobPtr.y + sy * st, px = 0, py = 0;
+  if (Math.abs(nx) > W) { px = nx - Math.sign(nx) * W; nx = Math.sign(nx) * W; }
+  if (Math.abs(ny) > H) { py = ny - Math.sign(ny) * H; ny = Math.sign(ny) * H; }
+  knobPtr.x = nx; knobPtr.y = ny;
+  if (px || py) {
+    try {
+      if (typeof mapHdgUp !== 'undefined' && mapHdgUp) { const h = (S.hdg || 0) * Math.PI / 180; [px, py] = [px * Math.cos(h) - py * Math.sin(h), px * Math.sin(h) + py * Math.cos(h)]; }
+      leafMap.panBy([px, py], { animate: false });
+    } catch (e) { _swallow(e); }
+  }
+  knobPtrDraw();
+}
+// 포인터 아래 지점 — 공항 · VOR · 픽스가 30px 안이면 그 ID, 기체에서 방위 · 거리 · 위경도
+function knobPtrInfo() {
+  if (!knobPtr.on) return null;
+  const ll = _knobPtrLatLng(), z = leafMap.getZoom(), p = leafMap.project(ll, z);
+  let best = null, bd = 30;
+  try {
+    (typeof fpRefCandidates === 'function' ? fpRefCandidates() : []).forEach(c => {
+      const d = leafMap.project([c.lat, c.lon], z).distanceTo(p);
+      if (d < bd) { bd = d; best = c; }
+    });
+  } catch (e) { _swallow(e); }
+  const brg = Math.round((bearing(S.lat, S.lon, ll.lat, ll.lng) + 360) % 360), dis = distance(S.lat, S.lon, ll.lat, ll.lng);
+  return { lat: ll.lat, lon: ll.lng, brg, dis, id: best ? best.ident : '', cat: best ? best.cat : '' };
+}
+function knobPtrDraw() {
+  const w = _knobMapWrap(); if (!w) return;
+  let el = document.getElementById('knob-ptr');
+  if (!knobPtr.on) { if (el) el.style.display = 'none'; return; }
+  if (!el) {
+    el = document.createElement('div'); el.id = 'knob-ptr';
+    el.innerHTML = '<div class="kp-x"></div><div class="kp-info"></div>';
+    w.appendChild(el);
+  }
+  el.style.display = 'block';
+  el.style.left = (w.clientWidth / 2 + knobPtr.x) + 'px'; el.style.top = (w.clientHeight / 2 + knobPtr.y) + 'px';
+  const i = knobPtrInfo(), dms = (v, p, n) => `${v >= 0 ? p : n}${Math.abs(v).toFixed(4)}°`;
+  const dist = i ? (i.dis < 10 ? i.dis.toFixed(1) : Math.round(i.dis)) : '';
+  el.querySelector('.kp-info').innerHTML = i ? `${i.id ? `<b>${i.id}</b> <span>${i.cat}</span><br>` : ''}${String(i.brg).padStart(3, '0')}° ${dist}NM<br>${dms(i.lat, 'N', 'S')} ${dms(i.lon, 'E', 'W')}` : '';
+}
+// 라벨 바 — 노브마다 지금 맡은 일
 function cduKnobSync() {
-  const el = document.getElementById('cdu-knob-sel'); if (!el) return;
-  const t = sysLayout === 'HALF' ? `SEL ${sysSel === 'L' ? '◀ L' : 'R ▶'}` : 'FULL';
-  if (el.textContent !== t) el.textContent = t;
+  const set = (id, h) => { const e = document.getElementById(id); if (e && e.innerHTML !== h) e.innerHTML = h; };
+  const pane = sysLayout === 'HALF' ? `←☐→ Pane <b>${sysSel === 'L' ? '◀L' : 'R▶'}</b>` : '←☐→ Pane <span style="color:#666">FULL</span>';
+  set('cdu-lbl-L', `<div>− Range +</div><div>Push:Pan ${knobPtr.on ? '<b>ON</b>' : ''}</div><div>${pane}</div>`);
+  let L = null; try { L = typeof cduKnobRadio === 'object' ? cduKnobRadio.labels() : null; } catch (e) { _swallow(e); }
+  if (L) {
+    set('cdu-lbl-C', L.mid.map(t => `<div>${t}</div>`).join(''));
+    set('cdu-lbl-R', L.right.map(t => `<div>${t}</div>`).join(''));
+  }
+  if (knobPtr.on) knobPtrDraw();
+}
+setTimeout(() => { try { cduKnobSync(); cduKnobWire(); } catch (e) { _swallow(e); } }, 0);
+// 손가락 · 마우스 → 노브 조작
+function cduKnobWire() {
+  document.querySelectorAll('#cdu-knobs .cdu-knob').forEach(el => {
+    if (el._wired) return; el._wired = true;
+    const k = el.dataset.k;
+    const zone = (cx, cy) => {      // 'in' 가운데(작은 노브 · 조이스틱 머리) · 'out' 바깥 고리
+      const r = el.getBoundingClientRect(), dx = cx - (r.left + r.width / 2), dy = cy - (r.top + r.height / 2);
+      return { inner: Math.hypot(dx, dy) < r.width * 0.3, side: dx < 0 ? -1 : 1 };
+    };
+    let st = null;
+    el.addEventListener('pointerdown', e => {
+      e.preventDefault(); try { el.setPointerCapture(e.pointerId); } catch (er) { _swallow(er); }
+      const z = zone(e.clientX, e.clientY);
+      st = { x: e.clientX, y: e.clientY, acc: 0, moved: false, held: false, z, tilt: null };
+      el.classList.add('pressed');
+      if (k === 'R' && z.inner) st.hT = setTimeout(() => { st.held = true; cduKnobOp('R', 'hold'); }, 1500);
+      st.sT = setTimeout(() => { cduKeyStuck = true; try { drawPFD(); } catch (er) { _swallow(er); } }, 10000);
+    });
+    el.addEventListener('pointermove', e => {
+      if (!st) return;
+      const dx = e.clientX - st.x, dy = e.clientY - st.y;
+      if (k === 'L' && st.z.inner) {             // 조이스틱 머리 — 8방향
+        if (Math.hypot(dx, dy) < 10) return;
+        const a = Math.round(Math.atan2(dy, dx) / (Math.PI / 4));
+        const dir = { x: Math.round(Math.cos(a * Math.PI / 4)), y: Math.round(Math.sin(a * Math.PI / 4)) };
+        if (!st.tilt) { st.moved = true; clearTimeout(st.hT); cduKnobOp('L', 'tilt', dir); st.rep = setInterval(() => cduKnobOp('L', 'tilt', st.tilt), 140); }
+        st.tilt = dir; return;
+      }
+      const v = dx - dy;                          // 오른쪽 · 위로 끌면 시계 방향
+      const steps = Math.trunc((v - st.acc) / 14);
+      if (steps) {
+        st.moved = true; clearTimeout(st.hT); st.acc += steps * 14;
+        for (let i = 0; i < Math.abs(steps); i++) cduKnobOp(k, k === 'R' && st.z.inner ? 'rotIn' : 'rot', Math.sign(steps));
+      }
+    });
+    const end = () => {
+      if (!st) return;
+      clearTimeout(st.hT); clearTimeout(st.sT); clearInterval(st.rep);
+      el.classList.remove('pressed');
+      if (cduKeyStuck) { cduKeyStuck = false; try { drawPFD(); } catch (er) { _swallow(er); } }
+      if (!st.moved && !st.held) {
+        if (st.z.inner) cduKnobOp(k, 'push');
+        else cduKnobOp(k, k === 'R' && st.z.inner ? 'rotIn' : 'rot', st.z.side);   // 바깥 고리를 톡 — 그쪽으로 한 칸
+      }
+      st = null;
+    };
+    el.addEventListener('pointerup', end); el.addEventListener('pointercancel', end);
+    el.addEventListener('wheel', e => {
+      e.preventDefault();
+      const z = zone(e.clientX, e.clientY), d = e.deltaY < 0 ? 1 : -1;
+      cduKnobOp(k, k === 'R' && z.inner ? 'rotIn' : 'rot', d);
+    }, { passive: false });
+  });
 }
 function sysPageSet(id) {
   if (!SYS_PAGES[id]) return;
@@ -1404,7 +1550,7 @@ function _hocasCduRefresh() {
 
 // 창이 보일 때(applyPanels 가 부른다)
 function sysShow() { sysDraw(); }
-try { appRegister({ sysLayoutToggle, cduKnob, fuelAdjust, fuelSetTotal, fuelReset, sysPageSet, afcsTestStart, fuelTypeCycle, fuelEauxToggle, fuelReturnSet, videoChanOpen, videoChanSet, videoSrcToggle, videoDefault, videoAdj }); } catch (e) { _swallow(e); }
+try { appRegister({ sysLayoutToggle, fuelAdjust, fuelSetTotal, fuelReset, sysPageSet, afcsTestStart, fuelTypeCycle, fuelEauxToggle, fuelReturnSet, videoChanOpen, videoChanSet, videoSrcToggle, videoDefault, videoAdj }); } catch (e) { _swallow(e); }
 try { window.addEventListener('resize', () => { try { sysDraw(); } catch (e) { _swallow(e); } }); } catch (e) { _swallow(e); }
 // 상부 콘솔 스위치가 바뀌면 곧바로 다시 그린다(발전기·TRU·배터리 → Electrical)
 try { if (typeof ovhdOn === 'function') ovhdOn(() => { try { sysDraw(); } catch (e) { _swallow(e); } }); } catch (e) { _swallow(e); }

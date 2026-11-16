@@ -492,6 +492,7 @@
     ];
 
     function switchMode(mode, target = '') {
+        if (mode !== currentMode) knobCur = -1;
         currentMode = mode;
         if(target) inputTarget = target;
         
@@ -1267,7 +1268,7 @@
         container.innerHTML = `
             <div style="display:flex; flex-direction:column; align-items:center; padding-top:10px; height:100%;">
                 <div style="display:flex; gap:10px; margin-bottom:20px; align-items:center; width:100%; justify-content:center;">
-                    <div style="background:#0a0a0a; border:1px solid #444; width:120px; height:35px; display:flex; align-items:center; justify-content:center; color:var(--text-cyan); font-size:20px; font-weight:bold; border-radius:4px;">${displayVal}</div>
+                    <div id="xpdr-code-box" style="background:#0a0a0a; border:1px solid #444; width:120px; height:35px; display:flex; align-items:center; justify-content:center; color:var(--text-cyan); font-size:20px; font-weight:bold; border-radius:4px;">${displayVal}</div>
                     <div class="item-btn" style="width:45px; height:35px;" data-act="backspaceXpdr">←<br>BKSP</div>
                 </div>
                 <div class="xpdr-numpad-grid">
@@ -3098,7 +3099,117 @@
         }
 
         updateHeaderUI();
+        _knobCursorMark();
+        try { if (typeof cduKnobSync === 'function') cduKnobSync(); } catch (e) { _swallow(e); }
     }
+
+    // ── CDU 아래 노브(KUH-1CG FLM 7.15 · SDS 31-42) — 가운데 · 오른쪽 노브가 다루는 무전 · 데이터 입력 ──
+    //   가운데: 고른 무전기(MIC) 볼륨 · 누르면 COM 스켈치 / Audio & Radios NAV 탭이면 NAV ID(모르스) 듣기
+    //   오른쪽 큰·작은 노브: COM 대기 주파수 1 MHz · 25 kHz, 작은 노브 누름 COM1 ⇄ COM2 · 1.5 초 길게 누름 대기 ⇄ 활성
+    //     NAV 탭 — NAV1 · NAV2 활성 주파수(이 앱의 NAV 에는 대기가 없다) 1 MHz · 50 kHz, 누름 NAV1 ⇄ NAV2
+    //     데이터 입력 화면(COM 대기 입력 · PERF 입력 · XPDR 코드) — 큰 노브 커서 · 작은 노브 숫자 · 누름 Enter
+    let knobTune = 'com1', knobNav = 'nav1', knobCur = -1;
+    const knobSq = { com1: true, com2: true, uvhf: true }, knobNavId = { nav1: false, nav2: false };
+    const _knobMicVol = () => ({ 'COM1': 'com1', 'COM2': 'com2', 'U/VHF': 'uvhf', 'VHF-FM': 'vhffm', 'HF': 'hf' })[micSelected] || 'com1';
+    const _knobNavCtx = () => currentMode === 'AUDIO' && audioTab === 'NAV';
+    const _knobEntry = () => ['COM_INPUT', 'PERF_INPUT', 'XPDR_CODE'].includes(currentMode) && !(currentMode === 'COM_INPUT' && inputTarget === 'hf');
+    // 데이터 입력 칸의 지금 글자(점 없이 숫자만)
+    function _knobBuf() {
+        if (currentMode === 'XPDR_CODE') return hasStartedTyping ? xpdrInput : xpdrState.code;
+        if (currentMode === 'PERF_INPUT') return hasStartedTyping ? currentInput : String(perfData[inputTarget] ?? '0');
+        return hasStartedTyping ? currentInput : String((freqs[inputTarget] || {}).stb || '').replace('.', '');
+    }
+    function _knobBufSet(v) {
+        hasStartedTyping = true;
+        if (currentMode === 'XPDR_CODE') xpdrInput = v; else currentInput = v;
+    }
+    const _knobMax = () => currentMode === 'XPDR_CODE' ? 4 : currentMode === 'PERF_INPUT' ? 6 : 6;
+    // 커서 자리를 입력 칸에 밑줄 · 청록 바탕으로(COM 은 MHz 뒤 점을 건너 센다)
+    function _knobCursorMark() {
+        if (!_knobEntry() || knobCur < 0) return;
+        const el = currentMode === 'XPDR_CODE' ? document.getElementById('xpdr-code-box') : document.querySelector('#mainContentArea .freq-box-main');
+        if (!el) return;
+        const buf = _knobBuf(), dot = currentMode === 'COM_INPUT' && buf.length > 3;
+        const shown = dot ? buf.slice(0, 3) + '.' + buf.slice(3) : buf;
+        const di = dot && knobCur >= 3 ? knobCur + 1 : knobCur;
+        const ch = i => (i === di ? `<span class="knob-cur" style="background:#2fe0e0;color:#000;text-decoration:underline">${shown[i] || '_'}</span>` : shown[i]);
+        el.innerHTML = [...Array(Math.max(shown.length, di + 1)).keys()].map(ch).join('');
+    }
+    function _knobComStep(id, big, d) {
+        let [mhz, khz] = String(freqs[id].stb).split('.');
+        mhz = +mhz; khz = Math.round(+('0.' + (khz || '0')) * 1000);
+        if (big) mhz = 118 + ((mhz - 118 + d) % 19 + 19) % 19;          // 118 ~ 136 MHz
+        else khz = ((khz + 25 * d) % 1000 + 1000) % 1000;              // 25 kHz
+        freqs[id].stb = mhz + '.' + String(khz).padStart(3, '0');
+        updateHeaderUI();
+        const el = document.getElementById(`h-${id}-stb`);
+        if (el) { el.classList.add('knob-tuned'); clearTimeout(el._kt); el._kt = setTimeout(() => el.classList.remove('knob-tuned'), 3000); }
+    }
+    function _knobNavStep(id, big, d) {
+        let [mhz, khz] = String(freqs[id].act).split('.');
+        mhz = +mhz; khz = Math.round(+('0.' + (khz || '0')) * 1000);
+        if (big) mhz = 108 + ((mhz - 108 + d) % 10 + 10) % 10;          // 108 ~ 117 MHz
+        else khz = ((khz + 50 * d) % 1000 + 1000) % 1000;              // 50 kHz
+        const v = mhz + '.' + String(Math.round(khz / 10)).padStart(2, '0');
+        freqs[id].act = v;
+        const match = (typeof _resolveVor === 'function') ? _resolveVor(v, null) : null;
+        freqs[id].id = match ? match.id : '';
+        try { setNavRadio(id === 'nav1' ? 'NAV1' : 'NAV2', v, match ? match.id : null); } catch (e) { _swallow(e); }
+        renderContent();
+    }
+    window.cduKnobRadio = {
+        // 가운데 노브
+        vol(d) {
+            const id = _knobNavCtx() ? knobNav : _knobMicVol();
+            volumes[id] = Math.max(0, Math.min(100, (volumes[id] ?? 100) + 5 * d));
+            if (id === 'uvhf') { try { if (typeof c5SetVolPct === 'function') c5SetVolPct(volumes[id]); } catch (e) { _swallow(e); } }
+            if (currentMode === 'AUDIO') renderContent();
+            return volumes[id];
+        },
+        midPush() {
+            if (_knobNavCtx()) { knobNavId[knobNav] = !knobNavId[knobNav]; renderContent(); return; }
+            const id = _knobMicVol();
+            knobSq[id] = !(knobSq[id] ?? true);
+            try { uiToast(`${id.toUpperCase()} 스켈치 ${knobSq[id] ? 'ON' : 'OFF'}`, '', 1400); } catch (e) { _swallow(e); }
+        },
+        // 오른쪽 노브 — big: 큰 노브, d: ±1
+        tune(big, d) {
+            if (_knobEntry()) {
+                const buf = _knobBuf(); if (knobCur < 0) knobCur = Math.max(0, buf.length - 1);
+                if (big) { knobCur = Math.max(0, Math.min(Math.min(buf.length, _knobMax() - 1), knobCur + d)); if (!hasStartedTyping) _knobBufSet(buf); renderContent(); return; }
+                const top = currentMode === 'XPDR_CODE' ? 8 : 10;
+                const a = buf.split(''); while (a.length <= knobCur) a.push('0');
+                const n = /\d/.test(a[knobCur]) ? +a[knobCur] : 0;
+                a[knobCur] = String(((n + d) % top + top) % top);
+                _knobBufSet(a.join('')); renderContent(); return;
+            }
+            if (_knobNavCtx()) return _knobNavStep(knobNav, big, d);
+            _knobComStep(knobTune, big, d);
+        },
+        push() {
+            if (_knobEntry()) {
+                knobCur = -1;
+                if (currentMode === 'XPDR_CODE') confirmXpdr(); else if (currentMode === 'PERF_INPUT') confirmPerfInput(); else confirmInput();
+                return;
+            }
+            if (_knobNavCtx()) { knobNav = knobNav === 'nav1' ? 'nav2' : 'nav1'; return; }
+            knobTune = knobTune === 'com1' ? 'com2' : 'com1';
+        },
+        hold() {
+            if (_knobEntry() || _knobNavCtx()) return;
+            swapFreq(knobTune);
+        },
+        // 라벨 바 글자
+        labels() {
+            const nav = _knobNavCtx(), vid = nav ? knobNav : _knobMicVol();
+            const mid = [`${vid.toUpperCase()} Volum`, `<b>${volumes[vid] ?? 100}%</b>`, nav ? `Push:ID ${knobNavId[vid] ? 'ON' : 'OFF'}` : `Push:Squelch ${(knobSq[vid] ?? true) ? 'ON' : 'OFF'}`];
+            const right = _knobEntry() ? ['Data Entry', 'Push:Enter']
+                        : nav ? [`${knobNav.toUpperCase()} FREQ`, `<b>${freqs[knobNav].act}</b>`, 'Push:1-2']
+                        : [`${knobTune.toUpperCase()} FREQ`, `<b>${freqs[knobTune].stb}</b>`, 'Push:1-2 Hold:↕'];
+            return { mid, right };
+        },
+        state: () => ({ mode: currentMode, tune: knobTune, nav: knobNav, cur: knobCur, sq: { ...knobSq }, navId: { ...knobNavId }, vol: { ...volumes }, freqs: JSON.parse(JSON.stringify(freqs)), xpdr: xpdrState.code, buf: _knobBuf() }),
+    };
 
     // --- Render Helpers ---
     // 🎙 PTT — 고른 MIC 의 무전기(COM1 · COM2 는 그 주 주파수 · U/VHF 는 C-5000 RT1)로 누르는 동안 송신(32-callout.js kuhPtt)
@@ -3151,6 +3262,7 @@
                 <div style="display:flex; gap:4px; font-size:12px; font-weight:bold; margin-bottom:2px;">
                     <span style="color:var(--text-green);">${freqs[id].act}</span>
                     <span style="color:white;">${freqs[id].id}</span>
+                    ${knobNavId[id] ? '<span class="knob-navid" style="color:#fff;border:1px solid #fff;font-size:9px;padding:0 2px;">ID</span>' : ''}
                 </div>
                 <div style="color:var(--text-cyan); font-size:9px; font-weight:bold;">▾ 표지 선택</div>
             </div>
