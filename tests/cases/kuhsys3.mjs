@@ -113,6 +113,11 @@ export async function run(page, t) {
     ovhdSet('pcd1', 'IDLE'); fadecStep(0.1); o.crank = sysSndState().eng[1].starter && !sysSndState().eng[1].ign;
     let n = 0, ign = false; for (; n < 400 && fadec.e[1].ph !== 'RUN'; n++) { fadecStep(0.1); if (sysSndState().eng[1].ign) ign = true; }
     o.secs = n / 10; o.ign = ign; o.run = !sysSndState().eng[1].starting;
+    // EOP — 시동 5초 뒤부터 20초 동안 서서히(시동이 끝나 갈 때 정상값)
+    ovhdSet('pcd1', 'OFF'); fadecStep(0.1); Object.assign(fadec.e[1], { stCool: 0, consec: 0, post5: 0, lock: 0, ng: 0, tgt: 20 });
+    ovhdSet('pcd1', 'IDLE'); fadecStep(0.1);
+    const eopAt = s => { while (fadec.e[1].eopT < s - 1e-6) fadecStep(0.1); return eisData().eop[0]; };
+    o.eop = [eopAt(3), eopAt(5), eopAt(10), eopAt(15), eopAt(22), eopAt(27)];
     ovhdSet('pcd1', 'OFF'); fadecStep(0.1); o.engOff = sysSndState().eng[1].ph === 'OFF' && !sysSndState().eng[1].starting;
     try { sysSndTick(0.1); o.tick = true; } catch (e) { o.tick = false; }
     ovhdSet('pcd1', 'FLY'); fadecSync(); ovhdSet('apuContr', 'OFF'); _apuOnT = null; window.radarAltFt = ra0;
@@ -120,6 +125,8 @@ export async function run(page, t) {
   });
   t.ok(sd.apu && sd.apuOff, `APU 소리 — CONTR ON 뒤 17초 동안 시동 소리가 차오르고 작동 소리로 · OFF 면 꺼진다 (${JSON.stringify(sd)})`);
   t.ok(sd.crank && sd.ign && sd.run && sd.secs >= 22 && sd.secs <= 28, `엔진 시동 소리 — 시동기 → 점화 → 분리까지 약 25초 (${sd.secs}초)`);
+  t.ok(sd.eop[0] === 0 && sd.eop[1] === 0 && sd.eop[2] > 15 && sd.eop[2] < 19 && sd.eop[3] > sd.eop[2] && sd.eop[4] > sd.eop[3] && sd.eop[4] < 68 && sd.eop[5] === 68,
+    `SYSTEM 창 EOP — 시동 5초 뒤부터 20초 동안 서서히 오른다 (3·5·10·15·22·27초: ${sd.eop.map(v => Math.round(v)).join(' · ')})`);
   t.ok(sd.engOff && sd.tick, 'PCD OFF 면 엔진 시동 소리도 꺼진다 · 소리 장치가 없어도 오류 없음');
   t.ok(r.battOnly && r.cduDead && r.mfd3 && r.back, '배터리 단독 — 기장 자리면 CDU2 꺼짐 · 부기장 자리면 MFD3 꺼짐(PFD 대체 EIS) · 전원이 돌아오면 되살아난다');
 }

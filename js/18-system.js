@@ -698,6 +698,11 @@ function _sysBars(g, x, y, w, h, lbls, vals, frac, lines) {
   });
 }
 // EIS 값 — SYSTEM 창 왼쪽 띠(MFD EIS)와 PFD 대체 모드 EIS(03-pfd.js drawEisRev)가 같이 쓴다
+// EOP — 시동 중에는 5초 뒤부터 20초 동안 서서히 오른다(36-kuhsys.js fadecEopFrac)
+function _eopOf(n, run, v) {
+  try { if (typeof fadecEopFrac === 'function') { const f = fadecEopFrac(n); if (f !== null) return v * f; } } catch (e) { _swallow(e); }
+  return run ? v : 0;
+}
 function eisData(F) {
   F = F || fuelFlow();
   const P = F.P || { e1: { tgt: 0, ng: 0 }, e2: { tgt: 0, ng: 0 }, nr: 0 };
@@ -707,7 +712,7 @@ function eisData(F) {
   const hp = hydPsi();
   return {
     P, rot,
-    eot: [run1 ? 91 : 30, run2 ? 93 : 30], eop: [run1 ? 68 : 0, run2 ? 66 : 0], mgb: [rot ? 91 : 30, rot ? 43 : 0],
+    eot: [run1 ? 91 : 30, run2 ? 93 : 30], eop: [_eopOf(1, run1, 68), _eopOf(2, run2, 66)], mgb: [rot ? 91 : 30, rot ? 43 : 0],
     ff: [F.f1, F.f2], fp: [fuelPress(1), fuelPress(2)], hyd: [hp[1], hp[2]],
     qty: { l: fuelLeft(), r: fuelRight(), aux: fuelAux(), tot: fuelTotal() }, bat, accp: rot ? 2837 : 0,
   };

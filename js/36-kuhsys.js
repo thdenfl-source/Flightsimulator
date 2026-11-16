@@ -162,7 +162,7 @@ function mflStep() {
 //   고장(교관 창): 고온 시동 · AISBV 고착 · FAIL FIX(4,000ft 내려가면 실속) · PWR LIMIT(TQ 85%)
 const FADEC = { ngRate: 2.2, ngIgn: 12, ngSep: 54, hsp: 963, tgtWarn: 927, tgtNoRise: 18, eopNoRise: 30, consecHot: 2, consecCold: 4,
                 starterCool: 60, motorMax: 120, ignMax: 120, cool90: 120, post5: 300, lock4h: 4 * 3600, tgtLim: 951, tgtLimOei: 974, split: 34, fixDrop: 4000 };
-const _fe = n => ({ n, ph: null, ng: 0, tgt: 15, np: 0, eop: 0, t: 0, tgtUp: false, eopUp: false, npUp: false,
+const _fe = n => ({ n, ph: null, ng: 0, tgt: 15, np: 0, eop: 0, eopT: 99, t: 0, tgtUp: false, eopUp: false, npUp: false,
                     stCool: 0, consec: 0, lastTry: 0, motor: 0, motorN: 0, motorCool: 0, ign: 0, ignN: 0, ignCool: 0,
                     cool90: 0, post5: 0, lock: 0, idle1: 0, fault: null, faultAlt: 0, why: '', pfl: [], adv: '' });
 const fadec = { e: { 1: _fe(1), 2: _fe(2) }, on: true };
@@ -175,7 +175,7 @@ function _fLever(n) {
 function fadecRun(n) { if (_ksB206() || !fadec.on) return true; const e = fadec.e[n]; return e.ph === null || e.ph === 'RUN'; }
 // 레버대로 곧바로(시작 상태 · 시나리오 · 검사)
 function fadecSync() {
-  [1, 2].forEach(n => { const e = fadec.e[n]; e.ph = _fLever(n) === 'OFF' ? 'OFF' : 'RUN'; e.why = ''; e.t = 0; if (e.ph === 'OFF') { e.ng = 0; e.np = 0; e.eop = 0; } });
+  [1, 2].forEach(n => { const e = fadec.e[n]; e.ph = _fLever(n) === 'OFF' ? 'OFF' : 'RUN'; e.why = ''; e.t = 0; e.eopT = 99; if (e.ph === 'OFF') { e.ng = 0; e.np = 0; e.eop = 0; } });
   try { if (typeof simEngApply === 'function') simEngApply(true); } catch (e) { _swallow(e); }
 }
 function fadecFault(n, f, on) {
@@ -232,7 +232,7 @@ function fadecStep(dt) {
       if (e.stCool > 0) { _fAbort(e, `시동기 식히는 중(${Math.ceil(e.stCool)}초 남음)`); changed = true; return; }
       if (e.consec >= max) { _fAbort(e, `시동기 연속 ${max}회 — 30분 식힌다`); changed = true; return; }
       if (!_fBleed(n)) { _fAbort(e, '시동 공압원 없음 — APU 를 돌리거나 건너편 엔진 FLY · TQ 60% · NR 99.5%'); changed = true; return; }
-      Object.assign(e, { ph: 'CRANK', t: 0, tgtUp: false, eopUp: false, npUp: false, why: '', post5: 0 });
+      Object.assign(e, { ph: 'CRANK', t: 0, eopT: 0, tgtUp: false, eopUp: false, npUp: false, why: '', post5: 0 });
       e.consec++; e.lastTry = performance.now(); e.tgt = Math.max(e.tgt, oat);
       _fSay(`ENG${n} 시동 — 시동기 물림(#${n} ENG STRT)`, '');
       changed = true;
@@ -248,8 +248,9 @@ function fadecStep(dt) {
       if (e.ph === 'IGN') {
         const up = e.fault === 'HOT' ? 90 : 45;
         e.tgt = Math.min(e.fault === 'HOT' ? 1050 : 720, e.tgt + up * dt);
-        e.eop = Math.min(45, e.eop + 3 * dt); e.np = Math.min(55, e.np + 2.5 * dt);
-      } else e.eop = Math.min(15, e.eop + 1 * dt);
+        e.np = Math.min(55, e.np + 2.5 * dt);
+      }
+      e.eopT += dt; e.eop = fadecEopRamp(e.eopT) * FADEC_EOP_RUN;   // 시동 5초 뒤부터 20초 동안 서서히
       if (aisbvStuck && e.ng >= 38) { e.ng = 40; _fAbort(e, 'NG 40% 부근 압축기 실속(AISBV 열리지 않음)', true); changed = true; return; }
       if (e.tgt > oat + 30) e.tgtUp = true;
       if (e.eop >= 20) e.eopUp = true;
@@ -269,6 +270,7 @@ function fadecStep(dt) {
     // 돈다(RUN)
     if (e.ph === 'RUN') {
       e.hsp = false;
+      if (e.eopT < 30) { e.eopT += dt; e.eop = fadecEopRamp(e.eopT) * FADEC_EOP_RUN; }   // 시동이 끝나도 EOP 는 마저 오른다
       const P = _ks(() => engParams(), null), p = P ? (n === 1 ? P.e1 : P.e2) : null;
       if (p && p.ng <= 90) e.cool90 += dt; else e.cool90 = 0;
       const other = fadec.e[3 - n];
@@ -292,6 +294,16 @@ function fadecOeiExp(n) {
   return a - b >= FADEC.split;
 }
 let _fOvBusy = false;
+// 엔진 오일 압력(EOP) — 시동을 건 뒤 5초부터 20초 동안 서서히 정상값까지(0 → 1)
+const FADEC_EOP_RUN = 68, FADEC_EOP_DELAY = 5, FADEC_EOP_RISE = 20;
+function fadecEopRamp(t) { return Math.max(0, Math.min(1, (t - FADEC_EOP_DELAY) / FADEC_EOP_RISE)); }
+// SYSTEM 창 EOP(18-system.js eisData) — 시동 중이거나 막 끝나 아직 오르는 중이면 그 몫(0~1), 아니면 null(평소 값)
+function fadecEopFrac(n) {
+  if (_ksB206() || !fadec.on) return null;
+  const e = fadec.e[n]; if (!e || e.ph === null) return null;
+  if (e.ph === 'CRANK' || e.ph === 'IGN' || (e.ph === 'RUN' && e.eopT < FADEC_EOP_DELAY + FADEC_EOP_RISE)) return fadecEopRamp(e.eopT);
+  return null;
+}
 // 03-pfd.js engParams — 시동 · 멈춤 · 실패 중에는 이 엔진의 NG · TGT · NP 를 여기 값으로, 도는 동안은 TGT 한계 · PWR LIMIT
 function fadecOverride(n, p) {
   if (_ksB206() || !fadec.on) return p;

@@ -159,5 +159,24 @@ export async function run(page, t) {
   t.ok(tog.on.on && tog.on.cls && /🔊/.test(tog.on.txt) && tog.on.pref === '1' && tog.on.ctx,
     `누르면 켜진다 — 소리 장치를 열고 이 기기에 적어 둔다 (${tog.on.txt})`);
   t.ok(!tog.off.on && /🔇/.test(tog.off.txt) && tog.off.pref === '0', '다시 누르면 꺼진다');
+  // ── 소리 크기 — SOUND 아래 − / + (10% 씩 · 로터 소리에 곱한다 · 이 기기에 적어 둔다) ──
+  const sv = await page.evaluate(() => {
+    const g = () => ({ value: 0, setTargetAtTime(v) { this.value = v; } });
+    const fake = { ctx: { currentTime: 0 }, master: { gain: g() }, gGnd: { gain: g() }, gAir: { gain: g() }, src: [], buf: {} };
+    const was = { snd: _snd, on: sndOn, run: S.running };
+    const o = {}, row = document.getElementById('snd-vol'), btn = d => row.querySelector(`[data-arg='[${d}]']`).click();
+    o.row = !!row && !!row.closest('#ctl3d') && row.previousElementSibling && row.previousElementSibling.id === 'snd-btn';
+    sndVol = 100; _snd = fake; sndOn = true; S.running = true; _simOnGnd = false;
+    sndTick(0.016); const full = fake.master.gain.value;
+    btn(-10); btn(-10); btn(-10); sndTick(0.016); o.v70 = sndVol; o.ratio = fake.master.gain.value / full;
+    o.txt = document.getElementById('snd-vol-v').textContent; o.pref = localStorage.getItem('simSoundVol');
+    for (let i = 0; i < 12; i++) btn(-10); o.min = sndVol; sndTick(0.016); o.mute = fake.master.gain.value;
+    for (let i = 0; i < 12; i++) btn(10); o.max = sndVol;
+    _snd = was.snd; sndOn = was.on; S.running = was.run; sndMix = 0;
+    return o;
+  });
+  t.ok(sv.row && sv.v70 === 70 && Math.abs(sv.ratio - 0.7) < 1e-6 && sv.txt === '70%' && sv.pref === '70',
+    `SOUND 아래 소리 크기 − / + — 10% 씩 · 70% 면 로터 소리도 70% (${sv.txt})`);
+  t.ok(sv.min === 0 && sv.mute === 0 && sv.max === 100, '소리 크기는 0~100% 안에서');
   t.ok(page.errors.length === 0, `소리를 켜고 끄는 동안 오류가 없다${page.errors.length ? ' — ' + page.errors.join(' / ') : ''}`);
 }

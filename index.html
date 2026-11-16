@@ -17,11 +17,11 @@
      CDN 을 쓰면 한 번이라도 못 받는 순간 앱이 통째로 죽는다 — 비행 중에는
      그럴 여지를 두지 않는다. -->
 <!-- 패널 새 창(다중 모니터) — 라이브러리가 거는 이벤트까지 받아 적어야 하므로 맨 먼저 -->
-<script src="js/00-edition.js?v=695"></script>
-<script src="js/00-aircraft.js?v=695"></script>
-<script src="js/00-params.js?v=695"></script>
-<script src="js/00-sched.js?v=695"></script>
-<script src="js/00-popout.js?v=695"></script>
+<script src="js/00-edition.js?v=696"></script>
+<script src="js/00-aircraft.js?v=696"></script>
+<script src="js/00-params.js?v=696"></script>
+<script src="js/00-sched.js?v=696"></script>
+<script src="js/00-popout.js?v=696"></script>
 <link rel="stylesheet" href="vendor/leaflet.css"/>
 <script src="vendor/leaflet.js"></script>
 <link rel="stylesheet" href="vendor/leaflet-velocity.min.css"/>
@@ -695,6 +695,11 @@ html, body {
   width: 100%; box-sizing: border-box; margin: 0; }
 #ctl3d > #ctl3d-body > .sim-btn, #ctl3d-tog { padding: 5px 4px; text-align: center; }
 #ctl3d .fcp-btn-row { display: flex; gap: 3px; }
+#ctl3d .snd-vol-row { align-items: center; }
+#ctl3d .snd-vol-row .sim-btn { flex: 0 0 26px; padding: 3px 0; font-size: 14px; line-height: 1; }
+#snd-vol-v { flex: 1; text-align: center; font: bold 11px 'Helvetica Neue', Arial, sans-serif; color: #9aa4ae;
+             background: rgba(0,0,0,0.75); border: 1px solid #333; border-radius: 3px; padding: 3px 0; }
+#snd-vol.on #snd-vol-v { color: #00e07a; border-color: #00e07a; }
 #ctl3d .fcp-btn-row .sim-btn { flex: 1; width: auto; padding: 5px 0; }
 #ctl3d .fcp-btn-row .sim-btn.on { color: #ffb000; border-color: #ffb000; }
 #ctl3d .fcp-btn-row .sim-btn.dim { opacity: 0.45; }
@@ -2705,7 +2710,7 @@ body.simple-mode #simple-view { display: flex; position: fixed; left: 0; right: 
     </div>
   </form>
 </div>
-<script src="js/00-gate.js?v=695"></script>
+<script src="js/00-gate.js?v=696"></script>
 <!-- ── 단일화면 선택 바 (기본 숨김) ── -->
 <!-- ── 시작 안내(사용법/키보드) 오버레이 ── -->
 <div id="help-overlay" style="display:none;">
@@ -3749,6 +3754,8 @@ body.simple-mode #simple-view { display: flex; position: fixed; left: 0; right: 
           <button class="sim-btn" id="fly3d-btn" data-act="toggleSim" title="FLY / PAUSE — 지도 창의 같은 버튼과 같습니다">▶ FLY</button>
           <!-- SOUND — 로터 소리 켜기/끄기(16-sound.js). 땅에서는 이륙 전, 바퀴가 떨어지면 이륙 후 소리 -->
           <button class="sim-btn" id="snd-btn" data-act="toggleSound" title="소리 — 땅에서는 이륙 전, 바퀴가 떨어지면 이륙 후 소리(뜨고 내릴 때 겹쳐 바뀝니다)">🔇 SOUND</button>
+          <!-- 소리 크기 — 0~100%(10% 씩 · 16-sound.js sndVolStep) · 로터 · APU · 엔진 소리 모두 -->
+          <div class="fcp-btn-row snd-vol-row" id="snd-vol"><button class="sim-btn" data-act="sndVolStep" data-arg='[-10]' title="소리 작게(10%)">−</button><span id="snd-vol-v" title="소리 크기">100%</span><button class="sim-btn" data-act="sndVolStep" data-arg='[10]' title="소리 크게(10%)">+</button></div>
           <!-- 계기 ON/OFF — 3D 화면 왼쪽 위에 겹친 계기(PFD 일부)를 보이고 감춘다(07-sim.js) -->
           <button class="sim-btn on" id="fpv-btn" data-act="toggleFpv" title="ADI 의 예상 항적(초록 원 · FPV) 보이기/감추기">FPV ON</button>
             <button class="sim-btn on" id="pfdov-btn" data-act="togglePfdOverlay" title="계기 — 3D 화면 왼쪽 위에 PFD 계기(FCP 없이)를 겹쳐 보이기/감추기">계기 ON</button>
@@ -4104,55 +4111,55 @@ body.simple-mode #simple-view { display: flex; position: fixed; left: 0; right: 
 <!-- 앱 코드 — 클래식 스크립트(모듈 아님)라 전역 스코프를 공유한다.
      순서가 곧 실행 순서이므로 임의로 바꾸지 말 것. -->
   <!-- AIP 데이터 — 코드보다 먼저 로드한다 -->
-  <script src="js/data/terminal-fixes.js?v=695"></script>
-  <script src="js/data/ifr-fixes.js?v=695"></script>
-  <script src="js/data/ifr-procedures.js?v=695"></script>
-  <script src="js/data/airfield-info.js?v=695"></script>
-  <script src="js/data/enr-vors.js?v=695"></script>
-  <script src="js/data/loc-stations.js?v=695"></script>
-  <script src="js/data/enr-routes.js?v=695"></script>
-  <script src="js/data/airspace.js?v=695"></script>
-  <script src="js/data/runways.js?v=695"></script>
+  <script src="js/data/terminal-fixes.js?v=696"></script>
+  <script src="js/data/ifr-fixes.js?v=696"></script>
+  <script src="js/data/ifr-procedures.js?v=696"></script>
+  <script src="js/data/airfield-info.js?v=696"></script>
+  <script src="js/data/enr-vors.js?v=696"></script>
+  <script src="js/data/loc-stations.js?v=696"></script>
+  <script src="js/data/enr-routes.js?v=696"></script>
+  <script src="js/data/airspace.js?v=696"></script>
+  <script src="js/data/runways.js?v=696"></script>
   <!-- 앱 코드 -->
-  <script src="js/00-ui.js?v=695"></script>
-  <script src="js/01-state.js?v=695"></script>
-  <script src="js/02-math.js?v=695"></script>
-  <script src="js/03-pfd.js?v=695"></script>
-  <script src="js/04-map.js?v=695"></script>
-  <script src="js/05-gps.js?v=695"></script>
-  <script src="js/06-nav.js?v=695"></script>
-  <script src="js/07-sim.js?v=695"></script>
-  <script src="js/08-ifrdb.js?v=695"></script>
-  <script src="js/09a-start.js?v=695"></script>
-  <script src="js/09-cdu.js?v=695"></script>
-  <script src="js/09b-cdu-screens.js?v=695"></script>
-  <script src="js/10-tools.js?v=695"></script>
-  <script src="js/11-charts.js?v=695"></script>
-  <script src="js/12-joystick.js?v=695"></script>
-  <script src="js/13-joyhid.js?v=695"></script>
-  <script src="js/14-simmode.js?v=695"></script>
-  <script src="js/15-heli3d.js?v=695"></script>
-  <script src="js/16-sound.js?v=695"></script>
-  <script src="js/17-upper.js?v=695"></script>
-  <script src="js/18-system.js?v=695"></script>
-  <script src="js/19-lower.js?v=695"></script>
-  <script src="js/20-navaids.js?v=695"></script>
-  <script src="js/21-c5000.js?v=695"></script>
-  <script src="js/22-npx138.js?v=695"></script>
-  <script src="js/23-afcs.js?v=695"></script>
-  <script src="js/24-sar.js?v=695"></script>
-  <script src="js/25-b206panel.js?v=695"></script>
-  <script src="js/26-b206radio.js?v=695"></script>
-  <script src="js/27-b206coll.js?v=695"></script>
-  <script src="js/28-debrief.js?v=695"></script>
-  <script src="js/29-env.js?v=695"></script>
-  <script src="js/30-scenario.js?v=695"></script>
-  <script src="js/31-ios.js?v=695"></script>
-  <script src="js/32-callout.js?v=695"></script>
-  <script src="js/33-train4.js?v=695"></script>
-  <script src="js/34-infra.js?v=695"></script>
-  <script src="js/35-kuhgrip.js?v=695"></script>
-  <script src="js/36-kuhsys.js?v=695"></script>
+  <script src="js/00-ui.js?v=696"></script>
+  <script src="js/01-state.js?v=696"></script>
+  <script src="js/02-math.js?v=696"></script>
+  <script src="js/03-pfd.js?v=696"></script>
+  <script src="js/04-map.js?v=696"></script>
+  <script src="js/05-gps.js?v=696"></script>
+  <script src="js/06-nav.js?v=696"></script>
+  <script src="js/07-sim.js?v=696"></script>
+  <script src="js/08-ifrdb.js?v=696"></script>
+  <script src="js/09a-start.js?v=696"></script>
+  <script src="js/09-cdu.js?v=696"></script>
+  <script src="js/09b-cdu-screens.js?v=696"></script>
+  <script src="js/10-tools.js?v=696"></script>
+  <script src="js/11-charts.js?v=696"></script>
+  <script src="js/12-joystick.js?v=696"></script>
+  <script src="js/13-joyhid.js?v=696"></script>
+  <script src="js/14-simmode.js?v=696"></script>
+  <script src="js/15-heli3d.js?v=696"></script>
+  <script src="js/16-sound.js?v=696"></script>
+  <script src="js/17-upper.js?v=696"></script>
+  <script src="js/18-system.js?v=696"></script>
+  <script src="js/19-lower.js?v=696"></script>
+  <script src="js/20-navaids.js?v=696"></script>
+  <script src="js/21-c5000.js?v=696"></script>
+  <script src="js/22-npx138.js?v=696"></script>
+  <script src="js/23-afcs.js?v=696"></script>
+  <script src="js/24-sar.js?v=696"></script>
+  <script src="js/25-b206panel.js?v=696"></script>
+  <script src="js/26-b206radio.js?v=696"></script>
+  <script src="js/27-b206coll.js?v=696"></script>
+  <script src="js/28-debrief.js?v=696"></script>
+  <script src="js/29-env.js?v=696"></script>
+  <script src="js/30-scenario.js?v=696"></script>
+  <script src="js/31-ios.js?v=696"></script>
+  <script src="js/32-callout.js?v=696"></script>
+  <script src="js/33-train4.js?v=696"></script>
+  <script src="js/34-infra.js?v=696"></script>
+  <script src="js/35-kuhgrip.js?v=696"></script>
+  <script src="js/36-kuhsys.js?v=696"></script>
 
 <input type="file" id="zipFileInput" accept=".zip,application/zip,application/x-zip-compressed,application/octet-stream" style="display:none" onchange="handleZipFile(this.files[0]); this.value='';"></body>
 </html>

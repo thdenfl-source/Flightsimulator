@@ -28,6 +28,17 @@ let sndOn  = false;       // SOUND 버튼
 let sndMix = 0;           // 지금 섞인 몫 — 0 = 이륙 전(땅) · 1 = 이륙 후(공중)
 let _snd   = null;        // { ctx, master, gGnd, gAir, buf: {gnd, air}, src: [] }
 let _sndT  = 0;
+// 소리 크기(SOUND 아래 − / +) — 0~100%, 이 기기에 적어 둔다. 로터 · APU · 엔진 소리 모두에 곱한다
+const SND_VOL_PREF = 'simSoundVol';
+let sndVol = 100;
+try { const v = parseInt(localStorage.getItem(SND_VOL_PREF), 10); if (Number.isFinite(v)) sndVol = Math.max(0, Math.min(100, v)); } catch (e) { sndVol = 100; }
+function sndVolGain() { return sndVol / 100; }
+function sndVolStep(d) {
+  sndVol = Math.max(0, Math.min(100, Math.round((sndVol + (Number(d) || 0)) / 10) * 10));
+  try { localStorage.setItem(SND_VOL_PREF, String(sndVol)); } catch (e) { _swallow(e); }
+  updateSoundBtn();
+  try { sndTick(0); } catch (e) { _swallow(e); }
+}
 
 // 땅에 있는가 — SIM 모드는 비행 모델의 착지 판정 그대로, 아니면 지면 위 높이(전파고도)로
 function sndOnGround() {
@@ -117,6 +128,8 @@ function updateSoundBtn() {
   if (!b) return;
   b.textContent = sndOn ? '🔊 SOUND' : '🔇 SOUND';
   b.classList.toggle('on', sndOn);
+  const v = document.getElementById('snd-vol-v'); if (v) v.textContent = sndVol + '%';
+  const r = document.getElementById('snd-vol'); if (r) r.classList.toggle('on', sndOn);
 }
 
 // 매 프레임(07-sim.js simStep) — 섞는 몫을 목표로 옮기고 크기를 건다. dt 는 실제 시간(s)
@@ -135,7 +148,7 @@ function sndTick(dt) {
     // 경고음(Bell 206 ENG OUT · RPM)이 울리는 동안은 로터 소리를 반으로 줄여 경고음이 들리게 한다
     const duck = (typeof b206HornOn === 'function' && b206HornOn()) ? 0.5 : 1;
     const nr = sndNr();
-    _snd.master.gain.setTargetAtTime(sndOn && (S.running || sndOnGround()) ? SND_VOL * sndTqGain(tq) * duck * sndNrGain(nr) : 0, t, 0.15);
+    _snd.master.gain.setTargetAtTime(sndOn && (S.running || sndOnGround()) ? SND_VOL * sndVolGain() * sndTqGain(tq) * duck * sndNrGain(nr) : 0, t, 0.15);
     _snd.src.forEach(s => { try { s.playbackRate.setTargetAtTime(sndNrRate(nr), t, 0.3); } catch (e) { _swallow(e); } });
   } catch (e) { _swallow(e); }
 }
@@ -174,7 +187,7 @@ function sndAutoOn() {
     document.addEventListener('pointerdown', go, true); document.addEventListener('keydown', go, true);
   }
 }
-try { appRegister({ toggleSound }); } catch (e) { _swallow(e); }
+try { appRegister({ toggleSound, sndVolStep }); } catch (e) { _swallow(e); }
 try { updateSoundBtn(); } catch (e) { _swallow(e); }
 
 // ══════════ 계통 소리 — APU 시동 · 작동 · 엔진 시동(16-sound.js · 실시간 합성, 파일 없음) ══════════
@@ -255,7 +268,7 @@ function sysSndTick(dt) {
   if (!_snd || !sndOn) { if (_ss) { try { _ss.bus.gain.setTargetAtTime(0, _snd.ctx.currentTime, 0.1); } catch (e) { _swallow(e); } } return; }
   const ss = _ssEnsure(); if (!ss) return;
   const ctx = _snd.ctx, t = ctx.currentTime, st = sysSndState();
-  try { ss.bus.gain.setTargetAtTime(SYS_SND_VOL, t, 0.2); } catch (e) { _swallow(e); }
+  try { ss.bus.gain.setTargetAtTime(SYS_SND_VOL * sndVolGain(), t, 0.2); } catch (e) { _swallow(e); }
   // APU — 끄면 곧바로 꺼진다
   const L = sysSndLevels(st, ss, dt);
   const a = L.apu, A = ss.apu;
