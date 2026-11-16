@@ -76,7 +76,8 @@ export async function run(page, t) {
     sndTick(1.5); o.t25 = sndMix; o.air = [fake.gGnd.gain.value, fake.gAir.gain.value];
     _simOnGnd = true;                                    // 내려앉았다
     sndTick(1.25); o.back = sndMix;
-    S.running = false; sndTick(0.016); o.paused = fake.master.gain.value;
+    _simOnGnd = false; S.running = false; sndTick(0.016); o.paused = fake.master.gain.value;
+    _simOnGnd = true; sndTick(0.016); o.pausedGnd = fake.master.gain.value;
     S.running = true; sndOn = false; sndTick(0.016); o.off = fake.master.gain.value;
     _snd = was.snd; sndOn = was.on; S.running = was.run; sndMix = 0;
     return o;
@@ -86,7 +87,8 @@ export async function run(page, t) {
     `바퀴가 떨어지면 두 소리가 겹쳐 바뀐다 — 1초에 ${(fade.t1 * 100).toFixed(0)}% (크기는 그대로 · 같은 힘 곡선)`);
   t.ok(fade.t25 === 1 && fade.air[0] < 1e-9 && fade.air[1] === 1, '2.5초면 이륙 후 소리만 난다');
   t.ok(Math.abs(fade.back - 0.5) < 1e-6, `내려앉으면 거꾸로 겹쳐 이륙 전 소리로 돌아간다 (1.25초에 ${(fade.back * 100).toFixed(0)}%)`);
-  t.ok(fade.paused === 0 && fade.off === 0, 'PAUSE 이거나 SOUND 를 끄면 소리가 잦아든다');
+  t.ok(fade.paused === 0 && fade.off === 0, '공중에서 PAUSE 이거나 SOUND 를 끄면 소리가 잦아든다');
+  t.ok(fade.pausedGnd > 0, '땅 위에서는 PAUSE 여도 엔진이 돌면(NR) 로터 소리가 난다');
 
   // ── 크기는 토크를 따른다 — 토크 0% 에서 70%, 100% 이상이면 100% ──
   const vol = await page.evaluate(() => {
@@ -125,6 +127,25 @@ export async function run(page, t) {
   t.ok(nrv.n100[1] === 1 && nrv.n50[1] < 1, `NR 이 낮으면 소리도 낮고 느려진다 (빠르기 ${nrv.n50[1].toFixed(2)})`);
   t.ok(nrv.sysOff === 'OFF', '연료 레버 · ENG 로 엔진을 꺼도 엔진 소리가 꺼진다');
   t.ok(nrv.auto && nrv.hook, 'Cockpit Mode 가 시작되면 SOUND 가 켜진다');
+  const xf = await page.evaluate(() => {
+    const mem = { apuSpool: 0, eSpool: { 1: 0, 2: 0 }, post: { 1: 0, 2: 0 } };
+    const st = (ph, ng, apu) => ({ apu: { spool: apu }, eng: { 1: { ph, ng, starting: ph === 'CRANK' || ph === 'IGN' }, 2: { ph: 'RUN', ng: 80, starting: false } } });
+    const o = {};
+    for (let i = 0; i < 10; i++) sysSndLevels(st('IGN', 50, 1), mem, 0.1);
+    o.start = sysSndLevels(st('IGN', 54, 1), mem, 0.1).eng[1];
+    o.run0 = sysSndLevels(st('RUN', 60, 1), mem, 0.1).eng[1];
+    for (let i = 0; i < 40; i++) sysSndLevels(st('RUN', 62, 1), mem, 0.1);
+    o.run4 = sysSndLevels(st('RUN', 62, 1), mem, 0.1).eng[1];
+    for (let i = 0; i < 45; i++) sysSndLevels(st('RUN', 62, 1), mem, 0.1);
+    o.run9 = sysSndLevels(st('RUN', 62, 1), mem, 0.1).eng[1];
+    o.cold2 = sysSndLevels(st('RUN', 62, 1), mem, 0.1).eng[2];   // 시동 없이 처음부터 돌던 엔진
+    o.apuOn = mem.apuSpool; sysSndLevels(st('RUN', 62, 0), mem, 0.3); o.apu03 = mem.apuSpool; sysSndLevels(st('RUN', 62, 0), mem, 0.3); o.apu06 = mem.apuSpool;
+    o.nrUp = sndNrGain(20) < sndNrGain(60) && sndNrGain(60) < sndNrGain(100);
+    return o;
+  });
+  t.ok(xf.start > 0.5 && xf.run0 > 0.5 && xf.run4 < xf.run0 * 0.6 && xf.run4 > 0 && xf.run9 === 0 && xf.cold2 === 0 && xf.nrUp,
+    `엔진 시동이 끝나면 8초에 걸쳐 시동 소리가 잦아들고 로터 소리가 NR 따라 차오른다 (${xf.start.toFixed(2)} → ${xf.run0.toFixed(2)} → 4초 ${xf.run4.toFixed(2)} → 9초 ${xf.run9})`);
+  t.ok(xf.apuOn === 1 && xf.apu03 > 0 && xf.apu06 === 0, `APU 는 OFF 하면 곧바로(0.5초) 꺼진다 (${xf.apu03.toFixed(2)} → ${xf.apu06})`);
 
   // ── 버튼을 누르면 켜지고, 이 기기에 적어 둔다 ──
   const tog = await page.evaluate(() => {

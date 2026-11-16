@@ -135,7 +135,7 @@ function sndTick(dt) {
     // 경고음(Bell 206 ENG OUT · RPM)이 울리는 동안은 로터 소리를 반으로 줄여 경고음이 들리게 한다
     const duck = (typeof b206HornOn === 'function' && b206HornOn()) ? 0.5 : 1;
     const nr = sndNr();
-    _snd.master.gain.setTargetAtTime(sndOn && S.running ? SND_VOL * sndTqGain(tq) * duck * sndNrGain(nr) : 0, t, 0.15);
+    _snd.master.gain.setTargetAtTime(sndOn && (S.running || sndOnGround()) ? SND_VOL * sndTqGain(tq) * duck * sndNrGain(nr) : 0, t, 0.15);
     _snd.src.forEach(s => { try { s.playbackRate.setTargetAtTime(sndNrRate(nr), t, 0.3); } catch (e) { _swallow(e); } });
   } catch (e) { _swallow(e); }
 }
@@ -179,9 +179,9 @@ try { updateSoundBtn(); } catch (e) { _swallow(e); }
 
 // ══════════ 계통 소리 — APU 시동 · 작동 · 엔진 시동(16-sound.js · 실시간 합성, 파일 없음) ══════════
 //   SOUND 가 켜져 있으면(비행 PAUSE 와 상관없이 — 시동은 땅에서 멈춰 있을 때 한다)
-//   APU: 상부 콘솔 APU CONTR ON → 17초 동안 시동(시동기 윙 · 점화 뒤 터빈이 차오르는 소리) → 작동(고른 터빈 휘파람) · OFF → 4초에 걸쳐 잦아듦
+//   APU: 상부 콘솔 APU CONTR ON → 17초 동안 시동(시동기 윙 · 점화 뒤 터빈이 차오르는 소리) → 작동(고른 터빈 휘파람) · OFF → 곧바로 꺼짐
 //   엔진: TQS PCD OFF → IDLE/FLY(36-kuhsys.js 시동 약 25초) → 시동기 윙 · 점화 딸깍 · 연소 울림 · 터빈이 NG 따라 오름 →
-//         분리 뒤 낮은 터빈 소리 · PCD OFF(또는 시동 실패) → 잦아듦
+//         시동이 끝나면(RUN) 8초에 걸쳐 잦아들고 그동안 로터 소리가 NR 따라 차오른다 · PCD OFF(또는 시동 실패) → 잦아듦
 //   크기는 로터 소리와 따로 — 계통 소리 버스(sysBus)
 const SYS_SND_VOL = 0.55;
 let _ss = null;   // { bus, apu: voice, e: {1: voice, 2: voice}, noise }
@@ -205,7 +205,7 @@ function _ssEnsure() {
   const ctx = _snd.ctx, bus = ctx.createGain(); bus.gain.value = SYS_SND_VOL;
   const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 4500; bus.connect(lp); lp.connect(ctx.destination);
   const noise = _ssNoise(ctx);
-  _ss = { bus, noise, apu: _ssVoice(ctx, bus, noise), e: { 1: _ssVoice(ctx, bus, noise), 2: _ssVoice(ctx, bus, noise) }, apuSpool: 0, eSpool: { 1: 0, 2: 0 }, clickT: { 1: 0, 2: 0 } };
+  _ss = { bus, noise, apu: _ssVoice(ctx, bus, noise), e: { 1: _ssVoice(ctx, bus, noise), 2: _ssVoice(ctx, bus, noise) }, apuSpool: 0, eSpool: { 1: 0, 2: 0 }, post: { 1: 0, 2: 0 }, clickT: { 1: 0, 2: 0 } };
   return _ss;
 }
 // 지금 낼 소리 — 검사도 이것을 본다(소리 장치 없이)
@@ -228,28 +228,47 @@ function sysSndState() {
   });
   return o;
 }
+// 크기 셈(소리 장치 없이도 — 검사가 이것을 본다). mem = { apuSpool, eSpool: {1,2}, post: {1,2} }
+//   APU — 켜면 17초에 걸쳐 차오르고, 끄면 곧바로(0.5초) 꺼진다
+//   엔진 — 시동 동안 소리가 나고, 시동이 끝나(RUN) 면 SYS_ENG_FADE 초에 걸쳐 잦아들어 없어진다.
+//          그동안 로터 소리가 NR 을 따라 차오른다(NR 12%/s — 약 8초) · 시동 없이 처음부터 돌던 엔진은 소리가 없다
+//          PCD OFF · 시동 중지면 3초에 걸쳐 잦아든다
+const SYS_ENG_FADE = 8, SYS_APU_OFF = 0.5;
+function sysSndLevels(st, mem, dt) {
+  const aTgt = st.apu.spool;
+  mem.apuSpool = aTgt >= mem.apuSpool ? aTgt : Math.max(aTgt, mem.apuSpool - dt / SYS_APU_OFF);
+  const out = { apu: mem.apuSpool, eng: {} };
+  [1, 2].forEach(n => {
+    const E = st.eng[n];
+    if (E.starting) mem.post[n] = 1;
+    else if (E.ph === 'RUN') mem.post[n] = Math.max(0, mem.post[n] - dt / SYS_ENG_FADE);
+    else mem.post[n] = 0;
+    const tgt = E.starting ? 1 : E.ph === 'RUN' ? mem.post[n] : 0;
+    mem.eSpool[n] = tgt >= mem.eSpool[n] || E.ph === 'RUN' ? tgt : Math.max(tgt, mem.eSpool[n] - dt / 3);
+    const f = Math.max(0, Math.min(1, E.ng / 100));
+    out.eng[n] = Math.min(1, mem.eSpool[n] * Math.max(0.25, Math.min(1, f * 1.4)));
+  });
+  return out;
+}
 function sysSndTick(dt) {
   if (typeof acIs === 'function' && acIs('b206')) return;          // Bell 은 제 소리(27-b206coll.js)
   if (!_snd || !sndOn) { if (_ss) { try { _ss.bus.gain.setTargetAtTime(0, _snd.ctx.currentTime, 0.1); } catch (e) { _swallow(e); } } return; }
   const ss = _ssEnsure(); if (!ss) return;
   const ctx = _snd.ctx, t = ctx.currentTime, st = sysSndState();
   try { ss.bus.gain.setTargetAtTime(SYS_SND_VOL, t, 0.2); } catch (e) { _swallow(e); }
-  // APU — 끄면 4초에 걸쳐 잦아든다
-  const aTgt = st.apu.spool;
-  ss.apuSpool = aTgt >= ss.apuSpool ? aTgt : Math.max(aTgt, ss.apuSpool - dt / 4);
-  const a = ss.apuSpool, A = ss.apu;
+  // APU — 끄면 곧바로 꺼진다
+  const L = sysSndLevels(st, ss, dt);
+  const a = L.apu, A = ss.apu;
   try {
     A.out.gain.setTargetAtTime(a > 0.01 ? 1 : 0, t, 0.3);
     A.whine.frequency.setTargetAtTime(500 + 2300 * a, t, 0.2); A.gW.gain.setTargetAtTime(0.05 + 0.10 * a * (a > 0.01 ? 1 : 0), t, 0.2);
     A.st.frequency.setTargetAtTime(90 + 260 * Math.min(1, a / 0.3), t, 0.2); A.gS.gain.setTargetAtTime(st.apu.phase === 'START' && a < 0.45 ? 0.10 : 0, t, 0.4);
     A.bp.frequency.setTargetAtTime(600 + 1400 * a, t, 0.3); A.gN.gain.setTargetAtTime(0.22 * Math.max(0, a - 0.25), t, 0.3);
   } catch (e) { _swallow(e); }
-  // 엔진 — 시동 중 소리를 크게, 돌고 나면 낮은 터빈 소리(로터 소리에 묻힌다) · 멎으면 잦아듦
+  // 엔진 — 시동 중 소리 · 시동이 끝나면 8초에 걸쳐 잦아들고 로터 소리(NR)가 차오른다 · 멎으면 잦아듦
   [1, 2].forEach(n => {
     const E = st.eng[n], V = ss.e[n], f = Math.max(0, Math.min(1, E.ng / 100));
-    const tgt = E.starting ? 1 : E.ph === 'RUN' ? 0.35 : 0;
-    ss.eSpool[n] = tgt >= ss.eSpool[n] ? tgt : Math.max(tgt, ss.eSpool[n] - dt / 4);
-    const lv = ss.eSpool[n] * (E.ph === 'RUN' && !E.starting ? 1 : Math.max(0.25, f * 1.4));
+    const lv = L.eng[n];
     try {
       V.out.gain.setTargetAtTime(Math.min(1, lv), t, 0.3);
       V.whine.frequency.setTargetAtTime(350 + 2600 * f, t, 0.15); V.gW.gain.setTargetAtTime(0.03 + 0.09 * f, t, 0.2);
