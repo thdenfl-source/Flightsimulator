@@ -160,7 +160,7 @@ function mflStep() {
 //   시동기: 연속 2회(외기 15℃ 넘음) · 4회(15℃ 이하) · 한 번마다 60초 냉각 / 모터링 2분 → 5분 · 다음은 30분 / 점화 2분 → 3분 · 23분
 //   정지: NG 90% 이하로 2분 식히지 않고 끄면 5분 안에 다시 시동해야 하고, 넘기면 4시간 시동 금지
 //   고장(교관 창): 고온 시동 · AISBV 고착 · FAIL FIX(4,000ft 내려가면 실속) · PWR LIMIT(TQ 85%)
-const FADEC = { ngIgn: 12, ngSep: 54, hsp: 963, tgtWarn: 927, tgtNoRise: 18, eopNoRise: 30, consecHot: 2, consecCold: 4,
+const FADEC = { ngRate: 2.2, ngIgn: 12, ngSep: 54, hsp: 963, tgtWarn: 927, tgtNoRise: 18, eopNoRise: 30, consecHot: 2, consecCold: 4,
                 starterCool: 60, motorMax: 120, ignMax: 120, cool90: 120, post5: 300, lock4h: 4 * 3600, tgtLim: 951, tgtLimOei: 974, split: 34, fixDrop: 4000 };
 const _fe = n => ({ n, ph: null, ng: 0, tgt: 15, np: 0, eop: 0, t: 0, tgtUp: false, eopUp: false, npUp: false,
                     stCool: 0, consec: 0, lastTry: 0, motor: 0, motorN: 0, motorCool: 0, ign: 0, ignN: 0, ignCool: 0,
@@ -240,7 +240,7 @@ function fadecStep(dt) {
     if (e.ph === 'CRANK' || e.ph === 'IGN') {
       e.t += dt;
       const aisbvStuck = e.fault === 'AISBV';
-      e.ng = Math.min(68, e.ng + 4 * dt);
+      e.ng = Math.min(68, e.ng + FADEC.ngRate * dt);   // 시동 약 25초(NG 54% 시동기 분리까지)
       if (e.ng >= FADEC.ngIgn && e.ignCool <= 0) {
         e.ph = 'IGN'; e.ign += dt;
         if (e.ign >= FADEC.ignMax) { e.ign = 0; e.ignN++; e.ignCool = e.ignN < 2 ? 180 : 1380; }

@@ -81,13 +81,13 @@ export async function run(page, t) {
     // APU 로 — NG 12% 점화 · 54% 시동기 분리 · ENG STRT 조언
     ovhdSet('apuContr', 'ON'); _apuOnT = performance.now() - APU_START_MS - 1;
     ovhdSet('pcd1', 'IDLE'); fadecStep(0.1); o.crank = fadec.e[1].ph; o.strt = pfdMsgs().some(m => m.t === '1 ENG STRT');
-    for (let i = 0; i < 40; i++) fadecStep(0.1); o.ign = fadec.e[1].ph + ':' + Math.round(fadec.e[1].ng) + ':' + (engParams().e1.ng > 12);
-    for (let i = 0; i < 120; i++) fadecStep(0.1); o.run = fadec.e[1].ph + ':' + simEngSt[1] + ':' + (fadec.e[1].stCool > 0);
+    for (let i = 0; i < 70; i++) fadecStep(0.1); o.ign = fadec.e[1].ph + ':' + Math.round(fadec.e[1].ng) + ':' + (engParams().e1.ng > 12);
+    for (let i = 0; i < 200; i++) fadecStep(0.1); o.run = fadec.e[1].ph + ':' + simEngSt[1] + ':' + (fadec.e[1].stCool > 0);
     o.strtOff = !pfdMsgs().some(m => m.t === '1 ENG STRT');
     // 고온 시동(지상) — TGT 963℃ 넘으면 HSP 자동 중지 · ENG1 H-START S-DOWN · 1 ENG FAULT
     ovhdSet('pcd1', 'OFF'); fadecStep(0.1); Object.assign(fadec.e[1], { stCool: 0, consec: 0, post5: 0, lock: 0, ng: 0, tgt: 20 });
     fadecFault(1, 'HOT', true); ovhdSet('pcd1', 'IDLE');
-    for (let i = 0; i < 300 && fadec.e[1].ph !== 'ABORT'; i++) fadecStep(0.1);
+    for (let i = 0; i < 450 && fadec.e[1].ph !== 'ABORT'; i++) fadecStep(0.1);
     o.hsp = fadec.e[1].ph + ':' + /HSP/.test(fadec.e[1].why) + ':' + pfdSysMsgs().includes('ENG1 H-START S-DOWN') + ':' + pfdMsgs().some(m => m.t === '1 ENG FAULT');
     fadecFault(1, 'HOT', false);
     // 바로 다시 — 시동기 식히는 중
@@ -95,7 +95,7 @@ export async function run(page, t) {
     // AISBV 고착 — NG 40% 부근 실속
     ovhdSet('pcd1', 'OFF'); fadecStep(0.1); Object.assign(fadec.e[1], { stCool: 0, consec: 0, ng: 0 });
     fadecFault(1, 'AISBV', true); ovhdSet('pcd1', 'IDLE');
-    for (let i = 0; i < 200 && fadec.e[1].ph !== 'ABORT'; i++) fadecStep(0.1); o.aisbv = fadec.e[1].ph + ':' + /실속/.test(fadec.e[1].why); fadecFault(1, 'AISBV', false);
+    for (let i = 0; i < 350 && fadec.e[1].ph !== 'ABORT'; i++) fadecStep(0.1); o.aisbv = fadec.e[1].ph + ':' + /실속/.test(fadec.e[1].why); fadecFault(1, 'AISBV', false);
     // 2분 식히지 않고 끄면 5분 → 4시간 시동 금지
     ovhdSet('pcd1', 'FLY'); fadecSync(); fadec.e[1].cool90 = 10; ovhdSet('pcd1', 'OFF'); fadecStep(0.1);
     o.post5 = fadec.e[1].post5 > 0; fadecStep(301); o.lock = fadec.e[1].lock > 3 * 3600;
