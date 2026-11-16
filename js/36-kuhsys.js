@@ -420,6 +420,7 @@ function kuhSysDraw(g, id, x, y, w, h) {
   } else if (id === 'asys_light') {
     const o = litOut();
     rows.push(['DISPLAY', o.sw, '#fff'], ['CDU', `${litCfg.cdu} → ${o.cduMode} ${Math.round(o.cduB * 100)}%`, '#fff'], ['MFD', `${litCfg.mfd} → ${o.mfdMode} ${Math.round(o.mfdB * 100)}%`, '#fff'], ['Console', `${o.consV.toFixed(1)} V DC`, '#fff']);
+  } else if (id === 'perf') { perfMfdDraw(g, x, y, w, h); return true;
   } else if (id === 'asys_maint') {
     g.fillStyle = '#fff'; g.textAlign = 'center'; g.font = 'bold 16px Helvetica Neue, Arial, sans-serif';
     if (maint.step !== 'CMC_LOG_VIEWER') { g.fillStyle = '#4a6a7a'; g.fillText('MAINTENANCE — CDU 에서 비밀번호 · CMC Logs', x + w / 2, y + h / 2); return true; }
@@ -720,3 +721,112 @@ setInterval(() => {
   try { navIlsAutoStep(); } catch (e) { _swallow(e); }
 }, 250);
 try { appRegister({ cfgEnter, cfgExit, navSwap, navDmeHoldToggle }); } catch (e) { _swallow(e); }
+
+// ══════════ ⑪ 성능 — MFD 'Helicopter Performance' · 높이-속도(H-V) 선도 ══════════
+//   H-V 회피영역(FLM 1.3 그림 2 — 한 엔진 고장 · OEI 2.5분 · 단단한 활주로 · 무풍, 19,200 lb):
+//     해면 ISA 0kt 25~210ft → 22kt 25~45ft / 4,000ft ISA+20 0kt 25~465ft → 37.5kt 25~80ft
+//   두 선도 사이는 밀도고도(해면 ISA 0 ft ~ 4,000ft ISA+20 ≈ 6,400 ft)로 잇는다(교범 그림의 대표점만 — 바꾸기 쉬운 표)
+const HV_CURVES = [{ da: 0, top: 210, knee: 22, kneeHi: 45, low: 25 }, { da: 6400, top: 465, knee: 37.5, kneeHi: 80, low: 25 }];
+function hvPoly(daFt) {
+  const f = Math.max(0, Math.min(1, daFt / HV_CURVES[1].da)), L = (k) => HV_CURVES[0][k] + (HV_CURVES[1][k] - HV_CURVES[0][k]) * f;
+  return [[0, L('low')], [0, L('top')], [L('knee'), L('kneeHi')], [L('knee'), L('low')]];
+}
+function _pip(x, y, poly) {
+  let ins = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const [xi, yi] = poly[i], [xj, yj] = poly[j];
+    if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / ((yj - yi) || 1e-9) + xi) ins = !ins;
+  }
+  return ins;
+}
+function hvState() {
+  const pa = _ks(() => S.alt, 0), oat = _ksOat(), isa = 15 - 1.98 * pa / 1000, da = pa + 120 * (oat - isa);
+  const ias = Math.max(0, _ks(() => (typeof simAirspeed === 'function' && simModeOn ? simAirspeed() : S.spd), 0)), h = _ks(() => radarAltFt(), 0);
+  const poly = hvPoly(da);
+  return { da, ias, h, poly, avoid: h > 5 && _pip(ias, h, poly) };
+}
+function perfMfdDraw(g, x, y, w, h) {
+  let P = null; try { P = typeof perfSnap === 'function' ? perfSnap() : null; } catch (e) { _swallow(e); }
+  g.save();
+  g.fillStyle = '#fff'; g.textAlign = 'center'; g.font = 'bold 17px Helvetica Neue, Arial, sans-serif';
+  g.fillText('Active Helicopter Performance', x + w / 2, y + 30);
+  if (P) {
+    const col1 = x + 20, col2 = x + w * 0.5 - 10;
+    const rows = [['Gross WT', `${Math.round(P.wt)} lb`, P.gwWarn ? '#ffb000' : '#fff'], ['PRESS ALT · OAT', `${Math.round(P.alt)} ft · ${P.temp}°C`, '#fff'],
+      [`MTA (${P.cfg.tql})`, `${P.mta.toFixed(1)}%`, '#2fe0e0'], ['Hover TQ IGE / OGE', `${P.ige.toFixed(1)} / ${P.oge.toFixed(1)}%`, P.ogeRed || P.igeRed ? '#ff3030' : '#3ad13a'],
+      ['MAX GW AEO IGE/OGE', `${P.aeoIge} / ${P.aeoOge}`, P.aeoOge <= P.wt ? '#ffb000' : '#fff'], ['MAX GW OEI IGE/OGE', `${P.oeiIge} / ${P.oeiOge}`, P.oeiOge <= P.wt ? '#ffb000' : '#fff'],
+      ['VNE', `${Math.round(P.vne)} kt`, '#fff'], ['MAX END', `${P.endHr.toFixed(1)} h / ${P.endSpd} kt`, '#fff'], ['MAX Range', `${Math.round(P.rngNm)} NM / ${P.rngSpd} kt`, '#fff'],
+      ['OEI MAX / MIN SPD', `${Math.round(P.oeiMax)} / ${P.oeiMin} kt`, '#fff'], ['MAX ROC', `${P.roc} fpm`, '#fff']];
+    rows.forEach(([k, v, c], i) => {
+      const yy = y + 62 + i * 25;
+      g.textAlign = 'left'; g.font = '13px Helvetica Neue, Arial, sans-serif'; g.fillStyle = '#9ab'; g.fillText(k, col1, yy);
+      g.textAlign = 'right'; g.font = 'bold 13px Helvetica Neue, Arial, sans-serif'; g.fillStyle = c; g.fillText(v, col2, yy);
+    });
+  }
+  // H-V 선도 — 오른쪽 절반(가로 IAS 0~60kt · 세로 바퀴 높이 0~500ft)
+  const S0 = hvState(), gx = x + w * 0.55, gy = y + 60, gw = w * 0.41, gh = h - 110;
+  const X = v => gx + v / 60 * gw, Y = v => gy + gh - v / 500 * gh;
+  g.strokeStyle = '#3a4a56'; g.lineWidth = 1; g.strokeRect(gx, gy, gw, gh);
+  g.font = '10px Helvetica Neue, Arial, sans-serif'; g.fillStyle = '#789'; g.textAlign = 'center';
+  [0, 20, 40, 60].forEach(v => g.fillText(String(v), X(v), gy + gh + 13)); g.fillText('IAS (kt)', gx + gw / 2, gy + gh + 26);
+  g.textAlign = 'right'; [0, 100, 200, 300, 400, 500].forEach(v => g.fillText(String(v), gx - 4, Y(v) + 3));
+  g.fillStyle = 'rgba(255,48,48,0.28)'; g.strokeStyle = '#ff3030'; g.lineWidth = 2; g.beginPath();
+  S0.poly.forEach(([a, b], i) => (i ? g.lineTo(X(a), Y(b)) : g.moveTo(X(a), Y(b)))); g.closePath(); g.fill(); g.stroke();
+  g.fillStyle = '#ff8080'; g.textAlign = 'left'; g.font = 'bold 11px Helvetica Neue, Arial, sans-serif'; g.fillText('AVOID', X(1.5), Y(S0.poly[1][1] * 0.6));
+  const px = X(Math.min(60, S0.ias)), py = Y(Math.min(500, S0.h));
+  g.fillStyle = S0.avoid ? '#ff3030' : '#3ad13a'; g.beginPath(); g.arc(px, py, 6, 0, 7); g.fill();
+  g.fillStyle = '#fff'; g.textAlign = 'center'; g.font = 'bold 12px Helvetica Neue, Arial, sans-serif';
+  g.fillText(`H-V (OEI 2.5MIN) · DA ${Math.round(S0.da)} ft`, gx + gw / 2, gy - 8);
+  if (S0.avoid) { g.fillStyle = '#ff3030'; g.fillText('H-V AVOID ZONE', gx + gw / 2, gy + 18); }
+  g.restore();
+}
+
+// ══════════ ⑫ CDU1 · CDU2 · MFD1~4 — 자리 · 백업(REV) · 배터리 단독 ══════════
+//   자리: 기장(CDU2 → MFD2(PFD2) · MFD4) · 부기장(CDU1 → MFD1(PFD1) · MFD3) — 이 앱의 PFD 창 · SYSTEM 창 · CDU 가 그 자리의 것
+//   MFD 고장(교관 창): MWP REV 램프 → REV 를 누르면 2초 · 안 누르면 8초 뒤 대체 모드
+//     SYSTEM(MFD3/4) 고장 → 같은 쪽 PFD 가 PFD/EIS(대체 모드 EIS) · PFD(MFD1/2) 고장 → SYSTEM 창이 PFD 백업
+//     고장이 풀리면 약 17.5초 뒤 정상으로 돌아온다
+//   배터리 단독: MFD3 · CDU2 꺼짐(MFD1 · MFD2 · MFD4 · CDU1 은 돈다) — 기장 자리면 CDU 가, 부기장 자리면 SYSTEM 창이 꺼진다
+const mfdSys = { seat: 'PLT', fail: { pfd: false, sys: false }, rev: false, revT: 0, revDue: 0, recT: 0 };
+try { if (localStorage.getItem('kuhSeat') === 'CPLT') mfdSys.seat = 'CPLT'; } catch (e) { _swallow(e); }
+function mfdIds() { return mfdSys.seat === 'PLT' ? { pfd: 'MFD2', sys: 'MFD4', cdu: 'CDU2' } : { pfd: 'MFD1', sys: 'MFD3', cdu: 'CDU1' }; }
+function mfdSeatSet(s) { mfdSys.seat = s === 'CPLT' ? 'CPLT' : 'PLT'; try { localStorage.setItem('kuhSeat', mfdSys.seat); } catch (e) { _swallow(e); } try { if (typeof cduRerender === 'function') cduRerender(); } catch (e) { _swallow(e); } }
+function mfdFailSet(k, on) { mfdSys.fail[k] = !!on; if (on) { mfdSys.revDue = 8; mfdSys.revT = 0; } else mfdSys.recT = 17.5; }
+function _battOnly() { try { return !_ksB206() && elecState().battOnly; } catch (e) { return false; } }
+function mfdSysDead() { return mfdSys.fail.sys || (_battOnly() && mfdIds().sys === 'MFD3'); }
+function mfdPfdDead() { return mfdSys.fail.pfd; }
+function cduDead() { return _battOnly() && mfdIds().cdu === 'CDU2'; }
+function mfdRevPending() { return (mfdSys.fail.pfd || mfdSys.fail.sys) && !mfdSys.rev; }
+function mfdRevPress() { if (mfdRevPending()) mfdSys.revDue = Math.min(mfdSys.revDue, mfdSys.revT + 2); }
+function mfdStep(dt) {
+  if (mfdSys.fail.pfd || mfdSys.fail.sys) {
+    mfdSys.recT = 0;
+    if (!mfdSys.rev) { mfdSys.revT += dt; if (mfdSys.revT >= mfdSys.revDue) { mfdSys.rev = true; _fSay(`REV — ${mfdSys.fail.pfd ? mfdIds().sys + ' 가 PFD 백업' : mfdIds().pfd + ' 가 PFD/EIS 대체 모드'}`, ''); } }
+  } else if (mfdSys.rev) { mfdSys.recT -= dt; if (mfdSys.recT <= 0) { mfdSys.rev = false; _fSay('MFD 정상 화면으로 돌아왔다', ''); } }
+  const ov = document.getElementById('cdu-nopwr'), dead = cduDead();
+  const wrap = document.getElementById('cdu-scaler');   // CDU 화면(키 위까지) — 그 위를 덮는다
+  if (wrap) {
+    let o = ov;
+    if (!o && dead) { o = document.createElement('div'); o.id = 'cdu-nopwr'; o.innerHTML = `<b>${mfdIds().cdu}</b><span>전원 없음 — 배터리 단독(교범 3.6.1)</span>`; wrap.appendChild(o); }
+    if (o) o.style.display = dead ? 'flex' : 'none';
+  }
+}
+// SYSTEM 창을 대신 그린다(18-system.js sysDraw) — 꺼짐 · PFD 백업이면 true
+function mfdSysOverride(E) {
+  const g = E.g, c = E.c;
+  if (mfdSysDead()) {
+    g.setTransform(1, 0, 0, 1, 0, 0); g.fillStyle = '#000'; g.fillRect(0, 0, c.width, c.height);
+    g.fillStyle = '#334'; g.font = `bold ${Math.round(16 * E.dpr)}px Helvetica Neue, Arial, sans-serif`; g.textAlign = 'center';
+    g.fillText(mfdSys.fail.sys ? `${mfdIds().sys} FAIL` : `${mfdIds().sys} — 전원 없음(배터리 단독)`, c.width / 2, c.height / 2);
+    return true;
+  }
+  if (mfdPfdDead() && mfdSys.rev && typeof drawPfdTo === 'function') {
+    c.dataset.noFcp = '1'; try { drawPfdTo(c); } finally { delete c.dataset.noFcp; }
+    return true;
+  }
+  return false;
+}
+// PFD 대체 모드 EIS — SYSTEM(MFD3/4)이 꺼져 REV 로 넘어갔을 때(03-pfd.js pfdRevMode)
+function mfdPfdRev() { return mfdSysDead() && (mfdSys.rev || (_battOnly() && !mfdSys.fail.sys)); }
+setInterval(() => { try { mfdStep(0.25); } catch (e) { _swallow(e); } }, 250);
+try { appRegister({ mfdSeatSet }); } catch (e) { _swallow(e); }

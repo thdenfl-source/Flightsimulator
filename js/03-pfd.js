@@ -47,7 +47,10 @@ function pfdCanvasW() {
 // 그 아래 엔진 칸(TGT · NG · TQ · NP/NR)과 이어져 왼쪽 한 줄이 실기 대체 모드 EIS 가 된다.
 // 실기 PFD 처럼 속도계 · 고도계는 가운데 쪽으로 모아(왼쪽 EIS 칸 폭만큼 안쪽 · 좌우 대칭) 자세계는 늘 화면 전체 폭이다 —
 // 자세계 가운데와 HSI 가운데가 한 세로줄(화면 가운데)에 선다. 대체 모드 EIS 는 자세계 왼쪽 위 하늘에 얹힌다.
-function pfdRevMode() { try { return typeof sysScreenShown === 'function' && !sysScreenShown(); } catch (e) { return false; } }
+function pfdRevMode() {
+  try { if (typeof mfdPfdRev === 'function' && mfdPfdRev()) return true; } catch (e) { _swallow(e); }   // SYSTEM(MFD3/4) 꺼짐 → REV 대체 모드(36-kuhsys.js)
+  try { return typeof sysScreenShown === 'function' && !sysScreenShown(); } catch (e) { return false; }
+}
 function pfdLayout(W, H, ctrlH) {
   const usableH = H - ctrlH;
   const tapW = Math.max(56, Math.min(80, W * 0.075));
@@ -117,6 +120,13 @@ function drawPFD() {
     if (cvs.id === 'pfd-ov-cvs' && typeof b206OverlayDraw === 'function') { b206OverlayDraw(ctx, 0, 0, W, H); return; }
     ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
     b206Draw(ctx, 0, 0, W, b206RoomH(cvs, H, CTRL_H));
+    return;
+  }
+  // PFD(MFD1/2) 고장 — 본 PFD 창은 꺼진다(SYSTEM 창이 REV 로 백업 — 36-kuhsys.js)
+  if (cvs.id === 'pfd' && typeof mfdPfdDead === 'function' && mfdPfdDead()) {
+    ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = '#334'; ctx.font = 'bold 18px Helvetica Neue, Arial, sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText(`${mfdIds().pfd} FAIL`, W / 2, (H - CTRL_H) / 2);
     return;
   }
   const L = pfdLayout(W, H, CTRL_H);
@@ -742,7 +752,7 @@ function drawMwp(L) {
   const msgFits = x0 + bw * 4 + gap * 3 <= L.ai.x + L.ai.w - 2;
   const lamps = [['WARN', pend === 'W' || [...casAct.values()].some(m => m.lvl === 1 && !m.ack), '#e01818', '#fff'],
                  ['CAUT', [...casAct.values()].some(m => m.lvl === 2 && !m.ack), '#ffb000', '#000'],
-                 ['REV', !!L.revOn, '#ffb000', '#000']];
+                 ['REV', !!L.revOn || (typeof mfdRevPending === 'function' && mfdRevPending()), '#ffb000', '#000']];
   ctx.save();
   ctx.font = `bold ${Math.max(8, h * 0.45)}px Helvetica Neue, Arial, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   const R = {};
@@ -784,6 +794,7 @@ function pfdMwpHit(px, py) {
   const R = _mwpR; if (!R) return false;
   const inR = r => r && px >= r.x && px <= r.x + r.w && py >= r.y && py <= r.y + r.h;
   if (inR(R.WARN) || inR(R.CAUT)) { casAckAll('MWP'); return true; }
+  if (inR(R.REV)) { try { if (typeof mfdRevPress === 'function') mfdRevPress(); } catch (e) { _swallow(e); } return true; }   // REV — 2초 안에 대체 모드
   if (inR(R.MSG)) { try { uiToast('SYSTEM MESSAGE — ' + pfdSysMsgs().join(' · '), 'warn', 3000); } catch (e) { _swallow(e); } return true; }
   return false;
 }

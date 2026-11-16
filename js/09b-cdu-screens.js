@@ -149,7 +149,7 @@
     // (perfData·perfResults는 화면 렌더에서 읽고 쓰므로 바깥에 남긴다)
     let calculatePerformance;
     // SIM 모드(14-simmode.js)가 쓰는 성능 접근자 — 아래 IIFE 안에서 채운다
-    let perfTqForVs, perfVsForTq, perfHoverTq, perfVy, perfMta, perfWeightLb;
+    let perfTqForVs, perfVsForTq, perfHoverTq, perfVy, perfMta, perfWeightLb, perfMtaAt;
     (function () {
     // Vy Tables
     const vyTemps = [-32, -20, -10, 0, 10, 20, 30, 40];
@@ -400,6 +400,7 @@
     };
     // PERF 의 총중량(lb) — SIM 의 상승·강하율이 무게에 반비례한다(남는 동력 ÷ 무게)
     perfWeightLb = function () { return parseFloat(perfData.weight) || 16000; };
+    perfMtaAt = (a, t) => mta30At(a, t, false);   // 아무 고도 · 온도의 MTA(30) — PERF OEI 근사(perfExt)
     // 제자리 호버에 필요한 토크(%) — 지면효과 안(IGE)·밖(OGE)
     // 매 프레임 불리므로(계기·비행 모델) 입력이 그대로면 셈을 다시 하지 않는다.
     let _hovCache = null, _hovKey = '';
@@ -779,15 +780,88 @@
             { okText: '새 탭에서 열기', cancelText: '취소', linkHref: UBIKAIS_URL });
     }
 
+    // ── PERF(FLM 4.9) — Config · Hover · Cruise 세 탭 · MFD 'Helicopter Performance'(SYSTEM 창) ──
+    //   Config: Gross WT(12,240 ~ 19,200 lb 밖이면 황색) · ENG ANTI ICE · ECS-H(둘 다 켜면 가용 토크 −18%) · TQ-L(D30M · S10M · S2.5M) · Drag(E-AUX · 서치라이트 · EFS · 호이스트)
+    //   Hover: 가용(MTA) · IGE/OGE 요구 토크(넘으면 적) · Go/No-Go · MAX Gross WT IGE/OGE(AEO · OEI — 지금 무게 이하면 황)
+    //   Cruise: VNE · MAX END(최소동력 속도 ≈ Vy) · MAX Range(예비 340 lb 빼고) · OEI MAX(120kt 까지) · OEI MIN · MAX ROC
+    //   (OEI · 순항 값은 교범 도표가 그림이라 PERF 표 · SIM 모형에서 근사 — 바꾸기 쉬운 셈)
+    let perfTab = 'Hover';
+    const perfCfg = { ai: false, ecs: false, tql: 'D30M', eaux: false, srch: false, efs: false, hoist: false };
+    const PERF_GW = { min: 12240, max: 19200, reserve: 340 };
+    function perfSetTab(t) { perfTab = t; renderContent(); }
+    function perfCfgSet(k, v) { perfCfg[k] = v === undefined ? !perfCfg[k] : v; renderContent(); try { if (typeof sysDraw === 'function') sysDraw(); } catch (e) { _swallow(e); } }
+    function perfUseDefaults() {
+        try { perfData.alt = String(Math.round(S.alt || 0)); perfData.temp = String(Math.round(typeof oatNowC === 'function' ? oatNowC() : 15)); } catch (e) { _swallow(e); }
+        perfCfg.ai = (typeof ovhdGet === 'function') && (ovhdGet('engAi1') === 'ON' || ovhdGet('engAi2') === 'ON');
+        renderContent();
+    }
+    function _perfHoverAt(wt) { const w0 = perfData.weight; perfData.weight = String(wt); calculatePerformance(); const r = { ige: +perfResults.ige, oge: +perfResults.oge }; perfData.weight = w0; calculatePerformance(); return r; }
+    function _perfMaxGw(kind, avail) {
+        let lo = 8000, hi = 22000;
+        if (_perfHoverAt(lo)[kind] > avail) return lo;
+        for (let i = 0; i < 30; i++) { const m = (lo + hi) / 2; if (_perfHoverAt(m)[kind] <= avail) lo = m; else hi = m; }
+        return Math.min(PERF_GW.max, Math.round(lo / 10) * 10);
+    }
+    function perfExt() {
+        calculatePerformance();
+        const wt = parseFloat(perfData.weight) || 16000, alt = parseFloat(perfData.alt) || 0, temp = parseFloat(perfData.temp);
+        const base = { D30M: +perfResults.mta30, S10M: +perfResults.mta10, 'S2.5M': +perfResults.mta25 }[perfCfg.tql];
+        const pen = perfCfg.ai && perfCfg.ecs ? -18 : 0;
+        const mta = (Number.isFinite(base) ? base : 0) + pen;
+        const ige = +perfResults.ige, oge = +perfResults.oge;
+        // OEI — 한 엔진 2.5분 165% 를 두 엔진 몫(82.5%)으로, 그날 대기에 비례해 줄인다(근사)
+        const m25sl = (typeof perfMtaAt === 'function' ? perfMtaAt(0, 15) : 120) + 11;
+        const oei = Math.max(0, 82.5 * Math.min(1, (+perfResults.mta25 || 0) / m25sl) + pen / 2);
+        const aeoIge = _perfMaxGw('ige', mta), aeoOge = _perfMaxGw('oge', mta), oeiIge = _perfMaxGw('ige', oei), oeiOge = _perfMaxGw('oge', oei);
+        // 순항
+        const vne = typeof simVne === 'function' ? simVne(alt) : 160 - 2 * alt / 1000;
+        const vy = +perfResults.vy || 70;
+        let fuel = 0, ff = 0;
+        try { fuel = fuelTotal(); const F = fuelFlow(); ff = (F.e1 || 0) + (F.e2 || 0) || F.total || 0; } catch (e) { _swallow(e); }
+        if (!(ff > 200)) ff = 1100;
+        const usable = Math.max(0, fuel - PERF_GW.reserve), drag = (perfCfg.eaux ? 0.25 : 0) + (perfCfg.srch ? 0.08 : 0) + (perfCfg.efs ? 0.12 : 0) + (perfCfg.hoist ? 0.07 : 0);
+        const endHr = usable / (ff * 0.85), rngSpd = Math.min(vne - 5, Math.round(vy * 1.55 * (1 - drag * 0.3))), rngNm = usable / ff * rngSpd;
+        const oeiMax = Math.min(120, vne), oeiMin = oei >= oge ? 0 : Math.min(vy, Math.round(20 + 3 * (oge - oei)));
+        const roc = typeof perfVsForTq === 'function' ? Math.max(0, Math.round(perfVsForTq(mta - 0.62 * oge) / 10) * 10) : 0;
+        return { wt, alt, temp, mta, base, pen, ige, oge, oei, aeoIge, aeoOge, oeiIge, oeiOge, vne, vy, endHr, endSpd: Math.round(vy), rngNm, rngSpd, oeiMax, oeiMin, roc,
+                 gwWarn: wt >= PERF_GW.max || wt <= PERF_GW.min, igeRed: ige > mta, ogeRed: oge > mta, cfg: Object.assign({}, perfCfg), usable, drag };
+    }
+    window.perfSnap = perfExt;
+    function _perfTabs() {
+        return `<div style="display:flex;gap:4px;margin-bottom:8px">` + ['Config', 'Hover', 'Cruise'].map(t => `<div class="item-btn ${perfTab === t ? 'on' : ''}" data-act="perfSetTab" data-arg='["${t}"]' style="flex:1;height:28px;font-size:11px">${t}<div class="status-line"></div></div>`).join('') +
+            `<div class="item-btn" data-act="sysPageSet" data-arg='["perf"]' style="flex:0 0 64px;height:28px;font-size:9px">MFD 보기</div></div>`;
+    }
     function renderPerfScreen(container, footer, title) {
         calculatePerformance(); 
-        title.innerText = "Performance (Hover & Climb)";
+        title.innerText = "Helicopter PERF";
+        if (perfTab !== 'Hover') {
+            const P = perfExt(), row = (k, v, c) => `<div style="display:flex;justify-content:space-between;padding:6px 4px;border-bottom:1px solid #1d252c;font-size:12px"><span style="color:#9ab">${k}</span><b style="color:${c || '#fff'}">${v}</b></div>`;
+            const tog = (k, l) => `<div class="item-btn ${perfCfg[k] ? 'on' : ''}" data-act="perfCfgSet" data-arg='["${k}"]' style="flex:1;height:32px;font-size:10px">${l}<div class="status-line"></div></div>`;
+            if (perfTab === 'Config') container.innerHTML = _perfTabs() +
+                row('Gross WT', `${Math.round(P.wt)} lb`, P.gwWarn ? '#ffb000' : '#fff') + row('PRESS ALT · OAT', `${Math.round(P.alt)} ft · ${P.temp}°C`) +
+                `<div style="color:#567;font-size:9px;margin:8px 0 4px">Anti-Ice · ECS-H(둘 다면 가용 토크 −18%)</div><div style="display:flex;gap:5px">${tog('ai', 'ENG ANTI ICE')}${tog('ecs', 'ECS-H')}</div>` +
+                `<div style="color:#567;font-size:9px;margin:8px 0 4px">TQ-L</div><div style="display:flex;gap:5px">${['D30M', 'S10M', 'S2.5M'].map(m => `<div class="item-btn ${perfCfg.tql === m ? 'on' : ''}" data-act="perfCfgSet" data-arg='["tql","${m}"]' style="flex:1;height:30px;font-size:10px">${m}<div class="status-line"></div></div>`).join('')}</div>` +
+                `<div style="color:#567;font-size:9px;margin:8px 0 4px">Exterior · Drag Factor ${P.drag.toFixed(2)}</div><div style="display:flex;gap:5px">${tog('eaux', 'E-AUX')}${tog('srch', 'SRCH LT')}${tog('efs', 'EFS')}${tog('hoist', 'E.HOIST')}</div>` +
+                `<div style="display:flex;gap:5px;margin-top:10px"><div class="item-btn" data-act="perfUseDefaults" style="flex:1;height:32px;font-size:11px">Use Defaults(지금 고도 · 외기)</div></div>`;
+            else container.innerHTML = _perfTabs() +
+                row('VNE', `${Math.round(P.vne)} KIAS`) + row('MAX END Time / SPD', `${P.endHr.toFixed(1)} h / ${P.endSpd} kt`) +
+                row('MAX Range / SPD', `${Math.round(P.rngNm)} NM / ${P.rngSpd} kt`) + row('OEI MAX SPD', `${Math.round(P.oeiMax)} kt`) +
+                row('OEI MIN SPD', `${P.oeiMin} kt`, P.oeiMin > 0 ? '#ffb000' : '#fff') + row('MAX ROC', `${P.roc} fpm`) +
+                `<div style="color:#567;font-size:9px;margin-top:8px">연료 ${Math.round(P.usable + PERF_GW.reserve)} lb — 예비 ${PERF_GW.reserve} lb 를 빼고 셈합니다(순항 · OEI 는 근사)</div>`;
+            footer.innerHTML = cduFooter("switchMode('HOME')");
+            return;
+        }
+        const PX = perfExt();
         
         let warningHtml = perfResults.outOfLimits ? 
             `<div style="background-color:#3a0000; border:1px solid #f44336; color:#f44336; font-size:9px; font-weight:bold; text-align:center; padding:3px; border-radius:3px; margin-bottom:8px; animation: blink 1.5s infinite;">⚠️ CAUTION: OUT OF CHART LIMITS (Data Capped)</div>` : '';
 
-        container.innerHTML = `
+        container.innerHTML = _perfTabs() + `
             ${warningHtml}
+            <div style="display:flex; justify-content:space-between; font-size:10px; padding:0 5px 4px; color:#9ab">
+                <span>MTA(${perfCfg.tql}${PX.pen ? ' −18' : ''}) <b style="color:var(--text-cyan)">${PX.mta.toFixed(1)}%</b></span>
+                <span>MAX GW AEO <b style="color:${PX.aeoIge <= PX.wt ? '#ffb000' : '#fff'}">${PX.aeoIge}</b>/<b style="color:${PX.aeoOge <= PX.wt ? '#ffb000' : '#fff'}">${PX.aeoOge}</b> · OEI <b style="color:${PX.oeiIge <= PX.wt ? '#ffb000' : '#fff'}">${PX.oeiIge}</b>/<b style="color:${PX.oeiOge <= PX.wt ? '#ffb000' : '#fff'}">${PX.oeiOge}</b></span>
+            </div>
             <div style="display:flex; justify-content:space-between; align-items:flex-end; padding:0 5px 5px 5px; border-bottom:1px solid #333; margin-bottom:10px;">
                 <span style="color:white; font-size:10px; font-weight:bold;">CONDITIONS</span>
                 <span style="color:white; font-size:10px; font-weight:bold;">RESULTS</span>
@@ -805,7 +879,7 @@
                     </div>
                     <div>
                         <div class="perf-label">GROSS WT (LBS)</div>
-                        <div class="perf-val-box" data-act="switchMode" data-arg='["PERF_INPUT","weight"]'>${perfData.weight}</div>
+                        <div class="perf-val-box" data-act="switchMode" data-arg='["PERF_INPUT","weight"]' style="${PX.gwWarn ? 'color:#ffb000' : ''}">${perfData.weight}</div>
                     </div>
                     <div>
                         <div class="perf-label">V/S (FPM)</div>
@@ -819,11 +893,11 @@
                     <div style="display:flex; gap:5px;">
                         <div style="flex:1;">
                             <div class="perf-result-title">IGE TQ</div>
-                            <div class="perf-result-box" style="color:#0f0;">${perfResults.ige}%</div>
+                            <div class="perf-result-box" style="color:${PX.igeRed ? '#ff3030' : '#0f0'};">${perfResults.ige}%</div>
                         </div>
                         <div style="flex:1;">
                             <div class="perf-result-title">OGE TQ</div>
-                            <div class="perf-result-box" style="color:#0f0;">${perfResults.oge}%</div>
+                            <div class="perf-result-box" style="color:${PX.ogeRed ? '#ff3030' : '#0f0'};">${perfResults.oge}%</div>
                         </div>
                     </div>
                     <div style="display:flex; gap:5px;">
@@ -2582,6 +2656,10 @@
         UNI('spd',  '속도', [{v:'kt',t:'kt'},   {v:'kmh',t:'km/h'}], unitSpd) +
         UNI('temp', '온도', [{v:'C',t:'°C'},    {v:'F',t:'°F'}],     unitTemp) +
         `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;margin-bottom:5px;border:1px solid #1e2630;border-radius:5px;background:#0a1116;">` +
+          `<div style="color:#cdd6df;font-size:12px;font-weight:bold;">자리(CDU · MFD)</div><div style="display:flex;gap:4px;">` +
+          [['PLT', '기장 CDU2 · MFD2/4'], ['CPLT', '부기장 CDU1 · MFD1/3']].map(([v, t]) => { const on = typeof mfdSys !== 'undefined' && mfdSys.seat === v; return `<div data-act="mfdSeatSet" data-arg='["${v}"]' style="cursor:pointer;padding:4px 8px;border-radius:4px;font-size:10px;font-weight:bold;` +
+            `border:1px solid ${on ? '#00e5ff' : '#3a4653'};background:${on ? '#00303c' : '#161c23'};color:${on ? '#00e5ff' : '#8a97a5'};">${t}</div>`; }).join('') + `</div></div>` +
+        `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;margin-bottom:5px;border:1px solid #1e2630;border-radius:5px;background:#0a1116;">` +
           `<div style="color:#cdd6df;font-size:12px;font-weight:bold;">COM Channel Spacing</div><div style="display:flex;gap:4px;">` +
           [['25', '25 kHz'], ['8.33', '8.33 kHz']].map(([v, t]) => `<div data-act="setComSpacing" data-arg='["${v}"]' style="cursor:pointer;padding:4px 10px;border-radius:4px;font-size:11px;font-weight:bold;` +
             `border:1px solid ${comSpacing === v ? '#00e5ff' : '#3a4653'};background:${comSpacing === v ? '#00303c' : '#161c23'};color:${comSpacing === v ? '#00e5ff' : '#8a97a5'};">${t}</div>`).join('') + `</div></div>` +
@@ -3784,6 +3862,9 @@ switchMode('HOME');
     // data-act 이름 → 실제 함수. 여기 없는 이름을 쓰면 콘솔에 경고가 찍히므로,
     // 예전처럼 버튼이 조용히 죽지 않는다. 복합 동작은 아래에서 합성 액션으로 만든다.
     cduRegister({
+      perfSetTab,
+      perfCfgSet,
+      perfUseDefaults,
       fidEditToggle,
       setComSpacing,
       _setToggle,

@@ -4,6 +4,7 @@ export const name = 'SYSTEM 창';
 
 export async function run(page, t) {
   const r = await page.evaluate(async () => {
+    sysLayout = 'FULL'; sysPage = 'asys_fuel';   // 처음은 HALF(교범) — 이 검사는 FULL 의 Fuel 화면을 본다
     const wait = ms => new Promise(res => setTimeout(res, ms));
     fuelReset();
     selectPanel('right', 'sysp', true); await wait(200);
