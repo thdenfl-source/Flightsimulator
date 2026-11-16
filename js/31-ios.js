@@ -29,6 +29,8 @@ function iosState() {
       chip: b2 && typeof b206c !== 'undefined' && !!b206c.chip, thStuck: b2 && typeof b206c !== 'undefined' && !!b206c.thStuck,
       asi: typeof instFail !== 'undefined' && instFail.asi !== null, alt: typeof instFail !== 'undefined' && instFail.alt !== null,
       vsi: typeof instFail !== 'undefined' && instFail.vsi !== null, ahrs: typeof instFail !== 'undefined' && !!instFail.ahrs, hdg: typeof instFail !== 'undefined' && !!instFail.hdg,
+      hot1: typeof fadec !== 'undefined' && fadec.e[1].fault === 'HOT', aisbv1: typeof fadec !== 'undefined' && fadec.e[1].fault === 'AISBV',
+      fix1: typeof fadec !== 'undefined' && fadec.e[1].fault === 'FAIL_FIX', plim1: typeof fadec !== 'undefined' && fadec.e[1].fault === 'PWR_LIMIT',
     },
     eng: (() => { try { return engStateLabel(); } catch (e) { return ''; } })(),
     scn: (typeof scnList === 'function') ? scnList().map(x => x.name) : [],
@@ -58,6 +60,7 @@ function iosHandle(m) {
       else if ((m.what === 'govHi' || m.what === 'govLo') && typeof b206cEngFail === 'function') b206cEngFail('gov', on ? (m.what === 'govHi' ? 'HI' : 'LO') : null);
       else if ((m.what === 'chip' || m.what === 'thStuck') && typeof b206cEngFail === 'function') b206cEngFail(m.what, on);
       else if (['asi', 'alt', 'vsi', 'ahrs', 'hdg'].includes(m.what) && typeof instFailSet === 'function') instFailSet(m.what, on);
+      else if (typeof fadecFault === 'function' && ({ hot1: 'HOT', aisbv1: 'AISBV', fix1: 'FAIL_FIX', plim1: 'PWR_LIMIT' })[m.what]) fadecFault(1, ({ hot1: 'HOT', aisbv1: 'AISBV', fix1: 'FAIL_FIX', plim1: 'PWR_LIMIT' })[m.what], on);
       try { if (typeof fdrNote === 'function') fdrNote(`교관 — 고장 ${m.what} ${on ? '걸림' : '풀림'}`, on ? 'err' : ''); } catch (e) { _swallow(e); }
     }
     else if (c === 'msg') { try { uiToast(`🧑‍✈️ 교관: ${String(m.text || '').slice(0, 200)}`, 'warn', 6000); } catch (e) { _swallow(e); } }
@@ -155,7 +158,7 @@ function iosRender(m) {
     kv('승강률', Math.round(m.vs) + ' fpm') + kv('토크', Math.round(m.tq) + '%') + kv('NR', Math.round(m.nr) + '%') + kv('바람', `${Math.round(m.wind.dir)}° / ${Math.round(m.wind.spd)} kt`) +
     kv('자리', `${m.lat.toFixed(4)}, ${m.lon.toFixed(4)}`);
   const F = (m.ac === 'b206' ? [['bEng', '엔진 고장'], ['bHyd', '유압 고장'], ['govHi', '거버너 HI'], ['govLo', '거버너 LO'], ['chip', 'ENG CHIP'], ['thStuck', '스로틀 고착']]
-                             : [['oei', '2번 엔진 고장(OEI · SIM)'], ['idle', '두 엔진 IDLE(SIM)']])
+                             : [['oei', '2번 엔진 고장(OEI · SIM)'], ['idle', '두 엔진 IDLE(SIM)'], ['hot1', '1번 고온 시동(HSP)'], ['aisbv1', '1번 AISBV 고착(시동 실속)'], ['fix1', '1번 FADEC FAIL FIX'], ['plim1', '1번 PWR LIMIT']])
     .concat([['trDrive', '꼬리로터 구동 상실(SIM)'], ['trFixed', '꼬리로터 피치 고정(SIM)'], ['asi', '속도계 고착'], ['alt', '고도계 고착'], ['vsi', '승강계 고착'], ['ahrs', 'AHRS(자세) 고장'], ['hdg', '나침반 오차 25°']]);
   const fh = F.map(([k, l]) => `<button data-ios="fail:${k}:${m.fails[k] ? 0 : 1}" class="${m.fails[k] ? 'on' : ''}">${m.fails[k] ? '✕ ' : ''}${l}</button>`).join('');
   const fe = R.querySelector('[data-iosv="fails"]'); if (fe.dataset.h !== fh) { fe.dataset.h = fh; fe.innerHTML = fh; }

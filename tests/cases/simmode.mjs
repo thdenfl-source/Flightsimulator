@@ -11,6 +11,8 @@ export const name = 'SIM 모드';
 const SETUP = () => {
   // 시작하면 활주로에 파킹 브레이크 SET 으로 서 있다(09-cdu.js startStateApply) — SIM 조종을 보려면 푼다
   try { if (typeof ovhdSet === 'function' && ovhdGet('parkBrake') !== 'RELEASE') ovhdSet('parkBrake', 'RELEASE'); } catch (e) { /* 콘솔이 없으면 그만 */ }
+  // 엔진은 지금 PCD 레버대로 곧바로(36-kuhsys.js — 앞 검사가 레버를 내렸다 올려 시동 절차가 걸려 있을 수 있다)
+  try { if (typeof fadecSync === 'function') fadecSync(); } catch (e) { /* 없으면 그만 */ }
   window._pad = {
     index: 0, id: 'SIM STICK', mapping: '',
     buttons: Array.from({ length: 8 }, () => ({ pressed: false, value: 0 })),

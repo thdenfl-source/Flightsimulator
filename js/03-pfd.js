@@ -149,6 +149,7 @@ function drawPFD() {
   ctx.beginPath(); ctx.moveTo(L.hsi.x + 0.5, L.aiH); ctx.lineTo(L.hsi.x + 0.5, L.usableH); ctx.stroke();
   ctx.beginPath(); ctx.moveTo(L.crht.x + 0.5, L.aiH); ctx.lineTo(L.crht.x + 0.5, L.usableH); ctx.stroke();
   try { drawMwp(L); } catch (e) { _swallow(e); }
+  try { drawTcasAnn(L); } catch (e) { _swallow(e); }
   const RC = pfdRightCol(L, W);
   if (L.sideOn) drawPfdSideMsgs(L.side, RC.swY);
   if (L.insetOn) drawPfdInset(L.inset);
@@ -293,7 +294,9 @@ function engParams() {
     if (idle) return { tq: 0, ng: 62, tgt: 450, np: Math.min(nr, 70) };
     return { tq: 0, ng: 0, tgt: 0, np: 0 };
   };
-  const e1 = one(run[0], idleOf(0)), e2 = one(run[1], idleOf(1));
+  let e1 = one(run[0], idleOf(0)), e2 = one(run[1], idleOf(1));
+  // T700 FADEC(36-kuhsys.js) — 시동 · 멈춤 중에는 그 엔진의 NG · TGT · NP 를, 도는 동안은 TGT 한계 · PWR LIMIT 를
+  if (typeof fadecOverride === 'function') { try { e1 = fadecOverride(1, e1); e2 = fadecOverride(2, e2); } catch (e) { _swallow(e); } }
   return { e1, e2, nr };
 }
 function _engBox(x, y, w, h, title) {
@@ -543,6 +546,8 @@ function pfdMsgs() {
   // VRS(소용돌이 고리 · SIM) — 저속 · 큰 강하율에서 들어가면 맨 위에 황색 경고(음성은 14-simmode.js)
   try { if (typeof simVrsOn === 'function' && simVrsOn()) out.unshift({ t: 'VORTEX RING', c: PFD_MSG_AMBER }); } catch (e) { _swallow(e); }
   // TCAS(33-train4.js) — TA 황색 · RA 빨강(올라라 · 내려라)
+  // T700 FADEC(36-kuhsys.js) — n ENG STRT(조언) · n ENG FAULT · n FADEC(주의)
+  try { if (typeof fadecCas === 'function') out.push(...fadecCas()); } catch (e) { _swallow(e); }
   // SIM 경고 · 주의(KUH-1CG SDS 31-50-04) — n ENG OUT · LOW ROTOR RPM(적) · IAS(황 · VNE 넘김)
   try {
     if (simModeOn && typeof simEngSt !== 'undefined') {
@@ -552,7 +557,7 @@ function pfdMsgs() {
       if (typeof simOverVne === 'function' && simOverVne()) out.push({ t: 'IAS', c: PFD_MSG_AMBER });
     }
   } catch (e) { _swallow(e); }
-  try { if (typeof tcasState !== 'undefined' && tcasState !== 'CLEAR') out.unshift(tcasState === 'RA' ? { t: tcasRaSense > 0 ? 'TCAS RA CLIMB' : 'TCAS RA DESCEND', c: '#ff3030' } : { t: 'TRAFFIC', c: '#ffb000' }); } catch (e) { _swallow(e); }
+  // (TCAS 는 CAS 가 아니다 — 자세계 위 TRAFFIC 알림 · 피치 · 승강계 띠로 보인다: drawTcasPfd)
   return out;
 }
 
@@ -711,13 +716,14 @@ function casVoiceStep(now) {
 function pfdSysMsgs() {
   const out = [];
   if (typeof cduKeyStuck !== 'undefined' && cduKeyStuck) out.push('CDU KEY STUCK');
+  try { if (typeof kuhSysMsgs === 'function') out.push(...kuhSysMsgs()); } catch (e) { _swallow(e); }   // GRA SERVICE · 엔진 PFL · CVFDR(36-kuhsys.js)
   return out;
 }
 let _mwpR = null;
 // MWP(주 경고 패널) — FMA 오른쪽에 WARN · CAUT · REV 램프, 그 옆에 MSG(시스템 메시지). 램프를 누르면 승인
 function drawMwp(L) {
   const fc = fmaCells(L.ai.x, L.ai.w), y = L.ai.y + FMA_MARGIN, h = FMA_BOX_H, bw = 34, gap = 3;
-  const pend = casAckPending(), x0 = fc.x0 + fc.total + 8;
+  const pend = casAckPending(), x0 = fc.x0 + fc.total + 8, lt = typeof lampTestOn !== 'undefined' && lampTestOn;   // Lamp Test — 램프 모두
   if (x0 + bw * 3 + gap * 2 > L.ai.x + L.ai.w - 2) return;
   const msgFits = x0 + bw * 4 + gap * 3 <= L.ai.x + L.ai.w - 2;
   const lamps = [['WARN', pend === 'W' || [...casAct.values()].some(m => m.lvl === 1 && !m.ack), '#e01818', '#fff'],
@@ -726,7 +732,8 @@ function drawMwp(L) {
   ctx.save();
   ctx.font = `bold ${Math.max(8, h * 0.45)}px Helvetica Neue, Arial, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   const R = {};
-  lamps.forEach(([t, on, bg, fg], i) => {
+  lamps.forEach(([t, on0, bg, fg], i) => {
+    const on = on0 || lt;
     const x = x0 + i * (bw + gap);
     ctx.fillStyle = on ? bg : '#1a1d20'; ctx.fillRect(x, y, bw, h);
     ctx.strokeStyle = on ? bg : '#3a4048'; ctx.lineWidth = 1; ctx.strokeRect(x + 0.5, y + 0.5, bw - 1, h - 1);
@@ -735,7 +742,7 @@ function drawMwp(L) {
   });
   // MSG — 시스템 메시지가 있으면 점멸
   const sm = pfdSysMsgs();
-  if (sm.length && msgFits) {                    // REV 오른쪽(왼쪽 EIS 칸과 겹치지 않게)
+  if ((sm.length || lt) && msgFits) {                    // REV 오른쪽(왼쪽 EIS 칸과 겹치지 않게)
     const x = x0 + 3 * (bw + gap), bl = Math.floor(performance.now() / 500) % 2 === 0;
     ctx.fillStyle = bl ? '#ffffff' : '#000'; ctx.fillRect(x, y, bw, h);
     ctx.strokeStyle = '#fff'; ctx.strokeRect(x + 0.5, y + 0.5, bw - 1, h - 1);
@@ -744,6 +751,20 @@ function drawMwp(L) {
   }
   ctx.restore();
   if (!cvs.dataset.noFcp) _mwpR = R;
+}
+// TCAS TRAFFIC 알림 — FMA 아래 가운데(TA 황 · RA 적, 처음 5초 점멸 — 33-train4.js tcasAnn)
+function drawTcasAnn(L) {
+  const a = typeof tcasAnn === 'function' ? tcasAnn() : null; if (!a) return;
+  const fc = fmaCells(L.ai.x, L.ai.w), h = FMA_BOX_H, y = L.ai.y + FMA_MARGIN + h + 6;
+  ctx.save();
+  ctx.font = `bold ${Math.max(10, h * 0.6)}px Helvetica Neue, Arial, sans-serif`;
+  const w = ctx.measureText(a.txt).width + 14, x = fc.x0 + fc.total / 2 - w / 2;   // FMA 아래 가운데
+  const on = !a.blink || Math.floor(performance.now() / 400) % 2 === 0;
+  ctx.fillStyle = on ? a.col : 'rgba(0,0,0,0.7)'; ctx.fillRect(x, y, w, h);
+  ctx.strokeStyle = a.col; ctx.lineWidth = 1.5; ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+  ctx.fillStyle = on ? (a.col === '#ff3030' ? '#fff' : '#000') : a.col; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+  ctx.fillText(a.txt, x + 7, y + h / 2 + 1);
+  ctx.restore();
 }
 function pfdMwpHit(px, py) {
   const R = _mwpR; if (!R) return false;
@@ -1355,6 +1376,16 @@ function drawAI(x, y, w, h) {
       ctx.fillText(Math.abs(p), lw/2+15,py+4);
     }
   }
+  // TCAS RA 피치 띠(33-train4.js tcasRaCue) — 붉은 칸은 가지 말 피치 · 초록 테두리는 갈 피치
+  try {
+    const cue = typeof tcasRaCue !== 'undefined' && tcasState === 'RA' ? tcasRaCue : null;
+    if (cue && cue.pNo) {
+      const bw = wS * 0.34, yA = skyY - cue.pNo[1] * ppd, yB = skyY - cue.pNo[0] * ppd;
+      ctx.fillStyle = 'rgba(255,40,40,0.38)'; ctx.fillRect(-bw / 2, Math.min(yA, yB), bw, Math.abs(yB - yA));
+      ctx.strokeStyle = '#ff3030'; ctx.lineWidth = 2; ctx.strokeRect(-bw / 2, Math.min(yA, yB), bw, Math.abs(yB - yA));
+      if (cue.pGo) { const gA = skyY - cue.pGo[1] * ppd, gB = skyY - cue.pGo[0] * ppd; ctx.strokeStyle = '#22e022'; ctx.lineWidth = 3; ctx.strokeRect(-bw / 2, Math.min(gA, gB), bw, Math.abs(gB - gA)); }
+    }
+  } catch (e) { _swallow(e); }
   ctx.restore();
 
   // Bank/roll scale — arc centre sits BELOW the panel top edge so the arc
@@ -1832,6 +1863,15 @@ function drawVSI(x, y, w, h) {
     }
   }
 
+  // TCAS RA 승강계 띠 — 붉은 칸(가지 말 승강률) · 초록 칸(갈 승강률)
+  try {
+    const cue = typeof tcasRaCue !== 'undefined' && tcasState === 'RA' ? tcasRaCue : null;
+    if (cue) {
+      const yF = f => vY(vsD(Math.max(-VSI_DN, Math.min(VSI_UP, f))));
+      (cue.vsNo || []).forEach(([a, b]) => { const ya = yF(b), yb = yF(a); ctx.fillStyle = 'rgba(255,40,40,0.75)'; ctx.fillRect(x, ya, w * 0.28, yb - ya); });
+      if (cue.vsGo) { const ya = yF(cue.vsGo[1]), yb = yF(cue.vsGo[0]); ctx.fillStyle = 'rgba(34,224,34,0.85)'; ctx.fillRect(x, ya, w * 0.28, yb - ya); }
+    }
+  } catch (e) { _swallow(e); }
   // zero line
   ctx.strokeStyle='#555'; ctx.lineWidth=1;
   ctx.beginPath(); ctx.moveTo(x,cy); ctx.lineTo(x+w*0.65,cy); ctx.stroke();

@@ -523,6 +523,7 @@ function _sysPaint(g, c, W, H, dpr, own) {
     g.fillText(`${videoCfg.src} · Brightness ${videoCfg.bri}% · Contrast ${videoCfg.con}% · Saturation ${videoCfg.sat}%`, 610, 330);
     g.fillText('영상 입력 없음 — 채널 · 설정은 CDU Aircraft Systems → Video', 610, 354);
   }
+  else if (typeof kuhSysDraw === 'function' && kuhSysDraw(g, sysPage, 224, 32, 772, 594)) { /* 36-kuhsys.js */ }
   else {
     g.fillStyle = '#4a6a7a'; g.font = 'bold 26px Helvetica Neue, Arial, sans-serif';
     g.fillText(name.toUpperCase(), 610, 310);
@@ -560,6 +561,7 @@ function _sysPaintHalf(g, F) {
       try {
         if (id === 'asys_fuel') _sysFuelPage(g, F); else if (id === 'asys_elec') _sysElecPage(g, F); else if (id === 'asys_afcs') _sysAfcsPage(g);
         else if (id === 'asys_eng') _sysEnginePage(g, F); else if (id === 'asys_status') _sysStatusPage(g, F);
+        else if (typeof kuhSysDraw === 'function' && kuhSysDraw(g, id, 224, 32, 772, 594)) { /* 36-kuhsys.js */ }
         else { g.fillStyle = '#4a6a7a'; g.textAlign = 'center'; g.font = 'bold 26px Helvetica Neue, Arial, sans-serif'; g.fillText((SYS_PAGES[id] || '').toUpperCase(), 610, 310); }
       } finally { sysPage = p0; }
     }
@@ -1306,6 +1308,7 @@ function _sysEnginePage(g, F) {
       ['ETF', '1.00', '', !run], ['T2', String(oat), '°C'], ['PS3', String(Math.round(60 + 1.2 * e.tq)), 'PSI', !run],
       ['P0', p0.toFixed(1), '', !run], ['LDS', run && e.tq > 0 ? (Math.abs(P.e1.tq - P.e2.tq) / 2).toFixed(1) : '0.0', '%'],
       ['PCD Position', pcd === 'OFF' ? 'Stop' : pcd === 'IDLE' ? 'Idle' : 'Fly'],
+      ['FADEC', (() => { try { const f = fadec.e[n]; return { RUN: 'Run', OFF: 'Off', CRANK: 'Crank', IGN: 'Ignition', ABORT: 'Abort', MOTOR: 'Motoring' }[f.ph] || 'Run'; } catch (e) { return 'Run'; } })()],
     ];
     rows.forEach((r, i) => row(x0, x1, 166 + i * 25.7, r[0], r[1], r[2], r[3]));
     panel(x0 + 6, 520, x1 - 6, 680, 'Power Check');
@@ -1486,6 +1489,7 @@ function videoAdj(k, d) {
 }
 function _videoSysRedraw() { try { if (sysPage === 'asys_video') sysDraw(); } catch (e) { _swallow(e); } }
 function sysCduHtml(id) {
+  if (typeof kuhSysCdu === 'function') { const h = kuhSysCdu(id); if (h) return h; }   // RA Self Test · System Tests · Lighting Config · Maintenance(36-kuhsys.js)
   if (id === 'asys_fuel') return fuelCduHtml();
   if (id === 'asys_video') { setTimeout(_videoCduRender, 0); return videoCduHtml(); }
   if (id === 'asys_elec') return `<div id="elecc" style="padding:10px 8px;color:#cde;font-size:12px"></div>`;

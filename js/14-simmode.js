@@ -581,6 +581,7 @@ function simEngApply(quiet) {
     const pcd = g('pcd' + n), fire = g('fire' + n);
     let v = pcd === 'OFF' ? 'OFF' : pcd === 'IDLE' ? 'IDLE' : 'FLY';
     if (g('fuel' + n) === 'CLOSE' || fire === 'ARM') v = 'OFF';            // FUEL CLOSE · T HANDLE ARM → 연료가 끊긴다
+    if (typeof fadecRun === 'function' && !fadecRun(n)) v = 'OFF';        // T700 FADEC — 시동 중 · 실패 · 멈춤이면 돌지 않는다(36-kuhsys.js)
     st[n] = v;
   });
   if (_simEngBtn === 1) st[2] = 'OFF';                                   // ENG 버튼 OEI — 2번 고장
