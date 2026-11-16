@@ -2128,8 +2128,13 @@ const SK_MENUS = {
     { lbl: 'CAS', dim: () => !(typeof pfdCasOverflow === 'function' && pfdCasOverflow()), on: () => typeof pfdCasOverflow === 'function' && pfdCasOverflow(), go: 'CAS' },
     // SIM — 조종간으로 직접 모는 모드(FCP 의 SIM 버튼을 옮겨 왔다 · simModeBtnPress)
     // (절차 훈련판 — 00-edition.js SIM_ENABLED 거짓 — 에서는 빈칸)
-    { lbl: () => (typeof SIM_ENABLED === 'undefined' || SIM_ENABLED) ? 'SIM' : '', on: () => simModeOn,
-      dim: () => typeof SIM_ENABLED !== 'undefined' && !SIM_ENABLED, act: () => { if (typeof SIM_ENABLED === 'undefined' || SIM_ENABLED) simModeBtnPress(); } },
+    // 12 — 승인하지 않은 경고 · 주의가 있으면 WARN ACK(적) · CAUT ACK(황) 점멸 · 누르면 승인(03-pfd.js casAckAll). 없으면 SIM
+    { lbl: () => { const p = typeof casAckPending === 'function' ? casAckPending() : ''; if (p) return p === 'W' ? 'WARN<br>ACK' : 'CAUT<br>ACK';
+                   return (typeof SIM_ENABLED === 'undefined' || SIM_ENABLED) ? 'SIM' : ''; },
+      on: () => !(typeof casAckPending === 'function' && casAckPending()) && simModeOn,
+      cls: () => { const p = typeof casAckPending === 'function' ? casAckPending() : ''; return p === 'W' ? 'ackw' : p === 'C' ? 'ackc' : ''; },
+      dim: () => !(typeof casAckPending === 'function' && casAckPending()) && typeof SIM_ENABLED !== 'undefined' && !SIM_ENABLED,
+      act: () => { if (typeof casAckPending === 'function' && casAckPending()) { casAckAll('PFD'); return; } if (typeof SIM_ENABLED === 'undefined' || SIM_ENABLED) simModeBtnPress(); } },
   ],
   // 그림 6 — PFD 지도 선택
   MAPSET: [
@@ -2163,8 +2168,8 @@ const SK_MENUS = {
   SENS: [{}, {}, { lbl: 'RA<br>Settings', go: 'RA' }, {}, {}, {}, {}, {}, {}, {}, _skBack, {}],
   RA: [{}, _skRadio('ra', 'RA1'), _skRadio('ra', 'RA2'), {}, {}, {}, {}, {}, {}, {}, _skBack, {}],
   CAS: [{}, {}, {}, {}, {}, {}, {}, {}, {},
-    { lbl: 'CAS<br>UP', dim: () => typeof pfdCasPage === 'undefined' || pfdCasPage <= 0, act: () => pfdCasStep(-1) },
-    { lbl: 'CAS<br>DN', dim: () => { try { return pfdCasPage >= pfdCasPages(pfdMsgs().length) - 1; } catch (e) { return true; } }, act: () => pfdCasStep(1) },
+    { lbl: 'CAS<br>UP', dim: () => !(typeof pfdCasCanUp === 'function' && pfdCasCanUp()), act: () => pfdCasStep(-1) },
+    { lbl: 'CAS<br>DN', dim: () => !(typeof pfdCasCanDn === 'function' && pfdCasCanDn()), act: () => pfdCasStep(1) },
     _skBack],
 };
 let skMenu = 'TOP', _skStack = [], _skIdle = null;
@@ -2210,7 +2215,8 @@ function pfdSkRender() {
     if (span.innerHTML !== lbl) span.innerHTML = lbl;
     const sub = it.sub ? it.sub() : '';
     if (em.textContent !== sub) em.textContent = sub;
-    const flags = { none: !it.lbl, on: !!(it.on && it.on()), auto: !!(it.auto && it.auto()), off: !!(it.dim && it.dim()), go: !!it.go };
+    const ck = it.cls ? it.cls() : '';
+    const flags = { none: !it.lbl, on: !!(it.on && it.on()), auto: !!(it.auto && it.auto()), off: !!(it.dim && it.dim()), go: !!it.go, ackw: ck === 'ackw', ackc: ck === 'ackc' };
     Object.entries(flags).forEach(([c, v]) => { if (el.classList.contains(c) !== v) el.classList.toggle(c, v); });
   });
 }

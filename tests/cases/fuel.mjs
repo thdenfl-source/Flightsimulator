@@ -84,7 +84,7 @@ export async function run(page, t) {
     o.msov = fuelPress(1) === 0 && draw().fills.includes('#f2e64b@284,231');
     ovhdSet('fuel1', 'OPEN'); tick(1); o.msovOpen = fuelPress(1) >= 15 && !draw().fills.includes('#f2e64b@284,231');
     // ⑩ FUEL 1 LOW
-    fuel.ft1 = 100; o.low = msgs().includes('FUEL 1 LOW');
+    fuel.ft1 = 100; o.low = msgs().includes('1 FUEL LOW');
     fuelReset(); ovhdReset('lcon'); localStorage.removeItem('ovhdState'); tick(1);
     selectPanel('right', 'map', true);
     return o;
@@ -107,5 +107,5 @@ export async function run(page, t) {
   t.ok(R.f5On && !R.f5Gnd && R.f5Auto && !R.f5Hi, 'F5 XFER — ON: 14 lb/min F5 → AFT(TP ▲) · AUTO: 비행 중 AFT 90% 아래에서(땅에서는 안 함)');
   t.ok(R.f5Used > 150 && R.aftKept > 360, `F5 XFER AUTO — 비행 20분이면 F5 가 AFT 로 넘어가 줄어든다(F5 ${Math.round(R.f5Used)} lbs 사용 · AFT ${Math.round(R.aftKept)} lbs 유지)`);
   t.ok(R.msov && R.msovOpen, 'TQS 연료차단 CLOSE — 라인 압력 0 · MFSOV 1 CLOSE 호박색, OPEN 이면 다시');
-  t.ok(R.low, 'FUEL 1 LOW — 집합 탱크 165 아래');
+  t.ok(R.low, '1 FUEL LOW — 집합 탱크 165 아래');
 }

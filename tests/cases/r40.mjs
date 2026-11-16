@@ -23,29 +23,29 @@ export async function run(page, t) {
   t.ok(A.toPitch && A.toColl && A.drops === 0, `ALT 가 컬렉티브 ↔ 피치 칸으로 옮겨 가도 '풀림' 경보는 없다 (풀림 ${A.drops})`);
   t.ok(A.tune, '새 조정값(afcs · tfc · vstick)은 00-params.js(TUNE)에 모였다');
 
-  // ── CAS 쪽넘김 — 5줄이 넘으면 소프트키 CAS 가 살고 CAS UP · DN 으로 넘긴다 ──
+  // ── CAS 넘기기 — 창(최대 20줄)을 넘으면 소프트키 CAS 가 살고 CAS UP · DN 으로 한 줄씩 넘긴다(맨 아래 n↑ m↓) ──
   const C = await page.evaluate(() => {
     const keep = window.pfdMsgs, o = {};
     window.pfdMsgs = () => Array.from({ length: 60 }, (_, i) => ({ t: 'MSG ' + (i + 1), c: '#22e022' }));
     const shot = () => { const seen = [], f = CanvasRenderingContext2D.prototype.fillText;
       CanvasRenderingContext2D.prototype.fillText = function (x, ...a) { seen.push(String(x)); return f.call(this, x, ...a); };
       try { drawPFD(); } finally { CanvasRenderingContext2D.prototype.fillText = f; } return seen; };
-    pfdCasPage = 0; shot(); o.over = pfdCasOverflow();
-    const per = pfdCasLines - 1, pages = Math.ceil(60 / per); o.per = per; o.pages = pages; o.lines = pfdCasLines;
-    const s1 = shot(); o.p1 = { first: s1.includes('MSG 1') && s1.includes('MSG ' + per), hid: !s1.includes('MSG ' + (per + 1)), tag: s1.some(x => x.includes('CAS 1/' + pages)) };
+    casScroll = 0; shot(); o.over = pfdCasOverflow();
+    const srt = casSorted().map(m => m.t), slots = pfdCasLines - 1; o.lines = pfdCasLines; o.slots = slots;
+    const s1 = shot(); o.p1 = { first: s1.includes(srt[0]) && s1.includes(srt[slots - 1]), hid: !s1.includes(srt[slots]), tag: s1.includes((60 - slots) + '↓') };
     pfdSkGo('TOP'); const casI = SK_MENUS.TOP.findIndex(x => x.lbl === 'CAS'); o.casOn = !SK_MENUS.TOP[casI].dim();
     pfdSkPress(casI); o.menu = skMenu;
     const dn = SK_MENUS.CAS.findIndex(x => /DN/.test(x.lbl || '')), up = SK_MENUS.CAS.findIndex(x => /UP/.test(x.lbl || ''));
-    pfdSkPress(dn); const s2 = shot(); o.p2 = { page: pfdCasPage, has6: s2.includes('MSG ' + (per + 1)), no1: !s2.includes('MSG 1') };
-    for (let i = 0; i < pages + 2; i++) pfdSkPress(dn); o.max = pfdCasPage;
-    pfdSkPress(up); o.back = pfdCasPage;
+    pfdSkPress(dn); const s2 = shot(); o.p2 = { line: casScroll, has: s2.includes(srt[slots]), no1: !s2.includes(srt[0]), tag: s2.includes('1↑  ' + (60 - slots - 1) + '↓') };
+    for (let i = 0; i < 80; i++) { pfdSkPress(dn); shot(); } o.max = casScroll; o.dnDim = SK_MENUS.CAS[dn].dim();
+    pfdSkPress(up); shot(); o.back = casScroll;
     window.pfdMsgs = () => [{ t: 'ONE', c: '#22e022' }]; o.few = !pfdCasOverflow() && SK_MENUS.TOP[casI].dim();
-    window.pfdMsgs = keep; pfdCasPage = 0; pfdSkGo('TOP');
+    window.pfdMsgs = keep; casScroll = 0; pfdSkGo('TOP');
     return o;
   });
-  t.ok(C.over && C.p1.first && C.p1.hid && C.p1.tag, `PFD 메시지가 창(스톱워치 위까지 · ${C.lines}줄)을 넘으면 넘치는 것은 숨기고 끝에 ▲▼ CAS 1/${C.pages}`);
+  t.ok(C.over && C.p1.first && C.p1.hid && C.p1.tag, `PFD 메시지가 창(스톱워치 위까지 · ${C.lines}줄 · 최대 20)을 넘으면 넘치는 것은 숨기고 끝에 남은 수 ↓`);
   t.ok(C.casOn && C.menu === 'CAS', '소프트키 CAS 가 살아나고, 누르면 CAS UP · CAS DN 이 뜬다');
-  t.ok(C.p2.page === 1 && C.p2.has6 && C.p2.no1 && C.max === C.pages - 1 && C.back === C.pages - 2, `CAS DN 으로 다음 쪽 · 마지막 쪽에서 멈춤 · CAS UP 으로 앞 쪽 (${C.max + 1}쪽)`);
+  t.ok(C.p2.line === 1 && C.p2.has && C.p2.no1 && C.p2.tag && C.max === 60 - C.slots && C.dnDim && C.back === C.max - 1, `CAS DN 으로 한 줄씩 · 끝에서 멈춤 · CAS UP 으로 한 줄 위 (${C.max})`);
   t.ok(C.few, '메시지가 적으면 CAS 는 꺼져(흐리게) 있다');
 
   // ── 교통 — 기종 · 장주 몫 · 교관 배치 · 위치 보고 ──
@@ -183,7 +183,7 @@ export async function run(page, t) {
     return o;
   });
   t.ok(I2.warm && I2.cond, '결빙 조건 — 외기 5°C 넘으면 없음 · 0°C 이하 구름 속이면 ICE DETECTED');
-  t.ok(Math.abs(I2.acc - 61 / 180) < 0.02 && I2.tqK > 1.02 && /ICE DETECTED/.test(I2.cas), `착빙 — 구름 속 1분에 ${Math.round(I2.acc * 100)}% · SIM 필요 토크 ×${I2.tqK.toFixed(3)}`);
+  t.ok(Math.abs(I2.acc - 61 / 180) < 0.02 && I2.tqK > 1.02 && /ICE DETECD/.test(I2.cas), `착빙 — 구름 속 1분에 ${Math.round(I2.acc * 100)}% · SIM 필요 토크 ×${I2.tqK.toFixed(3)}`);
   t.ok(I2.e1 > 0.4 && I2.e2 === 0 && I2.engK < 1 && /1 ENG ICING/.test(I2.cas) && !/2 ENG ICING/.test(I2.cas), `엔진 착빙 — 방빙 OFF 인 1번만(${Math.round(I2.e1 * 100)}%) · 낼 수 있는 토크 ×${I2.engK.toFixed(3)}`);
   t.ok(I2.asi && /PITOT ICING/.test(I2.cas) && I2.asiBack, '피토 히트 OFF 로 착빙 — 속도계가 굳고, PITOT HEAT 을 켜면 풀린다');
   t.ok(I2.e1Melt && I2.melt, '방빙을 켜면 엔진 착빙이 녹고, 5°C 넘는 곳으로 나오면 착빙이 걷힌다');

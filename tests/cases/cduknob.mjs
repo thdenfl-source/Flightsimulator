@@ -59,7 +59,7 @@ export async function run(page, t) {
     cduKnobOp('R', 'rotIn', 1); o.buf = R.state().buf;
     cduKnobOp('R', 'push'); o.xpdr = [code0, R.state().xpdr, R.state().mode];
     // 키 고착 — 10 초 넘게 누르면 PFD 메시지
-    cduKeyStuck = true; o.stuck = pfdMsgs().some(m => m.t === 'CDU KEY STUCK'); cduKeyStuck = false;
+    cduKeyStuck = true; o.stuck = pfdSysMsgs().includes('CDU KEY STUCK') && !pfdMsgs().some(m => m.t === 'CDU KEY STUCK'); cduKeyStuck = false;
     CDU_ACT.switchMode('HOME');
     return o;
   });
@@ -85,5 +85,5 @@ export async function run(page, t) {
   t.ok(/Data Entry/.test(r.lblDE) && /Enter/.test(r.lblDE), `입력 화면이면 Data Entry (${r.lblDE})`);
   t.ok(r.cur === 0 && r.curMark, '큰 노브 — 커서(청록 바탕)');
   t.ok(r.buf[0] === String((+r.xpdr[0][0] + 1) % 8) && r.xpdr[1] === r.buf && r.xpdr[2] === 'XPDR_MODE', `작은 노브 숫자 · 누르면 Enter (${r.xpdr})`);
-  t.ok(r.stuck, '10 초 넘게 누르면 PFD 에 CDU KEY STUCK');
+  t.ok(r.stuck, '10 초 넘게 누르면 CDU KEY STUCK — CAS 가 아니라 시스템 메시지(PFD MSG)');
 }
