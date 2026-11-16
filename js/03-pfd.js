@@ -169,9 +169,11 @@ function drawNavSrcBox(x, y, w, h) {
                 lat: ok ? wp.lat : null, lon: ok ? wp.lon : null, color: '#00cc44' });
   }
   ['NAV1', 'NAV2'].forEach(id => {
-    const rr = navRadios[id] || {};
+    // DME HOLD(36-kuhsys.js navDmeHold) — 잡아 둔 국의 거리를 계속(ident 뒤 H)
+    const hd = typeof navDmeHold !== 'undefined' ? navDmeHold[id] : null;
+    const rr = hd || navRadios[id] || {};
     const ok = rr.lat !== null && rr.lat !== undefined && rr.lon !== null && rr.lon !== undefined;
-    rows.push({ src: id, ident: ok ? (rr.id || '----') : '----',
+    rows.push({ src: id, ident: ok ? ((rr.id || '----') + (hd ? ' H' : '')) : '----',
                 lat: ok ? rr.lat : null, lon: ok ? rr.lon : null, color: '#44aaff', dme: true, elev: rr.elev || 0 });
   });
   ctx.save(); ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
@@ -317,6 +319,13 @@ function _engBox(x, y, w, h, title) {
     ctx.fillText(title, x + w / 2, y + 3);
   }
 }
+// 시동 중인 엔진(36-kuhsys.js fadec — CRANK · IGN) — NG 계기 옆에 세로로 START
+function engStarting(n) { try { const e = typeof fadec !== 'undefined' && fadec.e[n]; return !!e && (e.ph === 'CRANK' || e.ph === 'IGN'); } catch (er) { return false; } }
+function drawStartVert(g, cx, y0, step, fs) {
+  g.save(); g.font = `bold ${fs}px Helvetica Neue, Arial, sans-serif`; g.textAlign = 'center'; g.textBaseline = 'alphabetic'; g.fillStyle = '#ffffff';
+  'START'.split('').forEach((c, i) => g.fillText(c, cx, y0 + fs + i * step));
+  g.restore();
+}
 function drawEnginePanel(x, y, w, h) {
   if (!(w > 60) || !(h > 80)) return;
   const P = engParams();
@@ -336,6 +345,9 @@ function drawEnginePanel(x, y, w, h) {
   };
   num(x + m, 'TGT °C', 'TGT1', 'TGT2', P.e1.tgt, P.e2.tgt, 0);
   num(x + m * 2 + half, 'NG %', 'NG1', 'NG2', P.e1.ng, P.e2.ng, 1);
+  { const bx = x + m * 2 + half, fs = Math.max(6, Math.min(8, (th - 6) / 5.6)), st = fs * 1.1;   // 시동 중 — NG 숫자 옆 세로 START
+    if (engStarting(1)) drawStartVert(ctx, bx + half / 2 + (engStarting(2) ? -3 : 1), y + 11, st, fs);   // NG1 숫자와 NG2 숫자 사이
+    if (engStarting(2)) drawStartVert(ctx, bx + half / 2 + (engStarting(1) ? 5 : 1), y + 11, st, fs); }
   // 아래: TQ(엔진마다) · NP1/NR/NP2 막대
   const by = y + 9 + th + 12, bh = h - (by - y) - 4;
   drawTqGauge(x + m, by, half, bh, [P.e1.tq, P.e2.tq]);
@@ -546,6 +558,8 @@ function pfdMsgs() {
   // VRS(소용돌이 고리 · SIM) — 저속 · 큰 강하율에서 들어가면 맨 위에 황색 경고(음성은 14-simmode.js)
   try { if (typeof simVrsOn === 'function' && simVrsOn()) out.unshift({ t: 'VORTEX RING', c: PFD_MSG_AMBER }); } catch (e) { _swallow(e); }
   // TCAS(33-train4.js) — TA 황색 · RA 빨강(올라라 · 내려라)
+  // 전기(36-kuhsys.js) — n TRU · BATT LOW(주의)
+  try { if (typeof elecCas === 'function') out.push(...elecCas()); } catch (e) { _swallow(e); }
   // T700 FADEC(36-kuhsys.js) — n ENG STRT(조언) · n ENG FAULT · n FADEC(주의)
   try { if (typeof fadecCas === 'function') out.push(...fadecCas()); } catch (e) { _swallow(e); }
   // SIM 경고 · 주의(KUH-1CG SDS 31-50-04) — n ENG OUT · LOW ROTOR RPM(적) · IAS(황 · VNE 넘김)

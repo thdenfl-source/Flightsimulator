@@ -120,6 +120,7 @@ export async function run(page, t) {
     o.afcsIdle = ['SEMA1 OK', 'SEMA2 OK', 'TRIM OK', 'AFCS MAINTENANCE MODE', 'NOM DEF'].every(x => a0.includes(x)) && a0.filter(x => x === 'OFF').length === 6;
     // 시험 — 하부 콘솔 AFCAU 의 P FLT TST 를 누르면 시작한다. 시간을 앞당겨 단계를 본다
     afcsPfltOk = () => true;                     // 땅 위 · 유압 정상 조건은 'AFCS 연동' 검사가 본다
+    ovhdSet('ap1', 'IN'); ovhdSet('ap2', 'IN');   // P FLT TEST 는 AP1 · AP2 OFF 에서(FLM 2.3.4)
     afcsLast = ''; ovhdSet('bFltTst', 'IN'); o.pflt = !!afcsTest;
     const at = sec => { afcsTest.t0 = performance.now() - sec * 1000; return texts(); };
     const t1 = at(1), t4 = at(4), t8 = at(8);
@@ -128,7 +129,7 @@ export async function run(page, t) {
     o.both = t8.includes('AP1 TEST OK') && t8.includes('AP2 TEST OK');
     const t11 = at(11); o.after = afcsTest === null && afcsLast === 'AFCS TEST OK';
     const t12 = texts();
-    o.pfltOut = ovhdGet('bFltTst') === 'OUT';
+    o.pfltOut = ovhdGet('bFltTst') === 'OUT'; ovhdSet('ap1', 'OUT'); ovhdSet('ap2', 'OUT');
     o.noMaint = !t12.includes('AFCS MAINTENANCE MODE') && !t12.includes('NOM DEF') && t12.includes('AFCS TEST OK');
     sysPageSet('asys_eng'); const e0 = texts();
     o.eng = ['Engine 1', 'Engine 2', 'MGB', 'IGB', 'TGB', 'Anti-Ice', 'EHC LCF 1', 'T45 Margin', 'PCD Position', 'Power Check', 'Incomplete', 'ALT UNS'].filter(x => !e0.includes(x));

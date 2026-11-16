@@ -17,14 +17,18 @@ function _afOv(id, d) { try { const v = typeof ovhdGet === 'function' ? ovhdGet(
 function afcsAxes() {
   const dc = typeof pwrDc === 'function' ? pwrDc() : true;
   const off = id => _afOv(id, 'OUT') === 'IN';               // AFCAU 의 눌러 두는 버튼 — 들어가면 OFF · REL 글씨가 켜진다
-  const ap1 = dc && !off('ap1'), ap2 = dc && !off('ap2');
-  const fail = !dc, apOff = !ap1 && !ap2;
+  // 고장(36-kuhsys.js afcsFault · afcsPft) — APM 내부 결함 · P FLT TEST 5회 실패 잠김
+  const F = typeof afcsFault !== 'undefined' ? afcsFault : null, lock = typeof afcsPft !== 'undefined' && afcsPft.lock;
+  const ap1 = dc && !off('ap1') && !(F && F.apm1), ap2 = dc && !off('ap2') && !(F && F.apm2);
+  const fail = !dc || lock || !!(F && F.apm1 && F.apm2), apOff = !ap1 && !ap2;
   const ahrsBk = _afOv('ahrsSel', 'N') === 'BACKUP' || (off('ahrs1Cut') && off('ahrs2Cut'));
   const adcBk = _afOv('adcSel', 'N') === 'BACKUP';
   const colRel = off('tfCol'), cycRel = off('tfCyc');
   const all = apOff || ahrsBk;
-  const sas = [all || colRel, all || cycRel, all || cycRel];   // 컬렉티브 · 롤/요 · 피치
-  const degraded = !fail && !apOff && (ahrsBk || adcBk || colRel || cycRel);
+  // 한 축의 SEMA 둘 고장 → 그 축만 SAS · COLL LINK → 컬렉티브 축만 · SEMA2 하나 → 그 축 기능 저하(황)
+  const sb = F ? F.semaBoth : {}, s2 = F ? F.sema2 : {};
+  const sas = [all || colRel || !!sb.C || !!(F && F.collLink), all || cycRel || !!sb.YR, all || cycRel || !!sb.P];   // 컬렉티브 · 롤/요 · 피치
+  const degraded = !fail && !apOff && (ahrsBk || adcBk || colRel || cycRel || !!(s2.C || s2.YR || s2.P || sb.C || sb.YR || sb.P));
   return { dc, fail, ap1, ap2, apOff, ahrsBk, adcBk, sas, degraded };
 }
 // CAS 메시지(PFD 메시지 시현창 — 03-pfd.js pfdMsgs 가 맨 위에 넣는다)
@@ -41,6 +45,7 @@ function afcsCas() {
   if (A.ahrsBk) out.push({ t: 'AHRS BACKUP', c: AMB });
   if (ad === '1' || ad === '2') out.push({ t: `BOTH ON ADC${ad}`, c: AMB });
   if (A.adcBk) out.push({ t: 'ADC BACKUP', c: AMB });
+  if (typeof afcsFault !== 'undefined' && afcsFault.collLink) out.push({ t: 'COLL LINK', c: AMB });
   return out;
 }
 // 쓸 수 없는 축의 상위모드를 푼다(누르자마자 걸려도 곧 풀린다 — 축이 SAS 인 동안은 걸리지 않는다)

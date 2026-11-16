@@ -35,14 +35,14 @@ export async function run(page, t) {
     o.navTab = /NAV/.test(document.getElementById('cdu-lbl-R').textContent);
     cduKnobOp('C', 'push'); o.navId = R.state().navId.nav1 && !!document.querySelector('#mainContentArea .knob-navid');
     cduKnobOp('C', 'push');
-    const n0 = R.state().freqs.nav1.act; cduKnobOp('R', 'rotIn', 1); o.nav = [n0, R.state().freqs.nav1.act];
+    const n0 = navStby.NAV1; cduKnobOp('R', 'rotIn', 1); o.nav = [n0, navStby.NAV1];
     cduKnobOp('R', 'rotIn', -1);
     CDU_ACT.switchMode('HOME'); await w(20);
     // 오른쪽 — COM1 대기 1 MHz · 25 kHz, 누름 COM2, 길게 대기 ⇄ 활성
     const s0 = R.state().freqs.com1.stb;
     cduKnobOp('R', 'rot', 1); o.mhz = [s0, R.state().freqs.com1.stb];
     cduKnobOp('R', 'rotIn', -1); o.khz = R.state().freqs.com1.stb;
-    o.tuned = document.getElementById('h-com1-stb').classList.contains('knob-tuned') && document.getElementById('h-com1-stb').textContent === o.khz;
+    o.tuned = document.getElementById('h-com1-stb').classList.contains('knob-tuned') && document.getElementById('h-com1-stb').textContent === o.khz.slice(0, -1);   // 25 kHz 는 XXX.XX 로 시현
     // 136.975 → 118.000 둘러 감기
     for (let i = 0; i < 40; i++) cduKnobOp('R', 'rotIn', 1);
     o.lblR = document.getElementById('cdu-lbl-R').textContent;
@@ -75,7 +75,7 @@ export async function run(page, t) {
   t.ok(r.vol[1] === Math.max(0, r.vol[0] - 10), `가운데 노브 — COM1 볼륨 5 % 씩 (${r.vol})`);
   t.ok(r.sq === false && /Squelch OFF/.test(r.lblC), `누르면 스켈치 (${r.lblC})`);
   t.ok(r.navTab && r.navId, 'Audio & Radios NAV 탭 — 누르면 NAV ID(흰 ID)');
-  t.ok(r.nav[0] !== r.nav[1] && /^1[01]\d\.\d\d$/.test(r.nav[1]), `NAV 탭 — 작은 노브는 NAV1 50 kHz (${r.nav})`);
+  t.ok(r.nav[0] !== r.nav[1] && /^1[01]\d\.\d\d$/.test(r.nav[1]), `NAV 탭 — 작은 노브는 NAV1 예비(STBY) 50 kHz (${r.nav})`);
   t.ok(+r.mhz[1].split('.')[0] === ((+r.mhz[0].split('.')[0] - 118 + 1) % 19) + 118, `큰 노브 1 MHz (${r.mhz})`);
   t.ok(r.khz.split('.')[1] === String((+r.mhz[1].split('.')[1] - 25 + 1000) % 1000).padStart(3, '0'), `작은 노브 25 kHz (${r.khz})`);
   t.ok(r.tuned, '돌린 대기 주파수는 위 막대에서 옅은 청색');

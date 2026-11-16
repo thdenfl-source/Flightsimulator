@@ -136,6 +136,7 @@ function maintGo(step, arg) {
   _ksRefresh(true);
 }
 function maintBack() {
+  if (maint.step === 'CONFIG') { cfgExit(); return; }
   const back = { SYS_MAINT: 'PASSWORD', LOGGING_STATUS: 'SYS_MAINT', FAULTS_LIST: 'LOGGING_STATUS', CMC_LOG_VIEWER: 'FAULTS_LIST' }[maint.step];
   if (back) maintGo(back);
 }
@@ -368,7 +369,18 @@ function kuhSysInner(id) {
       `<div style="display:flex;gap:6px"><input id="maint-pw" type="password" autocomplete="off" style="flex:1;min-width:0;background:#000;color:#fff;border:1px solid #2fe0e0;font-size:16px;padding:6px">` +
       `${_kBtn('maintPwEnter', undefined, 'Enter', false, 'flex:0 0 70px')}</div>` +
       (maint.err ? `<div style="color:#ff5050;font-size:12px;margin-top:6px">비밀번호가 맞지 않습니다</div>` : '');
-    if (maint.step === 'SYS_MAINT') return back + _kHd('System Maintenance') + `<div style="display:flex;gap:6px">${_kBtn('maintGo', ['LOGGING_STATUS'], 'CMC Logs')}${_kBtn('maintGo', ['PASSWORD'], 'Log Out')}</div>`;
+    if (maint.step === 'SYS_MAINT') return back + _kHd('System Maintenance') + `<div style="display:flex;gap:6px">${_kBtn('maintGo', ['LOGGING_STATUS'], 'CMC Logs')}${_kBtn('maintGo', ['PASSWORD'], 'Log Out')}</div>` +
+      _kHd('Restart Options') + `<div style="display:flex;gap:6px">${_kBtn('cfgEnter', undefined, 'System to Config Mode')}</div>`;
+    if (maint.step === 'CONFIG') {
+      const pg = CFG_PAGES[cfgMode.page];
+      const body = !cfgMode.in
+        ? CFG_PAGES.map((p, i) => `<div style="padding:5px 8px;margin-bottom:2px;border-radius:3px;${i === cfgMode.page ? 'background:#2fe0e0;color:#000;font-weight:bold' : 'color:#cde'}">${p}</div>`).join('')
+        : `<div style="color:#2fe0e0;font-weight:bold;margin-bottom:6px">${pg}</div>` +
+          (pg === 'Knobs' ? _kRow('마지막 노브 입력', cfgMode.last || '—') : '') +
+          [...Array(6).keys()].map(i => `<div style="padding:4px 8px;border-radius:3px;${i === cfgMode.item ? 'background:#16353b;color:#2fe0e0' : 'color:#9ab'}">${pg} · Item ${i + 1}</div>`).join('');
+      return _kHd('Home (Config Mode) — 오른쪽 큰 노브 장 · 작은 노브 항목 · 누름 들어감/나옴') + body +
+        `<div style="display:flex;gap:6px;margin-top:8px">${_kBtn('cfgExit', undefined, 'Exit Config Mode')}</div>`;
+    }
     if (maint.step === 'LOGGING_STATUS') return back + _kHd('CMC Logs — Logging Status') + _kRow('Logging', 'Active', '#3ad13a') + _kRow('MFL 기록', `${maint.mfl.length}건`) +
       `<div style="display:flex;gap:6px;margin-top:8px">${_kBtn('maintGo', ['FAULTS_LIST'], 'Faults List')}</div>`;
     if (maint.step === 'FAULTS_LIST') {
@@ -448,3 +460,263 @@ setInterval(() => {
   try { _ksRefresh(); } catch (e) { _swallow(e); }
 }, 100);
 try { appRegister({ raStSet, raStSling, sysTestRun, litSet, litBrt, maintPwEnter, maintGo, maintBack }); } catch (e) { _swallow(e); }
+
+// ══════════ ⑥ CDU 노브 — 레이더 제어(Push:Radar) · 정비 Config Mode ══════════
+//   레이더: SYSTEM 창 Video 채널 RADAR 가 보일 때 CDU 조이스틱을 누르면 레이더 제어가 열리고 다시 누르면 닫힌다(FLM 7.15 · 5.20)
+//     열려 있으면 조이스틱 회전 = 거리(RNG) · 오른쪽 큰 노브 = TILT(−15~+15°) · 작은 노브 = GAIN(0~32) · 누름 = RDR TX · 1.5초 누름 = FREEZE
+//   Config Mode(AMM 31-60-02-727): Maintenance → Restart Options → System to Config Mode — 큰 노브 장 이동 · 작은 노브 항목 · 누름 들어감/나옴
+//     (실기는 CDU1 C/B 를 넣을 때 오른쪽 작은 노브를 누르고 있으면 들어간다 — 이 앱에는 회로차단기가 없다)
+const RADAR_RNG = [2.5, 5, 10, 20, 40, 80, 160];
+const radarCtl = { open: false, tx: false, rOnly: false, freeze: false, mode: 'SEARCH', range: 20, tilt: 0, gain: 16 };
+function radarShown() {
+  try {
+    if (videoCfg.ch !== 'RADAR') return false;
+    return sysPage === 'asys_video' || (sysLayout === 'HALF' && (sysHalf.L === 'asys_video' || sysHalf.R === 'asys_video'));
+  } catch (e) { return false; }
+}
+const CFG_PAGES = ['Status', 'Knobs', 'GDU Controls', 'Diagnostics Terminal', 'Database Status', 'File Manager', 'Systems', 'Fan Control', 'Restart Options'];
+const cfgMode = { on: false, page: 0, in: false, item: 0, last: '' };
+function cfgEnter() { cfgMode.on = true; cfgMode.page = 0; cfgMode.in = false; cfgMode.item = 0; maint.step = 'CONFIG'; _fSay('Restart — System to Config Mode(CDU · MFD · ACP 다시 시작)', ''); _ksRefresh(true); }
+function cfgExit() { cfgMode.on = false; maint.step = 'SYS_MAINT'; _ksRefresh(true); }
+// 18-system.js cduKnobOp 가 먼저 묻는다 — 여기서 처리했으면 true
+function kuhKnob(k, op, a) {
+  if (cfgMode.on && k === 'R') {
+    cfgMode.last = `R ${op}${a ? (a > 0 ? ' +' : ' −') : ''}`;
+    if (op === 'rot' && !cfgMode.in) cfgMode.page = (cfgMode.page + a + CFG_PAGES.length) % CFG_PAGES.length;
+    else if (op === 'rotIn' || (op === 'rot' && cfgMode.in)) cfgMode.item = Math.max(0, Math.min(5, cfgMode.item + a));
+    else if (op === 'push') { cfgMode.in = !cfgMode.in; cfgMode.item = 0; }
+    _ksRefresh(true); return true;
+  }
+  if (cfgMode.on) cfgMode.last = `${k} ${op}`;
+  if (k === 'L' && op === 'push' && radarShown()) { radarCtl.open = !radarCtl.open; try { sysDraw(); } catch (e) { _swallow(e); } return true; }
+  if (radarCtl.open && radarShown()) {
+    if (k === 'L' && op === 'rot') { const i = RADAR_RNG.indexOf(radarCtl.range); radarCtl.range = RADAR_RNG[Math.max(0, Math.min(RADAR_RNG.length - 1, (i < 0 ? 3 : i) + a))]; }
+    else if (k === 'R' && op === 'rot') radarCtl.tilt = Math.max(-15, Math.min(15, radarCtl.tilt + a));
+    else if (k === 'R' && op === 'rotIn') radarCtl.gain = Math.max(0, Math.min(32, radarCtl.gain + a));
+    else if (k === 'R' && op === 'push') radarCtl.tx = !radarCtl.tx;
+    else if (k === 'R' && op === 'hold') radarCtl.freeze = !radarCtl.freeze;
+    else return false;
+    try { sysDraw(); } catch (e) { _swallow(e); } return true;
+  }
+  return false;
+}
+// 라벨 바 덮어쓰기 — { L, R } (없으면 18-system.js 기본)
+function kuhKnobLabels() {
+  const o = {};
+  if (radarShown()) o.L = ['− Range +', `Push:Radar ${radarCtl.open ? '<b>ON</b>' : ''}`];
+  if (radarCtl.open && radarShown()) o.R = ['Tilt · Gain', `<b>${radarCtl.tilt > 0 ? '+' : ''}${radarCtl.tilt}° · G${radarCtl.gain}</b>`, 'Push:TX Hold:FRZ'];
+  if (cfgMode.on) o.R = ['Config Mode', `<b>${CFG_PAGES[cfgMode.page]}</b>`, 'Push:Menu'];
+  return o;
+}
+// SYSTEM 창 Video RADAR — 레이더 제어 차림(메인: RNG · RDR TX · R ONLY · FREEZE · SEARCH · MAINT / 기상: TILT · GAIN)
+function radarDraw(g, x, y, w, h) {
+  if (!radarCtl.open) return;
+  const bx = x + w - 230, by = y + 60;
+  g.fillStyle = 'rgba(0,0,0,0.85)'; g.fillRect(bx, by, 210, 250); g.strokeStyle = '#2fe0e0'; g.lineWidth = 2; g.strokeRect(bx, by, 210, 250);
+  g.font = 'bold 15px Helvetica Neue, Arial, sans-serif'; g.textAlign = 'center'; g.fillStyle = '#2fe0e0'; g.fillText('RADAR CONTROL', bx + 105, by + 24);
+  const rows = [['RNG', `${radarCtl.range} NM`], ['RDR TX', radarCtl.tx ? 'ON' : 'STBY'], ['R ONLY', radarCtl.rOnly ? 'ON' : 'OFF'], ['FREEZE', radarCtl.freeze ? 'ON' : 'OFF'],
+                ['MODE', radarCtl.mode], ['TILT', `${radarCtl.tilt > 0 ? '+' : ''}${radarCtl.tilt}°`], ['GAIN', String(radarCtl.gain)]];
+  rows.forEach(([k, v], i) => {
+    const yy = by + 54 + i * 27;
+    g.textAlign = 'left'; g.fillStyle = '#9ab'; g.font = '14px Helvetica Neue, Arial, sans-serif'; g.fillText(k, bx + 14, yy);
+    g.textAlign = 'right'; g.fillStyle = (k === 'RDR TX' && radarCtl.tx) || (k === 'FREEZE' && radarCtl.freeze) ? '#22e022' : '#fff'; g.font = 'bold 14px Helvetica Neue, Arial, sans-serif'; g.fillText(v, bx + 196, yy);
+  });
+}
+
+// ══════════ ⑦ NAV 예비 주파수 · 교환 · DME HOLD · ILS 자동 ══════════
+//   NAV1 · NAV2 마다 활성(navRadios — 지금 튜닝) · 예비(navStby). 활성에 새 주파수가 들어가면(CDU 입력 · 접근 자동 튜닝) 앞 활성은 예비로 내려간다
+//   ↕(교환) · CDU 오른쪽 노브(NAV 탭 — 예비를 1 MHz · 50 kHz · 1.5초 누름 교환) · DME HOLD(켜 둔 국의 거리를 계속 — 'H')
+//   ILS/LOC 접근: CDI 가 FMS 인 채로 FAF 15NM 안에서 최종 접근 진로(LOC)에 들면 그 LOC 를 맞춘 NAV 로 바뀐다(FLM 7.15.3.8)
+const navStby = { NAV1: '113.00', NAV2: '113.25' };
+try { Object.assign(navStby, JSON.parse(localStorage.getItem('navStby') || '{}')); } catch (e) { _swallow(e); }
+const navDmeHold = { NAV1: null, NAV2: null };
+let _navSwapping = false;
+function _navStbySave() { try { localStorage.setItem('navStby', JSON.stringify(navStby)); } catch (e) { _swallow(e); } }
+try {
+  if (typeof setNavRadio === 'function') {
+    const _snr = setNavRadio;
+    setNavRadio = function (navId, freq, id) {
+      const r = (typeof navRadios !== 'undefined' && navRadios[navId]) || {}, old = r.freq;
+      _snr(navId, freq, id);
+      if (!_navSwapping && freq != null && old != null && Math.abs(parseFloat(old) - parseFloat(r.freq)) >= 0.001) { navStby[navId] = Number(old).toFixed(2); _navStbySave(); }
+    };
+  }
+} catch (e) { _swallow(e); }
+function navSwap(navId) {
+  const r = navRadios[navId]; if (!r) return;
+  const old = r.freq, nw = navStby[navId];
+  _navSwapping = true;
+  try { const v = typeof _resolveVor === 'function' ? _resolveVor(nw, null) : null; setNavRadio(navId, nw, v ? v.id : null); } finally { _navSwapping = false; }
+  navStby[navId] = Number(old).toFixed(2); _navStbySave();
+  try { if (typeof cduRerender === 'function') cduRerender(); } catch (e) { _swallow(e); }
+}
+function navStbyStep(navId, big, d) {
+  let [mhz, khz] = String(navStby[navId]).split('.');
+  mhz = +mhz; khz = Math.round(+('0.' + (khz || '0')) * 1000);
+  if (big) mhz = 108 + ((mhz - 108 + d) % 10 + 10) % 10; else khz = ((khz + 50 * d) % 1000 + 1000) % 1000;
+  navStby[navId] = mhz + '.' + String(Math.round(khz / 10)).padStart(2, '0'); _navStbySave();
+}
+function navDmeHoldToggle(navId) {
+  const r = navRadios[navId]; if (!r) return;
+  navDmeHold[navId] = navDmeHold[navId] ? null : (r.lat != null ? { lat: r.lat, lon: r.lon, elev: r.elev || 0, id: r.id, freq: r.freq } : null);
+  try { if (typeof cduRerender === 'function') cduRerender(); } catch (e) { _swallow(e); }
+}
+// ILS/LOC 자동 — FMS 인 채로 FAF 15NM 안 · LOC 진로 ±2.5° 안 · 다가가는 쪽이면 LOC 를 맞춘 NAV 로
+let _ilsAutoDone = '';
+function navIlsAutoStep() {
+  if (typeof navSrc === 'undefined' || navSrc !== 'FMS') return;
+  const id = ['NAV1', 'NAV2'].find(n => navRadios[n] && navRadios[n].loc && navRadios[n].lat != null);
+  if (!id) return;
+  const r = navRadios[id], key = id + r.id;
+  if (_ilsAutoDone === key) return;
+  const wps = _ks(() => S.wps, []), faf = wps.find(w => /FAF|^FF/i.test(String(w.role || w.ident || ''))) || wps[wps.length - 1];
+  const dFaf = faf ? distance(S.lat, S.lon, faf.lat, faf.lon) : distance(S.lat, S.lon, r.lat, r.lon);
+  if (dFaf > 15) return;
+  const brgTo = bearing(S.lat, S.lon, r.lat, r.lon), crs = Number.isFinite(r.crs) ? r.crs : null;
+  if (crs == null) return;
+  const off = Math.abs(((brgTo - crs + 540) % 360) - 180);
+  if (off > 2.5) return;
+  _ilsAutoDone = key;
+  try { setNavSrc(id); } catch (e) { _swallow(e); }
+  _fSay(`ILS/LOC 최종 접근 진로 — CDI FMS → ${id}(${r.id}) 자동 전환`, '');
+}
+
+// ══════════ ⑧ HOCAS — MEP CTL(DOI) · DMS · CURSOR(조이스틱 배정 · 12-joystick.js) ══════════
+//   MEP CTL(사이클릭 4방향): 처음 누르면 DOI(제어 대상 지시 — 청록 테두리)를 만들고, 다음부터 PFD → SYSTEM(MFD) → 지도(DMM) 를 차례로
+//   DMS(사이클릭 4방향 + 누름): DOI 화면의 메뉴 — 지도: 위/아래 메뉴(DIR · VIEW · QUICK · SETUP) · 오른쪽 펼침 · 누름(VIEW 면 2D ⇄ 3D)
+//     SYSTEM: 위/아래 계통 화면 · 왼/오른쪽 HALF 판 / PFD: 위/아래 CAS 넘기기
+//   CURSOR(컬렉티브 X/Y + 누름 + ENABLE): DOI 가 지도면 지도 포인터(CDU 조이스틱과 같은 것)를 켜고(ENABLE · 위로 길게 FREEZE) 움직인다 · 누름은 기체 자리로
+const HOCAS_DOI = ['pfd', 'sysp', 'map'], HOCAS_DOI_NM = { pfd: 'MFD2 PFD', sysp: 'MFD4 SYSTEM', map: 'DMM MAP' }, DMM_MENU = ['DIR', 'VIEW', 'QUICK', 'SETUP'];
+const hocasSw = { doi: null, dms: 'DIR', exp: false, view: '2D', curEn: false, cx: 0, cy: 0, last: '' };
+function _doiPaint() {
+  ['pfd-wrap', 'sysp-wrap', 'map-wrap'].forEach((id, i) => { const el = document.getElementById(id); if (el) el.classList.toggle('hocas-doi', hocasSw.doi === HOCAS_DOI[i]); });
+}
+function hocasMep(dir) {
+  hocasSw.last = 'MEP ' + dir;
+  if (!hocasSw.doi) hocasSw.doi = 'pfd';
+  else { const i = HOCAS_DOI.indexOf(hocasSw.doi), d = dir === 'R' || dir === 'A' ? 1 : -1; hocasSw.doi = HOCAS_DOI[(i + d + HOCAS_DOI.length) % HOCAS_DOI.length]; }
+  _doiPaint();
+}
+function hocasDms(dir, long) {
+  hocasSw.last = 'DMS ' + dir + (long ? ' (길게)' : '');
+  const doi = hocasSw.doi; if (!doi) return;
+  if (doi === 'map') {
+    if (dir === 'U' || dir === 'D') {
+      if (long) hocasSw.dms = dir === 'U' ? DMM_MENU[0] : DMM_MENU[DMM_MENU.length - 1];
+      else { const i = DMM_MENU.indexOf(hocasSw.dms); hocasSw.dms = DMM_MENU[(i + (dir === 'U' ? -1 : 1) + DMM_MENU.length) % DMM_MENU.length]; }
+    } else if (dir === 'R') hocasSw.exp = true;
+    else if (dir === 'L') hocasSw.exp = false;
+    else if (dir === 'P') {
+      if (long) hocasSw.exp = false;
+      else if (hocasSw.dms === 'VIEW') { hocasSw.view = hocasSw.view === '2D' ? '3D' : '2D'; try { if (typeof toggle3dMap === 'function') toggle3dMap(); } catch (e) { _swallow(e); } }
+    }
+  } else if (doi === 'sysp') {
+    const ids = Object.keys(SYS_PAGES).filter(k => k !== 'map'), i = ids.indexOf(sysPage);
+    if (dir === 'U' || dir === 'D') sysPageSet(ids[(i + (dir === 'U' ? -1 : 1) + ids.length) % ids.length]);
+    else if ((dir === 'L' || dir === 'R') && sysLayout === 'HALF') { sysSel = dir; sysPage = sysHalf[sysSel]; try { sysDraw(); } catch (e) { _swallow(e); } }
+  } else if (doi === 'pfd') { if (dir === 'U' || dir === 'D') { try { pfdCasStep(dir === 'U' ? -1 : 1); } catch (e) { _swallow(e); } } }
+}
+function hocasCursor(op, dx, dy) {
+  hocasSw.last = 'CURSOR ' + op;
+  if (op === 'en') { hocasSw.curEn = !hocasSw.curEn; if (hocasSw.curEn && hocasSw.doi === 'map' && !knobPtr.on) knobPtrToggle(); if (!hocasSw.curEn && knobPtr.on) knobPtrToggle(); return; }
+  if (hocasSw.doi !== 'map') return;
+  if (op === 'freeze' && !knobPtr.on) { hocasSw.curEn = true; knobPtrToggle(); return; }
+  if (!knobPtr.on) return;
+  if (op === 'push') { knobPtr.x = 0; knobPtr.y = 0; try { leafMap.panTo([S.lat, S.lon], { animate: false }); } catch (e) { _swallow(e); } knobPtrDraw(); return; }
+  if (op === 'slew') { knobPtrMove(dx, dy); hocasSw.cx = Math.max(-1, Math.min(1, knobPtr.x / 200)); hocasSw.cy = Math.max(-1, Math.min(1, -knobPtr.y / 200)); }
+}
+
+let _hcSlew = null;
+function hocasSlewStart(dx, dy) { hocasSlewStop(); hocasCursor('slew', dx, dy); _hcSlew = setInterval(() => hocasCursor('slew', dx, dy), 120); }
+function hocasSlewStop() { if (_hcSlew) { clearInterval(_hcSlew); _hcSlew = null; } }
+
+// ══════════ ⑨ 전기 — GCU 보호 · 버스 타이 · 부하 차단 · 배터리 단독 ══════════
+//   GCU: 저전압 100V · 과전압 125V 4.5초 · 저주파 336Hz 4초 · 고주파 475Hz 2초 넘게 이어지면 그 발전기를 떼어 낸다(GEN 스위치를 OFF 했다 ON 해야 다시)
+//   AC-BTC: 발전기 하나면 정상 쪽이 반대 버스까지 · 둘 다 없고 APU GEN 만이면 AC · DC NON-ESSENTIAL 차단(로터 제빙 TEST 만)
+//   APU GEN 단독 + 비상 유압 펌프 + 윈드실드 방빙 + 엔진 흡입구 방빙을 함께 2분 넘게 쓰면 경고
+//   TRU 하나가 멎으면 DC BTC 로 정상 쪽이 반대 버스까지 · 둘 다 멎으면(또는 AC 가 없으면) 배터리 단독 — 80% 에서 약 50분
+const elecFault = { gen1: null, gen2: null, tru1: false, tru2: false };
+const GCU_LIM = { UV: 4.5, OV: 4.5, UF: 4, OF: 2 };
+const elecGcu = { t: { 1: 0, 2: 0 }, trip: { 1: false, 2: false } };
+const elecBatt = { soc: 100, aiT: 0, aiWarned: false };
+function elecFaultSet(k, v) { elecFault[k] = v; if (k === 'gen1' || k === 'gen2') { const n = k === 'gen1' ? 1 : 2; if (!v) elecGcu.t[n] = 0; } }
+function gcuTripped(n) { return !!elecGcu.trip[n]; }
+try { if (typeof ovhdOn === 'function') ovhdOn((id, v) => { if ((id === 'gen1' || id === 'gen2') && v === 'OFF') { const n = id === 'gen1' ? 1 : 2; elecGcu.trip[n] = false; elecGcu.t[n] = 0; } }); } catch (e) { _swallow(e); }
+function elecStep(dt) {
+  if (_ksB206()) return;
+  [1, 2].forEach(n => {
+    const f = elecFault['gen' + n];
+    if (f && !elecGcu.trip[n] && _ksOv('gen' + n, 'ON') === 'ON') {
+      elecGcu.t[n] += dt;
+      if (elecGcu.t[n] >= GCU_LIM[f]) { elecGcu.trip[n] = true; _fSay(`GCU ${n} — ${{ UV: '저전압 100V', OV: '과전압 125V', UF: '저주파 336Hz', OF: '고주파 475Hz' }[f]} · ${n}번 발전기를 떼어 냈다`, 'err'); }
+    }
+  });
+  let E = null; try { E = elecState(); } catch (e) { _swallow(e); }
+  if (!E) return;
+  if (E.battOnly) elecBatt.soc = Math.max(0, elecBatt.soc - 80 / (50 * 60) * dt);
+  else if (E.tru1 || E.tru2) elecBatt.soc = Math.min(100, elecBatt.soc + 0.05 * dt);
+  const aiAll = E.apuConn && !E.gen1 && !E.gen2 && _ksOv('emergPump', 'AUTO') === 'ON' && (_ksOv('wsPlt', 'OFF') === 'ON' || _ksOv('wsCplt', 'OFF') === 'ON') && (_ksOv('engAi1', 'OFF') === 'ON' || _ksOv('engAi2', 'OFF') === 'ON');
+  elecBatt.aiT = aiAll ? elecBatt.aiT + dt : 0;
+  if (elecBatt.aiT > 120 && !elecBatt.aiWarned) { elecBatt.aiWarned = true; _fSay('APU GEN 단독 — 비상 유압 펌프 · 윈드실드 · 흡입구 방빙 동시 2분 넘음(하나를 끈다)', 'err'); }
+  if (!aiAll) elecBatt.aiWarned = false;
+}
+function elecBattMin() { return elecBatt.soc / 80 * 50; }
+function elecCas() {
+  if (_ksB206()) return [];
+  let E = null; try { E = elecState(); } catch (e) { return []; }
+  const out = [], A = '#ffb000';
+  [1, 2].forEach(n => { if (_ksOv('tru' + n, 'ON') === 'ON' && E.ac && !E['tru' + n]) out.push({ t: `${n} TRU`, c: A }); });
+  if (E.battOnly && elecBatt.soc < 25) out.push({ t: 'BATT LOW', c: A });
+  return out;
+}
+function elecSysNote(g) {
+  let E = null; try { E = elecState(); } catch (e) { return; }
+  const lines = [[`AC NON-ESS ${E.acNess ? 'ON' : 'SHED'}`, E.acNess ? '#3ad13a' : '#ffb000'], [`DC NON-ESS ${E.dcNess ? 'ON' : 'SHED'}`, E.dcNess ? '#3ad13a' : '#ffb000'],
+                 [`AC-BTC ${E.tie ? 'CLOSED' : 'OPEN'} · DC BTC ${E.dcTie ? 'CLOSED' : 'OPEN'}`, '#fff'],
+                 [E.battOnly ? `BATTERY ONLY ${Math.round(elecBatt.soc)}% · ${Math.round(elecBattMin())} min` : `BATT ${Math.round(elecBatt.soc)}%`, E.battOnly ? '#ffb000' : '#fff']];
+  g.save(); g.font = 'bold 13px Helvetica Neue, Arial, sans-serif'; g.textAlign = 'left';
+  lines.forEach(([t, c], i) => { g.fillStyle = c; g.fillText(t, 240, 548 + i * 18); });
+  g.restore();
+}
+
+// ══════════ ⑩ AFCS — P FLT TEST 조건 · 결과 셋 · 5회 실패 잠김 · 고장 등급별 남는 모드 ══════════
+//   시험 조건(FLM 2.3.4): 땅 위 · 유압 정상 · DC · AP1 · AP2 OFF(AFCAU OFF 글씨) · (조이스틱이 있으면) 사이클릭 · 페달 가운데
+//   시험 중 다시 누르면 중단. 결과: AP1/AP2 TEST OK · 사소한 결함(한쪽 APM · SEMA2 — 기능 저하 운용) · 중요 결함(두 APM · 한 축 SEMA 둘 — 운용 불가)
+//   결함이 5회 쌓이면 AFCS 사용 불가(AFCS FAIL)
+//   고장(교관 창): APM1 · APM2(둘 다면 AFCS FAIL · 130 KIAS) · 피치 SEMA2(그 축 황색 저하) · 피치 SEMA 둘(그 축만 SAS) · COLL LINK(컬렉티브 축만 — CAS)
+const afcsFault = { apm1: false, apm2: false, sema2: { C: false, YR: false, P: false }, semaBoth: { C: false, YR: false, P: false }, collLink: false };
+const afcsPft = { fails: 0, lock: false, result: '' };
+function afcsPftPre() {
+  if (_ksOv('ap1', 'OUT') !== 'IN' || _ksOv('ap2', 'OUT') !== 'IN') return 'AP1 · AP2 를 OFF 로';
+  try {
+    if (typeof joyOn !== 'undefined' && joyOn && typeof hocasAxes === 'function') {
+      const ax = hocasAxes();
+      if (Math.abs(ax.roll || 0) > 0.15 || Math.abs(ax.pitch || 0) > 0.15) return '사이클릭을 가운데로';
+      if (Math.abs(ax.yaw || 0) > 0.15) return '페달을 가운데로';
+    }
+  } catch (e) { _swallow(e); }
+  return '';
+}
+function afcsPftResult() {
+  const F = afcsFault, anyBoth = Object.values(F.semaBoth).some(Boolean), anySema2 = Object.values(F.sema2).some(Boolean);
+  if ((F.apm1 && F.apm2) || anyBoth) return 'MAJOR';
+  if (F.apm1 || F.apm2 || anySema2) return 'MINOR';
+  return 'OK';
+}
+function afcsPftDone(res) {
+  afcsPft.result = res;
+  if (res !== 'OK') { afcsPft.fails++; if (afcsPft.fails >= 5 && !afcsPft.lock) { afcsPft.lock = true; _fSay('P FLT TEST 5회 실패 — AFCS 사용 불가', 'err'); } }
+  else afcsPft.fails = 0;
+}
+function afcsFaultSet(k, on) {
+  if (k === 'apm1' || k === 'apm2' || k === 'collLink') afcsFault[k] = on;
+  else if (k === 'semaP2') afcsFault.sema2.P = on;
+  else if (k === 'semaPB') afcsFault.semaBoth.P = on;
+}
+
+// ── ⑥~⑩ 한 걸음 ──
+setInterval(() => {
+  try { elecStep(0.25); } catch (e) { _swallow(e); }
+  try { navIlsAutoStep(); } catch (e) { _swallow(e); }
+}, 250);
+try { appRegister({ cfgEnter, cfgExit, navSwap, navDmeHoldToggle }); } catch (e) { _swallow(e); }

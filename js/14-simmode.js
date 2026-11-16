@@ -889,7 +889,9 @@ function simVne(altFt = S.alt) {
   if (acB206()) return B206P.vne - B206P.vnePerKft * Math.max(0, altFt - B206P.vneAlt) / 1000;   // Bell 206 — 130kt, 3,000ft 위로 1,000ft 마다 3.5kt
   return VNE_SL - VNE_PER_KFT * Math.max(0, altFt) / 1000;
 }
-function simOverVne() { return simModeOn && !_simOnGnd && simAirspeed() > simVne(); }
+// AFCS FAIL 이면 130 KIAS 안으로(FLM 3.8 — 36-kuhsys.js · 23-afcs.js)
+function simVneLim() { let v = simVne(); try { if (typeof afcsAxes === 'function' && !acB206() && afcsAxes().fail) v = Math.min(v, 130); } catch (e) { _swallow(e); } return v; }
+function simOverVne() { return simModeOn && !_simOnGnd && simAirspeed() > simVneLim(); }
 // 남은 차이(d)를 향해 '바뀌는 빠르기(acc)' 를 한 구간 옮긴다. acc 는 jerk 의 빠르기로
 // 커진다(그래서 점점 빨라진다). 목표가 가까워지면 풀 수 있는 만큼(√(jb·|d|) — jb 는
 // 푸는 빠르기, 주지 않으면 jerk)으로 줄여 넘치지 않고, 아주 가까우면 곧게(d 에 비례해)

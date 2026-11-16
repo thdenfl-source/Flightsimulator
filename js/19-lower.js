@@ -176,6 +176,8 @@ ovhdOn((id, v) => {
   if (id === 'parkBrake') lconSyncPark();
   // AFCAU P FLT TST — 누르면 AFCS 시험(18-system.js afcsTestStart). 시험이 끝나면 버튼이 다시 나온다
   if (id === 'bFltTst' && v === 'IN' && !_lconQuiet) { try { afcsTestStart(); } catch (e) { _swallow(e); } }
+  // 시험 중에 다시 누르면(버튼이 나오면) 중단
+  if (id === 'bFltTst' && v === 'OUT' && !_lconQuiet) { try { if (typeof afcsTest !== 'undefined' && afcsTest) afcsTestStart(); } catch (e) { _swallow(e); } }
   // FUEL 패널 · AFCAU AP1/AP2 → SYSTEM 창(Fuel · Aircraft Status · AFCS) 다시 그리기
   try { if (typeof sysDraw === 'function') sysDraw(); } catch (e) { _swallow(e); }
   // PFD 메시지 시현창(03-pfd.js pfdMsgs — PITOT · PARKING BRAKE · ENG A/I · NLG LOCK · EMER FLOATS)도 곧바로

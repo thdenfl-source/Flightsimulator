@@ -41,6 +41,8 @@ function sysLayoutToggle() {
 let cduKeyStuck = false;
 const knobPtr = { on: false, x: 0, y: 0, follow: false };
 function cduKnobOp(k, op, a) {
+  // 레이더 제어(Push:Radar) · 정비 Config Mode 는 36-kuhsys.js 가 먼저 받는다
+  try { if (typeof kuhKnob === 'function' && kuhKnob(k, op, a)) { cduKnobSync(); return; } } catch (e) { _swallow(e); }
   const R = typeof cduKnobRadio === 'object' ? cduKnobRadio : null;
   if (k === 'L') {
     if (op === 'rot') { try { if (a > 0) leafMap.zoomIn(1, { animate: false }); else leafMap.zoomOut(1, { animate: false }); } catch (e) { _swallow(e); } }
@@ -128,11 +130,12 @@ function knobPtrDraw() {
 function cduKnobSync() {
   const set = (id, h) => { const e = document.getElementById(id); if (e && e.innerHTML !== h) e.innerHTML = h; };
   const pane = sysLayout === 'HALF' ? `←☐→ Pane <b>${sysSel === 'L' ? '◀L' : 'R▶'}</b>` : '←☐→ Pane <span style="color:#666">FULL</span>';
-  set('cdu-lbl-L', `<div>− Range +</div><div>Push:Pan ${knobPtr.on ? '<b>ON</b>' : ''}</div><div>${pane}</div>`);
+  let O = {}; try { O = typeof kuhKnobLabels === 'function' ? kuhKnobLabels() : {}; } catch (e) { _swallow(e); }
+  set('cdu-lbl-L', O.L ? O.L.map(t => `<div>${t}</div>`).join('') + `<div>${pane}</div>` : `<div>− Range +</div><div>Push:Pan ${knobPtr.on ? '<b>ON</b>' : ''}</div><div>${pane}</div>`);
   let L = null; try { L = typeof cduKnobRadio === 'object' ? cduKnobRadio.labels() : null; } catch (e) { _swallow(e); }
   if (L) {
     set('cdu-lbl-C', L.mid.map(t => `<div>${t}</div>`).join(''));
-    set('cdu-lbl-R', L.right.map(t => `<div>${t}</div>`).join(''));
+    set('cdu-lbl-R', (O.R || L.right).map(t => `<div>${t}</div>`).join(''));
   }
   if (knobPtr.on) knobPtrDraw();
 }
@@ -522,6 +525,7 @@ function _sysPaint(g, c, W, H, dpr, own) {
     g.font = '14px Helvetica Neue, Arial, sans-serif'; g.fillStyle = '#789';
     g.fillText(`${videoCfg.src} · Brightness ${videoCfg.bri}% · Contrast ${videoCfg.con}% · Saturation ${videoCfg.sat}%`, 610, 330);
     g.fillText('영상 입력 없음 — 채널 · 설정은 CDU Aircraft Systems → Video', 610, 354);
+    if (videoCfg.ch === 'RADAR') { g.fillText('레이더 제어 — CDU 조이스틱을 누른다(Push:Radar)', 610, 378); try { if (typeof radarDraw === 'function') radarDraw(g, 224, 32, 772, 594); } catch (e) { _swallow(e); } }
   }
   else if (typeof kuhSysDraw === 'function' && kuhSysDraw(g, sysPage, 224, 32, 772, 594)) { /* 36-kuhsys.js */ }
   else {
@@ -627,8 +631,11 @@ function _sysHocasPage(g, x, y, w, h) {
     g.strokeStyle = '#bbb'; g.beginPath(); g.moveTo(mid, y0); g.lineTo(mid, ty + 4); g.stroke();
   };
   const wr = typeof casMepT !== 'undefined' && casMepT && performance.now() - casMepT < 1500;   // 사이클릭 MEP/RST 를 막 눌렀다
-  sec('Cyclic', [['MEPCTL', 'Off', 'Off'], ['DMS', 'Off', 'Off'], ['Warn Reset', 'Off', wr ? 'On' : 'Off']]);
-  sec('Collective', [['Cursor X', 'Off', 'Off'], ['Cursor Y', 'Off', 'Off'], ['Cursor Enable', 'Off', 'Off']]);
+  const H = typeof hocasSw !== 'undefined' ? hocasSw : null;   // 36-kuhsys.js — MEP CTL(DOI) · DMS · CURSOR
+  const doiNm = H && H.doi ? HOCAS_DOI_NM[H.doi].split(' ')[0] : 'Off', dmsNm = H && H.doi === 'map' ? `${H.dms}${H.exp ? '▸' : ''} ${H.view}` : (H && H.doi ? 'On' : 'Off');
+  const cur = H && typeof knobPtr !== 'undefined' && knobPtr.on;
+  sec('Cyclic', [['MEPCTL', 'Off', doiNm], ['DMS', 'Off', dmsNm], ['Warn Reset', 'Off', wr ? 'On' : 'Off']]);
+  sec('Collective', [['Cursor X', 'Off', cur ? H.cx.toFixed(2) : 'Off'], ['Cursor Y', 'Off', cur ? H.cy.toFixed(2) : 'Off'], ['Cursor Enable', 'Off', cur ? 'On' : 'Off']]);
   sec('Push to talk', [['PTT- ICS(1st)', 'Off', ptt ? 'On' : 'Off'], ['PTT- SEL(2nd)', 'Off', 'Off']]);
 }
 // ── TCAS 화면 — 기수 위 교통 지도(6NM 고리 · 2NM 점 고리) · 머리글 TCAS : TA/RA · ADS-B · 교통(33-train4.js tcasDrawInset — 모드 · 고도 범위 · 시험 그림 그대로)
@@ -723,6 +730,8 @@ function _sysLeftStrip(g, F) {
   _sysBox(g, 114, 20, 104, 152, 'NG', '%');
   _sysBars(g, 118, 24, 96, 145, ['NG1', 'NG2'], [P.e1.ng.toFixed(1), P.e2.ng.toFixed(1)], [P.e1.ng / 110, P.e2.ng / 110],
     [[0.70, '#ff3030'], [0.66, '#ffcc00']]);
+  // 시동 중 — NG 막대 바깥쪽에 세로로 START(1번 왼쪽 · 2번 오른쪽)
+  try { if (typeof engStarting === 'function') { if (engStarting(1)) drawStartVert(g, 125, 70, 16, 13); if (engStarting(2)) drawStartVert(g, 207, 70, 16, 13); } } catch (e) { _swallow(e); }
   // EOT · EOP · MGB
   const eot = D.eot, eop = D.eop;
   _sysBox(g, 5, 188, 68, 152, 'EOT', '°C');
@@ -1052,7 +1061,8 @@ function elecState() {
   try { P = engParams(); } catch (e) { P = null; }
   const sw = (id, on) => { try { return typeof ovhdGet === 'function' ? ovhdGet(id) === on : true; } catch (e) { return true; } };
   const ng = i => P ? (i === 1 ? P.e1.ng : P.e2.ng) : 0;
-  const gen1 = ng(1) > 50 && sw('gen1', 'ON'), gen2 = ng(2) > 50 && sw('gen2', 'ON');
+  const trip = n => typeof gcuTripped === 'function' && gcuTripped(n);   // GCU 보호로 떨어진 발전기(36-kuhsys.js)
+  const gen1 = ng(1) > 50 && sw('gen1', 'ON') && !trip(1), gen2 = ng(2) > 50 && sw('gen2', 'ON') && !trip(2);
   const apu = apuGenOn();                                    // APU 가 다 돈 뒤에만(17초 · apuRunning)
   let onGnd = false;
   try { onGnd = (typeof radarAltFt === 'function' ? radarAltFt() : S.alt) < 5; } catch (e) { _swallow(e); }
@@ -1066,17 +1076,20 @@ function elecState() {
   const tie = mainGen ? gen1 !== gen2 : (apuConn || gpuConn);
   // 연결선에서 각 AC 버스로 내려가는 몫 — 그 버스를 제 발전기가 맡지 않을 때만 전기가 온다
   const dropL = ac && !gen1, dropR = ac && !gen2;
-  const tru1 = ac && sw('tru1', 'ON'), tru2 = ac && sw('tru2', 'ON');
+  const tf = k => typeof elecFault !== 'undefined' && !!elecFault[k];
+  const tru1 = ac && sw('tru1', 'ON') && !tf('tru1'), tru2 = ac && sw('tru2', 'ON') && !tf('tru2');
   const nTru = (tru1 ? 1 : 0) + (tru2 ? 1 : 0);
-  const batt = sw('batt', 'ON');
+  const batt = sw('batt', 'ON') && !(typeof elecBatt !== 'undefined' && elecBatt.soc <= 0);   // 다 쓴 배터리는 없는 것과 같다
   const dc = nTru > 0 || batt;
   // 주 발전기 없이 APU GEN 이 맡으면 DC N-ESS(비필수)를 끊어 쓸데없는 전기를 줄인다
-  const dcNess = dc && !apuConn;
+  const dcNess = dc && !apuConn && nTru > 0;                  // 배터리 단독이면 DC N-ESS 도 끊긴다
+  const acNess = ac && !(!gen1 && !gen2 && apuConn);         // 주 발전기 둘 다 없고 APU GEN 만이면 AC N-ESS 차단
+  const dcTie = nTru === 1, battOnly = batt && nTru === 0;   // TRU 하나 → DC BTC 닫힘 · 둘 다 없으면 배터리 단독
   const dcLoad = ELEC_DC_LOAD - (dc && !dcNess ? ELEC_DC_NESS : 0);
   const genA = nGen ? ELEC_AC_LOAD / nGen : 0, truA = nTru ? dcLoad / nTru : 0;
   const bat = !batt ? { a: 0, v: 25 } : nTru ? { a: 5, v: 28 } : { a: -45, v: 24 };
   return { gen1, gen2, apu, gpu, apuConn, gpuConn, mainGen, ac, tru1, tru2, dc, dcNess, batt, battBus: batt || dc, nGen, genA, truA, bat,
-           tie, dropL, dropR };
+           tie, dropL, dropR, acNess, dcTie, battOnly };
 }
 // 전원 — 하부 콘솔 장치 · 연료 펌프 · AFCS 가 쓰는 버스(상부 콘솔 스위치를 따른 elecState)
 //   DC(필수) : 무전기(C-5000 · NPX138) · 승압 펌프 BP1/BP2 · AFCS(AP1 · AP2) · 하부 콘솔 표시등·버튼 글씨
@@ -1170,6 +1183,7 @@ function _sysElecPage(g) {
   gauge(1248, 920, 'TRU 2', tA(E.tru2) / 400, truB, [`${Math.round(tA(E.tru2))}A`, `${E.tru2 ? 28 : 0}V`]);
   gauge(438, 920, 'BATT', (E.bat.a + 100) / 200, batB, [`${E.bat.a}A`, `${E.bat.v}V`, '25.0°C']);
   g.restore();
+  try { if (typeof elecSysNote === 'function') elecSysNote(g); } catch (e) { _swallow(e); }   // 버스 타이 · 부하 차단 · 배터리(36-kuhsys.js)
 }
 
 // ── 공용 — 상부 콘솔 값 · 로터 · 바깥 기온 ──
@@ -1217,8 +1231,17 @@ function afcsPfltOk() {
   return wow && hydNormal();
 }
 function afcsTestStart() {
+  // 시험 중에 다시 누르면 중단(FLM 2.3.4)
+  if (afcsTest) { afcsTest = null; afcsLast = 'P FLT TEST ABORTED'; try { if (ovhdGet('bFltTst') === 'IN') setTimeout(() => ovhdSet('bFltTst', 'OUT'), 300); } catch (e) { _swallow(e); } return; }
   if (!afcsPfltOk()) {
     afcsTest = null; afcsLast = 'P FLT TST INHIBITED';
+    try { if (typeof ovhdGet === 'function' && ovhdGet('bFltTst') === 'IN') setTimeout(() => ovhdSet('bFltTst', 'OUT'), 300); } catch (e) { _swallow(e); }
+    try { sysPageSet('asys_afcs'); } catch (e) { _swallow(e); }
+    return;
+  }
+  const pre = typeof afcsPftPre === 'function' ? afcsPftPre() : '';   // AP1 · AP2 OFF · 조종간 가운데(36-kuhsys.js)
+  if (pre) {
+    afcsLast = `P FLT TEST — ${pre}`;
     try { if (typeof ovhdGet === 'function' && ovhdGet('bFltTst') === 'IN') setTimeout(() => ovhdSet('bFltTst', 'OUT'), 300); } catch (e) { _swallow(e); }
     try { sysPageSet('asys_afcs'); } catch (e) { _swallow(e); }
     return;
@@ -1231,7 +1254,10 @@ function afcsPhase() {
   if (!afcsTest) return null;
   const t = (performance.now() - afcsTest.t0) / 1000;
   if (t >= AFCS_AP1_SEC + AFCS_HOLD_SEC) {
-    afcsTest = null; afcsLast = 'AFCS TEST OK';
+    afcsTest = null;
+    const res = typeof afcsPftResult === 'function' ? afcsPftResult() : 'OK';   // OK · MINOR(기능 저하 운용) · MAJOR(운용 불가)
+    try { if (typeof afcsPftDone === 'function') afcsPftDone(res); } catch (e) { _swallow(e); }
+    afcsLast = res === 'OK' ? 'AFCS TEST OK' : res === 'MINOR' ? 'AP TEST FAILED — 기능 저하(운용 가능)' : 'AP TEST FAILED — 운용 불가';
     // 하부 콘솔 AFCAU 의 P FLT TST 버튼은 시험이 끝나면 다시 나온다
     try { if (typeof ovhdGet === 'function' && ovhdGet('bFltTst') === 'IN') ovhdSet('bFltTst', 'OUT'); } catch (e) { _swallow(e); }
     return null;
@@ -1276,9 +1302,9 @@ function _sysAfcsPage(g) {
   lane(1, 170, 330);
   lane(2, 420, 900);
   if (!P && afcsLast) {
-    const inh = /INHIBITED/.test(afcsLast);
+    const inh = /INHIBITED|P FLT TEST|FAILED/.test(afcsLast);
     g.fillStyle = inh ? SYS_AMBER : '#22e022'; g.textAlign = 'center'; g.font = _f(14); g.fillText(afcsLast, 610, 590);
-    if (inh) { g.font = _f(11, false); g.fillText('WOW · HYD PRESS NORMAL · DC POWER REQUIRED', 610, 608); }
+    if (inh) { g.font = _f(11, false); g.fillText(/INHIBITED/.test(afcsLast) ? 'WOW · HYD PRESS NORMAL · DC POWER REQUIRED' : `P FLT TEST 결함 ${typeof afcsPft !== 'undefined' ? afcsPft.fails : 0}/5${typeof afcsPft !== 'undefined' && afcsPft.lock ? ' — AFCS 사용 불가' : ''}`, 610, 608); }
   }
 }
 
