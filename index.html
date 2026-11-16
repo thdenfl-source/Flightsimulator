@@ -17,11 +17,11 @@
      CDN 을 쓰면 한 번이라도 못 받는 순간 앱이 통째로 죽는다 — 비행 중에는
      그럴 여지를 두지 않는다. -->
 <!-- 패널 새 창(다중 모니터) — 라이브러리가 거는 이벤트까지 받아 적어야 하므로 맨 먼저 -->
-<script src="js/00-edition.js?v=687"></script>
-<script src="js/00-aircraft.js?v=687"></script>
-<script src="js/00-params.js?v=687"></script>
-<script src="js/00-sched.js?v=687"></script>
-<script src="js/00-popout.js?v=687"></script>
+<script src="js/00-edition.js?v=688"></script>
+<script src="js/00-aircraft.js?v=688"></script>
+<script src="js/00-params.js?v=688"></script>
+<script src="js/00-sched.js?v=688"></script>
+<script src="js/00-popout.js?v=688"></script>
 <link rel="stylesheet" href="vendor/leaflet.css"/>
 <script src="vendor/leaflet.js"></script>
 <link rel="stylesheet" href="vendor/leaflet-velocity.min.css"/>
@@ -2422,6 +2422,8 @@ body.gate-open #gate-overlay { display: none; }
 .ov-key.pressed .ov-sq { transform: translateY(2px); box-shadow: 0 1px 0 #77756d; }
 .ov-lamp .ov-sq { font-size: 10px; color: #3c4a3c; background: #111; }
 .ov-lamp.on .ov-sq { color: #001a00; background: #3ad13a; box-shadow: 0 0 8px #3ad13a, 0 0 0 2px #0e0f10; }
+/* HOCAS MEP CTL — DOI(제어 대상 화면) 표시(36-kuhsys.js) */
+#pfd-wrap.hocas-doi, #sysp-wrap.hocas-doi, #map-wrap.hocas-doi { outline: 3px solid #2fe0e0; outline-offset: -3px; }
 /* CDU System Tests — Lamp Test: 콘솔 램프 · 눌러 두는 버튼 글씨를 모두 켠다(36-kuhsys.js) */
 .lamptest .ov-lamp .ov-sq { color: #001a00; background: #3ad13a; box-shadow: 0 0 8px #3ad13a, 0 0 0 2px #0e0f10; }
 .lamptest .ov-lpb .ov-sq { color: #ffb000; text-shadow: 0 0 6px rgba(255,176,0,.7); }
@@ -2700,7 +2702,7 @@ body.simple-mode #simple-view { display: flex; position: fixed; left: 0; right: 
     </div>
   </form>
 </div>
-<script src="js/00-gate.js?v=687"></script>
+<script src="js/00-gate.js?v=688"></script>
 <!-- ── 단일화면 선택 바 (기본 숨김) ── -->
 <!-- ── 시작 안내(사용법/키보드) 오버레이 ── -->
 <div id="help-overlay" style="display:none;">
@@ -3279,6 +3281,25 @@ body.simple-mode #simple-view { display: flex; position: fixed; left: 0; right: 
             NG 90% 이하로 2분 식히지 않고 끄면 5분 안에 다시 시동하거나 4시간 기다려야 합니다. 건너편이 멎으면 TGT 한계가 951 → 974℃ 로 넓어집니다.
             교관 창 고장: 1번 고온 시동 · AISBV 고착(NG 40% 실속) · FAIL FIX(<span style="color:#ffb000">1 FADEC</span> — 그 고도에서 4,000ft 내려오면 실속) · PWR LIMIT(TQ 85%).
             SYSTEM 창 Engine 화면 맨 아래에 FADEC 단계가 보입니다.</li>
+        <li><b>시동 중 START</b>: 시동 중인 엔진(CRANK · 점화)은 PFD · SYSTEM 의 NG 계기 옆에 세로로 <b>START</b> 가 보입니다.</li>
+        <li><b>CDU 노브 — 더</b>:
+            <ul>
+            <li><b>COM 채널 간격</b>(CDU Setting): 25 kHz(XXX.XX 로 시현 — .025 → .02) · 8.33 kHz(XXX.XXX · .005 · .010 · .015 … 136.990 까지).</li>
+            <li><b>Flight ID 입력</b>(TCAS → Transponder 의 Flight ID 를 누르면 청록 Datafield): 오른쪽 작은 노브 K~Z → 0~9 → A~J, 큰 노브 커서, 누르면 Enter.</li>
+            <li><b>Push:Radar</b>: SYSTEM 창 Video 채널이 RADAR 일 때 CDU 조이스틱을 누르면 레이더 제어(거리 · RDR TX · FREEZE · TILT −15~+15° · GAIN 0~32) — 다시 누르면 닫힘.</li>
+            <li><b>Config Mode</b>: Maintenance → System Maintenance → Restart Options → System to Config Mode. 오른쪽 큰 노브 장 · 작은 노브 항목 · 누름 들어감/나옴(Knobs 장은 노브 입력을 보입니다).</li>
+            </ul></li>
+        <li><b>NAV 예비 주파수</b>(Audio &amp; Radios NAV 탭): 활성 아래 <b>STBY</b> · <b>↕</b> 교환 · <b>DME HOLD</b>(다시 튜닝해도 잡아 둔 국의 거리 — PFD 에 ident 뒤 H).
+            새 활성이 들어오면(입력 · 접근 자동 튜닝) 앞 활성은 예비로 내려갑니다. NAV 탭에서 오른쪽 노브는 예비를 맞추고 1.5초 누르면 교환.
+            ILS/LOC 접근은 CDI 가 FMS 인 채로 15NM 안에서 LOC 진로에 들면 LOC 를 맞춘 NAV 로 자동 전환합니다.</li>
+        <li><b>HOCAS 스위치</b>(조이스틱 배정 — HOCAS 묶음): <b>MEP CTL</b> 4방향으로 DOI(청록 테두리 — PFD → SYSTEM → 지도) · <b>DMS</b> 4방향 + 누름(지도: DIR · VIEW · QUICK · SETUP, VIEW 누르면 2D ⇄ 3D / SYSTEM: 계통 화면 · HALF 판 / PFD: CAS 넘기기) ·
+            컬렉티브 <b>CURSOR</b> X/Y(누르는 동안) · PUSH(기체 자리로) · ENABLE · ▲ 길게(FREEZE). SYSTEM HOCAS 표 Pilot 칸에 지금 값이 보입니다.</li>
+        <li><b>전기 버스</b>: GCU 보호(저 · 과전압 4.5초 · 저주파 4초 · 고주파 2초 — GEN 스위치 OFF→ON 으로 다시), 발전기 하나면 AC-BTC 로 반대 버스까지,
+            두 발전기 없이 APU GEN 만이면 AC · DC NON-ESSENTIAL 차단, TRU 하나 고장이면 DC BTC(<span style="color:#ffb000">n TRU</span>), 둘 다 없으면 <b>배터리 단독</b>(80% 에서 약 50분 · <span style="color:#ffb000">BATT LOW</span>).
+            APU GEN 단독에 비상 유압 펌프 · 윈드실드 · 흡입구 방빙을 함께 2분 넘게 쓰면 경고. SYSTEM Electrical 화면 아래에 버스 상태 · 배터리 남은 시간.</li>
+        <li><b>AFCS P FLT TEST</b>: 땅 위 · 유압 · DC 와 함께 <b>AP1 · AP2 OFF</b>(조이스틱이 있으면 사이클릭 · 페달 가운데)여야 시작합니다. 시험 중 다시 누르면 중단.
+            결과 — OK · 사소한 결함(한쪽 APM · SEMA2 — 기능 저하 운용) · 중요 결함(두 APM · 한 축 SEMA 둘 — 운용 불가). 결함이 5회면 AFCS 사용 불가(AFCS FAIL).
+            AFCS FAIL 이면 130 KIAS 넘으면 IAS 주의. 교관 창 고장: APM1 · APM2 · 피치 SEMA2 · 피치 SEMA 둘(피치 축만 SAS) · COLL LINK(컬렉티브 축만) · GEN1 과전압 · TRU1.</li>
         <li><b>HOCAS</b>(CDU <b>Aircraft Systems → HOCAS</b>): 누르면 <b>SYSTEM 창</b>에 HOCAS 화면(<b>Cyclic Stick Position</b> 원 · Co-Pilot/Pilot 의 Cyclic · Collective · Push to talk 표)이 떠 <b>사이클릭(전후·좌우)과 페달</b>이 가운데(중립)인지,
             한쪽으로 얼마나 치우쳤는지 보입니다 — <b>●</b> 지금 조종간 자리(가운데면 초록 · 치우치면 호박색, F/A·L/R %),
             <b>○</b> SIM 에서 트림이 잡고 있는 자리, 아래 막대는 페달입니다.
@@ -4070,55 +4091,55 @@ body.simple-mode #simple-view { display: flex; position: fixed; left: 0; right: 
 <!-- 앱 코드 — 클래식 스크립트(모듈 아님)라 전역 스코프를 공유한다.
      순서가 곧 실행 순서이므로 임의로 바꾸지 말 것. -->
   <!-- AIP 데이터 — 코드보다 먼저 로드한다 -->
-  <script src="js/data/terminal-fixes.js?v=687"></script>
-  <script src="js/data/ifr-fixes.js?v=687"></script>
-  <script src="js/data/ifr-procedures.js?v=687"></script>
-  <script src="js/data/airfield-info.js?v=687"></script>
-  <script src="js/data/enr-vors.js?v=687"></script>
-  <script src="js/data/loc-stations.js?v=687"></script>
-  <script src="js/data/enr-routes.js?v=687"></script>
-  <script src="js/data/airspace.js?v=687"></script>
-  <script src="js/data/runways.js?v=687"></script>
+  <script src="js/data/terminal-fixes.js?v=688"></script>
+  <script src="js/data/ifr-fixes.js?v=688"></script>
+  <script src="js/data/ifr-procedures.js?v=688"></script>
+  <script src="js/data/airfield-info.js?v=688"></script>
+  <script src="js/data/enr-vors.js?v=688"></script>
+  <script src="js/data/loc-stations.js?v=688"></script>
+  <script src="js/data/enr-routes.js?v=688"></script>
+  <script src="js/data/airspace.js?v=688"></script>
+  <script src="js/data/runways.js?v=688"></script>
   <!-- 앱 코드 -->
-  <script src="js/00-ui.js?v=687"></script>
-  <script src="js/01-state.js?v=687"></script>
-  <script src="js/02-math.js?v=687"></script>
-  <script src="js/03-pfd.js?v=687"></script>
-  <script src="js/04-map.js?v=687"></script>
-  <script src="js/05-gps.js?v=687"></script>
-  <script src="js/06-nav.js?v=687"></script>
-  <script src="js/07-sim.js?v=687"></script>
-  <script src="js/08-ifrdb.js?v=687"></script>
-  <script src="js/09a-start.js?v=687"></script>
-  <script src="js/09-cdu.js?v=687"></script>
-  <script src="js/09b-cdu-screens.js?v=687"></script>
-  <script src="js/10-tools.js?v=687"></script>
-  <script src="js/11-charts.js?v=687"></script>
-  <script src="js/12-joystick.js?v=687"></script>
-  <script src="js/13-joyhid.js?v=687"></script>
-  <script src="js/14-simmode.js?v=687"></script>
-  <script src="js/15-heli3d.js?v=687"></script>
-  <script src="js/16-sound.js?v=687"></script>
-  <script src="js/17-upper.js?v=687"></script>
-  <script src="js/18-system.js?v=687"></script>
-  <script src="js/19-lower.js?v=687"></script>
-  <script src="js/20-navaids.js?v=687"></script>
-  <script src="js/21-c5000.js?v=687"></script>
-  <script src="js/22-npx138.js?v=687"></script>
-  <script src="js/23-afcs.js?v=687"></script>
-  <script src="js/24-sar.js?v=687"></script>
-  <script src="js/25-b206panel.js?v=687"></script>
-  <script src="js/26-b206radio.js?v=687"></script>
-  <script src="js/27-b206coll.js?v=687"></script>
-  <script src="js/28-debrief.js?v=687"></script>
-  <script src="js/29-env.js?v=687"></script>
-  <script src="js/30-scenario.js?v=687"></script>
-  <script src="js/31-ios.js?v=687"></script>
-  <script src="js/32-callout.js?v=687"></script>
-  <script src="js/33-train4.js?v=687"></script>
-  <script src="js/34-infra.js?v=687"></script>
-  <script src="js/35-kuhgrip.js?v=687"></script>
-  <script src="js/36-kuhsys.js?v=687"></script>
+  <script src="js/00-ui.js?v=688"></script>
+  <script src="js/01-state.js?v=688"></script>
+  <script src="js/02-math.js?v=688"></script>
+  <script src="js/03-pfd.js?v=688"></script>
+  <script src="js/04-map.js?v=688"></script>
+  <script src="js/05-gps.js?v=688"></script>
+  <script src="js/06-nav.js?v=688"></script>
+  <script src="js/07-sim.js?v=688"></script>
+  <script src="js/08-ifrdb.js?v=688"></script>
+  <script src="js/09a-start.js?v=688"></script>
+  <script src="js/09-cdu.js?v=688"></script>
+  <script src="js/09b-cdu-screens.js?v=688"></script>
+  <script src="js/10-tools.js?v=688"></script>
+  <script src="js/11-charts.js?v=688"></script>
+  <script src="js/12-joystick.js?v=688"></script>
+  <script src="js/13-joyhid.js?v=688"></script>
+  <script src="js/14-simmode.js?v=688"></script>
+  <script src="js/15-heli3d.js?v=688"></script>
+  <script src="js/16-sound.js?v=688"></script>
+  <script src="js/17-upper.js?v=688"></script>
+  <script src="js/18-system.js?v=688"></script>
+  <script src="js/19-lower.js?v=688"></script>
+  <script src="js/20-navaids.js?v=688"></script>
+  <script src="js/21-c5000.js?v=688"></script>
+  <script src="js/22-npx138.js?v=688"></script>
+  <script src="js/23-afcs.js?v=688"></script>
+  <script src="js/24-sar.js?v=688"></script>
+  <script src="js/25-b206panel.js?v=688"></script>
+  <script src="js/26-b206radio.js?v=688"></script>
+  <script src="js/27-b206coll.js?v=688"></script>
+  <script src="js/28-debrief.js?v=688"></script>
+  <script src="js/29-env.js?v=688"></script>
+  <script src="js/30-scenario.js?v=688"></script>
+  <script src="js/31-ios.js?v=688"></script>
+  <script src="js/32-callout.js?v=688"></script>
+  <script src="js/33-train4.js?v=688"></script>
+  <script src="js/34-infra.js?v=688"></script>
+  <script src="js/35-kuhgrip.js?v=688"></script>
+  <script src="js/36-kuhsys.js?v=688"></script>
 
 <input type="file" id="zipFileInput" accept=".zip,application/zip,application/x-zip-compressed,application/octet-stream" style="display:none" onchange="handleZipFile(this.files[0]); this.value='';"></body>
 </html>
