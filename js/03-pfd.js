@@ -151,7 +151,7 @@ function drawPFD() {
   if (L.sideOn) drawPfdSideMsgs(L.side);
   if (L.insetOn) drawPfdInset(L.inset);
   const RC = pfdRightCol(L, W);
-  if (hocasOn) drawHocas(L.hsi.x, L.hsi.y, L.hsi.w, L.hsi.h, W / 2, RC);
+  // HOCAS 는 SYSTEM 창(18-system.js _sysHocasPage)에 보인다 — PFD 에는 그리지 않는다
   drawStopwatch(L.hsi.x, L.hsi.y, L.hsi.w, L.hsi.h, W / 2, RC);
 }
 
@@ -555,6 +555,14 @@ const HOCAS_DEAD = 0.05;          // 이 안이면 가운데(중립)로 본다
 // (켜기 · CTR · DEFAULT 는 CDU 의 Aircraft Systems → HOCAS 칸 — 18-system.js)
 function toggleHocas() {
   hocasOn = !hocasOn;
+  // 켜면 SYSTEM 창에 HOCAS 화면을 띄운다(HALF 면 고른 반쪽 · 다른 쪽은 TCAS)
+  // 끄면 HOCAS 를 띄우기 전 화면으로 돌린다
+  try {
+    if (typeof sysPageSet === 'function') {
+      if (hocasOn) { if (sysPage !== 'asys_hocas') toggleHocas._prev = sysPage; sysPageSet('asys_hocas'); }
+      else if (sysPage === 'asys_hocas') sysPageSet(toggleHocas._prev && toggleHocas._prev !== 'asys_hocas' ? toggleHocas._prev : (sysLayout === 'HALF' ? 'tcas' : 'asys_fuel'));
+    }
+  } catch (e) { _swallow(e); }
   try { drawPFD(); } catch (e) { _swallow(e); }
   try { if (typeof _hocasCduRefresh === 'function') _hocasCduRefresh(); } catch (e) { _swallow(e); }
 }

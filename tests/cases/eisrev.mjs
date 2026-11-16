@@ -56,8 +56,8 @@ export async function run(page, t) {
   t.ok(R.off.txt.includes(String(Math.round(R.D.qty.tot))) && R.off.txt.includes(String(R.D.accp)),
     `값은 SYSTEM 창 EIS 와 같다 (Fuel Total ${Math.round(R.D.qty.tot)} · ACCP ${R.D.accp})`);
   const Sd = R.side;
-  t.ok(Sd.on && Sd.msgX > Sd.altR && Sd.park && Sd.msgRight && Sd.hocas && Sd.swIn,
-    `메시지 · HOCAS · 스톱워치는 자세계 오른쪽 칸(고도계 바깥 x ${Math.round(Sd.msgX)} > ${Math.round(Sd.altR)})`);
+  t.ok(Sd.on && Sd.msgX > Sd.altR && Sd.park && Sd.msgRight && !Sd.hocas && Sd.swIn,
+    `메시지 · 스톱워치는 자세계 오른쪽 칸 — HOCAS 는 SYSTEM 창으로 옮겨 PFD 에 없다(고도계 바깥 x ${Math.round(Sd.msgX)} > ${Math.round(Sd.altR)})`);
   t.ok(Math.abs(Sd.hsiR - Sd.crX) < 0.5, 'CRHT · NAV 칸은 HSI 오른쪽에 붙는다');
   t.ok(R.half.every(h => h.half && h.inside && h.full) && R.half.some(h => h.inset),
     `자세계 · HSI 를 반반으로 · HSI 는 늘 다 보이고, 오른쪽 아래 MAP · TCAS 창은 자리가 있을 때만 (${R.half.map(h => h.W + (h.inset ? '·창' : '')).join(' ')})`);

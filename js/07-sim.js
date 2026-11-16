@@ -1424,6 +1424,14 @@ function cduFullScreen() { enterSolo('cdu'); }
 function cduFullNavBtn() {
   // 3D 단독에 겹친 CDU — 단독 화면을 바꾸는 FULL/HALF 는 두지 않는다(3D 단독을 지킨다)
   try { if (cduOvActive()) return `<div class="nav-btn" style="opacity:.35;pointer-events:none"><span>✥</span>3D</div>`; } catch (e) { _swallow(e); }
+  // Aircraft Systems 화면 — FULL/HALF 는 SYSTEM 창의 큰 칸 나누기(한 화면 · 반쪽 둘)를 고른다(18-system.js sysLayout)
+  try {
+    if (typeof cduMode === 'function' && /^(ACSYS|TCAS)/.test(cduMode()) && typeof sysLayout !== 'undefined') {
+      const f = sysLayout === 'FULL';
+      return `<div class="nav-btn" id="sys-layout-btn" data-act="sysLayoutToggle" title="SYSTEM 창 — 한 화면(FULL) · 반쪽 둘(HALF)"><span>▥</span>`
+           + `<div style="white-space:nowrap"><b style="color:${f ? '#2fe0e0' : '#777'}">FULL</b>/<b style="color:${f ? '#777' : '#2fe0e0'}">HALF</b></div></div>`;
+    }
+  } catch (e) { _swallow(e); }
   return _soloActive
     ? `<div class="nav-btn" data-act="exitSolo"><span>✥</span>Half</div>`
     : `<div class="nav-btn" data-act="cduFullScreen"><span>✥</span>Full</div>`;

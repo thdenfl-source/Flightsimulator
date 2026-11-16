@@ -3695,6 +3695,9 @@ switchMode('HOME');
     // ── 밖으로 공개하는 이름 ───────────────────────────────────────
     // 함수: CDU 밖 JS 또는 위임이 닿지 않는 인라인 핸들러(지도 팝업)에서 호출
     window.switchMode        = switchMode;         // 앱 각처 + cduFooter의 인라인 문자열
+    // 지금 CDU 화면 이름 · 다시 그리기(18-system.js SYSTEM FULL/HALF 단추가 푸터를 고쳐 그릴 때)
+    window.cduMode           = () => currentMode;
+    window.cduRerender       = () => { try { renderContent(); } catch (e) { _swallow(e); } };
     // C-5000 VOL 노브(21-c5000.js) → CDU U/VHF 음량
     window.cduSetUvhfVol     = v => { volumes.uvhf = Math.max(0, Math.min(100, Math.round(v))); if (currentMode === 'AUDIO') { try { renderContent(); } catch (e) { _swallow(e); } } };
     // 하부 콘솔 MPP 의 COM2(19-lower.js) — COM2 주 · 예비 채널을 둘 다 121.500(GUARD)으로 맞춘다
