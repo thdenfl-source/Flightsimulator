@@ -57,10 +57,10 @@ export async function run(page, t) {
       try { const cv = document.createElement('canvas'); cv.width = 1000; cv.height = 630; _sysPaint(cv.getContext('2d'), cv, 1000, 630, 1, true); } finally { proto.fillText = orig; } }
     o.halfDraw = own.includes('HOCAS') && own.includes('TCAS') && own.includes('Cyclic Stick Position') && own.some(x => /^TCAS : /.test(x));
     // 노브 셋 — 가운데는 왼쪽 ⇄ 오른쪽
-    const kn = [...document.querySelectorAll('#cdu-knobs [data-act="cduKnob"]')]; o.knobs = kn.length;
-    o.sel0 = sysSel; kn[1].click(); o.sel1 = sysSel; o.selTxt = document.getElementById('cdu-knob-sel').textContent;
+    o.knobs = document.querySelectorAll('#cdu-knobs .cdu-knob').length;
+    o.sel0 = sysSel; cduKnobOp('L', 'tilt', { x: 1, y: 0 }); o.sel1 = sysSel; o.selTxt = document.getElementById('cdu-lbl-L').textContent;
     sysPageSet('asys_fuel'); o.halves2 = sysHalf.L + '|' + sysHalf.R;
-    kn[0].click(); o.selKeep = sysSel;
+    cduKnobOp('L', 'tilt', { x: 0, y: 1 }); o.selKeep = sysSel;
     document.querySelector('#footerNav [data-act="sysLayoutToggle"]').click(); o.full = sysLayout;
     localStorage.removeItem('sysLayout'); sysSel = 'L'; sysHalf = { L: 'asys_hocas', R: 'tcas' }; sysPageSet('asys_fuel'); CDU_ACT.switchMode('HOME');
     return o;
@@ -84,8 +84,8 @@ export async function run(page, t) {
   t.ok(r.layoutBtn, 'Aircraft Systems 푸터에 SYSTEM FULL/HALF 단추');
   t.ok(r.half === 'HALF' && r.halves === 'asys_hocas|tcas', `HALF — 왼쪽 HOCAS · 오른쪽 TCAS (${r.half} ${r.halves})`);
   t.ok(r.halfDraw, 'HALF 그림 — 두 반쪽 이름표(HOCAS · TCAS)와 TCAS 머리글');
-  t.ok(r.knobs === 3 && r.sel0 === 'L' && r.sel1 === 'R' && /R/.test(r.selTxt), `CDU 아래 노브 셋 — 가운데가 왼쪽 ⇄ 오른쪽 (${r.knobs} ${r.sel0}→${r.sel1} ${r.selTxt})`);
+  t.ok(r.knobs === 3 && r.sel0 === 'L' && r.sel1 === 'R' && /Pane R▶/.test(r.selTxt), `CDU 아래 노브 셋 — 조이스틱 좌우가 판(Pane) 왼쪽 ⇄ 오른쪽 (${r.knobs} ${r.sel0}→${r.sel1} ${r.selTxt})`);
   t.eq(r.halves2, 'asys_hocas|asys_fuel', '고른 쪽(오른쪽)에 다음 계통 화면이 들어간다');
-  t.eq(r.selKeep, 'R', '왼쪽 노브는 아직 기능 없음 — 고른 쪽 그대로');
+  t.eq(r.selKeep, 'R', '조이스틱을 위 · 아래로 기울이면 판은 그대로');
   t.eq(r.full, 'FULL', '다시 누르면 FULL');
 }

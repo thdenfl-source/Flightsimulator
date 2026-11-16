@@ -500,6 +500,8 @@ function pfdMsgs() {
   try { P = engParams(); } catch (e) { _swallow(e); }
   const out = [];
   if (ov('pitotHeat', 'AUTO') === 'OFF') out.push({ t: 'PITOT OFF', c: PFD_MSG_AMBER });
+  // CDU 키 고착 — 노브를 누른 채 10 초가 넘으면(SDS 31-42-01 · 18-system.js cduKeyStuck)
+  if (typeof cduKeyStuck !== 'undefined' && cduKeyStuck) out.push({ t: 'CDU KEY STUCK', c: PFD_MSG_AMBER });
   // 1 · 2 GEN OFF(황) — 그 발전기가 버스에 없을 때(UPPER GEN 스위치 OFF, 또는 엔진이 멎어 발전하지 못함 — 18-system.js elecState)
   let E = null;
   try { if (typeof elecState === 'function') E = elecState(); } catch (e) { _swallow(e); }
