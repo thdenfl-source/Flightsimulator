@@ -346,14 +346,19 @@ function kuhSysInner(id) {
       `<div style="display:flex;gap:6px">${_kBtn('raStSling', undefined, `슬링 ${raSt.sling ? 'ON' : 'OFF'}`, raSt.sling)}</div>`;
   }
   if (id === 'asys_tests') {
+    // 실기 화면 — 가운데 Status 상자 · 3열(FQMS1 _ FQMS2 / Engine 1 _ Engine 2 / CVFDR · Lamp Test · TCAS) · 단추 아래 상태
     const busy = Object.keys(sysTst.run).length > 0;
-    const col = s => s === 'Pass' || s === 'Done' || s === 'Completed' ? '#3ad13a' : s === 'Abort' || s === 'Fail' ? '#ffb000' : s === 'In Progress' ? '#2fe0e0' : s === 'ON' ? '#fff' : '#678';
-    return `<div style="text-align:center;font-weight:bold;color:${busy ? '#2fe0e0' : '#3ad13a'};margin:2px 0 8px">${busy ? 'Busy' : 'Ready To Execute'}</div>` +
-      `<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">` +
-      SYS_TEST_IDS.map(k => `<div class="item-btn" data-act="sysTestRun" data-arg='${JSON.stringify([k])}' style="height:auto;min-height:44px;padding:5px 3px">` +
-        `<span style="font-size:11px">${k}</span><span style="font-size:10px;color:${col(sysTst.st[k])}">${sysTst.st[k]}${k.startsWith('Engine') && sysTst.abortY[k === 'Engine 1' ? 0 : 1] ? ' ⚠' : ''}</span></div>`).join('') + `</div>` +
-      (sysTst.msg.length ? `<div style="color:#ffb000;font-size:11px;margin-top:8px">${sysTst.msg.join(' · ')}</div>` : '') +
-      _kHd(`Engine(EPAC) — 지상 20초 Done · 공중은 대기속도 ${EPAC_COND.ias}kt 위 · 승강 ±${EPAC_COND.vs}fpm · 경사 ${EPAC_COND.bank}° 안이어야 Completed(아니면 Abort)`);
+    const col = s => s === 'Abort' || s === 'Fail' ? '#ffb000' : s === 'ON' ? '#fff' : s === '----' ? '#9ab' : '#5fd8ff';
+    const tip = `Engine(EPAC) — 지상 20초 Done · 공중은 대기속도 ${EPAC_COND.ias}kt 위 · 승강 ±${EPAC_COND.vs}fpm · 경사 ${EPAC_COND.bank}° 안이어야 Completed(아니면 Abort)`;
+    const btn = k => `<div class="item-btn st-btn" data-act="sysTestRun" data-arg='${JSON.stringify([k])}' title="${k.startsWith('Engine') ? tip : k}" style="height:auto;min-height:50px;padding:4px 3px;justify-content:center">` +
+      `<span style="font-size:12px;color:#e8f4ff">${k.replace(/^FQMS (\d)$/, 'FQMS$1')}</span>` +
+      `<span style="font-size:${sysTst.st[k] === '----' ? 12 : 14}px;font-weight:bold;color:${col(sysTst.st[k])}">${sysTst.st[k]}${k.startsWith('Engine') && sysTst.abortY[k === 'Engine 1' ? 0 : 1] ? ' ⚠' : ''}</span></div>`;
+    const gap = '<div></div>';
+    return `<div style="display:flex;justify-content:center;margin:2px 0 14px"><div class="st-status" style="background:#000;border:2px solid #556;border-radius:3px;padding:4px 22px;text-align:center;min-width:140px">` +
+      `<div style="color:#fff;font-size:13px">Status</div><div style="color:#fff;font-size:13px">${busy ? 'Busy' : 'Ready To Execute'}</div></div></div>` +
+      `<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px 5px">` +
+      btn('FQMS 1') + gap + btn('FQMS 2') + btn('Engine 1') + gap + btn('Engine 2') + btn('CVFDR') + btn('Lamp Test') + btn('TCAS') + `</div>` +
+      (sysTst.msg.length ? `<div style="color:#ffb000;font-size:11px;margin-top:8px">${sysTst.msg.join(' · ')}</div>` : '');
   }
   if (id === 'asys_light') {
     const o = litOut();

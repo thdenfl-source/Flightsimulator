@@ -22,7 +22,9 @@ export async function run(page, t) {
     window.radarAltFt = () => 3000; raStStep(0.1); o.bNoComp = raSt.n === n0 + 2; window.radarAltFt = ra0;
     // ── System Tests ──
     open('asys_tests'); await w(30);
-    o.tests = SYS_TEST_IDS.every(k => box().textContent.includes(k)) && /Ready To Execute/.test(box().textContent);
+    o.tests = SYS_TEST_IDS.every(k => box().textContent.includes(k.replace(/^FQMS (\d)$/, 'FQMS$1'))) && /Status\s*Ready To Execute/.test(box().textContent);
+    { const g = box().querySelector('div[style*="grid-template-columns:1fr 1fr 1fr"]'), c = g ? [...g.children] : [];   // 실기 배치 3열 — 가운데 빈칸 둘
+      o.layout = c.length === 9 && !c[1].dataset.act && !c[4].dataset.act && JSON.parse(c[6].dataset.arg)[0] === 'CVFDR' && JSON.parse(c[7].dataset.arg)[0] === 'Lamp Test' && JSON.parse(c[8].dataset.arg)[0] === 'TCAS'; }
     click('sysTestRun', ['FQMS 1']); await w(150); o.busy = /Busy/.test(box().textContent) && sysTst.st['FQMS 1'] === 'In Progress';
     sysTestStep(3.1); o.fqms = sysTst.st['FQMS 1'];
     sysTestRun('Engine 1'); sysTestStep(20.1); o.epacGnd = sysTst.st['Engine 1'];
@@ -115,6 +117,7 @@ export async function run(page, t) {
   t.ok(r.raPage && r.slingAllow && r.inhibit && r.sub, 'RA Self Test — 슬링 + Allow 면 GRA SERVICE(PFL) · Inhibit 로 바꾸면 사라지고 단추 글씨도 Inhibit');
   t.ok(r.bLow && r.bHigh && r.bNoComp, 'RA BITE — 250ft 아래 안 함 · 위에서 60초마다 · 2,550ft 넘으면 곧바로');
   t.ok(r.tests && r.busy && r.fqms === 'Done' && r.epacGnd === 'Done' && r.cvfdr === 'Pass', `System Tests — 일곱 단추 · Busy · FQMS Done · 지상 EPAC Done · CVFDR Pass (${r.fqms} ${r.epacGnd} ${r.cvfdr})`);
+  t.ok(r.layout, 'System Tests 실기 배치 — Status 상자 · 3열(FQMS1 _ FQMS2 / Engine 1 _ Engine 2 / CVFDR · Lamp Test · TCAS)');
   t.ok(r.lamp && r.lampOff, 'Lamp Test — MWP · MSG · 콘솔 램프가 모두 켜지고 다시 누르면 꺼진다');
   t.ok(r.lit && r.nvg && r.cduDim && r.litBack, 'Lighting Config — DISPLAY NVG 면 MFD NVIS · CDU 수동 밝기 · 낮 AUTO 는 필터 없음');
   t.ok(r.pwErr && r.pwOk, 'Maintenance — 비밀번호가 틀리면 막고 맞으면 System Maintenance');
