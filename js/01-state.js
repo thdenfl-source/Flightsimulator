@@ -120,7 +120,7 @@ let _hdgJump = 0;      // 기체가 돈 것이 아닌 기수 맞춤(HDG 포착 �
 // altHoldOn : converges S.alt → selAlt  at selVS fpm (pilot-set rate)
 // crhtOn    : converges RA(AGL) → selCrht at  500 fpm   (fixed, mutually exclusive with altHoldOn)
 // Default: ALT hold engaged on startup, holding the initial 500 ft.
-let altHoldOn = true;
+let altHoldOn = false;   // 시작은 꺼짐 — 조종사가 ALT 를 걸 때만 컬렉티브 · 피치 축에 물린다
 
 // BRG needle visibility
 let brg1Visible = true;

@@ -22,7 +22,7 @@ export async function run(page, t) {
     if (followMode) toggleFollow();
     if (!_view3dOn) toggle3dMap();
     let n = 0;
-    while (!_ship3dReady && n < 300) { await wait(50); n++; }
+    while (!_ship3dReady && n < 900) { await wait(50); n++; }   // 여러 묶음을 함께 돌리면 지도 load 가 늦다 — 45초까지
     return { ready: _ship3dReady, waited: n * 50,
              type: _ml3d && _ml3d.getLayer('ship-3d') ? _ml3d.getLayer('ship-3d').type : null };
   });

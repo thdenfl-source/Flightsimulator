@@ -217,7 +217,7 @@ function simAfcsAny() {
 }
 // ALT 단독(IAS 없이)이면 Vy 아래에서는 컬렉티브 축(출력으로 고도), Vy 이상에서는 피치 축(자세로 고도 — 컬렉티브는 조종사 손)에 물린다.
 //   경계에서 오락가락하지 않게 Vy 에서 올라타고 Vy−ALT_PITCH_HYS 아래로 떨어져야 내려온다. CRHT 는 늘 컬렉티브 축.
-const ALT_PITCH_HYS = 5;          // kt
+const ALT_PITCH_HYS = TUNE.afcs.altPitchHys;   // kt (00-params.js)
 let _altPitch = false;
 function simAltPitch() {
   // ALT 단독일 때만 — IAS 가 걸려 있으면 IAS 가 피치 축이고 ALT 는 컬렉티브 축에 남는다
@@ -229,10 +229,14 @@ function simAltPitch() {
   return _altPitch;
 }
 // 피치 축 ALT — 지금 속도의 수평 자세에 원하는 상승률과의 차이만큼 기수를 들고 숙인다(1,000fpm 에 2.5° · ±4°)
-const ALT_PITCH_K = 0.0025, ALT_PITCH_MAX = 4;
+const ALT_PITCH_K = TUNE.afcs.altPitchK, ALT_PITCH_MAX = TUNE.afcs.altPitchMax;
 function simAltPitchTgt() {
   const err = simAfcsVsCmd() - (S.vs || 0);
-  return pitchFromSpd(Math.max(0, S.spd)) + Math.max(-ALT_PITCH_MAX, Math.min(ALT_PITCH_MAX, err * ALT_PITCH_K));
+  // 속도 지킴 — Vy 에 가까워질수록(Vy+guard kt 안) 기수를 덜 든다. 그 이상 오르려면 조종사가 컬렉티브를 올린다
+  //   (속도가 그래도 Vy−hys 아래로 떨어지면 ALT 는 컬렉티브 축으로 넘어가 출력으로 오른다)
+  const guard = Math.max(0, Math.min(1, (S.spd - simVyKt()) / Math.max(1, TUNE.afcs.altPitchGuard)));
+  const up = ALT_PITCH_MAX * guard;
+  return pitchFromSpd(Math.max(0, S.spd)) + Math.max(-ALT_PITCH_MAX, Math.min(up, err * ALT_PITCH_K));
 }
 // ALT 가 지금 피치 축에 물려 있나 — SIM 은 simAltPitch, SIM 밖(AFCS 비행 · 절차 훈련판)도 같은 규칙(Vy 이상 · Vy−5kt 아래로 내려와야 풀림)
 //   FMA 가 이것을 보고 ALT 를 피치 칸(오른쪽)에 적는다
@@ -423,6 +427,15 @@ function _simGs() { try { return gsOn ? gsDeviation() : null; } catch (e) { retu
 // 고도를 보고 정한다 — 그래야 되찾을 때 넘치거나 출렁이지 않는다.
 const SIM_AFCS_ALT_K = 10;     // 1ft 어긋날 때마다 원하는 상승률(fpm)
 const SIM_AFCS_LEAD  = 2;      // 앞을 내다보는 시간(s)
+// CRHT 가 지키는 땅 높이 — 전파고도의 바닥(바다 물결 · 갑판 가장자리 · 타일 바뀜)을 걸러 쓴다(TUNE.afcs.crhtGndTau 초)
+//   CRHT 를 새로 걸었거나 1초 넘게 안 봤으면 지금 값에서 시작한다
+let _crhtGnd = null, _crhtGndT = 0;
+function crhtGroundFt() {
+  const g = radarGroundFt(), now = performance.now(), dt = (now - _crhtGndT) / 1000; _crhtGndT = now;
+  if (_crhtGnd === null || !crhtOn || dt > 1 || !Number.isFinite(_crhtGnd)) _crhtGnd = g;
+  else _crhtGnd += (g - _crhtGnd) * Math.min(1, dt / Math.max(0.1, TUNE.afcs.crhtGndTau));
+  return _crhtGnd;
+}
 function simAfcsVsCmd() {
   // G/A · VS — 선택 상승률로 오른다(G/A 처음 몇 초는 점점 붙인다 · 내려가지는 않는다)
   if (tdOn) return _tdVsCmd();
@@ -439,7 +452,7 @@ function simAfcsVsCmd() {
     const corr = Math.max(-400, Math.min(400, (g.path - ahead) * 0.5));
     return Math.max(-2000, Math.min(500, -base + corr));
   }
-  const tgt = altHoldOn ? selAlt : selCrht + radarGroundFt();
+  const tgt = altHoldOn ? selAlt : selCrht + crhtGroundFt();
   const rate = altHoldOn ? Math.max(50, Math.abs(selVS)) : 500;
   const ahead = S.alt + (S.vs || 0) / 60 * SIM_AFCS_LEAD;
   return Math.max(-rate, Math.min(rate, (tgt - ahead) * SIM_AFCS_ALT_K));
@@ -669,7 +682,10 @@ function simTrFailStep(dt, onGnd) {
 const simVrsRec = { on: false, t: 0, alt0: 0, spd0: 0, tq0: 0, maxLat: 0, minTq: 999, last: null };
 function simVrsEval(onGnd) {
   const R = simVrsRec, on = simVrs > 0.3;
-  if (on && !R.on) Object.assign(R, { on: true, t: 0, alt0: S.alt, spd0: simAirspeed(), tq0: S.tq, maxLat: 0, minTq: S.tq });
+  if (on && !R.on) {
+    Object.assign(R, { on: true, t: 0, alt0: S.alt, spd0: simAirspeed(), tq0: S.tq, maxLat: 0, minTq: S.tq });
+    try { if (typeof speak === 'function') speak('Vortex ring'); } catch (e) { _swallow(e); }   // PFD 메시지 VORTEX RING(03-pfd.js)
+  }
   if (R.on) {
     R.t += (typeof _simLastDt === 'number' ? _simLastDt : 0.05); R.maxLat = Math.max(R.maxLat, Math.abs(simLat)); R.minTq = Math.min(R.minTq, S.tq);
     if (!on && simVrs < 0.05) {
@@ -1302,10 +1318,17 @@ function simModeAxes() {
 // 화면 사이클릭의 가동범위 — 끝까지 밀면 피치 ±10° · 롤 ±20°(트림 자세 위에 더해진다).
 // 피치는 가운데 감도를 반으로(끝으로 갈수록 붙어 끝에서 10°) — 손가락으로 자세를 잘게 맞추게.
 const VSTICK_PITCH_DEG = 10, VSTICK_ROLL_DEG = 20, VSTICK_PITCH_CENTER = 0.5;
+// 감도 · 데드존 — ⚙ 설정의 STICK 감도(appSet.stickK) · 데드존(appSet.stickDead), 없으면 TUNE.vstick(00-params.js)
+function vStickTune() {
+  const a = (typeof appSet !== 'undefined') ? appSet : {}, T = TUNE.vstick;
+  return { k: Number.isFinite(a.stickK) ? a.stickK : T.pitchK, rk: Number.isFinite(a.stickK) ? a.stickK : T.rollK, dead: Number.isFinite(a.stickDead) ? a.stickDead : T.dead };
+}
 function vStickCyclic() {
-  const p = vStick.pitch, ap = Math.abs(p);
+  const V = vStickTune(), dz = x => Math.abs(x) <= V.dead ? 0 : Math.sign(x) * (Math.abs(x) - V.dead) / (1 - V.dead);
+  const p = dz(vStick.pitch), ap = Math.abs(p), r = dz(vStick.roll);
   const pc = Math.sign(p) * ap * (VSTICK_PITCH_CENTER + (1 - VSTICK_PITCH_CENTER) * ap);   // 기울기: 가운데 0.5 → 끝 1.5(끝값 1)
-  return { roll: vStick.roll * VSTICK_ROLL_DEG / SIM_BANK_MAX, pitch: pc * VSTICK_PITCH_DEG / SIM_PITCH_MAX };
+  const cl = x => Math.max(-1, Math.min(1, x));
+  return { roll: cl(r * V.rk * VSTICK_ROLL_DEG / SIM_BANK_MAX), pitch: cl(pc * V.k * VSTICK_PITCH_DEG / SIM_PITCH_MAX) };
 }
 let vStickOn = false;
 const vStick = { coll: 0, yaw: 0, roll: 0, pitch: 0 };
@@ -1494,7 +1517,11 @@ function toggleVStick() {
   // 절차 훈련판 — STICK 을 켜면 종합판과 똑같은 SIM 비행 모델로 조종하고(SIM 단추는 없다), 끄면 AFCS 비행으로 돌아간다
   if (_vsProc()) {
     if (vStickOn && !simModeOn) toggleSimMode(true, { stick: true });
-    else if (!vStickOn && simModeOn) toggleSimMode(false);
+    else if (!vStickOn && simModeOn) {
+      toggleSimMode(false);
+      // AFCS 비행으로 넘겨 줄 때 — 지금 속도 · 그 속도의 자세를 기준으로(속도 · 기수가 튀지 않게)
+      selSpd = Math.max(0, Math.round(S.spd)); S.pit = pitchFromSpd(Math.max(0, S.spd));
+    }
   }
   // 켤 때 컬렉티브는 지금 토크 자리에서 시작한다(튀지 않게)
   if (vStickOn) { vStick.coll = Math.max(0, Math.min(1, (S.tq || 0) / SIM_LEVER_TOP)); vStick.yaw = vStick.roll = vStick.pitch = 0; }
@@ -1693,6 +1720,7 @@ function toggleSimMode(on, opt) {
     // 손을 떼면 그 자리에서 날던 대로 — 지금 자세를 그대로 이어받는다
     bankTarget = S.bnk;
     simTrimReset();
+    try { if (!simNearGround()) simTrimHoldSpeed(); } catch (e) { _swallow(e); }   // 공중이면 지금 속도를 지키는 자세로 트림 — 들어가는 순간 기수가 튀지 않게
     simAcc = 0; simVsAcc = 0; simFlareVs = 0; simFlareVyVs = 0; _flareV0 = null; simNr = 100; // 지금 날던 대로 이어 간다
     simLookReset();
     // 지금 날고 있는 상태를 유지할 만큼의 토크로 레버를 맞춰 둔다(진입 충격 방지)

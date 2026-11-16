@@ -2116,7 +2116,8 @@ const SK_MENUS = {
     // Hover Display — 80kt 아래(또는 켜져 있을 때)만 · FCP 의 HOVER PAGE · HOVER POS 버튼은 없앴다
     { lbl: 'Hover<br>Display', on: () => hoverPageOn, dim: () => !(hoverEligible() || hoverPageOn), act: () => { toggleHoverPage(); try { updateHoverBtns(); } catch (e) { _swallow(e); } } },
     { lbl: 'Hover<br>Position', on: () => hoverPosOn, act: () => toggleHoverPosition() },
-    { lbl: 'CAS' },
+    // CAS — 메시지가 넘쳐 숨겨지면 살아난다 · 누르면 CAS UP · CAS DN 으로 쪽을 넘긴다(03-pfd.js pfdCasStep)
+    { lbl: 'CAS', dim: () => !(typeof pfdCasOverflow === 'function' && pfdCasOverflow()), on: () => typeof pfdCasOverflow === 'function' && pfdCasOverflow(), go: 'CAS' },
     // SIM — 조종간으로 직접 모는 모드(FCP 의 SIM 버튼을 옮겨 왔다 · simModeBtnPress)
     // (절차 훈련판 — 00-edition.js SIM_ENABLED 거짓 — 에서는 빈칸)
     { lbl: () => (typeof SIM_ENABLED === 'undefined' || SIM_ENABLED) ? 'SIM' : '', on: () => simModeOn,
@@ -2153,6 +2154,10 @@ const SK_MENUS = {
   // 그림 8 — PFD 센서
   SENS: [{}, {}, { lbl: 'RA<br>Settings', go: 'RA' }, {}, {}, {}, {}, {}, {}, {}, _skBack, {}],
   RA: [{}, _skRadio('ra', 'RA1'), _skRadio('ra', 'RA2'), {}, {}, {}, {}, {}, {}, {}, _skBack, {}],
+  CAS: [{}, {}, {}, {}, {}, {}, {}, {}, {},
+    { lbl: 'CAS<br>UP', dim: () => typeof pfdCasPage === 'undefined' || pfdCasPage <= 0, act: () => pfdCasStep(-1) },
+    { lbl: 'CAS<br>DN', dim: () => { try { return pfdCasPage >= pfdCasPages(pfdMsgs().length) - 1; } catch (e) { return true; } }, act: () => pfdCasStep(1) },
+    _skBack],
 };
 let skMenu = 'TOP', _skStack = [], _skIdle = null;
 function _pfdSkBuild() {
