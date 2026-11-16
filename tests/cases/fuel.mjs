@@ -6,6 +6,7 @@ export async function run(page, t) {
     localStorage.removeItem('ovhdState'); fuelReset();
     selectPanel('right', 'sysp', true); sysPageSet('asys_fuel');
     const o = {}, wow0 = fuelWow;
+    sysLayout = 'FULL'; sysPage = 'asys_fuel';   // 처음은 HALF(교범) — 이 검사는 FULL 의 Fuel 화면(좌표)을 본다
     const msgs = () => pfdMsgs().map(m => m.t);
     const tick = (real, sim = 0) => fuelSysTick(real, sim);
     const draw = () => {

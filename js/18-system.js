@@ -10,13 +10,14 @@ const SYS_W = 1000, SYS_H = 630;
 const SYS_PAGES = {
   asys_afcs: 'AFCS', asys_status: 'Aircraft Status', asys_elec: 'Electrical', asys_eng: 'Engines',
   asys_fuel: 'Fuel', map: 'Map', asys_ratest: 'RA Self Test', asys_hocas: 'HOCAS', asys_tests: 'System Tests', asys_light: 'Lighting Config', asys_video: 'Video', asys_maint: 'Maintenance',
-  tcas: 'TCAS',
+  tcas: 'TCAS', perf: 'Helicopter Performance',
 };
 let sysPage = 'asys_fuel';
 // ── 큰 칸 나누기 — FULL(한 화면) · HALF(왼쪽 · 오른쪽 반쪽 둘). CDU Aircraft Systems 아래 FULL/HALF 단추로 바꾼다 ──
 //   HALF 에서는 CDU 아래 가운데 노브로 고른 쪽(sysSel — 청록 테두리)에 다음에 고른 계통 화면이 들어간다.
 //   HOCAS 는 반쪽 크기 화면이라 HALF 에서 다른 쪽이 비거나 같은 HOCAS 면 TCAS(교통)를 띄운다.
-let sysLayout = 'FULL', sysHalf = { L: 'asys_hocas', R: 'tcas' }, sysSel = 'L';
+let sysLayout = 'HALF',   // 지상 전원 인가 시 MFD3 · 4 는 HALF 로 시작(FLM 7.15.1.3) — 저장한 설정이 있으면 그것
+    sysHalf = { L: 'asys_hocas', R: 'tcas' }, sysSel = 'L';
 try { const v = JSON.parse(localStorage.getItem('sysLayout') || 'null'); if (v) { if (v.layout === 'FULL' || v.layout === 'HALF') sysLayout = v.layout; if (v.half && SYS_PAGES[v.half.L] && SYS_PAGES[v.half.R]) sysHalf = v.half; if (v.sel === 'R') sysSel = 'R'; } } catch (e) { _swallow(e); }
 if (sysLayout === 'HALF') sysPage = sysHalf[sysSel];
 function _sysLayoutSave() { try { localStorage.setItem('sysLayout', JSON.stringify({ layout: sysLayout, half: sysHalf, sel: sysSel })); } catch (e) { _swallow(e); } }
@@ -456,6 +457,8 @@ function sysEnsure() {
 function sysDraw() {
   const E = sysEnsure();
   if (!E) return;
+  // MFD 꺼짐(고장 · 배터리 단독) · PFD 백업(REV) — 36-kuhsys.js
+  try { if (typeof mfdSysOverride === 'function' && mfdSysOverride(E)) return; } catch (e) { _swallow(e); }
   _sysPaint(E.g, E.c, E.W, E.H, E.dpr, true);
 }
 // 같은 계통 화면을 다른 캔버스에 그린다 — SIM 3D 조종석 패널의 MFD(15-heli3d.js) · 고른 화면(page)으로 잠깐 바꿔 그린다

@@ -108,7 +108,8 @@ export async function run(page, t) {
   const C = await page.evaluate(async () => {
     const w = ms => new Promise(r => setTimeout(r, ms));
     selectPanel('right', 'sysp', true); await w(300);
-    sysPageSet('asys_video'); videoChanSet('HOIST'); sysDraw(); await w(1500);
+    sysLayout = 'FULL'; sysPageSet('asys_video');   // HOIST CAM 은 FULL 큰 칸에(처음은 HALF)
+    videoChanSet('HOIST'); sysDraw(); await w(1500);
     const el = document.getElementById('sysp-hoist');
     const o = { el: !!el, on: sarHoistCamOn(), w: el ? el.clientWidth : 0 };
     if (sarHoistCamOn()) { const m = _sarCam.map; o.pitch = m.getPitch(); o.bearing = Math.round((m.getBearing() + 360) % 360); o.hdg = Math.round(S.hdg % 360); o.layer = !!m.getLayer('sar-3d') || !m.isStyleLoaded(); }

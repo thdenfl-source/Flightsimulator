@@ -17,11 +17,11 @@
      CDN 을 쓰면 한 번이라도 못 받는 순간 앱이 통째로 죽는다 — 비행 중에는
      그럴 여지를 두지 않는다. -->
 <!-- 패널 새 창(다중 모니터) — 라이브러리가 거는 이벤트까지 받아 적어야 하므로 맨 먼저 -->
-<script src="js/00-edition.js?v=688"></script>
-<script src="js/00-aircraft.js?v=688"></script>
-<script src="js/00-params.js?v=688"></script>
-<script src="js/00-sched.js?v=688"></script>
-<script src="js/00-popout.js?v=688"></script>
+<script src="js/00-edition.js?v=689"></script>
+<script src="js/00-aircraft.js?v=689"></script>
+<script src="js/00-params.js?v=689"></script>
+<script src="js/00-sched.js?v=689"></script>
+<script src="js/00-popout.js?v=689"></script>
 <link rel="stylesheet" href="vendor/leaflet.css"/>
 <script src="vendor/leaflet.js"></script>
 <link rel="stylesheet" href="vendor/leaflet-velocity.min.css"/>
@@ -2422,6 +2422,9 @@ body.gate-open #gate-overlay { display: none; }
 .ov-key.pressed .ov-sq { transform: translateY(2px); box-shadow: 0 1px 0 #77756d; }
 .ov-lamp .ov-sq { font-size: 10px; color: #3c4a3c; background: #111; }
 .ov-lamp.on .ov-sq { color: #001a00; background: #3ad13a; box-shadow: 0 0 8px #3ad13a, 0 0 0 2px #0e0f10; }
+/* CDU 꺼짐 — 배터리 단독이면 CDU2(기장)는 전원이 없다(36-kuhsys.js) */
+#cdu-nopwr { position: absolute; inset: 0; z-index: 50; background: #000; display: none; flex-direction: column; align-items: center; justify-content: center; gap: 8px; color: #445; font: bold 14px Helvetica Neue, Arial, sans-serif; }
+#cdu-nopwr b { font-size: 22px; color: #556; }
 /* HOCAS MEP CTL — DOI(제어 대상 화면) 표시(36-kuhsys.js) */
 #pfd-wrap.hocas-doi, #sysp-wrap.hocas-doi, #map-wrap.hocas-doi { outline: 3px solid #2fe0e0; outline-offset: -3px; }
 /* CDU System Tests — Lamp Test: 콘솔 램프 · 눌러 두는 버튼 글씨를 모두 켠다(36-kuhsys.js) */
@@ -2702,7 +2705,7 @@ body.simple-mode #simple-view { display: flex; position: fixed; left: 0; right: 
     </div>
   </form>
 </div>
-<script src="js/00-gate.js?v=688"></script>
+<script src="js/00-gate.js?v=689"></script>
 <!-- ── 단일화면 선택 바 (기본 숨김) ── -->
 <!-- ── 시작 안내(사용법/키보드) 오버레이 ── -->
 <div id="help-overlay" style="display:none;">
@@ -3300,6 +3303,16 @@ body.simple-mode #simple-view { display: flex; position: fixed; left: 0; right: 
         <li><b>AFCS P FLT TEST</b>: 땅 위 · 유압 · DC 와 함께 <b>AP1 · AP2 OFF</b>(조이스틱이 있으면 사이클릭 · 페달 가운데)여야 시작합니다. 시험 중 다시 누르면 중단.
             결과 — OK · 사소한 결함(한쪽 APM · SEMA2 — 기능 저하 운용) · 중요 결함(두 APM · 한 축 SEMA 둘 — 운용 불가). 결함이 5회면 AFCS 사용 불가(AFCS FAIL).
             AFCS FAIL 이면 130 KIAS 넘으면 IAS 주의. 교관 창 고장: APM1 · APM2 · 피치 SEMA2 · 피치 SEMA 둘(피치 축만 SAS) · COLL LINK(컬렉티브 축만) · GEN1 과전압 · TRU1.</li>
+        <li><b>PERF(Helicopter PERF — FLM 4.9)</b>: CDU PERF 위쪽 <b>Config · Hover · Cruise</b> 탭 · <b>MFD 보기</b>(SYSTEM 창 Helicopter Performance).
+            <ul>
+            <li><b>Config</b>: Gross WT(12,240 ~ 19,200 lb 밖이면 황색) · ENG ANTI ICE · ECS-H(둘 다면 가용 토크 −18%) · TQ-L(D30M · S10M · S2.5M) · Exterior(E-AUX · SRCH LT · EFS · E.HOIST — Drag Factor) · <b>Use Defaults</b>(지금 고도 · 외기).</li>
+            <li><b>Hover</b>: 가용 토크(MTA) · IGE/OGE 요구 토크(MTA 를 넘으면 적색) · Go/No-Go · MAX Gross WT IGE/OGE(AEO · OEI — 지금 무게 이하면 황색).</li>
+            <li><b>Cruise</b>: VNE · MAX END(최소동력 속도) · MAX Range(예비 340 lb 제외) · OEI MAX(120kt 까지) · OEI MIN · MAX ROC. (OEI · 순항은 교범 도표가 그림이라 근사)</li>
+            <li><b>H-V 선도</b>(MFD — 한 엔진 고장 · OEI 2.5분, 19,200 lb): 해면 ISA 0kt 25~210ft → 22kt 25~45ft, 4,000ft ISA+20 은 465ft · 37.5kt 까지(밀도고도로 잇는다). 지금 IAS · 바퀴 높이 점이 회피영역 안이면 적색.</li>
+            </ul></li>
+        <li><b>자리 · CDU1/CDU2 · MFD1~4</b>(CDU Setting 의 '자리'): 기장 — CDU2 · MFD2(PFD) · MFD4(SYSTEM) / 부기장 — CDU1 · MFD1 · MFD3. SYSTEM 창은 지상 전원을 넣으면 <b>HALF</b> 로 시작합니다(EIS 는 늘 왼쪽).
+            <b>MFD 고장</b>(교관 창): MWP <b>REV</b> 램프 — 누르면 2초, 안 누르면 8초 뒤 대체 모드(SYSTEM 고장 → PFD 가 PFD/EIS · PFD 고장 → SYSTEM 창이 PFD 백업). 고장이 풀리면 약 17.5초 뒤 정상.
+            <b>배터리 단독</b>이면 MFD3 · CDU2 가 꺼집니다 — 기장 자리면 CDU 가, 부기장 자리면 SYSTEM 창이 꺼지고 PFD 가 EIS 대체 모드.</li>
         <li><b>HOCAS</b>(CDU <b>Aircraft Systems → HOCAS</b>): 누르면 <b>SYSTEM 창</b>에 HOCAS 화면(<b>Cyclic Stick Position</b> 원 · Co-Pilot/Pilot 의 Cyclic · Collective · Push to talk 표)이 떠 <b>사이클릭(전후·좌우)과 페달</b>이 가운데(중립)인지,
             한쪽으로 얼마나 치우쳤는지 보입니다 — <b>●</b> 지금 조종간 자리(가운데면 초록 · 치우치면 호박색, F/A·L/R %),
             <b>○</b> SIM 에서 트림이 잡고 있는 자리, 아래 막대는 페달입니다.
@@ -4091,55 +4104,55 @@ body.simple-mode #simple-view { display: flex; position: fixed; left: 0; right: 
 <!-- 앱 코드 — 클래식 스크립트(모듈 아님)라 전역 스코프를 공유한다.
      순서가 곧 실행 순서이므로 임의로 바꾸지 말 것. -->
   <!-- AIP 데이터 — 코드보다 먼저 로드한다 -->
-  <script src="js/data/terminal-fixes.js?v=688"></script>
-  <script src="js/data/ifr-fixes.js?v=688"></script>
-  <script src="js/data/ifr-procedures.js?v=688"></script>
-  <script src="js/data/airfield-info.js?v=688"></script>
-  <script src="js/data/enr-vors.js?v=688"></script>
-  <script src="js/data/loc-stations.js?v=688"></script>
-  <script src="js/data/enr-routes.js?v=688"></script>
-  <script src="js/data/airspace.js?v=688"></script>
-  <script src="js/data/runways.js?v=688"></script>
+  <script src="js/data/terminal-fixes.js?v=689"></script>
+  <script src="js/data/ifr-fixes.js?v=689"></script>
+  <script src="js/data/ifr-procedures.js?v=689"></script>
+  <script src="js/data/airfield-info.js?v=689"></script>
+  <script src="js/data/enr-vors.js?v=689"></script>
+  <script src="js/data/loc-stations.js?v=689"></script>
+  <script src="js/data/enr-routes.js?v=689"></script>
+  <script src="js/data/airspace.js?v=689"></script>
+  <script src="js/data/runways.js?v=689"></script>
   <!-- 앱 코드 -->
-  <script src="js/00-ui.js?v=688"></script>
-  <script src="js/01-state.js?v=688"></script>
-  <script src="js/02-math.js?v=688"></script>
-  <script src="js/03-pfd.js?v=688"></script>
-  <script src="js/04-map.js?v=688"></script>
-  <script src="js/05-gps.js?v=688"></script>
-  <script src="js/06-nav.js?v=688"></script>
-  <script src="js/07-sim.js?v=688"></script>
-  <script src="js/08-ifrdb.js?v=688"></script>
-  <script src="js/09a-start.js?v=688"></script>
-  <script src="js/09-cdu.js?v=688"></script>
-  <script src="js/09b-cdu-screens.js?v=688"></script>
-  <script src="js/10-tools.js?v=688"></script>
-  <script src="js/11-charts.js?v=688"></script>
-  <script src="js/12-joystick.js?v=688"></script>
-  <script src="js/13-joyhid.js?v=688"></script>
-  <script src="js/14-simmode.js?v=688"></script>
-  <script src="js/15-heli3d.js?v=688"></script>
-  <script src="js/16-sound.js?v=688"></script>
-  <script src="js/17-upper.js?v=688"></script>
-  <script src="js/18-system.js?v=688"></script>
-  <script src="js/19-lower.js?v=688"></script>
-  <script src="js/20-navaids.js?v=688"></script>
-  <script src="js/21-c5000.js?v=688"></script>
-  <script src="js/22-npx138.js?v=688"></script>
-  <script src="js/23-afcs.js?v=688"></script>
-  <script src="js/24-sar.js?v=688"></script>
-  <script src="js/25-b206panel.js?v=688"></script>
-  <script src="js/26-b206radio.js?v=688"></script>
-  <script src="js/27-b206coll.js?v=688"></script>
-  <script src="js/28-debrief.js?v=688"></script>
-  <script src="js/29-env.js?v=688"></script>
-  <script src="js/30-scenario.js?v=688"></script>
-  <script src="js/31-ios.js?v=688"></script>
-  <script src="js/32-callout.js?v=688"></script>
-  <script src="js/33-train4.js?v=688"></script>
-  <script src="js/34-infra.js?v=688"></script>
-  <script src="js/35-kuhgrip.js?v=688"></script>
-  <script src="js/36-kuhsys.js?v=688"></script>
+  <script src="js/00-ui.js?v=689"></script>
+  <script src="js/01-state.js?v=689"></script>
+  <script src="js/02-math.js?v=689"></script>
+  <script src="js/03-pfd.js?v=689"></script>
+  <script src="js/04-map.js?v=689"></script>
+  <script src="js/05-gps.js?v=689"></script>
+  <script src="js/06-nav.js?v=689"></script>
+  <script src="js/07-sim.js?v=689"></script>
+  <script src="js/08-ifrdb.js?v=689"></script>
+  <script src="js/09a-start.js?v=689"></script>
+  <script src="js/09-cdu.js?v=689"></script>
+  <script src="js/09b-cdu-screens.js?v=689"></script>
+  <script src="js/10-tools.js?v=689"></script>
+  <script src="js/11-charts.js?v=689"></script>
+  <script src="js/12-joystick.js?v=689"></script>
+  <script src="js/13-joyhid.js?v=689"></script>
+  <script src="js/14-simmode.js?v=689"></script>
+  <script src="js/15-heli3d.js?v=689"></script>
+  <script src="js/16-sound.js?v=689"></script>
+  <script src="js/17-upper.js?v=689"></script>
+  <script src="js/18-system.js?v=689"></script>
+  <script src="js/19-lower.js?v=689"></script>
+  <script src="js/20-navaids.js?v=689"></script>
+  <script src="js/21-c5000.js?v=689"></script>
+  <script src="js/22-npx138.js?v=689"></script>
+  <script src="js/23-afcs.js?v=689"></script>
+  <script src="js/24-sar.js?v=689"></script>
+  <script src="js/25-b206panel.js?v=689"></script>
+  <script src="js/26-b206radio.js?v=689"></script>
+  <script src="js/27-b206coll.js?v=689"></script>
+  <script src="js/28-debrief.js?v=689"></script>
+  <script src="js/29-env.js?v=689"></script>
+  <script src="js/30-scenario.js?v=689"></script>
+  <script src="js/31-ios.js?v=689"></script>
+  <script src="js/32-callout.js?v=689"></script>
+  <script src="js/33-train4.js?v=689"></script>
+  <script src="js/34-infra.js?v=689"></script>
+  <script src="js/35-kuhgrip.js?v=689"></script>
+  <script src="js/36-kuhsys.js?v=689"></script>
 
 <input type="file" id="zipFileInput" accept=".zip,application/zip,application/x-zip-compressed,application/octet-stream" style="display:none" onchange="handleZipFile(this.files[0]); this.value='';"></body>
 </html>
