@@ -148,4 +148,58 @@ export async function run(page, t) {
   });
   t.ok(L.ok === 'ok' && L.high === 'down' && L.low === 'up', `LSO — 3.5° 선 위 '좋음' · 높으면 ▼ 내려 · 낮으면 ▲ 올려 (${L.ok} · ${L.high} · ${L.low})`);
   t.ok(L.left === 'left' && L.right === 'right' && L.wave === 'waveoff' && L.far === null, `LSO — 우현으로 치우치면 ◀ · 좌현이면 ▶ · 빠른 강하면 WAVE OFF · 0.5NM 밖은 없음`);
+
+  // ── CDU 연료 — 예비(RET)까지 시간 · 도달 시각 · 거리 · 바닥까지 ──
+  const F = await page.evaluate(() => {
+    const keep = { ff: window.fuelFlow, gs: window.groundSpdKt, ret: fuelCfg.ret };
+    window.fuelFlow = () => ({ f1: 300, f2: 300, P: null }); window.groundSpdKt = () => 120; fuelCfg.ret = 200;
+    const tot = fuelTotal(), E = fuelEndurance();
+    const o = { ret: Math.abs(E.toRetH - (tot - 200) / 600) < 1e-9, zero: Math.abs(E.toZeroH - tot / 600) < 1e-9, rng: Math.abs(E.rangeNm - (tot - 200) / 600 * 120) < 1e-6,
+                eta: E.etaRet instanceof Date && E.etaRet.getTime() > Date.now() };
+    window.fuelFlow = keep.ff; window.groundSpdKt = keep.gs; fuelCfg.ret = keep.ret;
+    return o;
+  });
+  t.ok(F.ret && F.zero && F.rng && F.eta, 'CDU 연료 — 예비까지 시간 · 도달 시각 · 거리(지상속도) · 바닥까지 시간');
+
+  // ── 결빙 — 외기 5°C 이하 + 습기(구름 속)면 ICE DETECTED · 착빙 · 엔진 방빙 · 피토 히트 ──
+  const I2 = await page.evaluate(() => {
+    const k = { oat: env.oat, sfc: window._oatSurfaceC, ceil: env.ceil, alt: S.alt, ep: window.engParams, a1: ovhdGet('engAi1'), a2: ovhdGet('engAi2'), pt: ovhdGet('pitotHeat'), asi: instFail.asi };
+    const o = {};
+    window.engParams = () => ({ e1: { ng: 95, tq: 70 }, e2: { ng: 95, tq: 70 }, nr: 100 });
+    envIce.acc = 0; envIce.eng[1] = envIce.eng[2] = 0; envIce.pitot = false; instFail.asi = null;
+    S.alt = 2000; envSet({ oat: 15, ceil: 0 }); envIceStep(30); o.warm = !envIce.cond && envIce.acc === 0;
+    envSet({ oat: 0, ceil: 1500 });                                   // 구름 1,500~3,000ft · 외기 −4°C
+    ovhdSet('engAi1', 'OFF'); ovhdSet('engAi2', 'ON'); ovhdSet('pitotHeat', 'OFF');
+    envIceStep(1); o.cond = envIce.cond;
+    for (let i = 0; i < 60; i++) envIceStep(1);
+    o.acc = envIce.acc; o.e1 = envIce.eng[1]; o.e2 = envIce.eng[2]; o.tqK = iceTqK(); o.engK = iceEngK();
+    o.cas = pfdMsgs().map(m => m.t).join(','); o.asi = instFail.asi !== null && envIce.pitot;
+    ovhdSet('pitotHeat', 'AUTO'); ovhdSet('engAi1', 'ON'); envIceStep(1); o.asiBack = instFail.asi === null && !envIce.pitot;
+    for (let i = 0; i < 70; i++) envIceStep(1); o.e1Melt = envIce.eng[1] === 0;
+    envSet({ ceil: 0 }); envSet({ oat: 15 }); for (let i = 0; i < 70; i++) envIceStep(1); o.melt = envIce.acc === 0 && !envIce.cond;
+    window.engParams = k.ep; ovhdSet('engAi1', k.a1); ovhdSet('engAi2', k.a2); ovhdSet('pitotHeat', k.pt); instFail.asi = k.asi;
+    S.alt = k.alt; envSet({ oat: k.oat, ceil: k.ceil }); window._oatSurfaceC = k.sfc;
+    return o;
+  });
+  t.ok(I2.warm && I2.cond, '결빙 조건 — 외기 5°C 넘으면 없음 · 0°C 이하 구름 속이면 ICE DETECTED');
+  t.ok(Math.abs(I2.acc - 61 / 180) < 0.02 && I2.tqK > 1.02 && /ICE DETECTED/.test(I2.cas), `착빙 — 구름 속 1분에 ${Math.round(I2.acc * 100)}% · SIM 필요 토크 ×${I2.tqK.toFixed(3)}`);
+  t.ok(I2.e1 > 0.4 && I2.e2 === 0 && I2.engK < 1 && /1 ENG ICING/.test(I2.cas) && !/2 ENG ICING/.test(I2.cas), `엔진 착빙 — 방빙 OFF 인 1번만(${Math.round(I2.e1 * 100)}%) · 낼 수 있는 토크 ×${I2.engK.toFixed(3)}`);
+  t.ok(I2.asi && /PITOT ICING/.test(I2.cas) && I2.asiBack, '피토 히트 OFF 로 착빙 — 속도계가 굳고, PITOT HEAT 을 켜면 풀린다');
+  t.ok(I2.e1Melt && I2.melt, '방빙을 켜면 엔진 착빙이 녹고, 5°C 넘는 곳으로 나오면 착빙이 걷힌다');
+
+  // ── 공항 주기 헬기 — 가까운 공항 활주로 옆에 셋씩(흰수리 · Bell) · ENV 로 끈다 ──
+  const P = await page.evaluate(() => {
+    const k = { la: S.lat, lo: S.lon, pk: env.parked };
+    const ap = RUNWAYS.find(a => a.apt === 'RKSI') || RUNWAYS.find(a => a.rwys && a.rwys.length), r = ap.rwys[0];
+    S.lat = (r.a[0] + r.b[0]) / 2; S.lon = (r.a[1] + r.b[1]) / 2; envSet({ parked: true }); _parkedKey = '';
+    const L = tfcParkedList().filter(p => p.apt === ap.apt);
+    const midLa = S.lat, midLo = S.lon;
+    const d = L.map(p => Math.hypot((p.lat - midLa) * 110540, (p.lon - midLo) * 111320 * Math.cos(midLa * Math.PI / 180)));
+    const o = { n: L.length, kinds: new Set(L.map(p => p.ac)).size, dmin: Math.min(...d), layer: !!(typeof _ml3d !== 'undefined' && _ml3d && _ml3d.getLayer && _ml3d.getLayer('traffic-3d')) || typeof TFC3D_LAYER === 'object' };
+    envSet({ parked: false }); o.off = tfcParkedList().length === 0;
+    envSet({ parked: k.pk }); S.lat = k.la; S.lon = k.lo; _parkedKey = '';
+    return o;
+  });
+  t.ok(P.n === 3 && P.kinds === 2 && P.dmin > 100 && P.layer, `공항 주기 헬기 — 활주로 옆 주기장에 셋(흰수리 · Bell · 활주로 가운데에서 ${Math.round(P.dmin)}m 밖)`);
+  t.ok(P.off, 'ENV 공항 주기 헬기 없음이면 그리지 않는다');
 }

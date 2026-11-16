@@ -622,9 +622,9 @@ function simEngApply(quiet) {
 // 종전 이름(TRAINING 연동) — 이제는 모든 엔진 조작을 한 번에 본다
 function simTrngApply(quiet) { simEngApply(quiet); }
 function simEngAvail() {
-  const m = mtaNow();
-  if (simEng >= 2) return m;
-  if (simEng === 1) return simOeiTqLim() / 2;                          // 엔진 하나가 둘의 몫을 다 낸다
+  const m = mtaNow(), ice = typeof iceEngK === 'function' ? iceEngK() : 1;   // 엔진 착빙(29-env.js) — 엔진마다 최대 6% 덜 낸다
+  if (simEng >= 2) return m * ice;
+  if (simEng === 1) return simOeiTqLim() / 2 * ice;                    // 엔진 하나가 둘의 몫을 다 낸다
   return 0;
 }
 function cycleSimEng() {

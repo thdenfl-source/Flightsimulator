@@ -536,6 +536,8 @@ function pfdMsgs() {
       if (typeof kgLt !== 'undefined' && kgLt.srch) out.push({ t: 'SEARCH LT ON', c: PFD_MSG_GREEN });
     }
   } catch (e) { _swallow(e); }
+  // 결빙(29-env.js) — ICE DETECTED · n ENG ICING · PITOT ICING(황)
+  try { if (typeof iceCas === 'function') out.push(...iceCas()); } catch (e) { _swallow(e); }
   // VRS(소용돌이 고리 · SIM) — 저속 · 큰 강하율에서 들어가면 맨 위에 황색 경고(음성은 14-simmode.js)
   try { if (typeof simVrsOn === 'function' && simVrsOn()) out.unshift({ t: 'VORTEX RING', c: PFD_MSG_AMBER }); } catch (e) { _swallow(e); }
   // TCAS(33-train4.js) — TA 황색 · RA 빨강(올라라 · 내려라)

@@ -19,7 +19,7 @@ const ENV_VIS = [0, 10, 5, 3, 1.5, 0.8, 0.4];                 // km(0 = 무제�
 const ENV_SEA_ROLL = [0, 1, 2, 4, 6, 8, 10], ENV_SEA_PITCH = [0, 0.5, 1, 2, 3, 4, 5];
 const ENV_SEA_DRIFT = [0, 0.1, 0.3, 0.6, 0.9, 1.3, 1.8];      // 익수자 바람 쪽 표류(kt) — 파도 · 바람에 밀린다
 const ENV_SEA_NAME = ['0 잔잔', '1 잔물결', '2 약', '3 보통', '4 약간 높음', '5 높음', '6 매우 높음'];
-const env = { tod: 'DAY', vis: 0, rain: 0, nvg: false, sea: 0, gust: 0, ceil: 0, ldg: false, raCall: true, surface: 'normal', traffic: 0, tfcType: 'mix', tfcPat: 1 };
+const env = { tod: 'DAY', vis: 0, rain: 0, nvg: false, sea: 0, gust: 0, ceil: 0, ldg: false, raCall: true, surface: 'normal', traffic: 0, tfcType: 'mix', tfcPat: 1, oat: 'auto', parked: true };
 try { Object.assign(env, JSON.parse(localStorage.getItem(ENV_KEY) || '{}')); } catch (e) { _swallow(e); }
 function _envSave() { try { localStorage.setItem(ENV_KEY, JSON.stringify(env)); } catch (e) { _swallow(e); } }
 // 시정(km) → 안개가 짙어지는 자리(0 = 화면 가운데 · 1 = 지평선)
@@ -62,11 +62,69 @@ function envApply() {
   } catch (e) { _swallow(e); }
 }
 function envSet(o) {
-  for (const k of ['tod', 'vis', 'rain', 'nvg', 'sea', 'gust', 'ceil', 'ldg', 'raCall', 'surface', 'traffic', 'tfcType', 'tfcPat']) if (o[k] !== undefined) env[k] = o[k];
+  for (const k of ['tod', 'vis', 'rain', 'nvg', 'sea', 'gust', 'ceil', 'ldg', 'raCall', 'surface', 'traffic', 'tfcType', 'tfcPat', 'oat', 'parked']) if (o[k] !== undefined) env[k] = o[k];
+  if (o.oat !== undefined && o.oat !== 'auto' && Number.isFinite(+o.oat)) window._oatSurfaceC = +o.oat;   // 지면 기온을 손으로(결빙 연습) — 'auto' 면 METAR 대로
   env.sea = Math.max(0, Math.min(6, env.sea | 0)); env.rain = Math.max(0, Math.min(2, env.rain | 0));
   if (o.sea !== undefined) env._seaApplied = -1;
   _envSave(); envApply(); envPanelRender();
 }
+// ── 결빙 — 외기온도 5°C 이하에서 습기(구름 속 · 비 · 1.6km 아래 안개)에 들면 결빙 조건(ICE DETECTED)
+//   착빙(envIce.acc 0~1): 구름 속이면 3분에 가득 · 비 · 안개는 그보다 천천히 · 5°C 넘으면 1분에 녹고, 습기만 벗어나면 10분에 걷힌다
+//     → SIM 필요 토크가 최대 8% 늘고(로터 착빙 · 14-simmode.js 가 iceTqK 를 곱한다)
+//   엔진 착빙(envIce.eng[n]): 그 엔진 방빙(상부 콘솔 NO1 · NO2 ENG A/I)이 꺼져 있고 NG 87.5% 위에서 2분에 가득 · 방빙을 켜면 1분에 녹는다
+//     → 낼 수 있는 토크가 엔진마다 최대 6% 줄고 'n ENG ICING'(황)
+//   피토 히트 OFF 로 착빙 30% 를 넘기면 속도계가 그 값에 굳는다(PITOT HEAT 을 켜거나 녹으면 풀린다)
+const envIce = { cond: false, acc: 0, eng: { 1: 0, 2: 0 }, pitot: false };
+function oatNowC() { return (window._oatSurfaceC ?? 15) - 1.98 * (S.alt || 0) / 1000; }
+// 습기 정도(0~1) — 구름 속 1 · 강한 비 0.8 · 약한 비 0.5 · 짙은 안개(시정 1.6km 아래) 0.35
+function envMoisture() {
+  const base = env.ceil || 0, alt = S.alt || 0;
+  if (base > 0 && alt >= base && alt <= base + 1500) return 1;
+  if (env.rain >= 2) return 0.8;
+  if (env.rain >= 1) return 0.5;
+  if (env.vis > 0 && env.vis < 1.6) return 0.35;
+  return 0;
+}
+let _iceT = 0;
+function envIceStep(dt) {
+  if (env.oat !== 'auto' && Number.isFinite(+env.oat)) window._oatSurfaceC = +env.oat;   // METAR 가 덮어써도 손으로 고른 기온을 지킨다
+  const oat = oatNowC(), m = envMoisture(), cond = oat <= 5 && m > 0;
+  if (cond && !envIce.cond) { try { if (typeof fdrNote === 'function') fdrNote(`결빙 조건 — 외기 ${oat.toFixed(0)}°C`, 'warn'); } catch (e) { _swallow(e); } }
+  envIce.cond = cond;
+  if (!(dt > 0)) return;
+  const cl = v => Math.max(0, Math.min(1, v));
+  envIce.acc = cl(envIce.acc + (cond ? m * dt / 180 : -(oat > 5 ? dt / 60 : dt / 600)));
+  let P = null; try { P = engParams(); } catch (e) { P = null; }
+  [1, 2].forEach(n => {
+    const ov = typeof ovhdGet === 'function' ? ovhdGet('engAi' + n) : 'OFF', e = P ? (n === 1 ? P.e1 : P.e2) : null;
+    const prot = ov === 'ON' || (e && e.ng <= 87.5), run = e && e.ng > 50;
+    envIce.eng[n] = cl(envIce.eng[n] + (cond && run && !prot ? m * dt / 120 : -dt / 60));
+  });
+  // 피토관 착빙 — 속도계가 굳는다(교관이 건 속도계 고장과 겹치지 않게 제가 굳힌 것만 푼다)
+  const pitotOff = typeof ovhdGet === 'function' && ovhdGet('pitotHeat') === 'OFF';
+  try {
+    if (typeof instFail !== 'undefined') {
+      if (!envIce.pitot && pitotOff && cond && envIce.acc > 0.3 && instFail.asi === null) { instFail.asi = Math.round(S.spd || 0); envIce.pitot = true; try { fdrNote('피토관 착빙 — 속도계 굳음', 'err'); } catch (e) { _swallow(e); } }
+      else if (envIce.pitot && (!pitotOff || envIce.acc < 0.1)) { instFail.asi = null; envIce.pitot = false; }
+    }
+  } catch (e) { _swallow(e); }
+}
+// SIM 필요 토크 배율(로터 착빙) · 낼 수 있는 토크 배율(엔진 착빙)
+function iceTqK() { return 1 + 0.08 * envIce.acc; }
+function iceEngK() { return 1 - 0.03 * (envIce.eng[1] + envIce.eng[2]); }
+// PFD 메시지(03-pfd.js pfdMsgs) — ICE DETECTED · n ENG ICING(황)
+function iceCas() {
+  const out = [];
+  if (envIce.cond) out.push({ t: 'ICE DETECTED', c: '#ffb000' });
+  [1, 2].forEach(n => { if (envIce.eng[n] > 0.2) out.push({ t: `${n} ENG ICING`, c: '#ffb000' }); });
+  if (envIce.pitot) out.push({ t: 'PITOT ICING', c: '#ffb000' });
+  return out;
+}
+setInterval(() => {
+  const now = performance.now(), dtR = _iceT ? Math.min(2, (now - _iceT) / 1000) : 0; _iceT = now;
+  let k = 0; try { k = S.running ? (typeof simSpeed === 'number' ? simSpeed : 1) : 0; } catch (e) { k = 0; }
+  try { envIceStep(dtR * k); } catch (e) { _swallow(e); }
+}, 500);
 // 익수자 바람 쪽 표류(kt · 방향 = 바람이 불어 가는 쪽) — 24-sar.js 가 부른다
 function envSeaDrift() {
   const kt = ENV_SEA_DRIFT[env.sea] || 0;
@@ -78,11 +136,13 @@ function envPanelRender() {
   const w = document.getElementById('env-wrap'); if (!w) return;
   w.querySelectorAll('[data-env]').forEach(b => {
     const [k, v] = b.dataset.env.split(':');
-    const cur = (k === 'nvg' || k === 'ldg' || k === 'raCall') ? String(!!env[k]) : String(env[k]);
+    const cur = (k === 'nvg' || k === 'ldg' || k === 'raCall' || k === 'parked') ? String(!!env[k]) : String(env[k]);
     b.classList.toggle('on', cur === v);
   });
   const s = w.querySelector('[data-envv="sea"]');
   if (s) s.textContent = `${ENV_SEA_NAME[env.sea]} — 함정 롤 ${ENV_SEA_ROLL[env.sea]}° · 피칭 ${ENV_SEA_PITCH[env.sea]}° · 익수자 표류 ${ENV_SEA_DRIFT[env.sea]}kt(바람 쪽)`;
+  const ic = w.querySelector('[data-envv="ice"]');
+  if (ic) { const o = oatNowC(); ic.textContent = `외기 ${o.toFixed(0)}°C · ${envIce.cond ? '결빙 조건(습기 · 5°C 이하)' : '결빙 조건 아님'} · 착빙 ${Math.round(envIce.acc * 100)}% · 엔진 ${Math.round(envIce.eng[1] * 100)} / ${Math.round(envIce.eng[2] * 100)}%`; }
 }
 function toggleEnvPanel() {
   let w = document.getElementById('env-wrap');
@@ -102,6 +162,9 @@ function toggleEnvPanel() {
       grp('교통량(TCAS)', 'traffic', [0, 1, 3, 5].map(v => [v, v ? v + '대' : '없음'])) +
       grp('교통 기종', 'tfcType', [['mix', '섞어서'], ['kuh', '흰수리'], ['b206', 'Bell 206']]) +
       grp('교통 장주비행', 'tfcPat', [[0, '없음'], [1, '셋에 하나'], [2, '반'], [3, '모두']]) +
+      grp('지면 기온(결빙)', 'oat', [['auto', 'METAR'], [15, '15°C'], [5, '5°C'], [0, '0°C'], [-5, '−5°C'], [-15, '−15°C']]) +
+      `<div class="env-note" data-envv="ice"></div>` +
+      grp('공항 주기 헬기', 'parked', [['false', '없음'], ['true', '있음']]) +
       grp('착륙등(흰수리)', 'ldg', [['false', '끔'], ['true', '켬']]) +
       grp('RA 콜아웃', 'raCall', [['false', '끔'], ['true', '켬']]) +
       `<div class="env-note" data-envv="sea"></div><div class="env-row"><span>METAR</span><div><button class="sim-btn" data-envx="metar">가까운 공항 METAR 로 맞추기</button></div></div></div>`;
@@ -111,7 +174,7 @@ function toggleEnvPanel() {
       if (e.target === w || e.target.closest('[data-envx]')) { w.style.display = 'none'; return; }
       const b = e.target.closest('[data-env]'); if (!b) return;
       const [k, v] = b.dataset.env.split(':');
-      envSet({ [k]: (k === 'tod' || k === 'surface' || k === 'tfcType') ? v : (k === 'nvg' || k === 'ldg' || k === 'raCall') ? v === 'true' : +v });
+      envSet({ [k]: (k === 'tod' || k === 'surface' || k === 'tfcType' || (k === 'oat' && v === 'auto')) ? v : (k === 'nvg' || k === 'ldg' || k === 'raCall' || k === 'parked') ? v === 'true' : +v });
       // 교통 기종 · 장주 몫을 바꾸면 지금 떠 있는 교통을 새로 띄운다
       if ((k === 'tfcType' || k === 'tfcPat') && typeof traffic !== 'undefined') { const n = env.traffic; traffic.length = 0; env.traffic = n; }
     });

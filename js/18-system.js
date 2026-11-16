@@ -647,6 +647,7 @@ function fuelCduHtml() {
     `<div>Total<div id="fuelc-t" style="font-size:17px;font-weight:bold;color:#3ad13a"></div></div>` +
     `<div>Right<div id="fuelc-r" style="font-size:17px;font-weight:bold;color:#fff"></div></div></div>` +
     `<div style="text-align:center;margin-bottom:8px">Fuel Flow <b id="fuelc-ff" style="color:#fff"></b> PPH · END <b id="fuelc-end" style="color:#fff"></b></div>` +
+    `<div style="text-align:center;margin-bottom:8px;font-size:11px">RET 도달 <b id="fuelc-eta" style="color:#fff"></b> · 거리 <b id="fuelc-rng" style="color:#fff"></b> · 0 까지 <b id="fuelc-dry" style="color:#fff"></b></div>` +
     `<div style="display:flex;gap:6px;margin-bottom:6px">${btn('−100', 'fuelAdjust', [-100])}${btn('+100', 'fuelAdjust', [100])}</div>` +
     `<div style="display:flex;gap:6px;margin-bottom:6px">${[1000, 1500, 2000, FUEL_MAX].map(v => btn(String(v), 'fuelSetTotal', [v])).join('')}</div>` +
     `<div style="text-align:center;margin:4px 0 6px">AUX L <b id="fuelc-al" style="color:#fff"></b> · R <b id="fuelc-ar" style="color:#fff"></b> LBS</div>` +
@@ -673,6 +674,16 @@ async function fuelReturnSet() {
   fuelCfg.ret = Math.max(0, Math.min(FUEL_MAX + 2 * FUEL_AUX_FULL, n));
   _fuelCfgSave(); _fuelCduRefresh();
 }
+// 남은 시간 · 거리 — 지금 연료 흐름(두 엔진 합)과 지상속도로. 예비(Return Fuel)까지 · 바닥(0)까지 · 예비 도달 시각(이 기기 시계 · 시뮬 배속 반영)
+function fuelEndurance() {
+  const F = fuelFlow(), ff = F.f1 + F.f2, tot = fuelTotal(), ret = fuelCfg.ret || 0;
+  let gs = 0; try { gs = Math.max(0, groundSpdKt()); } catch (e) { gs = Math.max(0, S.spd || 0); }
+  const k = (typeof simSpeed === 'number' && simSpeed > 0) ? simSpeed : 1;
+  if (!(ff > 0)) return { ff: 0, gs, toRetH: null, toZeroH: null, rangeNm: null, etaRet: null };
+  const toRetH = Math.max(0, tot - ret) / ff, toZeroH = tot / ff;
+  return { ff, gs, toRetH, toZeroH, rangeNm: toRetH * gs, etaRet: new Date(Date.now() + toRetH * 3600e3 / k) };
+}
+const _hm = h => `${Math.floor(h)}+${String(Math.floor((h % 1) * 60)).padStart(2, '0')}`;
 function _fuelCduRefresh() {
   const el = document.getElementById('fuelc-t');
   if (!el) return;
@@ -686,6 +697,10 @@ function _fuelCduRefresh() {
   set('fuelc-al', String(Math.round(fuel.auxL)) + (auxPump[1] ? ' ▸' : '')); set('fuelc-ar', String(Math.round(fuel.auxR)) + (auxPump[2] ? ' ▸' : ''));
   const usable = Math.max(0, fuelTotal() - (fuelCfg.ret || 0));
   set('fuelc-end', ff > 0 ? `${Math.floor(usable / ff)}+${String(Math.floor((usable / ff % 1) * 60)).padStart(2, '0')}` : '—');
+  const E = fuelEndurance(), p2 = n => String(n).padStart(2, '0');
+  set('fuelc-eta', E.etaRet ? `${p2(E.etaRet.getHours())}:${p2(E.etaRet.getMinutes())}` : '—');
+  set('fuelc-rng', E.rangeNm !== null && E.gs > 5 ? `${Math.round(E.rangeNm)} NM` : '—');
+  set('fuelc-dry', E.toZeroH !== null ? _hm(E.toZeroH) : '—');
 }
 
 // ── 전기 계통(Electrical) ──
