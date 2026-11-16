@@ -1059,13 +1059,16 @@ function heelsLit() {
   if (!E || !E.batt) return false;
   return !(E.gen1 || E.gen2) || nr < HEELS_NR_MIN;
 }
+const GEN_NR_MIN = 84;   // GEN 이 정상 작동하는 최소 NR(%)
 function elecState() {
   let P = null;
   try { P = engParams(); } catch (e) { P = null; }
   const sw = (id, on) => { try { return typeof ovhdGet === 'function' ? ovhdGet(id) === on : true; } catch (e) { return true; } };
-  const ng = i => P ? (i === 1 ? P.e1.ng : P.e2.ng) : 0;
+  // 흰수리의 GEN 1 · 2 는 엔진이 아니라 주 기어박스(MGB)에 물려 돈다 — 로터 회전(NR)이 84% 이상이면 두 발전기 모두 정상.
+  //   한 엔진이 멎어도 NR 이 유지되면 그 쪽 GEN 은 그대로 돈다(NR 이 84% 아래로 처지면 둘 다 떨어진다)
+  const nr = P ? (P.nr || 0) : 0, mgbOk = nr >= GEN_NR_MIN;
   const trip = n => typeof gcuTripped === 'function' && gcuTripped(n);   // GCU 보호로 떨어진 발전기(36-kuhsys.js)
-  const gen1 = ng(1) > 50 && sw('gen1', 'ON') && !trip(1), gen2 = ng(2) > 50 && sw('gen2', 'ON') && !trip(2);
+  const gen1 = mgbOk && sw('gen1', 'ON') && !trip(1), gen2 = mgbOk && sw('gen2', 'ON') && !trip(2);
   const apu = apuGenOn();                                    // APU 가 다 돈 뒤에만(17초 · apuRunning)
   let onGnd = false;
   try { onGnd = (typeof radarAltFt === 'function' ? radarAltFt() : S.alt) < 5; } catch (e) { _swallow(e); }

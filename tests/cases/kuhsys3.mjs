@@ -81,5 +81,23 @@ export async function run(page, t) {
   t.ok(r.revLamp && !r.rev1 && r.rev2 && r.sysBlack, 'SYSTEM(MFD4) 고장 — REV 램프 · 누르면 2초 뒤 PFD 대체 모드 EIS · SYSTEM 창은 꺼짐');
   t.ok(r.recWait && r.rec, '고장이 풀리면 약 17.5초 뒤 정상 화면');
   t.ok(!r.auto7 && r.auto8 && r.pfdBlack && r.sysPfd, 'PFD(MFD2) 고장 — REV 를 누르지 않으면 8초 뒤 SYSTEM 창이 PFD 백업');
+  // ── GEN 은 MGB(NR 84% 이상) · 다른 캔버스의 PFD 는 CAS 줄 수를 건드리지 않는다 ──
+  const g = await page.evaluate(() => {
+    const o = {}, nr0 = window._nrNoSim;
+    fadecSync(); ovhdSet('pcd1', 'OFF'); fadecSync();
+    const E1 = elecState(); o.oneEng = E1.gen1 && E1.gen2 && engParams().nr >= 84 && !pfdMsgs().some(m => m.t === '1 GEN');
+    window._nrNoSim = () => 80; const E2 = elecState(); o.lowNr = !E2.gen1 && !E2.gen2; window._nrNoSim = nr0;
+    ovhdSet('pcd1', 'FLY'); fadecSync();
+    // CAS — 본 PFD 의 줄 수가 다른 크기 캔버스를 그려도 그대로
+    const keep = window.pfdMsgs; window.pfdMsgs = () => Array.from({ length: 30 }, (_, i) => ({ t: 'M' + i, c: '#22e022' }));
+    drawPFD(); const l0 = pfdCasLines, ov0 = pfdCasOverflow();
+    const c = document.createElement('canvas'); c.width = 300; c.height = 240; c.dataset.noFcp = '1'; drawPfdTo(c);
+    o.cas = pfdCasLines === l0 && pfdCasOverflow() === ov0;
+    window.pfdMsgs = keep; casAct.clear();
+    return o;
+  });
+  t.ok(g.oneEng, 'NO1 엔진을 꺼도 NR 이 84% 이상이면 GEN 1 · 2 모두 정상(GEN 은 MGB 에 물려 있다)');
+  t.ok(g.lowNr, 'NR 이 84% 아래면 두 GEN 모두 떨어진다');
+  t.ok(g.cas, '3D 위 PFD · 팝아웃처럼 다른 캔버스에 그려도 본 PFD 의 CAS 줄 수 · 소프트키 CAS 가 흔들리지 않는다');
   t.ok(r.battOnly && r.cduDead && r.mfd3 && r.back, '배터리 단독 — 기장 자리면 CDU2 꺼짐 · 부기장 자리면 MFD3 꺼짐(PFD 대체 EIS) · 전원이 돌아오면 되살아난다');
 }

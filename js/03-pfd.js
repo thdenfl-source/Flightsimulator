@@ -527,7 +527,7 @@ function pfdMsgs() {
   const out = [];
   if (ov('pitotHeat', 'AUTO') === 'OFF') out.push({ t: 'PITOT HEAT', c: PFD_MSG_AMBER });
   // (CDU 키 고착은 CAS 가 아니라 System Message — PFD 왼쪽 위 MSG · pfdSysMsgs)
-  // 1 · 2 GEN OFF(황) — 그 발전기가 버스에 없을 때(UPPER GEN 스위치 OFF, 또는 엔진이 멎어 발전하지 못함 — 18-system.js elecState)
+  // 1 · 2 GEN(황) — 그 발전기가 버스에 없을 때(UPPER GEN 스위치 OFF, 또는 NR 이 84% 아래 — GEN 은 MGB 에 물려 있다 · 18-system.js elecState)
   let E = null;
   try { if (typeof elecState === 'function') E = elecState(); } catch (e) { _swallow(e); }
   [1, 2].forEach(n => {
@@ -691,18 +691,22 @@ function casUpdate() {
 }
 function casSorted() { return [...casAct.values()].sort((a, b) => a.lvl - b.lvl || b.seq - a.seq); }
 // 창에 보일 줄 — 경고 고정 · 주의 · 조언은 casScroll 부터
-function casView(lines) {
+// commit 이 거짓이면(3D 위에 겹친 PFD · 조종석 MFD 처럼 본 PFD 가 아닌 캔버스) 넘김 자리 · 소프트키 상태를 건드리지 않는다
+//   — 크기가 다른 두 캔버스가 번갈아 그리며 줄 수가 오락가락해 소프트키 CAS 가 깜박이던 일(Cockpit 모드 · PFD 팝아웃)
+function casView(lines, commit = true) {
   casUpdate();
   const L = Math.max(2, Math.min(CAS_MAX_LINES, lines | 0));
   const all = casSorted(), W = all.filter(m => m.lvl === 1), R = all.filter(m => m.lvl !== 1);
-  if (W.length + R.length <= L) { casScroll = 0; casLastView = { up: 0, dn: 0 }; return { list: all, tag: '', up: 0, dn: 0 }; }
+  if (W.length + R.length <= L) { if (commit) { casScroll = 0; casLastView = { up: 0, dn: 0 }; } return { list: all, tag: '', up: 0, dn: 0 }; }
   const w = W.slice(0, Math.min(W.length, L - 1));
   const slots = Math.max(0, L - 1 - w.length);
-  casScroll = Math.max(0, Math.min(casScroll, R.length - slots));
-  const up = casScroll, dn = Math.max(0, R.length - casScroll - slots);
-  casLastView = { up, dn };
-  return { list: [...w, ...R.slice(casScroll, casScroll + slots)], tag: `${up ? up + '↑' : ''}${up && dn ? '  ' : ''}${dn ? dn + '↓' : ''}`, up, dn };
+  const sc = Math.max(0, Math.min(casScroll, R.length - slots));
+  const up = sc, dn = Math.max(0, R.length - sc - slots);
+  if (commit) { casScroll = sc; casLastView = { up, dn }; }
+  return { list: [...w, ...R.slice(sc, sc + slots)], tag: `${up ? up + '↑' : ''}${up && dn ? '  ' : ''}${dn ? dn + '↓' : ''}`, up, dn };
 }
+// 본 PFD 캔버스에 그리는 중인가(줄 수 · 넘김을 정하는 쪽)
+function pfdMainCvs() { return typeof cvs !== 'undefined' && cvs && cvs.id === 'pfd'; }
 function pfdCasOverflow() { try { const v = casView(pfdCasLines); return v.up + v.dn > 0; } catch (e) { return false; } }
 function pfdCasStep(d) { casScroll = Math.max(0, casScroll + d); try { casView(pfdCasLines); drawPFD(); } catch (e) { _swallow(e); } }
 function pfdCasCanUp() { return casLastView.up > 0; }
@@ -816,8 +820,9 @@ function drawPfdSideMsgs(S0, swY) {
   if (widest > S0.w - 8) { mfs = Math.max(6, mfs * (S0.w - 8) / widest); ctx.font = `bold ${mfs}px Helvetica Neue, Arial, sans-serif`; }
   // 창 높이 — 스톱워치 위 4px 까지(HOCAS 가 있던 자리까지)
   const bh = Math.max(mfs * 1.3 + 6, (Number.isFinite(swY) ? swY - 4 : S0.y + S0.h) - S0.y);
-  pfdCasLines = Math.max(2, Math.min(CAS_MAX_LINES, Math.floor((bh - 6) / (mfs * 1.3))));
-  const V = casView(pfdCasLines), msgs = V.tag ? [...V.list, { t: V.tag, c: '#ffffff' }] : V.list;
+  const lines = Math.max(2, Math.min(CAS_MAX_LINES, Math.floor((bh - 6) / (mfs * 1.3)))), main = pfdMainCvs();
+  if (main) pfdCasLines = lines;
+  const V = casView(lines, main), msgs = V.tag ? [...V.list, { t: V.tag, c: '#ffffff' }] : V.list;
   ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(S0.x, S0.y, S0.w, bh);
   ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
   let my = S0.y + 3 + mfs;
@@ -2039,9 +2044,10 @@ function drawHSI(x, y, w, h, cxC) {
     // 창은 스톱워치 위까지 — 들어가는 줄 수로 쪽을 나눈다(HOCAS 자리를 메시지에)
     if (!_pfdSideMsgs) {
       const mfs0 = Math.max(7, Math.min(10, r * 0.085)), RC0 = hsiRightCol(x, y, w, h, cxC);
-      pfdCasLines = Math.max(2, Math.min(CAS_MAX_LINES, Math.floor(((RC0.swY - 4) - (wdY + fs * 1.1 + 6)) / (mfs0 * 1.3))));
+      const ln = Math.max(2, Math.min(CAS_MAX_LINES, Math.floor(((RC0.swY - 4) - (wdY + fs * 1.1 + 6)) / (mfs0 * 1.3))));
+      if (pfdMainCvs()) pfdCasLines = ln; else drawHSI._lines = ln;
     }
-    const _V = _pfdSideMsgs ? { list: [], tag: '' } : casView(pfdCasLines), msgs = _V.tag ? [..._V.list, { t: _V.tag, c: '#ffffff' }] : _V.list;   // 넘치면 쪽넘김(CAS UP · DN) · 옆 칸이면 거기서
+    const _V = _pfdSideMsgs ? { list: [], tag: '' } : casView(pfdMainCvs() ? pfdCasLines : (drawHSI._lines || pfdCasLines), pfdMainCvs()), msgs = _V.tag ? [..._V.list, { t: _V.tag, c: '#ffffff' }] : _V.list;   // 넘치면 쪽넘김(CAS UP · DN) · 옆 칸이면 거기서
     if (!_pfdSideMsgs) _pfdMsgBottom = wdY + fs * 1.1 + 4;    // 바람 글자 아래끝(메시지가 없을 때)
     if (msgs.length) {
       ctx.save();
