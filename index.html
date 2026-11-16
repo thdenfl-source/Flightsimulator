@@ -17,11 +17,11 @@
      CDN 을 쓰면 한 번이라도 못 받는 순간 앱이 통째로 죽는다 — 비행 중에는
      그럴 여지를 두지 않는다. -->
 <!-- 패널 새 창(다중 모니터) — 라이브러리가 거는 이벤트까지 받아 적어야 하므로 맨 먼저 -->
-<script src="js/00-edition.js?v=682"></script>
-<script src="js/00-aircraft.js?v=682"></script>
-<script src="js/00-params.js?v=682"></script>
-<script src="js/00-sched.js?v=682"></script>
-<script src="js/00-popout.js?v=682"></script>
+<script src="js/00-edition.js?v=683"></script>
+<script src="js/00-aircraft.js?v=683"></script>
+<script src="js/00-params.js?v=683"></script>
+<script src="js/00-sched.js?v=683"></script>
+<script src="js/00-popout.js?v=683"></script>
 <link rel="stylesheet" href="vendor/leaflet.css"/>
 <script src="vendor/leaflet.js"></script>
 <link rel="stylesheet" href="vendor/leaflet-velocity.min.css"/>
@@ -2047,7 +2047,7 @@ html.ac-b206 #pfd-ov { background: transparent; border: 0; box-shadow: none; min
         .panel-border { flex: 1; border: 1.5px solid var(--active-blue); border-radius: 5px; padding: 8px; background: black; display: flex; flex-direction: column; }
 
         /* Common Buttons with enhanced active states for touch feedback */
-        .item-btn { height: 35px; background: var(--btn-grad); border: var(--border-3d);
+        .item-btn { height: 32px;   /* CDU 버튼 90 % (노브 줄 자리) */ background: var(--btn-grad); border: var(--border-3d);
             color: white; font-size: 8px; display: flex; flex-direction: column; justify-content: center; align-items: center; cursor: pointer; border-radius: 4px; position: relative; text-align: center;
             transition: transform 0.05s, background 0.1s;
         }
@@ -2098,18 +2098,18 @@ html.ac-b206 #pfd-ov { background: transparent; border: 0; box-shadow: none; min
         }
 
         /* Footer */
-        #cdu-knobs { display: flex; justify-content: space-around; align-items: center; height: 46px; background: #0b0b0b; border-top: 1px solid #2a2a2a; flex-shrink: 0; }
+        #cdu-knobs { display: flex; justify-content: space-around; align-items: center; height: 42px; background: #0b0b0b; border-top: 1px solid #2a2a2a; flex-shrink: 0; }
         .cdu-knob-mid { display: flex; align-items: center; gap: 6px; }
         #cdu-knob-sel { font: bold 9px Helvetica Neue, Arial, sans-serif; color: #2fe0e0; min-width: 44px; }
-        .cdu-knob { width: 34px; height: 34px; border-radius: 50%; cursor: pointer; position: relative;
+        .cdu-knob { width: 31px; height: 31px; border-radius: 50%; cursor: pointer; position: relative;
                     background: radial-gradient(circle at 35% 30%, #666, #222 60%, #111); border: 2px solid #444; box-shadow: 0 2px 4px #000, inset 0 1px 2px #888; }
         .cdu-knob i { position: absolute; left: 50%; top: 3px; width: 3px; height: 11px; margin-left: -1.5px; background: #ddd; border-radius: 2px; }
         .cdu-knob:active { transform: scale(.94); }
-        .footer-nav { height: 53px; display: flex; justify-content: space-around; align-items: center; background: #111; border-top: 1.5px solid #333; padding: 0 5px; }
+        .footer-nav { height: 48px; display: flex; justify-content: space-around; align-items: center; background: #111; border-top: 1.5px solid #333; padding: 0 5px; }
         .nav-btn { background: var(--btn-grad); border: var(--border-3d); border-radius: 5px; padding: 4px 4px;
                    /* 개수와 라벨 길이에 상관없이 모두 같은 크기 — Flight Plan 푸터와 동일한 규칙 */
-                   flex: 1 1 0; min-width: 0; max-width: 68px; margin: 0 2px;
-                   height: 42px; box-sizing: border-box;
+                   flex: 1 1 0; min-width: 0; max-width: 61px; margin: 0 2px;
+                   height: 38px; box-sizing: border-box;
                    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
                    cursor: pointer; font-size: 7px; line-height: 9px; color: white; transition: transform 0.05s, background 0.1s; }
         .nav-btn:active { background: linear-gradient(to bottom, #555, #222, #111); transform: scale(0.95); }
@@ -2130,11 +2130,11 @@ html.ac-b206 #pfd-ov { background: transparent; border: 0; box-shadow: none; min
         #mainContentArea:has(> .home-grid), #mainContentArea:has(> .acsys-page > .home-grid) {
             background: radial-gradient(ellipse at 30% 20%, #8a8c8e 0%, #6f7173 45%, #5d5f61 100%); }
         .home-grid { gap: 7px 6px; padding: 6px 2px; }
-        .home-icon-wrapper { width: 21%; height: 67px; box-sizing: border-box; justify-content: space-between; padding: 5.4px 2.7px 4.5px;
+        .home-icon-wrapper { width: 19%; height: 60px; box-sizing: border-box; justify-content: space-between; padding: 5.4px 2.7px 4.5px;
             background: linear-gradient(to bottom, #20262c 0%, #07090b 55%, #000 100%); border: 2px solid #d4d8db; border-radius: 8px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.12); transition: transform 0.05s, border-color 0.1s; }
         .home-icon-wrapper:active { transform: scale(0.95); border-color: #2fe0e0; }
-        .home-icon-wrapper .icon-box, .home-icon-wrapper .icon-box.func-active { width: 100%; height: 34px; margin: 0; border: none !important;
+        .home-icon-wrapper .icon-box, .home-icon-wrapper .icon-box.func-active { width: 100%; height: 31px; margin: 0; border: none !important;
             background: none !important; box-shadow: none; border-radius: 0; overflow: visible; }
         .home-icon-wrapper .icon-box:active { transform: none; }
         .home-icon-wrapper .icon-box svg { width: auto; height: 100%; max-width: 80%; }
@@ -2142,13 +2142,13 @@ html.ac-b206 #pfd-ov { background: transparent; border: 0; box-shadow: none; min
             font-family: 'Helvetica Neue', Arial, sans-serif; text-shadow: 0 1px 1px #000; }
         /* Waypoint Info — 사진처럼 3칸씩(마지막 줄 Create Waypoint · Airport INFO 는 가운데) */
         .wpt-grid { gap: 9px 8px; padding-top: 10px; }
-        .wpt-grid .home-icon-wrapper { width: 29%; }
+        .wpt-grid .home-icon-wrapper { width: 26%; }
         /* Aircraft Systems — 사진의 자리: 4칸 격자 두 줄(빈칸 하나) · 아래 한 줄은 바닥에 */
         #mainContentArea:has(> .acsys-grid) { display: flex; flex-direction: column; }
-        .acsys-grid { display: grid; grid-template-columns: repeat(4, 21%); justify-content: center; gap: 7px 6px; }
+        .acsys-grid { display: grid; grid-template-columns: repeat(4, 19%); justify-content: center; gap: 7px 6px; }
         .acsys-grid .home-icon-wrapper { width: 100%; }
         .acsys-grid.acsys-bot { margin-top: auto; }
-        .acsys-empty { height: 67px; }
+        .acsys-empty { height: 60px; }
         .acsys-iconly .icon-box, .acsys-iconly .icon-box.func-active { height: 100%; }
         .acsys-iconly .icon-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
         .acsys-txtbtn { justify-content: center; gap: 4px; }
@@ -2681,7 +2681,7 @@ body.simple-mode #simple-view { display: flex; position: fixed; left: 0; right: 
     </div>
   </form>
 </div>
-<script src="js/00-gate.js?v=682"></script>
+<script src="js/00-gate.js?v=683"></script>
 <!-- ── 단일화면 선택 바 (기본 숨김) ── -->
 <!-- ── 시작 안내(사용법/키보드) 오버레이 ── -->
 <div id="help-overlay" style="display:none;">
@@ -4015,54 +4015,54 @@ body.simple-mode #simple-view { display: flex; position: fixed; left: 0; right: 
 <!-- 앱 코드 — 클래식 스크립트(모듈 아님)라 전역 스코프를 공유한다.
      순서가 곧 실행 순서이므로 임의로 바꾸지 말 것. -->
   <!-- AIP 데이터 — 코드보다 먼저 로드한다 -->
-  <script src="js/data/terminal-fixes.js?v=682"></script>
-  <script src="js/data/ifr-fixes.js?v=682"></script>
-  <script src="js/data/ifr-procedures.js?v=682"></script>
-  <script src="js/data/airfield-info.js?v=682"></script>
-  <script src="js/data/enr-vors.js?v=682"></script>
-  <script src="js/data/loc-stations.js?v=682"></script>
-  <script src="js/data/enr-routes.js?v=682"></script>
-  <script src="js/data/airspace.js?v=682"></script>
-  <script src="js/data/runways.js?v=682"></script>
+  <script src="js/data/terminal-fixes.js?v=683"></script>
+  <script src="js/data/ifr-fixes.js?v=683"></script>
+  <script src="js/data/ifr-procedures.js?v=683"></script>
+  <script src="js/data/airfield-info.js?v=683"></script>
+  <script src="js/data/enr-vors.js?v=683"></script>
+  <script src="js/data/loc-stations.js?v=683"></script>
+  <script src="js/data/enr-routes.js?v=683"></script>
+  <script src="js/data/airspace.js?v=683"></script>
+  <script src="js/data/runways.js?v=683"></script>
   <!-- 앱 코드 -->
-  <script src="js/00-ui.js?v=682"></script>
-  <script src="js/01-state.js?v=682"></script>
-  <script src="js/02-math.js?v=682"></script>
-  <script src="js/03-pfd.js?v=682"></script>
-  <script src="js/04-map.js?v=682"></script>
-  <script src="js/05-gps.js?v=682"></script>
-  <script src="js/06-nav.js?v=682"></script>
-  <script src="js/07-sim.js?v=682"></script>
-  <script src="js/08-ifrdb.js?v=682"></script>
-  <script src="js/09a-start.js?v=682"></script>
-  <script src="js/09-cdu.js?v=682"></script>
-  <script src="js/09b-cdu-screens.js?v=682"></script>
-  <script src="js/10-tools.js?v=682"></script>
-  <script src="js/11-charts.js?v=682"></script>
-  <script src="js/12-joystick.js?v=682"></script>
-  <script src="js/13-joyhid.js?v=682"></script>
-  <script src="js/14-simmode.js?v=682"></script>
-  <script src="js/15-heli3d.js?v=682"></script>
-  <script src="js/16-sound.js?v=682"></script>
-  <script src="js/17-upper.js?v=682"></script>
-  <script src="js/18-system.js?v=682"></script>
-  <script src="js/19-lower.js?v=682"></script>
-  <script src="js/20-navaids.js?v=682"></script>
-  <script src="js/21-c5000.js?v=682"></script>
-  <script src="js/22-npx138.js?v=682"></script>
-  <script src="js/23-afcs.js?v=682"></script>
-  <script src="js/24-sar.js?v=682"></script>
-  <script src="js/25-b206panel.js?v=682"></script>
-  <script src="js/26-b206radio.js?v=682"></script>
-  <script src="js/27-b206coll.js?v=682"></script>
-  <script src="js/28-debrief.js?v=682"></script>
-  <script src="js/29-env.js?v=682"></script>
-  <script src="js/30-scenario.js?v=682"></script>
-  <script src="js/31-ios.js?v=682"></script>
-  <script src="js/32-callout.js?v=682"></script>
-  <script src="js/33-train4.js?v=682"></script>
-  <script src="js/34-infra.js?v=682"></script>
-  <script src="js/35-kuhgrip.js?v=682"></script>
+  <script src="js/00-ui.js?v=683"></script>
+  <script src="js/01-state.js?v=683"></script>
+  <script src="js/02-math.js?v=683"></script>
+  <script src="js/03-pfd.js?v=683"></script>
+  <script src="js/04-map.js?v=683"></script>
+  <script src="js/05-gps.js?v=683"></script>
+  <script src="js/06-nav.js?v=683"></script>
+  <script src="js/07-sim.js?v=683"></script>
+  <script src="js/08-ifrdb.js?v=683"></script>
+  <script src="js/09a-start.js?v=683"></script>
+  <script src="js/09-cdu.js?v=683"></script>
+  <script src="js/09b-cdu-screens.js?v=683"></script>
+  <script src="js/10-tools.js?v=683"></script>
+  <script src="js/11-charts.js?v=683"></script>
+  <script src="js/12-joystick.js?v=683"></script>
+  <script src="js/13-joyhid.js?v=683"></script>
+  <script src="js/14-simmode.js?v=683"></script>
+  <script src="js/15-heli3d.js?v=683"></script>
+  <script src="js/16-sound.js?v=683"></script>
+  <script src="js/17-upper.js?v=683"></script>
+  <script src="js/18-system.js?v=683"></script>
+  <script src="js/19-lower.js?v=683"></script>
+  <script src="js/20-navaids.js?v=683"></script>
+  <script src="js/21-c5000.js?v=683"></script>
+  <script src="js/22-npx138.js?v=683"></script>
+  <script src="js/23-afcs.js?v=683"></script>
+  <script src="js/24-sar.js?v=683"></script>
+  <script src="js/25-b206panel.js?v=683"></script>
+  <script src="js/26-b206radio.js?v=683"></script>
+  <script src="js/27-b206coll.js?v=683"></script>
+  <script src="js/28-debrief.js?v=683"></script>
+  <script src="js/29-env.js?v=683"></script>
+  <script src="js/30-scenario.js?v=683"></script>
+  <script src="js/31-ios.js?v=683"></script>
+  <script src="js/32-callout.js?v=683"></script>
+  <script src="js/33-train4.js?v=683"></script>
+  <script src="js/34-infra.js?v=683"></script>
+  <script src="js/35-kuhgrip.js?v=683"></script>
 
 <input type="file" id="zipFileInput" accept=".zip,application/zip,application/x-zip-compressed,application/octet-stream" style="display:none" onchange="handleZipFile(this.files[0]); this.value='';"></body>
 </html>
