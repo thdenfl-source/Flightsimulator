@@ -67,13 +67,18 @@ export async function run(page, t) {
     o.imb20 = msgs().includes('FUEL IMBALANCE');
     tick(0.1, 11); o.imb31 = msgs().includes('FUEL IMBALANCE') && draw().fills.includes('#f2e64b@263,562');
     fuelWow = wow0;
-    // ⑧ F5 XFER — ON: F5 → AFT(TP ▲) · AUTO: 비행 중 AFT 170 아래에서
+    // ⑧ F5 XFER — ON: F5 → AFT(TP ▲) · AUTO: 비행 중 AFT 90%(378) 아래에서 시작해 98% 에서 멈춘다
     fuelReset(); fuel.aft -= 100; ovhdSet('f5Xfer', 'ON'); tick(0.1);
     const f50 = fuel.f5; tick(0.1, 60);
     o.f5Show = (draw(), fuelDrawn.f5Show); ovhdSet('aux1Xfer', 'ON'); o.auxOn = (draw(), fuelDrawn.aux[0]) && draw().seen.filter(x => x === 'TP1').length === 1; ovhdSet('aux1Xfer', 'AUTO');
     o.f5On = fuelSys.f5 && (draw(), fuelDrawn.f5) && Math.round(f50 - fuel.f5) === 14;
-    fuelReset(); fuelWow = () => true; ovhdSet('f5Xfer', 'AUTO'); fuel.aft = 160; tick(0.1); o.f5Gnd = fuelSys.f5;
-    fuelWow = () => false; tick(0.1); o.f5Auto = fuelSys.f5; fuelWow = wow0;
+    fuelReset(); fuelWow = () => true; ovhdSet('f5Xfer', 'AUTO'); fuel.aft = 370; tick(0.1); o.f5Gnd = fuelSys.f5;
+    fuelWow = () => false; tick(0.1); o.f5Auto = fuelSys.f5;
+    fuelReset(); fuel.aft = 400; fuelSysTick(0.1, 0.1); o.f5Hi = fuelSys.f5;            // 90% 위 — 아직 시작하지 않는다
+    // 비행 20분 — AFT 에서 먹는 만큼(약 540 lbs/h) F5 가 AFT 로 넘어가 F5 가 줄어든다
+    fuelReset(); fuelSysTick(0.1, 0);
+    for (let i = 0; i < 1200; i++) { fuel.aft = Math.max(0, fuel.aft - 0.15); fuelSysTick(1, 1); }
+    o.f5Used = 270 - fuel.f5; o.aftKept = fuel.aft; fuelWow = wow0;
     // ⑨ MSOV(TQS 연료차단) CLOSE — 압력 0 · MFSOV 1 CLOSE 호박색 · Aircraft Status Closed
     fuelReset(); ovhdSet('fuel1', 'CLOSE'); tick(1);
     o.msov = fuelPress(1) === 0 && draw().fills.includes('#f2e64b@284,231');
@@ -99,7 +104,8 @@ export async function run(page, t) {
   t.ok(R.autoGnd && R.autoDir === -1 && R.autoOff === 0 && R.autoBal <= 11,
     `XFER AUTO — 땅에서는 쉬고 비행 중 차 200 → 이송(${R.autoDir}) → ±11 안에서 멈춤(차 ${R.autoBal.toFixed(1)})`);
   t.ok(!R.imb20 && R.imb31, 'FUEL IMBALANCE — 차 350(기내 1800 아래 기준 150) 30초 넘으면 CAS · Fuel 화면 호박색');
-  t.ok(R.f5On && !R.f5Gnd && R.f5Auto, 'F5 XFER — ON: 14 lb/min F5 → AFT(TP ▲) · AUTO: 비행 중 AFT 170 아래에서');
+  t.ok(R.f5On && !R.f5Gnd && R.f5Auto && !R.f5Hi, 'F5 XFER — ON: 14 lb/min F5 → AFT(TP ▲) · AUTO: 비행 중 AFT 90% 아래에서(땅에서는 안 함)');
+  t.ok(R.f5Used > 150 && R.aftKept > 360, `F5 XFER AUTO — 비행 20분이면 F5 가 AFT 로 넘어가 줄어든다(F5 ${Math.round(R.f5Used)} lbs 사용 · AFT ${Math.round(R.aftKept)} lbs 유지)`);
   t.ok(R.msov && R.msovOpen, 'TQS 연료차단 CLOSE — 라인 압력 0 · MFSOV 1 CLOSE 호박색, OPEN 이면 다시');
   t.ok(R.low, 'FUEL 1 LOW — 집합 탱크 165 아래');
 }

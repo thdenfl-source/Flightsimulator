@@ -39,7 +39,8 @@ function sysMapSlot() {
 //                 Fuel 화면에 교차공급 점선(---) · 'FUEL XFEED'(녹)
 //   XFER        — 주 탱크 사이 이송 펌프 1000 lbs/h. LH: FWD → AFT(AFT 98% 에서 멈춤, TP ◀) · RH: AFT → FWD(FWD 98%, TP ▶)
 //                 AUTO: 비행 중(바퀴가 떠 있고) 기내 400~2000 lbs 일 때 좌우 차 100 lbs 넘으면 돌고 ±11 안이면 멈춘다
-//   F5 XFER     — F5 → AFT 840 lbs/h(14 lb/min). ON: 늘(AFT 98% 까지) · AUTO: 비행 중 AFT 가 170 lbs 아래로 내려가면
+//   F5 XFER     — F5 → AFT 840 lbs/h(14 lb/min). ON: 늘(AFT 98% 까지) · AUTO: 비행 중 AFT 가 90%(378 lbs) 아래로 내려가면
+//                 시작해 98% 에서 멈춘다 — AFT 를 가득 채워 두며 F5 를 먼저 쓴다(종전 170 lbs 기준은 30분 넘게 F5 가 줄지 않았다)
 //   AUX1/2 XFER — EXT AUX 탱크 → 그쪽 주 탱크(아래)
 //   MSOV CLOSE  — 그 라인 압력 0 · Fuel 화면 'MFSOV n CLOSE' 호박색
 // FUEL IMBALANCE(황) — 좌우 차 300 lbs(기내 1800 아래면 150) 넘게 30초, 또는 AUTO 이송이 15분 돌아도 맞추지 못할 때
@@ -50,6 +51,7 @@ const FUEL_MAIN0 = FUEL_CAP;                        // (옛 이름)
 const FUEL_MAX = 2500;                              // 채울 수 있는 끝(lbs)
 const FUEL_FEED_PPH = 1000;                         // 주 탱크 → 집합 탱크(저절로)
 const FUEL_XFER_PPH = 1000, FUEL_F5_PPH = 840, FUEL_HI = 0.98;   // 이송 펌프 · F5 이송 · 고수준 감지(가득의 98%)
+const FUEL_F5_AUTO = 0.90;                                         // F5 AUTO 이송을 시작하는 AFT 수위(가득의 90%)
 const FUEL_LOW_LBS = 165;                           // FUEL n LOW — 집합 탱크가 이 아래
 const FUEL_BP_PSI = { 1: 19, 2: 19 }, FUEL_PRES_LOW = 9, FUEL_XFEED_SEC = 5, FUEL_SUCTION_PSI = 4;
 // AUX 탱크(EXT AUX1 왼쪽 · EXT AUX2 오른쪽) — 처음 525 lbs 씩. 하부 콘솔 AUX1/AUX2 XFER 로 주 탱크에 보낸다:
@@ -180,7 +182,7 @@ function fuelSysTick(dtReal, dt) {
   let f5 = false;
   if (fuel.f5 > 0 && fuel.aft < FUEL_CAP.aft * FUEL_HI && pwrDcNess()) {
     if (f5s === 'ON') f5 = true;
-    else if (f5s === 'AUTO') f5 = !wow && (fuelSys.f5 || fuel.aft <= 170);
+    else if (f5s === 'AUTO') f5 = !wow && (fuelSys.f5 || fuel.aft <= FUEL_CAP.aft * FUEL_F5_AUTO);
   }
   fuelSys.f5 = f5;
   if (dt > 0) {
