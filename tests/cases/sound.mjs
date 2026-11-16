@@ -102,6 +102,30 @@ export async function run(page, t) {
   t.ok(Math.abs(vol.t0 - 0.7) < 1e-9 && Math.abs(vol.t50 - 0.85) < 1e-9 && Math.abs(vol.t100 - 1) < 1e-9 && Math.abs(vol.t130 - 1) < 1e-9,
     `소리 크기는 토크를 따른다 — 0% → ${(vol.t0 * 100).toFixed(0)}% · 50% → ${(vol.t50 * 100).toFixed(0)}% · 100% → ${(vol.t100 * 100).toFixed(0)}% · 130% → ${(vol.t130 * 100).toFixed(0)}%`);
 
+  // ── 엔진을 모두 끄면 NR 이 내려가며 로터 소리도 잦아든다 · Cockpit Mode 가 시작되면 소리가 켜진다 ──
+  const nrv = await page.evaluate(() => {
+    const g = () => ({ value: 0, setTargetAtTime(v) { this.value = v; } });
+    const rate = { playbackRate: g() };
+    const fake = { ctx: { currentTime: 0 }, master: { gain: g() }, gGnd: { gain: g() }, gAir: { gain: g() }, src: [rate], buf: {} };
+    const was = { snd: _snd, on: sndOn, run: S.running, ep: window.engParams };
+    _snd = fake; sndOn = true; S.running = true; _simOnGnd = true;
+    const ep0 = window.engParams, at = nr => { window.engParams = () => Object.assign(ep0(), { nr }); sndTick(0.016); return [fake.master.gain.value, rate.playbackRate.value]; };
+    const o = { n100: at(100), n50: at(50), n3: at(3), n0: at(0) };
+    window.engParams = was.ep; _snd = was.snd; sndOn = was.on; S.running = was.run; sndMix = 0;
+    o.sysOff = (() => { const s0 = simEngSt[1]; simEngSt[1] = 'OFF'; const r = sysSndState().eng[1].ph; simEngSt[1] = s0; return r; })();
+    // Cockpit Mode — 소리가 켜진다
+    sndOn = false; try { localStorage.setItem('simSound', '0'); } catch (e) {}
+    if (typeof sndAutoOn === 'function') sndAutoOn(); o.auto = sndOn && localStorage.getItem('simSound') === '1' && /🔊/.test(document.getElementById('snd-btn').textContent);
+    sndOn = false; updateSoundBtn(); try { localStorage.setItem('simSound', '0'); } catch (e) {}
+    o.hook = /sndAutoOn\(\)/.test(String(cockpitStart));
+    return o;
+  });
+  t.ok(nrv.n100[0] > 0 && nrv.n50[0] > 0 && nrv.n50[0] < nrv.n100[0] * 0.6 && nrv.n3[0] === 0 && nrv.n0[0] === 0,
+    `엔진을 끄면 NR 따라 로터 소리가 잦아든다 — NR 100 ${nrv.n100[0].toFixed(2)} · 50 ${nrv.n50[0].toFixed(2)} · 3% 아래 무음`);
+  t.ok(nrv.n100[1] === 1 && nrv.n50[1] < 1, `NR 이 낮으면 소리도 낮고 느려진다 (빠르기 ${nrv.n50[1].toFixed(2)})`);
+  t.ok(nrv.sysOff === 'OFF', '연료 레버 · ENG 로 엔진을 꺼도 엔진 소리가 꺼진다');
+  t.ok(nrv.auto && nrv.hook, 'Cockpit Mode 가 시작되면 SOUND 가 켜진다');
+
   // ── 버튼을 누르면 켜지고, 이 기기에 적어 둔다 ──
   const tog = await page.evaluate(() => {
     const b = document.getElementById('snd-btn');

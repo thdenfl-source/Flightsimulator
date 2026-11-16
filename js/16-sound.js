@@ -45,6 +45,16 @@ function sndTqGain(tq) {
   const v = Number.isFinite(tq) ? tq : 0;
   return SND_TQ_MIN + (1 - SND_TQ_MIN) * Math.max(0, Math.min(1, v / 100));
 }
+// 로터 회전(NR)에 따른 크기 · 빠르기 — 엔진을 모두 끄면 NR 이 내려가며 소리도 낮아지고 잦아든다(NR 5% 아래 무음)
+function sndNr() {
+  try { if (typeof engParams === 'function') { const n = engParams().nr; if (Number.isFinite(n)) return n; } } catch (e) { _swallow(e); }
+  return 100;
+}
+function sndNrGain(nr) {
+  const f = Math.max(0, Math.min(1, (nr - 5) / 95));
+  return f <= 0 ? 0 : Math.pow(f, 1.3);
+}
+function sndNrRate(nr) { return 0.55 + 0.45 * Math.max(0, Math.min(1, nr / 100)); }   // 되풀이 빠르기 — NR 이 낮으면 낮고 느린 소리
 // 같은 힘 곡선 — 두 소리의 크기(이륙 전, 이륙 후)
 function sndGains(mix) {
   const m = Math.max(0, Math.min(1, mix));
@@ -124,7 +134,9 @@ function sndTick(dt) {
     try { if (typeof tqShown === 'function') tq = tqShown(); } catch (e) { _swallow(e); }
     // 경고음(Bell 206 ENG OUT · RPM)이 울리는 동안은 로터 소리를 반으로 줄여 경고음이 들리게 한다
     const duck = (typeof b206HornOn === 'function' && b206HornOn()) ? 0.5 : 1;
-    _snd.master.gain.setTargetAtTime(sndOn && S.running ? SND_VOL * sndTqGain(tq) * duck : 0, t, 0.15);
+    const nr = sndNr();
+    _snd.master.gain.setTargetAtTime(sndOn && S.running ? SND_VOL * sndTqGain(tq) * duck * sndNrGain(nr) : 0, t, 0.15);
+    _snd.src.forEach(s => { try { s.playbackRate.setTargetAtTime(sndNrRate(nr), t, 0.3); } catch (e) { _swallow(e); } });
   } catch (e) { _swallow(e); }
 }
 function sndFrame() {
@@ -149,6 +161,19 @@ function sndFrame() {
   document.addEventListener('keydown', go, true);
 })();
 
+// Cockpit Mode 가 시작되면 소리를 켠다(07-sim.js cockpitStart) — 누른 그 순간이면 바로, 아니면 첫 터치 · 키 입력 때 연다
+function sndAutoOn() {
+  if (!sndOn) {
+    sndOn = true;
+    try { localStorage.setItem(SND_PREF, '1'); } catch (e) { _swallow(e); }
+    updateSoundBtn();
+  }
+  sndStart();
+  if (_snd && _snd.ctx.state === 'suspended') {
+    const go = () => { document.removeEventListener('pointerdown', go, true); document.removeEventListener('keydown', go, true); if (sndOn) sndStart(); };
+    document.addEventListener('pointerdown', go, true); document.addEventListener('keydown', go, true);
+  }
+}
 try { appRegister({ toggleSound }); } catch (e) { _swallow(e); }
 try { updateSoundBtn(); } catch (e) { _swallow(e); }
 
@@ -198,6 +223,7 @@ function sysSndState() {
   [1, 2].forEach(n => {
     let ph = 'RUN', ng = 0;
     try { const f = typeof fadec !== 'undefined' ? fadec.e[n] : null; ph = f && f.ph ? f.ph : 'RUN'; const P = engParams(); ng = (n === 1 ? P.e1 : P.e2).ng || 0; } catch (e) { _swallow(e); }
+    try { if (ph === 'RUN' && typeof simEngSt !== 'undefined' && simEngSt[n] === 'OFF') ph = 'OFF'; } catch (e) { _swallow(e); }
     o.eng[n] = { ph, ng, starter: ph === 'CRANK' || ph === 'IGN', ign: ph === 'IGN', starting: ph === 'CRANK' || ph === 'IGN' };
   });
   return o;
