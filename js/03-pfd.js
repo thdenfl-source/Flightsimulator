@@ -148,9 +148,9 @@ function drawPFD() {
   ctx.beginPath(); ctx.moveTo(0, L.aiH); ctx.lineTo(W, L.aiH); ctx.stroke();
   ctx.beginPath(); ctx.moveTo(L.hsi.x + 0.5, L.aiH); ctx.lineTo(L.hsi.x + 0.5, L.usableH); ctx.stroke();
   ctx.beginPath(); ctx.moveTo(L.crht.x + 0.5, L.aiH); ctx.lineTo(L.crht.x + 0.5, L.usableH); ctx.stroke();
-  if (L.sideOn) drawPfdSideMsgs(L.side);
-  if (L.insetOn) drawPfdInset(L.inset);
   const RC = pfdRightCol(L, W);
+  if (L.sideOn) drawPfdSideMsgs(L.side, RC.swY);
+  if (L.insetOn) drawPfdInset(L.inset);
   // HOCAS 는 SYSTEM 창(18-system.js _sysHocasPage)에 보인다 — PFD 에는 그리지 않는다
   drawStopwatch(L.hsi.x, L.hsi.y, L.hsi.w, L.hsi.h, W / 2, RC);
 }
@@ -605,11 +605,13 @@ function hocasAxes() {
 // HSI 오른쪽 아래 칸의 자리 — HOCAS 창과 그 아래 스톱워치가 같은 왼쪽 · 폭으로 선다
 // ── 자세계 오른쪽 칸(실기 PFD 의 오른쪽 위) — 메시지 시현창(위) · HOCAS · 스톱워치(아래) ──
 let _pfdSideMsgs = false;
-// ── CAS 쪽넘김 — 메시지가 PFD_CAS_LINES 줄을 넘으면 넘치는 것은 숨기고, 소프트키 CAS 가 살아나 CAS UP · CAS DN 으로 넘겨 본다 ──
-const PFD_CAS_LINES = 5;
+// ── CAS 쪽넘김 — 메시지가 창에 들어가는 줄(pfdCasLines)을 넘으면 넘치는 것은 숨기고, 소프트키 CAS 가 살아나 CAS UP · CAS DN 으로 넘겨 본다 ──
+//   창은 스톱워치 바로 위까지 내려온다(HOCAS 가 SYSTEM 창으로 옮겨 그 자리를 메시지에 준다) — 줄 수는 그 높이로 그때마다 정한다
+const PFD_CAS_LINES = 5;            // 창 높이를 아직 모를 때의 기본값
+let pfdCasLines = PFD_CAS_LINES;
 let pfdCasPage = 0;
-function pfdCasPages(n) { return Math.max(1, Math.ceil(n / PFD_CAS_LINES)); }
-function pfdCasOverflow() { try { return pfdMsgs().length > PFD_CAS_LINES; } catch (e) { return false; } }
+function pfdCasPages(n) { return n <= pfdCasLines ? 1 : Math.ceil(n / Math.max(1, pfdCasLines - 1)); }
+function pfdCasOverflow() { try { return pfdMsgs().length > pfdCasLines; } catch (e) { return false; } }
 function pfdCasStep(d) {
   const pages = pfdCasPages(pfdMsgs().length);
   pfdCasPage = Math.max(0, Math.min(pages - 1, pfdCasPage + d));
@@ -620,19 +622,22 @@ function pfdCasView(msgs) {
   const pages = pfdCasPages(msgs.length);
   if (pages <= 1) { pfdCasPage = 0; return { list: msgs, tag: '' }; }
   pfdCasPage = Math.min(pfdCasPage, pages - 1);
-  const list = msgs.slice(pfdCasPage * PFD_CAS_LINES, (pfdCasPage + 1) * PFD_CAS_LINES);
+  const per = Math.max(1, pfdCasLines - 1);   // 넘기는 쪽은 한 줄을 쪽 표시(▲▼ CAS n/m)에 쓴다
+  const list = msgs.slice(pfdCasPage * per, (pfdCasPage + 1) * per);
   return { list, tag: `${pfdCasPage > 0 ? '▲' : ' '}${pfdCasPage < pages - 1 ? '▼' : ' '} CAS ${pfdCasPage + 1}/${pages}` };
 }
-function drawPfdSideMsgs(S0) {
-  const all = pfdMsgs(), V = pfdCasView(all), msgs = V.tag ? [...V.list, { t: V.tag, c: '#ffffff' }] : V.list;
+function drawPfdSideMsgs(S0, swY) {
+  const all = pfdMsgs();
   _pfdMsgBottom = S0.y;
-  if (!msgs.length) return;
   ctx.save();
   let mfs = Math.max(8, Math.min(11, S0.w * 0.085));
   ctx.font = `bold ${mfs}px Helvetica Neue, Arial, sans-serif`;
-  const widest = Math.max(...msgs.map(m => ctx.measureText(m.t).width));
+  const widest = Math.max(ctx.measureText('▲▼ CAS 9/9').width, ...all.map(m => ctx.measureText(m.t).width));
   if (widest > S0.w - 8) { mfs = Math.max(6, mfs * (S0.w - 8) / widest); ctx.font = `bold ${mfs}px Helvetica Neue, Arial, sans-serif`; }
-  const bh = msgs.length * mfs * 1.3 + 6;
+  // 창 높이 — 스톱워치 위 4px 까지(HOCAS 가 있던 자리까지)
+  const bh = Math.max(mfs * 1.3 + 6, (Number.isFinite(swY) ? swY - 4 : S0.y + S0.h) - S0.y);
+  pfdCasLines = Math.max(2, Math.floor((bh - 6) / (mfs * 1.3)));
+  const V = pfdCasView(all), msgs = V.tag ? [...V.list, { t: V.tag, c: '#ffffff' }] : V.list;
   ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(S0.x, S0.y, S0.w, bh);
   ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
   let my = S0.y + 3 + mfs;
@@ -1831,6 +1836,11 @@ function drawHSI(x, y, w, h, cxC) {
     ctx.restore();
     // ── 메시지 시현창(바람 정보 아래) ── 콘솔 스위치 · 엔진 상태를 따른다(pfdMsgs)
     const _all = _pfdSideMsgs ? [] : pfdMsgs();   // 자세계 오른쪽 칸이 있으면 거기에(drawPfdSideMsgs)
+    // 창은 스톱워치 위까지 — 들어가는 줄 수로 쪽을 나눈다(HOCAS 자리를 메시지에)
+    if (!_pfdSideMsgs) {
+      const mfs0 = Math.max(7, Math.min(10, r * 0.085)), RC0 = hsiRightCol(x, y, w, h, cxC);
+      pfdCasLines = Math.max(2, Math.floor(((RC0.swY - 4) - (wdY + fs * 1.1 + 6)) / (mfs0 * 1.3)));
+    }
     const _V = _pfdSideMsgs ? { list: [], tag: '' } : pfdCasView(_all), msgs = _V.tag ? [..._V.list, { t: _V.tag, c: '#ffffff' }] : _V.list;   // 넘치면 쪽넘김(CAS UP · DN) · 옆 칸이면 거기서
     if (!_pfdSideMsgs) _pfdMsgBottom = wdY + fs * 1.1 + 4;    // 바람 글자 아래끝(메시지가 없을 때)
     if (msgs.length) {
