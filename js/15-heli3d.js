@@ -655,16 +655,55 @@ function _h3DrawHeli(h, parts, SP, main, pose, ph, tph, spin) {
 //   높이는 내 기체와 같은 셈 — 그려진 땅(과장 배율) + 그 자리의 AGL. 15km 밖은 그리지 않는다(밤 불빛 · 점은 29-env.js).
 const TFC3D_MAX_M = 15000;
 function tfc3dActive() { return typeof traffic !== 'undefined' && traffic.length > 0; }
+// ── 공항 주기 헬기 — 가까운 공항(내 기체 12km 안)의 활주로마다 옆 주기장에 흰수리 · Bell 을 세워 둔다(로터 멈춤 · TCAS 에는 없다)
+//   활주로 가운데에서 왼쪽으로(활주로 폭 반 + 110m) · 활주로를 따라 45m 간격 셋 · 기수는 활주로 쪽
+//   ENV '공항 주기 헬기'(env.parked)로 끄고 켠다 · 내 기체가 서 있는 자리(40m 안)에는 두지 않는다
+const PARKED_KM = 12, PARKED_OFF = 110, PARKED_GAP = 45;
+let _parkedKey = '', _parkedList = [];
+function tfcParkedList() {
+  if (typeof env !== 'undefined' && env.parked === false) return [];
+  if (typeof RUNWAYS === 'undefined') return [];
+  const near = [];
+  for (const ap of RUNWAYS) {
+    const r = ap.rwys && ap.rwys[0]; if (!r) continue;
+    const la = (r.a[0] + r.b[0]) / 2, lo = (r.a[1] + r.b[1]) / 2;
+    if (Math.hypot((la - S.lat) * 110.54, (lo - S.lon) * 111.32 * Math.cos(S.lat * D2R)) < PARKED_KM) near.push(ap);
+  }
+  const key = near.map(a => a.apt).join(',');
+  if (key !== _parkedKey) {
+    _parkedKey = key; _parkedList = [];
+    near.forEach((ap, ai) => {
+      const r = ap.rwys[0], kx = 111320 * Math.cos(r.a[0] * D2R), ky = 110540;
+      const n = (r.b[0] - r.a[0]) * ky, e = (r.b[1] - r.a[1]) * kx, L = Math.hypot(n, e) || 1, u = { n: n / L, e: e / L }, lf = { n: u.e, e: -u.n };
+      const off = (r.w || 45) / 2 + PARKED_OFF, la0 = (r.a[0] + r.b[0]) / 2, lo0 = (r.a[1] + r.b[1]) / 2;
+      const hdgRwy = (Math.atan2(-lf.e, -lf.n) / D2R + 360) % 360;      // 활주로 쪽을 본다
+      [-1, 0, 1].forEach((k, j) => {
+        const dn = lf.n * off + u.n * k * PARKED_GAP, de = lf.e * off + u.e * k * PARKED_GAP;
+        _parkedList.push({ id: `${ap.apt}-${j}`, apt: ap.apt, ac: (ai + j) % 2 === 0 ? 'kuh' : 'b206', lat: la0 + dn / ky, lon: lo0 + de / kx, hdg: hdgRwy });
+      });
+    });
+  }
+  // 내 기체가 그 자리에 서 있으면(주기장에서 시작) 그 칸은 비운다
+  return _parkedList.filter(p => Math.hypot((p.lat - S.lat) * 110540, (p.lon - S.lon) * 111320 * Math.cos(S.lat * D2R)) > 40);
+}
 const TFC3D_LAYER = {
   id: 'traffic-3d', type: 'custom', renderingMode: '3d',
   onAdd(map) { this.map = map; },
   render(gl, args) {
-    if (!tfc3dActive()) return;
+    const parked = (() => { try { return tfcParkedList(); } catch (e) { return []; } })();
+    if (!tfc3dActive() && !parked.length) return;
     let h;
     try { h = _h3Init(gl); } catch (e) { _swallow(e); return; }
     const main = (args && args.defaultProjectionData && args.defaultProjectionData.mainMatrix)
               || (args && args.modelViewProjectionMatrix) || args;
     if (!main || main.length !== 16) return;
+    // 주기 헬기 — 그려진 땅 위(활주로 표고로 편 자리)에 · 로터는 멈춘 채(날개 자리만 조금씩 다르게)
+    for (const p of parked) {
+      let drawn = null; try { drawn = this.map.queryTerrainElevation([p.lon, p.lat]); } catch (e) { drawn = null; }
+      const ty = p.ac === 'b206' ? 'b206' : 'kuh', SP = H3_SPECS[ty];
+      try { _h3DrawHeli(h, _h3Set(h, ty), SP, main, { lon: p.lon, lat: p.lat, alt: Number.isFinite(drawn) ? Math.max(0, drawn) : 0, hdg: p.hdg, pit: 0, bnk: 0 }, (p.id.length * 0.7) % 1.5, 0, false); } catch (e) { _swallow(e); }
+    }
+    if (!tfc3dActive()) return;
     const now = performance.now();
     let k = 0; try { k = S.running ? (typeof simSpeed === 'number' ? simSpeed : 1) : 0; } catch (e) { k = 0; }
     const ahead = (typeof _tfcT !== 'undefined' && _tfcT) ? Math.min(1, (now - _tfcT) / 1000) * k : 0;   // 지난 걸음 뒤로 흐른 시뮬 초

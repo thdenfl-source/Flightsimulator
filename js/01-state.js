@@ -252,7 +252,7 @@ function hoverTqRef() {
 
 // 지금 '수평 비행' 에 필요한 토크(%)
 // (SIM 은 대기속도 — 옆걸음과 바람까지 담는다. simAirspeed · 14-simmode.js)
-function tqRequired() { return tqRequiredAt((simModeOn && typeof simAirspeed === 'function') ? simAirspeed() : S.spd, S.bnk); }
+function tqRequired() { return tqRequiredAt((simModeOn && typeof simAirspeed === 'function') ? simAirspeed() : S.spd, S.bnk) * (typeof iceTqK === 'function' ? iceTqK() : 1); }   // 로터 착빙(29-env.js)
 // 운동량 이론의 유도속도 비(vi/vi0) — 전진 속도 V(kt), 호버 유도속도 vi0(kt)
 function pwViRatio(V, vi0) { const v = V / vi0; return Math.sqrt(Math.sqrt(v ** 4 / 4 + 1) - v * v / 2); }
 // 그 '대기속도'·뱅크로 수평 비행할 때 필요한 토크(%) — 계기의 Vy 선도 이것으로 긋는다
