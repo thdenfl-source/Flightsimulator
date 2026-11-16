@@ -248,6 +248,32 @@ function _h3BuildBodyB206(SP = H3_SPECS.b206) {
   _h3Plate(m, [[-3.55, -0.98], [-3.55, 0.98], [-4.05, 0.98], [-4.05, -0.98]], [0, 0, 1.58], H3X, H3Y, H3Z, 0.06, H3C.blue);
   // 꼬리로터 기어 덮개
   _h3Pod(m, HELI3D_TAIL.x - 0.22, HELI3D_TAIL.x + 0.22, Math.sign(HELI3D_TAIL.y) * 0.10, HELI3D_TAIL.z, 0.11, 0.15, H3C.dark, 3, 2);
+  // ── 세부(외부 시점에서 Bell 로 알아보게) ──
+  // 앞 · 옆 유리창(짙은 유리) — 좌우 앞문 창 · 뒷문 창(동체 옆면에 얇게 붙인다)
+  [-1, 1].forEach(sd => {
+    const y = sd * 0.71;
+    _h3Plate(m, [[3.05, 1.18], [3.40, 1.62], [2.60, 1.86], [2.10, 1.86], [2.10, 1.18]], [0, y, 0], H3X, H3Z, [0, sd, 0], 0.02, H3C.glass);   // 앞문 창
+    _h3Plate(m, [[1.70, 1.25], [1.70, 1.82], [0.75, 1.82], [0.75, 1.25]], [0, y, 0], H3X, H3Z, [0, sd, 0], 0.02, H3C.glass);              // 뒷문 창
+    // 문 틀 · 손잡이(짙은 선)
+    _h3Plate(m, [[2.02, 0.68], [2.07, 0.68], [2.07, 1.90], [2.02, 1.90]], [0, sd * 0.712, 0], H3X, H3Z, [0, sd, 0], 0.015, H3C.dark);
+    _h3Plate(m, [[0.68, 0.70], [0.73, 0.70], [0.73, 1.88], [0.68, 1.88]], [0, sd * 0.712, 0], H3X, H3Z, [0, sd, 0], 0.015, H3C.dark);
+    _h3Plate(m, [[1.78, 1.10], [1.92, 1.10], [1.92, 1.14], [1.78, 1.14]], [0, sd * 0.715, 0], H3X, H3Z, [0, sd, 0], 0.02, H3C.black);
+    // 스키드 발판(앞 가로관 위 · 스키드 폭 안)
+    _h3Plate(m, [[1.20, sd * 0.62], [0.80, sd * 0.62], [0.80, sd * 0.90], [1.20, sd * 0.90]], [0, 0, 0.45], H3X, H3Y, H3Z, 0.03, H3C.gray);
+  });
+  _h3Plate(m, [[3.70, 0.32], [3.70, -0.32], [3.20, -0.50], [3.20, 0.50]], [0, 0, 1.70], H3X, H3Y, H3Z, 0.02, H3C.glass);   // 위 앞유리(천장 창)
+  // 기수 피토관 · 기수 아래 착륙등
+  _h3Rod(m, [3.60, 0, 1.55], [3.92, 0, 1.55], 0.02, H3C.gray);   // (기수 끝 안 — 전장 11.8m 를 넘지 않게)
+  _h3Lathe(m, [3.55, 0, 0.70], H3Z, [[0, 0], [0.11, 0.01], [0.11, 0.05], [0, 0.06]], [0.98, 0.96, 0.80], 12);
+  // 꼬리 스키드(수직 꼬리날개 아래) · 꼬리 끝 흰 등 · 좌우 날개 끝 위치등(왼쪽 빨강 · 오른쪽 초록)
+  _h3Rod(m, [-5.10, 0, 1.00], [-5.55, 0, 0.75], 0.03, H3C.gray);
+  _h3Lathe(m, [-5.74, 0, 1.64], H3X, [[0, 0], [0.05, 0], [0.05, 0.06], [0, 0.06]], [1, 1, 1], 8);
+  _h3Lathe(m, [-3.80, -1.00, 1.58], H3Y, [[0, 0], [0.05, 0], [0.05, 0.05], [0, 0.05]], [0.95, 0.15, 0.15], 8);
+  _h3Lathe(m, [-3.80, 1.00, 1.58], H3Y, [[0, -0.05], [0.05, -0.05], [0.05, 0], [0, 0]], [0.15, 0.90, 0.25], 8);
+  // 지붕 · 배 안테나 · 빨간 충돌방지등(엔진 덮개 뒤)
+  _h3Plate(m, [[-0.20, 0], [-0.55, 0], [-0.70, 0.40], [-0.40, 0.40]], [0, 0, 1.94], H3X, H3Z, H3Y, 0.02, H3C.dark);
+  _h3Plate(m, [[1.50, 0], [1.15, 0], [1.05, -0.28], [1.30, -0.28]], [0, 0, 0.56], H3X, H3Z, H3Y, 0.02, H3C.dark);
+  _h3Lathe(m, [-1.30, 0, 2.18], H3Z, [[0.07, 0], [0.07, 0.07], [0, 0.10]], H3C.red, 10);
   return m;
 }
 function _h3BuildBody(ty = H3_OWN) {
@@ -705,6 +731,9 @@ let _extFloor = null, _extFloorT = 0;
 // 거리(− 가까이 · + 멀리), DEFAULT(뒤에서 기본 거리·각). 누르고 있으면 이어 간다.
 const EXT_ZOOM_STEP = 1.1, EXT_ZOOM_MIN = 0.5, EXT_ZOOM_MAX = 25;
 let extCam = { yaw: 0, elev: 0, zoom: 1 };
+// 둘레 · 높이 · 거리를 기억한다 — 다음에 EXT 를 켜도 그 자리에서(DEFAULT 로 지운다)
+try { const v = JSON.parse(localStorage.getItem('extCam') || 'null'); if (v && [v.yaw, v.elev, v.zoom].every(Number.isFinite)) extCam = { yaw: v.yaw, elev: v.elev, zoom: Math.max(0.5, Math.min(25, v.zoom)) }; } catch (e) { _swallow(e); }
+function _extCamSave() { try { localStorage.setItem('extCam', JSON.stringify(extCam)); } catch (e) { _swallow(e); } }
 function extCamStep(dir) {
   if (dir === 'L') extCam.yaw = normAS(extCam.yaw - 1);
   else if (dir === 'R') extCam.yaw = normAS(extCam.yaw + 1);
@@ -715,7 +744,7 @@ function extCamStep(dir) {
   try { if (_ml3d) _applyFollow(); } catch (e) { _swallow(e); }
   updateExtCamInfo();
 }
-function extCamDefault() { extCam = { yaw: 0, elev: 0, zoom: 1 }; try { if (_ml3d) _applyFollow(); } catch (e) { _swallow(e); } updateExtCamInfo(); }
+function extCamDefault() { extCam = { yaw: 0, elev: 0, zoom: 1 }; _extCamSave(); try { if (_ml3d) _applyFollow(); } catch (e) { _swallow(e); } updateExtCamInfo(); }
 let _extHoldT = null, _extHoldI = null;
 function extCamHold(dir) {
   extCamStop();
@@ -727,6 +756,7 @@ function extCamStop() {
   if (_extHoldI) { clearInterval(_extHoldI); _extHoldI = null; }
 }
 function updateExtCamInfo() {
+  _extCamSave();
   const el = document.getElementById('extcam-info');
   if (el) el.textContent = `${Math.round((extCam.yaw + 360) % 360)}° · ${EXT_ELEV + extCam.elev}° · ×${extCam.zoom.toFixed(1)}`;
 }
@@ -892,6 +922,15 @@ function _ckLayer() {
 }
 // 화면마다 가로/세로 비율 — 팝아웃 칸을 그 비율로 3D 화면 안에 가득(오른쪽 버튼 줄은 비켜) 맞춘다
 const CKPIT_POP_AR = { ovhd: 1000 / 1240, lcon: 1000 / 1400, pfd: 1.2, sysp: 1000 / 630, map: 1.3, cdu: 354 / 567 };
+// 팝아웃 크기 — 창 막대의 − · + 로 10% 씩(50~100% · 오른쪽 버튼 줄에 붙은 채) · 컬렉티브 · 사이클릭 창도 함께(35-kuhgrip.js)
+let ckPopK = 1;
+try { const v = parseFloat(localStorage.getItem('ckPopK')); if (v >= 0.5 && v <= 1) ckPopK = v; } catch (e) { _swallow(e); }
+function ckPopScale(d) {
+  ckPopK = Math.max(0.5, Math.min(1, Math.round((ckPopK + 0.1 * (Number(d) || 0)) * 10) / 10));
+  try { localStorage.setItem('ckPopK', String(ckPopK)); } catch (e) { _swallow(e); }
+  try { _ckPopFit(); } catch (e) { _swallow(e); }
+  try { if (typeof _kgPopSync === 'function') _kgPopSync(); } catch (e) { _swallow(e); }
+}
 function _ckPopFit() {
   const p = document.getElementById('ck-pop'), L = document.getElementById('ck-layer');
   if (!p || !L || !p.classList.contains('show')) return;
@@ -901,7 +940,7 @@ function _ckPopFit() {
   const lr = L.getBoundingClientRect(), btn = document.getElementById('ctl3d');
   const br = btn && btn.offsetWidth > 0 ? btn.getBoundingClientRect() : null;
   const room = br ? Math.min(W - 4, br.left - lr.left - 4) : W - 130;
-  const w = Math.max(160, Math.min(room - 6, (H * 0.96 - bar) * a)), h = w / a + bar;
+  const w = Math.max(160, Math.min(room - 6, (H * 0.96 - bar) * a * ckPopK)), h = w / a + bar;
   const st = { width: Math.round(w) + 'px', height: Math.round(h) + 'px',
                left: Math.round(Math.max(6, room - w)) + 'px', top: Math.round(Math.max(4, (H - h) / 2)) + 'px' };
   for (const k in st) if (p.style[k] !== st[k]) p.style[k] = st[k];
@@ -938,6 +977,7 @@ function _ckPopEl(k) {
     p = document.createElement('div');
     p.id = 'ck-pop';
     p.innerHTML = '<div class="ck-pop-bar"><span id="ck-pop-title"></span>' +
+      '<span class="ck-pop-sz"><button class="sim-btn" data-act="ckPopScale" data-arg="[-1]" title="창 줄이기">−</button><button class="sim-btn" data-act="ckPopScale" data-arg="[1]" title="창 키우기">+</button></span>' +
       '<button class="sim-btn" data-act="toggleConsolePop" data-arg="[null]" title="닫기">✕</button></div><div id="ck-pop-host"></div>';
   }
   if (p.parentElement !== Ly) Ly.appendChild(p);
@@ -1352,7 +1392,7 @@ function toggleCockpitView() {
   try { heli3dNoseSync(null); } catch (e) { _swallow(e); }
   ckpitSync(null);
 }
-try { appRegister({ toggleCockpitView, toggleConsolePop, ckpitOpacity }); } catch (e) { _swallow(e); }
+try { appRegister({ toggleCockpitView, toggleConsolePop, ckpitOpacity, ckPopScale }); } catch (e) { _swallow(e); }
 
 // 화면 버튼(data-act) 연결 — 11-charts.js 보다 나중에 로드되므로 여기서 직접 등록한다
 try { appRegister({ toggleExtView, extCamHold, extCamDefault }); } catch (e) { _swallow(e); }

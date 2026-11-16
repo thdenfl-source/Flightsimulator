@@ -144,7 +144,7 @@ export async function run(page, t) {
     const o = { split: fcp3dAvail() };
     toggleFcp3d(); o.splitRefused = !document.getElementById('fcp3d-l') || !document.getElementById('fcp3d-l').classList.contains('show');
     fcpL = false;
-    panelSolo('m3d'); await wait(600);
+    panelSolo('m3d'); await wait(600); for (let i = 0; i < 40 && !(typeof fcp3dAvail === 'function' && fcp3dAvail()); i++) await wait(150);   // 바쁘면 3D 단독이 늦게 선다
     o.avail = fcp3dAvail();
     o.oneBtn = !document.getElementById('fcp-r-btn');
     document.getElementById('fcp-l-btn').click(); await wait(150);   // 화면 버튼 그대로 눌러 본다
@@ -178,7 +178,7 @@ export async function run(page, t) {
     const wait = ms => new Promise(r => setTimeout(r, ms));
     const o = { split: cduOvAvail(), home0: document.getElementById('cdu-wrap').parentElement.id };
     cduOvOn = false;
-    panelSolo('m3d'); await wait(600);
+    panelSolo('m3d'); await wait(600); for (let i = 0; i < 40 && !(typeof fcp3dAvail === 'function' && fcp3dAvail()); i++) await wait(150);   // 바쁘면 3D 단독이 늦게 선다
     document.getElementById('cduov-btn').click(); await wait(300);
     const box = document.getElementById('cdu-ov'), rc = box.getBoundingClientRect();
     const ctl = document.getElementById('ctl3d').getBoundingClientRect(), host = box.parentElement.getBoundingClientRect();
@@ -227,7 +227,7 @@ export async function run(page, t) {
     const home0 = document.getElementById('map-wrap').parentElement.id;
     const o = { split: mapOvActive() };
     cduOvOn = false; mapOvOn = false;
-    panelSolo('m3d'); await wait(600);
+    panelSolo('m3d'); await wait(600); for (let i = 0; i < 40 && !(typeof fcp3dAvail === 'function' && fcp3dAvail()); i++) await wait(150);   // 바쁘면 3D 단독이 늦게 선다
     document.getElementById('cduov-btn').click(); await wait(200);
     document.querySelector('#cdu-ov [data-act="cduOpenMap"]').click(); await wait(300);   // 겹친 CDU 의 MAP
     const box = document.getElementById('map-ov'), rc = box.getBoundingClientRect();
@@ -369,7 +369,7 @@ export async function run(page, t) {
   const ctl = await page.evaluate(async () => {
     const wait = ms => new Promise(r => setTimeout(r, ms));
     if (simModeOn) toggleSimMode(false);
-    panelSolo('m3d'); await wait(600);
+    panelSolo('m3d'); await wait(600); for (let i = 0; i < 40 && !(typeof fcp3dAvail === 'function' && fcp3dAvail()); i++) await wait(150);   // 바쁘면 3D 단독이 늦게 선다
     const r = q => { const e = document.querySelector(q); if (!e || !e.offsetParent) return null; const x = e.getBoundingClientRect(); return { l: x.left, t: x.top, r: x.right, b: x.bottom }; };
     const d3 = r('#map3d'), nav = r('#map3d .maplibregl-ctrl-bottom-left .maplibregl-ctrl-group'), tilt = r('#tilt-ctrl'), sc = r('#map3d .vfr-scale');
     const o = { d3, nav, tilt, sc, right: !!document.querySelector('#map3d .maplibregl-ctrl-bottom-right .maplibregl-ctrl-group') };

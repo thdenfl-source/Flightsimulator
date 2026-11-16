@@ -19,7 +19,8 @@ function _fdrModes() {
   try {
     if (typeof gspdOn !== 'undefined' && gspdOn) m.push('GSPD');
     if (navApOn) m.push('NAV'); else if (hdgSelOn) m.push('HDG');
-    if (crhtOn) m.push('CRHT'); else if (altHoldOn) m.push('ALT');
+    // ALT 가 피치 축에 물려 있으면 ALT(P) — 강평의 AFCS 축 띠가 칸을 가린다(14-simmode.js afcsAltPitch)
+    if (crhtOn) m.push('CRHT'); else if (altHoldOn) m.push(typeof afcsAltPitch === 'function' && afcsAltPitch() ? 'ALT(P)' : 'ALT');
     if (typeof simIasOn !== 'undefined' && simModeOn && simIasOn) m.push('IAS');
     if (typeof gsOn !== 'undefined' && gsOn) m.push('G/S');
   } catch (e) { _swallow(e); }
@@ -47,7 +48,11 @@ function fdrRecord() {
     if (p.gnd && !r.gnd) _fdrEvent(r, '이륙');
     if (!p.gnd && r.gnd) _fdrEvent(r, `착륙 (강하 ${Math.round(-Math.min(0, p.vs))} fpm)`, p.vs < -300 ? 'warn' : '');
     if (p.modes !== r.modes) {
-      const a = p.modes ? p.modes.split(' ') : [], b = r.modes ? r.modes.split(' ') : [];
+      // ALT ↔ ALT(P) 는 축만 옮긴 것 — 걸림 · 풀림이 아니라 '축 바뀜' 으로 적는다
+      const nz = x => x === 'ALT(P)' ? 'ALT' : x;
+      const a = p.modes ? p.modes.split(' ').map(nz) : [], b = r.modes ? r.modes.split(' ').map(nz) : [];
+      const pa = (p.modes || '').split(' ').includes('ALT(P)'), pb = (r.modes || '').split(' ').includes('ALT(P)');
+      if (a.includes('ALT') && b.includes('ALT') && pa !== pb) _fdrEvent(r, `ALT 축 — ${pb ? '피치' : '컬렉티브'} (${r.ias.toFixed(0)} kt)`);
       const on = b.filter(x => !a.includes(x)), off = a.filter(x => !b.includes(x));
       if (on.length) _fdrEvent(r, `AFCS 걸림 — ${on.join(' · ')}`);
       if (off.length) _fdrEvent(r, `AFCS 풀림 — ${off.join(' · ')}`, 'warn');
@@ -77,7 +82,7 @@ setInterval(() => {
 
 // ── 요약 ──
 function fdrSummary(rows = fdr.rows) {
-  const s = { dur: 0, maxAlt: 0, maxIas: 0, maxTq: 0, tqOverS: 0, tqContS: 0, vneS: 0, nrLowS: 0, landings: 0, hardLdg: 0, airS: 0, drops: 0, exceed: 0 };
+  const s = { dur: 0, maxAlt: 0, maxIas: 0, maxTq: 0, tqOverS: 0, tqContS: 0, vneS: 0, nrLowS: 0, landings: 0, hardLdg: 0, airS: 0, drops: 0, exceed: 0, rbOk: 0, rbBad: 0 };
   if (!rows.length) return s;
   s.dur = rows[rows.length - 1].t - rows[0].t;
   let cont = 100; try { cont = typeof tqLimitCont === 'function' ? tqLimitCont() : 100; } catch (e) { _swallow(e); }
@@ -88,6 +93,7 @@ function fdrSummary(rows = fdr.rows) {
     if (i && !rows[i - 1].gnd && r.gnd) { s.landings++; if (rows[i - 1].vs < -300) s.hardLdg++; }
   });
   s.drops = fdr.ev.filter(e => /AFCS 풀림/.test(e.txt)).length;
+  s.rbOk = fdr.ev.filter(e => /리드백 정확/.test(e.txt)).length; s.rbBad = fdr.ev.filter(e => /리드백 틀림/.test(e.txt)).length;   // KUH PTT · Bell 무전 리드백(32-callout.js)
   s.exceed = fdr.ev.filter(e => /한계 넘음|과열|마스트 범핑/.test(e.txt)).length;
   return s;
 }
@@ -254,7 +260,7 @@ function dbfRender() {
   const s = fdrSummary(), kv = (k, v, warn) => `<span class="${warn ? 'warn' : ''}"><em>${k}</em>${v}</span>`;
   q('sum').innerHTML = n ? kv('기록', _hms(s.dur)) + kv('비행', _hms(s.airS)) + kv('최고 고도', s.maxAlt.toFixed(0) + ' ft') + kv('최고 속도', s.maxIas.toFixed(0) + ' kt') +
     kv('최고 TQ', s.maxTq.toFixed(0) + '%', s.tqOverS > 0) + kv('TQ 연속한계↑', _hms(s.tqContS), s.tqContS > 0) + kv('TQ 최대한계↑', _hms(s.tqOverS), s.tqOverS > 0) +
-    kv('VNE↑', _hms(s.vneS), s.vneS > 0) + kv('낮은 NR', _hms(s.nrLowS), s.nrLowS > 0) + kv('착륙', `${s.landings}${s.hardLdg ? ` (거친 ${s.hardLdg})` : ''}`, s.hardLdg > 0) + kv('AFCS 풀림', String(s.drops), s.drops > 0) + (s.exceed ? kv('점검 필요', s.exceed + '건', true) : '')
+    kv('VNE↑', _hms(s.vneS), s.vneS > 0) + kv('낮은 NR', _hms(s.nrLowS), s.nrLowS > 0) + kv('착륙', `${s.landings}${s.hardLdg ? ` (거친 ${s.hardLdg})` : ''}`, s.hardLdg > 0) + kv('AFCS 풀림', String(s.drops), s.drops > 0) + (s.rbOk + s.rbBad ? kv('리드백', `정확 ${s.rbOk} · 틀림 ${s.rbBad}`, s.rbBad > 0) : '') + (s.exceed ? kv('점검 필요', s.exceed + '건', true) : '')
     : '<span>아직 기록이 없습니다 — 비행(▶)을 시작하면 1초마다 적습니다.</span>';
   // 읽기
   q('read').innerHTML = cur ? `<b>${_hms(cur.t)}</b> · ALT ${cur.alt.toFixed(0)} ft · IAS ${cur.ias.toFixed(0)} kt · HDG ${String(Math.round(cur.hdg) % 360).padStart(3, '0')}° · VS ${cur.vs.toFixed(0)} fpm · TQ ${cur.tq.toFixed(0)}% · NR ${cur.nr.toFixed(0)}% · BANK ${cur.bnk.toFixed(0)}° · PITCH ${cur.pit.toFixed(1)}°<br>` +
@@ -301,7 +307,8 @@ function _dbfChart(c, rows, ci) {
   const { g, w, h } = _cvs(c);
   g.fillStyle = '#0b1218'; g.fillRect(0, 0, w, h);
   const S4 = [['ALT ft', r => r.alt, '#4fc3f7'], ['IAS kt', r => r.ias, '#81c784'], ['TQ %', r => r.tq, '#ffb74d'], ['VS fpm', r => r.vs, '#ce93d8']];
-  const L0 = 46, R0 = 8, n = rows.length, bh = h / S4.length;
+  const AF = 42;                                              // 맨 아래 AFCS 축 띠(컬렉티브 · 피치 · 롤)
+  const L0 = 46, R0 = 8, n = rows.length, bh = (h - AF) / S4.length;
   let cont = 100, red = 113; try { cont = tqLimitCont(); red = tqLimitRed(); } catch (e) { _swallow(e); }
   S4.forEach(([name, f, col], k) => {
     const y0 = k * bh + 4, y1 = (k + 1) * bh - 6;
@@ -319,6 +326,24 @@ function _dbfChart(c, rows, ci) {
     for (let i = 0; i < n; i += step) { const x = X(i), y = Y(f(rows[i])); if (i === 0) g.moveTo(x, y); else g.lineTo(x, y); }
     g.stroke(); g.lineWidth = 1;
   });
+  // AFCS 축 띠 — 그 순간 각 축을 잡은 모드(COLL: ALT · CRHT · G/S · PITCH: IAS · ALT(P) · GSPD · ROLL: HDG · NAV · GSPD)
+  {
+    const y0 = h - AF + 2, lh = (AF - 6) / 3, X = i => L0 + (n > 1 ? i / (n - 1) : 0) * (w - L0 - R0);
+    const AX = [['COLL', ms => ms.includes('CRHT') ? 'CRHT' : ms.includes('G/S') ? 'G/S' : ms.includes('ALT') ? 'ALT' : ''],
+                ['PITCH', ms => ms.includes('GSPD') ? 'GSPD' : ms.includes('ALT(P)') ? 'ALT' : ms.includes('IAS') ? 'IAS' : ''],
+                ['ROLL', ms => ms.includes('GSPD') ? 'GSPD' : ms.includes('NAV') ? 'NAV' : ms.includes('HDG') ? 'HDG' : '']];
+    const COL = { ALT: '#4fc3f7', CRHT: '#26a69a', 'G/S': '#ff66ff', IAS: '#81c784', GSPD: '#ffb74d', NAV: '#ce93d8', HDG: '#90caf9' };
+    AX.forEach(([nm, f], k) => {
+      const yy = y0 + k * lh;
+      g.fillStyle = '#7d8a96'; g.font = '9px Arial'; g.textAlign = 'right'; g.fillText(nm, L0 - 3, yy + lh - 2);
+      g.strokeStyle = '#1e2b36'; g.strokeRect(L0, yy, w - L0 - R0, lh - 1);
+      let run = null;
+      const flush = (iEnd) => { if (run && run.m) { const xa = X(run.i), xb = X(iEnd); g.fillStyle = COL[run.m] || '#999'; g.globalAlpha = 0.75; g.fillRect(xa, yy + 1, Math.max(1, xb - xa), lh - 3); g.globalAlpha = 1;
+        if (xb - xa > 26) { g.fillStyle = '#0b1218'; g.font = 'bold 9px Arial'; g.textAlign = 'left'; g.fillText(run.m, xa + 3, yy + lh - 3); } } };
+      for (let i = 0; i < n; i++) { const ms = (rows[i].modes || '').split(' '), m = f(ms); if (!run || run.m !== m) { if (run) flush(i); run = { i, m }; } }
+      if (run) flush(n - 1);
+    });
+  }
   // 채점 구간(A ~ B) 그늘
   if (n >= 2 && _grade.a >= 0) {
     const xa = L0 + _grade.a / (n - 1) * (w - L0 - R0), xb = _grade.b > _grade.a ? L0 + Math.min(n - 1, _grade.b) / (n - 1) * (w - L0 - R0) : xa + 2;

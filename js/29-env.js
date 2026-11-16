@@ -19,7 +19,7 @@ const ENV_VIS = [0, 10, 5, 3, 1.5, 0.8, 0.4];                 // km(0 = 무제�
 const ENV_SEA_ROLL = [0, 1, 2, 4, 6, 8, 10], ENV_SEA_PITCH = [0, 0.5, 1, 2, 3, 4, 5];
 const ENV_SEA_DRIFT = [0, 0.1, 0.3, 0.6, 0.9, 1.3, 1.8];      // 익수자 바람 쪽 표류(kt) — 파도 · 바람에 밀린다
 const ENV_SEA_NAME = ['0 잔잔', '1 잔물결', '2 약', '3 보통', '4 약간 높음', '5 높음', '6 매우 높음'];
-const env = { tod: 'DAY', vis: 0, rain: 0, nvg: false, sea: 0, gust: 0, ceil: 0, ldg: false, raCall: true, surface: 'normal', traffic: 0 };
+const env = { tod: 'DAY', vis: 0, rain: 0, nvg: false, sea: 0, gust: 0, ceil: 0, ldg: false, raCall: true, surface: 'normal', traffic: 0, tfcType: 'mix', tfcPat: 1 };
 try { Object.assign(env, JSON.parse(localStorage.getItem(ENV_KEY) || '{}')); } catch (e) { _swallow(e); }
 function _envSave() { try { localStorage.setItem(ENV_KEY, JSON.stringify(env)); } catch (e) { _swallow(e); } }
 // 시정(km) → 안개가 짙어지는 자리(0 = 화면 가운데 · 1 = 지평선)
@@ -62,7 +62,7 @@ function envApply() {
   } catch (e) { _swallow(e); }
 }
 function envSet(o) {
-  for (const k of ['tod', 'vis', 'rain', 'nvg', 'sea', 'gust', 'ceil', 'ldg', 'raCall', 'surface', 'traffic']) if (o[k] !== undefined) env[k] = o[k];
+  for (const k of ['tod', 'vis', 'rain', 'nvg', 'sea', 'gust', 'ceil', 'ldg', 'raCall', 'surface', 'traffic', 'tfcType', 'tfcPat']) if (o[k] !== undefined) env[k] = o[k];
   env.sea = Math.max(0, Math.min(6, env.sea | 0)); env.rain = Math.max(0, Math.min(2, env.rain | 0));
   if (o.sea !== undefined) env._seaApplied = -1;
   _envSave(); envApply(); envPanelRender();
@@ -100,6 +100,8 @@ function toggleEnvPanel() {
       grp('구름 밑면', 'ceil', [0, 500, 1000, 1500, 2500, 4000].map(v => [v, v ? v + 'ft' : '없음'])) +
       grp('지면', 'surface', [['normal', '보통'], ['sand', '모래(브라운아웃)'], ['snow', '눈(화이트아웃)']]) +
       grp('교통량(TCAS)', 'traffic', [0, 1, 3, 5].map(v => [v, v ? v + '대' : '없음'])) +
+      grp('교통 기종', 'tfcType', [['mix', '섞어서'], ['kuh', '흰수리'], ['b206', 'Bell 206']]) +
+      grp('교통 장주비행', 'tfcPat', [[0, '없음'], [1, '셋에 하나'], [2, '반'], [3, '모두']]) +
       grp('착륙등(흰수리)', 'ldg', [['false', '끔'], ['true', '켬']]) +
       grp('RA 콜아웃', 'raCall', [['false', '끔'], ['true', '켬']]) +
       `<div class="env-note" data-envv="sea"></div><div class="env-row"><span>METAR</span><div><button class="sim-btn" data-envx="metar">가까운 공항 METAR 로 맞추기</button></div></div></div>`;
@@ -109,7 +111,9 @@ function toggleEnvPanel() {
       if (e.target === w || e.target.closest('[data-envx]')) { w.style.display = 'none'; return; }
       const b = e.target.closest('[data-env]'); if (!b) return;
       const [k, v] = b.dataset.env.split(':');
-      envSet({ [k]: (k === 'tod' || k === 'surface') ? v : (k === 'nvg' || k === 'ldg' || k === 'raCall') ? v === 'true' : +v });
+      envSet({ [k]: (k === 'tod' || k === 'surface' || k === 'tfcType') ? v : (k === 'nvg' || k === 'ldg' || k === 'raCall') ? v === 'true' : +v });
+      // 교통 기종 · 장주 몫을 바꾸면 지금 떠 있는 교통을 새로 띄운다
+      if ((k === 'tfcType' || k === 'tfcPat') && typeof traffic !== 'undefined') { const n = env.traffic; traffic.length = 0; env.traffic = n; }
     });
   }
   w.style.display = 'flex'; envPanelRender();
@@ -214,7 +218,47 @@ function _envLightPts(t) {
   } catch (e) { _swallow(e); }
   return P;
 }
-let envHapi = null, envSarLit = false;
+// ── 함정 착함 신호(LSO · 착함 신호수) — 함정 0.5NM · 500ft 안에서 3D 화면 위에 신호를 띄운다 ──
+//   착함 원에 대한 좌우 어긋남 · 접근각(HAPI 와 같은 3.5° 기준) · 강하율 · 뱅크를 보고
+//   WAVE OFF(빨강) > 높이(▲ 올려 · ▼ 내려) > 좌우(◀ · ▶) > 정상(● 계속) > 갑판 위 저속 저고도면 '착함'(초록)
+function shipLsoSignal() {
+  if (typeof shipLat === 'undefined' || shipLat === null || !shipVisible) return null;
+  const D = _envD2R, h = shipHdg * D, F = [Math.cos(h), Math.sin(h)];
+  const td = _envOff(shipLat, shipLon, F[0] * SHIP3D_TD.fwd, F[1] * SHIP3D_TD.fwd);
+  const v = _envDist(td[0], td[1], S.lat, S.lon);                          // 착함 원 → 내 기체(북 · 동 m)
+  const along = v.n * F[0] + v.e * F[1], cross = -v.n * F[1] + v.e * F[0];  // 함수 쪽 + · 우현 쪽 +
+  const hft = S.alt - SHIP3D_DECK / 0.3048, dist = v.d;
+  if (dist > 926 || hft > 500) return null;
+  let bank = Math.abs(S.bnk || 0), vs = S.vs || 0, gs = 0; try { gs = groundSpdKt(); } catch (e) { _swallow(e); }
+  const shipKt = typeof shipSpd === 'number' ? shipSpd : 0;
+  if (dist < SHIP3D_TD.r * 1.2 && hft < 15 && Math.abs(gs - shipKt) < 8) return { k: 'land', txt: '착함 — 그대로 내려앉으십시오', col: '#3dff6a' };
+  if ((hft < 120 && vs < -500) || bank > 20) return { k: 'waveoff', txt: 'WAVE OFF — 상승 · 복행', col: '#ff3030' };
+  const ang = Math.atan2(Math.max(0, hft) * 0.3048, Math.max(20, dist)) / D;
+  const lat = dist < 60 ? cross : cross * 60 / dist;                       // 가까울수록 좌우를 엄하게
+  if (dist > 40 && ang > 4.5) return { k: 'down', txt: '▼ 내려 — 높음', col: '#ffd23a' };
+  if (dist > 40 && ang < 2.5) return { k: 'up', txt: '▲ 올려 — 낮음', col: '#ffd23a' };
+  if (lat > 6) return { k: 'left', txt: '◀ 왼쪽으로', col: '#ffd23a' };
+  if (lat < -6) return { k: 'right', txt: '오른쪽으로 ▶', col: '#ffd23a' };
+  return { k: 'ok', txt: '● 좋음 — 계속', col: '#3dff6a' };
+}
+let shipLso = null;
+setInterval(() => {
+  try {
+    shipLso = shipLsoSignal();
+    const host = document.getElementById('map3d'); if (!host) return;
+    let el = document.getElementById('lso-sig');
+    if (!shipLso) { if (el) el.style.display = 'none'; return; }
+    if (!el) {
+      el = document.createElement('div'); el.id = 'lso-sig';
+      el.style.cssText = 'position:absolute;left:50%;top:18%;transform:translateX(-50%);z-index:6;pointer-events:none;padding:4px 12px;border-radius:6px;background:rgba(0,0,0,0.6);font:bold 15px Arial;border:2px solid';
+      host.appendChild(el);
+    }
+    el.style.display = 'block';
+    const t = `LSO  ${shipLso.txt}`; if (el.textContent !== t) el.textContent = t;
+    el.style.color = shipLso.col; el.style.borderColor = shipLso.col;
+  } catch (e) { _swallow(e); }
+}, 200);
+let envHapi = null, envSarLit = false, tfcTagN = 0;   // tfcTagN — 이번 장면에 그린 교통 꼬리표 수
 // ── 지형 가림(3D) — 카메라에서 불까지 12곳의 지형 높이를 보고, 시선보다 높은 곳이 있으면 가린다 ──
 //   지형 높이는 그려진 3D 지형(queryTerrainElevation · 과장 배율 그대로)이라 카메라 높이와 같은 잣대다.
 //   불 하나마다 0.6초 기억하고, 한 장면에 새로 재는 것은 60개까지(나머지는 지난 값).
@@ -227,6 +271,7 @@ function envCamEye(m, cam) {
   } catch (e) { _swallow(e); }
   return cam ? { lat: cam.lat, lng: cam.lng, h: (S.alt || 0) * 0.3048 } : null;
 }
+// hM — 불 높이: 수(m)면 그 자리 땅 위 높이 · { air: 기압고도(m) } 면 공중의 불(교통) — 그려진 땅 + (고도 − 실제 땅)
 function envLightVisible(m, eye, la, lo, hM) {
   if (!m.queryTerrainElevation) return true;
   const now = performance.now(), key = la.toFixed(5) + ',' + lo.toFixed(5);
@@ -237,9 +282,14 @@ function envLightVisible(m, eye, la, lo, hM) {
   let v = true;
   try {
     const q = ll => { const z = m.queryTerrainElevation(ll); return Number.isFinite(z) ? z : null; };
-    const g0 = q([lo, la]); const lh = (g0 == null ? 0 : Math.max(0, g0)) + (hM || 3);   // 불 높이 — 그 자리 지면 + 3m
-    for (let i = 1; i < ENV_OCC_N; i++) {
-      const k = i / ENV_OCC_N, sla = eye.lat + (la - eye.lat) * k, slo = eye.lng + (lo - eye.lng) * k;
+    const g0 = q([lo, la]), gd = g0 == null ? 0 : Math.max(0, g0);
+    const ex = (typeof MAP3D_EXAG === 'number' && MAP3D_EXAG > 0) ? MAP3D_EXAG : 1;
+    const lh = (hM && typeof hM === 'object') ? gd + Math.max(3, hM.air - gd / ex) : gd + (hM || 3);   // 불 높이 — 땅 불은 지면 + 3m
+    // 먼 불일수록 촘촘히 짚는다(150m 마다 · 12~32곳) — 성긴 짚기로 능선 사이를 빠져나가 보이던 일
+    const dKm = Math.hypot((la - eye.lat) * 110.54, (lo - eye.lng) * 111.32 * Math.cos(la * Math.PI / 180));
+    const N = Math.max(ENV_OCC_N, Math.min(32, Math.round(dKm * 1000 / 150)));
+    for (let i = 1; i < N; i++) {
+      const k = i / N, sla = eye.lat + (la - eye.lat) * k, slo = eye.lng + (lo - eye.lng) * k;
       const z = q([slo, sla]); if (z == null) continue;
       if (z > eye.h + (lh - eye.h) * k + 2) { v = false; break; }
     }
@@ -277,7 +327,9 @@ function envFxFrame() {
   const dark = env.tod !== 'DAY' || env.nvg;
   const tfc = (typeof traffic !== 'undefined') ? traffic : [];
   const cv = fx.cv, m = (typeof _ml3d !== 'undefined') ? _ml3d : null;
-  if ((!dark && !tfc.length) || !m || !m.project) { if (cv.width) { cv.width = 0; } return; }
+  // 낮에도 켜진 착륙등 · 서치라이트는 엷게 보인다(빛줄기 · 빛 무리 35%)
+  const dayBeams = !dark && (() => { try { return envBeams().length > 0; } catch (e) { return false; } })();
+  if ((!dark && !tfc.length && !dayBeams) || !m || !m.project) { if (cv.width) { cv.width = 0; } return; }
   const r = cv.parentElement.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
   const W = Math.round(r.width * dpr), H = Math.round(r.height * dpr);
   if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; }
@@ -290,22 +342,34 @@ function envFxFrame() {
   // 산 뒤의 불은 가린다 — 카메라 눈높이에서 불까지 지형을 짚어 본다(envLightVisible · 0.6초 동안 기억)
   const eye = envCamEye(m, cam); _envOccBudget = ENV_OCC_MAX;
   const inFront = (la, lo, hM) => { const f = inFront0(la, lo); if (f.ok && eye && f.d > 150 && !envLightVisible(m, eye, la, lo, hM)) f.ok = false; return f; };
-  // 다른 항공기 — 낮에는 작은 점 · 밤에는 충돌방지등(빨강 깜빡 · 흰 번쩍)
+  // 다른 항공기 — 낮에는 작은 점 · 밤에는 충돌방지등(빨강 깜빡 · 흰 번쩍) · 꼬리표
+  tfcTagN = 0;
   for (const tr of tfc) {
-    const f = inFront(tr.lat, tr.lon); if (!f.ok || f.d > 20000) continue;
-    if (!dark && f.d < 4000 && typeof TFC3D_LAYER !== 'undefined') continue;   // 낮 · 4km 안은 실제 모형(15-heli3d.js)이 보인다 — 점은 먼 데만
+    const f = inFront(tr.lat, tr.lon, { air: (tr.alt || 0) * 0.3048 }); if (!f.ok || f.d > 20000) continue;
     const p = m.project([tr.lon, tr.lat]); const dy = ((tr.alt - S.alt) * 0.3048) / Math.max(50, f.d) * r.height * 0.9;
     const y = p.y - dy - 4; if (!(p.x > -20 && p.x < r.width + 20 && y > -20 && y < r.height + 20)) continue;
-    const blink = Math.floor(t * 1.5 + tr.id) % 2 === 0;
-    g.fillStyle = dark ? (blink ? '#ff2a2a' : '#ffffff') : '#20262c'; g.globalAlpha = dark ? 1 : 0.8;
-    g.beginPath(); g.arc(p.x, y, Math.max(1.5, Math.min(5, 3000 / Math.max(300, f.d))), 0, 7); g.fill();
+    // 낮 · 4km 안은 실제 모형(15-heli3d.js)이 보인다 — 점은 먼 데만
+    if (dark || f.d >= 4000 || typeof TFC3D_LAYER === 'undefined') {
+      const blink = Math.floor(t * 1.5 + tr.id) % 2 === 0;
+      g.fillStyle = dark ? (blink ? '#ff2a2a' : '#ffffff') : '#20262c'; g.globalAlpha = dark ? 1 : 0.8;
+      g.beginPath(); g.arc(p.x, y, Math.max(1.5, Math.min(5, 3000 / Math.max(300, f.d))), 0, 7); g.fill();
+    }
+    // 꼬리표 — 기종 · 상대고도(백 ft) · 거리(NM) · TCAS 색(멀어 모형이 작아도 알아보게)
+    const rel = Math.round(((tr.alt || 0) - S.alt) / 100), col = tr.st === 'RA' ? '#ff3030' : tr.st === 'TA' ? '#ffb000' : dark ? '#e8f4ff' : '#0b2a44';
+    const lbl = `${tr.ac === 'b206' ? 'B206' : 'KUH'} ${rel >= 0 ? '+' : '−'}${String(Math.abs(rel)).padStart(2, '0')} ${(f.d / 1852).toFixed(1)}`;
+    g.globalAlpha = 0.9; g.font = 'bold 11px Arial'; g.textAlign = 'center'; g.lineWidth = 3;
+    g.strokeStyle = dark ? 'rgba(0,0,0,0.8)' : 'rgba(255,255,255,0.85)'; g.strokeText(lbl, p.x, y - 10);
+    g.fillStyle = col; g.fillText(lbl, p.x, y - 10);
+    tfcTagN++;
   }
   g.globalAlpha = 1;
-  if (!dark) return;
+  if (!dark && !dayBeams) return;
   g.globalCompositeOperation = 'lighter';
+  const beamK = dark ? 1 : 0.35;
   // 빛 무리 — 땅에 떨어진 빛 · 그 위로 헬기에서 내려오는 빛줄기(원뿔)
   const first = typeof _ckFirst === 'function' && _ckFirst();
-  for (const b of envBeams()) {
+  for (const b0 of envBeams()) {
+    const b = { ...b0, k: b0.k * beamK };
     const f = inFront(b.lat, b.lon); if (!f.ok) continue;
     const p = m.project([b.lon, b.lat]), [la2, lo2] = _envOff(b.lat, b.lon, 0, b.r), p2 = m.project([lo2, la2]);
     const rp = Math.max(6, Math.min(400, Math.hypot(p2.x - p.x, p2.y - p.y)));
@@ -314,6 +378,7 @@ function envFxFrame() {
     gr.addColorStop(0, `rgba(255,248,220,${0.55 * b.k})`); gr.addColorStop(1, 'rgba(255,248,220,0)');
     g.save(); g.translate(p.x, p.y); g.scale(1, 0.55); g.translate(-p.x, -p.y); g.fillStyle = gr; g.beginPath(); g.arc(p.x, p.y, rp, 0, 7); g.fill(); g.restore();
   }
+  if (!dark) { g.globalAlpha = 1; g.globalCompositeOperation = 'source-over'; return; }   // 낮 — 활주로 · 함정 불빛은 그리지 않는다
   for (const [la, lo, col, k] of _envLightPts(t)) {
     if (!col) continue;
     const f = inFront(la, lo); if (!f.ok) continue;

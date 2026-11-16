@@ -46,6 +46,8 @@ function iosHandle(m) {
     if (c === 'run' && !S.running) toggleSim();
     else if (c === 'pause' && S.running) toggleSim();
     else if (c === 'env' && typeof envSet === 'function') envSet(m.o || {});
+    else if (c === 'tfc' && typeof trafficAdd === 'function') { const t = trafficAdd(m.o || {}); try { if (typeof fdrNote === 'function') fdrNote(`교관 — 교통 띄움(${t.ac === 'b206' ? 'Bell' : '흰수리'} · ${t.mode === 'pat' ? '장주' : '항로'})`); } catch (e) { _swallow(e); } }
+    else if (c === 'tfcClear' && typeof trafficClear === 'function') trafficClear();
     else if (c === 'wind') { windDir = ((+m.dir % 360) + 360) % 360; windSpd = Math.max(0, +m.spd || 0); try { if (typeof updateWindUi === 'function') updateWindUi(); } catch (e) { _swallow(e); } }
     else if (c === 'fail') {
       const on = !!m.on;
@@ -109,6 +111,8 @@ function iosBuild() {
       <div class="ios-row"><span>연료</span><div>${[91, 60, 40, 20, 8].map(g => `<button data-ios="gal:${g}">${g} gal</button>`).join('')}</div></div>
       <div class="ios-row"><span>뒷자리 · 화물(lb)</span><div><input type="number" data-iosv="wbrear" min="0" max="600" placeholder="뒷자리"><input type="number" data-iosv="wbcargo" min="0" max="250" placeholder="화물"><button data-ios="wbset">적용</button></div></div>
       <div class="ios-row"><span>보기</span><div><button data-ios="wbp:aft">뒤로 쏠림(화물 250)</button><button data-ios="wbp:heavy">최대 무게</button><button data-ios="wbp:std">표준</button></div></div></div>
+    <h2>교통 배치</h2><div class="ios-row"><span>방위° · 거리NM · 상대ft · 침로° · 기종</span><div><input type="number" data-iosv="tb" min="0" max="359" placeholder="방위" value="0"><input type="number" data-iosv="tn" min="0.2" max="15" step="0.1" placeholder="NM" value="3"><input type="number" data-iosv="tr" min="-3000" max="3000" step="100" placeholder="±ft" value="0"><input type="number" data-iosv="th" min="0" max="359" placeholder="침로" value="180"><select data-iosv="ta"><option value="kuh">흰수리</option><option value="b206">Bell 206</option></select></div></div>
+    <div class="ios-btns"><button data-ios="tfc:rte">항로로 띄우기</button><button data-ios="tfc:pat">가까운 공항 장주로</button><button data-ios="tfcClear">교통 모두 지우기</button></div>
     <h2>바람</h2><div class="ios-row"><span>방향 · 세기</span><div><input type="number" data-iosv="wd" min="0" max="359" placeholder="°"><input type="number" data-iosv="ws" min="0" max="60" placeholder="kt"><button data-ios="wind">적용</button></div></div>
     <h2>환경</h2>` +
     grp('시간대', 'tod', [['DAY', '주간'], ['DUSK', '황혼'], ['NIGHT', '야간']]) +
@@ -118,6 +122,7 @@ function iosBuild() {
     grp('구름 밑면', 'ceil', [0, 500, 1000, 1500, 2500].map(v => [v, v ? v + 'ft' : '없음'])) +
     grp('지면', 'surface', [['normal', '보통'], ['sand', '모래'], ['snow', '눈']]) + grp('교통량', 'traffic', [0, 1, 3, 5].map(v => [v, v ? v + '대' : '없음'])) +
     `<h2>SAR · 시나리오</h2><div class="ios-btns"><button data-ios="sar:1">요구조자 앞에 놓기</button><button data-ios="sar:0">요구조자 치우기</button></div><div class="ios-btns" data-iosv="scn"></div>
+    <h2>교범</h2><div class="ios-btns"><button data-ios="manual">📘 교관 교범 열기</button></div>
     <h2>메시지</h2><div class="ios-row"><div style="flex:1;display:flex;gap:6px"><input type="text" data-iosv="msg" placeholder="교육생 화면에 띄울 말" style="flex:1"><button data-ios="msg">보내기</button></div></div>`;
   document.body.appendChild(R);
   R.addEventListener('click', e => {
@@ -126,6 +131,9 @@ function iosBuild() {
     if (p[0] === 'env') iosCmd('env', { o: { [p[1]]: (p[1] === 'tod' || p[1] === 'surface') ? p[2] : (p[1] === 'nvg') ? p[2] === 'true' : +p[2] } });
     else if (p[0] === 'rtc') { if (typeof toggleRemoteIos === 'function') toggleRemoteIos(); }
     else if (p[0] === 'fail') iosCmd('fail', { what: p[1], on: p[2] === '1' });
+    else if (p[0] === 'tfc') { const v = k => R.querySelector(`[data-iosv="${k}"]`).value; iosCmd('tfc', { o: { brg: +v('tb'), nm: +v('tn'), rel: +v('tr'), hdg: +v('th'), ac: v('ta'), pat: p[1] === 'pat' } }); }
+    else if (p[0] === 'tfcClear') iosCmd('tfcClear');
+    else if (p[0] === 'manual') { try { if (typeof openManual === 'function') openManual(); else uiOpenExternal('docs/instructor-manual.html'); } catch (e) { _swallow(e); } }
     else if (p[0] === 'wind') iosCmd('wind', { dir: +R.querySelector('[data-iosv="wd"]').value, spd: +R.querySelector('[data-iosv="ws"]').value });
     else if (p[0] === 'msg') { const i = R.querySelector('[data-iosv="msg"]'); if (i.value.trim()) { iosCmd('msg', { text: i.value.trim() }); i.value = ''; } }
     else if (p[0] === 'scn') iosCmd('scn', { i: +p[1] });

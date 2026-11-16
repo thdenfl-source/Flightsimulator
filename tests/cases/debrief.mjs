@@ -73,25 +73,28 @@ export async function run(page, t) {
   // ── 시나리오 · 환경 ──
   const SC = await page.evaluate(async () => {
     const o = {}, keep = localStorage.getItem('scnList');
+    try { await scnStoreReady; } catch (e) { /* 없음 */ }
+    const keepMem = _scnMem; _scnMem = [];                          // 시나리오 목록은 메모리 · IndexedDB(30-scenario.js)
     localStorage.removeItem('scnList');
     S.lat = 36.1; S.lon = 126.2; S.alt = 1500; S.hdg = 45; S.spd = 80; windDir = 120; windSpd = 15;
     envSet({ tod: 'NIGHT', vis: 3, rain: 1, nvg: false, sea: 4 });
     o.env = { night: document.documentElement.classList.contains('env-night'), rain: document.documentElement.classList.contains('env-rain1'), roll: shipRollAmp, pitch: shipPitchAmp, fog: envSky()['fog-ground-blend'], drift: envSeaDrift() };
     toggleScenario(); const w = document.getElementById('scn-wrap');
     w.querySelector('[data-scnv="name"]').value = '검사 시나리오'; w.querySelector('[data-scn="save"]').click();
-    o.saved = scnList().length;
+    o.saved = scnList().length; o.idb = !!_fdrIdb && localStorage.getItem('scnList') === null;   // IndexedDB 에 적고 localStorage 는 쓰지 않는다
     S.lat = 30; S.alt = 9000; windSpd = 0; envSet({ tod: 'DAY', vis: 0, rain: 0, sea: 0 });
     w.querySelector('[data-scn="load:0"]').click();
     o.loaded = { lat: S.lat, alt: S.alt, wind: windSpd, tod: env.tod, sea: env.sea, run: S.running };
     o.imp = scnImport(JSON.stringify([Object.assign(scnCapture('들여온 것'), {})]));
     envSet({ tod: 'DAY', vis: 0, rain: 0, sea: 0 }); windSpd = 0;
     if (keep === null) localStorage.removeItem('scnList'); else localStorage.setItem('scnList', keep);
+    _scnMem = keepMem; if (keepMem && _fdrIdb) _scnIdbPut(keepMem);
     if (w) w.style.display = 'none';
     return o;
   });
   t.ok(SC.env.night && SC.env.rain && SC.env.roll === 6 && SC.env.pitch === 3 && SC.env.fog < 0.3 && SC.env.drift.kt === 0.9 && SC.env.drift.dir === 300,
     `환경 — 야간 · 비 · 시정 3km(안개 ${SC.env.fog.toFixed(2)}) · 바다 상태 4(함정 롤 ${SC.env.roll}° · 피칭 ${SC.env.pitch}° · 익수자 ${SC.env.drift.kt}kt 바람 쪽)`);
-  t.ok(SC.saved === 1 && Math.abs(SC.loaded.lat - 36.1) < 1e-9 && SC.loaded.alt === 1500 && SC.loaded.wind === 15 && SC.loaded.tod === 'NIGHT' && SC.loaded.sea === 4 && !SC.loaded.run && SC.imp === 1,
+  t.ok(SC.saved === 1 && SC.idb && Math.abs(SC.loaded.lat - 36.1) < 1e-9 && SC.loaded.alt === 1500 && SC.loaded.wind === 15 && SC.loaded.tod === 'NIGHT' && SC.loaded.sea === 4 && !SC.loaded.run && SC.imp === 1,
     '시나리오 — 지금 상태 저장 · 불러오기(자리 · 고도 · 바람 · 환경, 멈춘 채) · 파일 들여오기');
 
   // ── PFD — HDG 선회 방향 화살표 · AFCS 모드 풀림 경보 ──

@@ -8,8 +8,32 @@
 // JSON 파일로 내보내고 들여올 수 있다(다른 기기 · 교관끼리 나누기). 지도 창 · 3D 창의 🎬 SCN 단추로 연다.
 // ══════════════════════════════════════════════════════
 const SCN_KEY = 'scnList';
-function scnList() { try { const a = JSON.parse(localStorage.getItem(SCN_KEY) || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; } }
-function _scnSaveList(a) { try { localStorage.setItem(SCN_KEY, JSON.stringify(a)); } catch (e) { _swallow(e); try { uiToast('저장 공간이 모자랍니다', 'err'); } catch (er) { /* 그만 */ } } }
+// 목록은 메모리(_scnMem)에 두고 IndexedDB(28-debrief.js 의 'shinesong' 데이터베이스 · 비행 저장과 같은 곳)에 적는다 —
+// localStorage 5MB 한계를 벗어난다. IndexedDB 를 못 쓰면 localStorage 로 돌아간다. 옛 localStorage 목록은 처음 열 때 옮기고 지운다.
+let _scnMem = null;
+function _scnLs() { try { const a = JSON.parse(localStorage.getItem(SCN_KEY) || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; } }
+function scnList() { return (_scnMem || _scnLs()).slice(); }
+function _scnIdbPut(a) {
+  return new Promise(ok => {
+    try { const tx = _fdrIdb.transaction('flights', 'readwrite'); tx.objectStore('flights').put(a, SCN_KEY); tx.oncomplete = () => ok(true); tx.onerror = tx.onabort = () => ok(false); }
+    catch (e) { _swallow(e); ok(false); }
+  });
+}
+function _scnSaveList(a) {
+  _scnMem = a.slice();
+  if (typeof _fdrIdb !== 'undefined' && _fdrIdb) { _scnIdbPut(a).then(ok => { if (!ok) { try { uiToast('저장 공간이 모자랍니다', 'err'); } catch (er) { /* 그만 */ } } }); return; }
+  try { localStorage.setItem(SCN_KEY, JSON.stringify(a)); } catch (e) { _swallow(e); try { uiToast('저장 공간이 모자랍니다', 'err'); } catch (er) { /* 그만 */ } }
+}
+const scnStoreReady = (async () => {
+  try { if (typeof fdrStoreReady !== 'undefined') await fdrStoreReady; } catch (e) { _swallow(e); }
+  if (!(typeof _fdrIdb !== 'undefined' && _fdrIdb)) return;
+  const got = await new Promise(ok => { try { const r = _fdrIdb.transaction('flights').objectStore('flights').get(SCN_KEY); r.onsuccess = () => ok(Array.isArray(r.result) ? r.result : null); r.onerror = () => ok(null); } catch (e) { ok(null); } });
+  const ls = _scnLs(), mem = _scnMem || [];
+  const seen = new Set(), all = [];
+  [...mem, ...(got || []), ...ls].forEach(x => { if (x && x.name && !seen.has(x.name)) { seen.add(x.name); all.push(x); } });
+  _scnMem = all;
+  if (ls.length || (mem.length && !got)) { if (await _scnIdbPut(all)) try { localStorage.removeItem(SCN_KEY); } catch (e) { _swallow(e); } }
+})();
 const _scnNum = (f, d = null) => { try { const v = f(); return Number.isFinite(v) ? v : d; } catch (e) { return d; } };
 // 지금 상태 → 시나리오
 function scnCapture(name) {

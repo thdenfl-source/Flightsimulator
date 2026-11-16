@@ -113,6 +113,22 @@ function _diagRender() {
   offlineCheck().then(r => { const el = document.getElementById('diag-offline'); if (el) el.textContent = r.cache ? (r.missing.length ? `${r.total - r.missing.length}/${r.total} — ${r.missing.length}개 아직 없음` : `준비됨(${r.total}개)`) : '서비스 워커 캐시 없음(처음 열었거나 지원 안 함)'; });
 }
 
+// ── 계기 보호 — 비행 값(S.*)이 계산 오류로 숫자가 아니게(NaN · 무한) 되면 계기 · 3D 가 통째로 멎는다.
+//   0.1초마다 보고 깨진 값은 마지막 정상 값으로 되돌리고 진단 기록에 남긴다(한 번만 알림) ──
+const INST_GUARD_KEYS = ['lat', 'lon', 'alt', 'spd', 'hdg', 'vs', 'pit', 'bnk', 'tq'];
+let _instGood = null, instGuardHits = 0, _instGuardToast = 0;
+function instGuardCheck() {
+  if (typeof S === 'undefined') return 0;
+  const bad = INST_GUARD_KEYS.filter(k => k in S && !Number.isFinite(S[k]));
+  if (!bad.length) { _instGood = {}; INST_GUARD_KEYS.forEach(k => { if (k in S) _instGood[k] = S[k]; }); return 0; }
+  bad.forEach(k => { S[k] = _instGood && Number.isFinite(_instGood[k]) ? _instGood[k] : 0; });
+  instGuardHits++;
+  _DIAG_ERR.push({ t: Date.now(), msg: `계기 보호 — 숫자가 아닌 값을 되돌림(${bad.join(' · ')})`, at: 'instGuard' }); if (_DIAG_ERR.length > 100) _DIAG_ERR.shift();
+  if (Date.now() - _instGuardToast > 30000) { _instGuardToast = Date.now(); try { uiToast(`계기 보호 — 잘못된 비행 값(${bad.join(' · ')})을 직전 값으로 되돌렸습니다(🩺 진단 기록)`, 'warn', 4000); } catch (e) { _swallow(e); } }
+  return bad.length;
+}
+setInterval(() => { try { instGuardCheck(); } catch (e) { _swallow(e); } }, 100);
+
 // ── ③ 저장 공간 ──
 function storageLocalSizes() {
   const out = [];
@@ -172,7 +188,13 @@ function swUpdateBanner() {
   const had = !!navigator.serviceWorker.controller;           // 처음 여는 것이면(조종하는 워커가 없으면) 알리지 않는다
   navigator.serviceWorker.addEventListener('controllerchange', () => { if (had) swUpdateBanner(); });
   // 오래 켜 두는 기기 — 30분마다 새 판이 있는지 물어본다
-  setInterval(() => { try { navigator.serviceWorker.getRegistration().then(r => r && r.update()).catch(() => {}); } catch (e) { _swallow(e); } }, 30 * 60 * 1000);
+  const ask = () => { try { navigator.serviceWorker.getRegistration().then(r => r && r.update()).catch(() => {}); } catch (e) { _swallow(e); } };
+  setInterval(ask, 30 * 60 * 1000);
+  // 다시 이 앱으로 돌아올 때(태블릿을 다시 켜거나 탭을 고를 때)도 물어본다 — 10분에 한 번까지
+  let lastAsk = 0;
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && Date.now() - lastAsk > 10 * 60 * 1000) { lastAsk = Date.now(); ask(); } });
+  // 이미 받아 둔 새 판이 기다리고 있으면(다른 탭이 잡고 있어 아직 바뀌지 않음) 곧바로 알린다
+  try { navigator.serviceWorker.getRegistration().then(r => { if (r && r.waiting && had) swUpdateBanner(); }).catch(() => {}); } catch (e) { _swallow(e); }
 })();
 
 // ── ⑤ 교관 교범(docs/instructor-manual.html · 인쇄하면 PDF) ──

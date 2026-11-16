@@ -33,6 +33,13 @@ const TUNE_DEFAULT = {
   hapi: { high: 4.5, ok: 2.5, slight: 1.5 },
   // TCAS — RA(거리 NM · 상대고도 ft · 남은 시간 s) · TA
   tcas: { raNm: 3, raFt: 600, raTau: 25, taNm: 6, taFt: 1200, taTau: 40, taNear: 2 },
+  // AFCS(14-simmode.js) — ALT 피치 축: 1fpm 차이마다 k° · 최대 max° · Vy 아래 hys kt 에서 컬렉티브로 ·
+  //   Vy+guard kt 안으로 들어오면 기수 들기를 줄인다(속도를 지나치게 잃지 않게) · CRHT 지면 거르기(s)
+  afcs: { altPitchK: 0.0025, altPitchMax: 4, altPitchHys: 5, altPitchGuard: 15, crhtGndTau: 2 },
+  // 교통(33-train4.js) — 장주 옆 거리 · 연장 · 이륙 뒤 · 고도(ft AGL) · 선회율(°/s) · 승강 한계(fpm) · 위치 보고 거리(NM)
+  tfc: { patOff: 1.0, patExt: 0.8, patUp: 0.6, patAlt: 1000, patTurn: 6, patVs: 800, reportNm: 5 },
+  // 화면 조종간(STICK) — 사이클릭 감도(배) · 데드존(0~1)
+  vstick: { pitchK: 1, rollK: 1, dead: 0 },
 };
 function _tuneMerge(a, b) {
   for (const k of Object.keys(b || {})) {

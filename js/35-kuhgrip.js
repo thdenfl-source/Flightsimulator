@@ -257,6 +257,24 @@ function _kgMount() {
   }
   kgRender();
 }
+// 서치라이트 방향 지시기(Cockpit) — 켜져 있으면 차양 위 가운데에 위에서 본 방위(기수 위) · 아래로 각 · 광도
+function kgSrchInd() {
+  const ck = document.getElementById('sim-ckpit');
+  let el = document.getElementById('kg-srch-ind');
+  const show = !!ck && kgOn() && kgLt.srch;
+  if (!show) { if (el) el.style.display = 'none'; return; }
+  if (!el || el.parentElement !== ck) {
+    el = document.createElement('div'); el.id = 'kg-srch-ind';
+    el.style.cssText = 'position:absolute;left:50%;top:6%;transform:translateX(-50%);z-index:3;pointer-events:none;background:rgba(0,0,0,0.55);border:1px solid #ffd23a;border-radius:6px;padding:3px 8px;display:flex;align-items:center;gap:6px;font:bold 11px Arial;color:#ffd23a';
+    el.innerHTML = '<svg viewBox="-20 -20 40 40" width="34" height="34"><circle r="17" fill="none" stroke="#ffd23a" stroke-opacity="0.6"/><path d="M0 -6 L4 4 L0 2 L-4 4 Z" fill="#e9ecef"/><line class="ar" x1="0" y1="0" x2="0" y2="-16" stroke="#ffd23a" stroke-width="3" stroke-linecap="round"/></svg><span class="tx"></span>';
+    ck.appendChild(el);
+  }
+  el.style.display = 'flex';
+  const ar = el.querySelector('.ar'); if (ar) ar.setAttribute('transform', `rotate(${kgLt.az.toFixed(1)})`);
+  const tx = `SRCH ${Math.abs(Math.round(kgLt.az))}°${kgLt.az >= 0 ? 'R' : 'L'} · ${Math.round(kgLt.el)}°↓ · ${Math.round(kgLt.br * 100)}%`;
+  const sp = el.querySelector('.tx'); if (sp && sp.textContent !== tx) sp.textContent = tx;
+}
+setInterval(() => { try { kgSrchInd(); } catch (e) { _swallow(e); } }, 150);
 function kgPop(k) { kgPopK = (k === undefined || k === kgPopK) ? null : k; const p = document.getElementById('kg-pop'); if (p) p.dataset.k = ''; _kgPopSync(); }
 function _kgPopSync() {
   const ck = document.getElementById('sim-ckpit');
@@ -267,7 +285,7 @@ function _kgPopSync() {
   if (!L) return;
   if (!p) {
     p = document.createElement('div'); p.id = 'kg-pop';
-    p.innerHTML = '<div class="kgp-bar"><span class="kgp-t"></span><button type="button" class="sim-btn kgp-x" title="닫기">✕</button></div><div id="kg-pop-body"></div>';
+    p.innerHTML = '<div class="kgp-bar"><span class="kgp-t"></span><span class="ck-pop-sz"><button type="button" class="sim-btn" data-act="ckPopScale" data-arg="[-1]" title="창 줄이기">−</button><button type="button" class="sim-btn" data-act="ckPopScale" data-arg="[1]" title="창 키우기">+</button></span><button type="button" class="sim-btn kgp-x" title="닫기">✕</button></div><div id="kg-pop-body"></div>';
     p.querySelector('.kgp-x').addEventListener('click', e => { e.stopPropagation(); kgPop(null); });
     const body = p.querySelector('#kg-pop-body');
     body.addEventListener('pointerdown', e => {
@@ -282,7 +300,7 @@ function _kgPopSync() {
   if (p.dataset.k !== kgPopK) { p.dataset.k = kgPopK; p.querySelector('.kgp-t').textContent = kgPopK === 'coll' ? 'COLLECTIVE' : 'CYCLIC'; document.getElementById('kg-pop-body').dataset.h = ''; kgRender(); }
   // 크기 — 3D 창 높이의 80%(버튼을 누르기 좋게) · 오른쪽 3D 버튼 줄 바로 왼쪽(틈 4px) · 세로 가운데
   const bar = 26, H = L.clientHeight, a = KG_AR[kgPopK];
-  let h = Math.max(160, H * 0.8 - bar), w = h * a;
+  let h = Math.max(160, (H * 0.8 - bar) * (typeof ckPopK === 'number' ? ckPopK : 1)), w = h * a;
   const lr = L.getBoundingClientRect(), btn = document.getElementById('ctl3d');
   const br = btn && btn.offsetWidth > 0 ? btn.getBoundingClientRect() : null;
   const rightEdge = br ? br.left - lr.left - 4 : L.clientWidth - 140;

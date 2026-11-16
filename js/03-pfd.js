@@ -536,6 +536,8 @@ function pfdMsgs() {
       if (typeof kgLt !== 'undefined' && kgLt.srch) out.push({ t: 'SEARCH LT ON', c: PFD_MSG_GREEN });
     }
   } catch (e) { _swallow(e); }
+  // VRS(소용돌이 고리 · SIM) — 저속 · 큰 강하율에서 들어가면 맨 위에 황색 경고(음성은 14-simmode.js)
+  try { if (typeof simVrsOn === 'function' && simVrsOn()) out.unshift({ t: 'VORTEX RING', c: PFD_MSG_AMBER }); } catch (e) { _swallow(e); }
   // TCAS(33-train4.js) — TA 황색 · RA 빨강(올라라 · 내려라)
   try { if (typeof tcasState !== 'undefined' && tcasState !== 'CLEAR') out.unshift(tcasState === 'RA' ? { t: tcasRaSense > 0 ? 'TCAS RA CLIMB' : 'TCAS RA DESCEND', c: '#ff3030' } : { t: 'TRAFFIC', c: '#ffb000' }); } catch (e) { _swallow(e); }
   return out;
@@ -591,8 +593,26 @@ function hocasAxes() {
 // HSI 오른쪽 아래 칸의 자리 — HOCAS 창과 그 아래 스톱워치가 같은 왼쪽 · 폭으로 선다
 // ── 자세계 오른쪽 칸(실기 PFD 의 오른쪽 위) — 메시지 시현창(위) · HOCAS · 스톱워치(아래) ──
 let _pfdSideMsgs = false;
+// ── CAS 쪽넘김 — 메시지가 PFD_CAS_LINES 줄을 넘으면 넘치는 것은 숨기고, 소프트키 CAS 가 살아나 CAS UP · CAS DN 으로 넘겨 본다 ──
+const PFD_CAS_LINES = 5;
+let pfdCasPage = 0;
+function pfdCasPages(n) { return Math.max(1, Math.ceil(n / PFD_CAS_LINES)); }
+function pfdCasOverflow() { try { return pfdMsgs().length > PFD_CAS_LINES; } catch (e) { return false; } }
+function pfdCasStep(d) {
+  const pages = pfdCasPages(pfdMsgs().length);
+  pfdCasPage = Math.max(0, Math.min(pages - 1, pfdCasPage + d));
+  try { drawPFD(); } catch (e) { _swallow(e); }
+}
+// 지금 쪽의 메시지 · 넘김 표시(▲▼ 쪽/쪽수) — 넘치지 않으면 모두
+function pfdCasView(msgs) {
+  const pages = pfdCasPages(msgs.length);
+  if (pages <= 1) { pfdCasPage = 0; return { list: msgs, tag: '' }; }
+  pfdCasPage = Math.min(pfdCasPage, pages - 1);
+  const list = msgs.slice(pfdCasPage * PFD_CAS_LINES, (pfdCasPage + 1) * PFD_CAS_LINES);
+  return { list, tag: `${pfdCasPage > 0 ? '▲' : ' '}${pfdCasPage < pages - 1 ? '▼' : ' '} CAS ${pfdCasPage + 1}/${pages}` };
+}
 function drawPfdSideMsgs(S0) {
-  const msgs = pfdMsgs();
+  const all = pfdMsgs(), V = pfdCasView(all), msgs = V.tag ? [...V.list, { t: V.tag, c: '#ffffff' }] : V.list;
   _pfdMsgBottom = S0.y;
   if (!msgs.length) return;
   ctx.save();
@@ -923,7 +943,12 @@ function drawFMA(x, y, w) {
       }
     } else if (F) _fmaFlash[i] = null;
     // 풀림 — 황색 칸 깜빡임(5초)
+    // ALT 가 컬렉티브 ↔ 피치 칸으로 옮겨 간 것은 '풀림' 이 아니다 — 다른 칸에 ALT 가 켜져 있으면 경고하지 않는다
+    const _altL = l => l === 'ALT' || l === 'ALT.A', _oth = i === 0 ? 2 : i === 2 ? 0 : -1;
+    const xfer = _oth >= 0 && _altL(modes[_oth]) && active[_oth] && _altL(_fmaLblPrev[i] || '');
+    if (xfer && !on) { _fmaOnPrev[i] = false; _fmaDrop[i] = null; }
     _fmaDropCheck(i, on, modes[i], now);
+    _fmaLblPrev[i] = modes[i];
     const D = _fmaDrop[i];
     if (D && !D.vol && now - D.t < FMA_DROP_MS) {
       if (Math.floor((now - D.t) / 400) % 2 === 0) {
@@ -943,7 +968,7 @@ function pfdHdgTurnDir() {
 // ── 모드 풀림 경보 — 걸려 있던 칸이 꺼지면 5초 동안 칸 전체가 황색으로 깜빡이고 '딩동'이 울린다 ──
 // 조종사가 막 누르거나 키를 친 직후(0.6초 안)에 풀린 것은 스스로 푼 것으로 보아 경보하지 않는다(소리 · 깜빡임 없음).
 const FMA_DROP_MS = 5000;
-const _fmaDrop = [null, null, null], _fmaOnPrev = [];
+const _fmaDrop = [null, null, null], _fmaOnPrev = [], _fmaLblPrev = [];
 let _fmaAc = null;   // _pilotInT · afcsCmd — 01-state.js
 ['pointerdown', 'keydown', 'click'].forEach(ev => window.addEventListener(ev, () => {
   _pilotInT = performance.now();
@@ -1789,7 +1814,8 @@ function drawHSI(x, y, w, h, cxC) {
     ctx.closePath(); ctx.fillStyle = '#ffffff'; ctx.fill();
     ctx.restore();
     // ── 메시지 시현창(바람 정보 아래) ── 콘솔 스위치 · 엔진 상태를 따른다(pfdMsgs)
-    const msgs = _pfdSideMsgs ? [] : pfdMsgs();   // 자세계 오른쪽 칸이 있으면 거기에(drawPfdSideMsgs)
+    const _all = _pfdSideMsgs ? [] : pfdMsgs();   // 자세계 오른쪽 칸이 있으면 거기에(drawPfdSideMsgs)
+    const _V = _pfdSideMsgs ? { list: [], tag: '' } : pfdCasView(_all), msgs = _V.tag ? [..._V.list, { t: _V.tag, c: '#ffffff' }] : _V.list;   // 넘치면 쪽넘김(CAS UP · DN) · 옆 칸이면 거기서
     if (!_pfdSideMsgs) _pfdMsgBottom = wdY + fs * 1.1 + 4;    // 바람 글자 아래끝(메시지가 없을 때)
     if (msgs.length) {
       ctx.save();

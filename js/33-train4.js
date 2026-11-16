@@ -62,7 +62,7 @@ function instFailApply() {
 })();
 
 // ── 설정(⚙) — 이 기기 'appSet' ──
-const appSet = { callsign: 'Coastguard zero one', atcVoice: true, readback: true, rate: 1.05, mission: 'patrol', voice: '' };   // voice — 관제 목소리 이름('' 이면 자동)   // mission — Watchman 교신의 임무(patrol · medevac · sar)
+const appSet = { callsign: 'Coastguard zero one', atcVoice: true, readback: true, rate: 1.05, mission: 'patrol', voice: '', stickK: 1, stickDead: 0 };   // voice — 관제 목소리 이름('' 이면 자동)   // mission — Watchman 교신의 임무(patrol · medevac · sar)
 try { Object.assign(appSet, JSON.parse(localStorage.getItem('appSet') || '{}')); } catch (e) { _swallow(e); }
 function appSetSave() { try { localStorage.setItem('appSet', JSON.stringify(appSet)); } catch (e) { _swallow(e); } }
 
@@ -100,7 +100,9 @@ const _tNE = (la1, lo1, la2, lo2) => ({ n: (la2 - la1) * 60, e: (lo2 - lo1) * 60
 //   비행 — 셋에 하나(1 · 4 …번째)는 가까운 공항(15NM 안)에서 장주비행(왼쪽 장주 · 1,000ft AGL · 접지 후 이륙),
 //          나머지는 항로비행(곧게 · 교통 연습용으로 셋에 하나는 내 쪽으로)
 const TFC_SPD = { kuh: [125, 140], b206: [100, 110] }, TFC_PAT_SPD = { kuh: 90, b206: 80 };
-const TFC_PAT = { off: 1.0, ext: 0.8, up: 0.6, alt: 1000, turn: 6, vsMax: 800 };   // NM · NM · NM · ft AGL · °/s · fpm
+const _TT = TUNE.tfc;   // 00-params.js — 장주 옆 · 연장 · 이륙 뒤(NM) · 고도(ft AGL) · 선회율(°/s) · 승강 한계(fpm)
+const TFC_PAT = { off: _TT.patOff, ext: _TT.patExt, up: _TT.patUp, alt: _TT.patAlt, turn: _TT.patTurn, vsMax: _TT.patVs };
+const TFC_LEG = ['upwind', 'crosswind', 'downwind', 'base', 'final', 'touch and go'];
 const _tfcR2D = 180 / Math.PI;
 function _tfcBrg(la1, lo1, la2, lo2) { const v = _tNE(la1, lo1, la2, lo2); return (Math.atan2(v.e, v.n) * _tfcR2D + 360) % 360; }
 // 가까운 활주로(15NM 안) — { ap, r }
@@ -126,16 +128,46 @@ function _tfcPatWps(ap, r) {
   return [P(r.b, C.up, 0, 600), P(r.b, C.up, C.off, C.alt), P(r.a, -C.ext, C.off, C.alt), P(r.a, -C.ext, 0, 600),
           P(r.a, 0, 0, 50), P(r.a, L / 2, 0, 15)];
 }
+// ENV 교통 기종(env.tfcType: mix · kuh · b206) · 장주 몫(env.tfcPat: 0 없음 · 1 셋에 하나 · 2 반 · 3 모두)
+function _tfcAc(seq) { const t = (typeof env !== 'undefined' && env.tfcType) || 'mix'; return t === 'kuh' || t === 'b206' ? t : (seq % 2 === 0 ? 'kuh' : 'b206'); }
+function _tfcWantPat(i) { const p = (typeof env !== 'undefined' && Number.isFinite(env.tfcPat)) ? env.tfcPat : 1; return p === 3 ? true : p === 2 ? i % 2 === 1 : p === 1 ? i % 3 === 1 : false; }
+// 교통 하나를 바로 띄운다(교관 화면 — 방위 · 거리 · 상대고도 · 침로 · 기종 · 장주) — 내 기체 기준
+function trafficAdd(o = {}) {
+  const ac = o.ac === 'b206' ? 'b206' : 'kuh', id = ++_tfcSeq;
+  if (o.pat) { const nr = _tfcNearRwy(); if (nr) { const t = _tfcPatOne(nr, ac, id, 0); t.byIos = true; traffic.push(t); _tfcEnvSync(); return t; } }
+  const b = (+o.brg || 0) * Math.PI / 180, r = Math.max(0.2, +o.nm || 3);
+  const t = { id, ac, mode: 'rte', byIos: true, lat: S.lat + r * Math.cos(b) / 60, lon: S.lon + r * Math.sin(b) / 60 / Math.cos(S.lat * Math.PI / 180),
+              alt: Math.max(100, S.alt + (+o.rel || 0)), hdg: ((+o.hdg || 0) % 360 + 360) % 360, spd: +o.spd || (ac === 'kuh' ? 130 : 105), vs: 0, bnk: 0, pit: -3, st: 'OT' };
+  traffic.push(t); _tfcEnvSync(); return t;
+}
+function trafficClear() { traffic.length = 0; try { if (typeof env !== 'undefined') env.traffic = 0; } catch (e) { _swallow(e); } }
+// 교관이 띄운 교통은 ENV 교통량에 더해진다 — 그만큼 교통량 칸을 넓혀 두어 지우지 않게
+function _tfcEnvSync() { try { if (typeof env !== 'undefined') env.traffic = Math.max(env.traffic || 0, traffic.length); } catch (e) { _swallow(e); } }
+function _tfcPatOne(nr, ac, id, wi0) {
+  const wp = _tfcPatWps(nr.ap, nr.r), wi = wi0 === undefined ? Math.floor(Math.random() * wp.length) : wi0, pv = wp[(wi + wp.length - 1) % wp.length];
+  return { id, ac, mode: 'pat', apt: nr.ap.apt, rwy: String(nr.r.id || '').split('/')[0], wp, wi, lat: pv.lat, lon: pv.lon, alt: pv.alt,
+           hdg: _tfcBrg(pv.lat, pv.lon, wp[wi].lat, wp[wi].lon), spd: TFC_PAT_SPD[ac], vs: 0, bnk: 0, pit: 0, st: 'OT' };
+}
+// 장주 위치 보고(무전) — 다른 다리로 들어설 때, 내 기체에서 reportNm 안이면 · 6초에 하나
+let _tfcSayT = 0;
+function _tfcReport(t) {
+  const now = Date.now(); if (now - _tfcSayT < 6000) return;
+  const v = _tNE(S.lat, S.lon, t.lat, t.lon); if (Math.hypot(v.n, v.e) > TUNE.tfc.reportNm) return;
+  _tfcSayT = now;
+  const cs = t.ac === 'b206' ? `Bell ${String(200 + t.id).split('').join(' ')}` : `Coast guard ${String(500 + t.id).split('').join(' ')}`;
+  const leg = TFC_LEG[t.wi] || '', rw = t.rwy ? `, runway ${t.rwy.replace(/^0/, '').split('').join(' ').replace('L', 'left').replace('R', 'right').replace('C', 'center')}` : '';
+  const txt = `${t.apt || ''} traffic, ${cs}, ${leg}${rw}`;
+  try { if (typeof speak === 'function') speak(txt); } catch (e) { _swallow(e); }
+  try { if (typeof fdrNote === 'function') fdrNote(`교통 위치 보고 — ${cs} ${leg}`); } catch (e) { _swallow(e); }
+  tfcLastReport = { t: now, txt };
+}
+let tfcLastReport = null;
 function _tfcSpawn(toward, i) {
-  const ac = _tfcSeq % 2 === 0 ? 'kuh' : 'b206';
+  const ac = _tfcAc(_tfcSeq);
   const id = ++_tfcSeq;
-  if (!toward && i % 3 === 1) {                                         // 장주비행
+  if ((!toward || (typeof env !== 'undefined' && env.tfcPat === 3)) && _tfcWantPat(i)) {   // 장주비행
     const nr = _tfcNearRwy();
-    if (nr) {
-      const wp = _tfcPatWps(nr.ap, nr.r), wi = Math.floor(Math.random() * wp.length), pv = wp[(wi + wp.length - 1) % wp.length];
-      return { id, ac, mode: 'pat', apt: nr.ap.apt, wp, wi, lat: pv.lat, lon: pv.lon, alt: pv.alt,
-               hdg: _tfcBrg(pv.lat, pv.lon, wp[wi].lat, wp[wi].lon), spd: TFC_PAT_SPD[ac], vs: 0, bnk: 0, pit: 0, st: 'OT' };
-    }
+    if (nr) return _tfcPatOne(nr, ac, id);
   }
   const b = Math.random() * 2 * Math.PI, r = 6 + Math.random() * 6;
   const la = S.lat + r * Math.cos(b) / 60, lo = S.lon + r * Math.sin(b) / 60 / Math.cos(S.lat * Math.PI / 180);
@@ -156,7 +188,7 @@ function _tfcPatStep(t, dt) {
   const tLeft = dist / Math.max(1, t.spd) * 60;                          // 분
   t.vs = Math.max(-TFC_PAT.vsMax, Math.min(TFC_PAT.vsMax, (w.alt - t.alt) / Math.max(0.2, tLeft)));
   t.pit = t.vs > 200 ? 4 : t.vs < -200 ? -2 : 0;
-  if (dist < Math.max(0.12, t.spd * dt / 3600 * 1.5)) t.wi = (t.wi + 1) % t.wp.length;
+  if (dist < Math.max(0.12, t.spd * dt / 3600 * 1.5)) { t.wi = (t.wi + 1) % t.wp.length; try { _tfcReport(t); } catch (e) { _swallow(e); } }
 }
 function trafficStep(dtSim) {
   const want = (typeof env !== 'undefined') ? (env.traffic || 0) : 0;
@@ -296,6 +328,7 @@ function toggleSettings() {
       else if (k === 'atcVoice' || k === 'readback') { appSet[k] = v === '1'; appSetSave(); }
       else if (k === 'rate') { appSet.rate = +v; appSetSave(); }
       else if (k === 'mission') { appSet.mission = v; appSetSave(); }
+      else if (k === 'stickK' || k === 'stickDead') { appSet[k] = +v; appSetSave(); }   // 화면 조종간(STICK) 감도 · 데드존(14-simmode.js vStickCyclic)
       else if (k === 'voiceTest') { if (typeof speak === 'function') speak(`${appSet.callsign}, radar contact, maintain VFR.`); }
       else if (k === 'raCall' && typeof envSet === 'function') envSet({ raCall: v === '1' });
       else if (k === 'export') settingsExport();
@@ -329,6 +362,8 @@ function _setRender() {
     })()}</select><button class="sim-btn" data-set="voiceTest:1">▶ 들어 보기</button></div></div>
     <div class="set-row"><span>임무(Watchman 교신)</span><div>${[['patrol', 'Sea patrol'], ['medevac', 'MEDEVAC'], ['sar', 'Search and Rescue']].map(([v, l]) => `<button class="sim-btn ${appSet.mission === v ? 'on' : ''}" data-set="mission:${v}">${l}</button>`).join('')}</div></div>
     <div class="set-row"><span>콜사인(관제)</span><div><input type="text" data-setv="callsign" value="${appSet.callsign.replace(/"/g, '&quot;')}"></div></div>
+    <div class="set-row"><span>STICK 감도</span><div>${[0.5, 0.75, 1, 1.5].map(v => `<button class="sim-btn ${appSet.stickK === v ? 'on' : ''}" data-set="stickK:${v}">×${v}</button>`).join('')}</div></div>
+    <div class="set-row"><span>STICK 데드존</span><div>${[0, 0.05, 0.1].map(v => `<button class="sim-btn ${appSet.stickDead === v ? 'on' : ''}" data-set="stickDead:${v}">${v ? Math.round(v * 100) + '%' : '없음'}</button>`).join('')}</div></div>
     <div class="set-row"><span>교관 기기 연결</span><div><button class="sim-btn" data-set="ios">📱 Instructor Sync(QR)</button></div></div>
     <div class="set-row"><span>모든 설정</span><div><button class="sim-btn" data-set="export">내보내기</button><label class="sim-btn">들여오기<input type="file" accept=".json" data-setv="file" hidden></label><button class="sim-btn" data-set="reset">초기화</button></div></div>
     <div class="set-note">환경(시간대 · 시정 · 바다 · 돌풍 · 구름 · 지면 · 교통량)은 🌙 ENV 에서 고릅니다.</div></div>`;
@@ -588,6 +623,8 @@ function rtcLinkOpen(rx, tx, onText) {
 // 짝을 맺은 뒤 두 기기가 중계에 붙는다(메인: 수락할 때 · 태블릿: 수락 알림을 받을 때)
 function rtcLinkStart() {
   if (!rtc.room || !rtc.key) return;
+  // 짝을 기억한다 — 새로고침 · 잠깐 꺼짐 뒤에도 묻지 않고 다시 이어진다(12시간 · '연결 끊기' 로 지운다)
+  try { localStorage.setItem('rtcPair', JSON.stringify({ room: rtc.room, key: rtc.key, t: Date.now() })); } catch (e) { _swallow(e); }
   try { if (rtc.link) rtc.link.close(); } catch (e) { _swallow(e); }
   const ios = typeof IOS_MODE !== 'undefined' && IOS_MODE, base = 'shinesong/' + rtc.room;
   rtc.linkPeer = false;
@@ -601,6 +638,25 @@ function rtcLinkStart() {
   let n = 0; const hi = setInterval(() => { if (rtc.linkPeer || ++n > 30 || !rtc.link) { clearInterval(hi); return; } if (rtc.link.ready) rtcEnc(rtc.key, JSON.stringify({ type: 'hello' })).then(t => rtc.link && rtc.link.pub(t)).catch(_swallow); }, 1000);
 }
 
+// Instructor Sync 다시 잇기 — 기억해 둔 짝(rtcPair)이 12시간 안이면 앱을 열 때 인터넷 중계로 곧바로 다시 붙는다
+//   (중계가 끊겨도 rtcLinkOpen 이 다음 중계로 계속 다시 붙는다 · 미러는 상대가 다시 보이면 전체를 한 번 보낸다)
+const RTC_PAIR_MS = 12 * 3600 * 1000;
+function rtcPairForget() {
+  try { localStorage.removeItem('rtcPair'); } catch (e) { _swallow(e); }
+  try { if (rtc.link) rtc.link.close(); } catch (e) { _swallow(e); }
+  rtc.link = null; rtc.linkPeer = false; rtc.open = false; rtc.room = null; rtc.key = null;
+  try { if (rtc.pc) rtc.pc.close(); } catch (e) { _swallow(e); } rtc.pc = null; rtc.ch = null;
+  try { _rtcRender(); } catch (e) { _swallow(e); }
+  try { uiToast('Instructor Sync — 연결을 끊고 짝을 지웠습니다'); } catch (e) { _swallow(e); }
+}
+function rtcResume() {
+  let p = null; try { p = JSON.parse(localStorage.getItem('rtcPair') || 'null'); } catch (e) { p = null; }
+  if (!p || !p.room || !p.key || !(Date.now() - (p.t || 0) < RTC_PAIR_MS)) return false;
+  if (rtc.link) return true;
+  rtc.room = p.room; rtc.key = p.key; rtcLinkStart();
+  return true;
+}
+setTimeout(() => { try { rtcResume(); } catch (e) { _swallow(e); } }, 1500);
 // ── QR — 만들기(vendor/qrcode.js) · 읽기(BarcodeDetector 가 있으면 그것, 없으면 vendor/jsQR.js) — 필요할 때만 읽어 온다 ──
 const _jsLoaded = {};
 function _loadJs(src) {
@@ -660,6 +716,7 @@ function toggleRemoteIos() {
         : '<button class="sim-btn on rtc-big" data-rtc="request">연결 요청</button>'}</div>
       <div class="rtc-view" data-rtcv="view"></div>
       <div class="set-note rtc-st" data-rtcv="st"></div>
+      <div class="rtc-btns"><button class="sim-btn" data-rtc="forget" title="기억해 둔 짝을 지운다 — 다음에는 처음부터 연결 요청">연결 끊기</button></div>
       <details class="rtc-txt"><summary>카메라가 없을 때 — 코드로 잇기</summary>
         <div class="set-row"><textarea data-rtcv="out" readonly placeholder="${ios ? '여기 나온 답 코드를 교육생 기기로' : '여기 나온 요청 코드를 교관 기기로'}"></textarea></div>
         <div class="set-row"><button class="sim-btn" data-rtc="copy">복사</button><button class="sim-btn" data-rtc="share">공유</button></div>
@@ -674,6 +731,7 @@ function toggleRemoteIos() {
       const k = b.dataset.rtc;
       try {
         if (k === 'x') { qrScanStop(); w.style.display = 'none'; return; }
+        if (k === 'forget') { rtcPairForget(); return; }
         if (k === 'request') {
           view.innerHTML = '<div class="set-note">요청 QR 을 만드는 중…</div>';
           const q = await rtcRequest(); await showQr(q, '교관 태블릿의 <b>[📷 교육생 QR 찍어 잇기]</b>로 이 QR 을 찍게 하세요. 찍으면 이 기기에 <b>수락</b> 창이 뜹니다.');
