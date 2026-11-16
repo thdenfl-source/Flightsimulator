@@ -65,7 +65,7 @@ export async function run(page, t) {
   await page.evaluate(() => selectPanel('right', 'cdu'));
   await page.waitForTimeout(250);
   const modes = ['HOME', 'AIRFIELD', 'CHARTS', 'UTIL', 'PERF', 'AUDIO', 'INTERCOM',
-                 'XPDR_MODE', 'TRACKPOINT', 'SETTINGS', 'CONTROLS', 'CHECKLIST'];
+                 'XPDR_MODE', 'TRACKPOINT', 'SETTINGS', 'CONTROLS', 'CHECKLIST', 'TCAS', 'TCAS_XPDR'];
   page.errors.length = 0;
   for (const m of modes) {
     await page.evaluate(mm => { try { switchMode(mm); } catch (e) { throw e; } }, m);
@@ -127,8 +127,8 @@ export async function runDegenerate(page, t) {
     return { home, wxTitle, wxLabels, hrefs, cctv, back };
   });
   t.eq(wx.home.join('|'),
-    'MAP|AircraftSystems|PERF|Charts|Flight Plan|PROC|VNAV|WaypointInfo|NOTAM|Track &Point|Services|Utilities|SkyVector|Tideforecast|ERavailability|Wildfirestatus|Weather|Checklist|AirportINFO|조종장치',
-    `CDU 홈 배열 — 4칸씩 MAP… / Flight Plan… / NOTAM… / SkyVector… / Weather · Checklist · Airport INFO · 조종장치 (${wx.home.join(' · ')})`);
+    'MAP|AircraftSystems|PERF|Charts|Flight Plan|PROC|VNAV|WaypointInfo|NOTAM|Track &Point|Services|Utilities|SkyVector|Tideforecast|ERavailability|Wildfirestatus|Weather|TCAS|AirportINFO|조종장치',
+    `CDU 홈 배열 — 4칸씩 MAP… / Flight Plan… / NOTAM… / SkyVector… / Weather · TCAS · Airport INFO · 조종장치 (${wx.home.join(' · ')})`);
   // 조종장치 — 홈 맨 아랫줄 · 조종 장치 사용 · 버튼/축 배정 · 키보드 단축키(설정에 있던 것) · 배정 화면의 Back 은 조종장치로
   const ctl = await page.evaluate(async () => {
     const wait = ms => new Promise(r => setTimeout(r, ms));
@@ -203,7 +203,7 @@ export async function runDegenerate(page, t) {
     'Windy · 저고도 날씨 · METAR/TAF 는 종전 사이트로 열린다');
   t.ok(wx.cctv === 'CCTV' && wx.back === 'Weather', `CCTV 가 열리고 Back 은 Weather 로 돌아온다 (${wx.cctv} → ${wx.back})`);
 
-  // ── CDU 홈의 Aircraft Systems — 누르면 사진처럼 계통 버튼 열한 개(위 두 줄 · 아래 한 줄), 각각 제 화면(준비 중) · Back 은 Aircraft Systems 로 ──
+  // ── CDU 홈의 Aircraft Systems — 누르면 사진처럼 계통 버튼 열두 개(위 두 줄 · 아래 한 줄 · 홈에서 옮겨 온 Checklist 포함), 각각 제 화면 · Back 은 Aircraft Systems 로 ──
   const sys = await page.evaluate(async () => {
     const wait = ms => new Promise(r => setTimeout(r, ms));
     selectPanel('right', 'cdu', true); await wait(150);
@@ -227,10 +227,10 @@ export async function runDegenerate(page, t) {
   });
   t.eq(sys.home[1], 'AircraftSystems', `CDU 홈 둘째 버튼이 Aircraft Systems 다 (${sys.home.slice(0, 3).join(' · ')})`);
   t.ok(sys.sTitle === 'Aircraft Systems' &&
-       sys.sLabels.join('|') === 'AFCS|AircraftStatus|Electrical|Engines|Fuel|RASelfTestAllow|HOCAS|SystemTests|LightingConfig|Video|Maintenance',
-    `누르면 계통 버튼 열한 개 (${sys.sLabels.join(' · ')})`);
-  t.ok(sys.grids.join(',') === '8,4', `사진의 자리 — 위 두 줄 4칸(빈칸 하나) · 아래 한 줄 4칸 (${sys.grids.join(',')})`);
-  t.ok(sys.pages.join('|') === 'AFCS|Aircraft Status|Electrical|Engines|Fuel|RA Self Test|HOCAS|System Tests|Lighting Config|Video|Maintenance',
+       sys.sLabels.join('|') === 'AFCS|AircraftStatus|Electrical|Engines|Fuel|RASelfTestAllow|Checklist|HOCAS|SystemTests|LightingConfig|Video|Maintenance',
+    `누르면 계통 버튼 열두 개(Checklist 포함) (${sys.sLabels.join(' · ')})`);
+  t.ok(sys.grids.join(',') === '8,4', `사진의 자리 — 위 두 줄 4칸(빈칸에 Checklist) · 아래 한 줄 4칸 (${sys.grids.join(',')})`);
+  t.ok(sys.pages.join('|') === 'AFCS|Aircraft Status|Electrical|Engines|Fuel|RA Self Test|CHECK LIST|HOCAS|System Tests|Lighting Config|Video|Maintenance',
     `각 버튼이 제 화면을 연다 (${sys.pages.join(' · ')})`);
   t.eq(sys.back, 'Aircraft Systems', '계통 화면의 Back 은 Aircraft Systems 로 돌아온다');
 }
