@@ -200,7 +200,7 @@ const HELP_ITEMS = [
   ['CAUTION LT TEST · MASTER CAUTION', '누르는 동안 등 · 경고음 점검 / 새 주의등을 알았다고 끈다.'],
   ['ENG FAIL (Bell)', '컬렉티브 큰 창 — 교관 훈련용 엔진 고장. 스로틀을 OFF 로 닫았다가 다시 시동하면 풀린다.'],
   ['STARTER (Bell)', '한 번 누르면 ON · 다시 누르면 OFF. N1 12% 넘어 스로틀 IDLE → 58% 넘어 STARTER OFF. 60초 넘기지 않는다.'],
-  ['컬렉티브 · 사이클릭(흰수리 조종석)', '조종석 그림의 컬렉티브(CDU 오른쪽) · 사이클릭을 누르면 크게 뜬다. 컬렉티브: LDG LT(EXT 펼침 · ON/OFF · RET 접음) · SRCH CTR(서치라이트 방향) · COLL TRIM(DN/UP) · SRCH LT(누르면 ON/OFF · 위아래 광도) · OEI(한 엔진일 때 HI 2.5분 ↔ LOW 10분). 사이클릭: DISENGAG(AP 해제) · 빨간 단추(AP FAST CUT OFF) · 4-WAY BEEP · 손잡이 앞 PTT · FORCE TRIM RELEASE · G/SPEED.'],
+  ['컬렉티브 · 사이클릭(흰수리 조종석)', '조종석 그림의 컬렉티브(CDU 오른쪽) · 사이클릭을 누르면 크게 뜬다. 컬렉티브: LDG LT(EXT 펼침 · ON/OFF · RET 접음) · SRCH CTR(서치라이트 방향) · COLL TRIM(DN/UP) · SRCH LT(누르면 ON/OFF · 위아래 광도) · OEI(한 엔진일 때 HI 2.5분 ↔ LOW 10분 — 남은 시간은 SYSTEM 창 살아 있는 엔진의 NG 옆에 보이고, 연속 정격(MTA 30) 위의 출력을 쓰는 동안만 줄어든다(황색)). 사이클릭: DISENGAG(AP 해제) · 빨간 단추(AP FAST CUT OFF) · 4-WAY BEEP · 손잡이 앞 PTT · FORCE TRIM RELEASE · G/SPEED.'],
   ['Watchman(VHF 125.3 · UHF 278.4)', '관제권 밖에서 레이더 조력 요청 — "… radial … miles from RKxx, direct to … for sea patrol(MEDEVAC · SAR)" → "radar contact, maintain VFR". 공항 10NM 안으로 들어오며 다시 부르면 "landing assured to RKxx, request frequency change" → "radar frequency change approved". 임무는 ⚙ 설정에서.'],
   ['관제 교신(TWR)', 'TWR 주파수로 PTT 를 놓으면 자리에 맞춰 조종사 말(🎙 PILOT)을 보여 주고 타워가 답한다 — 활주로 밖 지상 활주 요청 · 활주로 위 이륙 · 5NM 관제권 떠남 · 접근(inbound) · 5마일 final 착륙 허가. 비행계획이 없으면 장주(pattern) 비행.'],
   ['PTT (Bell 오디오 패널)', '누르는 동안 MIC 로 고른 무전기로 송신. 가까운 공항 TWR · GND · APP 주파수면 관제가 답한다.'],
