@@ -1496,9 +1496,7 @@ function sysCduHtml(id) {
   if (id === 'asys_hocas') {
     const b = (act, txt, extra) => `<div class="nav-btn" data-act="${act}" ${extra || ''} style="flex:1;min-width:0;max-width:none;width:auto;height:auto;min-height:54px;padding:8px 4px;font-size:13px;line-height:16px;text-align:center">${txt}</div>`;
     return `<div style="padding:12px 8px;color:#cde;font-size:12px">` +
-      `<div style="color:#567;font-size:10px;margin-bottom:6px">HOCAS — 조종간(사이클릭)·페달·컬렉티브 자리를 SYSTEM 창에 보입니다(HALF 면 다른 쪽은 TCAS).</div>` +
-      `<div style="display:flex;gap:6px;margin-bottom:8px">${b('toggleHocas', 'SYSTEM 표시 <b id="hocasc-on"></b>')}</div>` +
-      `<div style="color:#567;font-size:10px;margin:8px 0 4px">가운데(중립) — 조종간·페달에서 손을 뗀 채 누릅니다</div>` +
+      `<div style="color:#567;font-size:10px;margin:0 0 4px">가운데(중립) — 조종간·페달에서 손을 뗀 채 누릅니다</div>` +
       `<div style="display:flex;gap:6px;margin-bottom:10px">${b('hocasCenter', 'CTR<span style="font-size:10px;line-height:13px;height:auto;color:#9ab">가운데 맞춤 · 저장</span>')}` +
       `${b('hocasDefault', 'DEFAULT<span style="font-size:10px;line-height:13px;height:auto;color:#9ab">저장한 가운데 지우기</span>')}</div>` +
       `<div id="hocasc" style="font-size:12px"></div></div>`;

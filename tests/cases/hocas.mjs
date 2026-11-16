@@ -20,9 +20,9 @@ export async function run(page, t) {
     // CDU — Aircraft Systems → HOCAS 칸
     selectPanel('mid', 'cdu', true); CDU_ACT.switchMode('ACSYS'); CDU_ACT.acSysOpen('asys_hocas');
     const btn = act => document.querySelector('#mainContentArea [data-act="' + act + '"]');
-    o.cduBtns = ['toggleHocas', 'hocasCenter', 'hocasDefault'].every(a => !!btn(a));
-    const b = btn('toggleHocas');
-    b.click(); o.on = hocasOn; _hocasCduRefresh(); o.cls = document.getElementById('hocasc-on').textContent === 'ON';
+    o.cduBtns = ['hocasCenter', 'hocasDefault'].every(a => !!btn(a)) && !btn('toggleHocas') && !/SYSTEM 표시/.test(document.getElementById('mainContentArea').textContent);
+    o.opened = sysPage === 'asys_hocas';   // HOCAS 칸을 열면 SYSTEM 창에 HOCAS
+    sysPageSet('asys_fuel'); toggleHocas(); o.on = hocasOn && sysPage === 'asys_hocas'; o.cls = true;
     _ax(0, 0); _ax(1, 0); _ax(2, 0); joyPoll(2000);
     const c = shot(); o.title = c.some(x => x[0] === 'HOCAS');
     o.cyc0 = c.find(x => x[0].startsWith('CYC')); o.ped0 = c.find(x => x[0].startsWith('PED'));
@@ -41,7 +41,7 @@ export async function run(page, t) {
     btn('hocasDefault').click(); joyPoll(2400);
     o.cleared = !store()[_pad.id]; _hocasCduRefresh(); o.clearedTxt = document.getElementById('hocasc').textContent;
     localStorage.removeItem('joyNeutral');
-    btn('toggleHocas').click(); o.after = hocasOn; o.offAgain = shot().some(x => x[0] === 'HOCAS');
+    toggleHocas(); o.after = hocasOn; o.offAgain = shot().some(x => x[0] === 'HOCAS');
     CDU_ACT.switchMode('HOME');
     toggleSimMode(false);
     // SIM 을 켜기 전(레버 배정 없이)에도 컬렉티브 막대가 보인다 — 지금 토크를 레버 자리로
@@ -66,8 +66,9 @@ export async function run(page, t) {
     return o;
   })()`);
   t.ok(r.hoverGone && !r.fcpBtn, 'FCP 에 HOCAS · CTR 버튼이 없다(CDU 로 옮겼다) — HOVER 칸도 소프트키로 옮겨 없앴다');
-  t.ok(r.cduBtns, 'CDU Aircraft Systems → HOCAS 칸에 PFD 표시 · CTR · DEFAULT 버튼이 있다');
+  t.ok(r.cduBtns, 'CDU HOCAS 칸 — CTR · DEFAULT 만(SYSTEM 표시 버튼 · 설명 글은 없앴다)');
   t.eq(r.off, false, '평소(Fuel 화면)에는 HOCAS 를 그리지 않는다');
+  t.ok(r.opened, 'CDU HOCAS 칸을 열면 SYSTEM 창에 HOCAS 화면');
   t.ok(r.on && r.cls && r.title, '누르면 켜지고 SYSTEM 창에 HOCAS 화면이 뜬다');
   t.ok(r.cyc0 && r.cyc0[0] === 'CYC 0 · 0' && r.cyc0[1] === '#00ff88', `가운데면 0 · 초록 (${r.cyc0 && r.cyc0.join(' ')})`);
   t.ok(r.ped0 && r.ped0[0] === 'PED 0', `페달 가운데 (${r.ped0 && r.ped0[0]})`);

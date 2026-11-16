@@ -26,25 +26,26 @@ export async function run(page, t) {
   // ── CAS 쪽넘김 — 5줄이 넘으면 소프트키 CAS 가 살고 CAS UP · DN 으로 넘긴다 ──
   const C = await page.evaluate(() => {
     const keep = window.pfdMsgs, o = {};
-    window.pfdMsgs = () => Array.from({ length: 12 }, (_, i) => ({ t: 'MSG ' + (i + 1), c: '#22e022' }));
+    window.pfdMsgs = () => Array.from({ length: 60 }, (_, i) => ({ t: 'MSG ' + (i + 1), c: '#22e022' }));
     const shot = () => { const seen = [], f = CanvasRenderingContext2D.prototype.fillText;
       CanvasRenderingContext2D.prototype.fillText = function (x, ...a) { seen.push(String(x)); return f.call(this, x, ...a); };
       try { drawPFD(); } finally { CanvasRenderingContext2D.prototype.fillText = f; } return seen; };
-    pfdCasPage = 0; o.over = pfdCasOverflow();
-    const s1 = shot(); o.p1 = { first: s1.includes('MSG 1'), hid: !s1.includes('MSG 6'), tag: s1.some(x => /CAS 1\/3/.test(x)) };
+    pfdCasPage = 0; shot(); o.over = pfdCasOverflow();
+    const per = pfdCasLines - 1, pages = Math.ceil(60 / per); o.per = per; o.pages = pages; o.lines = pfdCasLines;
+    const s1 = shot(); o.p1 = { first: s1.includes('MSG 1') && s1.includes('MSG ' + per), hid: !s1.includes('MSG ' + (per + 1)), tag: s1.some(x => x.includes('CAS 1/' + pages)) };
     pfdSkGo('TOP'); const casI = SK_MENUS.TOP.findIndex(x => x.lbl === 'CAS'); o.casOn = !SK_MENUS.TOP[casI].dim();
     pfdSkPress(casI); o.menu = skMenu;
     const dn = SK_MENUS.CAS.findIndex(x => /DN/.test(x.lbl || '')), up = SK_MENUS.CAS.findIndex(x => /UP/.test(x.lbl || ''));
-    pfdSkPress(dn); const s2 = shot(); o.p2 = { page: pfdCasPage, has6: s2.includes('MSG 6'), no1: !s2.includes('MSG 1') };
-    pfdSkPress(dn); pfdSkPress(dn); o.max = pfdCasPage;
+    pfdSkPress(dn); const s2 = shot(); o.p2 = { page: pfdCasPage, has6: s2.includes('MSG ' + (per + 1)), no1: !s2.includes('MSG 1') };
+    for (let i = 0; i < pages + 2; i++) pfdSkPress(dn); o.max = pfdCasPage;
     pfdSkPress(up); o.back = pfdCasPage;
     window.pfdMsgs = () => [{ t: 'ONE', c: '#22e022' }]; o.few = !pfdCasOverflow() && SK_MENUS.TOP[casI].dim();
     window.pfdMsgs = keep; pfdCasPage = 0; pfdSkGo('TOP');
     return o;
   });
-  t.ok(C.over && C.p1.first && C.p1.hid && C.p1.tag, 'PFD 메시지가 5줄을 넘으면 넘치는 것은 숨기고 끝에 ▲▼ CAS 1/3');
+  t.ok(C.over && C.p1.first && C.p1.hid && C.p1.tag, `PFD 메시지가 창(스톱워치 위까지 · ${C.lines}줄)을 넘으면 넘치는 것은 숨기고 끝에 ▲▼ CAS 1/${C.pages}`);
   t.ok(C.casOn && C.menu === 'CAS', '소프트키 CAS 가 살아나고, 누르면 CAS UP · CAS DN 이 뜬다');
-  t.ok(C.p2.page === 1 && C.p2.has6 && C.p2.no1 && C.max === 2 && C.back === 1, `CAS DN 으로 다음 쪽 · 마지막 쪽에서 멈춤 · CAS UP 으로 앞 쪽 (${C.max + 1}쪽)`);
+  t.ok(C.p2.page === 1 && C.p2.has6 && C.p2.no1 && C.max === C.pages - 1 && C.back === C.pages - 2, `CAS DN 으로 다음 쪽 · 마지막 쪽에서 멈춤 · CAS UP 으로 앞 쪽 (${C.max + 1}쪽)`);
   t.ok(C.few, '메시지가 적으면 CAS 는 꺼져(흐리게) 있다');
 
   // ── 교통 — 기종 · 장주 몫 · 교관 배치 · 위치 보고 ──
