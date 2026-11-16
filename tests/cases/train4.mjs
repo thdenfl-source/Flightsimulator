@@ -24,26 +24,26 @@ export async function run(page, t) {
   const T = await page.evaluate(() => {
     const o = {}; speakLog.length = 0; const sp0 = window.speak; const said = []; window.speak = x => { said.push(x); return true; };
     envSet({ traffic: 1 }); trafficStep(0.1);
-    // 정면 2NM · 같은 고도 · 마주 옴 → RA(흰수리)
-    S.lat = 37; S.lon = 126; S.alt = 2000; S.hdg = 0; S.spd = 100;
-    Object.assign(traffic[0], { lat: 37 + 1.2 / 60, lon: 126, alt: 2200, hdg: 180, spd: 120 });
+    // 정면 1.0NM · +200ft · 마주 옴(220kt — tau 16초) → RA(흰수리 · SL 3 은 RA tau 18초)
+    S.lat = 37; S.lon = 126; S.alt = 2000; S.hdg = 0; S.spd = 100; S.vs = 0;
+    Object.assign(traffic[0], { lat: 37 + 1.0 / 60, lon: 126, alt: 2200, hdg: 180, spd: 120, vs: 0 });
     tcasEval(); o.ra = { st: traffic[0].st, state: tcasState, sense: tcasRaSense };
-    Object.assign(traffic[0], { lat: 37 + 2.2 / 60, alt: 2800 }); tcasEval(); o.ta = traffic[0].st;
+    Object.assign(traffic[0], { lat: 37 + 1.4 / 60, alt: 2800 }); tcasEval(); o.ta = traffic[0].st;   // 1.4NM +800ft — tau 23초(TA 25초 · ZTHR 850ft)
     Object.assign(traffic[0], { lat: 37 + 12 / 60, alt: 6000 }); tcasEval(); o.clear = tcasState;
     o.said = said.slice(); window.speak = sp0;
     // PFD TCAS 창 — 'NO TRAFFIC' 대신 기호
-    Object.assign(traffic[0], { lat: 37 + 2 / 60, alt: 2300 }); tcasEval();
+    Object.assign(traffic[0], { lat: 37 + 1.4 / 60, alt: 2300 }); tcasEval();   // 1.4NM +300ft — TA
     const seen = [], oT = CanvasRenderingContext2D.prototype.fillText;
     CanvasRenderingContext2D.prototype.fillText = function (x, ...a) { seen.push(String(x)); return oT.call(this, x, ...a); };
     try { if (typeof skState !== 'undefined') skState.tfcMap = true; drawPfdInset({ x: 0, y: 0, w: 220, h: 220 }); } finally { CanvasRenderingContext2D.prototype.fillText = oT; if (typeof skState !== 'undefined') skState.tfcMap = false; }
     o.inset = { noTraffic: seen.includes('NO TRAFFIC'), rel: seen.some(x => /^\+0[23]$/.test(x)) };
-    o.msgs = pfdMsgs().map(m => m.t);
+    o.msgs = pfdMsgs().map(m => m.t); o.ann = typeof tcasAnn === 'function' && tcasAnn();
     envSet({ traffic: 0 }); trafficStep(0.1); o.gone = traffic.length;
     return o;
   });
-  t.ok(T.ra.st === 'RA' && T.ra.sense === -1 && T.ta === 'TA' && T.clear === 'CLEAR', `TCAS — 정면 1.2NM · +200ft RA(DESCEND) · 2.2NM +800ft TA · 멀어지면 CLEAR`);
+  t.ok(T.ra.st === 'RA' && T.ra.sense === -1 && T.ta === 'TA' && T.clear === 'CLEAR', `TCAS — 정면 1.0NM · +200ft RA(DESCEND) · 1.4NM +800ft TA · 멀어지면 CLEAR`);
   t.ok(T.said.includes('Descend, descend') && T.said.includes('Clear of conflict'), `TCAS 음성 — ${T.said.join(' · ')}`);
-  t.ok(!T.inset.noTraffic && T.inset.rel && T.msgs.some(m => /TRAFFIC|TCAS/.test(m)) && T.gone === 0, `PFD TCAS 창에 상대 고도(+03)와 기호 · PFD 메시지 TRAFFIC`);
+  t.ok(!T.inset.noTraffic && T.inset.rel && !T.msgs.some(m => /TRAFFIC|TCAS/.test(m)) && T.ann && T.ann.txt === 'TRAFFIC' && T.gone === 0, `PFD TCAS 창에 상대 고도(+03)와 기호 · TRAFFIC 은 CAS 가 아니라 PFD 알림`);
 
   // ── 교통 — 흰수리 · Bell 이 번갈아, 셋에 하나는 가까운 공항 장주비행(왼쪽 장주 · 꼭짓점을 차례로 돈다) · 3D 모형 층 ──
   const TP = await page.evaluate(() => {

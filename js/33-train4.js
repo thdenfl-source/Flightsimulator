@@ -253,33 +253,75 @@ function tcasTestStart() {
   return true;
 }
 function tcasTesting() { return !!tcasTest && performance.now() - tcasTest.t0 < 8000; }
-// 하나하나 — 거리(NM) · 상대 고도(ft) · 다가오는 빠르기(kt) · 상태(OT 다른 · PT 가까운 · TA · RA)
-let tcasState = 'CLEAR', _tcasPrev = 'CLEAR', tcasRaSense = 0;
+// ── TCAS II(GTS 8000) 판정 — KUH-1CG FLM ──
+//   감도 단계(SL) — 전파고도로 고른다. SL 2(1,000ft 아래 · RA 없음) · SL 3(1,000~2,350ft) · SL 4(그 위)
+//   (교범에 SL 별 표가 없어 GTS 8000 의 흔한 값을 바꿀 수 있게 따로 둔다 — TCAS_SL)
+//   하나하나: 수평 tau = 거리 ÷ 다가오는 빠르기 · 수직 tau = 고도 차 ÷ 고도 차가 줄어드는 빠르기
+//     RA — (수평 tau ≤ RA tau 또는 거리 ≤ DMOD) 이고 (수직 tau ≤ RA tau 또는 고도 차 ≤ ZTHR)
+//     TA — 같은 식을 TA 값으로 · PT(가까운 교통) — 6NM · ±1,200ft 안 · 나머지 OT
+//   RA 종류 — 예방(Monitor Vertical Speed: 고도 차 450ft 넘고 내 승강 200fpm 안) · 상승 · 강하(1,000ft AGL 아래는 강하 RA 없음)
+//     음성: Climb, climb · Descend, descend · 건너면 Crossing · 이미 빠르면 Increase · 뒤집히면 … NOW · 풀리면 Clear of conflict
+//   PFD — TRAFFIC 알림(TA 황 · RA 적 · 처음 5초 점멸) · 자세계 피치 띠(붉은 금지 · 초록 목표) · 승강계 띠
+const TCAS_SL = [
+  { sl: 2, lo: 0,    hi: 1000,     ra: false, taTau: 25, raTau: null, taDmod: 0.30, raDmod: null, taZ: 850, raZ: null },
+  { sl: 3, lo: 1000, hi: 2350,     ra: true,  taTau: 25, raTau: 18,   taDmod: 0.33, raDmod: 0.20, taZ: 850, raZ: 600 },
+  { sl: 4, lo: 2350, hi: Infinity, ra: true,  taTau: 35, raTau: 25,   taDmod: 0.48, raDmod: 0.35, taZ: 850, raZ: 600 },
+];
+function tcasSl() { let agl = 5000; try { agl = typeof radarAltFt === 'function' ? radarAltFt() : S.alt; } catch (e) { _swallow(e); } return TCAS_SL.find(s => agl >= s.lo && agl < s.hi) || TCAS_SL[TCAS_SL.length - 1]; }
+let tcasState = 'CLEAR', _tcasPrev = 'CLEAR', tcasRaSense = 0, tcasRaType = null, tcasRaVoice = '', tcasRaCue = null, tcasAnnT = 0;
+function _tcasRaCmd(t, ownVs, agl) {
+  const rel = t.rel, crossing = rel * ownVs > 0 && Math.abs(rel) < 300, prev = tcasRaType;
+  if (Math.abs(rel) >= 450 && Math.abs(ownVs) < 200)
+    return { type: 'MONITOR', sense: 0, voice: 'Monitor vertical speed', vsNo: rel < 0 ? [[-3000, -300]] : [[300, 3000]], vsGo: null, pNo: null, pGo: null };
+  if (rel <= 0 || agl < 1000)
+    return { type: 'CLIMB', sense: 1, voice: prev === 'DESCEND' ? 'Climb, climb NOW' : crossing ? 'Climb, crossing climb' : ownVs > 1500 ? 'Increase climb' : 'Climb, climb',
+             vsNo: [[-3000, 1400]], vsGo: [1500, 2200], pNo: [-20, 4], pGo: [5, 12] };
+  return { type: 'DESCEND', sense: -1, voice: prev === 'CLIMB' ? 'Descend, descend NOW' : crossing ? 'Descend, crossing descend' : ownVs < -1500 ? 'Increase descent' : 'Descend, descend',
+           vsNo: [[-1400, 3000]], vsGo: [-2200, -1500], pNo: [-4, 20], pGo: [-12, -5] };
+}
 function tcasEval() {
-  let worst = 'CLEAR', sense = 0;
+  const sl = tcasSl(), am = tcasActMode(), ownVs = +S.vs || 0;
+  let agl = 5000; try { agl = typeof radarAltFt === 'function' ? radarAltFt() : S.alt; } catch (e) { _swallow(e); }
+  const raOk = am === 'TA/RA' && sl.ra;
+  let worst = 'CLEAR', ras = [];
   for (const t of traffic) {
     const v = _tNE(S.lat, S.lon, t.lat, t.lon), r = Math.hypot(v.n, v.e), rel = t.alt - S.alt;
     const h = t.hdg * Math.PI / 180, oh = S.hdg * Math.PI / 180;
     const rv = { n: t.spd * Math.cos(h) - (S.spd || 0) * Math.cos(oh), e: t.spd * Math.sin(h) - (S.spd || 0) * Math.sin(oh) };
     const close = -(v.n * rv.n + v.e * rv.e) / Math.max(0.01, r);     // kt(+ 면 다가온다)
-    const tau = close > 1 ? r / close * 3600 : 999;
-    Object.assign(t, { r, rel, close, tau });
-    const C = TUNE.tcas;
-    t.st = (r < C.raNm && Math.abs(rel) < C.raFt && tau < C.raTau) ? 'RA' : (r < C.taNm && Math.abs(rel) < C.taFt && (tau < C.taTau || r < C.taNear)) ? 'TA' : (r < C.taNm && Math.abs(rel) < C.taFt) ? 'PT' : 'OT';
-    if (t.st === 'RA') { worst = 'RA'; sense = rel <= 0 ? 1 : -1; } else if (t.st === 'TA' && worst !== 'RA') worst = 'TA';
+    const tau = close > 1 ? r / close * 3600 : Infinity;
+    const rvs = (t.vs || 0) - ownVs, tauV = rel * rvs < 0 ? Math.abs(rel) / Math.max(1, Math.abs(rvs)) * 60 : Infinity;
+    Object.assign(t, { r, rel, close, tau, tauV });
+    const hit = (T, D, Z) => (tau <= T || r <= D) && (tauV <= T || Math.abs(rel) <= Z);
+    t.st = raOk && hit(sl.raTau, sl.raDmod, sl.raZ) ? 'RA' : hit(sl.taTau, sl.taDmod, sl.taZ) ? 'TA' : (r <= 6 && Math.abs(rel) <= 1200) ? 'PT' : 'OT';
+    if (t.st === 'RA') { worst = 'RA'; ras.push(t); } else if (t.st === 'TA' && worst !== 'RA') worst = 'TA';
   }
-  const am = tcasActMode();                                        // XPDR/TCAS 모드(CDU TCAS) — 대기면 경보 없음 · TA Only(Bell · Auto 저고도)면 RA 를 TA 로
-  if (am === 'STBY') worst = 'CLEAR';
-  else if (am === 'TA' && worst === 'RA') worst = 'TA';
-  tcasState = worst; tcasRaSense = worst === 'RA' ? sense : 0;
+  if (am === 'STBY') { worst = 'CLEAR'; ras = []; traffic.forEach(t => { if (t.st === 'RA' || t.st === 'TA') t.st = 'OT'; }); }
+  const say = (typeof speak === 'function') ? speak : () => {};
+  let cmd = null;
+  if (worst === 'RA') cmd = _tcasRaCmd(ras.reduce((a, b) => (a.r <= b.r ? a : b)), ownVs, agl);
+  const prevVoice = tcasRaVoice;
+  tcasState = worst;
+  tcasRaSense = cmd ? cmd.sense : 0;
+  tcasRaCue = cmd;
+  if (worst !== _tcasPrev && worst !== 'CLEAR') tcasAnnT = performance.now();      // TRAFFIC 알림 — 처음 5초 점멸
+  if (cmd) {
+    if (cmd.voice !== prevVoice) say(cmd.voice);
+    tcasRaType = cmd.type; tcasRaVoice = cmd.voice;
+  } else {
+    if (_tcasPrev === 'RA') say('Clear of conflict');            // RA 가 풀리면(TA 로 내려와도)
+    else if (worst === 'TA' && _tcasPrev === 'CLEAR') say('Traffic, traffic');
+    tcasRaType = null; tcasRaVoice = '';
+  }
   if (worst !== _tcasPrev) {
-    const say = (typeof speak === 'function') ? speak : () => {};
-    if (worst === 'TA' && _tcasPrev === 'CLEAR') say('Traffic, traffic');
-    else if (worst === 'RA') say(sense > 0 ? 'Climb, climb' : 'Descend, descend');
-    else if (_tcasPrev === 'RA') say('Clear of conflict');            // RA 가 풀리면(TA 로 내려와도)
-    try { if (typeof fdrNote === 'function' && worst !== 'CLEAR') fdrNote(`TCAS ${worst}${worst === 'RA' ? (sense > 0 ? ' CLIMB' : ' DESCEND') : ''}`, worst === 'RA' ? 'err' : 'warn'); } catch (e) { _swallow(e); }
+    try { if (typeof fdrNote === 'function' && worst !== 'CLEAR') fdrNote(`TCAS ${worst}${cmd ? ' ' + cmd.type : ''}`, worst === 'RA' ? 'err' : 'warn'); } catch (e) { _swallow(e); }
     _tcasPrev = worst;
   }
+}
+// PFD TRAFFIC 알림 — { txt, col, blink } (RA 와 TA 가 함께면 RA 만)
+function tcasAnn() {
+  if (tcasState === 'CLEAR') return null;
+  return { txt: 'TRAFFIC', col: tcasState === 'RA' ? '#ff3030' : '#ffb000', blink: performance.now() - tcasAnnT < 5000 };
 }
 function tcasTargets() { return traffic; }
 // PFD TCAS 창에 그린다(03-pfd.js drawPfdInset) — 기수 위 · 6NM 고리

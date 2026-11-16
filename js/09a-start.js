@@ -73,6 +73,7 @@ function startStateApply() {
   try {
     if (typeof c5 !== 'undefined' && !c5.on) { c5.on = true; c5.page = 'HOME'; _c5Save(); c5Render(); }
   } catch (e) { _swallow(e); }
+  try { if (typeof fadecSync === 'function') fadecSync(); } catch (e) { _swallow(e); }   // 시작 상태는 이미 돌고 있다(시동 절차 없이)
   try { if (typeof simModeOn !== 'undefined' && simModeOn && typeof simEngApply === 'function') simEngApply(true); } catch (e) { _swallow(e); }
 }
 // 그 공항 활주로 가운데 지면에 활주로 방향으로 세운다 — 출발 공항을 고를 때(AIRPORTS)
