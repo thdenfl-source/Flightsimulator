@@ -735,6 +735,8 @@ function _sysLeftStrip(g, F) {
     [[0.70, '#ff3030'], [0.66, '#ffcc00']]);
   // 시동 중 — NG 막대 바깥쪽에 세로로 START(1번 왼쪽 · 2번 오른쪽)
   try { if (typeof engStarting === 'function') { if (engStarting(1)) drawStartVert(g, 125, 70, 16, 13); if (engStarting(2)) drawStartVert(g, 207, 70, 16, 13); } } catch (e) { _swallow(e); }
+  // OEI — 살아 있는 엔진의 NG 막대 바깥쪽에 정격 남은 시간(그 범위의 출력을 쓸 때만 줄어든다)
+  try { if (typeof simOeiInfo === 'function') { const o = simOeiInfo(); if (o) drawOeiVert(g, o.live === 1 ? 125 : 207, 60, 18, 11); } } catch (e) { _swallow(e); }
   // EOT · EOP · MGB
   const eot = D.eot, eop = D.eop;
   _sysBox(g, 5, 188, 68, 152, 'EOT', '°C');

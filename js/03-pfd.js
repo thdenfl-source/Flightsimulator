@@ -336,6 +336,19 @@ function drawStartVert(g, cx, y0, step, fs) {
   'START'.split('').forEach((c, i) => g.fillText(c, cx, y0 + fs + i * step));
   g.restore();
 }
+// OEI 정격 남은 시간 — 살아 있는 엔진의 NG 옆에 세로로(OEI · HI/LO · 분:초, 다 쓰면 CONT)
+//   그 범위의 출력을 쓰는 동안(시간이 줄어드는 중) 황색 · 아니면 흰색
+function drawOeiVert(g, cx, y0, step, fs) {
+  let o = null; try { if (typeof simOeiInfo === 'function') o = simOeiInfo(); } catch (e) { _swallow(e); }
+  if (!o) return null;
+  const t = `${Math.floor(o.left / 60)}:${String(Math.floor(o.left % 60)).padStart(2, '0')}`;
+  const lines = o.cont ? ['OEI', 'CONT'] : ['OEI', o.mode === 'LOW' ? 'LO' : 'HI', t];
+  g.save(); g.font = `bold ${fs}px Helvetica Neue, Arial, sans-serif`; g.textAlign = 'center'; g.textBaseline = 'alphabetic';
+  g.fillStyle = o.cont ? '#ffffff' : o.band ? '#ffb000' : '#ffffff';
+  lines.forEach((s, i) => g.fillText(s, cx, y0 + fs + i * step));
+  g.restore();
+  return o;
+}
 function drawEnginePanel(x, y, w, h) {
   if (!(w > 60) || !(h > 80)) return;
   const P = engParams();
@@ -357,7 +370,8 @@ function drawEnginePanel(x, y, w, h) {
   num(x + m * 2 + half, 'NG %', 'NG1', 'NG2', P.e1.ng, P.e2.ng, 1);
   { const bx = x + m * 2 + half, fs = Math.max(6, Math.min(8, (th - 6) / 5.6)), st = fs * 1.1;   // 시동 중 — NG 숫자 옆 세로 START
     if (engStarting(1)) drawStartVert(ctx, bx + half / 2 + (engStarting(2) ? -3 : 1), y + 11, st, fs);   // NG1 숫자와 NG2 숫자 사이
-    if (engStarting(2)) drawStartVert(ctx, bx + half / 2 + (engStarting(1) ? 5 : 1), y + 11, st, fs); }
+    if (engStarting(2)) drawStartVert(ctx, bx + half / 2 + (engStarting(1) ? 5 : 1), y + 11, st, fs);
+    try { if (typeof simOeiInfo === 'function' && simOeiInfo()) drawOeiVert(ctx, bx + half / 2 + 1, y + 11, st * 1.4, fs); } catch (e) { _swallow(e); } }   // OEI 남은 시간
   // 아래: TQ(엔진마다) · NP1/NR/NP2 막대
   const by = y + 9 + th + 12, bh = h - (by - y) - 4;
   drawTqGauge(x + m, by, half, bh, [P.e1.tq, P.e2.tq]);
@@ -1510,8 +1524,7 @@ function drawAI(x, y, w, h) {
     try {
       if (typeof simEng !== 'undefined' && simModeOn) {
         if (simEng === 1) {
-          const left = Math.max(0, (typeof simOeiLim === 'function' ? simOeiLim() : OEI_25_SEC) - simOeiT);
-          warns.push([left > 0 ? `OEI ${typeof simOeiMode !== 'undefined' && simOeiMode === 'LOW' ? 'LOW 10MIN' : 'HI 2.5MIN'} ${Math.floor(left / 60)}:${String(Math.floor(left % 60)).padStart(2, '0')}` : 'OEI CONT', '#ffb000']);
+          // OEI 정격 남은 시간은 SYSTEM 창 NG 옆(18-system.js · drawOeiVert)
           if (simEngTrng) warns.push([`ENG ${simEngFail} TRNG`, '#00e5ff']);   // 상부 콘솔 TRAINING 으로 든 OEI 훈련
         } else if (simEng === 0) warns.push([simEngSt[1] === 'OFF' && simEngSt[2] === 'OFF' ? 'ENG OFF' : 'ENG IDLE', '#ff3030']);
         if (simVrsOn()) warns.push(['VRS', '#ff3030']);

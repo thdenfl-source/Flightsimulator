@@ -554,6 +554,17 @@ function simOeiTqLim() {
   return m + (simOeiMode === 'LOW' ? OEI_LO_ADD : OEI_HI_ADD);
 }
 let simEng = 2, simOeiT = 0, simOeiMode = 'HI';
+// OEI 정격 시간은 그 범위의 출력(연속 정격 MTA(30) 위 · 2.5분/10분 정격 띠)을 쓰는 동안만 줄어든다
+function simOeiInBand() {
+  let tq = 0; try { tq = tqShown(); } catch (e) { _swallow(e); }
+  return tq > mtaNow() + 0.5;
+}
+// SYSTEM 창 NG 옆 OEI 표시(18-system.js · 03-pfd.js drawOeiVert) — 한 엔진일 때만
+function simOeiInfo() {
+  if (!simModeOn || simEng !== 1) return null;
+  const left = Math.max(0, simOeiLim() - simOeiT);
+  return { live: simEngFail === 1 ? 2 : 1, mode: simOeiMode, left, band: simOeiInBand(), cont: left <= 0 };
+}
 function simOeiLim() { return simOeiMode === 'LOW' ? OEI_LO_SEC : OEI_25_SEC; }
 function simOeiToggle() {
   if (simEng !== 1) { try { uiToast('OEI 출력 전환은 한 엔진 상황(OEI)에서만 씁니다', 'warn', 2500); } catch (e) { _swallow(e); } return false; }
@@ -2087,7 +2098,7 @@ function simFly(dt) {
   const trTq = onGnd && S.tq < 5 ? 0 : simTrTq(a, simAirspeed());
   // ── 엔진이 낼 수 있는 토크(그날의 MTA · OEI · IDLE) ── 그 이상은 내지 못하고, 모자란 몫은 로터 회전(NR)이 낸다
   // (AFCS·레버 없음일 때는 낼 수 있는 만큼만 건다 — 넘겨 당기는 손이 없다)
-  if (simEng === 1) simOeiT += dt;
+  if (simEng === 1 && simOeiInBand()) simOeiT += dt;   // 그 범위의 출력을 쓸 때만 시간이 줄어든다
   const avail = simEngAvail();
   let demand = Math.max(0, tTgt + trTq);
   if (!cfg || vert) demand = Math.min(demand, avail);
