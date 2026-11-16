@@ -202,4 +202,62 @@ export async function run(page, t) {
   });
   t.ok(P.n === 3 && P.kinds === 2 && P.dmin > 100 && P.layer, `공항 주기 헬기 — 활주로 옆 주기장에 셋(흰수리 · Bell · 활주로 가운데에서 ${Math.round(P.dmin)}m 밖)`);
   t.ok(P.off, 'ENV 공항 주기 헬기 없음이면 그리지 않는다');
+
+  // ── CDU TCAS(KUH-1CG FLM) — 홈의 Checklist 자리에 TCAS · Checklist 는 Aircraft Systems 안 ──
+  const TC = await page.evaluate(async () => {
+    const w = ms => new Promise(r => setTimeout(r, ms));
+    const ttl = () => document.getElementById('modeTitle').textContent.trim();
+    const o = {}, keep = JSON.stringify(tcasCfg);
+    CDU_ACT.switchMode('HOME'); await w(60);
+    const labels = [...document.querySelectorAll('#cdu-wrap .home-icon-wrapper .icon-label')].map(e => e.textContent.trim());
+    o.home = { tcas: labels.includes('TCAS'), check: labels.includes('Checklist') };
+    // Checklist — Aircraft Systems 안 · Back 은 Aircraft Systems 로
+    CDU_ACT.switchMode('ACSYS'); await w(60);
+    const ck = [...document.querySelectorAll('#cdu-wrap [data-act="acSysOpen"]')].find(e => /Checklist/.test(e.textContent));
+    o.acsysCheck = !!ck; if (ck) { ck.click(); await w(80); } o.clTitle = window.currentMode;
+    [...document.querySelectorAll('#cdu-wrap .nav-btn')].find(b => /Back/.test(b.textContent)).click(); await w(60); o.clBack = window.currentMode;
+    // TCAS 화면 — Traffic Settings 세 칸
+    document.querySelector('#cdu-wrap [data-act="switchMode"][data-arg=\'["TCAS"]\']')?.click(); CDU_ACT.switchMode('TCAS'); await w(60);
+    o.title = ttl(); o.heads = [...document.querySelectorAll('#cdu-wrap .tcas-hd')].map(e => e.textContent.trim()).join('|');
+    o.btns = [...document.querySelectorAll('#cdu-wrap .tcas-btn')].map(e => e.firstChild.textContent.trim());
+    // 모드 — Standby 면 대기(경보 · 시현 없음) · TA Only 면 RA 를 TA 로 · Auto 는 AGL 1,000ft 아래 TA Only
+    const click = (act, arg) => { const e = [...document.querySelectorAll(`#cdu-wrap [data-act="${act}"]`)].find(x => !arg || x.dataset.arg === JSON.stringify(arg)); if (e) e.click(); return !!e; };
+    S.lat = 37; S.lon = 126; S.alt = 3000; S.hdg = 0; S.spd = 100;
+    envSet({ traffic: 0 }); trafficStep(0); trafficAdd({ brg: 0, nm: 1.2, rel: 200, hdg: 180, ac: 'kuh', spd: 120 });
+    click('tcasCduMode', ['Standby']); await w(30); tcasEval(); o.stby = { st: tcasState, show: tcasShow(traffic[0]), xpdr: tcasCfg.mode };
+    click('tcasCduMode', ['TA Only']); await w(30); tcasEval(); o.taOnly = tcasState;
+    click('tcasCduMode', ['Auto']); await w(30); tcasEval(); o.autoHigh = tcasState;
+    const ra = window.radarAltFt; window.radarAltFt = () => 600; tcasEval(); o.autoLow = tcasState; window.radarAltFt = ra;
+    // 고도 표시 · 범위
+    click('tcasCduSet', ['alt', 'Absolute']); await w(30); o.abs = tcasAltTag(traffic[0]);
+    click('tcasCduSet', ['alt', 'Relative']); await w(30); o.rel = tcasAltTag(traffic[0]);
+    Object.assign(traffic[0], { lat: 37 + 5 / 60, alt: S.alt + 5000, hdg: 0 }); tcasEval();
+    o.rangeN = tcasShow(traffic[0]); click('tcasCduCycle', ['range']); await w(30); o.rangeName = tcasCfg.range; o.rangeA = tcasShow(traffic[0]);
+    tcasCfg.range = 'Normal';
+    // Motion Vector · VECT · System Test
+    click('tcasCduSet', ['motion', true]); await w(30); o.motion = tcasCfg.motion; click('tcasCduCycle', ['vect']); await w(30); o.vect = tcasCfg.vect;
+    const said = [], sp = window.speak; window.speak = x => { said.push(x); return true; };
+    click('tcasCduTest'); await w(50); o.testing = tcasTesting();
+    const seen = [], f = CanvasRenderingContext2D.prototype.fillText;
+    CanvasRenderingContext2D.prototype.fillText = function (x, ...a) { seen.push(String(x)); return f.call(this, x, ...a); };
+    try { skState.tfcMap = true; drawPfdInset({ x: 0, y: 0, w: 240, h: 240 }); } finally { CanvasRenderingContext2D.prototype.fillText = f; }
+    o.testDraw = ['TCAS TEST', '+10', '+02', '−02'].every(x => seen.includes(x)) && seen.some(x => /TCAS : TEST/.test(x));
+    tcasTest.t0 -= 8100; await w(50);
+    // Transponder 화면
+    CDU_ACT.switchMode('TCAS_XPDR'); await w(40); o.xpdr = { title: ttl(), txt: document.getElementById('cdu-wrap').textContent.includes('KUHC 123') };
+    window.speak = sp;
+    Object.assign(tcasCfg, JSON.parse(keep)); tcasCfgSave(); trafficClear(); CDU_ACT.switchMode('HOME');
+    return o;
+  });
+  t.ok(TC.home.tcas && !TC.home.check, 'CDU 홈 — Checklist 자리에 TCAS');
+  t.ok(TC.acsysCheck && TC.clTitle === 'CHECKLIST' && TC.clBack === 'ACSYS', 'Checklist 는 Aircraft Systems 안 — Back 은 Aircraft Systems 로');
+  t.ok(TC.title === 'Traffic Settings' && TC.heads === 'XPDR/TCAS MODE|Altitude Display|ADS-B', `TCAS — Traffic Settings 세 칸 (${TC.heads})`);
+  t.ok(['Auto', 'TA Only', 'ALT Reporting', 'On', 'Standby', 'Relative', 'Absolute', 'Altitude Range', 'Traffic Display', 'Motion Vector', 'VECT Duration'].every(x => TC.btns.includes(x)), `TCAS 단추 (${TC.btns.join(' · ')})`);
+  t.ok(TC.stby.st === 'CLEAR' && !TC.stby.show && TC.stby.xpdr === 'Standby', 'Standby — TCAS 대기(교통정보 · TA/RA 없음) · 트랜스폰더 모드도 같이');
+  t.ok(TC.taOnly === 'TA' && TC.autoHigh === 'RA' && TC.autoLow === 'TA', `TA Only 는 RA 대신 TA · Auto 는 AGL 1,000ft 위 RA(${TC.autoHigh}) · 아래 TA(${TC.autoLow})`);
+  t.ok(TC.abs === '032' && TC.rel === '+02', `고도 표시 — Absolute ${TC.abs} · Relative ${TC.rel}`);
+  t.ok(!TC.rangeN && TC.rangeName === 'Above' && TC.rangeA, '고도 범위 — Normal(±2,700)에서는 +5,000ft 비위협 교통을 숨기고 Above(+9,000)에서는 보인다');
+  t.ok(TC.motion === true && TC.vect === 120, 'ADS-B — Motion Vector 켬 · VECT Duration 1분 → 2분');
+  t.ok(TC.testing && TC.testDraw, 'System Test — PFD 교통 지도에 시험 그림(+10 · +02 RA · −02 TA) · TCAS : TEST');
+  t.ok(TC.xpdr.title === 'Transponder' && TC.xpdr.txt, 'Transponder 화면 — XPDR/TCAS MODE · Active · ADS-B TX · Flight ID KUHC 123 · Code');
 }

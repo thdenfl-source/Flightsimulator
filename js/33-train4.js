@@ -202,6 +202,57 @@ function trafficStep(dtSim) {
   });
   tcasEval();
 }
+// ── TCAS II 설정(KUH-1CG FLM · CDU Home > TCAS — Traffic Settings · Transponder) ──
+//   XPDR/TCAS 모드: Auto(지상 · AGL 1,000ft 아래 TA Only · 그 위 TA/RA) · TA Only · Altitude Reporting · On · Standby(뒤 셋은 TCAS 대기 —
+//     교통정보를 시현하지 않고 TA · RA 를 내지 않는다)
+//   고도 표시: Relative(자기 기준 ±백 ft) · Absolute(침입기 고도 백 ft)
+//   고도 범위: Normal ±2,700 · Above +9,000/−2,700 · Below +2,700/−9,000 · Unrestricted ±9,900(비위협 · 근접 교통만 거른다 —
+//     범위 밖이어도 TA · RA 는 계속 시현)
+//   ADS-B: Traffic Display(끄면 비위협 교통을 숨긴다) · Motion Vector(켜면 VECT Duration 동안 갈 자리까지 선) · VECT Duration 30초 · 1 · 2 · 5분
+//   System Test: 8초 동안 시험 그림(+10 비위협 · +02 RA · −02 TA · 근접) 뒤 "TCAS two system test passed"
+const tcasCfg = { mode: 'Auto', alt: 'Relative', range: 'Normal', adsb: true, motion: false, vect: 60 };
+try { Object.assign(tcasCfg, JSON.parse(localStorage.getItem('tcasCfg') || '{}')); } catch (e) { _swallow(e); }
+function tcasCfgSave() { try { localStorage.setItem('tcasCfg', JSON.stringify(tcasCfg)); } catch (e) { _swallow(e); } }
+const TCAS_RANGE = { Normal: [2700, 2700], Above: [9000, 2700], Below: [2700, 9000], Unrestricted: [9900, 9900] };
+const TCAS_RANGES = ['Normal', 'Above', 'Below', 'Unrestricted'], TCAS_VECTS = [30, 60, 120, 300];
+const TCAS_STBY_MODES = ['Standby', 'On', 'Altitude Reporting'];
+// 지금 TCAS 가 실제로 하는 일 — 'STBY'(대기) · 'TA'(TA Only) · 'TA/RA'
+function tcasActMode() {
+  const m = tcasCfg.mode;
+  if (TCAS_STBY_MODES.includes(m)) return 'STBY';
+  const b2 = typeof acB206 === 'function' && acB206();
+  if (m === 'TA Only' || b2) return 'TA';                          // Bell 은 RA 가 없다
+  let agl = 5000; try { agl = typeof radarAltFt === 'function' ? radarAltFt() : S.alt; } catch (e) { _swallow(e); }
+  return agl < 1000 ? 'TA' : 'TA/RA';                              // Auto — 지상 · AGL 1,000ft 아래는 TA Only
+}
+// 이 교통을 그리나 — 대기면 아무것도 · TA · RA 는 늘 · 나머지는 ADS-B Traffic Display · 고도 범위로 거른다
+function tcasShow(t) {
+  if (tcasActMode() === 'STBY') return false;
+  if (t.st === 'TA' || t.st === 'RA') return true;
+  if (!tcasCfg.adsb && t.st === 'OT') return false;
+  const rel = (t.alt || 0) - S.alt, R = TCAS_RANGE[tcasCfg.range] || TCAS_RANGE.Normal;
+  return rel <= R[0] && rel >= -R[1];
+}
+// 고도 꼬리표 — Relative: +02 · −05(백 ft) · Absolute: 045(그 교통의 고도 백 ft)
+function tcasAltTag(t) {
+  if (tcasCfg.alt === 'Absolute') return String(Math.max(0, Math.round((t.alt || 0) / 100))).padStart(3, '0');
+  const rel = Math.round(((t.alt || 0) - S.alt) / 100);
+  return (rel >= 0 ? '+' : '−') + String(Math.abs(rel)).padStart(2, '0');
+}
+function tcasSetMode(m) { tcasCfg.mode = m; tcasCfgSave(); try { tcasEval(); } catch (e) { _swallow(e); } try { if (typeof fdrNote === 'function') fdrNote(`XPDR/TCAS ${m}`); } catch (e) { _swallow(e); } }
+function tcasSet(k, v) { tcasCfg[k] = v; tcasCfgSave(); }
+function tcasCycle(k) { const L = k === 'range' ? TCAS_RANGES : TCAS_VECTS, i = L.indexOf(tcasCfg[k]); tcasCfg[k] = L[(i + 1) % L.length]; tcasCfgSave(); }
+// TCAS II System Test — 8초 시험 그림 · 끝나면 음성(통과). 대기 모드여도 시험은 한다
+let tcasTest = null;
+function tcasTestStart() {
+  if (tcasTest && performance.now() - tcasTest.t0 < 8000) return false;
+  tcasTest = { t0: performance.now(), ok: null };
+  try { if (typeof fdrNote === 'function') fdrNote('TCAS II 시스템 시험'); } catch (e) { _swallow(e); }
+  setTimeout(() => { if (!tcasTest) return; tcasTest.ok = true; try { if (typeof speak === 'function') speak('TCAS two system test passed'); } catch (e) { _swallow(e); } }, 8000);
+  try { if (typeof skState !== 'undefined' && !skState.tfcMap) { skState.tfcMap = true; if (typeof _skSave === 'function') _skSave(); } } catch (e) { _swallow(e); }   // PFD 교통 지도로
+  return true;
+}
+function tcasTesting() { return !!tcasTest && performance.now() - tcasTest.t0 < 8000; }
 // 하나하나 — 거리(NM) · 상대 고도(ft) · 다가오는 빠르기(kt) · 상태(OT 다른 · PT 가까운 · TA · RA)
 let tcasState = 'CLEAR', _tcasPrev = 'CLEAR', tcasRaSense = 0;
 function tcasEval() {
@@ -217,8 +268,9 @@ function tcasEval() {
     t.st = (r < C.raNm && Math.abs(rel) < C.raFt && tau < C.raTau) ? 'RA' : (r < C.taNm && Math.abs(rel) < C.taFt && (tau < C.taTau || r < C.taNear)) ? 'TA' : (r < C.taNm && Math.abs(rel) < C.taFt) ? 'PT' : 'OT';
     if (t.st === 'RA') { worst = 'RA'; sense = rel <= 0 ? 1 : -1; } else if (t.st === 'TA' && worst !== 'RA') worst = 'TA';
   }
-  const b2 = typeof acB206 === 'function' && acB206();
-  if (b2 && worst === 'RA') worst = 'TA';                           // Bell 은 RA 가 없다(TA 만)
+  const am = tcasActMode();                                        // XPDR/TCAS 모드(CDU TCAS) — 대기면 경보 없음 · TA Only(Bell · Auto 저고도)면 RA 를 TA 로
+  if (am === 'STBY') worst = 'CLEAR';
+  else if (am === 'TA' && worst === 'RA') worst = 'TA';
   tcasState = worst; tcasRaSense = worst === 'RA' ? sense : 0;
   if (worst !== _tcasPrev) {
     const say = (typeof speak === 'function') ? speak : () => {};
@@ -233,10 +285,17 @@ function tcasTargets() { return traffic; }
 // PFD TCAS 창에 그린다(03-pfd.js drawPfdInset) — 기수 위 · 6NM 고리
 function tcasDrawInset(g, cx, cy, r) {
   const hd = (S.hdg || 0) * Math.PI / 180;
+  if (tcasTesting()) { tcasDrawTest(g, cx, cy, r); return; }
   for (const t of traffic) {
-    if (t.r > 6.5) continue;
+    if (t.r > 6.5 || !tcasShow(t)) continue;
     const v = _tNE(S.lat, S.lon, t.lat, t.lon), x = v.e * Math.cos(hd) - v.n * Math.sin(hd), y = v.e * Math.sin(hd) + v.n * Math.cos(hd);
     const px = cx + x / 6 * r, py = cy - y / 6 * r, s = 6;
+    // Motion Vector — VECT Duration 동안 갈 자리까지(땅에 대한 움직임 · 기수 위)
+    if (tcasCfg.motion) {
+      const d = (t.spd || 0) * tcasCfg.vect / 3600, th = (t.hdg || 0) * Math.PI / 180;
+      const vx = d * Math.sin(th), vy = d * Math.cos(th), mx = vx * Math.cos(hd) - vy * Math.sin(hd), my = vx * Math.sin(hd) + vy * Math.cos(hd);
+      g.strokeStyle = '#ffffff'; g.lineWidth = 1; g.beginPath(); g.moveTo(px, py); g.lineTo(px + mx / 6 * r, py - my / 6 * r); g.stroke();
+    }
     const col = t.st === 'RA' ? '#ff3030' : t.st === 'TA' ? '#ffb000' : '#ffffff';
     g.fillStyle = col; g.strokeStyle = col; g.lineWidth = 1.5; g.beginPath();
     if (t.st === 'RA') g.rect(px - s, py - s, s * 2, s * 2);
@@ -244,18 +303,33 @@ function tcasDrawInset(g, cx, cy, r) {
     else { g.moveTo(px, py - s); g.lineTo(px + s, py); g.lineTo(px, py + s); g.lineTo(px - s, py); g.closePath(); }
     if (t.st === 'OT') g.stroke(); else g.fill();
     const rel = Math.round(t.rel / 100);
-    g.font = 'bold 10px Arial'; g.textAlign = 'center'; g.fillText((rel >= 0 ? '+' : '−') + String(Math.abs(rel)).padStart(2, '0'), px, rel >= 0 ? py - s - 3 : py + s + 10);
+    g.font = 'bold 10px Arial'; g.textAlign = 'center'; g.fillText(tcasAltTag(t), px, rel >= 0 ? py - s - 3 : py + s + 10);
   }
+}
+// System Test 그림(KUH-1CG FLM 그림 8) — 오른쪽 위 +10 비위협(빈 마름모) · 오른쪽 +02 RA(빨강 네모) · 왼쪽 −02 TA(노랑 동그라미) · 근접(찬 마름모)
+function tcasDrawTest(g, cx, cy, r) {
+  const at = (bx, by) => [cx + bx * r, cy - by * r];
+  const sym = (k, [px, py], tag, up) => {
+    const s = 7, col = k === 'RA' ? '#ff3030' : k === 'TA' ? '#ffd23a' : '#ffffff';
+    g.fillStyle = col; g.strokeStyle = col; g.lineWidth = 1.5; g.beginPath();
+    if (k === 'RA') g.rect(px - s, py - s, s * 2, s * 2); else if (k === 'TA') g.arc(px, py, s, 0, 7);
+    else { g.moveTo(px, py - s); g.lineTo(px + s, py); g.lineTo(px, py + s); g.lineTo(px - s, py); g.closePath(); }
+    if (k === 'OT') g.stroke(); else g.fill();
+    g.font = 'bold 11px Arial'; g.textAlign = 'center'; g.fillText(tag, px, up ? py - s - 3 : py + s + 11);
+  };
+  sym('OT', at(0.42, 0.55), '+10', true); sym('RA', at(0.42, -0.05), '+02', true); sym('TA', at(-0.42, -0.05), '−02', false); sym('PT', at(0.18, 0.34), '+05', true);
+  g.fillStyle = '#ffffff'; g.font = 'bold 11px Arial'; g.textAlign = 'center'; g.fillText('TCAS TEST', cx, cy + r * 0.55);
 }
 // 지도 표식
 const _tfcMk = new Map();
 function trafficMapSync() {
   if (typeof L === 'undefined' || typeof leafMap === 'undefined') return;
-  const live = new Set(traffic.map(t => t.id));
+  const shown = traffic.filter(tcasShow);                       // XPDR/TCAS 모드 · 고도 범위(CDU TCAS)를 따른다
+  const live = new Set(shown.map(t => t.id));
   for (const [id, m] of _tfcMk) if (!live.has(id)) { leafMap.removeLayer(m); _tfcMk.delete(id); }
-  for (const t of traffic) {
-    const col = t.st === 'RA' ? '#ff3030' : t.st === 'TA' ? '#ffb000' : '#ffffff', rel = Math.round(t.rel / 100);
-    const html = `<div style="color:${col};font:bold 11px Arial;transform:translate(-50%,-50%);white-space:nowrap;text-shadow:0 0 2px #000">◆ ${(rel >= 0 ? '+' : '−') + String(Math.abs(rel)).padStart(2, '0')}</div>`;
+  for (const t of shown) {
+    const col = t.st === 'RA' ? '#ff3030' : t.st === 'TA' ? '#ffb000' : '#ffffff';
+    const html = `<div style="color:${col};font:bold 11px Arial;transform:translate(-50%,-50%);white-space:nowrap;text-shadow:0 0 2px #000">◆ ${tcasAltTag(t)}</div>`;
     let m = _tfcMk.get(t.id);
     if (!m) { m = L.marker([t.lat, t.lon], { icon: L.divIcon({ className: 'tfc-mk', html, iconSize: [0, 0] }), interactive: false }).addTo(leafMap); _tfcMk.set(t.id, m); m._h = html; }
     else { m.setLatLng([t.lat, t.lon]); if (m._h !== html) { m.setIcon(L.divIcon({ className: 'tfc-mk', html, iconSize: [0, 0] })); m._h = html; } }

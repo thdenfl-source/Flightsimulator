@@ -31,7 +31,7 @@
         nav1: { act: "117.80", stb: "113.00", id: "TOP" }, nav2: { act: "115.50", stb: "113.25", id: "STJ" }
     };
     
-    let xpdrState = { mode: 'Auto', code: '1234', active: 'XPDR2', adsb: true, flightId: 'TERRY' };
+    let xpdrState = { mode: 'Auto', code: '1234', active: 'XPDR1', adsb: true, flightId: 'KUHC 123' };
     let hfState = { tuning: 'Simplex', emission: 'LSB V', sql: 'SQ3', pwr: 'High' };
     let utilTab    = 'MENU'; // 현재 페이지: MENU | DIST | COORD | WEIGHT | PRESS | FUEL | DENSALT
     let utilActive = 'm';    // focused field key for numpad input
@@ -541,8 +541,11 @@
     // ── Aircraft Systems 묶음 ── 홈의 'Aircraft Systems' 를 누르면 계통 화면 아홉 개로 가는 버튼이 나온다.
     // 각 화면은 아직 비어 있다(기능은 차차 넣는다) — renderAcSysPage 가 제목만 띄우고 Back 은 Aircraft Systems 로.
     const acSysGroupBtn = { id: 'acsys', text: 'Aircraft<br>Systems', icon: '<svg viewBox="0 16 100 60"><defs><linearGradient id="ag-acs" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f4f6f8"/><stop offset=".55" stop-color="#aab3bc"/><stop offset="1" stop-color="#5d6772"/></linearGradient></defs><g transform="rotate(-10 50 48)"><path d="M74 40 L84 37 Q92 34 94 26 L99 28 Q97 40 86 46 L86 52 L74 56 Z" fill="url(#ag-acs)" stroke="#3e464e" stroke-width="1.6" stroke-linejoin="round"/><path d="M14 38 Q9 48 14 58 L76 58 L76 38 Z" fill="url(#ag-acs)" stroke="#3e464e" stroke-width="1.8" stroke-linejoin="round"/><ellipse cx="14" cy="48" rx="4" ry="10" fill="#d3d9de" stroke="#3e464e" stroke-width="1.4"/><rect x="19" y="41" width="55" height="15" rx="1.5" fill="#15191e" stroke="#3e464e" stroke-width="1.2"/><rect x="21.0" y="43" width="4" height="11" rx=".8" fill="#2fd23a"/><rect x="26.2" y="43" width="4" height="11" rx=".8" fill="#2fd23a"/><rect x="31.4" y="43" width="4" height="11" rx=".8" fill="#2fd23a"/><rect x="36.6" y="43" width="4" height="11" rx=".8" fill="#2fd23a"/><rect x="41.8" y="43" width="4" height="11" rx=".8" fill="#2fd23a"/><rect x="47.0" y="43" width="4" height="11" rx=".8" fill="#2fd23a"/><rect x="52.2" y="43" width="4" height="11" rx=".8" fill="#2fd23a"/><rect x="57.4" y="43" width="4" height="11" rx=".8" fill="#2fd23a"/><rect x="62.6" y="43" width="4" height="11" rx=".8" fill="#2fd23a"/><rect x="67.8" y="43" width="4" height="11" rx=".8" fill="#2fd23a"/></g></svg>' };
+    // TCAS — 홈의 Checklist 자리(체크리스트는 Aircraft Systems 안으로). 그림은 실기 CDU 'Traffic' 단추(마름모 · +20 ↑ · 빈 마름모)
+    const tcasBtn = { id: 'tcas', text: 'TCAS', icon: '<svg viewBox="0 0 100 100"><polygon points="34,30 46,42 34,54 22,42" fill="#fff"/><text x="30" y="72" font-family="Arial" font-size="15" font-weight="bold" fill="#fff" text-anchor="middle">+20</text><line x1="56" y1="52" x2="56" y2="30" stroke="#fff" stroke-width="4"/><polyline points="50,36 56,28 62,36" fill="none" stroke="#fff" stroke-width="4"/><polygon points="68,56 80,68 68,80 56,68" fill="none" stroke="#fff" stroke-width="4"/></svg>' };
     // 아이콘은 실기 CDU 사진을 본떴다 — 색 있는 작은 그림(그라데이션 id 는 ag- 로 시작해 겹치지 않게)
     const AC_SYS_BTNS = [
+        { id: 'asys_check', text: 'Checklist', icon: '<svg viewBox="0 0 100 100"><rect x="22" y="14" width="56" height="72" rx="4" fill="none" stroke="#fff" stroke-width="5"/><rect x="36" y="8" width="28" height="12" rx="4" fill="#555"/><polyline points="30,38 38,48 52,28" fill="none" stroke="#00e5ff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/><line x1="57" y1="38" x2="70" y2="38" stroke="#aaa" stroke-width="4" stroke-linecap="round"/><polyline points="30,58 38,68 52,48" fill="none" stroke="#00e5ff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/><line x1="57" y1="58" x2="70" y2="58" stroke="#aaa" stroke-width="4" stroke-linecap="round"/></svg>' },
         { id: 'asys_afcs', text: 'AFCS', icon: '<svg viewBox="0 0 100 100"><defs><linearGradient id="ag-afh" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#d8dde3"/><stop offset="1" stop-color="#7d8894"/></linearGradient><linearGradient id="ag-afc" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2d4f8a"/><stop offset="1" stop-color="#14264a"/></linearGradient></defs><path d="M22 34 Q50 4 78 34 Z" fill="url(#ag-afc)"/><rect x="18" y="32" width="64" height="7" rx="3" fill="#0e1c38"/><circle cx="50" cy="22" r="5" fill="#f2c94c"/><rect x="26" y="38" width="48" height="36" rx="9" fill="url(#ag-afh)" stroke="#4a5562" stroke-width="2"/><rect x="31" y="44" width="38" height="12" rx="6" fill="#1b2633"/><circle cx="41" cy="50" r="4" fill="#3fe3ff"/><circle cx="59" cy="50" r="4" fill="#3fe3ff"/><g stroke="#4a5562" stroke-width="2.5"><line x1="40" y1="63" x2="40" y2="69"/><line x1="46" y1="63" x2="46" y2="69"/><line x1="52" y1="63" x2="52" y2="69"/><line x1="58" y1="63" x2="58" y2="69"/></g><rect x="20" y="48" width="6" height="14" rx="2" fill="#7d8894"/><rect x="74" y="48" width="6" height="14" rx="2" fill="#7d8894"/><path d="M30 74 L70 74 L76 96 L24 96 Z" fill="url(#ag-afc)"/><rect x="44" y="78" width="12" height="8" rx="2" fill="#f2c94c"/></svg>' },
         { id: 'asys_status', text: 'Aircraft<br>Status', icon: '<svg viewBox="0 0 100 100"><g stroke="#b9c2cb" stroke-width="4" stroke-linecap="round"><line x1="18" y1="14" x2="82" y2="62"/><line x1="82" y1="14" x2="18" y2="62"/></g><ellipse cx="50" cy="40" rx="11" ry="17" fill="#c7cfd7" stroke="#6b7682" stroke-width="2"/><ellipse cx="50" cy="34" rx="6" ry="7" fill="#46596b"/><rect x="47" y="56" width="6" height="30" rx="3" fill="#aab3bc"/><rect x="40" y="82" width="20" height="5" rx="2" fill="#aab3bc"/><circle cx="50" cy="38" r="3" fill="#6b7682"/><polyline points="4,52 26,52 32,40 38,64 44,30 50,70 56,46 62,52 96,52" fill="none" stroke="#2bff6a" stroke-width="3.5" stroke-linejoin="round" stroke-linecap="round"/></svg>' },
         { id: 'asys_elec', text: 'Electrical', iconOnly: true, icon: '<svg viewBox="0 0 100 100"><defs><linearGradient id="ag-bat" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7fd3ff"/><stop offset=".55" stop-color="#2b8fd6"/><stop offset="1" stop-color="#155a96"/></linearGradient></defs><rect x="24" y="22" width="12" height="9" rx="2" fill="#c9d1d8"/><rect x="64" y="22" width="12" height="9" rx="2" fill="#c9d1d8"/><rect x="12" y="30" width="76" height="50" rx="6" fill="url(#ag-bat)" stroke="#0c3d66" stroke-width="2"/><rect x="16" y="33" width="68" height="8" rx="3" fill="#ffffff" opacity=".25"/><text x="50" y="66" text-anchor="middle" font-family="Arial" font-weight="bold" font-size="22" fill="#ffffff">+/-</text></svg>' },
@@ -556,7 +559,7 @@
         { id: 'asys_maint', text: 'Maintenance', icon: '<svg viewBox="0 0 100 100"><path d="M74 10 A16 16 0 0 0 60 32 L18 74 A7 7 0 0 0 28 84 L70 42 A16 16 0 0 0 92 28 L82 36 L72 32 L70 22 Z" fill="#c4ccd3" stroke="#4a535c" stroke-width="2" stroke-linejoin="round"/><g transform="rotate(45 50 50)"><rect x="46" y="4" width="8" height="46" rx="2" fill="#d7dde3" stroke="#4a535c" stroke-width="1.5"/><rect x="40" y="50" width="20" height="40" rx="7" fill="#35c24a" stroke="#1d6f29" stroke-width="2"/><rect x="44" y="56" width="4" height="28" rx="2" fill="#9ff0a6" opacity=".7"/></g></svg>' }
     ];
     // 사진의 자리 — 위 두 줄(빈칸은 null) · 아래 한 줄은 바닥에 붙인다
-    const AC_SYS_TOP = ['asys_afcs', 'asys_status', 'asys_elec', 'asys_eng', 'asys_fuel', 'asys_ratest', null, 'asys_hocas'];
+    const AC_SYS_TOP = ['asys_afcs', 'asys_status', 'asys_elec', 'asys_eng', 'asys_fuel', 'asys_ratest', 'asys_check', 'asys_hocas'];   // 빈칸에 Checklist(홈에서 옮겨 왔다)
     const AC_SYS_BOT = ['asys_tests', 'asys_light', 'asys_video', 'asys_maint'];
     let _acSysPage = 'asys_afcs';
 
@@ -635,12 +638,12 @@
     // 홈 배열(사용자 지정) — 4칸씩: MAP·Aircraft Systems·PERF·Charts / Flight Plan·PROC·VNAV·Waypoint Info /
     // NOTAM·Track & Point·Services·Utilities / SkyVector·Tide·ER·Wildfire / Weather·Checklist·Airport INFO
     const HOME_ORDER = ['map', 'acsys', 'perf', 'charts', 'fpl', 'proc', 'vnav', 'wptinfo',
-                        'notam', 'sys', 'serv', 'util', 'skyvector', 'tide', 'eravail', 'wildfire', 'wxgrp', 'check', 'afld', 'ctrl'];
+                        'notam', 'sys', 'serv', 'util', 'skyvector', 'tide', 'eravail', 'wildfire', 'wxgrp', 'tcas', 'afld', 'ctrl'];   // Checklist 자리에 TCAS
     // 조종장치 — 조이스틱 · 게임패드 · 키보드(설정에 있던 조종 장치 항목을 모았다)
     const ctrlBtn = { id: 'ctrl', text: '조종장치', icon: '<svg viewBox="0 0 100 100"><rect x="20" y="70" width="60" height="16" rx="5" fill="#9e9e9e"/><rect x="45" y="36" width="10" height="36" rx="3" fill="#cfd8dc"/><ellipse cx="50" cy="30" rx="15" ry="17" fill="#00e5ff"/><circle cx="44" cy="22" r="3.5" fill="#ff5252"/><circle cx="31" cy="78" r="4" fill="#ff5252"/><circle cx="69" cy="78" r="4" fill="#ffca28"/></svg>' };
     function renderHomeScreen(container, footer, title) {
         title.innerText = "Home";
-        const all = [wxGroupBtn, acSysGroupBtn, wptInfoBtn, ctrlBtn].concat(homeButtons);
+        const all = [wxGroupBtn, acSysGroupBtn, wptInfoBtn, ctrlBtn, tcasBtn].concat(homeButtons);
         container.innerHTML = homeGridHtml(HOME_ORDER.map(id => all.find(b => b.id === id)).filter(Boolean));
         footer.innerHTML = cduFooter('', `<div class="nav-btn" data-act="openUbikais"><span>🛰</span>UBIKAIS</div>`);
     }
@@ -671,6 +674,7 @@
     }
     // 계통 버튼은 SYSTEM 창(18-system.js)의 화면도 고른다
     function acSysOpen(id) {
+        if (id === 'asys_check') { clOpen(); return; }           // Checklist — 체크리스트 화면(Back 은 Aircraft Systems 로)
         _acSysPage = id;
         try { if (typeof sysPageSet === 'function') sysPageSet(id); } catch (e) { _swallow(e); }
         switchMode('ACSYS_PAGE');
@@ -711,7 +715,7 @@
                 'wildfire': "https://fd.forest.go.kr/ffas/"
             };
 
-            let isActiveBtn = btn.id.startsWith('asys_') || btn.id.startsWith('wpt_') || ['wxgrp', 'acsys', 'wptinfo', 'weather', 'charts', 'notam', 'metar', 'directTo', 'map', 'fpl', 'serv', 'sys', 'perf', 'util', 'proc', 'cctv', 'vnav', 'check', 'afld', 'ctrl', 'skyvector', 'tide', 'eravail', 'wildfire'].includes(btn.id);
+            let isActiveBtn = btn.id.startsWith('asys_') || btn.id.startsWith('wpt_') || ['wxgrp', 'acsys', 'wptinfo', 'weather', 'charts', 'notam', 'metar', 'directTo', 'map', 'fpl', 'serv', 'sys', 'perf', 'util', 'proc', 'cctv', 'vnav', 'check', 'tcas', 'afld', 'ctrl', 'skyvector', 'tide', 'eravail', 'wildfire'].includes(btn.id);
             let boxClass = isActiveBtn ? 'icon-box func-active' : 'icon-box';
 
             if (links[btn.id]) {
@@ -733,6 +737,7 @@
                                   btn.id === 'util' ? `data-act="utilOpen" data-arg='["MENU"]'` :
                                   btn.id === 'map'  ? `data-act="cduOpenMap"` :
                                   btn.id === 'check' ? `data-act="clOpen"` :
+                                  btn.id === 'tcas' ? `data-act="switchMode" data-arg='["TCAS"]'` :
                                   btn.id === 'afld' ? `data-act="switchMode" data-arg='["AIRFIELD"]'` :
                                   btn.id === 'ctrl' ? `data-act="switchMode" data-arg='["CONTROLS"]'` :
                                   btn.id === 'cctv' ? `data-act="switchMode" data-arg='["CCTV"]'` :
@@ -1187,6 +1192,53 @@
         footer.innerHTML = cduFooter(`switchMode(${backMode}, '${inputTarget}')`, `<div class="nav-btn enter-btn-blue" data-act="confirmInput"><span>↩</span>Enter</div>`);
     }
 
+    // ── TCAS(KUH-1CG FLM 3.1 · 3.3 — CDU Home > TCAS) ──
+    //   Traffic Settings: XPDR/TCAS MODE(Auto · TA Only · ALT Reporting · On · Standby) · Altitude Display(Relative · Absolute · Altitude Range) ·
+    //   ADS-B(Traffic Display · Motion Vector · VECT Duration · Target selection) · 아래 Transponder · System Test
+    //   Transponder: XPDR/TCAS MODE · Active XPDR · ADS-B TX · Flight ID · Code
+    const TCAS_MODES = [['Auto', 'Auto'], ['TA Only', 'TA Only'], ['Altitude Reporting', 'ALT Reporting'], ['On', 'On'], ['Standby', 'Standby']];
+    const _tc = () => (typeof tcasCfg !== 'undefined' ? tcasCfg : { mode: xpdrState.mode, alt: 'Relative', range: 'Normal', adsb: true, motion: false, vect: 60 });
+    const _tcBtn = (on, label, act, arg, sub, h = 36) => `<div class="item-btn tcas-btn ${on ? 'on' : ''}" style="height:${h}px;font-size:10px;" ${act ? `data-act="${act}"` : ''} ${arg !== undefined ? `data-arg='${JSON.stringify(arg)}'` : ''}>${label}${sub ? `<span style="color:var(--text-cyan);font-size:9px;">${sub}</span>` : ''}<div class="status-line"></div></div>`;
+    function _tcasModeCol() {
+        const c = _tc(); xpdrState.mode = c.mode;
+        return `<div class="tcas-col"><div class="tcas-hd">XPDR/TCAS MODE</div>` +
+            TCAS_MODES.map(([m, l]) => _tcBtn(c.mode === m, l, 'tcasCduMode', [m])).join('') + `</div>`;
+    }
+    function renderTcasScreen(container, footer, title) {
+        title.innerText = "Traffic Settings";
+        const c = _tc(), vect = c.vect >= 60 ? (c.vect / 60) + 'MIN' : c.vect + 'SEC';
+        const test = typeof tcasTesting === 'function' && tcasTesting(), am = typeof tcasActMode === 'function' ? tcasActMode() : '';
+        container.innerHTML = `<div class="tcas-wrap">` +
+            _tcasModeCol() +
+            `<div class="tcas-col"><div class="tcas-hd">Altitude Display</div>` +
+            _tcBtn(c.alt === 'Relative', 'Relative', 'tcasCduSet', ['alt', 'Relative']) +
+            _tcBtn(c.alt === 'Absolute', 'Absolute', 'tcasCduSet', ['alt', 'Absolute']) +
+            _tcBtn(false, 'Altitude Range', 'tcasCduCycle', ['range'], c.range === 'Normal' ? 'Normal' : c.range, 40) + `</div>` +
+            `<div class="tcas-col"><div class="tcas-hd">ADS-B</div>` +
+            _tcBtn(c.adsb, 'Traffic Display', 'tcasCduSet', ['adsb', !c.adsb]) +
+            _tcBtn(c.motion, 'Motion Vector', 'tcasCduSet', ['motion', !c.motion], c.motion ? 'On' : 'Off', 40) +
+            _tcBtn(false, 'VECT Duration', 'tcasCduCycle', ['vect'], vect, 40) +
+            `<div class="item-btn tcas-btn dim" style="height:36px;font-size:10px;opacity:.45;">Target<br>selection<div class="status-line"></div></div></div>` +
+            `</div>` +
+            `<div class="tcas-foot"><div class="item-btn" style="height:34px;font-size:10px;" data-act="switchMode" data-arg='["TCAS_XPDR"]'>Transponder<span style="color:var(--text-cyan);font-size:9px;">${xpdrState.active} · ${xpdrState.code}</span></div>` +
+            `<div class="item-btn ${test ? 'on' : ''}" style="height:34px;font-size:10px;" data-act="tcasCduTest">System Test<span style="color:var(--text-cyan);font-size:9px;">${test ? 'TESTING…' : 'TCAS : ' + (am === 'STBY' ? 'STBY' : am === 'TA' ? 'TA ONLY' : 'TA/RA')}</span><div class="status-line"></div></div></div>`;
+        footer.innerHTML = cduFooter("switchMode('HOME')");
+    }
+    function renderTcasXpdrScreen(container, footer, title) {
+        title.innerText = "Transponder";
+        container.innerHTML = `<div class="tcas-wrap">` + _tcasModeCol() +
+            `<div class="tcas-col" style="justify-content:flex-start;padding-top:22px;gap:12px;">` +
+            _tcBtn(false, 'Active', 'tcasCduXpdr', [], xpdrState.active.replace('XPDR', 'XPDR '), 44) +
+            _tcBtn(xpdrState.adsb, 'ADS-B TX', 'toggleAdsb', undefined, '', 44) +
+            _tcBtn(false, 'Flight ID', '', undefined, xpdrState.flightId, 44) +
+            _tcBtn(false, 'Code', 'switchMode', ['XPDR_CODE'], xpdrState.code, 44) + `</div></div>`;
+        footer.innerHTML = cduFooter("switchMode('TCAS')");
+    }
+    function tcasCduMode(m) { setXpdrMode(m); }
+    function tcasCduSet(k, v) { try { tcasSet(k, v); } catch (e) { _swallow(e); } renderContent(); }
+    function tcasCduCycle(k) { try { tcasCycle(k); } catch (e) { _swallow(e); } renderContent(); }
+    function tcasCduXpdr() { xpdrState.active = xpdrState.active === 'XPDR1' ? 'XPDR2' : 'XPDR1'; renderContent(); }
+    function tcasCduTest() { try { if (typeof tcasTestStart === 'function') tcasTestStart(); } catch (e) { _swallow(e); } renderContent(); setTimeout(() => { if (currentMode === 'TCAS') renderContent(); }, 8100); }
     function renderXpdrModeScreen(container, footer, title) {
         title.innerText = "Transponder";
         container.innerHTML = `
@@ -2145,7 +2197,7 @@
     function _clColor() { return clPath.length ? (_clRoot().children[clPath[0]].color || '#00e5ff') : '#00e5ff'; }
     function clOpen()  { clPath = []; switchMode('CHECKLIST'); }
     function clInto(i) { clPath.push(i); switchMode('CHECKLIST'); }
-    function clBack()  { if (clPath.length) { clPath.pop(); switchMode('CHECKLIST'); } else { switchMode('HOME'); } }
+    function clBack()  { if (clPath.length) { clPath.pop(); switchMode('CHECKLIST'); } else { switchMode('ACSYS'); } }   // 체크리스트는 Aircraft Systems 안
     function clToggle(i) { const k = clPath.join('.') + '#' + i; clChecked[k] = !clChecked[k]; switchMode('CHECKLIST'); }
     function clResetLeaf() { const p = clPath.join('.'); Object.keys(clChecked).forEach(k => { if (k.startsWith(p + '#')) delete clChecked[k]; }); switchMode('CHECKLIST'); }
     function _clParent() { let n = _clRoot(); for (let i = 0; i < clPath.length - 1; i++) n = n.children[clPath[i]]; return n; }
@@ -3036,6 +3088,8 @@
             case 'XPDR_CODE': renderXpdrCodeScreen(container, footer, title); break;
             case 'UTIL': renderUtilScreen(container, footer, title); break;
             case 'CHECKLIST': renderChecklistScreen(container, footer, title); break;
+            case 'TCAS': renderTcasScreen(container, footer, title); break;
+            case 'TCAS_XPDR': renderTcasXpdrScreen(container, footer, title); break;
             case 'SETTINGS': renderSettingsScreen(container, footer, title); break;
             case 'CONTROLS': renderControlsScreen(container, footer, title); break;
             case 'JOYSTICK': renderJoystickScreen(container, footer, title); break;
@@ -3327,7 +3381,7 @@
         hfState.pwr = pwrs[(pwrs.indexOf(hfState.pwr) + 1) % pwrs.length]; renderContent();
     }
 
-    function setXpdrMode(m) { xpdrState.mode = m; renderContent(); }
+    function setXpdrMode(m) { xpdrState.mode = m; try { if (typeof tcasSetMode === 'function') tcasSetMode(m); } catch (e) { _swallow(e); } renderContent(); }   // TCAS 모드도 함께(33-train4.js)
     function toggleAdsb() { xpdrState.adsb = !xpdrState.adsb; renderContent(); }
     
     function addXpdrInput(num) {
@@ -3406,6 +3460,8 @@
             if(shortMode === 'TA ONLY') shortMode = 'TA';
             xpdrModeElem.innerText = shortMode;
         }
+        const xpdrNameElem = document.getElementById('top-xpdr-name');   // 위 막대 — 고른 트랜스폰더(TCAS > Transponder > Active)
+        if (xpdrNameElem && xpdrNameElem.innerText !== xpdrState.active) xpdrNameElem.innerText = xpdrState.active;
         const xpdrCodeElem = document.getElementById('top-xpdr-code');
         if(xpdrCodeElem) xpdrCodeElem.innerText = xpdrState.code;
     }
@@ -3586,6 +3642,7 @@ switchMode('HOME');
       setVoxMode,
       setXpdrMode,
       setXpdrPreset,
+      tcasCduMode, tcasCduSet, tcasCduCycle, tcasCduXpdr, tcasCduTest,
       showHelpOverlay: () => { document.getElementById('help-overlay').style.display = 'flex'; },
       swapFreq,
       switchAudioTab,

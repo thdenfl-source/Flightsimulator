@@ -17,11 +17,11 @@
      CDN 을 쓰면 한 번이라도 못 받는 순간 앱이 통째로 죽는다 — 비행 중에는
      그럴 여지를 두지 않는다. -->
 <!-- 패널 새 창(다중 모니터) — 라이브러리가 거는 이벤트까지 받아 적어야 하므로 맨 먼저 -->
-<script src="js/00-edition.js?v=680"></script>
-<script src="js/00-aircraft.js?v=680"></script>
-<script src="js/00-params.js?v=680"></script>
-<script src="js/00-sched.js?v=680"></script>
-<script src="js/00-popout.js?v=680"></script>
+<script src="js/00-edition.js?v=681"></script>
+<script src="js/00-aircraft.js?v=681"></script>
+<script src="js/00-params.js?v=681"></script>
+<script src="js/00-sched.js?v=681"></script>
+<script src="js/00-popout.js?v=681"></script>
 <link rel="stylesheet" href="vendor/leaflet.css"/>
 <script src="vendor/leaflet.js"></script>
 <link rel="stylesheet" href="vendor/leaflet-velocity.min.css"/>
@@ -2056,6 +2056,13 @@ html.ac-b206 #pfd-ov { background: transparent; border: 0; box-shadow: none; min
             transform: scale(0.96);
         }
         .status-line { position: absolute; bottom: 3px; width: 70%; height: 2px; background: #333; border-radius: 1.5px; }
+        /* CDU TCAS(Traffic Settings · Transponder — 09b-cdu-screens.js renderTcasScreen) — 세 칸 · 칸마다 머리글 · 아래 Transponder · System Test */
+        .tcas-wrap { display: flex; gap: 6px; padding: 4px 2px 0; }
+        .tcas-col { flex: 1; display: flex; flex-direction: column; gap: 5px; border: 1px solid #333; border-radius: 4px; padding: 4px; min-width: 0; }
+        .tcas-hd { color: #fff; font-size: 9px; text-align: center; padding-bottom: 3px; border-bottom: 1px solid #555; white-space: nowrap; }
+        .tcas-btn span { display: block; margin-top: 1px; }
+        .tcas-foot { display: flex; gap: 6px; padding: 6px 2px 0; }
+        .tcas-foot .item-btn { flex: 1; }
         .on .status-line { background: var(--text-green); box-shadow: 0 0 3px var(--text-green); }
 
         /* Sliders */
@@ -2667,7 +2674,7 @@ body.simple-mode #simple-view { display: flex; position: fixed; left: 0; right: 
     </div>
   </form>
 </div>
-<script src="js/00-gate.js?v=680"></script>
+<script src="js/00-gate.js?v=681"></script>
 <!-- ── 단일화면 선택 바 (기본 숨김) ── -->
 <!-- ── 시작 안내(사용법/키보드) 오버레이 ── -->
 <div id="help-overlay" style="display:none;">
@@ -3385,6 +3392,7 @@ body.simple-mode #simple-view { display: flex; position: fixed; left: 0; right: 
       <ul>
         <li><b>AFCS 축</b>: 시작할 때 ALT 는 꺼져 있습니다. ALT 단독은 Vy 이상에서 피치 축(FMA 오른쪽 칸), Vy−5kt 아래로 내려오면 컬렉티브 축 — 옮겨 갈 때 받는 칸이 깜빡이고 풀림 경보는 울리지 않습니다. CRHT 는 늘 컬렉티브 축이고 바다 물결 · 갑판 가장자리의 전파고도 출렁임은 걸러 씁니다. VRS 에 들면 PFD 에 VORTEX RING · 음성 경고.</li>
         <li><b>CAS 쪽넘김</b>: PFD 메시지가 5줄을 넘으면 소프트키 <b>CAS</b> 가 살아나고, 누르면 <b>CAS UP · CAS DN</b> 으로 쪽을 넘깁니다.</li>
+        <li><b>CDU TCAS</b>(홈의 Checklist 자리 · Checklist 는 Aircraft Systems 안으로 옮겼습니다) — KUH-1CG FLM 의 Traffic Settings: XPDR/TCAS MODE(Auto — 지상 · AGL 1,000ft 아래 TA Only, 위 TA/RA · TA Only · ALT Reporting · On · Standby — 뒤 셋은 TCAS 대기) · Altitude Display(Relative · Absolute · Altitude Range Normal · Above · Below · Unrestricted — 범위 밖 비위협 교통은 숨기고 TA · RA 는 늘 시현) · ADS-B(Traffic Display · Motion Vector · VECT Duration) · Transponder(Active XPDR · ADS-B TX · Flight ID · Code) · System Test(8초 시험 그림 뒤 "TCAS two system test passed").</li>
         <li><b>결빙</b>: 🌙 ENV '지면 기온'(METAR · 15 · 5 · 0 · −5 · −15°C)으로 외기를 고릅니다. 외기 5°C 이하에서 구름 속 · 비 · 짙은 안개에 들면 PFD 에 ICE DETECTED — 착빙이 쌓이면 SIM 필요 토크가 늘고(최대 8%), 엔진 방빙(NO1 · NO2 ENG A/I)이 꺼진 엔진은 n ENG ICING · 낼 수 있는 토크가 줄며, 피토 히트 OFF 면 PITOT ICING · 속도계가 굳습니다.</li>
         <li><b>공항 주기 헬기</b>: 가까운 공항(12km 안) 활주로 옆 주기장에 흰수리 · Bell 이 로터를 멈춘 채 서 있습니다(🌙 ENV 에서 끔).</li>
         <li><b>CDU 연료</b>: 연료 흐름 · END 아래에 예비(Return Fuel) 도달 시각 · 그때까지 갈 거리(지상속도) · 바닥까지 시간.</li>
@@ -3949,7 +3957,7 @@ body.simple-mode #simple-view { display: flex; position: fixed; left: 0; right: 
             
             <div class="header-box" style="padding:0; gap:0;">
                 <div style="flex:1; width:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; cursor:pointer;" data-act="switchMode" data-arg='["XPDR_MODE"]'>
-                    <div class="header-label" style="color:var(--text-cyan); margin-bottom:1px;">XPDR2</div>
+                    <div class="header-label" id="top-xpdr-name" style="color:var(--text-cyan); margin-bottom:1px;">XPDR1</div>
                     <div class="green-ind" id="top-xpdr-mode">AUTO</div>
                 </div>
                 <div style="width:80%; height:1px; background:#333;"></div>
@@ -3991,54 +3999,54 @@ body.simple-mode #simple-view { display: flex; position: fixed; left: 0; right: 
 <!-- 앱 코드 — 클래식 스크립트(모듈 아님)라 전역 스코프를 공유한다.
      순서가 곧 실행 순서이므로 임의로 바꾸지 말 것. -->
   <!-- AIP 데이터 — 코드보다 먼저 로드한다 -->
-  <script src="js/data/terminal-fixes.js?v=680"></script>
-  <script src="js/data/ifr-fixes.js?v=680"></script>
-  <script src="js/data/ifr-procedures.js?v=680"></script>
-  <script src="js/data/airfield-info.js?v=680"></script>
-  <script src="js/data/enr-vors.js?v=680"></script>
-  <script src="js/data/loc-stations.js?v=680"></script>
-  <script src="js/data/enr-routes.js?v=680"></script>
-  <script src="js/data/airspace.js?v=680"></script>
-  <script src="js/data/runways.js?v=680"></script>
+  <script src="js/data/terminal-fixes.js?v=681"></script>
+  <script src="js/data/ifr-fixes.js?v=681"></script>
+  <script src="js/data/ifr-procedures.js?v=681"></script>
+  <script src="js/data/airfield-info.js?v=681"></script>
+  <script src="js/data/enr-vors.js?v=681"></script>
+  <script src="js/data/loc-stations.js?v=681"></script>
+  <script src="js/data/enr-routes.js?v=681"></script>
+  <script src="js/data/airspace.js?v=681"></script>
+  <script src="js/data/runways.js?v=681"></script>
   <!-- 앱 코드 -->
-  <script src="js/00-ui.js?v=680"></script>
-  <script src="js/01-state.js?v=680"></script>
-  <script src="js/02-math.js?v=680"></script>
-  <script src="js/03-pfd.js?v=680"></script>
-  <script src="js/04-map.js?v=680"></script>
-  <script src="js/05-gps.js?v=680"></script>
-  <script src="js/06-nav.js?v=680"></script>
-  <script src="js/07-sim.js?v=680"></script>
-  <script src="js/08-ifrdb.js?v=680"></script>
-  <script src="js/09a-start.js?v=680"></script>
-  <script src="js/09-cdu.js?v=680"></script>
-  <script src="js/09b-cdu-screens.js?v=680"></script>
-  <script src="js/10-tools.js?v=680"></script>
-  <script src="js/11-charts.js?v=680"></script>
-  <script src="js/12-joystick.js?v=680"></script>
-  <script src="js/13-joyhid.js?v=680"></script>
-  <script src="js/14-simmode.js?v=680"></script>
-  <script src="js/15-heli3d.js?v=680"></script>
-  <script src="js/16-sound.js?v=680"></script>
-  <script src="js/17-upper.js?v=680"></script>
-  <script src="js/18-system.js?v=680"></script>
-  <script src="js/19-lower.js?v=680"></script>
-  <script src="js/20-navaids.js?v=680"></script>
-  <script src="js/21-c5000.js?v=680"></script>
-  <script src="js/22-npx138.js?v=680"></script>
-  <script src="js/23-afcs.js?v=680"></script>
-  <script src="js/24-sar.js?v=680"></script>
-  <script src="js/25-b206panel.js?v=680"></script>
-  <script src="js/26-b206radio.js?v=680"></script>
-  <script src="js/27-b206coll.js?v=680"></script>
-  <script src="js/28-debrief.js?v=680"></script>
-  <script src="js/29-env.js?v=680"></script>
-  <script src="js/30-scenario.js?v=680"></script>
-  <script src="js/31-ios.js?v=680"></script>
-  <script src="js/32-callout.js?v=680"></script>
-  <script src="js/33-train4.js?v=680"></script>
-  <script src="js/34-infra.js?v=680"></script>
-  <script src="js/35-kuhgrip.js?v=680"></script>
+  <script src="js/00-ui.js?v=681"></script>
+  <script src="js/01-state.js?v=681"></script>
+  <script src="js/02-math.js?v=681"></script>
+  <script src="js/03-pfd.js?v=681"></script>
+  <script src="js/04-map.js?v=681"></script>
+  <script src="js/05-gps.js?v=681"></script>
+  <script src="js/06-nav.js?v=681"></script>
+  <script src="js/07-sim.js?v=681"></script>
+  <script src="js/08-ifrdb.js?v=681"></script>
+  <script src="js/09a-start.js?v=681"></script>
+  <script src="js/09-cdu.js?v=681"></script>
+  <script src="js/09b-cdu-screens.js?v=681"></script>
+  <script src="js/10-tools.js?v=681"></script>
+  <script src="js/11-charts.js?v=681"></script>
+  <script src="js/12-joystick.js?v=681"></script>
+  <script src="js/13-joyhid.js?v=681"></script>
+  <script src="js/14-simmode.js?v=681"></script>
+  <script src="js/15-heli3d.js?v=681"></script>
+  <script src="js/16-sound.js?v=681"></script>
+  <script src="js/17-upper.js?v=681"></script>
+  <script src="js/18-system.js?v=681"></script>
+  <script src="js/19-lower.js?v=681"></script>
+  <script src="js/20-navaids.js?v=681"></script>
+  <script src="js/21-c5000.js?v=681"></script>
+  <script src="js/22-npx138.js?v=681"></script>
+  <script src="js/23-afcs.js?v=681"></script>
+  <script src="js/24-sar.js?v=681"></script>
+  <script src="js/25-b206panel.js?v=681"></script>
+  <script src="js/26-b206radio.js?v=681"></script>
+  <script src="js/27-b206coll.js?v=681"></script>
+  <script src="js/28-debrief.js?v=681"></script>
+  <script src="js/29-env.js?v=681"></script>
+  <script src="js/30-scenario.js?v=681"></script>
+  <script src="js/31-ios.js?v=681"></script>
+  <script src="js/32-callout.js?v=681"></script>
+  <script src="js/33-train4.js?v=681"></script>
+  <script src="js/34-infra.js?v=681"></script>
+  <script src="js/35-kuhgrip.js?v=681"></script>
 
 <input type="file" id="zipFileInput" accept=".zip,application/zip,application/x-zip-compressed,application/octet-stream" style="display:none" onchange="handleZipFile(this.files[0]); this.value='';"></body>
 </html>

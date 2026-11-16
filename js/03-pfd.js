@@ -675,12 +675,16 @@ function drawPfdInset(R0) {
     ctx.font = `bold ${fs}px Helvetica Neue, Arial, sans-serif`; ctx.textAlign = 'left'; ctx.fillStyle = '#00e5ff';
     ctx.fillText('6 NM', cx + r * 0.72 + 2, cy + r * 0.72);
     ctx.textAlign = 'right'; ctx.fillStyle = '#ffffff';
-    ctx.fillText('TCAS: TA ONLY', R0.x + R0.w - 4, R0.y + fs + 3);
+    // 모드 줄(KUH-1CG FLM 그림 8) — TCAS : TA/RA · TA ONLY · STBY · TEST · ADS-B : AIRB
+    const am = typeof tcasActMode === 'function' ? tcasActMode() : 'TA', test = typeof tcasTesting === 'function' && tcasTesting();
+    ctx.fillText(`TCAS : ${test ? 'TEST' : am === 'STBY' ? 'STBY' : am === 'TA' ? 'TA ONLY' : 'TA/RA'}`, R0.x + R0.w - 4, R0.y + fs + 3);
+    if (typeof tcasCfg !== 'undefined' && tcasCfg.adsb) ctx.fillText('ADS-B : AIRB', R0.x + R0.w - 4, R0.y + fs * 2 + 5);
+    if (typeof tcasCfg !== 'undefined') { ctx.textAlign = 'right'; ctx.fillStyle = tcasCfg.motion ? '#00e5ff' : '#9aa5b0'; ctx.fillText(`Motion: ${tcasCfg.motion ? Math.round(tcasCfg.vect / 60 * 10) / 10 + 'MIN' : 'Off'}`, R0.x + R0.w - 4, R0.y + R0.h - 5); }
     ctx.textAlign = 'left'; ctx.fillStyle = '#00e5ff'; ctx.fillText('HDG UP', R0.x + 4, R0.y + fs + 3);
     // 다른 항공기(33-train4.js 교통) — 없으면 NO TRAFFIC
-    const tg = (typeof tcasTargets === 'function') ? tcasTargets().filter(t => t.r <= 6.5) : [];
-    if (tg.length) { try { tcasDrawInset(ctx, cx, cy, r); } catch (e) { _swallow(e); } }
-    else { ctx.textAlign = 'right'; ctx.fillStyle = '#9aa5b0'; ctx.fillText('NO TRAFFIC', R0.x + R0.w - 4, R0.y + R0.h - 5); }
+    const tg = (typeof tcasTargets === 'function') ? tcasTargets().filter(t => t.r <= 6.5 && (typeof tcasShow !== 'function' || tcasShow(t))) : [];
+    if (tg.length || test) { try { tcasDrawInset(ctx, cx, cy, r); } catch (e) { _swallow(e); } }
+    else { ctx.textAlign = 'left'; ctx.fillStyle = '#9aa5b0'; ctx.fillText(am === 'STBY' ? 'TCAS STBY' : 'NO TRAFFIC', R0.x + 4, R0.y + R0.h - 5); }
   }
   ctx.restore();
   ctx.strokeStyle = '#5a6672'; ctx.lineWidth = 1; ctx.strokeRect(R0.x + 0.5, R0.y + 0.5, R0.w - 1, R0.h - 1);

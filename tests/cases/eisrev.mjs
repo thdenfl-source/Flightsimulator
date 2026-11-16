@@ -31,7 +31,7 @@ export async function run(page, t) {
     if (!L.insetOn) { drawPfdInset(r); }
     const seenI = () => { if (L.insetOn) return seen(); const proto = CanvasRenderingContext2D.prototype, orig = proto.fillText, out = [];
       proto.fillText = function (x, ...a) { out.push(String(x)); return orig.call(this, x, ...a); }; try { drawPfdInset(r); } finally { proto.fillText = orig; } return out; };
-    o.tap1 = pfdInsetHit(r.x + 5, r.y + 5) && pfdInsetTcas() && seenI().includes('TCAS: TA ONLY');
+    o.tap1 = pfdInsetHit(r.x + 5, r.y + 5) && pfdInsetTcas() && seenI().some(x => /^TCAS : (TA ONLY|TA\/RA)$/.test(x));
     if (!L.insetOn) drawPfdInset(r);
     o.tap2 = pfdInsetHit(r.x + 5, r.y + 5) && !pfdInsetTcas() && map0;
     hocasOn = false; ovhdSet('parkBrake', 'RELEASE'); drawPFD();
