@@ -241,6 +241,50 @@ function joyResetToDefault() {
   try { if (typeof simLookHold === 'function') simLookHold(false); } catch (e) { _swallow(e); }
 }
 
+// ══ 여러 장치를 함께 ══
+// 사이클릭 · 컬렉티브 · 페달처럼 다른 장치를 여럿 꽂아 함께 쓴다. 모든 장치를 한꺼번에 읽는다.
+//   입력 이름(code)은 장치 이름표를 앞에 붙여 'J1a2b3:b4' 처럼 가른다. 배정은
+//     · 장치가 하나일 때 잡은 것('b4')  — 어느 장치든 그 번호면 듣는다(종전과 같다)
+//     · 둘 이상일 때 잡은 것('J…:b4')    — 그 장치에서만 듣는다
+//   축 배정도 장치를 기억한다(joyAxes[역할].dev). 장치를 적지 않은 축은 지금 쓰는 장치(joyActiveIdx)를 본다.
+//   장치마다 켜고 끌 수 있다(조종장치 › 버튼 · 축 배정 › 연결된 장치).
+function _joyHash(s) { let h = 5381; for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) >>> 0; return h.toString(36).slice(0, 6); }
+let _joyPadList = [];
+// 장치 이름표 — 이름이 같으면(같은 기종 두 대) 순서로 가른다
+function joyDevKey(p) {
+  if (!p) return '';
+  const id = p.id || ('#' + p.index);
+  const same = _joyPadList.filter(q => (q.id || ('#' + q.index)) === id).sort((a, b) => a.index - b.index);
+  const n = same.findIndex(q => q.index === p.index);
+  return 'J' + _joyHash(id) + (n > 0 ? '-' + (n + 1) : '');
+}
+function _joyCodeDev(code) { const i = code.indexOf(':'); return i > 0 ? code.slice(0, i) : ''; }
+function _joyCodeRaw(code) { const i = code.indexOf(':'); return i > 0 ? code.slice(i + 1) : code; }
+// 그 입력에 배정한 동작 — 그 장치 것이 먼저, 없으면 장치를 가리지 않는 배정
+function _joyActOf(code) { return JOY_ACT_BY_ID[joyBinds[code] || joyBinds[_joyCodeRaw(code)]]; }
+// 장치 이름 기억(설정 화면에 이름으로 보이게)
+let joyDevNames = {};
+try { joyDevNames = JSON.parse(localStorage.getItem('joyDevNames') || '{}') || {}; } catch (e) { joyDevNames = {}; }
+function _joyNoteDev(p) {
+  const k = joyDevKey(p), n = p.id || ('#' + p.index);
+  if (joyDevNames[k] !== n) { joyDevNames[k] = n; try { localStorage.setItem('joyDevNames', JSON.stringify(joyDevNames)); } catch (e) { _swallow(e); } }
+}
+function joyDevName(k) { return (joyDevNames[k] || k).replace(/\s*\(.*?Vendor.*?\)\s*/i, ' ').trim(); }
+function joyDevShort(k) { const n = joyDevName(k); return n.length > 18 ? n.slice(0, 17) + '…' : n; }
+// 장치 켜고 끄기
+let joyDevOff = {};
+try { joyDevOff = JSON.parse(localStorage.getItem('joyDevOff') || '{}') || {}; } catch (e) { joyDevOff = {}; }
+function joyDevIsOff(p) { return !!joyDevOff[joyDevKey(p)]; }
+function joyDevToggle(k) {
+  if (joyDevOff[k]) delete joyDevOff[k]; else joyDevOff[k] = true;
+  try { localStorage.setItem('joyDevOff', JSON.stringify(joyDevOff)); } catch (e) { _swallow(e); }
+  Object.keys(_joyDown).forEach(c => { if (_joyCodeDev(c) === k) _joyEdge(c, false, performance.now()); });
+}
+// 잡을 때 — 장치가 둘 이상이면 그 장치 것으로 적는다
+function _joyCapCode(code) { return _joyPadList.filter(q => !joyDevIsOff(q)).length > 1 ? code : _joyCodeRaw(code); }
+// 지금 연결된 장치(설정 화면)
+function joyDevList() { return _joyPadList.map(q => ({ key: joyDevKey(q), id: q.id || ('#' + q.index), index: q.index, off: joyDevIsOff(q), act: joyPadActive(q), axes: (q.axes || []).length, btns: (q.buttons || []).length })); }
+
 let joyPadName = '';          // 연결된 장치 이름(설정 화면 표시용)
 let joyActiveIdx = -1;        // 지금 쓰고 있는 패드 번호(여러 대가 올라올 때)
 let joyLastCode = '';         // 마지막으로 눌린 입력(설정 화면 표시용)
@@ -251,9 +295,10 @@ const _joyHat = {};           // padIndex → { 축번호: true } 햇으로 판�
 const _joyNoHat = {};         // padIndex → { 축번호: true } 햇이 아님이 드러난 축
 const _joyOdd = {};           // padIndex → { 축번호: {7배값: true} } 본 격자값들
 // SIM 조종간으로 배정해 둔 축인가 — 그런 축은 햇으로 보지 않는다
-function _joyAxUsed(i) {
+function _joyAxUsed(i, p) {
   try {
-    return Object.keys(joyAxes).some(k => joyAxes[k] && joyAxes[k].i === i);
+    const k = p ? joyDevKey(p) : '';
+    return Object.keys(joyAxes).some(r => { const a = joyAxes[r]; if (!a || a.i !== i) return false; if (!p) return true; if (a.dev) return a.dev === k; const q = _joyAxPad(a); return !!q && q.index === p.index; });
   } catch (e) { return false; }
 }
 let _joyRaf = null;
@@ -268,6 +313,8 @@ function joyBindOf(actId) {
 }
 function joyCodeLabel(code) {
   if (!code) return '';
+  const dev = _joyCodeDev(code);
+  if (dev) return `${joyDevShort(dev)} · ${joyCodeLabel(_joyCodeRaw(code))}`;
   if (code[0] === 'b') return `버튼 ${code.slice(1)}`;
   if (code[0] === 'k') return `키 ${code.slice(1)}`;
   if (code[0] === 'h') {
@@ -299,7 +346,7 @@ function toggleJoy() {
 function joyReleaseAll() {
   try { Object.keys(_joyKeys).forEach(c => delete _joyKeys[c]); } catch (e) { _swallow(e); }
   Object.keys(_joyDown).forEach(code => {
-    const a = JOY_ACT_BY_ID[joyBinds[code]];
+    const a = _joyActOf(code);
     if (a && a.kind === 'hold' && a.off) { try { a.off(); } catch (e) { _swallow(e); } }
     delete _joyDown[code];
   });
@@ -352,8 +399,8 @@ function _joyEdge(code, pressed, now) {
   const wasDown = !!_joyDown[code];
   if (pressed && !wasDown) {
     joyLastCode = code;
-    if (joyCapture) { joySetBind(code, joyCapture); joyCapture = null; _joyDown[code] = { since: now, next: Infinity }; return; }
-    const a = JOY_ACT_BY_ID[joyBinds[code]];
+    if (joyCapture) { joySetBind(_joyCapCode(code), joyCapture); joyCapture = null; _joyDown[code] = { since: now, next: Infinity }; return; }
+    const a = _joyActOf(code);
     _joyDown[code] = { since: now, next: now + JOY_REPEAT_DELAY };
     if (!a) return;
     try {
@@ -362,10 +409,10 @@ function _joyEdge(code, pressed, now) {
     } catch (e) { _swallow(e); }
   } else if (!pressed && wasDown) {
     delete _joyDown[code];
-    const a = JOY_ACT_BY_ID[joyBinds[code]];
+    const a = _joyActOf(code);
     if (a && a.kind === 'hold' && a.off) { try { a.off(); } catch (e) { _swallow(e); } }
   } else if (pressed && wasDown) {
-    const a = JOY_ACT_BY_ID[joyBinds[code]];
+    const a = _joyActOf(code);
     if (!a || a.kind !== 'repeat') return;
     const st = _joyDown[code];
     if (now >= st.next) { st.next = now + JOY_REPEAT_INT; try { a.run(); } catch (e) { _swallow(e); } }
@@ -420,7 +467,7 @@ try { joyAxSaved = localStorage.getItem('joyAxes') !== null; } catch (e) { _swal
 // 내릴수록 값이 커지는 배선이 많다.
 const JOY_AX_DEFAULT = { roll: 0, pitch: 1, coll: 2, yaw: 5 };
 const JOY_AX_DEF_INV = { pitch: true, coll: true };
-function joyAxApplyDefault(p, neu) {
+function joyAxApplyDefault(p, neu, dev) {
   if (joyAxSaved || Object.keys(joyAxes).length) return;
   const n = (p.axes || []).length;
   if (n <= Math.max.apply(null, Object.values(JOY_AX_DEFAULT))) return;
@@ -430,6 +477,7 @@ function joyAxApplyDefault(p, neu) {
     const rest = Number.isFinite(neu[i]) ? neu[i] : 0;
     joyAxes[k] = { i, inv: !!JOY_AX_DEF_INV[k],
                    abs: (k === 'coll') && Math.abs(rest) > 0.5 };
+    if (dev) joyAxes[k].dev = dev;
   });
   joyAxSave();
 }
@@ -450,15 +498,26 @@ function joyAxInvert(role) {
 function joyAxLabel(role) {
   const a = joyAxes[role];
   if (!a) return '없음';
-  return `축 ${a.i}${a.inv ? ' · 반전' : ''}${a.abs ? ' · 레버식' : ''}`;
+  return `${a.dev ? joyDevShort(a.dev) + ' · ' : ''}축 ${a.i}${a.inv ? ' · 반전' : ''}${a.abs ? ' · 레버식' : ''}`;
+}
+// 그 축을 읽을 장치 — 적어 둔 장치(꺼져 있거나 빠졌으면 없음) · 적지 않았으면 지금 쓰는 장치
+//   장치를 적지 않은 축(장치 하나로 쓰던 배정)은 그때 쓰던 장치(joyMainDev)를 계속 본다 —
+//   페달 같은 다른 장치를 더 꽂아도 사이클릭 축이 그쪽으로 옮겨 가지 않게
+let joyMainDev = '';
+try { joyMainDev = localStorage.getItem('joyMainDev') || ''; } catch (e) { joyMainDev = ''; }
+function _joyAxPad(a, pads) {
+  pads = pads || joyPads();
+  if (!pads.length) return null;
+  if (a && a.dev) { const p = pads.find(q => joyDevKey(q) === a.dev); return p && !joyDevIsOff(p) ? p : null; }
+  if (joyMainDev && pads.length > 1) { const m = pads.find(q => joyDevKey(q) === joyMainDev && !joyDevIsOff(q)); if (m) return m; }
+  return pads.find(q => q.index === joyActiveIdx) || pads[0];
 }
 // 지금 쓰고 있는 패드에서 그 역할의 값(-1…1)을 읽는다. 배정이 없으면 0.
 function joyAxVal(role) {
   const a = joyAxes[role];
   if (!a || !joyOn) return 0;
-  const pads = joyPads();
-  if (!pads.length) return 0;
-  const p = pads.find(q => q.index === joyActiveIdx) || pads[0];
+  const p = _joyAxPad(a);
+  if (!p) return 0;
   const v = (p.axes || [])[a.i];
   if (!Number.isFinite(v)) return 0;
   const neu = (_joyNeutral[p.index] || [])[a.i];
@@ -473,10 +532,8 @@ function joyAxVal(role) {
 // 손을 뗀 지금 자리를 가운데로 삼는다(설정 화면 버튼 · 배정할 수 있는 동작 '조종간 중립 맞추기').
 function joyRecenter() {
   const pads = joyPads();
-  const p = pads.find(q => q.index === joyActiveIdx) || pads[0];
-  if (!p) { try { uiToast('조종 장치가 없습니다', 'err', 2000); } catch (e) { _swallow(e); } return false; }
-  _joyNeutral[p.index] = Array.prototype.slice.call(p.axes || []);
-  joyNeutralSave(p);
+  if (!pads.length) { try { uiToast('조종 장치가 없습니다', 'err', 2000); } catch (e) { _swallow(e); } return false; }
+  pads.forEach(p => { _joyNeutral[p.index] = Array.prototype.slice.call(p.axes || []); joyNeutralSave(p); });   // 연결된 장치 모두
   try { uiToast('조종간 중립을 지금 자리로 맞췄습니다(이 장치에 저장)', '', 2000); } catch (e) { _swallow(e); }
   return true;
 }
@@ -492,11 +549,10 @@ function joyNeutralSave(p) {
 // DEFAULT — 저장해 둔 가운데를 지우고, 장치가 처음 읽은(손을 뗀 지금) 자리를 가운데로 쓴다
 function joyNeutralDefault() {
   const pads = joyPads();
-  const p = pads.find(q => q.index === joyActiveIdx) || pads[0];
+  const p = pads[0];
   const st = _joyNeuStore();
-  if (p && p.id) delete st[p.id];
+  pads.forEach(q => { if (q.id) delete st[q.id]; _joyNeutral[q.index] = Array.prototype.slice.call(q.axes || []); });
   try { localStorage.setItem(JOY_NEU_KEY, JSON.stringify(st)); } catch (e) { _swallow(e); }
-  if (p) _joyNeutral[p.index] = Array.prototype.slice.call(p.axes || []);
   try { uiToast(p ? '저장한 가운데를 지웠습니다(기본값 — 지금 자리를 가운데로)' : '조종 장치가 없습니다', p ? '' : 'err', 2000); } catch (e) { _swallow(e); }
   return !!p;
 }
@@ -511,13 +567,13 @@ function joyNeutralSaved(p) {
 // (손을 떼도 조종간이 한쪽으로 밀린 것으로 읽힌다). SIM 버튼을 누르는 순간에는 대개 손이 떨어져 있다.
 function joyRecenterCyclic() {
   const pads = joyPads();
-  const p = pads.find(q => q.index === joyActiveIdx) || pads[0];
-  if (!p) return;
-  if (joyNeutralSaved(p)) return;   // 조종사가 CTR 로 맞춰 저장한 가운데가 있으면 그것을 믿는다
-  const neu = _joyNeutral[p.index] || (_joyNeutral[p.index] = Array.prototype.slice.call(p.axes || []));
+  if (!pads.length) return;
   for (const role of ['roll', 'pitch', 'yaw']) {
     const a = joyAxes[role];
     if (!a || a.abs) continue;
+    const p = _joyAxPad(a, pads);                // 그 축의 장치
+    if (!p || joyNeutralSaved(p)) continue;      // 조종사가 CTR 로 맞춰 저장한 가운데가 있으면 그것을 믿는다
+    const neu = _joyNeutral[p.index] || (_joyNeutral[p.index] = Array.prototype.slice.call(p.axes || []));
     const v = (p.axes || [])[a.i];
     if (Number.isFinite(v)) neu[a.i] = v;
   }
@@ -529,9 +585,8 @@ function joyRecenterCyclic() {
 function joyAxRaw(role) {
   const a = joyAxes[role];
   if (!a || !joyOn) return -1;
-  const pads = joyPads();
-  if (!pads.length) return -1;
-  const p = pads.find(q => q.index === joyActiveIdx) || pads[0];
+  const p = _joyAxPad(a);
+  if (!p) return -1;
   const v = (p.axes || [])[a.i];
   if (!Number.isFinite(v)) return -1;
   return Math.max(-1, Math.min(1, a.inv ? -v : v));
@@ -543,13 +598,16 @@ function joyAxToggleAbs(role) {
 }
 
 // 폴링 중 축 배정 — 가장 크게 움직인 축을 그 역할로 잡는다
-function _joyAxCaptureStep(p, neu) {
-  let best = -1, bestD = 0.45;      // 이만큼은 움직여야 '고른 것' 으로 본다
-  (p.axes || []).forEach((v, i) => {
-    if (!Number.isFinite(v)) return;
-    if ((_joyHat[p.index] || {})[i]) return;        // 햇은 조종간이 아니다
-    const d = Math.abs(v - (Number.isFinite(neu[i]) ? neu[i] : 0));
-    if (d > bestD) { bestD = d; best = i; }
+function _joyAxCaptureStep(pads) {
+  let best = -1, bestD = 0.45, p = null, neu = null;      // 이만큼은 움직여야 '고른 것' 으로 본다
+  pads.forEach(q => {
+    const nq = _joyNeutral[q.index] || [];
+    (q.axes || []).forEach((v, i) => {
+      if (!Number.isFinite(v)) return;
+      if ((_joyHat[q.index] || {})[i]) return;        // 햇은 조종간이 아니다
+      const d = Math.abs(v - (Number.isFinite(nq[i]) ? nq[i] : 0));
+      if (d > bestD) { bestD = d; best = i; p = q; neu = nq; }
+    });
   });
   if (best < 0) return;
   const v = p.axes[best] - (Number.isFinite(neu[best]) ? neu[best] : 0);
@@ -560,6 +618,7 @@ function _joyAxCaptureStep(p, neu) {
   const rest = Number.isFinite(neu[best]) ? neu[best] : 0;
   const abs = (joyAxCapture === 'coll') && Math.abs(rest) > 0.5;
   joyAxes[joyAxCapture] = { i: best, inv, abs };
+  if (pads.length > 1) joyAxes[joyAxCapture].dev = joyDevKey(p);   // 장치가 여럿이면 그 장치의 축으로
   joyAxSave();
   joyAxCapture = null;
 }
@@ -571,53 +630,56 @@ function joyPoll(now) {
   // 눌려 있는 키의 연속 동작(repeat)도 여기서 돈다 — 장치가 없어도 듣는다
   Object.keys(_joyKeys).forEach(code => _joyEdge(code, true, now));
   const pads = joyPads();
+  _joyPadList = pads;
   if (!pads.length) { joyPadName = ''; joyActiveIdx = -1; joyReleaseAll(); return; }
-  // 축 중립은 패드마다 따로 — 나중에 고르는 패드도 제 중립을 갖고 있어야 한다
+  // 축 중립은 패드마다 따로
   pads.forEach(q => {
     if (!_joyNeutral[q.index]) _joyNeutral[q.index] = joyNeutralSaved(q) || Array.prototype.slice.call(q.axes || []);   // CTR 로 맞춰 저장해 둔 가운데가 있으면 그것
+    _joyNoteDev(q);
   });
-  // ── 쓸 패드 고르기 ──
-  // 조종 장치 하나가 여러 대로 올라오는 기종이 있다(허브·복합 장치). 그때
-  // 첫 번째가 아무 값도 내지 않는 껍데기면 종전에는 영영 조용했다.
-  // 그래서 '지금 움직이고 있는' 패드로 옮겨 붙는다.
-  let sel = pads.find(q => q.index === joyActiveIdx) || null;
-  const live = pads.find(q => joyPadActive(q));
+  const use = pads.filter(q => !joyDevIsOff(q));
+  // ── '지금 쓰는 장치' — 장치를 적지 않은 축(종전 배정)과 이름 표시에 쓴다 ──
+  // 조종 장치 하나가 여러 대로 올라오는 기종(껍데기 장치)이 있어 '지금 움직이는' 쪽으로 옮겨 붙는다.
+  const pool = use.length ? use : pads;
+  let sel = pool.find(q => q.index === joyActiveIdx) || null;
+  const live = pool.find(q => joyPadActive(q));
   if (live && (!sel || (live.index !== sel.index && !joyPadActive(sel)))) sel = live;
-  if (!sel) sel = pads[0];
-  if (sel.index !== joyActiveIdx) { joyReleaseAll(); joyActiveIdx = sel.index; }
+  if (!sel) sel = pool[0];
+  joyActiveIdx = sel.index;
   joyPadName = sel.id || '조종 장치';
+  if (use.length === 1) { const k = joyDevKey(use[0]); if (k !== joyMainDev) { joyMainDev = k; try { localStorage.setItem('joyMainDev', k); } catch (e) { _swallow(e); } } }
+  // 빠졌거나 끈 장치에서 눌려 있던 입력은 놓는다
+  const keys = new Set(use.map(q => joyDevKey(q)));
+  Object.keys(_joyDown).forEach(c => { const k = _joyCodeDev(c); if (k && !keys.has(k)) _joyEdge(c, false, now); });
   if (!joyOn) return;
-  const p = sel;
-  const neu = _joyNeutral[p.index];
-
-  if (joyAxCapture) _joyAxCaptureStep(p, neu);
+  if (joyAxCapture) _joyAxCaptureStep(use);
+  use.forEach(p => _joyPollPad(p, now));
+  const pd = use.find(q => (q.axes || []).length > 5) || use[0];
+  if (pd) joyAxApplyDefault(pd, _joyNeutral[pd.index], use.length > 1 ? joyDevKey(pd) : '');
+  if (!joyLookDefaultDone) joyLookDefault(_joyHadSaved);
+  if (!joyApOffDone) joyApOffDefault();
+}
+// 장치 하나의 버튼 · 축 · 햇
+function _joyPollPad(p, now) {
+  const neu = _joyNeutral[p.index], pre = joyDevKey(p) + ':';
   (p.buttons || []).forEach((b, i) => {
     const v = (typeof b === 'object') ? (b.value != null ? b.value : (b.pressed ? 1 : 0)) : b;
-    const code = 'b' + i;
+    const code = pre + 'b' + i;
     const on = _joyDown[code] ? (v > JOY_OFF) : (v >= JOY_ON);
     _joyEdge(code, on, now);
   });
-  joyAxApplyDefault(p, neu);
-  if (!joyLookDefaultDone) joyLookDefault(_joyHadSaved);
-  if (!joyApOffDone) joyApOffDefault();
   const hat = _joyHat[p.index] || (_joyHat[p.index] = {});
   const no  = _joyNoHat[p.index] || (_joyNoHat[p.index] = {});
   const odd = _joyOdd[p.index] || (_joyOdd[p.index] = {});
   (p.axes || []).forEach((v, i) => {
     if (!Number.isFinite(v)) return;
     // ── 8방향 햇이 축 하나로 올라오는 기종 ──
-    // 쉬는 자리를 1 밖(대개 3.2857)으로 보내고, 눌린 방향은 -1…1 을 8등분해
-    // 실어 보낸다. 그래서 ± 두 방향으로는 여덟 방향을 가릴 수 없다.
-    //
-    // 가려내는 규칙:
     //   ① 1 밖의 값이 오면 그 자리에서 햇이다(그런 값은 햇만 낸다).
     //   ② 격자(0·±1/7·±3/7·±5/7·±1) 밖의 값이 한 번이라도 오면 영영 아니다.
-    //   ③ 격자만 지키면서 ±1/7·±3/7·±5/7 이 나오면 햇이다(한 번이면 충분하다 —
-    //      ②가 아날로그 축을 이미 걸러 냈으므로).
-    // SIM 조종간으로 배정한 축은 아예 보지 않는다 — 그 축은 사람이 이미
-    // "이건 조종간" 이라고 말한 것이다.
+    //   ③ 격자만 지키면서 ±1/7·±3/7·±5/7 이 나오면 햇이다.
+    // SIM 조종간으로 배정한 축은 아예 보지 않는다.
     const wasHat = hat[i];
-    if (_joyAxUsed(i)) { no[i] = true; }
+    if (_joyAxUsed(i, p)) { no[i] = true; }
     else if (!hat[i] && !no[i]) {
       if (joyIsHatValue(v)) hat[i] = true;                   // ① 1 밖 — 확정
       else if (joyLatticeHit(v) > JOY_LAT_TOL) no[i] = true; // ② 격자 밖 — 영영 아님
@@ -627,18 +689,17 @@ function joyPoll(now) {
       }
     }
     if (hat[i] && !wasHat) {
-      // 햇으로 판정되기 전에 ± 로 눌려 있었다면 그 자리에서 놓아 준다
-      _joyEdge('a' + i + '+', false, now);
-      _joyEdge('a' + i + '-', false, now);
+      _joyEdge(pre + 'a' + i + '+', false, now);
+      _joyEdge(pre + 'a' + i + '-', false, now);
     }
     if (hat[i]) {
       const dirs = joyHatDirs(v);
-      JOY_HAT_DIRS.forEach(d => _joyEdge('h' + i + d, dirs.indexOf(d) >= 0, now));
+      JOY_HAT_DIRS.forEach(d => _joyEdge(pre + 'h' + i + d, dirs.indexOf(d) >= 0, now));
       return;
     }
     const d = v - (Number.isFinite(neu[i]) ? neu[i] : 0);
     ['+', '-'].forEach(sgn => {
-      const code = 'a' + i + sgn;
+      const code = pre + 'a' + i + sgn;
       const m = sgn === '+' ? d : -d;
       const on = _joyDown[code] ? (m > JOY_OFF) : (m >= JOY_ON);
       _joyEdge(code, on, now);
@@ -664,8 +725,11 @@ function joyMonitor() {
     if (v > 0.2) btns.push({ i, v });
   });
   const axes = (p.axes || []).map((v, i) => ({ i, v, hat: !!hat[i] }));
+  const one = q => { const h = _joyHat[q.index] || {}, bs = [];
+    (q.buttons || []).forEach((b, i) => { const v = (typeof b === 'object') ? (b.value != null ? b.value : (b.pressed ? 1 : 0)) : b; if (v > 0.2) bs.push({ i, v }); });
+    return { index: q.index, id: q.id || '', key: joyDevKey(q), off: joyDevIsOff(q), act: joyPadActive(q), btns: bs, axes: (q.axes || []).map((v, i) => ({ i, v, hat: !!h[i] })) }; };
   return { id: p.id || '', mapping: p.mapping || '', btns, axes, index: p.index,
-           pads: pads.map(q => ({ index: q.index, id: q.id || '', act: joyPadActive(q) })) };
+           pads: pads.map(one) };
 }
 
 function _joyLoop() {
