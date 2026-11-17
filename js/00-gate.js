@@ -1,7 +1,7 @@
 // ─────────────────────────────────────────────────────────────
 // 00-gate.js — 시작 잠금(비밀번호)
 //
-// 앱을 열면 먼저 비밀번호를 묻는다. 맞으면 그 탭에서는 다시 묻지 않는다
+// 앱을 열면 먼저 비밀번호를 묻는다(종합판 shinesong 만 — 절차 훈련판 Flightsimulator 는 묻지 않고 화면 고르기부터). 맞으면 그 탭에서는 다시 묻지 않는다
 // (sessionStorage — 새로고침해도 그대로, 앱을 새로 열면 다시 묻는다).
 // 잠겨 있는 동안에는 화면을 덮고, 키보드·조이스틱이 뒤의 앱에 닿지 않게 한다.
 //
@@ -102,6 +102,12 @@
     form.querySelectorAll('.gate-mode-btn').forEach(b => b.addEventListener('click', () => pick(b.dataset.mode)));
     const first = el('gate-mode-pc'); try { if (first) first.focus(); } catch (e) { /* 누르면 된다 */ }
   };
+  // 절차 훈련판(Flightsimulator · js/00-edition.js)은 비밀번호를 묻지 않는다 — 곧바로 화면 · 기종 고르기
+  if (typeof APP_EDITION !== 'undefined' && APP_EDITION === 'proc') {
+    form.addEventListener('submit', e => e.preventDefault());
+    if (el('gate-mode')) chooseMode(); else setUnlocked();
+    return;
+  }
   form.addEventListener('submit', e => {
     e.preventDefault();
     if (form.classList.contains('choose')) return;
