@@ -20,6 +20,21 @@ const state = p => p.evaluate(() => {
 export async function run(page, t) {
   const url = page.url();
   const browser = page.context().browser();
+  // 절차 훈련판(Flightsimulator)은 비밀번호가 없다 — 처음 열면 곧바로 화면 · 기종 고르기
+  const procEd = await page.evaluate(() => typeof APP_EDITION !== 'undefined' && APP_EDITION === 'proc');
+  if (procEd) {
+    const tb = await browser.newPage();
+    await tb.goto(url); await ready(tb);
+    const s = await tb.evaluate(() => ({ locked: window.gateLocked, shown: getComputedStyle(document.getElementById('gate-overlay')).display !== 'none',
+      choose: getComputedStyle(document.getElementById('gate-mode')).display !== 'none', pwHidden: getComputedStyle(document.getElementById('gate-pw')).display === 'none',
+      ac: document.querySelectorAll('.gate-ac-btn').length }));
+    t.ok(s.shown && s.choose && s.pwHidden && s.ac === 3, '절차 훈련판 — 비밀번호 없이 처음부터 화면 · 기종 고르기');
+    await tb.click('#gate-mode-pc'); await tb.waitForTimeout(500);
+    const e = await tb.evaluate(() => ({ locked: window.gateLocked, shown: getComputedStyle(document.getElementById('gate-overlay')).display !== 'none', mode: sessionStorage.getItem('vfrStartMode') }));
+    t.ok(!e.locked && !e.shown && e.mode === 'pc', '절차 훈련판 — 화면을 고르면 바로 열린다');
+    await tb.close();
+    return;
+  }
   const tab = await browser.newPage();
   await tab.goto(url); await ready(tab);
   const s0 = await state(tab);
