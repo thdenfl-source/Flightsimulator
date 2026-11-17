@@ -55,7 +55,7 @@ function scnCapture(name) {
 function scnApply(sc) {
   if (!sc || !sc.pos) return false;
   const cur = (typeof AC_TYPE !== 'undefined') ? AC_TYPE : 'aw189';
-  if (sc.ac && sc.ac !== cur) { try { uiToast(`이 시나리오는 ${sc.ac === 'b206' ? 'Bell 206' : 'KUH-1CG'} 기종입니다 — 기종이 달라 연료 · 무게는 건너뜁니다`, 'warn', 4000); } catch (e) { _swallow(e); } }
+  if (sc.ac && sc.ac !== cur) { try { uiToast(`이 시나리오는 ${sc.ac === 'b206' ? 'Bell 206' : sc.ac === 'r22' ? 'R22' : 'KUH-1CG'} 기종입니다 — 기종이 달라 연료 · 무게는 건너뜁니다`, 'warn', 4000); } catch (e) { _swallow(e); } }
   try { S.running = false; if (typeof updateFlyBtns === 'function') updateFlyBtns(); } catch (e) { _swallow(e); }
   Object.assign(S, { lat: sc.pos.lat, lon: sc.pos.lon, alt: sc.pos.alt, hdg: sc.pos.hdg, spd: sc.pos.spd || 0, vs: sc.pos.vs || 0, bnk: 0, pit: 0 });
   S.trail = []; S.lastT = null;
@@ -113,7 +113,7 @@ function scnRender() {
   const w = document.getElementById('scn-wrap'); if (!w) return;
   const a = scnList(), fmt = t => { const d = new Date(t), p = n => String(n).padStart(2, '0'); return `${d.getMonth() + 1}/${d.getDate()} ${p(d.getHours())}:${p(d.getMinutes())}`; };
   w.querySelector('[data-scnv="list"]').innerHTML = a.length ? a.map((sc, i) => `<div class="scn-item"><div><b>${sc.name.replace(/</g, '&lt;')}</b>` +
-    `<small>${sc.ac === 'b206' ? 'Bell 206' : 'KUH-1CG'} · ${Math.round(sc.pos.alt)}ft · ${Math.round(sc.pos.spd)}kt · 바람 ${Math.round(sc.wind ? sc.wind.dir : 0)}°/${Math.round(sc.wind ? sc.wind.spd : 0)}kt · 지점 ${(sc.wps || []).length}${sc.sar ? ' · SAR' : ''} · ${fmt(sc.at)}</small></div>` +
+    `<small>${sc.ac === 'b206' ? 'Bell 206' : sc.ac === 'r22' ? 'R22' : 'KUH-1CG'} · ${Math.round(sc.pos.alt)}ft · ${Math.round(sc.pos.spd)}kt · 바람 ${Math.round(sc.wind ? sc.wind.dir : 0)}°/${Math.round(sc.wind ? sc.wind.spd : 0)}kt · 지점 ${(sc.wps || []).length}${sc.sar ? ' · SAR' : ''} · ${fmt(sc.at)}</small></div>` +
     `<button class="sim-btn" data-scn="load:${i}">불러오기</button><button class="sim-btn" data-scn="del:${i}">✕</button></div>`).join('')
     : '<div class="scn-empty">저장한 시나리오가 없습니다 — 이름을 넣고 "지금 상태 저장"을 누르십시오.</div>';
 }

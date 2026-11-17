@@ -442,7 +442,7 @@ function _dbfListOpen() {
   }
   const fmt = t => new Date(t).toLocaleString();
   w.innerHTML = `<div class="dbf-lbox"><div class="dbf-bar"><b>저장한 비행</b><button class="sim-btn" data-fl="x">✕</button></div>` +
-    (a.length ? a.map((r, i) => `<div class="dbf-litem"><div><b>${String(r.name).replace(/</g, '&lt;')}</b><small>${r.ac === 'b206' ? 'Bell 206' : 'KUH-1CG'} · ${_hms(r.rows.length ? r.rows[r.rows.length - 1][0] - r.rows[0][0] : 0)} · ${fmt(r.at)}</small></div>` +
+    (a.length ? a.map((r, i) => `<div class="dbf-litem"><div><b>${String(r.name).replace(/</g, '&lt;')}</b><small>${r.ac === 'b206' ? 'Bell 206' : r.ac === 'r22' ? 'R22' : 'KUH-1CG'} · ${_hms(r.rows.length ? r.rows[r.rows.length - 1][0] - r.rows[0][0] : 0)} · ${fmt(r.at)}</small></div>` +
       `<button class="sim-btn" data-fl="open:${i}">열기</button><button class="sim-btn" data-fl="del:${i}">✕</button></div>`).join('') : '<div class="dbf-litem">저장한 비행이 없습니다.</div>') + '</div>';
   w.style.display = 'flex';
 }
@@ -461,7 +461,7 @@ function fdrReport() {
     .imgs{display:flex;gap:8px} .imgs img{width:49%;border:1px solid #bbb;background:#0b1218} .ev div{padding:1px 0} .err{color:#c00} .warn{color:#b60}
     @media print{.noprint{display:none}}</style></head><body>
     <div class="noprint" style="text-align:right"><button onclick="print()">🖨 인쇄 / PDF 저장</button></div>
-    <h1>비행 강평 보고서</h1><div class="sub">${esc(_dbf.loaded || '이번 비행')} · ${(typeof AC_TYPE !== 'undefined' && AC_TYPE === 'b206') ? 'Bell 206B-3' : 'KUH-1CG'} · 작성 ${new Date().toLocaleString()}</div>
+    <h1>비행 강평 보고서</h1><div class="sub">${esc(_dbf.loaded || '이번 비행')} · ${(typeof acInfo === 'function') ? acInfo().name : 'KUH-1CG'} · 작성 ${new Date().toLocaleString()}</div>
     <table>${row('기록 · 비행', `${_hms(s.dur)} · ${_hms(s.airS)}`)}${row('최고 고도 · 속도 · 토크', `${s.maxAlt.toFixed(0)} ft · ${s.maxIas.toFixed(0)} kt · ${s.maxTq.toFixed(0)}%`)}
       ${row('토크 연속/최대 한계 넘음', `${_hms(s.tqContS)} / ${_hms(s.tqOverS)}`)}${row('VNE 넘음 · 낮은 NR', `${_hms(s.vneS)} · ${_hms(s.nrLowS)}`)}
       ${row('착륙(거친)', `${s.landings} (${s.hardLdg})`)}${row('AFCS 풀림 · 점검 필요', `${s.drops} · ${s.exceed || 0}건`)}</table>

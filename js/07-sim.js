@@ -18,7 +18,7 @@ function applyDelta(field, d){
       // 지금 속도에서 켠다) 기수 자세가 그 속도로 데려간다(14-simmode.js)
       if (simModeOn) { simIasStep(d); break; }
       iasNsOn = true;
-      S.spd = Math.max(0, Math.min((typeof acIs === 'function' && acIs('b206')) ? 130 : 320, S.spd + d));   // Bell 206 은 VNE 130
+      S.spd = Math.max(0, Math.min((typeof acIs === 'function' && acIs('b206')) ? B206P.vne : 320, S.spd + d));   // Bell 206 은 VNE 130 · R22 100
       S.pit = pitchFromSpd(S.spd);   // auto pitch from speed
       break;
     case 'hdg':

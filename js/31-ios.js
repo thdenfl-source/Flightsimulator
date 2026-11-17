@@ -161,11 +161,11 @@ function iosRender(m) {
   _iosSeen = Date.now(); _iosLast = m;
   const R = document.getElementById('ios-root'); if (!R) return;
   const kv = (k, v) => `<div><em>${k}</em><b>${v}</b></div>`;
-  R.querySelector('[data-iosv="state"]').innerHTML = kv('기종', m.ac === 'b206' ? 'Bell 206' : 'KUH-1CG') + kv('상태', m.running ? '비행' : '멈춤') + kv('엔진', m.eng || '') +
+  R.querySelector('[data-iosv="state"]').innerHTML = kv('기종', m.ac === 'b206' ? 'Bell 206' : m.ac === 'r22' ? 'R22' : 'KUH-1CG') + kv('상태', m.running ? '비행' : '멈춤') + kv('엔진', m.eng || '') +
     kv('고도', Math.round(m.alt) + ' ft') + kv('전파고도', Math.round(m.ra) + ' ft') + kv('속도', Math.round(m.spd) + ' kt') + kv('기수', String(Math.round(m.hdg) % 360).padStart(3, '0') + '°') +
     kv('승강률', Math.round(m.vs) + ' fpm') + kv('토크', Math.round(m.tq) + '%') + kv('NR', Math.round(m.nr) + '%') + kv('바람', `${Math.round(m.wind.dir)}° / ${Math.round(m.wind.spd)} kt`) +
     kv('자리', `${m.lat.toFixed(4)}, ${m.lon.toFixed(4)}`);
-  const F = (m.ac === 'b206' ? [['bEng', '엔진 고장'], ['bHyd', '유압 고장'], ['govHi', '거버너 HI'], ['govLo', '거버너 LO'], ['chip', 'ENG CHIP'], ['thStuck', '스로틀 고착']]
+  const F = (m.ac === 'b206' || m.ac === 'r22' ? [['bEng', '엔진 고장'], ['bHyd', '유압 고장'], ['govHi', '거버너 HI'], ['govLo', '거버너 LO'], ['chip', 'ENG CHIP'], ['thStuck', '스로틀 고착']]
                              : [['oei', '2번 엔진 고장(OEI · SIM)'], ['idle', '두 엔진 IDLE(SIM)'], ['hot1', '1번 고온 시동(HSP)'], ['aisbv1', '1번 AISBV 고착(시동 실속)'], ['fix1', '1번 FADEC FAIL FIX'], ['plim1', '1번 PWR LIMIT'],
                                 ['mfdPfd', 'PFD(MFD1/2) 고장 — REV'], ['mfdSysF', 'SYSTEM(MFD3/4) 고장 — REV'], ['gen1ov', 'GEN1 과전압(GCU 4.5초 차단)'], ['tru1', 'TRU1 고장'], ['apm1', 'APM1 고장'], ['apm2', 'APM2 고장'], ['semaP2', '피치 SEMA2 고장'], ['semaPB', '피치 SEMA 둘 고장'], ['collLink', 'COLL LINK']])
     .concat([['trDrive', '꼬리로터 구동 상실(SIM)'], ['trFixed', '꼬리로터 피치 고정(SIM)'], ['asi', '속도계 고착'], ['alt', '고도계 고착'], ['vsi', '승강계 고착'], ['ahrs', 'AHRS(자세) 고장'], ['hdg', '나침반 오차 25°']]);
@@ -205,6 +205,7 @@ const HELP_ITEMS = [
   ['관제 교신(TWR)', 'TWR 주파수로 PTT 를 놓으면 자리에 맞춰 조종사 말(🎙 PILOT)을 보여 주고 타워가 답한다 — 활주로 밖 지상 활주 요청 · 활주로 위 이륙 · 5NM 관제권 떠남 · 접근(inbound) · 5마일 final 착륙 허가. 비행계획이 없으면 장주(pattern) 비행.'],
   ['PTT (Bell 오디오 패널)', '누르는 동안 MIC 로 고른 무전기로 송신. 가까운 공항 TWR · GND · APP 주파수면 관제가 답한다.'],
   ['조종 장치 여러 대', '조이스틱 · 스로틀(컬렉티브) · 페달처럼 다른 장치를 여럿 꽂아 함께 쓴다. CDU 조종장치 › 버튼 · 축 배정 › 연결된 장치에서 장치마다 사용/꺼짐. 장치가 둘 이상이면 새로 잡는 버튼 · 축은 그 장치의 것으로 적힌다(같은 번호라도 다른 장치는 듣지 않는다). 장치 하나일 때 잡아 둔 배정은 어느 장치에서든 듣고, 축은 그때 쓰던 장치를 계속 본다. 조종간 중립 맞추기는 연결된 장치 모두.'],
+  ['R22', '기종 R22 — 시작 화면(비밀번호 뒤) 기종 고르기에서 R22. 단발 터빈 · 아날로그 계기판(한서대 훈련기 사진의 배치: 왼쪽 위 ENGINE OUT · FIRE · ROTOR RPM 경고등, 비행 계기 3열, 엔진 계기 2열 TRQ · ENG OIL · TOT · XMSN OIL · N1 · FUEL QTY · FUEL SHUT OFF · VOLT/AMP, 오른쪽 주의등 · MASTER CAUTION · TEST · HYD SYS). 엔진 · 시동 · 연료 · 하부 콘솔 무전 · 컬렉티브 · SIM 은 Bell 206 과 같고, VNE 100kt · 최대 2,550lb · 연료 69gal 이 다르다(00-params.js r22Perf 에서 고친다). FUEL QTY 계기를 누르면 무게 · 연료(W&B).'],
   ['SOUND', '로터 소리 — SOUND 아래 − / + 로 크기(0~100%, 로터 · APU · 엔진 모두). 토크에 따라 크기가 바뀐다. 경고음이 울리면 반으로 줄어든다. 계통 소리도 함께 — APU CONTR ON 뒤 17초 시동 소리 → 작동 소리, PCD IDLE 엔진 시동(시동기 · 점화 딸깍 · 터빈, 약 25초) — 시동이 끝나면 8초에 걸쳐 잦아들며 로터 소리로 바뀐다. APU 는 OFF 하면 곧바로 꺼진다. 로터 소리는 NR 을 따라 — 엔진을 모두 끄면 낮아지며 멎는다. Cockpit Mode 를 시작하면 SOUND 가 저절로 켜진다.'],
   ['🧰 도구', '작은 화면에서는 시나리오 · 환경 · 강평 · 교관 화면 · 설정 · 도움말이 이 메뉴 하나로 모인다.'],
   ['⚙ 설정', '소리 · RA 콜아웃 · 관제 음성 · 리드백 확인 · 말 빠르기 · 콜사인 · 다른 기기 교관 연결 · 모든 설정 내보내기/들여오기/초기화.'],
