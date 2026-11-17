@@ -10,6 +10,12 @@ const TUNE_DEFAULT = {
   // Bell 206B-3 성능(01-state.js B206P · 09-cdu.js PERF) — 최대 3,200lb · 표준 무게 3,000lb
   b206Perf: { wt: 3000, hovIge: 72, hovOge: 82, vy: 52, vi0: 14, par: 3.51e-5, fpmUp: 24, fpmDn: 38,
               vne: 130, vneAlt: 3000, vnePerKft: 3.5, mtaMax: 100, mtaFlatDa: 6000, mtaPerKft: 3.5, tqCont: 85 },
+  // R22(단발 터빈 · 사진 속 훈련기) 성능 — 최대 2,550lb(계기판 위 VNE 표 'TAKE OFF GROSS WEIGHT UP TO 2550 LBS') · 표준 2,250lb
+  //   VNE 100 KIAS(해면) · 3,000ft 위로 1,000ft 마다 3kt 줄어든다 · 토크 연속 100% · 5분 105%(연습용 근사 — 실기 RFM 값으로 바꿔 쓴다)
+  r22Perf: { wt: 2250, hovIge: 70, hovOge: 80, vy: 50, vi0: 13, par: 4.2e-5, fpmUp: 22, fpmDn: 36,
+             vne: 100, vneAlt: 3000, vnePerKft: 3, mtaMax: 100, mtaFlatDa: 5000, mtaPerKft: 3.5, tqCont: 85 },
+  r22Arm: { empty: 101.0, pilot: 79, copilot: 79, rear: 79, cargo: 120, fuel: 105.0 },
+  r22Cg:  { fwd: 93.0, aft: 106.0 },
   // Bell 무게 · 균형(25-b206panel.js) — 팔 길이(in) · 무게중심 한계(in)
   b206Arm: { empty: 116.5, pilot: 65, copilot: 65, rear: 104, cargo: 148, fuel: 110.3 },
   b206Cg:  { fwd: 106.0, aft: 114.2 },

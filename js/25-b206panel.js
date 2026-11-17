@@ -11,7 +11,12 @@
 //   N1 105% / N2 97~100% / NR 90~107% / VNE 130 KIAS(해면)
 // ══════════════════════════════════════════════════════
 const B206_W = 1000, B206_H = 600;
-const B206_LIM = {
+const _R22 = typeof acR22 === 'function' && acR22();   // R22(00-aircraft.js) — 같은 엔진 갈래, 한계 · 연료 · 무게 · 판 배치만 다르다
+const B206_LIM = _R22 ? {
+  tqCont: 85, tqMax: 100, totCont: 738, totMax: 810, n1Max: 105, n1Idle: 62, n2Lo: 97, n2Hi: 100, nrLo: 90, nrHi: 107,
+  vne: 100,                        // KIAS(계기판 위 VNE 표)
+  fuelCap: 69, fuelLow: 12,        // 갤런
+} : {
   tqCont: 85, tqMax: 100,          // 토크(%)
   totCont: 738, totMax: 810,       // TOT(°C)
   n1Max: 105, n1Idle: 62,          // N1(%)
@@ -58,7 +63,7 @@ function _b206ValsRest(on, tq, nr, gal, n1) {
 // ── 연료(91 갤런 · Jet-A) — 흰수리 연료 계통과 따로 셈한다 ──
 // 흐름(gph) = IDLE 약 9 · 토크 1% 당 0.21 더(85% 에서 약 27gph) · 시동 중 점화되면 6. 20 갤런 아래 LOW FUEL, 0 이면 엔진이 멎는다.
 // 처음엔 76 갤런. 계기판의 FUEL QTY 계기를 누르면 바꿀 수 있다(재급유).
-const B206_FUEL = { start: 76, idleGph: 9, perTq: 0.21 };
+const B206_FUEL = _R22 ? { start: 55, idleGph: 8, perTq: 0.17 } : { start: 76, idleGph: 9, perTq: 0.21 };
 let _b206Gal = B206_FUEL.start, _b206FuelT = 0;
 function b206FuelGal() { return _b206Gal; }
 function b206FuelSet(g) { _b206Gal = Math.max(0, Math.min(B206_LIM.fuelCap, +g || 0)); }
@@ -446,6 +451,7 @@ const B206_HIT = { test: [888, 22, 52, 52], master: [810, 26, 70, 36], fuel: [94
 // ── 판 전체 — g 에 (x, y, w, h) 칸으로 그린다 ──
 function b206Draw(g, x, y, w, h) {
   if (!(w > 40 && h > 40)) return;
+  if (_R22) return r22Draw(g, x, y, w, h);
   const v = b206Vals(), cdi = b206Cdi(), an = b206Annun(v);
   const rate = _b206TurnRate(v.hdg);
   g.save();
@@ -521,6 +527,98 @@ function b206Draw(g, x, y, w, h) {
   _b206Text(g, 'BELL 206B-3', 918, 300, 12, '#33393f'); _b206Text(g, 'JETRANGER III', 918, 316, 10, '#33393f');
   g.restore();
 }
+// ══ R22 계기판 — 한서대 훈련기 사진(HL9169 · HL9175)의 배치 ══
+//   위 왼쪽: 경고등 ENGINE OUT · FIRE · ROTOR RPM(빨강)   위 오른쪽(판 오른쪽 칸): 주의등 묶음 · MASTER CAUTION · CAUTION TEST · HYD SYS
+//   비행 계기 3열 —  1열 이중 회전계(NR/N2) · 속도계 · RMI · 디지털 시계
+//                    2열 (등록 표) · 자세계(+볼) · 방향지시계(DG) · CDI
+//                    3열 (빈칸) · 고도계 · 승강계 · ELT
+//   엔진 계기 2열 —  TORQUE · ENG OIL / TOT · XMSN OIL / N1 · FUEL QTY / FUEL SHUT OFF(빨간 손잡이) · LOAD/FUEL PSI
+//   그림 좌표는 Bell 판과 같은 1000×600
+const R22_HIT = { test: [930, 26, 52, 44], master: [848, 26, 76, 44], fuel: [590, 340, 104, 104], mute: [12, 24, 44, 40], hyd: [906, 300, 76, 100] };
+function _r22Ball(g, cx, cy, w, slip) {
+  g.save(); g.fillStyle = '#d8d0b0'; g.beginPath(); g.ellipse(cx, cy, w, 7, 0, 0, 7); g.fill();
+  g.strokeStyle = '#000'; g.lineWidth = 1.2; g.beginPath(); g.moveTo(cx - 7, cy - 7); g.lineTo(cx - 7, cy + 7); g.moveTo(cx + 7, cy - 7); g.lineTo(cx + 7, cy + 7); g.stroke();
+  g.fillStyle = '#111'; g.beginPath(); g.arc(cx + _cl(slip, -1, 1) * (w - 6), cy, 5.5, 0, 7); g.fill(); g.restore();
+}
+function _r22Clock(g, cx, cy) {
+  g.save(); g.fillStyle = '#1a1a1a'; g.fillRect(cx - 52, cy - 34, 104, 68); g.strokeStyle = '#444'; g.lineWidth = 2; g.strokeRect(cx - 52, cy - 34, 104, 68);
+  g.fillStyle = '#9fae8c'; g.fillRect(cx - 40, cy - 20, 80, 26); g.restore();
+  const d = new Date(), z = n => String(n).padStart(2, '0');
+  _b206Text(g, `${z(d.getHours())}:${z(d.getMinutes())}:${z(d.getSeconds())}`, cx, cy - 7, 17, '#1d2218');
+  _b206Text(g, 'QUARTZ CHRONOMETER', cx, cy - 27, 7, '#bbb'); _b206Text(g, 'TIMER   MODE   ST/SP', cx, cy + 20, 7, '#bbb');
+}
+function r22Draw(g, x, y, w, h) {
+  const v = b206Vals(), cdi = b206Cdi(), an = b206Annun(v), T = b206TestOn;
+  _b206TurnRate(v.hdg);
+  g.save();
+  g.fillStyle = '#1c1f22'; g.fillRect(x, y, w, h);                                  // 검은 판(사진)
+  const k = Math.min(w / B206_W, h / B206_H);
+  g.translate(x + (w - B206_W * k) / 2, y + (h - B206_H * k) / 2); g.scale(k, k);
+  g.save(); g.fillStyle = '#232629'; g.fillRect(4, 4, B206_W - 8, B206_H - 8); g.strokeStyle = '#3a3f44'; g.lineWidth = 3; g.strokeRect(4, 4, B206_W - 8, B206_H - 8);
+  g.fillStyle = '#4e565d'; for (const [sx, sy] of [[16, 16], [B206_W - 16, 16], [16, B206_H - 16], [B206_W - 16, B206_H - 16]]) { g.beginPath(); g.arc(sx, sy, 4, 0, 7); g.fill(); }
+  g.fillStyle = '#16181a'; g.fillRect(746, 14, 240, 572); g.restore();             // 오른쪽 칸(주의등 · 스위치)
+  try { const m = g.getTransform(); g.canvas._b206 = { a: m.a, e: m.e, f: m.f }; } catch (e) { /* 그만 */ }
+  // HORN MUTE · 경고등(빨강)
+  { const m = _b206HornMuted; g.save(); g.fillStyle = '#111'; g.fillRect(12, 24, 44, 40); g.strokeStyle = m ? '#ffb21a' : '#444'; g.lineWidth = 2; g.strokeRect(13, 25, 42, 38); g.restore();
+    _b206Text(g, 'HORN', 34, 38, 9, m ? '#ffb21a' : '#aaa'); _b206Text(g, 'MUTE', 34, 50, 9, m ? '#ffb21a' : '#aaa'); }
+  g.save(); g.fillStyle = '#0d0d0d'; g.fillRect(62, 22, 250, 46); g.restore();
+  _b206Lamp(g, 68, 28, 76, 34, 'ENGINE OUT', T || an.engOut, '#ff3a2a');
+  _b206Lamp(g, 150, 28, 76, 34, 'FIRE', T, '#ff3a2a');
+  _b206Lamp(g, 232, 28, 76, 34, 'ROTOR RPM', T || an.rpm, '#ff3a2a');
+  // 등록 표 — 2 · 3열 위
+  g.save(); g.fillStyle = '#e9e4d2'; g.fillRect(268, 100, 132, 64); g.strokeStyle = '#555'; g.strokeRect(268, 100, 132, 64); g.restore();
+  _b206Text(g, 'R22', 334, 122, 22, '#222'); _b206Text(g, 'GPS NOT APVD FOR IFR', 334, 150, 8, '#444');
+  // 비행 계기
+  const x1 = 110, x2 = 240, x3 = 370, y1 = 150, y2 = 270, y3 = 390, y4 = 510, Rf = 56;
+  b206Tach(g, x1, y1, Rf, v.nr, v.n2);
+  b206Airspeed(g, x1, y2, Rf, v.ias);
+  b206Rmi(g, x1, y3, Rf, v.hdg, b206RmiRel());
+  _r22Clock(g, x1, y4);
+  b206Attitude(g, x2, y2, Rf, v.pit, v.bnk);
+  _r22Ball(g, x2, y2 + Rf * 0.66, 26, v.slip);                // 볼 — 자세계 안 아래(계기 사이가 좁다)
+  b206Dg(g, x2, y3, Rf, v.hdg, v.hdgBug);
+  b206CdiGauge(g, x2, y4, Rf * 0.94, cdi);
+  b206Altimeter(g, x3, y2, Rf, v.alt, v.baro);
+  b206Vsi(g, x3, y3, Rf, v.vs);
+  // ELT
+  g.save(); g.fillStyle = '#111'; g.fillRect(x3 - 40, y4 - 40, 80, 80); g.fillStyle = '#c4161c'; g.fillRect(x3 - 8, y4 - 22, 16, 30); g.fillStyle = '#ddd'; g.fillRect(x3 - 5, y4 - 26, 10, 12); g.restore();
+  _b206Text(g, 'ELT', x3, y4 - 32, 10, '#ddd'); _b206Text(g, 'ARM', x3 + 26, y4 - 14, 8, '#ccc'); _b206Text(g, 'ON', x3 + 26, y4 + 6, 8, '#ccc'); _b206Text(g, 'RESET', x3, y4 + 26, 8, '#ccc');
+  // 엔진 계기
+  const e1 = 520, e2 = 640, Re = 52;
+  b206RoundGauge(g, e1, y1, Re, { lo: 0, hi: 120, maj: 10, min: 5, lab: q => q % 20 === 0 ? String(q) : null, fs: Re * 0.17,
+    bands: [[0, B206_LIM.tqCont, B206_COL.green], [B206_LIM.tqCont, B206_LIM.tqMax, B206_COL.yellow]], redline: [B206_LIM.tqMax], val: _cl(v.tq, 0, 125), title: ['TRQ', '%'] });
+  b206DualGauge(g, e2, y1, Re,
+    { lo: 0, hi: 150, maj: 50, min: 10, lab: q => String(q / 10), bands: [[115, 130, B206_COL.green]], redline: [50, 130], val: v.engOilP, unit: 'PSI' },
+    { lo: 0, hi: 150, maj: 50, min: 10, lab: q => String(q / 10), bands: [[0, 107, B206_COL.green]], redline: [107], val: v.engOilT, unit: '°C' }, ['ENG', 'OIL']);
+  b206RoundGauge(g, e1, y2, Re, { lo: 0, hi: 900, maj: 100, min: 50, lab: q => q % 200 === 0 ? String(q / 100) : null, fs: Re * 0.19,
+    bands: [[100, B206_LIM.totCont, B206_COL.green], [B206_LIM.totCont, B206_LIM.totMax, B206_COL.yellow]], redline: [B206_LIM.totMax], val: _cl(v.tot, 0, 920), title: ['TOT', '°C×100'] });
+  b206DualGauge(g, e2, y2, Re,
+    { lo: 0, hi: 100, maj: 50, min: 10, lab: q => String(q / 10), bands: [[30, 70, B206_COL.green]], redline: [30, 70], val: v.xmsnP, unit: 'PSI' },
+    { lo: 0, hi: 150, maj: 50, min: 10, lab: q => String(q / 10), bands: [[15, 110, B206_COL.green]], redline: [110], val: v.xmsnT, unit: '°C' }, ['XMSN', 'OIL']);
+  b206N1(g, e1, y3, Re, v.n1);
+  b206RoundGauge(g, e2, y3, Re, { lo: 0, hi: 70, maj: 10, min: 5, lab: q => q === 0 ? 'E' : q % 20 === 0 ? String(q) : null, bands: [[0, B206_LIM.fuelLow, B206_COL.yellow], [B206_LIM.fuelLow, B206_LIM.fuelCap, B206_COL.green]], val: v.gal, title: ['FUEL', 'QTY GAL'], a0: -120, a1: 120 });
+  // FUEL SHUT OFF — 빨간 당김 손잡이(PULL OFF)
+  g.save(); g.fillStyle = '#c4161c'; g.fillRect(e1 - 28, y4 - 34, 56, 68); g.fillStyle = '#7a0d0d'; g.beginPath(); g.arc(e1, y4 + 6, 15, 0, 7); g.fill();
+  g.fillStyle = '#d9d9d9'; g.beginPath(); g.arc(e1, y4 + 6, 9, 0, 7); g.fill(); g.restore();
+  _b206Text(g, 'FUEL', e1, y4 - 26, 9, '#fff'); _b206Text(g, 'SHUT OFF', e1, y4 - 15, 8, '#fff'); _b206Text(g, 'PULL OFF', e1, y4 + 28, 7, '#fff');
+  b206DualGauge(g, e2, y4, Re,
+    { lo: 0, hi: 100, maj: 50, min: 10, lab: q => String(q / 10), bands: [[0, 70, B206_COL.green]], redline: [100], val: v.load, unit: 'AMP' },
+    { lo: 0, hi: 30, maj: 10, min: 5, lab: q => String(q), bands: [[4, 25, B206_COL.green]], redline: [4, 25], val: v.fuelP, unit: 'PSI' }, ['VOLT', 'AMP']);
+  // 오른쪽 칸 — MASTER CAUTION · CAUTION TEST · 주의등 묶음 · HYD SYS · 이름
+  { const m = T || (b206MasterCaution(v, an) && (performance.now() % 1000) < 600);
+    _b206Lamp(g, 852, 30, 68, 36, '', m, '#ffb21a');
+    _b206Text(g, 'MASTER', 886, 42, 10, m ? '#1a0a00' : '#5a4434'); _b206Text(g, 'CAUTION', 886, 55, 10, m ? '#1a0a00' : '#5a4434'); }
+  g.save(); g.fillStyle = '#0d0d0d'; g.fillRect(930, 26, 52, 44); g.fillStyle = T ? '#ff3a2a' : '#7a0d0d'; g.beginPath(); g.arc(956, 48, T ? 8 : 10, 0, 7); g.fill(); g.restore();
+  _b206Text(g, 'TEST', 956, 80, 9, '#bbb');
+  b206Cautions(v, an).forEach(([t, on], i) => _b206Lamp(g, 760 + (i % 2) * 112, 100 + Math.floor(i / 2) * 44, 104, 36, t, T || on, '#ffb21a'));
+  { const on = b206Hyd.sw; g.save(); g.fillStyle = '#0d0d0d'; g.fillRect(906, 300, 76, 100);
+    g.fillStyle = '#555'; g.fillRect(936, 318, 16, 60); g.fillStyle = '#ddd'; g.fillRect(932, on ? 318 : 350, 24, 28); g.restore();
+    _b206Text(g, 'HYD SYS', 944, 310, 10, '#ddd'); _b206Text(g, 'ON', 970, 326, 9, '#ccc'); _b206Text(g, 'OFF', 970, 374, 9, '#ccc');
+    if (b206Hyd.fail) _b206Text(g, 'FAIL', 944, 392, 9, '#ff5252'); }
+  _b206Text(g, 'R22', 820, 340, 26, '#5f6870'); _b206Text(g, 'TURBINE TRAINER', 820, 366, 9, '#4d555c');
+  _b206Text(g, 'THIS AIRCRAFT IS EQUIPPED WITH AN', 866, 520, 8, '#7d868e'); _b206Text(g, 'ALTITUDE REPORTING SYSTEM', 866, 534, 8, '#7d868e');
+  g.restore();
+}
 // PFD 창에서 판이 쓸 높이(캔버스 px) — 소프트키 줄(#pfd-sk) · FCP(.ctrl-bar)가 캔버스 위로 실제로 시작하는 자리를 재서 그 위까지만.
 // FCP 높이(CTRL_H) 한 값으로만 빼면 기기 · 배율에 따라 판 아래쪽이 FCP 에 가려졌다(태블릿 1920 폭 화면)
 function b206RoomH(canvas, H, ctrlH) {
@@ -582,7 +680,7 @@ function b206PanelHit(ev) {
   const r = c.getBoundingClientRect(); if (!(r.width > 0)) return null;
   const px = (ev.clientX - r.left) * c.width / r.width, py = (ev.clientY - r.top) * c.height / r.height;
   const k = c._b206.a, x = (px - c._b206.e) / k, y = (py - c._b206.f) / k;
-  for (const [n, [bx, by, bw, bh]] of Object.entries(B206_HIT)) if (x >= bx && x <= bx + bw && y >= by && y <= by + bh) return n;
+  for (const [n, [bx, by, bw, bh]] of Object.entries(_R22 ? R22_HIT : B206_HIT)) if (x >= bx && x <= bx + bw && y >= by && y <= by + bh) return n;
   return null;
 }
 function _b206TestEnd() { if (b206TestOn) { b206TestOn = false; try { drawPFD(); } catch (e) { /* 그만 */ } } }
@@ -650,7 +748,8 @@ setInterval(() => {
 
 // ── 무게 · 연료(W&B) — 자중 · 사람 · 화물 · 연료(갤런 × 6.7lb)로 총중량을 셈한다. 성능(09-cdu.js Bell PERF)이 이 무게를 쓴다 ──
 // 최대 총중량 3,200lb. 연료는 타는 만큼 무게가 준다. 계기판 FUEL QTY 를 누르거나 컬렉티브 창의 W&B 단추로 연다.
-const B206_WB = { empty: 1950, pilot: 170, copilot: 170, rear: 0, cargo: 0, max: 3200, lbPerGal: 6.7 };
+const B206_WB = _R22 ? { empty: 1250, pilot: 170, copilot: 170, rear: 0, cargo: 0, max: 2550, lbPerGal: 6.7 }
+                     : { empty: 1950, pilot: 170, copilot: 170, rear: 0, cargo: 0, max: 3200, lbPerGal: 6.7 };
 const b206Wb = { empty: B206_WB.empty, pilot: B206_WB.pilot, copilot: B206_WB.copilot, rear: B206_WB.rear, cargo: B206_WB.cargo };
 function b206GrossWt() { return b206Wb.empty + b206Wb.pilot + b206Wb.copilot + b206Wb.rear + b206Wb.cargo + b206FuelGal() * B206_WB.lbPerGal; }
 function b206WbSet(o) {
@@ -662,8 +761,8 @@ function b206WbOpen() {
   if (!w) {
     w = document.createElement('div'); w.id = 'wb-wrap';
     const row = (k, t, u) => `<label><span>${t}</span><input type="number" inputmode="decimal" data-wb="${k}"><em>${u}</em></label>`;
-    w.innerHTML = `<div class="wb-box"><div class="wb-bar"><b>Bell 206B-3 무게 · 연료 (W&amp;B)</b><button class="sim-btn" data-wbx="close">✕</button></div>` +
-      row('empty', '기본 자중', 'lb') + row('pilot', '조종사', 'lb') + row('copilot', '부조종사 · 교관', 'lb') + row('rear', '뒷좌석(3석 합)', 'lb') + row('cargo', '화물', 'lb') +
+    w.innerHTML = `<div class="wb-box"><div class="wb-bar"><b>${_R22 ? 'R22' : 'Bell 206B-3'} 무게 · 연료 (W&amp;B)</b><button class="sim-btn" data-wbx="close">✕</button></div>` +
+      row('empty', '기본 자중', 'lb') + row('pilot', '조종사', 'lb') + row('copilot', '부조종사 · 교관', 'lb') + row('rear', _R22 ? '가운데 좌석' : '뒷좌석(3석 합)', 'lb') + row('cargo', '화물', 'lb') +
       row('gal', '연료', `gal (최대 ${B206_LIM.fuelCap})`) +
       `<div class="wb-sum" data-wbv="sum"></div><div class="wb-btns"><button class="sim-btn" data-wbx="full">연료 가득</button><button class="sim-btn on" data-wbx="ok">적용</button></div></div>`;
     document.body.appendChild(w);
@@ -674,7 +773,7 @@ function b206WbOpen() {
       const over = gw > B206_WB.max;
       const cg = b206Cg(o, gal), cgOk = b206CgOk(cg);
       // 무게중심 막대 — 앞 106 ~ 뒤 114.2
-      const pct = v => Math.max(0, Math.min(100, (v - 103) / (117 - 103) * 100));
+      const lo = B206_CG.fwd - 3, hi = B206_CG.aft + 3, pct = v => Math.max(0, Math.min(100, (v - lo) / (hi - lo) * 100));
       let hv = '';
       try { const w0 = Object.assign({}, b206Wb), g0 = b206FuelGal(); b206WbSet(Object.assign({}, o, { gal })); const h = b206HoverCheck(); b206WbSet(Object.assign(w0, { gal: g0 }));
         hv = `<div class="wb-hv">호버(지금 고도 ${Math.round(S.alt)}ft) — HIGE <b class="${h.igeOk ? '' : 'over'}">${h.ige.toFixed(0)}%</b> · HOGE <b class="${h.ogeOk ? '' : 'over'}">${h.oge.toFixed(0)}%</b> / 가용 ${h.mta.toFixed(0)}%` +
@@ -749,7 +848,7 @@ function b206HydFail(on) { b206Hyd.fail = !!on; try { if (typeof fdrNote === 'fu
 // ── 무게중심(CG · 세로, 기준선에서 in) — 206B-3 대략 팔 길이 ──
 //   자중 1,950lb @116.5 · 조종석 65 · 뒷좌석 104 · 화물칸 148 · 연료 110.3
 //   허용 — 앞 106.0 · 뒤 114.2(총중량 3,200lb 까지) · 벗어나면 W&B 창에 빨갛게
-const B206_ARM = TUNE.b206Arm, B206_CG = TUNE.b206Cg;   // 값은 00-params.js
+const B206_ARM = _R22 ? TUNE.r22Arm : TUNE.b206Arm, B206_CG = _R22 ? TUNE.r22Cg : TUNE.b206Cg;   // 값은 00-params.js
 function b206Cg(w = b206Wb, gal = b206FuelGal()) {
   let m = 0, wt = 0;
   for (const k of ['empty', 'pilot', 'copilot', 'rear', 'cargo']) { m += w[k] * B206_ARM[k]; wt += w[k]; }
