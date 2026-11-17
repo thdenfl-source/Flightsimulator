@@ -2457,6 +2457,7 @@
     }
     function joyAxUnbind(role) { joyAxClear(role); switchMode('JOYSTICK'); }
     function joyAxFlip(role) { joyAxInvert(role); switchMode('JOYSTICK'); }
+    function joyDevTog(k) { joyDevToggle(k); switchMode('JOYSTICK'); }
     function joyAxAbs(role) { joyAxToggleAbs(role); switchMode('JOYSTICK'); }
     function joyCenterNow() { joyRecenter(); switchMode('JOYSTICK'); }
     function joyResetBinds() {
@@ -2468,8 +2469,9 @@
       const back = `<div data-act="switchMode" data-arg='["CONTROLS"]' style="display:inline-flex;align-items:center;gap:4px;` +
         `padding:5px 10px;margin-bottom:8px;border:1px solid #2a4a5a;border-radius:4px;background:#0a1620;color:#00cfff;` +
         `font-size:10px;font-weight:bold;cursor:pointer;">‹ 조종장치</div>`;
+      const devs = (typeof joyDevList === 'function') ? joyDevList() : [];
       const conn = joyPadName
-        ? `<span style="color:#00ff88;">연결됨</span> · <span style="color:#8a97a5;">${joyPadName}</span>`
+        ? `<span style="color:#00ff88;">연결됨</span> · <span style="color:#8a97a5;">${devs.length > 1 ? `장치 ${devs.length}대 — 함께 씁니다` : joyPadName}</span>`
         : `<span style="color:#ff8877;">장치 없음</span> — 연결 후 <b>아무 버튼이나 한 번</b> 누르십시오`;
       // 게임패드로 안 잡히는 장치를 직접 여는 길(WebHID)
       const h = joyHidStatus();
@@ -2489,7 +2491,18 @@
         `font-size:10px;line-height:1.5;color:#cdd6df;">${conn}<br>` +
         `<span style="color:#567;">동작을 누른 뒤 원하는 버튼을 누르면 그 버튼으로 잡힙니다. ` +
         `햇(HAT)처럼 축으로 올라오는 입력도 방향별로 잡을 수 있습니다.</span></div>`;
-      const rows = [];
+      // ── 연결된 장치 — 여럿을 함께 쓴다 · 장치마다 켜고 끈다 ──
+      const devRows = devs.length ? (`<div style="color:#556;font-size:9px;letter-spacing:1px;margin:2px 0 4px;">연결된 장치 (${devs.length})</div>` +
+        devs.map(d => `<div style="display:flex;align-items:center;gap:6px;padding:7px 8px;margin-bottom:3px;` +
+          `border:1px solid ${d.off ? '#1e2630' : (d.act ? '#00e5ff88' : '#1e3a2a')};border-radius:5px;background:#0a1116;">` +
+          `<div style="flex:1;min-width:0;"><div style="color:${d.off ? '#5a6673' : '#cdd6df'};font-size:11px;font-weight:bold;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">` +
+          `${d.act && !d.off ? '● ' : ''}${joyDevName(d.key)}</div>` +
+          `<div style="color:#567;font-size:9px;margin-top:1px;">버튼 ${d.btns} · 축 ${d.axes}${d.off ? ' · 꺼짐 — 이 장치 입력은 듣지 않습니다' : ''}</div></div>` +
+          `<div data-act="joyDevTog" data-arg='["${d.key}"]' class="joy-dev-tog" style="flex:0 0 auto;color:${d.off ? '#6a7784' : '#00ff88'};font-size:9px;` +
+          `border:1px solid ${d.off ? '#2a3a4a' : '#1f5a3a'};border-radius:3px;padding:4px 10px;cursor:pointer;">${d.off ? '꺼짐' : '사용'}</div></div>`).join('') +
+        (devs.length > 1 ? `<div style="color:#4a5563;font-size:9px;margin:2px 2px 8px;line-height:1.45;">장치가 여럿이면 새로 잡는 버튼 · 축은 <b>그 장치의 것</b>으로 적힙니다` +
+          `(예: 사이클릭은 조이스틱, 컬렉티브는 스로틀, 요는 페달). 장치 하나일 때 잡아 둔 배정은 어느 장치에서든 듣습니다.</div>` : '')) : '';
+      const rows = [devRows];
       let grp = '';
       JOY_ACTIONS.forEach(a => {
         if (a.grp !== grp) {
@@ -2587,9 +2600,13 @@
                    `A${x.i}${x.hat ? '(HAT)' : ''} ${x.v.toFixed(2)}</span>`;
           }).join('&nbsp; ');
           // 여러 대로 올라오는 장치가 있어 어느 것을 쓰고 있는지도 적는다
+          // 장치가 여럿이면 장치마다 지금 들어오는 값을 따로 보인다
           const list = (m.pads || []).length > 1
-            ? '<br>' + m.pads.map(q => `<span style="color:${q.index === m.index ? '#00e5ff' : '#4a5563'};">` +
-                `#${q.index} ${q.id.slice(0, 22)}${q.index === m.index ? ' ←사용' : ''}</span>`).join('<br>')
+            ? '<br>' + m.pads.map(q => {
+                const qb = q.btns.length ? q.btns.map(x => `B${x.i}`).join(' ') : '—';
+                const qa = q.axes.filter(x => Math.abs(x.v) > 0.2 || x.hat).map(x => `A${x.i}${x.hat ? '(HAT)' : ''} ${x.v.toFixed(2)}`).join(' ') || '—';
+                return `<span style="color:${q.off ? '#3a4450' : (q.act ? '#00e5ff' : '#6a7784')};">#${q.index} ${q.id.slice(0, 22)}${q.off ? ' (꺼짐)' : ''}</span>` +
+                  `<br><span style="color:#4a5563;">&nbsp; 버튼 ${qb} · 축 ${qa}</span>`; }).join('<br>')
             : '';
           box.innerHTML = `눌린 버튼: ${b}<br>${a || '축 없음'}` +
             `<br><span style="color:#4a5563;">#${m.index} ${m.id.slice(0, 28)}` +
@@ -3875,6 +3892,7 @@ switchMode('HOME');
       joyAxPick,
       joyAxUnbind,
       joyAxFlip,
+      joyDevTog,
       joyAxAbs,
       joyResetBinds, joyCenterNow,
       addInput,

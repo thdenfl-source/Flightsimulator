@@ -270,6 +270,69 @@ export async function run(page, t) {
   t.eq(multi.monIdx, 1, '진단도 쓰고 있는 장치를 가리킨다');
   t.eq(multi.pads, 2, '진단에 연결된 장치가 모두 나온다');
 
+  // ── 서로 다른 장치 여럿을 함께(조이스틱 + 페달 등) ──
+  const many = await page.evaluate(`(() => {
+    (${SETUP.toString()})();
+    const mk = (index, id, nb, na) => ({ index, id, mapping: '',
+      buttons: Array.from({ length: nb }, () => ({ pressed: false, value: 0 })), axes: Array.from({ length: na }, () => 0) });
+    const stick = mk(0, 'T.16000M FCS', 16, 4), ped = mk(1, 'T-Rudder Pedals', 4, 3);
+    navigator.getGamepads = () => [stick, ped];
+    const keep = { devOff: JSON.stringify(joyDevOff), main: joyMainDev };
+    joyDevOff = {}; joyMainDev = '';
+    const btn = (p, i, on) => { p.buttons[i] = { pressed: !!on, value: on ? 1 : 0 }; };
+    let now = 1000; const o = {};
+    joyPoll(now);
+    const kS = joyDevKey(stick), kP = joyDevKey(ped);
+    o.keys = kS !== kP && /^J/.test(kS);
+    o.list = joyDevList().length;
+    // 둘이 꽂혀 있으면 새로 잡는 버튼은 그 장치의 것
+    gspdOn = false; joyBeginCapture('gspd');
+    btn(ped, 2, true); joyPoll(now += 16); btn(ped, 2, false); joyPoll(now += 16);
+    o.code = joyBindOf('gspd'); o.label = joyCodeLabel(o.code);
+    btn(stick, 2, true); joyPoll(now += 16); btn(stick, 2, false); joyPoll(now += 16);
+    o.otherDev = gspdOn;                                     // 다른 장치의 같은 번호는 듣지 않는다
+    btn(ped, 2, true); joyPoll(now += 16); btn(ped, 2, false); joyPoll(now += 16);
+    o.sameDev = gspdOn; if (gspdOn) toggleGspd();
+    // 장치 하나일 때 잡아 둔 배정(번호만)은 어느 장치에서든
+    joySetBind('b5', 'sim'); S.running = false;
+    btn(stick, 5, true); joyPoll(now += 16); btn(stick, 5, false); joyPoll(now += 16);
+    o.legacy = S.running; S.running = false;
+    // 축 — 페달의 축을 요로 잡으면 그 장치를 기억한다 · 두 장치를 함께 읽는다
+    joyAxBeginCapture('yaw'); ped.axes[0] = 1; joyPoll(now += 16); ped.axes[0] = 0; joyPoll(now += 16);
+    o.yawDev = joyAxes.yaw && joyAxes.yaw.dev === kP && joyAxes.yaw.i === 0;
+    joyAxBeginCapture('roll'); stick.axes[0] = -1; joyPoll(now += 16); stick.axes[0] = 0; joyPoll(now += 16);
+    o.rollDev = joyAxes.roll && joyAxes.roll.dev === kS && joyAxes.roll.i === 0;
+    stick.axes[0] = 0.6; ped.axes[0] = -0.5; joyPoll(now += 16);
+    o.both = [joyAxVal('roll'), joyAxVal('yaw')];
+    stick.axes[0] = 0; ped.axes[0] = 0.7; joyPoll(now += 16);
+    o.pedOnly = [joyAxVal('roll'), joyAxVal('yaw')];
+    // 장치를 끄면 그 장치는 듣지 않는다
+    joyDevToggle(kP); joyPoll(now += 16);
+    o.offYaw = joyAxVal('yaw');
+    btn(ped, 2, true); joyPoll(now += 16); btn(ped, 2, false); joyPoll(now += 16);
+    o.offBtn = gspdOn;
+    o.offList = joyDevList().find(d => d.key === kP).off;
+    joyDevToggle(kP); joyPoll(now += 16); o.onYaw = joyAxVal('yaw');
+    // 장치를 적지 않은 축(장치 하나로 쓰던 배정)은 그때 쓰던 장치를 계속 본다
+    joyMainDev = kS; joyAxes.pitch = { i: 1, inv: false };
+    ped.axes[1] = 0.8; joyPoll(now += 16); o.legacyAxPed = joyAxVal('pitch');
+    ped.axes[1] = 0; stick.axes[1] = 0.8; joyPoll(now += 16); o.legacyAxStick = joyAxVal('pitch');
+    stick.axes[1] = 0; ped.axes[0] = 0; joyPoll(now += 16);
+    const m = joyMonitor(); o.monPads = m.pads.length === 2 && m.pads.every(q => Array.isArray(q.axes) && q.key);
+    joyDevOff = JSON.parse(keep.devOff); joyMainDev = keep.main;
+    return o;
+  })()`);
+  t.ok(many.keys && many.list === 2, '장치 두 대가 각자 이름표로 함께 잡힌다');
+  t.ok(/:b2$/.test(many.code) && /T-Rudder/.test(many.label), `둘 이상이면 새로 잡는 버튼은 그 장치의 것 (${many.label})`);
+  t.ok(!many.otherDev && many.sameDev, '다른 장치의 같은 번호 버튼은 듣지 않고 · 잡은 장치의 버튼만 동작');
+  t.ok(many.legacy, '장치 하나일 때 잡아 둔 배정(번호만)은 어느 장치에서든 듣는다');
+  t.ok(many.yawDev && many.rollDev, '축도 장치를 기억한다(페달 축 → 요 · 조이스틱 축 → 롤)');
+  t.ok(Math.abs(many.both[0]) > 0.4 && many.both[1] < -0.3 && many.pedOnly[0] === 0 && many.pedOnly[1] > 0.5,
+    `두 장치를 동시에 읽는다 — 롤 ${many.both[0].toFixed(2)} · 요 ${many.both[1].toFixed(2)}`);
+  t.ok(many.offYaw === 0 && !many.offBtn && many.offList && many.onYaw > 0.5, '장치를 끄면 그 장치의 버튼 · 축을 듣지 않고 · 켜면 다시 듣는다');
+  t.ok(many.legacyAxPed === 0 && many.legacyAxStick > 0.5, '장치를 적지 않은 축은 그때 쓰던 장치를 계속 본다(페달을 더 꽂아도 옮겨 가지 않음)');
+  t.ok(many.monPads, '입력 진단에 장치마다 값이 나온다');
+
   // ── 장치가 안 보일 때 이유를 알려 준다 ──
   const why = await page.evaluate(`(() => {
     (${SETUP.toString()})();
