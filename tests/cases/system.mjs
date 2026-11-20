@@ -242,4 +242,20 @@ export async function run(page, t) {
   t.ok(!he.off && he.on, 'HEELS — OFF 면 꺼짐 · ON 이면 켜짐');
   t.ok(!he.armGen && !he.armOne && he.armBoth && !he.armNoBatt, 'HEELS ARM — 주 발전기 둘이 모두 끊기면 켜짐(하나라도 살아 있거나 배터리가 없으면 꺼짐)');
   t.ok(he.armNr && !he.armNr84, 'HEELS ARM — NR 84% 미만이면 켜짐');
+  // ── CDU 푸터 가운데 단추 — 어느 화면 · 모드에서든 SYSTEM 창 FULL ↔ HALF 만(CDU 단독 FULL/HALF · 3D 는 없앴다) ──
+  const fb = await page.evaluate(async () => {
+    const w = ms => new Promise(r => setTimeout(r, ms)), o = {};
+    selectPanel('mid', 'cdu', true); switchMode('HOME'); await w(80);
+    const ft = () => document.querySelector('#cdu-wrap .cdu-footer, #cdu-wrap') ;
+    const btn = () => document.getElementById('sys-layout-btn');
+    const l0 = sysLayout, solo0 = _soloActive;
+    o.home = !!btn() && !document.querySelector('#cdu-wrap [data-act="cduFullScreen"]') && !document.querySelector('#cdu-wrap [data-act="exitSolo"]');
+    btn().click(); await w(80); o.toggled = sysLayout !== l0 && _soloActive === solo0;
+    o.label = btn() && btn().textContent.replace(/\s/g, '') === '▥FULL/HALF';
+    btn().click(); await w(80); o.back = sysLayout === l0;
+    switchMode('INTERCOM'); await w(80); o.other = !!btn();
+    switchMode('HOME');
+    return o;
+  });
+  t.ok(fb.home && fb.toggled && fb.label && fb.back && fb.other, 'CDU 가운데 단추는 SYSTEM 창 FULL ↔ HALF 만 바꾼다(CDU 단독 화면은 바꾸지 않는다 · 어느 CDU 화면에서든)');
 }

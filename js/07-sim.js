@@ -1416,25 +1416,21 @@ function fpGoCduHome() {
   try { switchMode('HOME'); } catch(e) { _swallow(e); }
 }
 
-// CDU 하단 Full 버튼 — 상단 Full Screen 탭과 동일하게 CDU 전체화면 진입
+// CDU 하단 Full 버튼 — 상단 Full Screen 탭과 동일하게 CDU 전체화면 진입(지금은 푸터에서 부르지 않는다 · 남은 호출용)
 function cduFullScreen() { enterSolo('cdu'); }
 
 // ── CDU 하단 푸터 표준화 ──
-// 전체화면(solo)일 땐 FULL → HALF(우측 상단 ✕와 동일: exitSolo)
+// 가운데 단추는 SYSTEM 창의 큰 칸 나누기 하나만 한다 — FULL(한 화면) ↔ HALF(반쪽 둘) · 18-system.js sysLayout
+//   (예전에는 PC 모드에서 CDU 단독 FULL ↔ HALF · 3D 단독에서는 '3D'(쓸 수 없음)였다 — 화면 모드와 상관없이 같게)
 function cduFullNavBtn() {
-  // 3D 단독에 겹친 CDU — 단독 화면을 바꾸는 FULL/HALF 는 두지 않는다(3D 단독을 지킨다)
-  try { if (cduOvActive()) return `<div class="nav-btn" style="opacity:.35;pointer-events:none"><span>✥</span>3D</div>`; } catch (e) { _swallow(e); }
-  // Aircraft Systems 화면 — FULL/HALF 는 SYSTEM 창의 큰 칸 나누기(한 화면 · 반쪽 둘)를 고른다(18-system.js sysLayout)
   try {
-    if (typeof cduMode === 'function' && /^(ACSYS|TCAS)/.test(cduMode()) && typeof sysLayout !== 'undefined') {
+    if (typeof sysLayout !== 'undefined') {
       const f = sysLayout === 'FULL';
       return `<div class="nav-btn" id="sys-layout-btn" data-act="sysLayoutToggle" title="SYSTEM 창 — 한 화면(FULL) · 반쪽 둘(HALF)"><span>▥</span>`
            + `<div style="white-space:nowrap"><b style="color:${f ? '#2fe0e0' : '#777'}">FULL</b>/<b style="color:${f ? '#777' : '#2fe0e0'}">HALF</b></div></div>`;
     }
   } catch (e) { _swallow(e); }
-  return _soloActive
-    ? `<div class="nav-btn" data-act="exitSolo"><span>✥</span>Half</div>`
-    : `<div class="nav-btn" data-act="cduFullScreen"><span>✥</span>Full</div>`;
+  return `<div class="nav-btn" style="opacity:.35;pointer-events:none"><span>▥</span>FULL/HALF</div>`;
 }
 // PLAN 버튼 — Flight Plan 화면 열기(분할/전체화면 모두 대응)
 function openFlightPlan() {
