@@ -997,9 +997,11 @@ function applyPanels() {
   try { applyPoRatio(); } catch (e) { _swallow(e); }
   // 새로고침은 CDU 창(3분할의 가운데) 탭에 — 2분할에는 가운데가 없으니 우측 탭 끝에
   try {
+    const hb = document.getElementById('home-btn');
     const rb = document.getElementById('reload-btn');
     const tabs = document.getElementById(quadMode ? 'bot-tabs' : tripleMode ? 'mid-tabs' : 'page-tabs');
-    if (rb && tabs && rb.parentElement !== tabs) tabs.appendChild(rb);
+    if (hb && tabs && (hb.parentElement !== tabs || hb.nextElementSibling !== rb)) tabs.appendChild(hb);   // ⌂ 처음 화면 — 새로고침 바로 앞
+    if (rb && tabs && (rb.parentElement !== tabs || rb.previousElementSibling !== hb)) tabs.appendChild(rb);
   } catch (e) { _swallow(e); }
   const btn = document.getElementById('split-toggle');
   if (btn) btn.textContent = quadMode ? '⿰ 2분할' : tripleMode ? '▦ 4분할' : '⿲ 3분할';

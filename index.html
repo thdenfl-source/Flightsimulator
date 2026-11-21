@@ -17,11 +17,11 @@
      CDN 을 쓰면 한 번이라도 못 받는 순간 앱이 통째로 죽는다 — 비행 중에는
      그럴 여지를 두지 않는다. -->
 <!-- 패널 새 창(다중 모니터) — 라이브러리가 거는 이벤트까지 받아 적어야 하므로 맨 먼저 -->
-<script src="js/00-edition.js?v=703"></script>
-<script src="js/00-aircraft.js?v=703"></script>
-<script src="js/00-params.js?v=703"></script>
-<script src="js/00-sched.js?v=703"></script>
-<script src="js/00-popout.js?v=703"></script>
+<script src="js/00-edition.js?v=704"></script>
+<script src="js/00-aircraft.js?v=704"></script>
+<script src="js/00-params.js?v=704"></script>
+<script src="js/00-sched.js?v=704"></script>
+<script src="js/00-popout.js?v=704"></script>
 <link rel="stylesheet" href="vendor/leaflet.css"/>
 <script src="vendor/leaflet.js"></script>
 <link rel="stylesheet" href="vendor/leaflet-velocity.min.css"/>
@@ -192,7 +192,7 @@ html, body {
 }
 /* 탭 버튼 높이 고정 — 라벨에 한글·기호가 섞이면 줄 상자 높이가 달라져
    패널마다 탭 바 높이가 어긋나고, 3분할에서 상단선이 안 맞는다 */
-.page-tab, #reload-btn {
+.page-tab, #reload-btn, #home-btn {
   height: 28px; padding: 0 2px; line-height: 1; box-sizing: border-box;
   display: flex; align-items: center; justify-content: center;
 }
@@ -210,6 +210,10 @@ html, body {
   transition: color 0.15s, background 0.15s;
 }
 #reload-btn:hover { color: #fff; background: #06141f; }
+#home-btn { flex: 1; min-width: 0; background: transparent; border: 1px solid rgba(255,255,255,0.75); border-radius: 0;
+            color: #ffd23a; font-size: 14px; font-weight: bold; cursor: pointer; touch-action: manipulation; }
+#home-btn:hover { color: #fff; background: #06141f; }
+#ctl3d #reload3d-btn { color: #5aaefd; }
 #reload-btn:active { transform: rotate(180deg); }
 .page-tab.active {
   color: #00ff88;
@@ -2711,7 +2715,7 @@ body.simple-mode #simple-view { display: flex; position: fixed; left: 0; right: 
     </div>
   </form>
 </div>
-<script src="js/00-gate.js?v=703"></script>
+<script src="js/00-gate.js?v=704"></script>
 <!-- ── 단일화면 선택 바 (기본 숨김) ── -->
 <!-- ── 시작 안내(사용법/키보드) 오버레이 ── -->
 <div id="help-overlay" style="display:none;">
@@ -3676,7 +3680,8 @@ body.simple-mode #simple-view { display: flex; position: fixed; left: 0; right: 
       <button class="page-tab split-tab" id="cdu-solo-btn" data-act="panelSolo" data-arg='["cdu"]' title="CDU 단독 — CDU 만 화면 가득(한 번 더 누르면 원래 배치)">⛶ CDU 단독</button>
       <button class="page-tab po-btn" data-act="popoutToggle" data-arg='["right"]' title="이 패널을 새 창으로 띄운다(다중 모니터에 따로 배치)">⧉ POP UP</button>
       <button class="page-tab po-top-btn" data-act="popoutTop" data-arg='["right", "$el"]' title="Top — 이 창을 다른 창들보다 늘 위에 띄운다(한 번 더 누르면 본 창으로)">📌 Top</button>
-      <button id="reload-btn" data-act="hardReload" title="새로고침(상태 초기화)">⟳</button>
+      <button id="home-btn" data-act="goStartScreen" title="처음 화면 — 화면(PC · Cockpit · Simple) · 기종 고르기로 돌아간다(확인 뒤)">⌂</button>
+      <button id="reload-btn" data-act="hardReload" title="새로고침(상태 초기화 · 확인 뒤)">⟳</button>
     </div>
 
     <!-- 3D 전용 창 — 탭에서 '3D' 를 고르면 #map3d 가 이 안으로 옮겨 온다.
@@ -3805,6 +3810,8 @@ body.simple-mode #simple-view { display: flex; position: fixed; left: 0; right: 
           </div>
           <!-- ASE — 수리온 계열 자동 안정 장치(14-simmode.js). 기능은 하나씩 더해 간다 -->
           <button class="sim-btn sim-side-btn" id="sim3d-btn" data-act="simModeBtnPress" title="SIM 모드 켜기/끄기 — PFD 의 SIM 버튼과 같다">SIM OFF</button>
+          <!-- 새로고침 — 버튼 줄 맨 아래(Cockpit Mode 에서도) · 누르면 먼저 묻는다(09-cdu.js hardReload) -->
+          <button class="sim-btn" id="reload3d-btn" data-act="hardReload" title="새로고침(상태 초기화 · 확인 뒤)">⟳ 새로고침</button>
           </div>
         </div>
         <div id="tilt-ctrl">
@@ -4112,55 +4119,55 @@ body.simple-mode #simple-view { display: flex; position: fixed; left: 0; right: 
 <!-- 앱 코드 — 클래식 스크립트(모듈 아님)라 전역 스코프를 공유한다.
      순서가 곧 실행 순서이므로 임의로 바꾸지 말 것. -->
   <!-- AIP 데이터 — 코드보다 먼저 로드한다 -->
-  <script src="js/data/terminal-fixes.js?v=703"></script>
-  <script src="js/data/ifr-fixes.js?v=703"></script>
-  <script src="js/data/ifr-procedures.js?v=703"></script>
-  <script src="js/data/airfield-info.js?v=703"></script>
-  <script src="js/data/enr-vors.js?v=703"></script>
-  <script src="js/data/loc-stations.js?v=703"></script>
-  <script src="js/data/enr-routes.js?v=703"></script>
-  <script src="js/data/airspace.js?v=703"></script>
-  <script src="js/data/runways.js?v=703"></script>
+  <script src="js/data/terminal-fixes.js?v=704"></script>
+  <script src="js/data/ifr-fixes.js?v=704"></script>
+  <script src="js/data/ifr-procedures.js?v=704"></script>
+  <script src="js/data/airfield-info.js?v=704"></script>
+  <script src="js/data/enr-vors.js?v=704"></script>
+  <script src="js/data/loc-stations.js?v=704"></script>
+  <script src="js/data/enr-routes.js?v=704"></script>
+  <script src="js/data/airspace.js?v=704"></script>
+  <script src="js/data/runways.js?v=704"></script>
   <!-- 앱 코드 -->
-  <script src="js/00-ui.js?v=703"></script>
-  <script src="js/01-state.js?v=703"></script>
-  <script src="js/02-math.js?v=703"></script>
-  <script src="js/03-pfd.js?v=703"></script>
-  <script src="js/04-map.js?v=703"></script>
-  <script src="js/05-gps.js?v=703"></script>
-  <script src="js/06-nav.js?v=703"></script>
-  <script src="js/07-sim.js?v=703"></script>
-  <script src="js/08-ifrdb.js?v=703"></script>
-  <script src="js/09a-start.js?v=703"></script>
-  <script src="js/09-cdu.js?v=703"></script>
-  <script src="js/09b-cdu-screens.js?v=703"></script>
-  <script src="js/10-tools.js?v=703"></script>
-  <script src="js/11-charts.js?v=703"></script>
-  <script src="js/12-joystick.js?v=703"></script>
-  <script src="js/13-joyhid.js?v=703"></script>
-  <script src="js/14-simmode.js?v=703"></script>
-  <script src="js/15-heli3d.js?v=703"></script>
-  <script src="js/16-sound.js?v=703"></script>
-  <script src="js/17-upper.js?v=703"></script>
-  <script src="js/18-system.js?v=703"></script>
-  <script src="js/19-lower.js?v=703"></script>
-  <script src="js/20-navaids.js?v=703"></script>
-  <script src="js/21-c5000.js?v=703"></script>
-  <script src="js/22-npx138.js?v=703"></script>
-  <script src="js/23-afcs.js?v=703"></script>
-  <script src="js/24-sar.js?v=703"></script>
-  <script src="js/25-b206panel.js?v=703"></script>
-  <script src="js/26-b206radio.js?v=703"></script>
-  <script src="js/27-b206coll.js?v=703"></script>
-  <script src="js/28-debrief.js?v=703"></script>
-  <script src="js/29-env.js?v=703"></script>
-  <script src="js/30-scenario.js?v=703"></script>
-  <script src="js/31-ios.js?v=703"></script>
-  <script src="js/32-callout.js?v=703"></script>
-  <script src="js/33-train4.js?v=703"></script>
-  <script src="js/34-infra.js?v=703"></script>
-  <script src="js/35-kuhgrip.js?v=703"></script>
-  <script src="js/36-kuhsys.js?v=703"></script>
+  <script src="js/00-ui.js?v=704"></script>
+  <script src="js/01-state.js?v=704"></script>
+  <script src="js/02-math.js?v=704"></script>
+  <script src="js/03-pfd.js?v=704"></script>
+  <script src="js/04-map.js?v=704"></script>
+  <script src="js/05-gps.js?v=704"></script>
+  <script src="js/06-nav.js?v=704"></script>
+  <script src="js/07-sim.js?v=704"></script>
+  <script src="js/08-ifrdb.js?v=704"></script>
+  <script src="js/09a-start.js?v=704"></script>
+  <script src="js/09-cdu.js?v=704"></script>
+  <script src="js/09b-cdu-screens.js?v=704"></script>
+  <script src="js/10-tools.js?v=704"></script>
+  <script src="js/11-charts.js?v=704"></script>
+  <script src="js/12-joystick.js?v=704"></script>
+  <script src="js/13-joyhid.js?v=704"></script>
+  <script src="js/14-simmode.js?v=704"></script>
+  <script src="js/15-heli3d.js?v=704"></script>
+  <script src="js/16-sound.js?v=704"></script>
+  <script src="js/17-upper.js?v=704"></script>
+  <script src="js/18-system.js?v=704"></script>
+  <script src="js/19-lower.js?v=704"></script>
+  <script src="js/20-navaids.js?v=704"></script>
+  <script src="js/21-c5000.js?v=704"></script>
+  <script src="js/22-npx138.js?v=704"></script>
+  <script src="js/23-afcs.js?v=704"></script>
+  <script src="js/24-sar.js?v=704"></script>
+  <script src="js/25-b206panel.js?v=704"></script>
+  <script src="js/26-b206radio.js?v=704"></script>
+  <script src="js/27-b206coll.js?v=704"></script>
+  <script src="js/28-debrief.js?v=704"></script>
+  <script src="js/29-env.js?v=704"></script>
+  <script src="js/30-scenario.js?v=704"></script>
+  <script src="js/31-ios.js?v=704"></script>
+  <script src="js/32-callout.js?v=704"></script>
+  <script src="js/33-train4.js?v=704"></script>
+  <script src="js/34-infra.js?v=704"></script>
+  <script src="js/35-kuhgrip.js?v=704"></script>
+  <script src="js/36-kuhsys.js?v=704"></script>
 
 <input type="file" id="zipFileInput" accept=".zip,application/zip,application/x-zip-compressed,application/octet-stream" style="display:none" onchange="handleZipFile(this.files[0]); this.value='';"></body>
 </html>
