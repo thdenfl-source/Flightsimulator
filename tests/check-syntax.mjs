@@ -13,6 +13,7 @@ const blocks = [...html.matchAll(/<script(?![^>]*\ssrc=)[^>]*>([\s\S]*?)<\/scrip
 // 코드를 js/*.js 로 분리한 뒤에는 인라인 블록이 없을 수 있다. 둘 다 0 이면 이상.
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'vfrsim-syntax-'));
+process.on('exit', () => { try { fs.rmSync(dir, { recursive: true, force: true }); } catch (e) { /* 그만 */ } });   // 임시 폴더를 남기지 않는다
 let failed = 0;
 blocks.forEach((code, i) => {
   const f = path.join(dir, `block${i}.js`);
@@ -31,6 +32,23 @@ srcs.forEach(rel => {
   try { execFileSync(process.execPath, ['--check', f], { stdio: 'pipe' }); }
   catch (e) { failed++; console.error(`✗ ${rel} 문법 오류\n${e.stderr?.toString() || e.message}`); }
 });
+
+// 같은 이름의 전역 함수가 두 파일에 있으면 나중 것이 앞의 것을 조용히 덮는다(오류도 없다) —
+// 실제로 34-infra.js 의 _tileXY(lat, lon, z) 가 04-map.js 의 _tileXY(z, lat, lon) 를 덮어 3D 타일 미리 받기가 폭주한 일이 있었다.
+// (const · let 은 겹치면 브라우저가 바로 오류를 내지만 function 은 아니다)
+{
+  const seen = new Map();
+  srcs.forEach(rel => {
+    const f = path.join(ROOT, rel.replace(/^\.\//, '').replace(/\?.*$/, ''));
+    if (!fs.existsSync(f)) return;
+    fs.readFileSync(f, 'utf8').split('\n').forEach((l, i) => {
+      const m = l.match(/^(?:async\s+)?function\s+([\w$]+)\s*\(/); if (!m) return;
+      const at = `${rel.replace(/\?.*$/, '')}:${i + 1}`;
+      if (seen.has(m[1])) { failed++; console.error(`✗ 전역 함수 이름이 겹친다: ${m[1]} — ${seen.get(m[1])} · ${at}(나중 것이 앞의 것을 덮는다)`); }
+      else seen.set(m[1], at);
+    });
+  });
+}
 
 if (!blocks.length && !srcs.length) {
   console.error('검사할 스크립트를 찾지 못했습니다 — index.html 을 확인하세요.');

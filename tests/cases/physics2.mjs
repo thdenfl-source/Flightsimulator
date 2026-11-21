@@ -184,6 +184,6 @@ export async function run(page, t) {
     o.climb = S.vs; lever(t - 10); const v2 = run(3, 0, 60); o.after1 = v2[19]; o.after2 = v2[39];
     return o;
   })()`);
-  t.ok(fz.peak < 1900 && fz.gain < 280, `감속 플레어가 출력 상승에 겹쳐 쌓지 않는다 — 80kt 감속(레버 호버 −10%) 최대 ${Math.round(fz.peak)}fpm · ${Math.round(fz.gain)}ft (종전 2,400fpm · 300ft)`);
+  t.ok(fz.peak < 1700 && fz.gain < 170, `감속 플레어는 운동에너지 예산 안에서 — 80kt 감속(레버 호버 −10%) 최대 ${Math.round(fz.peak)}fpm · ${Math.round(fz.gain)}ft (종전 1,750fpm · 230ft · 처음 2,400fpm · 300ft)`);
   t.ok(fz.climb > 600 && fz.after1 < fz.climb * 0.5 && fz.after2 < 0, `오르다 레버를 내리면 곧 준다 — ${Math.round(fz.climb)} → 1초 ${Math.round(fz.after1)} → 2초 ${Math.round(fz.after2)}fpm`);
 }

@@ -17,11 +17,11 @@
      CDN 을 쓰면 한 번이라도 못 받는 순간 앱이 통째로 죽는다 — 비행 중에는
      그럴 여지를 두지 않는다. -->
 <!-- 패널 새 창(다중 모니터) — 라이브러리가 거는 이벤트까지 받아 적어야 하므로 맨 먼저 -->
-<script src="js/00-edition.js?v=712"></script>
-<script src="js/00-aircraft.js?v=712"></script>
-<script src="js/00-params.js?v=712"></script>
-<script src="js/00-sched.js?v=712"></script>
-<script src="js/00-popout.js?v=712"></script>
+<script src="js/00-edition.js?v=713"></script>
+<script src="js/00-aircraft.js?v=713"></script>
+<script src="js/00-params.js?v=713"></script>
+<script src="js/00-sched.js?v=713"></script>
+<script src="js/00-popout.js?v=713"></script>
 <link rel="stylesheet" href="vendor/leaflet.css"/>
 <script src="vendor/leaflet.js"></script>
 <link rel="stylesheet" href="vendor/leaflet-velocity.min.css"/>
@@ -1097,6 +1097,16 @@ html.env-nvg .maplibregl-canvas { filter: grayscale(1) brightness(1.5) contrast(
   background-image: repeating-linear-gradient(105deg, rgba(200,215,230,0.0) 0 9px, rgba(200,215,230,0.35) 9px 10px, rgba(200,215,230,0) 10px 23px);
   background-size: 200px 200px; animation: env-rain 0.35s linear infinite; }
 #map3d .env-fx { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1; }
+/* NVG — 관 시야(40° 둥근 시야 · 3D 지도의 세로 시야 ≈ 37° 라 화면 높이만큼) · 알갱이(scintillation) · 불빛 번짐.
+   조종석 계기(#sim-ckpit z 4)는 고글 아래로 보므로 그 밑(z 3)에 깐다 */
+#map3d .env-nvg { display: none; position: absolute; inset: 0; pointer-events: none; z-index: 3;
+  background: radial-gradient(circle closest-side at 50% 50%, rgba(0,0,0,0) 86%, rgba(0,8,0,0.82) 97%, #000 100%); }
+#map3d .env-nvg::after { content: ''; position: absolute; inset: 0; opacity: 0.22; mix-blend-mode: screen;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.55  0 0 0 0 1  0 0 0 0 0.5  0 0 0 1.6 -0.55'/></filter><rect width='160' height='160' filter='url(%23n)'/></svg>");
+  animation: env-nvg-grain 0.5s steps(5) infinite; }
+@keyframes env-nvg-grain { 0% { background-position: 0 0; } 20% { background-position: -37px 23px; } 40% { background-position: 51px -61px; } 60% { background-position: -83px -17px; } 80% { background-position: 29px 77px; } 100% { background-position: 0 0; } }
+html.env-nvg #map3d .env-nvg { display: block; }
+html.env-nvg #map3d .env-fx { filter: grayscale(1) sepia(1) hue-rotate(55deg) saturate(3) brightness(1.35); }
 #map3d .env-cloud { position: absolute; inset: 0; pointer-events: none; z-index: 1; opacity: 0; background: radial-gradient(ellipse at 50% 40%, #e8ecef 0%, #c9d0d6 60%, #b3bcc4 100%); }
 html.env-night #map3d .env-cloud { background: #10141a; } html.env-dusk #map3d .env-cloud { background: #5a5560; }
 html.env-rain1 .env-rain { display: block; opacity: 0.45; } html.env-rain2 .env-rain { display: block; opacity: 0.9; animation-duration: 0.22s; }
@@ -1121,8 +1131,8 @@ html.env-rain1 .env-rain { display: block; opacity: 0.45; } html.env-rain2 .env-
 #map-tools-btn { flex: none !important; min-width: 64px; padding-left: 8px; padding-right: 8px; white-space: nowrap; }
 #tools-menu { display: none; position: fixed; z-index: 30003; background: #121a21; border: 1px solid #3a4a58; border-radius: 8px; padding: 6px; box-shadow: 0 6px 18px rgba(0,0,0,0.5); }
 #tools-menu .sim-btn { display: block; width: 100%; margin: 3px 0; text-align: left; padding: 8px 12px; font-size: 14px; }
-#set-wrap, #rtc-wrap, #diag-wrap { display: none; position: fixed; inset: 0; z-index: 30002; background: rgba(0,0,0,0.45); align-items: center; justify-content: center; }
-#set-wrap .set-box, #rtc-wrap .set-box, #diag-wrap .set-box { width: min(520px, 96vw); max-height: 88vh; overflow-y: auto; background: #121a21; border: 1px solid #3a4a58; border-radius: 8px; color: #dfe6ec; font-size: 14px; padding-bottom: 10px; }
+#set-wrap, #rtc-wrap, #diag-wrap, #tileprep-wrap { display: none; position: fixed; inset: 0; z-index: 30002; background: rgba(0,0,0,0.45); align-items: center; justify-content: center; }
+#set-wrap .set-box, #rtc-wrap .set-box, #diag-wrap .set-box, #tileprep-wrap .set-box { width: min(520px, 96vw); max-height: 88vh; overflow-y: auto; background: #121a21; border: 1px solid #3a4a58; border-radius: 8px; color: #dfe6ec; font-size: 14px; padding-bottom: 10px; }
 .set-box .set-bar { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; background: #1b2731; margin-bottom: 4px; }
 .set-box .set-row { display: flex; align-items: center; gap: 8px; padding: 5px 12px; } .set-box .set-row > span { width: 150px; flex: none; color: #8aa0b0; }
 .set-box .set-row > div { display: flex; flex-wrap: wrap; gap: 4px; flex: 1; } .set-box .sim-btn { width: auto; flex: none; padding: 4px 10px; margin: 0; }
@@ -1623,6 +1633,7 @@ html.ac-b206 #pfd-ov { background: transparent; border: 0; box-shadow: none; min
 
 /* 진단 기록(34-infra.js) */
 #diag-wrap .diag-box { width: min(680px, 96vw); }
+#tileprep-wrap .sim-btn.on { background: #1d5a7a; color: #fff; } #tileprep-wrap .tp-bar { height: 8px; background: #26323c; border-radius: 4px; overflow: hidden; margin-bottom: 4px; } #tileprep-wrap .tp-bar i { display: block; height: 100%; background: #3fb950; }
 .diag-box .diag-h { padding: 8px 12px 2px; color: #ffcc66; font-weight: bold; font-size: 13px; }
 .diag-box .diag-list { margin: 0 12px; max-height: 150px; overflow-y: auto; background: #0b1218; border: 1px solid #2a3a48; border-radius: 4px; padding: 4px 6px; font: 11px/1.45 monospace; color: #cfd8df; }
 .diag-box .diag-list i { color: #7f95a5; } .diag-box .diag-ok { color: #4f8; }
@@ -2722,7 +2733,7 @@ body.simple-mode #simple-view { display: flex; position: fixed; left: 0; right: 
     </div>
   </form>
 </div>
-<script src="js/00-gate.js?v=712"></script>
+<script src="js/00-gate.js?v=713"></script>
 <!-- ── 단일화면 선택 바 (기본 숨김) ── -->
 <!-- ── 시작 안내(사용법/키보드) 오버레이 ── -->
 <div id="help-overlay" style="display:none;">
@@ -3745,7 +3756,7 @@ body.simple-mode #simple-view { display: flex; position: fixed; left: 0; right: 
             <button class="sim-btn" id="env3d-btn" data-act="toggleEnvPanel" title="환경 — 시간대 · 시정 · 비 · NVG · 바다 상태">🌙 ENV</button>
             <button class="sim-btn" id="dbf3d-btn" data-act="toggleDebrief" title="비행 기록 · 사후 강평">📋 DEBRIEF</button>
           <!-- 3D 화질 — 상 → 중 → 하(낮출수록 부드럽다 · 04-map.js) -->
-          <button class="sim-btn" id="q3d-btn" data-act="cycleMap3dQuality" title="3D 화질 — 누를 때마다 상 → 중 → 하. 낮출수록 저고도에서도 부드럽습니다">화질 중</button>
+          <button class="sim-btn" id="q3d-btn" data-act="cycleMap3dQuality" title="3D 화질 — 누를 때마다 상 → 중 → 하 → 자동. 낮출수록 저고도에서도 부드럽습니다. 자동은 프레임이 모자라면 낮추고 넉넉하면 올립니다">화질 중</button>
           <!-- 1인칭 ↔ 외부 시점(뒤에서 내 헬기를 본다) — SIM · Cockpit · 절차 훈련판 모두 -->
           <button class="sim-btn show" id="ext-btn" data-act="toggleExtView" title="외부 시점(External view) — 뒤에서 따라가며 내 헬기를 봅니다(SIM · Cockpit · 절차 훈련판 모두). 아래 버튼으로 둘레를 돌고 거리 · 높이를 바꿉니다">EXT</button>
           <!-- 외부 시점 카메라 — EXT 일 때만 · EXT 버튼 바로 밑(15-heli3d.js extCam*) -->
@@ -4131,55 +4142,55 @@ body.simple-mode #simple-view { display: flex; position: fixed; left: 0; right: 
 <!-- 앱 코드 — 클래식 스크립트(모듈 아님)라 전역 스코프를 공유한다.
      순서가 곧 실행 순서이므로 임의로 바꾸지 말 것. -->
   <!-- AIP 데이터 — 코드보다 먼저 로드한다 -->
-  <script src="js/data/terminal-fixes.js?v=712"></script>
-  <script src="js/data/ifr-fixes.js?v=712"></script>
-  <script src="js/data/ifr-procedures.js?v=712"></script>
-  <script src="js/data/airfield-info.js?v=712"></script>
-  <script src="js/data/enr-vors.js?v=712"></script>
-  <script src="js/data/loc-stations.js?v=712"></script>
-  <script src="js/data/enr-routes.js?v=712"></script>
-  <script src="js/data/airspace.js?v=712"></script>
-  <script src="js/data/runways.js?v=712"></script>
+  <script src="js/data/terminal-fixes.js?v=713"></script>
+  <script src="js/data/ifr-fixes.js?v=713"></script>
+  <script src="js/data/ifr-procedures.js?v=713"></script>
+  <script src="js/data/airfield-info.js?v=713"></script>
+  <script src="js/data/enr-vors.js?v=713"></script>
+  <script src="js/data/loc-stations.js?v=713"></script>
+  <script src="js/data/enr-routes.js?v=713"></script>
+  <script src="js/data/airspace.js?v=713"></script>
+  <script src="js/data/runways.js?v=713"></script>
   <!-- 앱 코드 -->
-  <script src="js/00-ui.js?v=712"></script>
-  <script src="js/01-state.js?v=712"></script>
-  <script src="js/02-math.js?v=712"></script>
-  <script src="js/03-pfd.js?v=712"></script>
-  <script src="js/04-map.js?v=712"></script>
-  <script src="js/05-gps.js?v=712"></script>
-  <script src="js/06-nav.js?v=712"></script>
-  <script src="js/07-sim.js?v=712"></script>
-  <script src="js/08-ifrdb.js?v=712"></script>
-  <script src="js/09a-start.js?v=712"></script>
-  <script src="js/09-cdu.js?v=712"></script>
-  <script src="js/09b-cdu-screens.js?v=712"></script>
-  <script src="js/10-tools.js?v=712"></script>
-  <script src="js/11-charts.js?v=712"></script>
-  <script src="js/12-joystick.js?v=712"></script>
-  <script src="js/13-joyhid.js?v=712"></script>
-  <script src="js/14-simmode.js?v=712"></script>
-  <script src="js/15-heli3d.js?v=712"></script>
-  <script src="js/16-sound.js?v=712"></script>
-  <script src="js/17-upper.js?v=712"></script>
-  <script src="js/18-system.js?v=712"></script>
-  <script src="js/19-lower.js?v=712"></script>
-  <script src="js/20-navaids.js?v=712"></script>
-  <script src="js/21-c5000.js?v=712"></script>
-  <script src="js/22-npx138.js?v=712"></script>
-  <script src="js/23-afcs.js?v=712"></script>
-  <script src="js/24-sar.js?v=712"></script>
-  <script src="js/25-b206panel.js?v=712"></script>
-  <script src="js/26-b206radio.js?v=712"></script>
-  <script src="js/27-b206coll.js?v=712"></script>
-  <script src="js/28-debrief.js?v=712"></script>
-  <script src="js/29-env.js?v=712"></script>
-  <script src="js/30-scenario.js?v=712"></script>
-  <script src="js/31-ios.js?v=712"></script>
-  <script src="js/32-callout.js?v=712"></script>
-  <script src="js/33-train4.js?v=712"></script>
-  <script src="js/34-infra.js?v=712"></script>
-  <script src="js/35-kuhgrip.js?v=712"></script>
-  <script src="js/36-kuhsys.js?v=712"></script>
+  <script src="js/00-ui.js?v=713"></script>
+  <script src="js/01-state.js?v=713"></script>
+  <script src="js/02-math.js?v=713"></script>
+  <script src="js/03-pfd.js?v=713"></script>
+  <script src="js/04-map.js?v=713"></script>
+  <script src="js/05-gps.js?v=713"></script>
+  <script src="js/06-nav.js?v=713"></script>
+  <script src="js/07-sim.js?v=713"></script>
+  <script src="js/08-ifrdb.js?v=713"></script>
+  <script src="js/09a-start.js?v=713"></script>
+  <script src="js/09-cdu.js?v=713"></script>
+  <script src="js/09b-cdu-screens.js?v=713"></script>
+  <script src="js/10-tools.js?v=713"></script>
+  <script src="js/11-charts.js?v=713"></script>
+  <script src="js/12-joystick.js?v=713"></script>
+  <script src="js/13-joyhid.js?v=713"></script>
+  <script src="js/14-simmode.js?v=713"></script>
+  <script src="js/15-heli3d.js?v=713"></script>
+  <script src="js/16-sound.js?v=713"></script>
+  <script src="js/17-upper.js?v=713"></script>
+  <script src="js/18-system.js?v=713"></script>
+  <script src="js/19-lower.js?v=713"></script>
+  <script src="js/20-navaids.js?v=713"></script>
+  <script src="js/21-c5000.js?v=713"></script>
+  <script src="js/22-npx138.js?v=713"></script>
+  <script src="js/23-afcs.js?v=713"></script>
+  <script src="js/24-sar.js?v=713"></script>
+  <script src="js/25-b206panel.js?v=713"></script>
+  <script src="js/26-b206radio.js?v=713"></script>
+  <script src="js/27-b206coll.js?v=713"></script>
+  <script src="js/28-debrief.js?v=713"></script>
+  <script src="js/29-env.js?v=713"></script>
+  <script src="js/30-scenario.js?v=713"></script>
+  <script src="js/31-ios.js?v=713"></script>
+  <script src="js/32-callout.js?v=713"></script>
+  <script src="js/33-train4.js?v=713"></script>
+  <script src="js/34-infra.js?v=713"></script>
+  <script src="js/35-kuhgrip.js?v=713"></script>
+  <script src="js/36-kuhsys.js?v=713"></script>
 
 <input type="file" id="zipFileInput" accept=".zip,application/zip,application/x-zip-compressed,application/octet-stream" style="display:none" onchange="handleZipFile(this.files[0]); this.value='';"></body>
 </html>

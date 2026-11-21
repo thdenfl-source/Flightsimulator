@@ -448,7 +448,7 @@ function _h3DrawLights(h, main, pose, mpp, st) {
   for (const L of st.pts) {
     const part = _h3GlowPart(h, keyOf(L.col)), k = Math.max(0, Math.min(1, L.k));
     const at = r => new Float32Array(_m4Mul(base, _m4From([[r, 0, 0], [0, r, 0], [0, 0, r]], L.p)));
-    const halo = Math.max(0.25, (3 + 14 * k) * mpp);
+    const halo = Math.max(0.25, (3 + 14 * k) * mpp) * (st.nvg ? 1.8 : 1);   // NVG — 고글이 빛을 번지게 한다
     [[1, 0.18], [0.6, 0.28], [0.32, 0.45]].forEach(([f, a]) => _h3Draw(h, part, at(halo * f), rot3, Math.min(1, a * (0.35 + 0.65 * k) * 1.4)));
     _h3Draw(h, part, at(Math.max(0.08, 1.4 * mpp)), rot3, Math.min(1, 0.45 + 0.55 * k));
   }

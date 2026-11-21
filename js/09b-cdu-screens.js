@@ -3543,7 +3543,9 @@
     async function afldToggleAll() {
         if (_afldUnlocked) { _afldUnlocked = false; switchMode('AIRFIELD'); return; }
         const p = await uiPrompt('전체 비행장 보기\n접근 코드를 입력하세요:', '', { password: true });
-        if (p === 'thdenfl') { _afldUnlocked = true; }
+        // 코드는 평문으로 두지 않는다 — SHA-256 해시로만 견준다(00-gate.js vfrSha256)
+        const AFLD_ALL_HASH = 'fe5f103afb59882d3b0f38d61152a835729626559128e397cff9d09bfc25d92e';
+        if (p !== null && typeof window.vfrSha256 === 'function' && window.vfrSha256(p) === AFLD_ALL_HASH) { _afldUnlocked = true; }
         else { _afldUnlocked = false; if (p !== null) uiAlert('코드가 올바르지 않습니다.\nAIP 공개 공항만 표시됩니다.'); }
         switchMode('AIRFIELD');
     }

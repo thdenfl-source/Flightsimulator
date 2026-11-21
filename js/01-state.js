@@ -14,16 +14,38 @@
 //   확인:        _swallowed()          최근 무시 예외 목록
 //                _swallowSummary()     메시지별 발생 횟수(반복되는 것이 진짜 문제)
 const _SWALLOW_LOG = [];
+// 누적 집계 — 최근 200건과 달리 지우지 않는다(어느 파일 · 어느 줄에서 몇 번). 진단 기록(34-infra.js)이 기능별로 보인다
+const _SWALLOW_BY = {};        // { 'js/15-heli3d.js': { n, sites: { '123': { n, msg } } } }
+let _SWALLOW_N = 0;
+function _swallowSite(stack) {
+  const lines = String(stack || '').split('\n');
+  for (const l of lines) {
+    const m = l.match(/(js\/[\w.-]+\.js)(?:\?[^:]*)?:(\d+)/);
+    if (m) return { file: m[1], line: m[2] };
+  }
+  return { file: '(기타)', line: '' };
+}
 let _DEBUG = false;
 function _swallow(e) {
   try {
     const at = (((e && e.stack) || '').split('\n')[1] || '').trim();
-    _SWALLOW_LOG.push({ t: Date.now(), msg: (e && e.message) || String(e), at });
+    const msg = (e && e.message) || String(e);
+    _SWALLOW_N++;
+    const st = _swallowSite(e && e.stack), F = _SWALLOW_BY[st.file] || (_SWALLOW_BY[st.file] = { n: 0, sites: {} });
+    F.n++; const ss = F.sites[st.line] || (F.sites[st.line] = { n: 0, msg }); ss.n++; ss.msg = msg;
+    _SWALLOW_LOG.push({ t: Date.now(), msg, at });
     if (_SWALLOW_LOG.length > 200) _SWALLOW_LOG.shift();
     if (_DEBUG) console.debug('[무시된 예외]', (e && e.message) || e, at);
   } catch (_) { /* 집계 자체가 실패해도 앱 동작에는 영향을 주지 않는다 */ }
 }
 function _swallowed() { return _SWALLOW_LOG.slice(); }
+// 파일(기능)별 누적 — [{ file, n, top: [{ line, n, msg }] }] 많은 것부터
+function _swallowByFile() {
+  return Object.entries(_SWALLOW_BY).map(([file, F]) => ({
+    file, n: F.n,
+    top: Object.entries(F.sites).map(([line, x]) => ({ line, n: x.n, msg: x.msg })).sort((a, b) => b.n - a.n).slice(0, 3),
+  })).sort((a, b) => b.n - a.n);
+}
 function _swallowSummary() {
   const c = {};
   _SWALLOW_LOG.forEach(r => { c[r.msg] = (c[r.msg] || 0) + 1; });
@@ -208,10 +230,10 @@ const PW_ETL0 = 12, PW_ETL1 = 24;   // 회전익 특성 '속도·TQ 효율' — 
 //   3ft 이하 : HOV − 10%  — 이 토크면 바퀴가 떨어져 3ft 에 선다(그보다 적으면 바퀴가 땅에)
 //   5ft      : HOV − 5%
 //   10ft     : HOV
-//   10→53ft  : HOV → OGE — 로터 지름 즈음(≈53ft) 위는 지면효과가 없다
+//   10ft 위  : HOV → OGE — Cheeseman–Bennett 곡선(igeTqAt) · 로터 지름 + 7ft(흰수리 53 · Bell 40 · R22 32ft) 위는 지면효과가 없다
 // 그래서 레버를 HOV−10% 에 두면 3ft, HOV−5% 면 5ft, HOV 면 10ft 에서 호버링한다.
 // HOV−20% ~ HOV−10% 는 바퀴가 떨어지기 직전(LIGHT ON WHEELS)이다(simLightOnWheels).
-const IGE_FULL_FT = 10, IGE_NONE_FT = 53;
+const IGE_FULL_FT = 10;
 // [바퀴 높이 ft, HOV 와의 차 %] — 땅(0ft)은 HOV−10 보다 조금 낮게 두어, HOV−10% 면 확실히
 // 바퀴가 떨어져 몇 초 안에 3ft 까지 오른다(같게 두면 땅에서 꼭 맞아 뜨지 않는다)
 const IGE_CURVE = [[0, -12], [3, -10], [5, -5], [10, 0]];
@@ -239,18 +261,45 @@ function hoverTqRef() {
     agl = S.alt - (d == null ? g : Math.max(g, d));
   }
   catch (e) { agl = S.alt; }
-  if (agl < IGE_FULL_FT) {                                     // 지면효과 — 낮을수록 덜 든다
-    const c = IGE_CURVE;
-    if (agl <= c[0][0]) return ige + c[0][1];
-    for (let i = 1; i < c.length; i++) {
-      if (agl <= c[i][0]) {
-        const f = (agl - c[i - 1][0]) / (c[i][0] - c[i - 1][0]);
-        return ige + c[i - 1][1] + (c[i][1] - c[i - 1][1]) * f;
-      }
-    }
+  return igeTqAt(agl, ige, p.oge);
+}
+// ── 지면효과 곡선 ── 꺾이는 데 없이 이어지게(종전: 10ft · 53ft 에서 기울기가 뚝 바뀌는 꺾은선)
+//   10ft 위 : Cheeseman–Bennett — 로터 원판이 땅에서 z 만큼 떠 있으면 유도 동력이 (R/4z)² 만큼 준다.
+//             z = 바퀴 높이 + 로터 높이. 10ft 에서 PERF IGE, IGE_NONE(≈ 로터 지름 + 7ft) 에서 OGE 가 되게 맞춘다.
+//   10ft 아래: 종전 기준점(0 · 3 · 5 · 10ft)은 그대로 — 그 사이를 단조 3차(PCHIP)로 잇고, 10ft 에서의 기울기는 위 곡선과 같게
+// 로터 반지름 · 바퀴(스키드) 위 로터 높이(ft) — 15-heli3d.js 의 H3_SPECS 와 같은 치수
+const IGE_ROTOR = { kuh: { r: 23.1, h: 17.9 }, b206: { r: 16.7, h: 9.4 }, r22: { r: 12.6, h: 8.8 } };
+function igeRotor() {
+  if (typeof acR22 === 'function' && acR22()) return IGE_ROTOR.r22;
+  return acB206() ? IGE_ROTOR.b206 : IGE_ROTOR.kuh;
+}
+function igeNoneFt(R = igeRotor()) { return Math.round(2 * R.r + 7); }
+function _igeCb(h, R) { const z = Math.max(1, h + R.h); return (R.r / (4 * z)) ** 2; }
+// 0(지면효과 없음) ~ 1(10ft 만큼) — 10ft 위에서만 쓴다
+function igeFrac(h, R = igeRotor()) {
+  const top = igeNoneFt(R); if (h >= top) return 0;
+  const a = _igeCb(IGE_FULL_FT, R), b = _igeCb(top, R);
+  return Math.max(0, Math.min(1, (_igeCb(h, R) - b) / (a - b)));
+}
+function igeTqAt(agl, ige, oge, R = igeRotor()) {
+  if (agl >= IGE_FULL_FT) return oge - (oge - ige) * igeFrac(agl, R);
+  // 10ft 에서의 기울기(%/ft) — 위 곡선과 맞춘다
+  const top = igeNoneFt(R), a = _igeCb(IGE_FULL_FT, R), b = _igeCb(top, R);
+  const dCb = -2 * R.r * R.r / (16 * (IGE_FULL_FT + R.h) ** 3);          // d(R/4z)²/dh
+  const mTop = Math.max(0, (oge - ige) * -dCb / (a - b));
+  const c = IGE_CURVE, n = c.length;
+  if (agl <= c[0][0]) return ige + c[0][1];
+  const d = []; for (let i = 0; i < n - 1; i++) d.push((c[i + 1][1] - c[i][1]) / (c[i + 1][0] - c[i][0]));
+  const m = [d[0]];
+  for (let i = 1; i < n - 1; i++) m.push(d[i - 1] * d[i] > 0 ? 2 * d[i - 1] * d[i] / (d[i - 1] + d[i]) : 0);
+  m.push(Math.min(mTop, 3 * d[n - 2]));                                    // 단조를 지키는 범위에서
+  for (let i = 0; i < n - 1; i++) {
+    if (agl > c[i + 1][0]) continue;
+    const hh = c[i + 1][0] - c[i][0], t = (agl - c[i][0]) / hh, t2 = t * t, t3 = t2 * t;
+    const y = (2 * t3 - 3 * t2 + 1) * c[i][1] + (t3 - 2 * t2 + t) * hh * m[i] + (-2 * t3 + 3 * t2) * c[i + 1][1] + (t3 - t2) * hh * m[i + 1];
+    return ige + y;
   }
-  const k = Math.max(0, Math.min(1, (agl - IGE_FULL_FT) / (IGE_NONE_FT - IGE_FULL_FT)));
-  return ige + (p.oge - ige) * k;                              // IGE → OGE
+  return ige;
 }
 
 // 지금 '수평 비행' 에 필요한 토크(%)
