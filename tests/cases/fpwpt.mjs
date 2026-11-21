@@ -344,6 +344,8 @@ export async function run(page, t) {
     await wait(100);
     const apt = AIRPORTS.find(x => x.ident === 'RKPK');
     r.toApt = distance(S.lat, S.lon, apt.lat, apt.lon);
+    // 지형 표고가 늦게 오면(인터넷이 되는 CI) 처음엔 아는 높이에 세웠다가 0.3초마다 다시 맞춘다(simSetOnGround) — 맞을 때까지(최대 4초)
+    for (let i = 0; i < 40 && Math.abs(S.alt - simGroundFt()) >= 1; i++) await wait(100);
     r.gnd = { alt: S.alt, g: simGroundFt(), spd: S.spd, vs: S.vs };
     r.trail = S.trail.length;
     // 두 번째부터는 옮기지 않는다 — 출발지만 자리를 정한다
