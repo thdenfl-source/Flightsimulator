@@ -368,6 +368,93 @@ function _h3BuildDisc(r, axis) {
   return m;
 }
 
+// ── 외부 등화(흰수리) — 위치표시등(왼쪽 빨강 · 오른쪽 초록 · 꼬리 흰색) · 충돌방지등(위 · 아래 빨강 번쩍) ──
+//   상부 콘솔(17-upper.js): POSITION LTS 밝기 노브 1~5(posLts) · STEADY/OFF/FLASH(posMode) · NAV LTS NORM/IR(navLts)
+//                         ANTI COLLISION LTS UPPER/BOTH/LOWER(acolSel) · DIM/OFF/BRT(acolMode) · NORM/IR(acolNorm)
+//   밝기: DISPLAY 스위치 DAY 100% · NIGHT 50% · NVG 30% — 위치표시등은 노브(5칸 중 몇 칸 · 최대 50%),
+//         충돌방지등 BRT 는 위치표시등의 2배(노브 5 · DAY 면 100%) · DIM 은 그 반
+//   IR 은 맨눈에 보이지 않는다(ENV NVG 일 때만) · DC 전원이 없으면 꺼진다 · Bell 206 · R22 는 상부 콘솔이 없어 칠한 등 그대로
+const H3_LT_POS = { L: [0.40, -2.30, 2.40], R: [0.40, 2.30, 2.40], T: [-9.30, 0, 3.05] };
+const H3_LT_ACOL = { U: [-0.60, 0, 4.50], D: [1.50, 0, 0.80] };
+const LT_DISP_K = { DAY: 1, NIGHT: 0.5, NVG: 0.3 };
+const LT_POS_MAX = 0.5, LT_ACOL_K = 2, LT_ACOL_DIM = 0.5;
+const LT_POS_FLASH = 1.5, LT_ACOL_PER = 1.1, LT_ACOL_ON = 0.15;   // 초 — 위치등 깜빡(반은 켜짐) · 충돌방지등 번쩍(분당 약 55번)
+const LT_COL = { red: [1, 0.12, 0.10], green: [0.15, 1, 0.35], white: [1, 1, 0.95] };
+function extLightState(tSec) {
+  const ov = (id, d) => { try { const v = typeof ovhdGet === 'function' ? ovhdGet(id) : undefined; return v === undefined || v === null ? d : v; } catch (e) { return d; } };
+  const t = Number.isFinite(tSec) ? tSec : performance.now() / 1000;
+  const kuh = !H3_B206;
+  let pwr = true; try { if (typeof pwrDc === 'function') pwr = !!pwrDc(); } catch (e) { _swallow(e); }
+  let nvg = false; try { nvg = typeof env !== 'undefined' && !!env.nvg; } catch (e) { _swallow(e); }
+  const disp = ov('display', 'DAY'), dk = LT_DISP_K[disp] ?? 1;
+  const knob = Math.max(1, Math.min(5, +ov('posLts', 3) || 3));
+  const posMode = ov('posMode', 'STEADY'), acolMode = ov('acolMode', 'OFF'), acolSel = ov('acolSel', 'BOTH');
+  const posIr = ov('navLts', 'NORM') === 'IR', acolIr = ov('acolNorm', 'NORM') === 'IR';
+  const posBase = LT_POS_MAX * dk * knob / 5;                                    // 위치표시등 밝기(0~1)
+  const acolBase = acolMode === 'OFF' ? 0 : LT_ACOL_K * posBase * (acolMode === 'DIM' ? LT_ACOL_DIM : 1);
+  const posOn = kuh && pwr && posMode !== 'OFF' && (!posIr || nvg);
+  const posLit = posOn && (posMode !== 'FLASH' || (t % LT_POS_FLASH) < LT_POS_FLASH / 2);
+  const acolOn = kuh && pwr && acolBase > 0 && (!acolIr || nvg);
+  const acolLit = acolOn && (t % LT_ACOL_PER) < LT_ACOL_ON;
+  const upper = acolSel !== 'LOWER', lower = acolSel !== 'UPPER';
+  const pts = [];
+  if (posLit) pts.push({ id: 'posL', p: H3_LT_POS.L, col: LT_COL.red, k: posBase }, { id: 'posR', p: H3_LT_POS.R, col: LT_COL.green, k: posBase }, { id: 'posT', p: H3_LT_POS.T, col: LT_COL.white, k: posBase });
+  if (acolLit && upper) pts.push({ id: 'acolU', p: H3_LT_ACOL.U, col: LT_COL.red, k: acolBase });
+  if (acolLit && lower) pts.push({ id: 'acolD', p: H3_LT_ACOL.D, col: LT_COL.red, k: acolBase });
+  return {
+    disp, dispK: dk, pwr, nvg,
+    pos: { on: posOn, lit: posLit, k: posOn ? posBase : 0, base: posBase, knob, mode: posMode, ir: posIr },
+    acol: { on: acolOn, lit: acolLit, k: acolOn ? acolBase : 0, base: acolBase, mode: acolMode, sel: acolSel, upper, lower, ir: acolIr },
+    blink: (posOn && posMode === 'FLASH') || acolOn, pts,
+  };
+}
+// 빛 덩이 — 스스로 빛나는 공(재질 −1 · 해의 그늘을 받지 않는다) · 색마다 하나씩 올려 두고 크기만 바꿔 그린다
+function _h3BuildGlow(col) {
+  const m = _h3New(), prof = [];
+  for (let i = 0; i <= 8; i++) { const a = -Math.PI / 2 + Math.PI * i / 8; prof.push([Math.cos(a), Math.sin(a)]); }
+  _h3Lathe(m, [0, 0, 0], H3Z, prof, col, 12);
+  for (let i = 9; i < m.length; i += 10) m[i] = -1;
+  return m;
+}
+function _h3GlowPart(h, key) {
+  h.glow = h.glow || {};
+  if (h.glow[key]) return h.glow[key];
+  const gl = h.gl, loc = h.loc, p = _h3Upload(gl, _h3BuildGlow(LT_COL[key]));
+  if (h.vao) {
+    p.vao = h.vao.create(); h.vao.bind(p.vao);
+    gl.bindBuffer(gl.ARRAY_BUFFER, p.buf);
+    [[loc.pos, 3, 0], [loc.nrm, 3, 12], [loc.col, 3, 24], [loc.mat, 1, 36]].forEach(([l, n, o]) => {
+      if (l < 0) return;
+      gl.enableVertexAttribArray(l); gl.vertexAttribPointer(l, n, gl.FLOAT, false, 40, o);
+    });
+    h.vao.bind(null);
+  }
+  h.glow[key] = p;
+  return p;
+}
+// 내 기체의 등 — 가운데 밝은 알(작게) + 둘레 빛 무리(밝기만큼 크고 진하게 · 멀리서도 몇 픽셀은 보이게)
+function _h3DrawLights(h, main, pose, mpp, st) {
+  if (!st || !st.pts.length) return;
+  const gl = h.gl;
+  const mc = maplibregl.MercatorCoordinate.fromLngLat([pose.lon, pose.lat], pose.alt);
+  const s = mc.meterInMercatorCoordinateUnits();
+  const R = heli3dRot(pose.hdg, pose.pit, pose.bnk);
+  const base = _m4Mul(main, _m4From(_m3Mul([[s, 0, 0], [0, -s, 0], [0, 0, s]], R), [mc.x, mc.y, mc.z]));
+  const rot3 = new Float32Array([1, 0, 0, 0, 1, 0, 0, 0, 1]);
+  const keyOf = c => c === LT_COL.green ? 'green' : c === LT_COL.white ? 'white' : 'red';
+  mpp = Number.isFinite(mpp) && mpp > 0 ? mpp : 0.05;
+  gl.useProgram(h.prog);
+  gl.depthMask(false);
+  for (const L of st.pts) {
+    const part = _h3GlowPart(h, keyOf(L.col)), k = Math.max(0, Math.min(1, L.k));
+    const at = r => new Float32Array(_m4Mul(base, _m4From([[r, 0, 0], [0, r, 0], [0, 0, r]], L.p)));
+    const halo = Math.max(0.25, (3 + 14 * k) * mpp);
+    [[1, 0.18], [0.6, 0.28], [0.32, 0.45]].forEach(([f, a]) => _h3Draw(h, part, at(halo * f), rot3, Math.min(1, a * (0.35 + 0.65 * k) * 1.4)));
+    _h3Draw(h, part, at(Math.max(0.08, 1.4 * mpp)), rot3, Math.min(1, 0.45 + 0.55 * k));
+  }
+  gl.depthMask(true);
+}
+
 // ── 그리기(WebGL) ──
 const H3_VS = `
 attribute vec3 a_pos; attribute vec3 a_nrm; attribute vec3 a_col; attribute float a_mat;
@@ -613,6 +700,11 @@ const HELI3D_LAYER = {
     const pc = _h3PoseNow;
     const pose = (pc && simExtView && now - pc.t < 60) ? pc.pose : heli3dPose(this.map);
     _h3DrawHeli(h, h.parts, H3_SPECS[H3_OWN], main, pose, _h3Phase, _h3TPhase, k > 0);
+    // 외부 등화(상부 콘솔 POSITION · ANTI COLLISION LTS)
+    try {
+      const st = extLightState(now / 1000);
+      if (st.pts.length) _h3DrawLights(h, main, pose, HELI3D_LEN / Math.max(1, heli3dScreenLen(this.map)), st);
+    } catch (e) { _swallow(e); }
   },
 };
 
@@ -746,7 +838,8 @@ function heli3dTick() {
   try { if (tfc3dActive() && S.running && _map3dShown()) { _ml3d.triggerRepaint(); return; } } catch (e) { _swallow(e); }
   if (!heli3dShown() || !_map3dShown()) return;
   const sim = ((typeof simModeOn !== 'undefined') && simModeOn) || simExtView;
-  if (!(S.running || gpsMode || _fdrPlaying || sim)) return;
+  let blink = false; try { blink = extLightState().blink; } catch (e) { _swallow(e); }   // 멈춰 있어도 깜빡이는 등은 그린다
+  if (!(S.running || gpsMode || _fdrPlaying || sim || blink)) return;
   // 화면 밖에 있으면 다시 그릴 까닭이 없다(지도를 손으로 옮겨 다른 곳을 볼 때)
   if (!sim) {
     try {
