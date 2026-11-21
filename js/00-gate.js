@@ -66,7 +66,8 @@
   let ok = false, again = false;
   try { ok = sessionStorage.getItem(LOCK_KEY) === '1'; } catch (e) { ok = false; }
   // '⌂ 처음 화면' 단추(09-cdu.js goStartScreen)로 다시 불렀으면 — 비밀번호는 묻지 않고 화면 · 기종 고르기부터
-  try { again = ok && sessionStorage.getItem('vfrChooseAgain') === '1'; if (again) sessionStorage.removeItem('vfrChooseAgain'); } catch (e) { again = false; }
+  // (표시는 화면을 고를 때 지운다 — 고르기 전에 한 번 더 새로 불러도(서비스 워커 갱신 등) 처음 화면이 그대로 뜨게)
+  try { again = ok && sessionStorage.getItem('vfrChooseAgain') === '1'; } catch (e) { again = false; }
   window.gateLocked = !ok || again;
   window.lockCheck = pw => sha256Hex(String(pw)) === LOCK_HASH;
   if (ok && !again) { document.body.classList.add('gate-open'); return; }
@@ -96,7 +97,7 @@
     acBtns.forEach(b => b.addEventListener('click', () => { ac = b.dataset.ac; acMark(); }));
     acMark();
     const pick = mode => {
-      try { sessionStorage.setItem('vfrStartMode', mode); } catch (e) { /* 이번만 */ }
+      try { sessionStorage.setItem('vfrStartMode', mode); sessionStorage.removeItem('vfrChooseAgain'); } catch (e) { /* 이번만 */ }
       window.vfrStartMode = mode;
       setUnlocked();
       if (ac && typeof AC_TYPE !== 'undefined' && ac !== AC_TYPE && typeof setAircraftType === 'function') setAircraftType(ac);
