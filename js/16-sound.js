@@ -159,10 +159,12 @@ function sndFrame() {
   sndTick(dt);
 }
 
-// 켜 둔 채 새로 열었으면 — 버튼은 켜진 모습으로 두고, 첫 터치·키 입력 때 소리를 연다
+// 앱을 새로 열면 SOUND 는 늘 꺼진 채로 시작한다(켜 둔 채 닫았어도) — 쓰려면 SOUND 버튼을 누른다
+// (예전에는 켜 둔 채 새로 열면 첫 터치 · 키 입력 때 다시 켰다 · Cockpit Mode 를 시작하면 저절로 켰다)
+const SND_RESTORE = false;
 (function sndRestore() {
   let pref = false;
-  try { pref = localStorage.getItem(SND_PREF) === '1'; } catch (e) { pref = false; }
+  try { pref = SND_RESTORE && localStorage.getItem(SND_PREF) === '1'; } catch (e) { pref = false; }
   if (!pref) return;
   sndOn = true;
   const go = () => {

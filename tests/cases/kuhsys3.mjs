@@ -10,7 +10,8 @@ export async function run(page, t) {
     selectPanel('mid', 'cdu', true);
     // ── PERF ──
     CDU_ACT.switchMode('PERF'); await w(20);
-    o.tabs = ['Config', 'Hover', 'Cruise'].every(x => document.getElementById('mainContentArea').textContent.includes(x));
+    o.tabs = ['Config', 'Hover', 'Cruise'].every(x => document.getElementById('mainContentArea').textContent.includes(x)) && !/MFD 보기/.test(document.getElementById('mainContentArea').textContent);
+    o.mfdAuto = sysLayout === 'HALF' ? (sysHalf.L === 'perf' || sysHalf.R === 'perf') : sysPage === 'perf';   // PERF 를 열면 SYSTEM 창에 Helicopter Performance
     const P0 = perfSnap();
     CDU_ACT.perfSetTab('Config'); await w(20);
     CDU_ACT.perfCfgSet('ai'); CDU_ACT.perfCfgSet('ecs'); await w(20);
@@ -72,6 +73,7 @@ export async function run(page, t) {
   });
   t.ok(r.half0, 'MFD(SYSTEM 창)는 처음 HALF 로 시작한다(지상 전원 인가)');
   t.ok(r.tabs && r.pen === 18 && r.tql, `PERF — Config · Hover · Cruise · 방빙+ECS-H 면 가용 토크 −18% (${r.pen}) · TQ-L S2.5M 이면 더 크다`);
+  t.ok(r.mfdAuto, 'PERF 를 열면 SYSTEM 창(MFD Aircraft Systems)에 Helicopter Performance 가 저절로 뜬다 · MFD 보기 탭은 없다');
   t.ok(r.hot.alt === 9000 && r.hot.temp === 35 && r.hot.ogeRed && r.redShown, `Use Defaults(지금 고도 · 외기) · 높고 더우면 OGE 요구 토크가 MTA 를 넘어 적색 (${JSON.stringify(r.hot)})`);
   t.ok(r.maxGwYel, 'MAX Gross WT 가 지금 무게 이하면 황색');
   t.ok(r.cruise, 'Cruise — VNE · MAX END · Range(예비 340 lb 제외) · OEI · ROC');
