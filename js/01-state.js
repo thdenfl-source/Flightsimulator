@@ -733,8 +733,13 @@ function startTrimHold(dir) {
   } else {
     _trimNonGspdDir = dir;
     if (dir === 'L' || dir === 'R') {
-      bankTarget = Math.max(-60, Math.min(60, bankTarget + (dir === 'R' ? 1 : -1)));
+      // 딸깍 한 번이 뱅크 1° — 누르고 있으면(0.5초 뒤) 0.1초마다 1° 씩 이어서(피치 트림처럼)
+      const step = () => { bankTarget = Math.max(-60, Math.min(60, bankTarget + (dir === 'R' ? 1 : -1))); };
+      step();
       rollApOn = false; hdgSelOn = false;   // 수동 뱅크 → 횡축 모드 해제(HDG 는 위에서 기준만 옮긴다)
+      trimHoldTimer = setTimeout(() => {
+        trimHoldInt = setInterval(step, SIM_TRIM_REP_MS);
+      }, SIM_TRIM_HOLD_MS - SIM_TRIM_REP_MS);
     } else {
       const d = dir === 'F' ? 1 : -1;
       applyDelta('spd', d);
