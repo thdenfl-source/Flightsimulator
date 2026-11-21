@@ -1019,7 +1019,8 @@ let simFlareVs = 0;       // 지금 플레어가 만든 상승률 몫(fpm)
 const FLARE_VY_GAIN = 1700, FLARE_V_END = 20, FLARE_EX_ON = 2, FLARE_EX_OFF = 0.5;
 let _flareV0 = null, _flarePreq0 = 0, _flareVyTgt = 0, simFlareVyVs = 0;
 const FLARE_VY_TAU = 0.6;   // 속도를 따라 곧 붙는다(줄어든 속도에 비례)
-const FLARE_VY_TAU_OFF = 1.5;   // 기수를 고르면 유입류가 바뀌는 동안(1~2초) 서서히 사라진다
+const FLARE_VY_TAU_OFF = 1.5;
+const FLARE_VY_DEC = 1.5, FLARE_VY_LO0 = 3, FLARE_VY_LO1 = 10;   // 감속(kt/s) · 호버 가까이 사라지는 속도(kt)   // 기수를 고르면 유입류가 바뀌는 동안(1~2초) 서서히 사라진다
 function simFlareVy(onGnd, ex) {
   if (onGnd || simAfcsVert() || !(S.spd > -5)) { _flareV0 = null; return 0; }
   const vy = simVyKt();
@@ -1032,7 +1033,12 @@ function simFlareVy(onGnd, ex) {
   const L = Math.max(0, Math.min(1, (Math.min(vy, _flareV0) - S.spd) / Math.max(10, vy - FLARE_V_END)));
   if (S.spd > vy) _flarePreq0 = tqRequired();                    // Vy 위에서는 아직 시작하지 않았다
   const comp = Math.max(0, tqRequired() - _flarePreq0) * CLIMB_FPM_DN * simWtK();   // 늘어난 필요 동력 몫을 메운다
-  return FLARE_VY_GAIN * L + comp;
+  // 플레어는 운동에너지를 쓰는 동안만 받쳐 준다 — 속도가 실제로 줄고 있을 때(감속 FLARE_VY_DEC kt/s 이면 다) ·
+  // 호버 가까이(FLARE_VY_LO0 → LO1 kt)에서는 사라진다. 종전에는 기수를 든 채로만 있으면 0kt 에서도 1,700fpm 이
+  // 끝없이 붙어, 레버가 호버 토크보다 낮은데도 계속 올라갔다
+  const decK = Math.max(0, Math.min(1, -(simAcc || 0) / FLARE_VY_DEC));
+  const loK = Math.max(0, Math.min(1, (S.spd - FLARE_VY_LO0) / (FLARE_VY_LO1 - FLARE_VY_LO0)));
+  return (FLARE_VY_GAIN * L + comp) * decK * loK;
 }
 function simFlareTgt(onGnd) {
   const ex = S.pit - pitchFromSpd(Math.max(0, S.spd));   // 그 속도의 자세보다 더 든 각(°)
