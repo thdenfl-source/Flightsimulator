@@ -138,4 +138,17 @@ export async function run(page, t) {
   });
   t.ok(rt.one === 1 && rt.held >= 6 && rt.after === rt.held && rt.click === rt.held - 1,
     `좌우 트림 — 딸깍 1° · 누르고 있으면 0.1초마다 1° 씩 이어서 · 놓으면 멈춘다 (1.3초 ${rt.held}° · ${rt.st} · ${rt.seq})`);
+
+  // ── 트림 반복은 타이머가 늦게 불려도(창이 뒤로 · 팝아웃 포커스) 누른 시간만큼 따라잡는다 ──
+  const cu = await page.evaluate(async () => {
+    const w = ms => new Promise(r => setTimeout(r, ms));
+    const sim0 = simModeOn; if (simModeOn) toggleSimMode(false);
+    if (gspdOn) toggleGspd(); hdgSelOn = false; rollApOn = false; navApOn = false; bankTarget = 0;
+    startTrimHold('R'); await w(450);
+    const t0 = performance.now(); while (performance.now() - t0 < 1000) {}   // 1초 동안 타이머가 불리지 못한다
+    await w(120); const b = bankTarget; stopTrimHold();
+    bankTarget = 0; if (sim0) toggleSimMode(true);
+    return b;
+  });
+  t.ok(cu >= 10, `트림 반복은 늦게 불려도 누른 시간만큼 따라잡는다 (1.6초 · 뱅크 ${cu}°)`);
 }

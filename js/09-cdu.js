@@ -149,9 +149,24 @@ function hardReloadNow() {
   try { localStorage.removeItem(SESSION_KEY); } catch(e) { _swallow(e); }
   location.reload();
 }
+// 저장 후 새로고침 — 지금 상태(위치 · 자세 · 속도 · 바람 · 연료 · 비행계획 등)를 시나리오로 적어 두고 새로 고친다.
+// 새로 고친 뒤 ⚙ 시나리오에서 '새로고침 전 …' 을 불러 같은 상황을 다시 연습한다(30-scenario.js scnSave · scnApply)
+function hardReloadSaveName() {
+  const d = new Date(), z = n => String(n).padStart(2, '0');
+  return `새로고침 전 ${d.getMonth() + 1}/${d.getDate()} ${z(d.getHours())}:${z(d.getMinutes())}`;
+}
 async function hardReload() {
   let ok = true;
-  try { if (typeof uiConfirm === 'function') ok = await uiConfirm('새로고침할까요?\n지금 비행 상태가 모두 처음으로 돌아갑니다.', { okText: '새로고침', cancelText: '취소' }); } catch (e) { _swallow(e); }
+  const canSave = typeof scnSave === 'function';
+  try {
+    if (typeof uiConfirm === 'function') ok = await uiConfirm('새로고침할까요?\n지금 비행 상태가 모두 처음으로 돌아갑니다.' + (canSave ? '\n(저장 후 새로고침 — 지금 상태를 시나리오로 남겨 다시 불러올 수 있습니다)' : ''),
+      Object.assign({ okText: '새로고침', cancelText: '취소' }, canSave ? { extraText: '저장 후 새로고침' } : {}));
+  } catch (e) { _swallow(e); }
+  if (ok === 'extra') {
+    try { const sc = scnSave(hardReloadSaveName()); if (typeof uiToast === 'function') uiToast(`시나리오 저장 — ${sc.name}`, '', 1500); } catch (e) { _swallow(e); }
+    setTimeout(hardReloadNow, 300);
+    return;
+  }
   if (ok) hardReloadNow();
 }
 // ⌂ 처음 화면 — 화면 고르기(PC · Cockpit · Simple · SIM) · 기종 고르기로 돌아간다(비밀번호는 다시 묻지 않는다 · 00-gate.js)

@@ -15,5 +15,5 @@ const APP_EDITION = (() => {
 // 절차 훈련판도 SIM(조종 비행 모델 · 3D 조작 버튼)은 종합판과 같다 — 다만 사이클릭의 피치 · 롤은 듣지 않는다(CYCLIC_LOCK).
 //   자세는 4방향 비퍼 트림(햇 · 컬렉티브/사이클릭 창의 4-WAY BEEP · 키보드)과 AFCS 로 바꾼다. 컬렉티브 · 페달 · COLL TRIM 은 그대로.
 const SIM_ENABLED = true;
-const CYCLIC_LOCK = APP_EDITION === 'proc';
+let CYCLIC_LOCK = APP_EDITION === 'proc';   // (let — 검사가 종합판에서도 잠가 본다 · tests/cases/proccyc.mjs)
 try { document.documentElement.classList.toggle('ed-proc', APP_EDITION === 'proc'); } catch (e) { /* 그만 */ }

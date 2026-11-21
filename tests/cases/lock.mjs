@@ -35,8 +35,15 @@ export async function run(page, t) {
       const cancel = [...document.querySelectorAll('.ui-dlg button')].find(b => /취소/.test(b.textContent)); if (cancel) cancel.click(); await w(200);
       o.cancelHome = window._reloaded === 0 && sessionStorage.getItem('vfrChooseAgain') !== '1';
       rb.click(); await w(200); o.askReload = !!document.querySelector('.ui-dlg') && /새로고침/.test(document.querySelector('.ui-dlg').textContent);
-      const okb = [...document.querySelectorAll('.ui-dlg button')].find(b => /새로고침/.test(b.textContent) && !/취소/.test(b.textContent)); if (okb) okb.click(); await w(200);
+      const okb = document.querySelector('.ui-dlg .ui-dlg-ok'); if (okb) okb.click(); await w(200);
       o.okReload = window._reloaded === 1;
+      // 저장 후 새로고침 — 지금 상태를 시나리오로 남기고 새로 고친다
+      const n0 = scnList().length;
+      rb.click(); await w(200);
+      const ex = document.querySelector('.ui-dlg .ui-dlg-extra'); o.extraBtn = !!ex && /저장 후 새로고침/.test(ex.textContent);
+      if (ex) ex.click(); await w(500);
+      const L = scnList(); o.saved = L.length === n0 + 1 && /^새로고침 전/.test(L[L.length - 1].name) && window._reloaded === 2;
+      if (L.length > n0) scnDelete(L.length - 1);
       window.hardReloadNow = keep;
       return o;
     });
@@ -58,6 +65,7 @@ export async function run(page, t) {
     await tb2.close();
     t.ok(q.btns && q.ck, '창 위 탭에 ⌂ 처음 화면 · ⟳ 새로고침 · 3D(Cockpit) 버튼 줄 맨 아래에 ⟳ 새로고침');
     t.ok(q.askHome && q.cancelHome && q.askReload && q.okReload, '처음 화면 · 새로고침은 먼저 묻는다 — 취소하면 그대로 · 확인하면 새로고침');
+    t.ok(q.extraBtn && q.saved, '저장 후 새로고침 — 지금 상태를 시나리오(새로고침 전 …)로 남기고 새로 고친다');
     t.ok(g.locked && g.shown && g.choose && g.pwHidden && g.flag === '1' && g.again && open && g.flagAfter === null, `처음 화면 — 비밀번호 없이 화면 · 기종 고르기가 뜨고, 고르면 열린다 (${JSON.stringify(g)} · ${open})`);
   }
   // 절차 훈련판(Flightsimulator)은 비밀번호가 없다 — 처음 열면 곧바로 화면 · 기종 고르기

@@ -165,4 +165,25 @@ export async function run(page, t) {
     return o;
   })()`);
   t.ok(pk.gnd && pk.set < 0.01 && pk.rate === 0 && pk.rel > 5, `PARKING BRAKE SET · 땅 위 — 페달을 밟아도 기수가 돌지 않는다(${pk.set.toFixed(2)}°) · RELEASE 면 돈다(${pk.rel.toFixed(0)}°)`);
+
+  // ── 감속 플레어는 출력 상승에 겹쳐 쌓지 않는다 · 오르던 것이 출력 부족으로 줄 때는 빨리 ──
+  const fz = await page.evaluate(`(() => {
+    (${SIM_SETUP_SRC})();
+    joyAxes.coll = { i: 3, inv: false, abs: true };
+    const lever = t => _ax(3, 2 * t / SIM_LEVER_TOP - 1);
+    const run = (secs, pitchAx, hold) => { const vs = []; S.running = true; let ts = 1000; S.lastT = ts; _ax(1, pitchAx);
+      for (let i = 0; i < secs * 20; i++) { ts += 50; joyPoll(ts); simStep(ts); if (hold != null) { S.spd = hold; simAcc = 0; } vs.push(S.vs); }
+      S.running = false; return vs; };
+    const o = {};
+    S.alt = 1000; S.spd = 80; S.vs = 0; S.pit = 0; S.bnk = 0; bankTarget = 0; simAcc = 0; simVsAcc = 0; _ax(0, 0); _ax(1, 0); _ax(2, 0);
+    let t = tqRequired(); S.tq = t; lever(t); run(3, 0);
+    const a0 = S.alt; lever(tqRequiredAt(0, 0) - 10);
+    const v1 = run(20, -0.6); o.peak = Math.max(...v1); o.gain = S.alt - a0;
+    // 60kt 로 붙잡고 +15% 로 오르다 −10% 로 내리면
+    S.alt = 1000; S.spd = 60; S.vs = 0; simVsAcc = 0; _ax(1, 0); t = tqRequiredAt(60, 0); S.tq = t; lever(t + 15); run(10, 0, 60);
+    o.climb = S.vs; lever(t - 10); const v2 = run(3, 0, 60); o.after1 = v2[19]; o.after2 = v2[39];
+    return o;
+  })()`);
+  t.ok(fz.peak < 1900 && fz.gain < 280, `감속 플레어가 출력 상승에 겹쳐 쌓지 않는다 — 80kt 감속(레버 호버 −10%) 최대 ${Math.round(fz.peak)}fpm · ${Math.round(fz.gain)}ft (종전 2,400fpm · 300ft)`);
+  t.ok(fz.climb > 600 && fz.after1 < fz.climb * 0.5 && fz.after2 < 0, `오르다 레버를 내리면 곧 준다 — ${Math.round(fz.climb)} → 1초 ${Math.round(fz.after1)} → 2초 ${Math.round(fz.after2)}fpm`);
 }
