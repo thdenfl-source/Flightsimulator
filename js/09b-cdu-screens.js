@@ -829,10 +829,17 @@
     window.perfSnap = perfExt;
     function _perfTabs() {
         return `<div style="display:flex;gap:4px;margin-bottom:8px">` + ['Config', 'Hover', 'Cruise'].map(t => `<div class="item-btn ${perfTab === t ? 'on' : ''}" data-act="perfSetTab" data-arg='["${t}"]' style="flex:1;height:28px;font-size:11px">${t}<div class="status-line"></div></div>`).join('') +
-            `<div class="item-btn" data-act="sysPageSet" data-arg='["perf"]' style="flex:0 0 64px;height:28px;font-size:9px">MFD 보기</div></div>`;
+            `</div>`;   // (MFD 보기 탭은 없앴다 — PERF 를 열면 SYSTEM 창에 Helicopter Performance 가 저절로 뜬다)
     }
     function renderPerfScreen(container, footer, title) {
         calculatePerformance(); 
+        // PERF 를 열면 MFD(SYSTEM 창 · Aircraft Systems)에 Helicopter Performance — HALF 면 고른 쪽에(이미 떠 있으면 그대로)
+        try {
+            if (typeof sysPageSet === 'function' && typeof sysPage !== 'undefined') {
+                const shown = sysLayout === 'HALF' ? (sysHalf.L === 'perf' || sysHalf.R === 'perf') : sysPage === 'perf';
+                if (!shown) sysPageSet('perf');
+            }
+        } catch (e) { _swallow(e); }
         title.innerText = "Helicopter PERF";
         if (perfTab !== 'Hover') {
             const P = perfExt(), row = (k, v, c) => `<div style="display:flex;justify-content:space-between;padding:6px 4px;border-bottom:1px solid #1d252c;font-size:12px"><span style="color:#9ab">${k}</span><b style="color:${c || '#fff'}">${v}</b></div>`;

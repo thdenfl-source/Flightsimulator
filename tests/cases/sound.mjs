@@ -119,14 +119,14 @@ export async function run(page, t) {
     sndOn = false; try { localStorage.setItem('simSound', '0'); } catch (e) {}
     if (typeof sndAutoOn === 'function') sndAutoOn(); o.auto = sndOn && localStorage.getItem('simSound') === '1' && /🔊/.test(document.getElementById('snd-btn').textContent);
     sndOn = false; updateSoundBtn(); try { localStorage.setItem('simSound', '0'); } catch (e) {}
-    o.hook = /sndAutoOn\(\)/.test(String(cockpitStart));
+    o.hook = !/sndAutoOn\(\)/.test(String(cockpitStart)) && SND_RESTORE === false;
     return o;
   });
   t.ok(nrv.n100[0] > 0 && nrv.n50[0] > 0 && nrv.n50[0] < nrv.n100[0] * 0.6 && nrv.n3[0] === 0 && nrv.n0[0] === 0,
     `엔진을 끄면 NR 따라 로터 소리가 잦아든다 — NR 100 ${nrv.n100[0].toFixed(2)} · 50 ${nrv.n50[0].toFixed(2)} · 3% 아래 무음`);
   t.ok(nrv.n100[1] === 1 && nrv.n50[1] < 1, `NR 이 낮으면 소리도 낮고 느려진다 (빠르기 ${nrv.n50[1].toFixed(2)})`);
   t.ok(nrv.sysOff === 'OFF', '연료 레버 · ENG 로 엔진을 꺼도 엔진 소리가 꺼진다');
-  t.ok(nrv.auto && nrv.hook, 'Cockpit Mode 가 시작되면 SOUND 가 켜진다');
+  t.ok(nrv.auto && nrv.hook, '처음 열면 SOUND 는 꺼짐(Cockpit Mode 를 시작해도 저절로 켜지 않는다) · sndAutoOn 은 남아 있다');
   const xf = await page.evaluate(() => {
     const mem = { apuSpool: 0, eSpool: { 1: 0, 2: 0 }, post: { 1: 0, 2: 0 } };
     const st = (ph, ng, apu) => ({ apu: { spool: apu }, eng: { 1: { ph, ng, starting: ph === 'CRANK' || ph === 'IGN' }, 2: { ph: 'RUN', ng: 80, starting: false } } });
