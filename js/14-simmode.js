@@ -1326,6 +1326,9 @@ function simModeAxes() {
   const vsa = vStickActive(), ga = gyroActive();
   if (vsa && vStick.yaw) o.yaw = vStick.yaw;
   if ((vsa || ga) && (vStick.roll || vStick.pitch)) { const c = vStickCyclic(); o.roll = c.roll; o.pitch = c.pitch; }
+  // 절차 훈련판(Flightsimulator · 00-edition.js CYCLIC_LOCK) — 사이클릭의 피치 · 롤은 듣지 않는다(조이스틱 · 화면 STICK · GYRO 모두).
+  // 자세는 비퍼 트림(4방향 햇)과 AFCS 로 — 트림 · 컬렉티브 · 페달은 종합판과 같다
+  if (typeof CYCLIC_LOCK !== 'undefined' && CYCLIC_LOCK) { o.roll = 0; o.pitch = 0; }
   return o;
 }
 

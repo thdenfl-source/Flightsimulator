@@ -46,7 +46,7 @@ export async function run(page, t) {
     const g = await tb.evaluate(() => ({ locked: window.gateLocked, shown: getComputedStyle(document.getElementById('gate-overlay')).display !== 'none',
       choose: getComputedStyle(document.getElementById('gate-mode')).display !== 'none', pwHidden: getComputedStyle(document.getElementById('gate-pw')).display === 'none',
       flag: sessionStorage.getItem('vfrChooseAgain') }));
-    await tb.click('#gate-mode-pc'); await tb.waitForTimeout(300);
+    await tb.evaluate(() => document.getElementById('gate-mode-pc').click()); await tb.waitForTimeout(300);   // (병렬 부하에서 playwright 의 '보일 때까지' 기다림이 늦게 풀려 직접 누른다)
     const open = await tb.evaluate(() => !window.gateLocked);
     await tb.close();
     t.ok(q.btns && q.ck, '창 위 탭에 ⌂ 처음 화면 · ⟳ 새로고침 · 3D(Cockpit) 버튼 줄 맨 아래에 ⟳ 새로고침');
