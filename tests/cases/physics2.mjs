@@ -133,4 +133,20 @@ export async function run(page, t) {
     `자동회전 RPM 수정표 — GW 15,000lb · DA 0 = ${r.chart.a.toFixed(1)}% · GW 17,000lb · DA 4,000ft = ${r.chart.b.toFixed(1)}% · 높을수록 크다`);
   t.ok(r.np.pw === 100 && r.np.nr > 100, `엔진이 돌면 레버를 내려 NR 이 넘쳐도 NP 는 100% (NR ${r.np.nr.toFixed(1)} · NP ${r.np.pw})`);
   t.ok(r.tf40.tf === 0 && r.tf5.tf === 0, `전이양력 지대 밖(5kt · 40kt)에서는 없다 (${r.tf5.tf.toFixed(2)}@${r.tf5.spd.toFixed(0)}kt · ${r.tf40.tf.toFixed(2)}@${r.tf40.spd.toFixed(0)}kt)`);
+
+  // ── 감속 플레어는 속도가 줄 때만 — 0kt 에서 기수를 든 채 레버가 호버 토크보다 낮으면 오르지 않는다 ──
+  const fq = await page.evaluate(`(() => {
+    (${SIM_SETUP_SRC})();
+    const fly = ${SIM_FLY_SRC};
+    joyAxes.coll = { i: 3, inv: false, abs: true };
+    S.alt = 1000; S.spd = 80; S.vs = 0; S.pit = 0; S.bnk = 0; bankTarget = 0; simAcc = 0; simVsAcc = 0;
+    _ax(0, 0); _ax(2, 0); _ax(1, 0); const t0 = tqRequired(); S.tq = t0; _ax(3, 2 * t0 / SIM_LEVER_TOP - 1); fly(3);
+    const hov = tqRequiredAt(0, 0) - 10; _ax(3, 2 * hov / SIM_LEVER_TOP - 1);
+    _ax(1, -0.6); let peak = -1e9; const a0 = S.alt;
+    S.running = true; let ts = 1000; S.lastT = ts; let t0kt = null;
+    for (let i = 0; i < 30 * 20; i++) { ts += 50; joyPoll(ts); simStep(ts); if (simAirspeed() < 2 && t0kt === null) t0kt = i; if (t0kt !== null) { S.spd = 0; simAcc = 0; } if (t0kt !== null && i > t0kt + 60) peak = Math.max(peak, S.vs); }   // 멈춘 뒤 제자리(뒤로 흐르지 않게)
+    S.running = false; _ax(1, 0);
+    return { peak, gain: S.alt - a0, t0kt: t0kt / 20, flare: simFlareVyVs };
+  })()`);
+  t.ok(fq.t0kt > 0 && fq.peak < 100 && fq.flare < 50, `감속 플레어는 속도가 줄 때만 — 멈춘 뒤 기수를 든 채(레버 호버 −10%)면 오르지 않는다 (멈추고 3초 뒤 최대 ${Math.round(fq.peak)}fpm · 플레어 몫 ${Math.round(fq.flare)})`);
 }

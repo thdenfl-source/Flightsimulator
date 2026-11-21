@@ -149,4 +149,24 @@ export async function run(page, t) {
   t.ok(ST.avail && ST.on.active && ST.on.sim && ST.on.shown, `STICK — Cockpit Mode 화면에서 화면 조종간이 뜨고 SIM 비행 모델로 조종한다${ST.proc ? '(절차 훈련판 — 켜는 동안만 SIM)' : ''}`);
   t.ok(ST.ax.roll > 0.3 && /^COLL \d+%$/.test(ST.ax.lbl), `STICK — 사이클릭이 종합판과 같은 조종 입력(롤 ${ST.ax.roll.toFixed(2)} · ${ST.ax.lbl})`);
   t.ok(!ST.off.active && (ST.proc ? !ST.off.sim : ST.off.sim), ST.proc ? '절차 훈련판 — STICK 을 끄면 SIM 을 내려놓고 AFCS 비행으로' : '종합판 — STICK 을 꺼도 SIM 은 그대로');
+
+  // ── Cockpit Mode 팝업 CDU 의 FULL/HALF — CDU 는 그대로 보이고, 조종석 SYSTEM MFD 도 반쪽 둘 ↔ 한 화면 ──
+  const FH = await page.evaluate(async () => {
+    const w = ms => new Promise(r => setTimeout(r, ms)), o = {};
+    if (!window._cockpitOn) { cockpitStart(); await w(1500); }
+    toggleConsolePop('cdu'); await w(400);
+    const cw = document.getElementById('cdu-wrap'), l0 = sysLayout;
+    const btn = document.getElementById('sys-layout-btn'); o.btn = !!btn;
+    if (btn) btn.click(); await w(400);
+    o.keep = !!cw.closest('#ck-pop') && cw.clientWidth > 100 && sysLayout !== l0;
+    // 조종석 SYSTEM MFD — HALF 면 반쪽 그림(_sysPaintHalf)을 부른다
+    let nH = 0; const oH = _sysPaintHalf; _sysPaintHalf = function (...a) { nH++; return oH.apply(this, a); };
+    const c = document.createElement('canvas'); c.width = 500; c.height = 315;
+    try { sysLayout = 'HALF'; sysDrawTo(c, sysPage); o.half = nH === 1; sysLayout = 'FULL'; sysDrawTo(c, sysPage); o.full = nH === 1; } finally { _sysPaintHalf = oH; }
+    sysLayout = l0; try { _sysLayoutSave(); } catch (e) {}
+    toggleConsolePop(null); await w(300);
+    return o;
+  });
+  t.ok(FH.btn && FH.keep, 'Cockpit Mode 팝업 CDU 에서 FULL/HALF 를 눌러도 CDU 가 그대로 보인다(검게 비지 않음)');
+  t.ok(FH.half && FH.full, '조종석 SYSTEM MFD 도 HALF 면 반쪽 둘 · FULL 이면 한 화면');
 }

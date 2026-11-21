@@ -465,9 +465,9 @@ function sysDraw() {
 function sysDrawTo(c, page) {
   const p0 = sysPage;
   if (page && SYS_PAGES[page]) sysPage = page;   // Map 은 큰 칸 테두리까지만 그린다(지도는 부른 쪽이 얹는다)
-  try { _sysPaint(c.getContext('2d'), c, c.width, c.height, 1, false); } finally { sysPage = p0; }
+  try { _sysPaint(c.getContext('2d'), c, c.width, c.height, 1, false, true); } finally { sysPage = p0; }   // FULL/HALF 도 SYSTEM 창과 같게
 }
-function _sysPaint(g, c, W, H, dpr, own) {
+function _sysPaint(g, c, W, H, dpr, own, half) {
   const E = { c };
   g.setTransform(1, 0, 0, 1, 0, 0);
   g.fillStyle = '#000'; g.fillRect(0, 0, E.c.width, E.c.height);
@@ -476,7 +476,7 @@ function _sysPaint(g, c, W, H, dpr, own) {
   const F = fuelFlow();
   _sysLeftStrip(g, F);
   _sysTopBar(g, F);
-  if (own && sysLayout === 'HALF') { _sysPaintHalf(g, F, W, H, k); return; }
+  if ((own || half) && sysLayout === 'HALF') { _sysPaintHalf(g, F, own); return; }   // 조종석 MFD(sysDrawTo)도 반쪽 둘
   // 큰 칸 — 청록 테두리와 위 가운데 화면 이름
   const name = SYS_PAGES[sysPage] || '';
   g.strokeStyle = SYS_CYAN; g.lineWidth = 4;
@@ -549,9 +549,11 @@ function _sysBoxTag(g, x, y, w, h, name, sel) {
   g.fillStyle = '#fff'; g.textAlign = 'center'; g.fillText(name, cx, y + 12);
 }
 // HALF — 큰 칸을 왼쪽 · 오른쪽 반쪽으로(고른 쪽은 청록 테두리). HOCAS · TCAS 는 반쪽에 맞춰 그리고, 나머지는 큰 칸 그림을 반으로 줄여 넣는다
-function _sysPaintHalf(g, F) {
-  const slot = document.getElementById('sysp-map'); if (slot) slot.style.display = 'none';
-  try { if (typeof sarHoistCamSlot === 'function') sarHoistCamSlot(false, null); } catch (e) { _swallow(e); }
+function _sysPaintHalf(g, F, own = true) {
+  if (own) {   // SYSTEM 창 제 캔버스일 때만 — 큰 칸의 지도 · HOIST CAM 자리를 감춘다
+    const slot = document.getElementById('sysp-map'); if (slot) slot.style.display = 'none';
+    try { if (typeof sarHoistCamSlot === 'function') sarHoistCamSlot(false, null); } catch (e) { _swallow(e); }
+  }
   [['L', 224], ['R', 612]].forEach(([sd, x]) => {
     const id = sysHalf[sd], y = 32, w = 384, h = 594;
     g.save(); g.beginPath(); g.rect(x, y, w, h); g.clip();

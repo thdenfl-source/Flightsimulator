@@ -1028,6 +1028,9 @@ function applyPanels() {
   ['pfd', 'map', 'cdu', 'm3d', 'plan', 'ovhd', 'sysp', 'lcon'].forEach(k => {
     const el = document.getElementById(wrapIds[k]);
     if (!el) return;
+    // 3D 단독(Cockpit Mode)에 겹친 CDU · Flight Plan(#cdu-ov — syncCduOverlay)은 그대로 둔다 — 종전에는 SYSTEM FULL/HALF 처럼
+    // applyPanels 를 부르는 단추를 누르면 숨은 창으로 끌려가 팝업 CDU 가 검게 비었다
+    if ((k === 'cdu' || k === 'plan') && el.closest('#cdu-ov')) { try { if (cduOvActive()) return; } catch (e) { _swallow(e); } }
     const host = hostOf(k);
     if (host && el.parentElement !== host) host.appendChild(el);
     el.classList.toggle('page-hidden', !host);

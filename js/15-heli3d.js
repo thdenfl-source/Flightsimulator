@@ -1219,14 +1219,15 @@ function ckpitDraw() {
       else if (s.k === 'sys') {
         const pg = typeof sysPage !== 'undefined' ? sysPage : 'asys_fuel';
         if (typeof sysDrawTo === 'function') sysDrawTo(c, pg);
-        if (pg === 'map') {                         // SYSTEM 창과 같은 자리(큰 칸 안쪽 227,49 · 766×574)
+        const full = typeof sysLayout === 'undefined' || sysLayout !== 'HALF';   // HALF(반쪽 둘)에는 큰 칸 지도 · 영상을 얹지 않는다
+        if (pg === 'map' && full) {                         // SYSTEM 창과 같은 자리(큰 칸 안쪽 227,49 · 766×574)
           const g = c.getContext('2d'), kk = Math.min(W / SYS_W, H / SYS_H);
           const ox = (W - SYS_W * kk) / 2, oy = (H - SYS_H * kk) / 2;
           g.setTransform(1, 0, 0, 1, 0, 0);
           ckMapDraw(g, ox + 227 * kk, oy + 49 * kk, 766 * kk, 574 * kk);
         }
         // HOIST CAM(24-sar.js) — Video 의 Channel HOIST 면 같은 큰 칸에 호이스트 붐 아래 영상
-        if (pg === 'asys_video' && typeof videoCfg !== 'undefined' && videoCfg.ch === 'HOIST' && typeof sarHoistCamDrawTo === 'function') {
+        if (full && pg === 'asys_video' && typeof videoCfg !== 'undefined' && videoCfg.ch === 'HOIST' && typeof sarHoistCamDrawTo === 'function') {
           const g = c.getContext('2d'), kk = Math.min(W / SYS_W, H / SYS_H);
           const ox = (W - SYS_W * kk) / 2, oy = (H - SYS_H * kk) / 2;
           g.setTransform(1, 0, 0, 1, 0, 0);
