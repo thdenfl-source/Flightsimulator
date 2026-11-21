@@ -149,4 +149,20 @@ export async function run(page, t) {
     return { peak, gain: S.alt - a0, t0kt: t0kt / 20, flare: simFlareVyVs };
   })()`);
   t.ok(fq.t0kt > 0 && fq.peak < 100 && fq.flare < 50, `감속 플레어는 속도가 줄 때만 — 멈춘 뒤 기수를 든 채(레버 호버 −10%)면 오르지 않는다 (멈추고 3초 뒤 최대 ${Math.round(fq.peak)}fpm · 플레어 몫 ${Math.round(fq.flare)})`);
+
+  // ── PARKING BRAKE SET 이면 땅 위에서는 페달을 밟아도 기수가 돌지 않는다 ──
+  const pk = await page.evaluate(`(() => {
+    (${SIM_SETUP_SRC})();
+    const fly = ${SIM_FLY_SRC};
+    joyAxes.coll = { i: 3, inv: false, abs: true };
+    S.alt = 0; S.vs = 0; S.spd = 0; S.tq = 30; _ax(3, 2 * 30 / SIM_LEVER_TOP - 1); _ax(0, 0); _ax(1, 0);
+    fly(1);
+    const o = { gnd: !!_simOnGnd };
+    ovhdSet('parkBrake', 'SET'); const h0 = S.hdg; _ax(2, 1); fly(3); o.set = Math.abs(normAS(S.hdg - h0)); o.rate = simYawRate;
+    _ax(2, 0); fly(0.5);
+    ovhdSet('parkBrake', 'RELEASE'); const h1 = S.hdg; _ax(2, 1); fly(3); o.rel = Math.abs(normAS(S.hdg - h1));
+    _ax(2, 0); fly(1);
+    return o;
+  })()`);
+  t.ok(pk.gnd && pk.set < 0.01 && pk.rate === 0 && pk.rel > 5, `PARKING BRAKE SET · 땅 위 — 페달을 밟아도 기수가 돌지 않는다(${pk.set.toFixed(2)}°) · RELEASE 면 돈다(${pk.rel.toFixed(0)}°)`);
 }
