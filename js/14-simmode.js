@@ -2044,10 +2044,13 @@ function simFly(dt) {
 
   // 꼬리로터 고장 — 페달이 듣지 않는다(아래 simTrFailStep 이 기수를 돌린다)
   if (simTrFail) a.yaw = 0;
+  // PARKING BRAKE SET · 땅 위 — 바퀴가 묶여 기수가 돌지 않는다(페달 · 남아 있던 요율 모두 0)
+  const parkHold = onGnd && simParkBrake;
+  if (parkHold) { a.yaw = 0; simYawRate = 0; }
   // ── 페달 → 기수 ──
   // HDG·NAV 가 기수를 잡고 있으면 페달은 무시한다(선택 헤딩으로 되돌리며 싸운다)
   // 페달 요율은 곧바로 붙지 않고 SIM_YAW_TAU 로 따라붙고, 놓으면 같은 빠르기로 멎는다
-  if (!simAfcsLat()) {
+  if (!simAfcsLat() && !parkHold) {
     simYawRate += (a.yaw * SIM_YAW_RATE - simYawRate) * Math.min(1, dt / SIM_YAW_TAU);
     if (Math.abs(simYawRate) < 0.01 && !a.yaw) simYawRate = 0;
     if (simYawRate) {
