@@ -1874,9 +1874,9 @@ function simLayoutStart() {
 // (화면 버튼 등록은 19-lower.js — appRegister 는 09-cdu.js 에서 정의되어 이 파일보다 늦다)
 
 // ── Simple mode ── 시작 화면에서 'Simple Mode' 를 고르면 창 하나만 화면 가득 본다.
-// 위 막대에 쓸 수 있는 창(PFD · COCKPIT · MAP · CDU · UPPER · LOWER · SYSTEM)이 다 있고, 누른 창 하나만 보인다.
+// 위 막대에 쓸 수 있는 창(PFD · COCKPIT · MAP · CDU · UPPER · LOWER · SYSTEM · CONTROL)이 다 있고, 누른 창 하나만 보인다.
 // 분할 패널(#app)은 감추고, 고른 화면 묶음을 그릇(#simple-host)에 옮긴다(applyPanels 의 hostOf).
-const SIMPLE_SCREENS = [['pfd', 'PFD'], ['map', 'MAP'], ['cdu', 'CDU'], ['ovhd', 'UPPER'], ['lcon', 'LOWER'], ['sysp', 'SYSTEM']]
+const SIMPLE_SCREENS = [['pfd', 'PFD'], ['map', 'MAP'], ['cdu', 'CDU'], ['ovhd', 'UPPER'], ['lcon', 'LOWER'], ['sysp', 'SYSTEM'], ['grip', 'CONTROL']]   // CONTROL — 컬렉티브 · 사이클릭(35-kuhgrip.js)
   .filter(([k]) => typeof acScrOk !== 'function' || acScrOk(k));   // Bell 206 — CDU · UPPER 없음
 // 위 막대의 두 번째 칸은 COCKPIT — Cockpit Mode(3D 조종석)로 들어가고, 끝내면(Split screen) 이 Simple 화면으로 돌아온다.
 // (3D 지도 자체는 MAP 의 '3D' 버튼으로 본다)
@@ -1915,6 +1915,7 @@ function simpleSet(k) {
     try { if (k === 'cdu' && typeof scaleCdu === 'function') scaleCdu(); } catch (e) { _swallow(e); }
     try { if (k === 'map' && typeof leafMap !== 'undefined') leafMap.invalidateSize(); } catch (e) { _swallow(e); }
     try { if (k === 'sysp' && typeof sysDraw === 'function') sysDraw(); } catch (e) { _swallow(e); }
+    try { if (k === 'grip' && typeof gripPanelRender === 'function') gripPanelRender(true); } catch (e) { _swallow(e); }
   };
   kick(); setTimeout(kick, 80); setTimeout(kick, 300);
 }

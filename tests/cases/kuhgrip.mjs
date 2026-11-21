@@ -134,9 +134,16 @@ export async function run(page, t) {
       g.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerId: 1 })); return true; };
     const l0 = !!env.ldg; o.pressed = press('ldgOn'); await w(100); o.ldg = !!env.ldg !== l0;
     press('ldgOn'); await w(100); o.back = !!env.ldg === l0;
+    o.tabTxt = [...document.querySelectorAll('.page-tab[data-sel="grip"]')].every(b => b.textContent === 'CONTROL');
     selectPanel('right', 'map', true); await w(100);
+    // Simple 화면 — 위 막대 CONTROL
+    simpleModeStart('grip'); await w(400);
+    const sb = document.querySelector('#simple-bar [data-scr="grip"]');
+    o.simple = !!sb && sb.textContent === 'CONTROL' && sb.classList.contains('on') && g.parentElement && g.parentElement.id === 'simple-host' && g.querySelectorAll('svg').length === 2;
+    simpleExit(); await w(200);
     return o;
   });
-  t.ok(G.tabs >= 3 && G.shown && G.svgs === 2 && /COLLECTIVE/.test(G.titles) && /CYCLIC/.test(G.titles), `창 탭 CYC·COLL — 컬렉티브 · 사이클릭 그림이 창에 (탭 ${G.tabs} · 그림 ${G.svgs})`);
-  t.ok(G.pressed && G.ldg && G.back, 'CYC·COLL 창의 단추를 누르면 그대로 조작된다(LDG LT ON ↔ OFF)');
+  t.ok(G.tabs >= 3 && G.shown && G.svgs === 2 && /COLLECTIVE/.test(G.titles) && /CYCLIC/.test(G.titles), `창 탭 CONTROL — 컬렉티브 · 사이클릭 그림이 창에 (탭 ${G.tabs} · 그림 ${G.svgs})`);
+  t.ok(G.tabTxt && G.simple, 'Simple 화면 위 막대에도 CONTROL — 컬렉티브 · 사이클릭 창 · 창 탭 이름도 CONTROL');
+  t.ok(G.pressed && G.ldg && G.back, 'CONTROL 창의 단추를 누르면 그대로 조작된다(LDG LT ON ↔ OFF)');
 }
