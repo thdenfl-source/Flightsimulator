@@ -38,7 +38,7 @@ export async function run(page, t) {
     const e = w.querySelector('[data-ev]'); e.click(); o.cur = _dbf.cur; o.live = _dbf.live;
     o.read = w.querySelector('[data-dbf-v="read"]').textContent;
     w.querySelector('[data-dbf="map"]').click(); o.track = !!_dbf.track; w.querySelector('[data-dbf="map"]').click(); o.trackOff = !_dbf.track;
-    w.querySelector('[data-dbf="play"]').click(); o.playing = !!_dbf.playT;
+    _dbf.play = 10; w.querySelector('[data-dbf="play"]').click(); o.playing = !!_dbf.playT;
     await new Promise(r => setTimeout(r, 900)); o.played = _dbf.cur;
     w.querySelector('[data-dbf="close"]').click(); o.closed = getComputedStyle(w).display === 'none' && !_dbf.playT;
     return o;
@@ -122,6 +122,30 @@ export async function run(page, t) {
   t.ok(P.arrowR && P.arrowL && P.dir1 === 1 && P.dir === -1, 'HSI 선택 헤딩 옆 화살표 — 오른쪽 선회 ▶ · 왼쪽 선회 ◀(+ 컴퍼스 안 호)');
   t.ok(P.drop === 1 && P.alert === 1 && P.flash && P.drop2 === 2 && P.alert2 === 1,
     'AFCS 모드 풀림 — 칸이 5초 동안 황색으로 깜빡이고 딩동(조종사가 막 눌러 푼 것은 경보 없음)');
+
+  // ── 재생 배속 ×1 · ×2 · ×4 · ×8 · ×10 — 느릴 때는 1초 기록 사이를 이어 매끄럽게 ──
+  const SP = await page.evaluate(() => {
+    const o = {};
+    _dbf.play = 0; dbfOpen(); const w = document.getElementById('dbf-wrap'), b = w.querySelector('[data-dbf="spd"]');
+    o.seq = [b.textContent]; for (let i = 0; i < 5; i++) { b.click(); o.seq.push(w.querySelector('[data-dbf="spd"]').textContent); }
+    dbfClose();
+    // 기록 세 줄(1초 간격) — 0.5초 나아가면 첫째와 둘째 줄 사이(반쯤)
+    const keep = fdr.rows, rp = _rp.on;
+    fdr.rows = [{ t: 0, lat: 37, lon: 127, alt: 1000, hdg: 350, pit: 0, bnk: 0, ias: 80, vs: 0 },
+                { t: 1, lat: 37.001, lon: 127, alt: 1100, hdg: 10, pit: 2, bnk: 10, ias: 90, vs: 600 },
+                { t: 2, lat: 37.002, lon: 127, alt: 1200, hdg: 20, pit: 2, bnk: 10, ias: 90, vs: 600 }];
+    _rp.on = true; _dbf.cur = 0; _dbf.frac = 0;
+    _dbfStep(0.5); o.half = { cur: _dbf.cur, frac: _dbf.frac, alt: S.alt, hdg: Math.round(typeof toMag === 'function' ? toMag(S.hdg) : S.hdg), ias: S.spd };
+    _dbfStep(1.0); o.mid = { cur: _dbf.cur, frac: +_dbf.frac.toFixed(2), alt: S.alt };
+    _dbfStep(5); o.end = { cur: _dbf.cur, playing: !!_dbf.playT };
+    _rp.on = rp; fdr.rows = keep; _dbf.cur = -1; _dbf.frac = 0; _dbf.live = true;
+    return o;
+  });
+  t.eq(SP.seq.join(' → '), '×1 → ×2 → ×4 → ×8 → ×10 → ×1', '재생 배속 단추 — ×1 · ×2 · ×4 · ×8 · ×10 을 돈다');
+  t.ok(SP.half.cur === 0 && Math.abs(SP.half.frac - 0.5) < 1e-6 && Math.abs(SP.half.alt - 1050) < 1e-6 && Math.abs(SP.half.ias - 85) < 1e-6,
+    `기록 사이를 이어 보인다 — 0.5초면 고도 ${SP.half.alt}ft · 속도 ${SP.half.ias}kt(1000 → 1100 · 80 → 90 의 반)`);
+  t.ok(SP.half.hdg === 0 || SP.half.hdg === 360, `기수는 짧은 쪽으로 돈다 (350° → 010° 의 반 = ${SP.half.hdg}°)`);
+  t.ok(SP.mid.cur === 1 && SP.mid.frac === 0.5 && Math.abs(SP.mid.alt - 1150) < 1e-6 && SP.end.cur === 2, `줄을 넘어가며 이어 간다 (1.5초 → ${SP.mid.alt}ft) · 끝에서 멈춘다`);
 
   const errs = (page.errors || []).filter(e => !/Failed to fetch|NetworkError|tile/i.test(e));
   t.ok(errs.length === 0, '오류 없음' + (errs.length ? ' — ' + errs.slice(0, 2).join(' / ') : ''));
