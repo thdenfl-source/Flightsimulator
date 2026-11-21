@@ -985,6 +985,33 @@ function selectPanel(side, sel, force) {
   applyPanels();
 }
 
+// ── 창 위 탭 줄 — 이름이 다 들어가는지 줄마다 재어 줄임말로 바꾼다(index.html .tabs-compact · .tabs-tight) ──
+//   다 펴서(.tabs-measure — 늘리지도 줄이지도 않게) 필요한 폭을 재고, 그 줄 폭보다 넓으면 줄임말(UPR · LWR · SYS · CTRL · 기호),
+//   줄임말로도 넘치면 더 촘촘하게 · 그래도 넘치면(아주 좁은 창) 옆으로 밀어 보게. 줄 폭이 바뀔 때마다(분할 · 창 끌기 · 창 크기) 다시 잰다.
+const TAB_ROWS = ['left-tabs', 'mid-tabs', 'page-tabs', 'bot-tabs'];
+function tabsFitRow(row) {
+  if (!row || !row.offsetParent) return null;
+  const avail = row.clientWidth;
+  row.classList.remove('tabs-compact', 'tabs-tight', 'tabs-scroll');
+  const need = k => { row.classList.add('tabs-measure'); const w = row.scrollWidth; row.classList.remove('tabs-measure'); return w; };
+  let mode = 'full';
+  if (need() > avail + 1) {
+    row.classList.add('tabs-compact'); mode = 'compact';
+    if (need() > avail + 1) {
+      row.classList.add('tabs-tight'); mode = 'tight';
+      if (need() > avail + 1) { row.classList.add('tabs-scroll'); mode = 'scroll'; }   // 그래도 넘치면 옆으로 밀어 본다(자르지 않는다)
+    }
+  }
+  return mode;
+}
+function tabsFit() { const o = {}; TAB_ROWS.forEach(id => { o[id] = tabsFitRow(document.getElementById(id)); }); return o; }
+try {
+  if (typeof ResizeObserver === 'function') {
+    const ro = new ResizeObserver(ents => ents.forEach(e => { try { tabsFitRow(e.target); } catch (er) { _swallow(er); } }));
+    const go = () => TAB_ROWS.forEach(id => { const el = document.getElementById(id); if (el) ro.observe(el); });
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', go); else go();
+  }
+} catch (e) { _swallow(e); }
 function applyPanels() {
   fixPanelDupes();
   const L = document.getElementById('left-panel');
@@ -1004,7 +1031,8 @@ function applyPanels() {
     if (rb && tabs && (rb.parentElement !== tabs || rb.previousElementSibling !== hb)) tabs.appendChild(rb);
   } catch (e) { _swallow(e); }
   const btn = document.getElementById('split-toggle');
-  if (btn) btn.textContent = quadMode ? '⿰ 2분할' : tripleMode ? '▦ 4분할' : '⿲ 3분할';
+  if (btn) { btn.textContent = quadMode ? '⿰ 2분할' : tripleMode ? '▦ 4분할' : '⿲ 3분할'; btn.dataset.short = btn.textContent.split(' ')[0]; }   // 좁은 탭 줄에서는 기호만(tabsFit)
+  requestAnimationFrame(() => { try { tabsFit(); } catch (e) { _swallow(e); } });   // ⌂ ⟳ 를 옮기거나 줄이 바뀌면 다시 잰다
 
   const wrapIds = { pfd: 'pfd-wrap', map: 'map-wrap', cdu: 'cdu-wrap', m3d: 'map3d-wrap', grip: 'grip-wrap',
                     plan: 'fp-wrap', ovhd: 'ovhd-wrap', sysp: 'sysp-wrap', lcon: 'lcon-wrap' };
@@ -1384,12 +1412,12 @@ function updateSoloBtn() {
     const b = document.getElementById(SOLO_BTNS[k]);
     if (!b) return;
     const on = (_soloActive && _soloCurrent === k);
-    b.textContent = on ? '✥ 분할' : `⛶ ${SOLO_NAMES[k]} 단독`;
+    b.textContent = on ? '✥ 분할' : `⛶ ${SOLO_NAMES[k]} 단독`; b.dataset.short = on ? '✥' : '⛶';
     b.classList.toggle('active', on);
   });  const ob = document.getElementById('m3d-only-btn');
   // Cockpit Mode 탭(오른쪽 창 · 가운데 · 아래 창 — 3D 탭 자리)
   { const on = _soloActive && _soloCurrent === 'm3d';
-    document.querySelectorAll('.ck-mode-tab').forEach(b => { const t = on ? '✥ 분할' : '⛶ Cockpit'; if (b.textContent !== t) b.textContent = t; b.classList.toggle('active', on); }); }
+    document.querySelectorAll('.ck-mode-tab').forEach(b => { const t = on ? '✥ 분할' : '⛶ Cockpit'; if (b.textContent !== t) { b.textContent = t; b.dataset.short = on ? '✥' : '⛶'; } b.classList.toggle('active', on); }); }
   try { if (typeof syncFcp3d === 'function') syncFcp3d(); } catch (e) { _swallow(e); }   // 3D 단독에서만 FCP L·R
   try { syncCduOverlay(); } catch (e) { _swallow(e); }   // 3D 단독에서만 CDU 겹치기
   try { syncMapOverlay(); } catch (e) { _swallow(e); }   // 3D 단독에서만 MAP 겹치기
