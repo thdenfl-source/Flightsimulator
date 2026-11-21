@@ -327,4 +327,40 @@ document.addEventListener('pointerdown', e => {
   if (open(kg) && !kg.contains(t) && !(t.closest && t.closest('.kg-mini'))) kgPop(null);
   if (open(bc) && !bc.contains(t) && !(t.closest && t.closest('#b206-coll')) && typeof b206cPop === 'function') b206cPop(false);
 }, true);
+// ── 일반 화면(창 탭 CYC·COLL)의 컬렉티브 · 사이클릭 — 교관 화면(31-ios.js iosGripRender)과 같은 그림 · 누르면 그대로 조작 ──
+//   흰수리: 컬렉티브 + 사이클릭 · Bell 206 / R22: 컬렉티브(27-b206coll.js — 스로틀 · STARTER · GOV RPM 등)
+function _gripB206Press(t, e) {
+  const k = t.dataset.bc;
+  if (k === 'grip') { const r = t.getBoundingClientRect(); b206cThrottle(e.clientX < r.left + r.width / 2 ? 1 : -1); }
+  else if (k === 'idlerel') b206cIdleRel();
+  else if (k === 'starter') b206cStarter(!b206c.start);
+  else if (k === 'incr') b206cBeep(1);
+  else if (k === 'decr') b206cBeep(-1);
+  else b206cToggle(k);
+}
+function gripPanelRender(force) {
+  const w = document.getElementById('grip-wrap'); if (!w) return;
+  if (!force && (w.classList.contains('page-hidden') || !w.offsetWidth)) return;
+  if (!w._bound) {
+    w._bound = true;
+    w.addEventListener('pointerdown', e => {
+      const t = e.target.closest('[data-kg],[data-bc]'); if (!t) return;
+      e.preventDefault(); e.stopPropagation();
+      try { w.setPointerCapture(e.pointerId); } catch (er) { /* 그만 */ }
+      try { if (t.dataset.kg) kgPress(t.dataset.kg); else _gripB206Press(t, e); } catch (er) { _swallow(er); }
+      setTimeout(() => gripPanelRender(true), 30);
+    });
+    const up = () => { try { _kgHoldStop(); } catch (er) { _swallow(er); } try { if (typeof b206c !== 'undefined' && b206c.beep) b206cBeep(0); } catch (er) { _swallow(er); } };
+    ['pointerup', 'pointercancel', 'lostpointercapture'].forEach(ev => w.addEventListener(ev, up));
+    w.addEventListener('wheel', e => { const t = e.target.closest('[data-bc="grip"]'); if (!t) return; e.preventDefault(); try { b206cThrottle(e.deltaY > 0 ? -1 : 1); } catch (er) { _swallow(er); } }, { passive: false });
+  }
+  let h = '';
+  try {
+    h = kgOn() ? `<div class="grip-row"><div class="grip-cell"><div class="grip-t">COLLECTIVE</div><div>${kgCollSvg('gc')}</div></div>` +
+                 `<div class="grip-cell"><div class="grip-t">CYCLIC</div><div>${kgCyclicSvg('gy')}</div></div></div>`
+               : `<div class="grip-row"><div class="grip-cell"><div class="grip-t">COLLECTIVE</div><div>${typeof _b206cSvg === 'function' ? _b206cSvg() : ''}</div></div></div>`;
+  } catch (e) { _swallow(e); }
+  if (force || w.dataset.h !== h) { w.dataset.h = h; w.innerHTML = h; }
+}
+setInterval(() => { try { gripPanelRender(false); } catch (e) { _swallow(e); } }, 150);
 try { appRegister({ kgPop }); } catch (e) { _swallow(e); }
