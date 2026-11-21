@@ -503,7 +503,8 @@ const VS_JERK      = 500;   // 속도·상승률 변화 빠르기를 종전의 �
 // 조종(컬렉티브·사이클릭)에 따른 속도·고도 변화 빠르기 배율 — 종전보다 10% 느리게
 const SIM_RATE_K   = 0.9;
 const VS_ACC_MAX   = 1250;   // 속도·상승률 변화 빠르기를 종전의 반으로     // 상승률이 바뀌는 최대 빠르기(fpm/s)
-const VS_IGE_TAU   = 0.3;     // 지면효과 안(땅 가까이)에서 상승률이 토크를 따라가는 시간(s)
+const VS_IGE_TAU   = 0.3;
+const VS_DROP_TAU  = 0.9;     // 오르던 상승률이 출력 부족으로 줄 때 따라가는 시간(s) — 늘 때보다 빠르게     // 지면효과 안(땅 가까이)에서 상승률이 토크를 따라가는 시간(s)
 const TQ_TAU       = 0.25;    // 토크가 레버를 따라가는 시간(s) — 엔진·거버너 지연(처음 0.5 의 반 = 2배 빠르게)
 // 레버를 급히 올리면 엔진이 따라붙는 동안 모자란 몫을 로터 회전이 내줘 NR 이 잠깐 처지고,
 // 급히 내리면 잠깐 넘친다 — 엔진 토크가 레버를 따라잡는 만큼 돌아온다.
@@ -988,7 +989,7 @@ function simKeVs(onGnd, spd = S.spd, acc = simAcc) {
   if (_simKePowered) return 0;
   // 호버에서 기수를 숙여(5°) 이륙 가속할 때 — 호버 토크 + 7% 넘게 쓰면 가라앉지 않는다
   // (호버 이륙 가속에만 — 전이양력을 다 받기 전(SPD_ETL_KT) 까지. 순항에서 가속할 때는 운동에너지 법칙 그대로)
-  if (acc > 0 && Math.abs(spd) < SPD_ETL_KT && S.tq >= hoverPowerTq() + HOV_TO_MARGIN) return 0;
+  if (acc > 0 && Math.abs(spd) < SPD_ETL_KT && S.tq >= hoverTqRef() + HOV_TO_MARGIN) return 0;   // 지금 높이의 호버 토크(공중)
   // 강하 파워에서 기수를 들어 줄어드는 강하율은 반만(DESC_KE_K)
   const k = (acc < 0 && !simAfcsVert() && S.tq < tqRequired() - DESC_TQ) ? DESC_KE_K : 1;
   return -(acc < 0 ? SIM_KE_EFF : SIM_KE_EFF_ACC) * k * SIM_KE_FPM * spd * acc;
@@ -2024,7 +2025,7 @@ function simFly(dt) {
       // 그래서 같은 토크로 이륙 가속하면 Vy 까지 상승률이 점점 오르고(속도·TQ 효율), Vy 를 넘으면 상승 효율이 떨어져 준다.
       // (ALT·CRHT 가 출력을 몰 때는 빼고 — 그때는 AFCS 가 가속에 드는 출력을 더 써서 고도를 지킨다)
       if (accUp && !simAfcsVert()) ke *= 1 - Math.max(0, Math.min(1, (S.tq - tqRequired()) / KE_PWR_FREE));
-      if (accUp && Math.abs(S.spd) < SPD_ETL_KT && S.tq >= hoverPowerTq() + HOV_TO_MARGIN) ke = 0;   // 호버 이륙 가속
+      if (accUp && Math.abs(S.spd) < SPD_ETL_KT && S.tq >= hoverTqRef() + HOV_TO_MARGIN) ke = 0;   // 호버 이륙 가속(지금 높이의 호버 토크)
       // 전이양력 지대(20kt 언저리)를 지나며 가속할 때의 침하는 회전익 특성 — 끄면 없다
       // (지면효과(IGE)를 받는 40ft 이내에서만 — 그 위에서는 침하가 없다)
       if (accUp && Math.abs(S.spd) < SPD_ETL_KT && (!rcOn('etl') || S.alt - simGroundFt() > RC_IGE_FT)) ke = 0;
@@ -2191,13 +2192,21 @@ function simFly(dt) {
   // 오토로테이션 쿠션 — 레버를 당겨 로터 에너지(simNrRel)를 쓰는 동안은 추력이 곧바로 붙는다(엔진 출력처럼 점점 붙지 않는다)
   const cushion = simEngAvail() < AUTO_ENG_TQ && simNrRel > 2;
   const vsFast = vsPow + (vTgt - vsPow) * Math.min(1, dt / (cushion ? AUTO_CUSH_TAU : VS_IGE_TAU));
-  const vsP = vsFast + (vsPow + accSlow * dt - vsFast) * (cushion ? 0 : wG);
+  let vsP = vsFast + (vsPow + accSlow * dt - vsFast) * (cushion ? 0 : wG);
+  // 오르던 중 출력이 모자라게 되면(레버를 내림 · 속도가 줄어 필요 동력이 늚) 오름은 곧 준다 — 양력이 모자란 만큼
+  // 바로 아래로 가속된다. 종전에는 상승률이 초당 600fpm 남짓으로만 줄어 레버를 내린 뒤에도 1~2초 더 올랐다
+  if (vsPow > 0 && vTgt < vsPow - 20 && !cushion) vsP = Math.min(vsP, vsPow + (vTgt - vsPow) * Math.min(1, dt / VS_DROP_TAU));
   // 이어 받는 '변화 빠르기' 는 평소 한계(VS_ACC_MAX) 안에 둔다 — 땅 가까이의 빠른 몫까지
   // 그대로 넘기면, 20ft 위로 올라선 뒤 평소 셈이 그 큰 값을 몇십 초 동안 풀지 못해
   // 상승률이 수천 fpm 으로 치솟는다(플레어 뒤 레버를 올려 받칠 때 드러났다)
   simVsAcc = Math.max(-VS_ACC_MAX * SIM_RATE_K, Math.min(VS_ACC_MAX * SIM_RATE_K, (vsP - vsPow) / dt));
   // 오토로테이션 플레어 — 로터 추력이 곧(FLARE_TAU) 따라온다
   simFlareVs = onGnd ? 0 : simFlareVs + (simFlareTgt(onGnd) - simFlareVs) * Math.min(1, dt / FLARE_TAU);
+  // Vy 플레어는 출력이 만든 상승(vsP)에 겹쳐 쌓지 않는다 — 둘을 더해 FLARE_VY_GAIN 을 넘지 않게(남는 몫만 메운다).
+  // 종전에는 레버를 호버 토크 아래로 둔 채 80kt 에서 감속하면 출력 상승(전이양력) · 운동에너지 · 플레어가 모두 붙어
+  // 2,400fpm · 300ft 남짓 떴다(80kt 운동에너지를 고도로 다 바꾼 것보다 많다)
+  // (출력을 걸고 나는 비행만 — 오토로테이션의 플레어는 그대로)
+  if (_flareVyTgt > 0 && !(simEngAvail() < AUTO_ENG_TQ)) _flareVyTgt = Math.min(_flareVyTgt, Math.max(0, FLARE_VY_GAIN - Math.max(0, vsP)));
   simFlareVyVs = onGnd ? 0 : simFlareVyVs + (_flareVyTgt - simFlareVyVs) * Math.min(1, dt / (_flareVyTgt < simFlareVyVs ? FLARE_VY_TAU_OFF : FLARE_VY_TAU));
   // 기수를 숙여 가속하며 레버를 내려도 강하는 4,000fpm 에서 멎는다(운동에너지 몫 포함)
   S.vs = Math.max(-SIM_VS_DN_MAX, vsP + simKeVs(onGnd) + Math.max(simFlareVs, simFlareVyVs));

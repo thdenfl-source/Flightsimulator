@@ -38,6 +38,7 @@
   .ui-dlg-btns button{min-width:76px;padding:9px 14px;border-radius:6px;cursor:pointer;
     font-size:14px;font-family:inherit;border:1px solid #4a5464;background:#2a313b;color:#e8eaed}
   .ui-dlg-btns .ui-dlg-ok{background:#2f6fd0;border-color:#2f6fd0;color:#fff}
+  .ui-dlg-btns .ui-dlg-extra{background:#1d4a2c;border-color:#2e7d46;color:#d9ffe4}
   .ui-dlg-btns a.ui-dlg-ok{min-width:76px;padding:9px 14px;border-radius:6px;cursor:pointer;
     font-size:14px;font-family:inherit;border:1px solid #2f6fd0;text-align:center}
   .ui-dlg-btns button:active,.ui-dlg-btns a:active{filter:brightness(1.25)}
@@ -98,6 +99,14 @@ function _uiDialog(opts) {
       resolve(val);
     };
 
+    // 세 번째 단추(extraText) — 누르면 'extra' 를 돌려준다(예: 저장 후 새로고침)
+    if (opts.extraText) {
+      const ex = document.createElement('button');
+      ex.type = 'button'; ex.className = 'ui-dlg-extra';
+      ex.textContent = opts.extraText;
+      ex.onclick = () => close('extra');
+      btns.appendChild(ex);
+    }
     if (opts.kind !== 'alert') {
       const cancel = document.createElement('button');
       cancel.type = 'button';

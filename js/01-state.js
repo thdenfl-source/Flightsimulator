@@ -217,6 +217,9 @@ const IGE_FULL_FT = 10, IGE_NONE_FT = 53;
 const IGE_CURVE = [[0, -12], [3, -10], [5, -5], [10, 0]];
 const LOW_BAND  = [-20, -10];                      // LIGHT ON WHEELS 구간(HOV 와의 차 %)
 // HOV(호버 파워, %) — 바퀴 높이 10ft 의 IGE 호버 토크
+// 호버 토크 둘 —
+//   hoverPowerTq() : 바퀴 높이의 호버 토크(PERF HIGE) — 땅 위 판정(LIGHT ON WHEELS · 이륙 · 바퀴 붙음)에만 쓴다
+//   hoverTqRef()   : 지금 높이의 호버 토크(지면효과가 높이에 따라 빠지며 OGE 로) — TQ 계기의 호버 선 · 공중 판정 · 레버 기준
 function hoverPowerTq() {
   let p = null;
   try { p = (typeof perfHoverTq === 'function') ? perfHoverTq() : null; } catch (e) { _swallow(e); }
@@ -690,6 +693,17 @@ function hdgTrimNudge(dir) {
   if (!hdgTrimActive(dir)) return;
   applyDelta('hdg', dir === 'R' ? 1 : -1);
 }
+// 누르고 있는 트림의 반복 — 타이머가 늦게 불려도(창이 뒤로 가거나 팝아웃 창에 포커스가 있으면 브라우저가 타이머를
+// 늦춘다) 지난 시간만큼 몰아서 따라잡는다 — 누른 시간에 맞는 만큼 트림이 들어간다(한 번에 최대 10번)
+function _trimRep(fn, ms) {
+  let last = performance.now();
+  return setInterval(() => {
+    const now = performance.now();
+    let n = Math.max(1, Math.min(10, Math.floor((now - last) / ms + 0.25)));
+    last = (now - last > ms * 10) ? now : last + n * ms;
+    while (n-- > 0) fn();
+  }, ms);
+}
 function startTrimHold(dir) {
   if (_trimDir === dir) return;         // 같은 누름이 겹쳐 들어왔다 — 한 번으로 친다
   stopTrimHold();                       // 중복 시작 방지(이전 홀드가 남아 있으면 정리)
@@ -704,7 +718,7 @@ function startTrimHold(dir) {
   if (hdgTrimActive(dir)) {
     hdgTrimNudge(dir);
     trimHoldTimer = setTimeout(() => {
-      trimHoldInt = setInterval(() => hdgTrimNudge(dir), SIM_TRIM_REP_MS);
+      trimHoldInt = _trimRep(() => hdgTrimNudge(dir), SIM_TRIM_REP_MS);
     }, SIM_TRIM_HOLD_MS - SIM_TRIM_REP_MS);
     return;
   }
@@ -721,14 +735,14 @@ function startTrimHold(dir) {
     }
     simTrimNudge(dir);
     trimHoldTimer = setTimeout(() => {
-      trimHoldInt = setInterval(() => simTrimNudge(dir, true), SIM_TRIM_REP_MS);
+      trimHoldInt = _trimRep(() => simTrimNudge(dir, true), SIM_TRIM_REP_MS);
     }, SIM_TRIM_HOLD_MS - SIM_TRIM_REP_MS);
     return;
   }
   if (gspdOn) {
     gspdTrim(dir);
     trimHoldTimer = setTimeout(() => {
-      trimHoldInt = setInterval(() => gspdTrimNudge(dir), 1000);
+      trimHoldInt = _trimRep(() => gspdTrimNudge(dir), 1000);
     }, 400);
   } else {
     _trimNonGspdDir = dir;
@@ -738,13 +752,13 @@ function startTrimHold(dir) {
       step();
       rollApOn = false; hdgSelOn = false;   // 수동 뱅크 → 횡축 모드 해제(HDG 는 위에서 기준만 옮긴다)
       trimHoldTimer = setTimeout(() => {
-        trimHoldInt = setInterval(step, SIM_TRIM_REP_MS);
+        trimHoldInt = _trimRep(step, SIM_TRIM_REP_MS);
       }, SIM_TRIM_HOLD_MS - SIM_TRIM_REP_MS);
     } else {
       const d = dir === 'F' ? 1 : -1;
       applyDelta('spd', d);
       trimHoldTimer = setTimeout(() => {
-        trimHoldInt = setInterval(() => applyDelta('spd', d), 80);
+        trimHoldInt = _trimRep(() => applyDelta('spd', d), 80);
       }, 350);
     }
   }
