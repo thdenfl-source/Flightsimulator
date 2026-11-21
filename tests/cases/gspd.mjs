@@ -123,4 +123,19 @@ export async function run(page, t) {
   t.ok(ax.hi.p && !ax.hi.ias && ax.hi.alt > ax.hi.mid, 'ALT 단독 · Vy 이상(110kt) — FMA 피치 칸(오른쪽)에 ALT · 컬렉티브 칸은 비어 조종사 손');
   t.ok(!ax.withIas.p && ax.withIas.ias && ax.withIas.alt < ax.withIas.mid, 'ALT + IAS 면 Vy 이상이어도 IAS 가 피치 칸 · ALT 는 컬렉티브 칸');
   t.ok(ax.hys && !ax.crht, 'Vy 바로 밑에서는 피치 축 그대로(Vy−5kt 아래로 내려와야 풀림) · CRHT 는 늘 컬렉티브');
+
+  // ── 좌우 트림(SIM 이 아닐 때) — 누르고 있으면 피치 트림처럼 이어서 뱅크가 옮겨진다 ──
+  const rt = await page.evaluate(async () => {
+    const w = ms => new Promise(r => setTimeout(r, ms));
+    const sim0 = simModeOn; if (simModeOn) toggleSimMode(false);
+    if (gspdOn) toggleGspd(); hdgSelOn = false; rollApOn = false; navApOn = false;
+    bankTarget = 0;
+    startTrimHold('R'); const one = bankTarget; const seq = []; for (let i = 0; i < 13; i++) { await w(100); seq.push(bankTarget + (trimHoldInt ? 'i' : '') + (_trimDir || '-')); } const held = bankTarget; stopTrimHold();
+    await w(300); const after = bankTarget;
+    startTrimHold('L'); stopTrimHold(); const click = bankTarget;
+    bankTarget = 0; if (sim0) toggleSimMode(true);
+    return { one, held, after, click, seq: seq.join(' '), st: [gspdOn, typeof gspdCoasting !== 'undefined' && gspdCoasting, hdgSelOn, rollApOn, navApOn, simModeOn, S.running, typeof altHoldOn !== 'undefined' && altHoldOn].join(',') };
+  });
+  t.ok(rt.one === 1 && rt.held >= 6 && rt.after === rt.held && rt.click === rt.held - 1,
+    `좌우 트림 — 딸깍 1° · 누르고 있으면 0.1초마다 1° 씩 이어서 · 놓으면 멈춘다 (1.3초 ${rt.held}° · ${rt.st} · ${rt.seq})`);
 }
