@@ -20,6 +20,39 @@ const state = p => p.evaluate(() => {
 export async function run(page, t) {
   const url = page.url();
   const browser = page.context().browser();
+  // ── ⌂ 처음 화면 · ⟳ 새로고침 — 먼저 묻고(취소하면 그대로), 처음 화면은 비밀번호 없이 화면 · 기종 고르기 ──
+  {
+    const tb = await browser.newPage();
+    await tb.addInitScript(() => { try { sessionStorage.setItem('vfrUnlocked', '1'); sessionStorage.setItem('vfrStartApt', '1'); } catch (e) {} });
+    await tb.goto(url); await ready(tb);
+    const q = await tb.evaluate(async () => {
+      const w = ms => new Promise(r => setTimeout(r, ms)), o = {};
+      const hb = document.getElementById('home-btn'), rb = document.getElementById('reload-btn');
+      o.btns = !!hb && !!rb && hb.nextElementSibling === rb && getComputedStyle(hb).display !== 'none';
+      const r3 = document.getElementById('reload3d-btn'); o.ck = !!r3 && r3.parentElement.id === 'ctl3d-body' && r3 === r3.parentElement.lastElementChild;
+      window._reloaded = 0; const keep = hardReloadNow; window.hardReloadNow = () => { window._reloaded++; };
+      hb.click(); await w(200); o.askHome = !!document.querySelector('.ui-dlg'); 
+      const cancel = [...document.querySelectorAll('.ui-dlg button')].find(b => /취소/.test(b.textContent)); if (cancel) cancel.click(); await w(200);
+      o.cancelHome = window._reloaded === 0 && sessionStorage.getItem('vfrChooseAgain') !== '1';
+      rb.click(); await w(200); o.askReload = !!document.querySelector('.ui-dlg') && /새로고침/.test(document.querySelector('.ui-dlg').textContent);
+      const okb = [...document.querySelectorAll('.ui-dlg button')].find(b => /새로고침/.test(b.textContent) && !/취소/.test(b.textContent)); if (okb) okb.click(); await w(200);
+      o.okReload = window._reloaded === 1;
+      window.hardReloadNow = keep;
+      return o;
+    });
+    // 처음 화면을 고르면 — 다시 열 때 비밀번호 없이 화면 · 기종 고르기
+    await tb.evaluate(() => { sessionStorage.setItem('vfrChooseAgain', '1'); });
+    await tb.reload(); await ready(tb);
+    const g = await tb.evaluate(() => ({ locked: window.gateLocked, shown: getComputedStyle(document.getElementById('gate-overlay')).display !== 'none',
+      choose: getComputedStyle(document.getElementById('gate-mode')).display !== 'none', pwHidden: getComputedStyle(document.getElementById('gate-pw')).display === 'none',
+      flag: sessionStorage.getItem('vfrChooseAgain') }));
+    await tb.click('#gate-mode-pc'); await tb.waitForTimeout(300);
+    const open = await tb.evaluate(() => !window.gateLocked);
+    await tb.close();
+    t.ok(q.btns && q.ck, '창 위 탭에 ⌂ 처음 화면 · ⟳ 새로고침 · 3D(Cockpit) 버튼 줄 맨 아래에 ⟳ 새로고침');
+    t.ok(q.askHome && q.cancelHome && q.askReload && q.okReload, '처음 화면 · 새로고침은 먼저 묻는다 — 취소하면 그대로 · 확인하면 새로고침');
+    t.ok(g.locked && g.shown && g.choose && g.pwHidden && g.flag === null && open, '처음 화면 — 비밀번호 없이 화면 · 기종 고르기가 뜨고, 고르면 열린다');
+  }
   // 절차 훈련판(Flightsimulator)은 비밀번호가 없다 — 처음 열면 곧바로 화면 · 기종 고르기
   const procEd = await page.evaluate(() => typeof APP_EDITION !== 'undefined' && APP_EDITION === 'proc');
   if (procEd) {

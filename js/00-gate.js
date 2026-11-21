@@ -63,11 +63,13 @@
     try { sessionStorage.setItem(LOCK_KEY, '1'); } catch (e) { /* 저장소를 못 쓰면 이번만 연다 */ }
   }
 
-  let ok = false;
+  let ok = false, again = false;
   try { ok = sessionStorage.getItem(LOCK_KEY) === '1'; } catch (e) { ok = false; }
-  window.gateLocked = !ok;
+  // '⌂ 처음 화면' 단추(09-cdu.js goStartScreen)로 다시 불렀으면 — 비밀번호는 묻지 않고 화면 · 기종 고르기부터
+  try { again = ok && sessionStorage.getItem('vfrChooseAgain') === '1'; if (again) sessionStorage.removeItem('vfrChooseAgain'); } catch (e) { again = false; }
+  window.gateLocked = !ok || again;
   window.lockCheck = pw => sha256Hex(String(pw)) === LOCK_HASH;
-  if (ok) { document.body.classList.add('gate-open'); return; }
+  if (ok && !again) { document.body.classList.add('gate-open'); return; }
 
   // 잠겨 있는 동안 키보드는 비밀번호 칸에만 — 뒤의 앱(단축키·트림 등)에 닿지 않게 붙잡는다
   const guard = e => {
@@ -103,7 +105,8 @@
     const first = el('gate-mode-pc'); try { if (first) first.focus(); } catch (e) { /* 누르면 된다 */ }
   };
   // 절차 훈련판(Flightsimulator · js/00-edition.js)은 비밀번호를 묻지 않는다 — 곧바로 화면 · 기종 고르기
-  if (typeof APP_EDITION !== 'undefined' && APP_EDITION === 'proc') {
+  // (처음 화면 단추로 다시 온 것도 같다 — 이미 비밀번호를 넣었다)
+  if (again || (typeof APP_EDITION !== 'undefined' && APP_EDITION === 'proc')) {
     form.addEventListener('submit', e => e.preventDefault());
     if (el('gate-mode')) chooseMode(); else setUnlocked();
     return;

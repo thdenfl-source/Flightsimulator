@@ -144,9 +144,23 @@ async function prefetchTiles() {
 }
 
 // ⟳ 새로고침: 세션을 지우고 초기 상태로 리로드(백그라운드 복원 종료)
-function hardReload() {
+// ⟳ 새로고침 — 잘못 눌러 비행이 날아가지 않게 먼저 묻는다(창 위 탭 · Cockpit Mode 버튼 줄 맨 아래)
+function hardReloadNow() {
   try { localStorage.removeItem(SESSION_KEY); } catch(e) { _swallow(e); }
   location.reload();
+}
+async function hardReload() {
+  let ok = true;
+  try { if (typeof uiConfirm === 'function') ok = await uiConfirm('새로고침할까요?\n지금 비행 상태가 모두 처음으로 돌아갑니다.', { okText: '새로고침', cancelText: '취소' }); } catch (e) { _swallow(e); }
+  if (ok) hardReloadNow();
+}
+// ⌂ 처음 화면 — 화면 고르기(PC · Cockpit · Simple · SIM) · 기종 고르기로 돌아간다(비밀번호는 다시 묻지 않는다 · 00-gate.js)
+async function goStartScreen() {
+  let ok = true;
+  try { if (typeof uiConfirm === 'function') ok = await uiConfirm('처음 화면(화면 · 기종 고르기)으로 갈까요?\n지금 비행 상태는 처음으로 돌아갑니다.', { okText: '처음 화면', cancelText: '취소' }); } catch (e) { _swallow(e); }
+  if (!ok) return;
+  try { sessionStorage.setItem('vfrChooseAgain', '1'); sessionStorage.removeItem('vfrStartMode'); } catch (e) { _swallow(e); }
+  hardReloadNow();
 }
 
 // 주기적 + 이탈 시점 저장
