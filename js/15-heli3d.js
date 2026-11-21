@@ -1240,20 +1240,38 @@ function ckpitDraw() {
 }
 // ── MFD 움직이는 지도(기수 위) ── 2D 지도에서 쓰는 바탕(위성 · OSM)을 그대로 받아(같은 타일 주소) 캔버스에 돌려 그린다.
 // 축척은 2D 지도 확대 단계보다 한 단계 넓게(7~14). 비행계획(마젠타 · 활성 구간 굵게) · 거리 고리 · 내 헬기.
+// (MFD 지도가 초록 · 검은 단색으로만 보이던 것 —
+//  ① 2D 지도(Leaflet)가 받은 타일은 서비스 워커(sw.js)에 '불투명(opaque)' 응답으로 남는데, 여기서 crossOrigin 으로
+//     같은 주소를 부르면 그 불투명 응답을 받아 그림이 실패했다. 픽셀을 읽지 않으므로 crossOrigin 을 쓰지 않는다.
+//  ② 한 번 실패한 타일은 다시 받지 않아 그 칸이 영영 비었다 — 실패하면 잠시 뒤 다시 받는다.
+//  ③ 받는 동안은 한 단계 넓은(이미 받은) 타일을 늘려 메운다 — 단색 바탕만 보이지 않게)
 const _ckTiles = new Map();
+const CK_TILE_RETRY_MS = 4000;
+function _ckTileUrl(sat, z, x, y) {
+  return sat ? `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${z}/${y}/${x}`
+             : `https://${'abc'[(x + y) % 3]}.tile.openstreetmap.org/${z}/${x}/${y}.png`;
+}
+function _ckTileSat() { return !(typeof osmLayer !== 'undefined' && typeof leafMap !== 'undefined' && leafMap && leafMap.hasLayer(osmLayer)); }
+// 받아 둔 그림만(새로 부르지 않는다) — 넓은 단계로 메울 때
+function _ckTileHave(z, x, y) {
+  const n = 1 << z; x = ((x % n) + n) % n;
+  const im = _ckTiles.get(`${_ckTileSat() ? 's' : 'o'}/${z}/${x}/${y}`);
+  return im && im.complete && im.naturalWidth > 0 ? im : null;
+}
 function _ckTile(z, x, y) {
   const n = 1 << z; x = ((x % n) + n) % n;
   if (y < 0 || y >= n) return null;
-  const sat = !(typeof osmLayer !== 'undefined' && typeof leafMap !== 'undefined' && leafMap.hasLayer(osmLayer));
+  const sat = _ckTileSat();
   const key = `${sat ? 's' : 'o'}/${z}/${x}/${y}`;
   let im = _ckTiles.get(key);
+  if (im && im._ckFail && performance.now() - im._ckFail > CK_TILE_RETRY_MS) { _ckTiles.delete(key); im = null; }   // 실패 — 잠시 뒤 다시
   if (!im) {
-    im = new Image(); im.crossOrigin = 'anonymous';
-    im.src = sat ? `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${z}/${y}/${x}`
-                 : `https://${'abc'[(x + y) % 3]}.tile.openstreetmap.org/${z}/${x}/${y}.png`;
+    im = new Image();
+    im.onerror = () => { im._ckFail = performance.now(); };
+    im.src = _ckTileUrl(sat, z, x, y);
     _ckTiles.set(key, im);
-    if (_ckTiles.size > 300) _ckTiles.delete(_ckTiles.keys().next().value);
-  }
+    if (_ckTiles.size > 400) _ckTiles.delete(_ckTiles.keys().next().value);
+  } else { _ckTiles.delete(key); _ckTiles.set(key, im); }   // 쓰는 타일은 뒤로(먼저 지워지지 않게)
   return im.complete && im.naturalWidth > 0 ? im : null;
 }
 function _ckWorld(lat, lon, z) {
@@ -1263,7 +1281,8 @@ function _ckWorld(lat, lon, z) {
 function ckMapDraw(g, x, y, w, h) {
   if (!(w > 4 && h > 4)) return;
   let z = 11;
-  try { z = Math.max(7, Math.min(14, Math.round(leafMap.getZoom()) - 1)); } catch (e) { _swallow(e); }
+  try { const z0 = Math.round(leafMap.getZoom()) - 1; if (Number.isFinite(z0)) z = Math.max(7, Math.min(14, z0)); } catch (e) { _swallow(e); }   // 지도가 아직 없으면 11
+  if (!Number.isFinite(S.lat) || !Number.isFinite(S.lon)) return;
   const hdg = (Number(S.hdg) || 0) * Math.PI / 180, ca = Math.cos(-hdg), sa = Math.sin(-hdg);
   const cx = x + w / 2, cy = y + h * 0.66;
   const [ax, ay] = _ckWorld(S.lat, S.lon, z);
@@ -1276,7 +1295,15 @@ function ckMapDraw(g, x, y, w, h) {
   const t0y = Math.floor((ay - R) / 256), t1y = Math.floor((ay + R) / 256);
   for (let ty = t0y; ty <= t1y; ty++) for (let tx = t0x; tx <= t1x; tx++) {
     const im = _ckTile(z, tx, ty);
-    if (im) g.drawImage(im, tx * 256 - ax, ty * 256 - ay, 256.5, 256.5);
+    if (im) { g.drawImage(im, tx * 256 - ax, ty * 256 - ay, 256.5, 256.5); continue; }
+    // 아직 없으면 — 받아 둔 넓은 단계(1~3 단계 위)의 그 자리를 늘려 메운다
+    for (let d = 1; d <= 3 && z - d >= 0; d++) {
+      const f = 1 << d, px = Math.floor(tx / f), py = Math.floor(ty / f), pim = _ckTileHave(z - d, px, py);
+      if (!pim) continue;
+      const s = 256 / f, sx = (tx - px * f) * s, sy = (ty - py * f) * s;
+      g.drawImage(pim, sx, sy, s, s, tx * 256 - ax, ty * 256 - ay, 256.5, 256.5);
+      break;
+    }
   }
   g.restore();
   g.fillStyle = 'rgba(0,0,0,0.22)'; g.fillRect(x, y, w, h);

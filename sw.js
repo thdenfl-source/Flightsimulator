@@ -1,6 +1,6 @@
 // VFR Flight Sim — Service Worker
 // 버전을 올리면 캐시가 갱신됩니다
-const CACHE = 'vfr-flight-v704';
+const CACHE = 'vfr-flight-v707';
 const CORE  = [
   './index.html',
   './manifest.json',
@@ -115,7 +115,8 @@ self.addEventListener('fetch', e => {
     e.respondWith(
       caches.open('vfr-tiles').then(c =>
         c.match(e.request).then(cached => {
-          const fresh = fetch(e.request).then(res => { c.put(e.request, res.clone()); return res; });
+          // 받은 타일만 넣는다 — 오류(429 · 5xx)까지 넣으면 그 칸이 영영 빈 채로 남았다
+          const fresh = fetch(e.request).then(res => { if (res && (res.ok || res.type === 'opaque')) c.put(e.request, res.clone()); return res; });
           return cached || fresh;
         })
       )

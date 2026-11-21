@@ -36,7 +36,11 @@ export async function run(page, t) {
   t.ok(A.panel && A.mfd === 4 && A.ovhd === 'ck-mini-ovhd' && A.lcon === 'ck-mini-lcon' && A.cdu === 'ck-mini-cdu' && A.btns,
     `조종석 패널 — MFD 넷 · 위아래 콘솔 · CDU 가 제자리에, 조종석 · LowerC · UpperC 버튼 (${A.ovhd} · ${A.lcon} · ${A.cdu})`);
   if (procEd) t.ok(A.fly.every(v => !v) && A.stick, '절차 훈련판 — STICK 은 있고, 자이로 · 회전익 특성 · SIM 버튼은 없다');
-  else t.ok(A.fly.every(v => v) && A.stick, '종합판 — 스틱 · 자이로 · 회전익 특성 · SIM 버튼을 모두 쓸 수 있다');
+  else {
+    const lockEd = await page.evaluate(() => typeof CYCLIC_LOCK !== 'undefined' && CYCLIC_LOCK);
+    if (lockEd) t.ok(!A.fly[0] && A.fly[1] && A.fly[2] && A.stick, '절차 훈련판 — 스틱 · 회전익 특성 · SIM 버튼은 종합판과 같고, 자이로(사이클릭)만 없다');
+    else t.ok(A.fly.every(v => v) && A.stick, '종합판 — 스틱 · 자이로 · 회전익 특성 · SIM 버튼을 모두 쓸 수 있다');
+  }
   t.ok(A.pop === 'pfd', '화면(MFD)을 누르면 가운데에 크게 뜬다');
   // (종합판은 SIM 이 켜진 채로 나온다 — 분할 화면의 3D 창에서 SIM 1인칭이면 조종석 패널이 계속 보일 수 있다)
   t.ok(!A.exit.ck && !A.exit.cam && (A.sim || !A.exit.panel) && A.exit.mode === 'pc' && A.exit.app !== 'none', 'Split screen — 분할 화면(PC 모드)으로 끝낸다');
@@ -140,14 +144,15 @@ export async function run(page, t) {
     document.getElementById('vstick-btn').click(); await w(200);
     o.on = { active: vStickActive(), sim: simModeOn, shown: getComputedStyle(document.getElementById('vstick')).display !== 'none' };
     vStick.roll = 1; vStick.pitch = 0; vStick.yaw = 0;
-    const ax = simModeAxes(); o.ax = { roll: ax.roll, lbl: document.querySelector('#vstick-coll .vs-lbl').textContent };
+    const ax = simModeAxes(); o.ax = { roll: ax.roll, lbl: document.querySelector('#vstick-coll .vs-lbl').textContent }; o.lock = typeof CYCLIC_LOCK !== 'undefined' && CYCLIC_LOCK;
     vStick.roll = 0;
     document.getElementById('vstick-btn').click(); await w(200);
     o.off = { active: vStickActive(), sim: simModeOn };
     return o;
   });
   t.ok(ST.avail && ST.on.active && ST.on.sim && ST.on.shown, `STICK — Cockpit Mode 화면에서 화면 조종간이 뜨고 SIM 비행 모델로 조종한다${ST.proc ? '(절차 훈련판 — 켜는 동안만 SIM)' : ''}`);
-  t.ok(ST.ax.roll > 0.3 && /^COLL \d+%$/.test(ST.ax.lbl), `STICK — 사이클릭이 종합판과 같은 조종 입력(롤 ${ST.ax.roll.toFixed(2)} · ${ST.ax.lbl})`);
+  if (ST.lock) t.ok(ST.ax.roll === 0 && /^COLL \d+%$/.test(ST.ax.lbl), `STICK — 절차 훈련판은 사이클릭 피치 · 롤을 듣지 않는다(컬렉티브는 그대로 · ${ST.ax.lbl})`);
+  else t.ok(ST.ax.roll > 0.3 && /^COLL \d+%$/.test(ST.ax.lbl), `STICK — 사이클릭이 종합판과 같은 조종 입력(롤 ${ST.ax.roll.toFixed(2)} · ${ST.ax.lbl})`);
   t.ok(!ST.off.active && (ST.proc ? !ST.off.sim : ST.off.sim), ST.proc ? '절차 훈련판 — STICK 을 끄면 SIM 을 내려놓고 AFCS 비행으로' : '종합판 — STICK 을 꺼도 SIM 은 그대로');
 
   // ── Cockpit Mode 팝업 CDU 의 FULL/HALF — CDU 는 그대로 보이고, 조종석 SYSTEM MFD 도 반쪽 둘 ↔ 한 화면 ──
@@ -169,4 +174,24 @@ export async function run(page, t) {
   });
   t.ok(FH.btn && FH.keep, 'Cockpit Mode 팝업 CDU 에서 FULL/HALF 를 눌러도 CDU 가 그대로 보인다(검게 비지 않음)');
   t.ok(FH.half && FH.full, '조종석 SYSTEM MFD 도 HALF 면 반쪽 둘 · FULL 이면 한 화면');
+
+  // ── MFD 지도(MFD4) — 2D 지도가 남긴 불투명 캐시와 다투지 않게(crossOrigin 없음) · 실패한 타일은 다시 받는다 · 넓은 단계로 메운다 ──
+  const MT = await page.evaluate(() => {
+    const o = {};
+    _ckTile(11, 1745, 793);
+    const key = [..._ckTiles.keys()].find(k => /\/11\/1745\/793$/.test(k)), im = _ckTiles.get(key);
+    o.noCors = !!im && !im.crossOrigin;
+    im._ckFail = performance.now() - 5000; _ckTile(11, 1745, 793); o.retry = _ckTiles.get(key) !== im;
+    // 넓은 단계 메우기 — 위 단계 타일이 받아져 있으면 그 자리를 그린다
+    const c = document.createElement('canvas'); c.width = 400; c.height = 300; const g = c.getContext('2d');
+    let n = 0; const d0 = g.drawImage; g.drawImage = function (...a) { n++; };
+    const fake = { complete: true, naturalWidth: 256 }, keep = window._ckTileHave, keepT = window._ckTile;
+    window._ckTile = () => null; window._ckTileHave = () => fake;
+    try { ckMapDraw(g, 0, 0, 400, 300); } finally { window._ckTile = keepT; window._ckTileHave = keep; g.drawImage = d0; }
+    o.fill = n > 0;
+    const la = S.lat; S.lat = NaN; try { ckMapDraw(c.getContext('2d'), 0, 0, 400, 300); o.nan = true; } catch (e) { o.nan = false; } S.lat = la;
+    return o;
+  });
+  t.ok(MT.noCors && MT.retry, 'MFD 지도 타일 — crossOrigin 없이(2D 지도 캐시와 같은 방식) · 실패한 타일은 잠시 뒤 다시 받는다');
+  t.ok(MT.fill && MT.nan, 'MFD 지도 — 받는 동안은 넓은 단계 타일로 메우고, 위치가 없어도 오류 없이 넘어간다');
 }
