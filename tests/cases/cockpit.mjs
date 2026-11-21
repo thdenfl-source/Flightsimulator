@@ -169,4 +169,24 @@ export async function run(page, t) {
   });
   t.ok(FH.btn && FH.keep, 'Cockpit Mode 팝업 CDU 에서 FULL/HALF 를 눌러도 CDU 가 그대로 보인다(검게 비지 않음)');
   t.ok(FH.half && FH.full, '조종석 SYSTEM MFD 도 HALF 면 반쪽 둘 · FULL 이면 한 화면');
+
+  // ── MFD 지도(MFD4) — 2D 지도가 남긴 불투명 캐시와 다투지 않게(crossOrigin 없음) · 실패한 타일은 다시 받는다 · 넓은 단계로 메운다 ──
+  const MT = await page.evaluate(() => {
+    const o = {};
+    _ckTile(11, 1745, 793);
+    const key = [..._ckTiles.keys()].find(k => /\/11\/1745\/793$/.test(k)), im = _ckTiles.get(key);
+    o.noCors = !!im && !im.crossOrigin;
+    im._ckFail = performance.now() - 5000; _ckTile(11, 1745, 793); o.retry = _ckTiles.get(key) !== im;
+    // 넓은 단계 메우기 — 위 단계 타일이 받아져 있으면 그 자리를 그린다
+    const c = document.createElement('canvas'); c.width = 400; c.height = 300; const g = c.getContext('2d');
+    let n = 0; const d0 = g.drawImage; g.drawImage = function (...a) { n++; };
+    const fake = { complete: true, naturalWidth: 256 }, keep = window._ckTileHave, keepT = window._ckTile;
+    window._ckTile = () => null; window._ckTileHave = () => fake;
+    try { ckMapDraw(g, 0, 0, 400, 300); } finally { window._ckTile = keepT; window._ckTileHave = keep; g.drawImage = d0; }
+    o.fill = n > 0;
+    const la = S.lat; S.lat = NaN; try { ckMapDraw(c.getContext('2d'), 0, 0, 400, 300); o.nan = true; } catch (e) { o.nan = false; } S.lat = la;
+    return o;
+  });
+  t.ok(MT.noCors && MT.retry, 'MFD 지도 타일 — crossOrigin 없이(2D 지도 캐시와 같은 방식) · 실패한 타일은 잠시 뒤 다시 받는다');
+  t.ok(MT.fill && MT.nan, 'MFD 지도 — 받는 동안은 넓은 단계 타일로 메우고, 위치가 없어도 오류 없이 넘어간다');
 }
