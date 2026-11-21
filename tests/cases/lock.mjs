@@ -27,21 +27,24 @@ export async function run(page, t) {
     await tb.goto(url); await ready(tb);
     const q = await tb.evaluate(async () => {
       const w = ms => new Promise(r => setTimeout(r, ms)), o = {};
+      // 병렬 부하에서는 대화상자가 200ms 안에 안 뜰 수 있다 — 정해진 시간 대신 될 때까지(최대 5초) 기다린다
+      const until = async (f, ms = 5000) => { const t0 = Date.now(); while (Date.now() - t0 < ms) { try { if (f()) return true; } catch (e) { /* 아직 */ } await w(40); } return false; };
+      const dlg = () => document.querySelector('.ui-dlg'), gone = () => !document.querySelector('.ui-dlg');
       const hb = document.getElementById('home-btn'), rb = document.getElementById('reload-btn');
       o.btns = !!hb && !!rb && hb.nextElementSibling === rb && getComputedStyle(hb).display !== 'none';
       const r3 = document.getElementById('reload3d-btn'); o.ck = !!r3 && r3.parentElement.id === 'ctl3d-body' && r3 === r3.parentElement.lastElementChild;
       window._reloaded = 0; const keep = hardReloadNow; window.hardReloadNow = () => { window._reloaded++; };
-      hb.click(); await w(200); o.askHome = !!document.querySelector('.ui-dlg'); 
-      const cancel = [...document.querySelectorAll('.ui-dlg button')].find(b => /취소/.test(b.textContent)); if (cancel) cancel.click(); await w(200);
+      hb.click(); o.askHome = await until(dlg);
+      const cancel = [...document.querySelectorAll('.ui-dlg button')].find(b => /취소/.test(b.textContent)); if (cancel) cancel.click(); await until(gone); await w(100);
       o.cancelHome = window._reloaded === 0 && sessionStorage.getItem('vfrChooseAgain') !== '1';
-      rb.click(); await w(200); o.askReload = !!document.querySelector('.ui-dlg') && /새로고침/.test(document.querySelector('.ui-dlg').textContent);
-      const okb = document.querySelector('.ui-dlg .ui-dlg-ok'); if (okb) okb.click(); await w(200);
-      o.okReload = window._reloaded === 1;
+      rb.click(); o.askReload = await until(() => dlg() && /새로고침/.test(dlg().textContent));
+      const okb = document.querySelector('.ui-dlg .ui-dlg-ok'); if (okb) okb.click();
+      o.okReload = await until(() => window._reloaded === 1); await until(gone);
       // 저장 후 새로고침 — 지금 상태를 시나리오로 남기고 새로 고친다
       const n0 = scnList().length;
-      rb.click(); await w(200);
+      rb.click(); await until(() => document.querySelector('.ui-dlg .ui-dlg-extra'));
       const ex = document.querySelector('.ui-dlg .ui-dlg-extra'); o.extraBtn = !!ex && /저장 후 새로고침/.test(ex.textContent);
-      if (ex) ex.click(); await w(500);
+      if (ex) ex.click(); await until(() => window._reloaded === 2);
       const L = scnList(); o.saved = L.length === n0 + 1 && /^새로고침 전/.test(L[L.length - 1].name) && window._reloaded === 2;
       if (L.length > n0) scnDelete(L.length - 1);
       window.hardReloadNow = keep;
@@ -54,10 +57,12 @@ export async function run(page, t) {
     await tb2.goto(url); await ready(tb2);
     await tb2.evaluate(() => { sessionStorage.setItem('vfrChooseAgain', '1'); });
     await tb2.reload(); await ready(tb2);
+    const gateUp = () => tb2.waitForFunction(() => window.gateLocked === true && getComputedStyle(document.getElementById('gate-mode')).display !== 'none', null, { timeout: 10000 }).catch(() => {});
+    await gateUp();
     const g = await tb2.evaluate(() => ({ locked: window.gateLocked, shown: getComputedStyle(document.getElementById('gate-overlay')).display !== 'none',
       choose: getComputedStyle(document.getElementById('gate-mode')).display !== 'none', pwHidden: getComputedStyle(document.getElementById('gate-pw')).display === 'none',
       flag: sessionStorage.getItem('vfrChooseAgain') }));
-    await tb2.reload(); await ready(tb2);   // 고르기 전에 한 번 더 새로 불러도(서비스 워커 갱신 등) 처음 화면 그대로
+    await tb2.reload(); await ready(tb2); await gateUp();   // 고르기 전에 한 번 더 새로 불러도(서비스 워커 갱신 등) 처음 화면 그대로
     g.again = await tb2.evaluate(() => window.gateLocked && getComputedStyle(document.getElementById('gate-mode')).display !== 'none');
     await tb2.evaluate(() => document.getElementById('gate-mode-pc').click());   // (병렬 부하에서 playwright 의 '보일 때까지' 기다림이 늦게 풀려 직접 누른다)
     const open = await tb2.waitForFunction(() => !window.gateLocked, null, { timeout: 8000 }).then(() => true, () => false);

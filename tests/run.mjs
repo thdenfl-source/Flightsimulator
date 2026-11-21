@@ -49,6 +49,8 @@ import * as joycenter from './cases/joycenter.mjs';
 import * as ship3d from './cases/ship3d.mjs';
 import * as heli3d from './cases/heli3d.mjs';
 import * as extlts from './cases/extlts.mjs';
+import * as fmodel3 from './cases/fmodel3.mjs';
+import * as infra2 from './cases/infra2.mjs';
 import * as ralt from './cases/ralt.mjs';
 import * as startapt from './cases/startapt.mjs';
 import * as hdgref from './cases/hdgref.mjs';
@@ -88,7 +90,7 @@ import * as kuhsys3 from './cases/kuhsys3.mjs';
 import * as r22 from './cases/r22.mjs';
 import * as proccyc from './cases/proccyc.mjs';
 
-const SUITES0 = [smoke, actions, coords, chartcal, hold, nav, gspd, dialog, chartview, procdata, simspd, tascalc, brg, fpwpt, maprot, map3d, dmearc, dme, fporder, wptcrs, brglbl, directto, crssync, locsta, susp, layout, gslope, joystick, geosearch, simmode, ga, tdown, bbtrim, physics2, hocas, joycenter, ship3d, heli3d, ralt, startapt, hdgref, sound, view3d, runway, apptune, lock, popout, upper, system, lower, c5000, npx138, fuelsys, afcslink, gtc, edition, cockpit, pfdmsg, fcpsimple, pfdsk, cdulive, sar, eisrev, b206, b206sys, debrief, b206sim, train3, train4, r4, kuhgrip, r5, r40, cduknob, cas, kuhsys, kuhsys2, kuhsys3, r22, proccyc, extlts];
+const SUITES0 = [smoke, actions, coords, chartcal, hold, nav, gspd, dialog, chartview, procdata, simspd, tascalc, brg, fpwpt, maprot, map3d, dmearc, dme, fporder, wptcrs, brglbl, directto, crssync, locsta, susp, layout, gslope, joystick, geosearch, simmode, ga, tdown, bbtrim, physics2, hocas, joycenter, ship3d, heli3d, ralt, startapt, hdgref, sound, view3d, runway, apptune, lock, popout, upper, system, lower, c5000, npx138, fuelsys, afcslink, gtc, edition, cockpit, pfdmsg, fcpsimple, pfdsk, cdulive, sar, eisrev, b206, b206sys, debrief, b206sim, train3, train4, r4, kuhgrip, r5, r40, cduknob, cas, kuhsys, kuhsys2, kuhsys3, r22, proccyc, extlts, fmodel3, infra2];
 // 여러 묶음으로 나뉜 검사(suites 를 내보내는 파일)는 펼친다
 // 절차 훈련판(EDITION=proc — Flightsimulator)에서는 SIM 모드를 쓰는 묶음을 건너뛴다(그 판은 사이클릭 피치 · 롤이 잠겨 사이클릭으로 모는 검사가 맞지 않는다 — 판 차이는 '판(edition)' 검사가 본다)
 // — SIM 을 켜는 검사(toggleSimMode(true) · SIM_SETUP · simModeOn = true)가 든 파일은 통째로
@@ -125,9 +127,18 @@ let total = 0, failed = 0;
 try {
   buildEnv();   // Leaflet 등 사전 점검(문제가 있으면 여기서 명확히 실패)
   // JOBS=n 이면 n 개 묶음을 함께 돌린다(페이지가 따로라 서로 간섭하지 않는다 · 기본 1)
-  const picked = SUITES.filter(s => !filter.length || filter.some(f => s.name.includes(f)));
+  let picked = SUITES.filter(s => !filter.length || filter.some(f => s.name.includes(f)));
+  // SHARD=i/n — 묶음을 n 조각으로 나눠 그 중 i 번째만(CI 에서 여러 일꾼이 나눠 돈다 · 1부터)
+  const shard = (process.env.SHARD || '').match(/^(\d+)\/(\d+)$/);
+  if (shard) {
+    const i = +shard[1], n = +shard[2];
+    if (!(n >= 1 && i >= 1 && i <= n)) { console.error(`SHARD=${process.env.SHARD} — i/n 꼴(1 ≤ i ≤ n)이어야 합니다`); process.exit(2); }
+    picked = picked.filter((_, k) => k % n === i - 1);
+    console.log(`조각 ${i}/${n} — 묶음 ${picked.length}개`);
+  }
   const jobs = Math.max(1, parseInt(process.env.JOBS || '1', 10) || 1);
   const runOne = async s => {
+    const t0 = Date.now();
     const page = await openApp(browser, {});
     const [T, rows] = makeT();
     let err = null;
@@ -135,7 +146,7 @@ try {
     await page.close();
     const bad = rows.filter(r => !r.pass).length + (err ? 1 : 0);
     total += rows.length + (err ? 1 : 0); failed += bad;
-    console.log(`\n${bad ? '✗' : '✓'} ${s.name}  (${rows.length - rows.filter(r => !r.pass).length}/${rows.length})`);
+    console.log(`\n${bad ? '✗' : '✓'} ${s.name}  (${rows.length - rows.filter(r => !r.pass).length}/${rows.length})${process.env.TIMING ? `  ${((Date.now() - t0) / 1000).toFixed(0)}s` : ''}`);
     rows.forEach(r => { if (!r.pass) console.log(`    ✗ ${r.msg}`); });
     if (process.env.VERBOSE) rows.forEach(r => { if (r.pass) console.log(`    ✓ ${r.msg}`); });
     if (err) console.log(`    ✗ 예외: ${err.message}`);

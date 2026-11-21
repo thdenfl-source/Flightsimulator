@@ -146,7 +146,13 @@ const MAP3D_QUALITY = {
 };
 const MAP3D_QUALITY_ORDER = ['high', 'mid', 'low'];
 let map3dQuality = 'mid';
-try { const v = localStorage.getItem('map3dQuality'); if (MAP3D_QUALITY[v]) map3dQuality = v; } catch (e) { /* 저장소를 못 쓰면 기본값 */ }
+// 고른 값 — 'high' · 'mid' · 'low' · 'auto'(자동: 프레임이 모자라면 한 단계씩 낮추고, 넉넉하면 다시 올린다)
+let map3dQualityPick = 'mid';
+try {
+  const v = localStorage.getItem('map3dQuality');
+  if (v === 'auto') map3dQualityPick = 'auto';
+  else if (MAP3D_QUALITY[v]) { map3dQuality = v; map3dQualityPick = v; }
+} catch (e) { /* 저장소를 못 쓰면 기본값 */ }
 function map3dPixelRatio(chin) {
   const q = MAP3D_QUALITY[map3dQuality];
   return Math.min(window.devicePixelRatio || 1, chin ? q.chin : q.ratio);
@@ -614,23 +620,71 @@ function _map3dLodGuard(map) {
   }
 }
 function setMap3dQuality(q) {
+  if (q === 'auto') {
+    map3dQualityPick = 'auto'; _q3dAuto.lowN = 0; _q3dAuto.hiT = 0;
+    try { localStorage.setItem('map3dQuality', 'auto'); } catch (e) { _swallow(e); }
+    _q3dBtnSync(); return;
+  }
+  if (!MAP3D_QUALITY[q]) return;
+  map3dQualityPick = q;
+  try { localStorage.setItem('map3dQuality', q); } catch (e) { _swallow(e); }
+  _map3dSetEff(q);
+}
+// 실제로 그리는 화질만 바꾼다(고른 값은 그대로 — 자동이 쓴다)
+function _map3dSetEff(q) {
   if (!MAP3D_QUALITY[q]) return;
   map3dQuality = q;
-  try { localStorage.setItem('map3dQuality', q); } catch (e) { _swallow(e); }
   _q3dBtnSync();
   if (_ml3d) { try { _map3dApplyQuality(_ml3d, false); } catch (e) { _swallow(e); } }
   _pfAt = null;                                  // 미리 받을 목록도 새 화질로
   requestAnimationFrame(() => { try { if (_ml3d) _applyFollow(); } catch (e) { _swallow(e); } });
 }
-// 화질 버튼 — 상 → 중 → 하 → 상
+// 화질 버튼 — 상 → 중 → 하 → 자동 → 상
+const MAP3D_PICK_ORDER = ['high', 'mid', 'low', 'auto'];
 function cycleMap3dQuality() {
-  const i = MAP3D_QUALITY_ORDER.indexOf(map3dQuality);
-  setMap3dQuality(MAP3D_QUALITY_ORDER[(i + 1) % MAP3D_QUALITY_ORDER.length]);
+  const i = MAP3D_PICK_ORDER.indexOf(map3dQualityPick);
+  setMap3dQuality(MAP3D_PICK_ORDER[(i + 1) % MAP3D_PICK_ORDER.length]);
 }
 function _q3dBtnSync() {
   const b = document.getElementById('q3d-btn');
-  if (b) b.textContent = '화질 ' + MAP3D_QUALITY[map3dQuality].name;
+  if (b) b.textContent = map3dQualityPick === 'auto' ? `화질 자동(${MAP3D_QUALITY[map3dQuality].name})` : '화질 ' + MAP3D_QUALITY[map3dQuality].name;
 }
+// ── 자동 화질 ── 3D 가 떠 있는 동안 2초마다 초당 프레임(FPS)을 잰다.
+//   24 아래가 두 번 잇따르면 한 단계 낮추고(상 → 중 → 하), 50 넘게 20초 이어지면 한 단계 올린다(하 → 중 → 상).
+//   바꾼 뒤 6초는 타일을 다시 받느라 느릴 수 있어 재지 않는다. 탭이 가려져 있으면 재지 않는다.
+const Q3D_LOW_FPS = 24, Q3D_LOW_N = 2, Q3D_HIGH_FPS = 50, Q3D_HIGH_S = 20, Q3D_WIN_S = 2, Q3D_SETTLE_S = 6;
+const _q3dAuto = { lowN: 0, hiT: 0, quietUntil: 0, frames: 0, t0: 0, last: null };
+function map3dAutoFeed(fps, nowS) {
+  const A = _q3dAuto; A.last = fps;
+  if (map3dQualityPick !== 'auto' || nowS < A.quietUntil) return map3dQuality;
+  const i = MAP3D_QUALITY_ORDER.indexOf(map3dQuality);   // 0 상 · 1 중 · 2 하
+  if (fps < Q3D_LOW_FPS) {
+    A.hiT = 0;
+    if (++A.lowN >= Q3D_LOW_N && i < MAP3D_QUALITY_ORDER.length - 1) { A.lowN = 0; A.quietUntil = nowS + Q3D_SETTLE_S; _map3dSetEff(MAP3D_QUALITY_ORDER[i + 1]); }
+  } else {
+    A.lowN = 0;
+    if (fps > Q3D_HIGH_FPS) {
+      A.hiT += Q3D_WIN_S;
+      if (A.hiT >= Q3D_HIGH_S && i > 0) { A.hiT = 0; A.quietUntil = nowS + Q3D_SETTLE_S; _map3dSetEff(MAP3D_QUALITY_ORDER[i - 1]); }
+    } else A.hiT = 0;
+  }
+  return map3dQuality;
+}
+(function q3dAutoLoop() {
+  const A = _q3dAuto;
+  const tick = ts => {
+    try {
+      if (map3dQualityPick === 'auto' && !document.hidden && _map3dShown()) {
+        if (!A.t0) { A.t0 = ts; A.frames = 0; }
+        A.frames++;
+        const dt = (ts - A.t0) / 1000;
+        if (dt >= Q3D_WIN_S) { map3dAutoFeed(A.frames / dt, ts / 1000); A.t0 = ts; A.frames = 0; }
+      } else { A.t0 = 0; A.frames = 0; }
+    } catch (e) { _swallow(e); }
+    requestAnimationFrame(tick);
+  };
+  try { requestAnimationFrame(tick); } catch (e) { /* 그림 루프가 없는 곳 */ }
+})();
 
 function _init3dMap() {
   if (_ml3d) {

@@ -70,6 +70,7 @@
   try { again = ok && sessionStorage.getItem('vfrChooseAgain') === '1'; } catch (e) { again = false; }
   window.gateLocked = !ok || again;
   window.lockCheck = pw => sha256Hex(String(pw)) === LOCK_HASH;
+  window.vfrSha256 = str => sha256Hex(String(str));   // 다른 접근 코드(공항 ALL 등)도 평문 없이 해시로 견준다
   if (ok && !again) { document.body.classList.add('gate-open'); return; }
 
   // 잠겨 있는 동안 키보드는 비밀번호 칸에만 — 뒤의 앱(단축키·트림 등)에 닿지 않게 붙잡는다

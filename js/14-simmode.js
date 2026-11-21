@@ -770,8 +770,10 @@ function simB206Hazards(dt, a, onGnd) {
   try { simTurbStep(dt, onGnd); simAutoTrack(onGnd); simTrFailStep(dt, onGnd); } catch (e) { _swallow(e); }
   _simLastDt = dt;
   const L = simLowG;
+  // LTE 는 두 기종 모두(아래 simLteStep) — 저중력 · 마스트 범핑은 시소형 2날개 로터(Bell 206 · R22)만
+  try { simLteStep(dt, a, onGnd); } catch (e) { _swallow(e); }
   if (!(typeof acB206 === 'function' && acB206()) || onGnd || !(dt > 0)) {
-    L.n = 1; L.r *= Math.max(0, 1 - dt * 2); L.t = 0; L.bump = 0; L.warned = false; L.pit0 = S.pit; L.vs0 = S.vs; simLte.yaw = 0; simLte.risk = 0; simLte.warned = false; return;
+    L.n = 1; L.r *= Math.max(0, 1 - dt * 2); L.t = 0; L.bump = 0; L.warned = false; L.pit0 = S.pit; L.vs0 = S.vs; return;
   }
   const V = simAirspeed();
   // ① 저중력
@@ -794,22 +796,35 @@ function simB206Hazards(dt, a, onGnd) {
     L.t = 0; L.bump = 0;
     if (L.n > 0.8) { L.r -= L.r * Math.min(1, dt / 0.8); L.warned = false; }
   }
-  // ② LTE
+}
+// ── LTE(꼬리로터 효과 상실) — 두 기종 같은 기준 ──
+//   기수가 도는 쪽은 주로터 반작용 쪽: Bell 206 · R22(위에서 반시계) 오른쪽 · 흰수리(로터 방향 설정 CW · 기본) 왼쪽.
+//   위험 상대풍은 그 쪽에 맞춰 거울로 — Bell 기준 285~315°(주로터 와류) · 210~330°(꼬리로터 와류고리) · 120~240°(뒷바람)
+//   → 흰수리(왼쪽으로 도는 기체)는 045~075° · 030~150° · 120~240°.
+//   흰수리는 꼬리로터 여유가 커 최대 빠르기를 LTE_KUH_K 배로. 회복: 반작용 반대쪽 페달 끝까지 · 사이클릭 앞으로 · 고도 여유가 있으면 컬렉티브 낮춤.
+const LTE_KUH_K = 0.7;
+function lteReact() { return (typeof acB206 === 'function' && acB206()) ? 1 : -rotorSign(); }   // +1 오른쪽으로 돈다
+function simLteStep(dt, a, onGnd) {
   const T = simLte;
-  const rel = ((windDir - S.hdg) % 360 + 360) % 360;
+  if (onGnd || !(dt > 0)) { T.yaw = 0; T.risk = 0; T.warned = false; return; }
+  const V = simAirspeed(), side = lteReact();
+  const rel0 = ((windDir - S.hdg) % 360 + 360) % 360, rel = side > 0 ? rel0 : (360 - rel0) % 360;   // 오른쪽으로 도는 기체의 방위로 바꿔 본다
   const wK = Math.max(0, Math.min(1, (windSpd - 5) / 15)), vK = Math.max(0, Math.min(1, (30 - V) / 20));
   const right = Math.max(_bump(rel, 300, 20), 0.8 * _bump(rel, 270, 65));
   const wc = 0.6 * _bump(rel, 180, 65), wcDir = rel < 180 ? 1 : -1;
-  let dir = right >= wc ? 1 : wcDir;
-  T.risk = Math.max(right, wc) * wK * vK * (simYawRate > 2 ? 1.5 : 1);
-  const left = Math.max(0, -a.yaw);                       // 왼쪽 페달이 맞선다
-  const tgt = dir * LTE_YAW * Math.min(1, T.risk) * (1 - 0.75 * left);
+  const dir = (right >= wc ? 1 : wcDir) * side;
+  T.risk = Math.max(right, wc) * wK * vK * (simYawRate * side > 2 ? 1.5 : 1);
+  // 반작용 반대쪽 페달이 맞선다 — 흰수리는 AFCS 요 채널(HDG 등)이 페달을 몰면 그 몫도(꼬리로터 여유 안에서)
+  const counter = Math.max(0, -a.yaw * side, (!acB206() && simAfcsLat()) ? 0.6 : 0);
+  const k = acB206() ? 1 : LTE_KUH_K;
+  const tgt = dir * LTE_YAW * k * Math.min(1, T.risk) * (1 - 0.75 * counter);
   T.yaw += (tgt - T.yaw) * Math.min(1, dt / 1.2);
   if (Math.abs(T.yaw) > 0.05) { S.hdg = normA(S.hdg + T.yaw * dt); selHdg = ((Math.round(hdgInd()) + 359) % 360) + 1; }
   if (Math.abs(T.yaw) > 10 && !T.warned) {
     T.warned = true;
-    try { uiToast('LTE — 기수가 저절로 돈다: 왼쪽 페달 끝까지 · 사이클릭 앞으로(속도) · 고도 여유 있으면 컬렉티브 낮춤', 'err', 4500); } catch (e) { _swallow(e); }
-    try { if (typeof fdrNote === 'function') fdrNote(`LTE (상대풍 ${rel.toFixed(0)}° · ${windSpd.toFixed(0)}kt · ${V.toFixed(0)}kt)`, 'err'); } catch (e) { _swallow(e); }
+    const ped = side > 0 ? '왼쪽' : '오른쪽';
+    try { uiToast(`LTE — 기수가 저절로 돈다: ${ped} 페달 끝까지 · 사이클릭 앞으로(속도) · 고도 여유 있으면 컬렉티브 낮춤`, 'err', 4500); } catch (e) { _swallow(e); }
+    try { if (typeof fdrNote === 'function') fdrNote(`LTE (상대풍 ${rel0.toFixed(0)}° · ${windSpd.toFixed(0)}kt · ${V.toFixed(0)}kt)`, 'err'); } catch (e) { _swallow(e); }
   }
   if (Math.abs(T.yaw) < 3) T.warned = false;
 }
@@ -891,6 +906,15 @@ function simTrTq(a, V) {
 // 자기 내리흐름 속으로 떨어진다 — 레버를 올려도 덜 오르고 더 가라앉는다. 앞으로 속도를 붙이거나(20kt)
 // 레버를 내리면 빠져나온다.
 const { kt: VRS_KT, outKt: VRS_OUT_KT, fpm: VRS_FPM, tq: VRS_TQ, sink: VRS_SINK, tauIn: VRS_TAU_IN, tauOut: VRS_TAU_OUT } = TUNE.vrs;   // 값은 00-params.js
+// 기종마다 원판 하중이 달라 호버 유도속도(vi = √(T / 2ρA))가 다르다 — VRS 에 드는 강하율은 vi 에 비례한다.
+// TUNE.vrs 는 흰수리 기준(vi 약 2,900fpm → 700fpm). Bell 206(약 1,600fpm) 0.55배 · R22(약 1,440fpm) 0.49배.
+// 무게가 늘면 √ 로 는다(simWtK). 잠기는 강하(sink)와 빠져나오는 기준(−300fpm)도 같은 배율.
+const VRS_VI_K = { kuh: 1, b206: 0.55, r22: 0.49 };
+function vrsK() {
+  const ty = (typeof acR22 === 'function' && acR22()) ? 'r22' : (typeof acB206 === 'function' && acB206()) ? 'b206' : 'kuh';
+  let w = 1; try { w = 1 / simWtK(); } catch (e) { _swallow(e); }
+  return VRS_VI_K[ty] * Math.sqrt(Math.max(0.5, Math.min(2, w)));
+}
 let simVrs = 0;
 function simVrsOn() { return simModeOn && simVrs > 0.3; }
 // ── VNE · 후퇴익 실속 ── VNE 는 해면 160kt, 고도 1,000ft 마다 2kt 준다. 넘기면 후퇴익 쪽(CW 로터 → 오른쪽)
@@ -1019,6 +1043,16 @@ let simFlareVs = 0;       // 지금 플레어가 만든 상승률 몫(fpm)
 // 몰 때(ALT·CRHT·G/A·T/D)는 AFCS 가 고도를 잡으므로 붙지 않는다.
 const FLARE_VY_GAIN = 1700, FLARE_V_END = 20, FLARE_EX_ON = 2, FLARE_EX_OFF = 0.5;
 let _flareV0 = null, _flarePreq0 = 0, _flareVyTgt = 0, simFlareVyVs = 0;
+// 출력 비행의 Vy 플레어가 기체를 '띄우는' 높이는 운동에너지 예산 안에서만 — 플레어를 시작한 속도의 ½V²/g 에 FLARE_PWR_ETA 를 곱한 높이까지
+// (강하를 멈추는 몫은 세지 않는다 — Vy 에서 −500fpm 으로 내려가다 기수를 들면 그대로 1,700fpm 줄어든다).
+// 종전에는 레버를 호버 −10% 로 내리고 80kt 에서 감속해도 플레어 몫만 160ft 남짓 더해 모두 230ft 가 떴다
+// (80kt 운동에너지를 고도로 다 바꾸면 284ft — 로터 · 유도 손실을 빼면 그 3분의 1 언저리가 맞다).
+// 오토로테이션 플레어는 이 예산을 쓰지 않는다(NR 과 맞바꾸는 셈은 따로).
+const FLARE_PWR_ETA = 0.25, FLARE_DESC_FPM = -200;   // 이보다 빨리 내려가다 시작한 플레어(강하 플레어)는 예산을 두지 않는다
+let _flareBudFt = 0, _flareUsedFt = 0;
+// 강하 중에 시작한 플레어는 내려오던 흐름(아래에서 위로 드는 유입류)의 에너지도 쓰므로 예산을 두지 않는다(0 = 예산 없음) —
+// 수평 · 상승 중에 기수를 들어 세우는(quick stop) 경우만 운동에너지 예산으로 묶는다
+function _flareBudget(v) { if ((S.vs || 0) < FLARE_DESC_FPM) return 0; const ms = Math.max(0, v) * 0.514444; return FLARE_PWR_ETA * ms * ms / (2 * 9.80665) * 3.28084; }
 const FLARE_VY_TAU = 0.6;   // 속도를 따라 곧 붙는다(줄어든 속도에 비례)
 const FLARE_VY_TAU_OFF = 1.5;
 const FLARE_VY_DEC = 1.5, FLARE_VY_LO0 = 3, FLARE_VY_LO1 = 10;   // 감속(kt/s) · 호버 가까이 사라지는 속도(kt)   // 기수를 고르면 유입류가 바뀌는 동안(1~2초) 서서히 사라진다
@@ -1027,10 +1061,10 @@ function simFlareVy(onGnd, ex) {
   const vy = simVyKt();
   if (_flareV0 === null) {
     if (!(ex > FLARE_EX_ON) || S.spd > vy + 40) return 0;
-    _flareV0 = Math.min(vy, S.spd); _flarePreq0 = tqRequired();
+    _flareV0 = Math.min(vy, S.spd); _flarePreq0 = tqRequired(); _flareBudFt = _flareBudget(S.spd); _flareUsedFt = 0;
   } else if (!(ex > FLARE_EX_OFF)) { _flareV0 = null; return 0; }
   // 기준보다 빨라졌으면(새로 감속을 시작했다) 그 속도를 새 기준으로 — 지난 플레어의 낮은 기준을 이어 쓰지 않게
-  if (S.spd > _flareV0 + 2) { _flareV0 = Math.min(vy, S.spd); _flarePreq0 = tqRequired(); }
+  if (S.spd > _flareV0 + 2) { _flareV0 = Math.min(vy, S.spd); _flarePreq0 = tqRequired(); _flareBudFt = _flareBudget(S.spd); _flareUsedFt = 0; }
   const L = Math.max(0, Math.min(1, (Math.min(vy, _flareV0) - S.spd) / Math.max(10, vy - FLARE_V_END)));
   if (S.spd > vy) _flarePreq0 = tqRequired();                    // Vy 위에서는 아직 시작하지 않았다
   const comp = Math.max(0, tqRequired() - _flarePreq0) * CLIMB_FPM_DN * simWtK();   // 늘어난 필요 동력 몫을 메운다
@@ -2162,11 +2196,12 @@ function simFly(dt) {
   // VRS — 저속에서 출력을 건 채 빠르게 가라앉으면 자기 내리흐름에 빠진다
   {
     const V = simAirspeed();
-    const inV = !onGnd && V < VRS_KT && (S.vs || 0) < VRS_FPM && S.tq > VRS_TQ;
-    const outV = onGnd || V > VRS_OUT_KT || (S.vs || 0) > -300 || S.tq < VRS_TQ - 5;
+    const vk = vrsK();
+    const inV = !onGnd && V < VRS_KT && (S.vs || 0) < VRS_FPM * vk && S.tq > VRS_TQ;
+    const outV = onGnd || V > VRS_OUT_KT || (S.vs || 0) > -300 * vk || S.tq < VRS_TQ - 5;
     const tgt = inV ? 1 : outV ? 0 : simVrs;
     simVrs += (tgt - simVrs) * Math.min(1, dt / (tgt > simVrs ? VRS_TAU_IN : VRS_TAU_OUT));
-    if (simVrs > 0.01) { if (vRaw > 0) vRaw *= 1 - 0.8 * simVrs; vRaw -= VRS_SINK * simVrs * Math.max(0.5, S.tq / Math.max(30, preq)); }
+    if (simVrs > 0.01) { if (vRaw > 0) vRaw *= 1 - 0.8 * simVrs; vRaw -= VRS_SINK * vk * simVrs * Math.max(0.5, S.tq / Math.max(30, preq)); }
     try { simVrsEval(onGnd); } catch (e) { _swallow(e); }
   }
   // RPM LOW — 양력이 NR² 로 줄어 오르던 힘이 빠지고 그만큼 가라앉는다
@@ -2206,8 +2241,17 @@ function simFly(dt) {
   // 종전에는 레버를 호버 토크 아래로 둔 채 80kt 에서 감속하면 출력 상승(전이양력) · 운동에너지 · 플레어가 모두 붙어
   // 2,400fpm · 300ft 남짓 떴다(80kt 운동에너지를 고도로 다 바꾼 것보다 많다)
   // (출력을 걸고 나는 비행만 — 오토로테이션의 플레어는 그대로)
-  if (_flareVyTgt > 0 && !(simEngAvail() < AUTO_ENG_TQ)) _flareVyTgt = Math.min(_flareVyTgt, Math.max(0, FLARE_VY_GAIN - Math.max(0, vsP)));
+  const powered = !(simEngAvail() < AUTO_ENG_TQ);
+  if (_flareVyTgt > 0 && powered) {
+    _flareVyTgt = Math.min(_flareVyTgt, Math.max(0, FLARE_VY_GAIN - Math.max(0, vsP)));
+    // 운동에너지 예산 — 쓴 만큼 줄어 다 쓰면 0(남은 몫의 제곱근으로 — 끝에 가서 부드럽게 사라진다)
+    // 이미 붙은 몫이 사라지는 동안(FLARE_VY_TAU_OFF) 더 오를 높이까지 미리 셈한다 — 예산을 넘지 않게
+    const tail = Math.min(Math.max(0, simFlareVyVs), Math.max(0, S.vs || 0)) * FLARE_VY_TAU_OFF / 60;
+    if (_flareBudFt > 0) _flareVyTgt *= Math.sqrt(Math.max(0, 1 - (_flareUsedFt + tail) / _flareBudFt));
+  }
   simFlareVyVs = onGnd ? 0 : simFlareVyVs + (_flareVyTgt - simFlareVyVs) * Math.min(1, dt / (_flareVyTgt < simFlareVyVs ? FLARE_VY_TAU_OFF : FLARE_VY_TAU));
+  // 예산은 플레어가 실제로 '띄운' 높이만 센다 — 강하를 멈추는 몫(내려가던 것을 0 으로)은 세지 않는다(Vy 플레어 그대로)
+  if (powered && simFlareVyVs > 0 && S.vs > 0) _flareUsedFt += Math.min(simFlareVyVs, S.vs) * dt / 60;
   // 기수를 숙여 가속하며 레버를 내려도 강하는 4,000fpm 에서 멎는다(운동에너지 몫 포함)
   S.vs = Math.max(-SIM_VS_DN_MAX, vsP + simKeVs(onGnd) + Math.max(simFlareVs, simFlareVyVs));
   if (S.vs <= -SIM_VS_DN_MAX && simVsAcc < 0) simVsAcc = 0;   // 한계에 눌린 채 쌓이지 않게

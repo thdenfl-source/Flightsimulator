@@ -1,6 +1,7 @@
 // VFR Flight Sim — Service Worker
 // 버전을 올리면 캐시가 갱신됩니다
-const CACHE = 'vfr-flight-v712';
+const CACHE = 'vfr-flight-v713';
+const TILE_CACHES = ['vfr-sat-tiles', 'vfr-dem-tiles', 'vfr-tiles'];
 const CORE  = [
   './index.html',
   './manifest.json',
@@ -99,7 +100,8 @@ self.addEventListener('install', e => {
 self.addEventListener('activate', e => {
   e.waitUntil(
     caches.keys()
-      .then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
+      // 지도 타일 캐시(위성 · 지형 · OSM)는 판이 바뀌어도 남긴다 — 미리 받아 둔 작전 구역(34-infra.js)이 배포마다 지워지지 않게
+      .then(keys => Promise.all(keys.filter(k => k !== CACHE && !TILE_CACHES.includes(k)).map(k => caches.delete(k))))
       .then(() => self.clients.claim())
   );
 });

@@ -1,38 +1,56 @@
 name: CI
 
-# 배포 전 최소 방어선.
-# 이 저장소는 빌드가 없고 index.html 이 그대로 GitHub Pages 로 나가므로,
-# 문법 오류나 죽은 버튼이 그대로 사용자에게 도달한다. 그것만은 막는다.
+# 배포 전 방어선 — 이 저장소는 빌드가 없고 index.html 이 그대로 GitHub Pages 로 나간다.
+# 전체 회귀 검사를 4 조각으로 나눠 함께 돌린다(한 줄로 돌리면 15분을 넘겨 끊겼다).
+# (이 경로에서는 절차 훈련판으로 돌고 SIM 검사 파일은 건너뛴다 — tests/run.mjs)
 on:
   push:
     branches: ['**']
   pull_request:
   workflow_dispatch:
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  test:
+  quick:
+    name: 문법 · 캐시 번호
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
-
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-
-      - name: 의존성 설치
-        run: npm install --no-audit --no-fund
-
       - name: 문법 검사
         run: node tests/check-syntax.mjs
-
-      - name: 크로미움 설치
-        run: npx playwright install --with-deps chromium
-
-      - name: 회귀 테스트
-        run: node tests/run.mjs
-
       - name: 서비스워커 캐시 버전 확인
         # index.html 이 바뀌었는데 sw.js 버전을 안 올리면 사용자에게 갱신이 안 간다.
         if: github.event_name == 'pull_request'
         run: node tests/check-swver.mjs "${{ github.event.pull_request.base.sha }}"
+
+  test:
+    name: 회귀 테스트 ${{ matrix.shard }}/4
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: 의존성 설치
+        run: npm install --no-audit --no-fund
+      - name: 크로미움 설치
+        run: npx playwright install --with-deps chromium
+      - name: 회귀 테스트
+        env:
+          SHARD: ${{ matrix.shard }}/4
+          TIMING: '1'
+        run: node tests/run.mjs

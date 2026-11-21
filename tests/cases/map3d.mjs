@@ -363,9 +363,10 @@ export async function run(page, t) {
                saved: (() => { try { return localStorage.getItem('map3dQuality'); } catch (e) { return null; } })() };
     };
     setMap3dQuality('low'); const low = look();
+    cycleMap3dQuality(); const auto = { btn: document.getElementById('q3d-btn').textContent, pick: map3dQualityPick };
     cycleMap3dQuality(); const high = look();
     cycleMap3dQuality(); const mid = look();
-    return { low, high, mid, dpr: window.devicePixelRatio || 1 };
+    return { low, auto, high, mid, dpr: window.devicePixelRatio || 1 };
   });
   t.ok(q.low.sat === 15 && q.low.dem === 12 && q.low.ratio <= 0.8 + 1e-9,
     `화질 '하' — 사진 15 · 지형 12 단계까지, 해상도 ${q.low.ratio}배`);
@@ -374,7 +375,28 @@ export async function run(page, t) {
   t.ok(q.mid.sat === 17 && q.mid.dem === 14, `화질 '중' — 사진 17 · 지형 14 단계까지`);
   t.ok([q.low, q.high, q.mid].every(v => v.first === 'satellite' && v.terrain && v.fade === 0),
     '바꿔 얹어도 위성 사진은 맨 아래 · 지형도 그대로 · 새 타일은 서서히 나타나지 않는다(다시 그리기 줄임)');
-  t.ok(q.low.btn === '화질 하' && q.high.btn === '화질 상' && q.mid.btn === '화질 중',
-    `버튼이 상 → 중 → 하 를 돌며 지금 화질을 적는다 (${q.low.btn} → ${q.high.btn} → ${q.mid.btn})`);
+  t.ok(q.low.btn === '화질 하' && q.auto.pick === 'auto' && q.auto.btn === '화질 자동(하)' && q.high.btn === '화질 상' && q.mid.btn === '화질 중',
+    `버튼이 상 → 중 → 하 → 자동 을 돌며 지금 화질을 적는다 (${q.low.btn} → ${q.auto.btn} → ${q.high.btn} → ${q.mid.btn})`);
+  // ── 자동 화질 — 프레임이 모자라면 한 단계씩 낮추고 넉넉하면 다시 올린다 ──
+  const au = await page.evaluate(() => {
+    setMap3dQuality('mid'); setMap3dQuality('auto');
+    const o = { start: map3dQuality };
+    _q3dAuto.quietUntil = 0;
+    map3dAutoFeed(18, 100); o.one = map3dQuality;                 // 한 번 모자란 것으로는 그대로
+    map3dAutoFeed(18, 102); o.down = map3dQuality;                // 두 번 잇따르면 한 단계 낮춘다
+    map3dAutoFeed(10, 104); map3dAutoFeed(10, 106); o.settle = map3dQuality;   // 바꾼 뒤 6초는 재지 않는다
+    map3dAutoFeed(10, 110); map3dAutoFeed(10, 112); o.low = map3dQuality;
+    let t = 120; for (let i = 0; i < 9; i++) { map3dAutoFeed(58, t); t += 2; } o.up9 = map3dQuality;   // 18초 — 아직
+    map3dAutoFeed(58, t); o.up10 = map3dQuality;                  // 20초 넉넉하면 한 단계 올린다
+    o.btn = document.getElementById('q3d-btn').textContent; o.saved = localStorage.getItem('map3dQuality');
+    setMap3dQuality('mid');
+    o.manual = (() => { map3dAutoFeed(5, 500); map3dAutoFeed(5, 502); return map3dQuality; })();   // 손으로 고르면 자동은 쉰다
+    return o;
+  });
+  t.ok(au.start === 'mid' && au.one === 'mid' && au.down === 'low' && au.settle === 'low' && au.low === 'low',
+    `자동 — FPS 24 아래가 두 번 잇따르면 한 단계 낮춘다 (${au.start} → ${au.down}) · '하' 아래로는 없다`);
+  t.ok(au.up9 === 'low' && au.up10 === 'mid' && au.btn === '화질 자동(중)' && au.saved === 'auto',
+    `자동 — FPS 50 넘게 20초 이어지면 한 단계 올린다 (${au.up9} → ${au.up10} · ${au.btn})`);
+  t.eq(au.manual, 'mid', '손으로 고른 화질은 자동이 건드리지 않는다');
   t.eq(q.mid.saved, 'mid', '고른 화질은 이 기기에 적어 둔다');
 }

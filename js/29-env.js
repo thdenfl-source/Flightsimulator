@@ -51,6 +51,8 @@ function envApply() {
   // 빗줄기 — 3D 창 위(누름은 아래로 지나간다)
   const host = document.getElementById('map3d');
   if (host && !host.querySelector('.env-rain')) { const r = document.createElement('div'); r.className = 'env-rain'; host.appendChild(r); }
+  // NVG 관 시야 · 알갱이(CSS html.env-nvg #map3d .env-nvg)
+  if (host && !host.querySelector('.env-nvg')) { const r = document.createElement('div'); r.className = 'env-nvg'; host.appendChild(r); }
   envApply3d();
   // 바다 상태 → 함정 롤 · 피칭
   try {
@@ -215,6 +217,7 @@ function _envFxEls() {
   }
   return _envFx;
 }
+const NVG_HALO_K = 2.2;   // NVG — 불빛 번짐(할로) 배율
 const _envD2R = Math.PI / 180;
 function _envOff(lat, lon, n, e) { return [lat + n / 110540, lon + e / (111320 * Math.cos(lat * _envD2R))]; }
 function _envDist(la1, lo1, la2, lo2) { const n = (la2 - la1) * 110540, e = (lo2 - lo1) * 111320 * Math.cos(la1 * _envD2R); return { n, e, d: Math.hypot(n, e) }; }
@@ -415,7 +418,7 @@ function envFxFrame() {
     if (dark || f.d >= 4000 || typeof TFC3D_LAYER === 'undefined') {
       const blink = Math.floor(t * 1.5 + tr.id) % 2 === 0;
       g.fillStyle = dark ? (blink ? '#ff2a2a' : '#ffffff') : '#20262c'; g.globalAlpha = dark ? 1 : 0.8;
-      g.beginPath(); g.arc(p.x, y, Math.max(1.5, Math.min(5, 3000 / Math.max(300, f.d))), 0, 7); g.fill();
+      g.beginPath(); g.arc(p.x, y, Math.max(1.5, Math.min(5, 3000 / Math.max(300, f.d))) * (env.nvg ? NVG_HALO_K : 1), 0, 7); g.fill();
     }
     // 꼬리표 — 기종 · 상대고도(백 ft) · 거리(NM) · TCAS 색(멀어 모형이 작아도 알아보게)
     if (typeof tcasShow === 'function' && !tcasShow(tr)) continue;   // 꼬리표는 TCAS 가 그리는 교통만(CDU TCAS 모드 · 고도 범위)
@@ -447,7 +450,8 @@ function envFxFrame() {
     if (!col) continue;
     const f = inFront(la, lo); if (!f.ok) continue;
     const p = m.project([lo, la]); if (!(p.x > -20 && p.x < r.width + 20 && p.y > -20 && p.y < r.height + 20)) continue;
-    const a = Math.exp(-f.d / (visM * 1.5)), sz = Math.max(1.2, Math.min(9, 900 / Math.max(60, f.d))) * k;
+    // NVG 는 빛을 키워 번지게 한다(할로) — 작은 불도 멀리서 크게 보인다
+    const a = Math.exp(-f.d / (visM * (env.nvg ? 2.5 : 1.5))), sz = Math.max(1.2, Math.min(9, 900 / Math.max(60, f.d))) * k * (env.nvg ? NVG_HALO_K : 1);
     if (a < 0.03) continue;
     const gr = g.createRadialGradient(p.x, p.y, 0, p.x, p.y, sz * 3);
     gr.addColorStop(0, col); gr.addColorStop(0.35, col + '88'.slice(0, col.length === 7 ? 2 : 0)); gr.addColorStop(1, 'rgba(0,0,0,0)');
