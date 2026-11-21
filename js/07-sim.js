@@ -1006,7 +1006,7 @@ function applyPanels() {
   const btn = document.getElementById('split-toggle');
   if (btn) btn.textContent = quadMode ? '⿰ 2분할' : tripleMode ? '▦ 4분할' : '⿲ 3분할';
 
-  const wrapIds = { pfd: 'pfd-wrap', map: 'map-wrap', cdu: 'cdu-wrap', m3d: 'map3d-wrap',
+  const wrapIds = { pfd: 'pfd-wrap', map: 'map-wrap', cdu: 'cdu-wrap', m3d: 'map3d-wrap', grip: 'grip-wrap',
                     plan: 'fp-wrap', ovhd: 'ovhd-wrap', sysp: 'sysp-wrap', lcon: 'lcon-wrap' };
   // 화면 하나만 새 창에 띄운 것(SIM Mode 창 배치판 · 00-popout.js popoutScreen)은 그 그릇이 먼저다
   const scrHost = k => (window._scrHost && window._scrHost[k]) ? document.getElementById('po-host-' + k) : null;
@@ -1027,7 +1027,7 @@ function applyPanels() {
     if ((k === 'ovhd' || k === 'lcon') && h && [L, M, R, B].includes(h) && !_vis(h)) h = null;
     return h || (k === 'map' ? sysMapHost() : null) || ckC(k, 'mini');
   };
-  ['pfd', 'map', 'cdu', 'm3d', 'plan', 'ovhd', 'sysp', 'lcon'].forEach(k => {
+  ['pfd', 'map', 'cdu', 'm3d', 'plan', 'ovhd', 'sysp', 'lcon', 'grip'].forEach(k => {
     const el = document.getElementById(wrapIds[k]);
     if (!el) return;
     // 3D 단독(Cockpit Mode)에 겹친 CDU · Flight Plan(#cdu-ov — syncCduOverlay)은 그대로 둔다 — 종전에는 SYSTEM FULL/HALF 처럼
@@ -1043,6 +1043,7 @@ function applyPanels() {
   if (hostOf('ovhd')) { try { if (typeof ovhdShow === 'function') ovhdShow(); } catch (e) { _swallow(e); } }
   if (hostOf('lcon')) { try { if (typeof lconShow === 'function') lconShow(); } catch (e) { _swallow(e); } }
   if (hostOf('sysp')) { try { if (typeof sysShow === 'function') requestAnimationFrame(sysShow); } catch (e) { _swallow(e); } }
+  if (hostOf('grip')) { try { if (typeof gripPanelRender === 'function') gripPanelRender(true); } catch (e) { _swallow(e); } }
   try { syncChinView(); } catch (e) { _swallow(e); }
 
   // PFD 호스트 패널은 FCP 조작부가 다 보이도록 넓게(2분할 55% / 3분할 1.4배)

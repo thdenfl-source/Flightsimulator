@@ -116,4 +116,27 @@ export async function run(page, t) {
   t.ok(C.oeiSkip || (C.oei2 === 'HI' && C.oeiLo === 'LOW' && C.limLo === 600 && C.oeiHi === 'HI' && C.limHi === 150), 'OEI 스위치 — 한 엔진일 때 누를 때마다 HI(2.5분) ↔ LOW(10분) · 두 엔진이면 바뀌지 않는다');
   t.ok(C.cycL, '사이클릭 — 왼쪽 좌석도 오른쪽과 같은 방향 · 4-WAY BEEP 화살표는 왼쪽으로 30° 틀어짐');
   t.ok(C.cycPop && C.closed, '사이클릭을 크게 띄우고 ✕ 로 닫는다');
+
+  // ── 일반 화면(창 탭 CYC·COLL) — 교관 화면처럼 컬렉티브 · 사이클릭 · 누르면 그대로 조작 ──
+  const G = await page.evaluate(async () => {
+    const w = ms => new Promise(r => setTimeout(r, ms)), o = {};
+    if (window._cockpitOn && typeof cockpitExit === 'function') cockpitExit();
+    if (typeof _soloActive !== 'undefined' && _soloActive) exitSolo();
+    await w(200);
+    o.tabs = document.querySelectorAll('.page-tab[data-sel="grip"]').length;
+    selectPanel('right', 'grip', true); await w(300);
+    const g = document.getElementById('grip-wrap');
+    o.shown = !!g && !g.classList.contains('page-hidden') && g.offsetWidth > 50;
+    o.svgs = g ? g.querySelectorAll('svg').length : 0;
+    o.titles = g ? g.textContent.replace(/\s+/g, ' ') : '';
+    const press = k => { const el = g.querySelector(`[data-kg="${k}"]`); if (!el) return false; const r = el.getBoundingClientRect();
+      el.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: r.left + r.width / 2, clientY: r.top + r.height / 2, pointerId: 1 }));
+      g.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerId: 1 })); return true; };
+    const l0 = !!env.ldg; o.pressed = press('ldgOn'); await w(100); o.ldg = !!env.ldg !== l0;
+    press('ldgOn'); await w(100); o.back = !!env.ldg === l0;
+    selectPanel('right', 'map', true); await w(100);
+    return o;
+  });
+  t.ok(G.tabs >= 3 && G.shown && G.svgs === 2 && /COLLECTIVE/.test(G.titles) && /CYCLIC/.test(G.titles), `창 탭 CYC·COLL — 컬렉티브 · 사이클릭 그림이 창에 (탭 ${G.tabs} · 그림 ${G.svgs})`);
+  t.ok(G.pressed && G.ldg && G.back, 'CYC·COLL 창의 단추를 누르면 그대로 조작된다(LDG LT ON ↔ OFF)');
 }
