@@ -33,7 +33,7 @@ export async function run(page, t) {
     return o;
   });
   t.ok(A.ac === 'b206' && A.cls && A.info === 1, `?ac=b206 — 기종 Bell 206B-3(단발) (${A.ac})`);
-  t.ok(A.gate === 3 && /R22/.test(A.gateTxt) && /KUH-1CG/.test(A.gateTxt) && !/AW189/.test(A.gateTxt) && /GLASS Cockpit/.test(A.gateSub), `시작 화면에 기종 고르기 버튼 셋(흰수리 · Bell 206 · R22) — 흰수리는 KUH-1CG (${A.gateTxt} · ${A.gateSub})`);
+  t.ok(A.gate === 4 && /R22/.test(A.gateTxt) && /흰수리 전탐석/.test(A.gateTxt) && /KUH-1CG/.test(A.gateTxt) && !/AW189/.test(A.gateTxt) && /GLASS Cockpit/.test(A.gateSub), `시작 화면에 기종 고르기 버튼 넷(흰수리 · Bell 206 · R22 · 흰수리 전탐석) — 흰수리는 KUH-1CG (${A.gateTxt} · ${A.gateSub})`);
   t.ok(A.nB === 1 && A.nAI === 0, `PFD 창에는 유리 PFD 대신 Bell 206 아날로그 계기판 (b206Draw ${A.nB} · drawAI ${A.nAI})`);
   t.ok(A.v.nr > 95 && A.v.nr < 105 && A.v.n2 > 95 && A.v.n2 <= 100, `회전계 — NR ${A.v.nr.toFixed(0)}% · N2 ${A.v.n2.toFixed(0)}%`);
   t.ok(A.v.tq > 0 && A.v.tq < 100 && A.v.n1 > 60 && A.v.n1 < 106 && A.v.tot > 400 && A.v.tot < 810 && A.v.gal > 0 && A.v.gal <= 91,
