@@ -300,96 +300,174 @@ function msnContacts() {
   try { if (typeof traffic !== 'undefined') for (const t of traffic) out.push({ id: 'A' + t.id, kind: 'air', name: t.ac === 'b206' ? 'Bell 206' : '흰수리', lat: t.lat, lon: t.lon, hM: (t.alt || 0) * 0.3048, len: 15, hdg: t.hdg, spd: t.spd, rcs: 8 }); } catch (e) { _swallow(e); }
   return out;
 }
-const RDR_RNG = [2, 5, 10, 20, 40];
-const RDR_RPM_S = 2.5;                                // 한 바퀴(초)
-const rdr = { tx: false, rng: 10, gain: 60, stc: 50, ftc: false, nup: false, ang: 0, tgt: null, paint: {}, trk: {}, pcv: null, flash: 0 };
-// 그 표적을 이 레이더가 볼 수 있는 거리(NM) — 수평선(안테나 · 표적 높이) · 반사 면적 · 해상 상태
+// ══ ② 탐색레이더 — Seaspray 5000E(Osprey) · VCCP 조작기 (KUH-1CG FLM 5.20 · SDS 34-47-01) ══
+//   X 대역 9.45~10.00GHz · 최대 200NM · 표적 200개 자동 추적 · 전원 DC-ESS BUS 1(RADAR) · 다시 켜면 90초 예열
+//   안테나: 기계 스캔 ±60° + 전자 스캔(E-scan) ±120° — 부채꼴(Sector) 화면 · 스캔 폭 120 · 60 · 20 · 240°
+//   모드: LRS(장거리 해상 · 해면 클러터 억제 · FREEZE) · WX(강수 밀도 색) · PT(소형 표적 자동 추적) · SART(수색구조 트랜스폰더) · ISAR(표적 영상)
+//   제어 권한(RDR > CMD): CKPT(조종실 · 처음) · CABIN(전탐석) · SHARED(함께) — CKPT 이면 전탐석 VCCP 는 CMD 말고는 듣지 않는다
+//   화면: 위 Hdg · Trk · SRV RDR CMD · RNG · Tilt · Gain / 아래 Alt · RAlt · GS · 위경도 · 커서 거리 · 방위 / RDR TX · STBY · FREEZE · R ONLY · NO ALT · NO HDG · NO POS
+const RDR_RNG = [10, 20, 50, 100, 200];
+const RDR_MODES = ['LRS', 'WX', 'PT', 'SART', 'ISAR'];
+const RDR_CMDS = ['CKPT', 'CABIN', 'SHARED'];
+const RDR_SECTORS = [120, 60, 20, 240];
+const RDR_SWEEP = 45;                                  // 스캔 속도(°/s)
+const RDR_WARM_S = 90;                                 // 다시 켠 뒤 예열(초)
+const RDR_RPM_S = 2 * 120 / RDR_SWEEP;                 // 한 번 오가는 시간(초) — 칠해진 표적이 살아 있는 시간에 쓴다
+const rdr = { pwr: true, warm: 0, tx: false, mode: 'LRS', cmd: 'CKPT', rng: 20, tilt: 0, gain: 15, sector: 120, frz: false, ronly: false, wxr: false, tws: true,
+  az: 0, dir: 1, cur: { az: 0, nm: 10 }, tgt: null, trkNo: {}, nTrk: 0, menu: null, menuI: 0, paint: {}, trk: {}, pcv: null, wx: null };
+// 전탐석 VCCP 가 다룰 수 있는가 — 제어 권한
+function rdrCabinOk() { return rdr.cmd !== 'CKPT'; }
+function rdrPower(on) { rdr.pwr = !!on; if (rdr.pwr) rdr.warm = RDR_WARM_S; else { rdr.tx = false; rdr.warm = 0; } }
+function rdrTx(on) {
+  if (on && (!rdr.pwr || rdr.warm > 0)) { _mToast(rdr.pwr ? `RDR 예열 중 — ${Math.ceil(rdr.warm)}초` : 'RDR 전원 꺼짐'); return false; }
+  rdr.tx = !!on; _mNote(`레이더 ${rdr.tx ? 'TX' : 'STBY'}`); return true;
+}
+// 그 표적을 이 레이더가 볼 수 있는 거리(NM) — 수평선(안테나 · 표적 높이) · 반사 면적 · 해상 상태 · 이득 · 모드
 function rdrDetNm(c) {
   const hA = Math.max(10, Number(S.alt) || 0), hT = c.kind === 'air' ? Math.max(10, c.hM / 0.3048) : Math.max(3, c.len * 0.5 / 0.3048 * 0.3);
   const horizon = 1.23 * (Math.sqrt(hA) + Math.sqrt(hT));
   const sea = (typeof env !== 'undefined' && env.sea) || 0;
   let rcsNm = c.kind === 'surv' ? Math.max(0.3, 1.6 * (1 - sea / 7)) : c.rcs * (1 - sea * 0.06);
-  rcsNm *= 0.55 + rdr.gain / 100 * 0.6;
+  if (rdr.mode === 'LRS') rcsNm *= c.kind === 'surv' ? 0.7 : 1.6;           // 장거리 — 큰 표적은 멀리 · 아주 작은 것은 클러터 억제에 묻힌다
+  else if (rdr.mode === 'PT') rcsNm *= c.rcs <= 10 ? 1.4 : 1;               // 소형 표적 우선
+  else if (rdr.mode === 'WX') rcsNm *= 0.5;
+  rcsNm *= 0.55 + rdr.gain / 30 * 0.6;
+  // 기울기 — 표적 높이 쪽에서 멀어질수록 약해진다(해상 표적은 0° 근처 · 위로 들면 약해진다)
+  rcsNm *= Math.max(0.3, 1 - Math.abs(rdr.tilt - (c.kind === 'air' ? 2 : -1)) / 35);
   return Math.min(horizon, rcsNm);
 }
+// 강수 구역(비가 오면 둘레에 몇 개) — WX 모드 · WXR 겹
+function _rdrWxCells() {
+  const rain = (typeof env !== 'undefined' && env.rain) || 0;
+  if (!rain) { rdr.wx = null; return []; }
+  if (!rdr.wx || rdr.wx.rain !== rain) {
+    const cells = [];
+    for (let i = 0; i < 3 + rain * 2; i++) { const [la, lo] = destPoint(S.lat, S.lon, (i * 137) % 360, 6 + (i * 23) % 60); cells.push({ lat: la, lon: lo, r: 3 + (i % 3) * 3, k: Math.min(1, 0.35 + rain * 0.25 + (i % 2) * 0.2) }); }
+    rdr.wx = { rain, cells };
+  }
+  return rdr.wx.cells;
+}
 function rdrStep(dt) {
-  if (!rdr.tx) return;
-  const a0 = rdr.ang, sweep = 360 / RDR_RPM_S * dt;
-  rdr.ang = normA(a0 + sweep);
-  const inArc = a => { const d = normA(a - a0); return d > 0 && d <= sweep + 1e-9; };
+  if (rdr.pwr && rdr.warm > 0) rdr.warm = Math.max(0, rdr.warm - dt);
+  if (!rdr.tx || !rdr.pwr) return;
+  if (rdr.frz) return;                                 // FREEZE — 화면을 붙든다(안테나는 돌지만 그림을 바꾸지 않는다)
+  // 부채꼴 스캔 — 기수 기준 ±sector/2 를 오간다
+  const half = rdr.sector / 2, a0 = rdr.az;
+  let a1 = a0 + rdr.dir * RDR_SWEEP * dt;
+  if (a1 >= half) { a1 = half; rdr.dir = -1; } else if (a1 <= -half) { a1 = -half; rdr.dir = 1; }
+  rdr.az = a1;
+  const lo = Math.min(a0, a1), hi = Math.max(a0, a1);
   const now = performance.now();
   for (const c of msnContacts()) {
-    const brg = bearing(S.lat, S.lon, c.lat, c.lon), nm = distance(S.lat, S.lon, c.lat, c.lon);
-    const disp = rdr.nup ? brg : normA(brg - S.hdg);
-    if (!inArc(disp)) continue;
-    if (nm > rdrDetNm(c) || nm > RDR_RNG[RDR_RNG.length - 1]) { delete rdr.paint[c.id]; continue; }
+    const brg = bearing(S.lat, S.lon, c.lat, c.lon), nm = distance(S.lat, S.lon, c.lat, c.lon), rel = normAS(brg - S.hdg);
+    if (rel < lo || rel > hi) continue;
+    if (nm > rdrDetNm(c) || nm > RDR_RNG[RDR_RNG.length - 1]) { if (!rdr.trkNo[c.id]) delete rdr.paint[c.id]; continue; }
     rdr.paint[c.id] = { brg, nm, t: now, kind: c.kind, rcs: c.rcs };
-    // 추적(지정한 표적) — 지난 두 바퀴의 자리로 침로 · 속력
     const T = rdr.trk[c.id] || (rdr.trk[c.id] = { h: [] });
     T.h.push({ lat: c.lat, lon: c.lon, t: now }); if (T.h.length > 4) T.h.shift();
     if (T.h.length >= 2) {
       const a = T.h[0], b = T.h[T.h.length - 1], hrs = (b.t - a.t) / 3600000;
       if (hrs > 0) { T.spd = distance(a.lat, a.lon, b.lat, b.lon) / hrs; T.cse = bearing(a.lat, a.lon, b.lat, b.lon); }
     }
+    // PT — 소형 표적은 저절로 추적
+    if (rdr.mode === 'PT' && c.rcs <= 10 && !rdr.trkNo[c.id]) rdrTrack(c.id, true);
   }
-  _rdrPaintBeam(a0, sweep, dt);
+  _rdrPaintBeam(lo, hi - lo, dt);
 }
-// 잔상 캔버스(PPI) — 한 줄씩 그린다: 해면 반사 · 비 · 육지 · 표적
+// 잔상 캔버스 — 기수 기준(가운데가 안테나). 한 줄씩: 육지(TWS) · 해면 반사 · 강수 · 잡음 · 표적
 function _rdrPaintBeam(a0, sweep, dt) {
-  const N = 320;
+  const N = 360;
   if (!rdr.pcv) { rdr.pcv = document.createElement('canvas'); rdr.pcv.width = rdr.pcv.height = N; }
   const g = rdr.pcv.getContext('2d'), c = N / 2, R = N / 2 - 2;
-  g.fillStyle = `rgba(0,0,0,${(1 - Math.exp(-dt / 1.4)).toFixed(3)})`; g.fillRect(0, 0, N, N);
-  const sea = (typeof env !== 'undefined' && env.sea) || 0, rain = (typeof env !== 'undefined' && env.rain) || 0;
-  const clutNm = (0.3 + sea * 0.45) * (1 - rdr.stc / 130), gk = rdr.gain / 100;
+  g.fillStyle = `rgba(0,0,0,${(1 - Math.exp(-dt / 2.4)).toFixed(3)})`; g.fillRect(0, 0, N, N);
+  const sea = (typeof env !== 'undefined' && env.sea) || 0, gk = rdr.gain / 30;
+  const clutNm = (0.3 + sea * 0.45) * (rdr.mode === 'LRS' ? 0.35 : 1) * Math.max(0.2, 1 - rdr.tilt / 30);
+  const cells = (rdr.mode === 'WX' || rdr.wxr) ? _rdrWxCells() : [];
   const steps = Math.max(1, Math.ceil(sweep / 1.2));
-  for (let s = 0; s < steps; s++) {
-    const disp = normA(a0 + sweep * (s + 1) / steps), brg = rdr.nup ? disp : normA(disp + S.hdg);
-    const sx = Math.sin(disp * _mD), sy = -Math.cos(disp * _mD);
-    const bins = 48;
+  for (let s = 0; s <= steps; s++) {
+    const rel = a0 + sweep * s / steps, brg = normA(rel + S.hdg);
+    const sx = Math.sin(rel * _mD), sy = -Math.cos(rel * _mD);
+    const bins = 56;
     for (let b = 1; b <= bins; b++) {
       const nm = rdr.rng * b / bins, r = R * b / bins;
-      let v = 0;
-      // 육지 반사(해안선)
+      let v = 0, col = '80,255,120';
       const [la, lo] = destPoint(S.lat, S.lon, brg, nm);
-      if (!_mWater(la, lo)) v = Math.max(v, 0.55 + 0.4 * gk);
-      // 해면 반사 — 가까이서 해상 상태만큼(STC 로 누른다)
-      if (nm < clutNm && Math.random() < (1 - nm / clutNm) * 0.8 * gk) v = Math.max(v, 0.25 + 0.5 * Math.random());
-      // 비(FTC 로 누른다)
-      if (rain && Math.random() < rain * (rdr.ftc ? 0.04 : 0.18) * gk) v = Math.max(v, 0.3 * Math.random() + 0.15);
-      // 잡음
-      if (Math.random() < gk * gk * 0.025) v = Math.max(v, 0.2);
-      if (v > 0) { g.fillStyle = `rgba(80,255,120,${v.toFixed(2)})`; g.fillRect(c + sx * r - 1.5, c + sy * r - 1.5, 3, 3); }
+      if (rdr.mode !== 'WX' && !_mWater(la, lo)) v = Math.max(v, 0.5 + 0.4 * gk);                                     // 육지 반사(해안선)
+      if (nm < clutNm && Math.random() < (1 - nm / clutNm) * 0.8 * gk) v = Math.max(v, 0.25 + 0.5 * Math.random());   // 해면 반사
+      for (const w of cells) { const d = distance(la, lo, w.lat, w.lon); if (d < w.r) { const k = w.k * (1 - d / w.r); const wk = k > 0.6 ? '255,60,60' : k > 0.35 ? '255,200,0' : '40,200,60'; if (k > v || rdr.mode === 'WX') { v = Math.max(v, 0.35 + k * 0.6); col = wk; } } }
+      if (Math.random() < gk * gk * 0.02) v = Math.max(v, 0.2);                                                         // 잡음
+      if (v > 0) { g.fillStyle = `rgba(${col},${v.toFixed(2)})`; g.fillRect(c + sx * r - 1.5, c + sy * r - 1.5, 3.2, 3.2); }
     }
   }
   // 표적 — 반사 면적만큼 크게
   const now = performance.now();
   for (const [, p] of Object.entries(rdr.paint)) {
     if (now - p.t > 120 || p.nm > rdr.rng) continue;
-    const disp = rdr.nup ? p.brg : normA(p.brg - S.hdg), r = R * p.nm / rdr.rng;
-    const sz = p.kind === 'surv' ? 2.5 : Math.min(9, 2.5 + p.rcs / 5);
-    g.fillStyle = p.kind === 'air' ? 'rgba(160,255,255,0.95)' : 'rgba(170,255,170,1)';
-    g.beginPath(); g.arc(c + Math.sin(disp * _mD) * r, c - Math.cos(disp * _mD) * r, sz, 0, 2 * Math.PI); g.fill();
+    const rel = normAS(p.brg - S.hdg), r = R * p.nm / rdr.rng;
+    const sz = p.kind === 'surv' ? 2.5 : Math.min(8, 2.2 + p.rcs / 6) * Math.max(0.5, 20 / rdr.rng);
+    g.fillStyle = p.kind === 'air' ? 'rgba(160,255,255,0.95)' : 'rgba(190,255,190,1)';
+    g.beginPath(); g.arc(c + Math.sin(rel * _mD) * r, c - Math.cos(rel * _mD) * r, Math.max(1.8, sz), 0, 2 * Math.PI); g.fill();
   }
 }
-function rdrRngStep(d) { const i = RDR_RNG.indexOf(rdr.rng); rdr.rng = RDR_RNG[_mClamp((i < 0 ? 2 : i) + d, 0, RDR_RNG.length - 1)]; if (rdr.pcv) rdr.pcv.getContext('2d').clearRect(0, 0, rdr.pcv.width, rdr.pcv.height); }
-// 화면에서 누른 자리(캔버스 기준 -1…1)에 가까운 표적을 지정한다
-function rdrPick(nx, ny) {
-  const nm = Math.hypot(nx, ny) * rdr.rng, disp = normA(Math.atan2(nx, -ny) / _mD), brg = rdr.nup ? disp : normA(disp + S.hdg);
-  const [la, lo] = destPoint(S.lat, S.lon, brg, nm);
-  let best = null, bd = rdr.rng * 0.08;
+function rdrClearPicture() { if (rdr.pcv) rdr.pcv.getContext('2d').clearRect(0, 0, rdr.pcv.width, rdr.pcv.height); }
+function rdrRngStep(d) { const i = RDR_RNG.indexOf(rdr.rng); rdr.rng = RDR_RNG[_mClamp((i < 0 ? 1 : i) + d, 0, RDR_RNG.length - 1)]; rdr.cur.nm = Math.min(rdr.cur.nm, rdr.rng); rdrClearPicture(); }
+// 추적(TRK) — 번호를 붙인다(최대 200)
+function rdrTrack(id, on) {
+  if (on) { if (!rdr.trkNo[id]) { if (Object.keys(rdr.trkNo).length >= 200) return false; rdr.trkNo[id] = ++rdr.nTrk; } rdr.tgt = id; _mNote(`레이더 추적 TRK${String(rdr.trkNo[id]).padStart(2, '0')} — ${id}`); }
+  else { delete rdr.trkNo[id]; if (rdr.tgt === id) rdr.tgt = null; }
+  return true;
+}
+// 기수 기준 방위 · 거리 자리에 가까운 표적
+function rdrNearRB(rel, nm) {
+  const [la, lo] = destPoint(S.lat, S.lon, normA(rel + S.hdg), nm);
+  let best = null, bd = rdr.rng * 0.06;
   const now = performance.now();
   for (const [id, p] of Object.entries(rdr.paint)) {
-    if (now - p.t > RDR_RPM_S * 1000 * 1.5) continue;
+    if (now - p.t > RDR_RPM_S * 1000 * 1.5 && !rdr.trkNo[id]) continue;
     const [pa, po] = destPoint(S.lat, S.lon, p.brg, p.nm);
-    const d = distance(la, lo, pa, po);
-    if (d < bd) { bd = d; best = id; }
+    const d = distance(la, lo, pa, po); if (d < bd) { bd = d; best = id; }
   }
-  rdr.tgt = best;
-  if (best) _mNote(`레이더 표적 지정 — ${best}`);
   return best;
 }
-function rdrSlaveEo() { if (!rdr.tgt) { _mToast('먼저 레이더 화면에서 표적을 누르십시오'); return false; } eoSlewTo({ kind: 'obj', id: rdr.tgt }); return true; }
+// 화면에서 누른 자리(기수 기준 방위 · 거리)의 표적을 지정하고 추적한다
+function rdrPickRB(rel, nm) {
+  rdr.cur = { az: _mClamp(normAS(rel), -120, 120), nm: _mClamp(nm, 0, rdr.rng) };
+  const id = rdrNearRB(rel, nm);
+  if (id) rdrTrack(id, true); else rdr.tgt = null;
+  return id;
+}
+// 커서 자리의 표적 추적 · 풀기(VCCP 누름)
+function rdrCursorTrk() {
+  const id = rdrNearRB(rdr.cur.az, rdr.cur.nm);
+  if (!id) { _mToast('커서 자리에 표적이 없습니다'); return null; }
+  if (rdr.trkNo[id] && rdr.tgt === id) rdrTrack(id, false); else rdrTrack(id, true);
+  return id;
+}
+function rdrSlaveEo() { if (!rdr.tgt) { _mToast('먼저 레이더 표적을 지정(추적)하십시오'); return false; } eoSlewTo({ kind: 'obj', id: rdr.tgt }); return true; }
+// SART — 수색구조 트랜스폰더(요구조자) 응답: 바깥쪽으로 점 12개(0.64NM 간격)
+function rdrSartReply() {
+  if (rdr.mode !== 'SART' || !rdr.tx || typeof sar === 'undefined' || !sar.on || sar.lat === null || sar.state === 'aboard') return null;
+  const nm = distance(S.lat, S.lon, sar.lat, sar.lon); if (nm > 10) return null;
+  return { brg: bearing(S.lat, S.lon, sar.lat, sar.lon), nm };
+}
+// ══ 메뉴(FNC 메인 · MAP) — VCCP 손잡이로 고르고 누른다 ══
+const RDR_MENU = {
+  FNC: [
+    { n: 'MODE', v: () => rdr.mode, set: d => { rdr.mode = RDR_MODES[(RDR_MODES.indexOf(rdr.mode) + (d || 1) + RDR_MODES.length) % RDR_MODES.length]; rdrClearPicture(); } },
+    { n: 'TX / STBY', v: () => rdr.tx ? 'TX' : 'STBY', set: () => rdrTx(!rdr.tx) },
+    { n: 'RDR > CMD', v: () => rdr.cmd, set: d => { rdr.cmd = RDR_CMDS[(RDR_CMDS.indexOf(rdr.cmd) + (d || 1) + 3) % 3]; }, any: true },
+    { n: 'TILT', v: () => `${rdr.tilt > 0 ? '+' : ''}${rdr.tilt}°`, set: d => { rdr.tilt = _mClamp(rdr.tilt + (d || 1), -30, 30); }, def: () => { rdr.tilt = 0; } },
+    { n: 'GAIN', v: () => String(rdr.gain), set: d => { rdr.gain = _mClamp(rdr.gain + (d || 1), 0, 30); }, def: () => { rdr.gain = 15; } },
+    { n: 'SECTOR', v: () => `${rdr.sector}°`, set: d => { rdr.sector = RDR_SECTORS[(RDR_SECTORS.indexOf(rdr.sector) + (d || 1) + RDR_SECTORS.length) % RDR_SECTORS.length]; rdrClearPicture(); }, def: () => { rdr.sector = 120; } },
+    { n: 'FREEZE', v: () => rdr.frz ? 'ON' : 'OFF', set: () => { rdr.frz = !rdr.frz; } },
+  ],
+  MAP: [
+    { n: 'WXR LAYER', v: () => rdr.wxr ? 'ON' : 'OFF', set: () => { rdr.wxr = !rdr.wxr; } },
+    { n: 'TWS TERRAIN', v: () => rdr.tws ? 'ON' : 'OFF', set: () => { rdr.tws = !rdr.tws; } },
+    { n: 'R ONLY', v: () => rdr.ronly ? 'ON' : 'OFF', set: () => { rdr.ronly = !rdr.ronly; } },
+    { n: 'RANGE', v: () => `${rdr.rng} NM`, set: d => rdrRngStep(d || 1), def: () => { rdr.rng = 20; rdrClearPicture(); } },
+  ],
+};
 
 // ══ ③ 서치라이트(35-kuhgrip.js kgLt) ══
 const srch = { mode: 'MAN', lim: false };            // MAN · EO(EO/IR 시선) · RDR(레이더 지정 표적)
@@ -453,6 +531,8 @@ function _msnCss() {
 .msn-cell .eo-vid{position:absolute;inset:0}
 .msn-cell .eo-spr,.msn-cell .eo-map{position:absolute;inset:0;width:100%;height:100%}
 .msn-cell .eo-hud,.msn-cell .nv-ov{pointer-events:none}
+.nv-zb{position:absolute;right:6px;bottom:6px;display:flex;flex-direction:column;gap:4px;z-index:4}
+.nv-zb b{width:26px;height:24px;border-radius:4px;background:rgba(10,20,25,.8);border:1px solid #567;color:#cfe;font:bold 14px Arial;display:flex;align-items:center;justify-content:center;cursor:pointer}
 .msn-chl{position:absolute;left:8px;top:6px;font:bold 15px "Segoe UI",Arial,sans-serif;color:#fff;text-shadow:0 0 3px #000,0 0 2px #000;pointer-events:none;z-index:3}
 .msn-dkeys{display:flex;align-items:flex-end;justify-content:center;gap:9px;padding-top:7px;flex-wrap:wrap}
 .msn-dk{display:flex;flex-direction:column;align-items:center;gap:3px;font:bold 10px Arial;color:#cde}
@@ -588,7 +668,7 @@ function _msnBuild() {
   <div class="msn-body">
     <div class="msn-disp">
       <div class="msn-scr">
-        <div class="msn-cell c-map"><div class="nv-map"></div><canvas class="nv-ov"></canvas></div>
+        <div class="msn-cell c-map"><div class="nv-map"></div><canvas class="nv-ov"></canvas><div class="nv-zb"><b data-mact="nv+">＋</b><b data-mact="nv-">−</b><b data-mact="nvc">⌖</b></div></div>
         <div class="msn-cell c-hoist"><canvas class="hc-cv"></canvas><span class="msn-chl">CH3 / 28fps</span></div>
         <div class="msn-cell msn-rdr c-rdr"><canvas></canvas><span class="msn-chl">CH2 / 28fps</span></div>
         <div class="msn-cell msn-eo c-eo"><div class="eo-vid"><canvas class="eo-spr"></canvas></div><canvas class="eo-hud"></canvas><span class="msn-chl">CH1 / 30fps</span></div>
@@ -628,12 +708,13 @@ function _msnBuild() {
           ${[['n', 51, 0, '▲'], ['ne', 92, 10, '◥'], ['e', 102, 51, '▶'], ['se', 92, 92, '◢'], ['s', 51, 102, '▼'], ['sw', 10, 92, '◣'], ['w', 0, 51, '◀'], ['nw', 10, 10, '◤']].map(([d, x, y, t]) => `<em data-cln="pan:${d}" style="left:${x}px;top:${y}px">${t}</em>`).join('')}</div>
         <div class="cln-rot"><b data-cln="rot:-1" title="왼쪽으로 돌림 — 넓게">⟲</b><b data-cln="rot:1" title="오른쪽으로 돌림 — 좁게">⟳</b></div>
         <div class="cln-k"><b data-cln="clr">CLR</b><b data-cln="fnc">FNC</b><b data-cln="wxr">WXR</b><b data-cln="tws">TWS</b></div>
-      </div><div class="msn-cap2">RADAR / MAP CONTROL UNIT (CLN)</div></div>
-      <div class="msn-panel"><h4>SAR RADAR</h4><div class="msn-keys">
-        <button class="msn-btn" data-mact="rtx">TX</button><button class="msn-btn" data-mact="rng-">RNG −</button><button class="msn-btn" data-mact="rng+">RNG +</button>
+      </div><div class="msn-cap2">SEARCH RADAR CONTROL — VCCP (SEASPRAY 5000E)</div></div>
+      <div class="msn-panel"><h4>SEARCH RADAR — 빠른 단추(메뉴 FNC · MAP 과 같다)</h4><div class="msn-keys">
+        <button class="msn-btn" data-mact="rtx">TX</button><button class="msn-btn" data-mact="rmode">MODE</button><button class="msn-btn" data-mact="rcmd">CMD</button>
+        <button class="msn-btn" data-mact="rng-">RNG −</button><button class="msn-btn" data-mact="rng+">RNG +</button>
+        <button class="msn-btn" data-mact="tilt-">TILT −</button><button class="msn-btn" data-mact="tilt+">TILT +</button>
         <button class="msn-btn" data-mact="gain-">GAIN −</button><button class="msn-btn" data-mact="gain+">GAIN +</button>
-        <button class="msn-btn" data-mact="stc-">STC −</button><button class="msn-btn" data-mact="stc+">STC +</button>
-        <button class="msn-btn" data-mact="ftc">FTC</button><button class="msn-btn" data-mact="nup">H UP</button>
+        <button class="msn-btn" data-mact="rsec">SCAN</button><button class="msn-btn" data-mact="rfrz">FREEZE</button><button class="msn-btn" data-mact="ronly">R ONLY</button>
         <button class="msn-btn" data-mact="r2eo">EO/IR → 표적</button><button class="msn-btn" data-mact="r2sl">서치라이트 → 표적</button></div>
         <div class="msn-tdata" data-m="tdata"></div></div>
     </div>
@@ -678,7 +759,12 @@ function _msnBuild() {
   R.querySelector('[data-m="clnknob"]').addEventListener('wheel', e => { e.preventDefault(); clnPress('rot:' + (e.deltaY > 0 ? -1 : 1), true); }, { passive: false });
   // 레이더 화면 — 누른 자리의 표적 지정
   const rc = R.querySelector('.msn-rdr canvas');
-  rc.addEventListener('pointerdown', e => { const r = rc.getBoundingClientRect(), M = Math.min(r.width, r.height); const nx = (e.clientX - r.left - r.width / 2) / (M / 2), ny = (e.clientY - r.top - r.height / 2) / (M / 2); rdrPick(nx / 0.92, ny / 0.92); });
+  rc.addEventListener('pointerdown', e => {
+    if (!rdrCabinOk()) { _rdrGuard('pick'); return; }
+    const r = rc.getBoundingClientRect(), G = _rdrGeo(rc.width, rc.height);
+    const x = (e.clientX - r.left) * rc.width / r.width - G.ox, y = (e.clientY - r.top) * rc.height / r.height - G.oy;
+    rdrPickRB(Math.atan2(x, -y) / _mD, Math.hypot(x, y) / G.R * rdr.rng);
+  });
   dispSet();
   return R;
 }
@@ -722,34 +808,44 @@ function slcRender() {
   _msnEl.querySelectorAll('.slc-sw .k').forEach(e => { const v = kpos[e.dataset.slc]; e.classList.toggle('up', !!v); e.classList.toggle('dn', !v); });
   _msnEl.querySelectorAll('.slc-pb b').forEach(e => e.classList.toggle('dn', !!slc.down[e.dataset.slc]));
 }
-// ══ 레이더 · 지도 조작기(EuroNav CLN) — MAP · ESC · CLR · FNC · WXR · TWS · 손잡이(돌림 · 8방향 · 누름) ══
-//   교범(EuroNav Control Unit): 돌리면 지도 확대 · 축소, 8방향으로 밀면 커서, 누르면 확인, 0.5초 누르면 커서 자리를 지도 가운데로
+// ══ 탐색레이더 조작기(VCCP — Video Converter Control Panel · FLM 5.20) ══
+//   MAP 지도 메뉴 · ESC 닫기 · CLR 지우기(메뉴 — 그 칸을 기본값으로) · FNC 메인 메뉴 · WXR 강수 겹 · TWS 지형 겹 · COM/TFC 쓰지 않음
+//   손잡이: 돌림 — 메뉴가 없으면 거리(RNG), 메뉴가 있으면 칸 옮기기 / 누름 — 메뉴 칸 실행 · 없으면 커서 자리 표적 추적(TRK) / 4축(8방향) — 커서
+const nv = { nm: 5, cur: null, ctr: null, pushT: 0 };
 const NV_RNG = [1, 2, 5, 10, 20, 40];
-const nv = { nm: 5, cur: null, ctr: null, wxr: false, terr: true, pushT: 0 };
+function _rdrGuard(k) {
+  if (rdrCabinOk()) return true;
+  // CKPT — 메뉴를 열어 RDR > CMD 만 바꿀 수 있다
+  if (k === 'fnc' || k === 'esc' || (rdr.menu && (k.startsWith('rot:') || k === 'push'))) return true;
+  _mToast('RDR CMD CKPT — 조종실이 레이더를 쥐고 있습니다(FNC → RDR > CMD 를 CABIN · SHARED 로)');
+  return false;
+}
 function clnPress(k, down) {
   if (k === 'push') {
     if (down) { nv.pushT = performance.now(); return; }
-    const held = (performance.now() - nv.pushT) / 1000;
-    if (held >= 0.5 && nv.cur) { nv.ctr = { lat: nv.cur.lat, lon: nv.cur.lon }; _mToast('지도 가운데를 커서 자리로'); }
-    else if (!nv.cur) nv.cur = { lat: S.lat, lon: S.lon };
-    else { const id = nvPickAt(nv.cur.lat, nv.cur.lon); if (id) { rdr.tgt = id; _mToast(`표적 지정 — ${id}`); _mNote(`표적 지정(CLN) — ${id}`); } }
+    if (!_rdrGuard('push')) return;
+    if (rdr.menu) { const m = RDR_MENU[rdr.menu][rdr.menuI]; if (m && (rdrCabinOk() || m.any)) m.set(1); else if (m) _mToast('RDR CMD CKPT — RDR > CMD 만 바꿀 수 있습니다'); }
+    else rdrCursorTrk();
     msnRenderPanels(); return;
   }
-  if (!down) return;
-  if (k.startsWith('rot:')) { const i = NV_RNG.indexOf(nv.nm); nv.nm = NV_RNG[_mClamp((i < 0 ? 2 : i) - +k.slice(4), 0, NV_RNG.length - 1)]; return; }
+  if (!down || !_rdrGuard(k)) return;
+  if (k.startsWith('rot:')) { const d = +k.slice(4); if (rdr.menu) rdr.menuI = (rdr.menuI + d + RDR_MENU[rdr.menu].length) % RDR_MENU[rdr.menu].length; else rdrRngStep(d); return; }
   if (k.startsWith('pan:')) {
-    const d = k.slice(4), brg = { n: 0, ne: 45, e: 90, se: 135, s: 180, sw: 225, w: 270, nw: 315 }[d];
-    const base = nv.cur || { lat: S.lat, lon: S.lon }; const [la, lo] = destPoint(base.lat, base.lon, brg, nv.nm * 0.08);
-    nv.cur = { lat: la, lon: lo }; return;
+    const d = k.slice(4), lim = rdr.sector / 2;
+    if (d.includes('n')) rdr.cur.nm = Math.min(rdr.rng, rdr.cur.nm + rdr.rng * 0.04);
+    if (d.includes('s')) rdr.cur.nm = Math.max(0, rdr.cur.nm - rdr.rng * 0.04);
+    if (d.includes('e')) rdr.cur.az = Math.min(lim, rdr.cur.az + 2);
+    if (d.includes('w')) rdr.cur.az = Math.max(-lim, rdr.cur.az - 2);
+    return;
   }
   switch (k) {
-    case 'map': dispSet({ lay: 'one', ch: 4 }); break;
-    case 'esc': if (nv.cur || nv.ctr) { nv.cur = null; nv.ctr = null; } else dispSet({ lay: 'quad' }); break;
-    case 'fnc': dispSet({ lay: 'quad' }); break;
-    case 'clr': rdr.tgt = null; nv.cur = null; break;
-    case 'wxr': nv.wxr = !nv.wxr; if (nv.wxr && !rdr.tx) rdr.tx = true; break;
-    case 'tws': nv.terr = !nv.terr; break;
-    case 'com': case 'tfc': break;   // 쓰지 않는다(교범)
+    case 'map': rdr.menu = rdr.menu === 'MAP' ? null : 'MAP'; rdr.menuI = 0; break;
+    case 'fnc': rdr.menu = rdr.menu === 'FNC' ? null : 'FNC'; rdr.menuI = 0; break;
+    case 'esc': rdr.menu = null; break;
+    case 'clr': if (rdr.menu) { const m = RDR_MENU[rdr.menu][rdr.menuI]; if (m && m.def) m.def(); } else { if (rdr.tgt) rdrTrack(rdr.tgt, false); rdr.cur = { az: 0, nm: rdr.rng / 2 }; } break;
+    case 'wxr': rdr.wxr = !rdr.wxr; rdrClearPicture(); break;
+    case 'tws': rdr.tws = !rdr.tws; break;
+    case 'com': case 'tfc': break;   // 쓰지 않는다
   }
   msnRenderPanels();
 }
@@ -765,14 +861,22 @@ function msnAct(a) {
     case 'fly': try { toggleSim(); } catch (e) { _swallow(e); } break;
     case 'spawn': { const n = msnSpawn(6); _mToast(n ? `선박 표적 ${n}척을 둘레 바다(2~12NM)에 띄웠습니다` : '둘레에 바다가 없어 띄우지 못했습니다(지형을 아직 모르면 잠시 뒤에)'); break; }
     case 'clear': msnVslClear(); break;
+    case 'nv+': { const i = NV_RNG.indexOf(nv.nm); nv.nm = NV_RNG[_mClamp((i < 0 ? 2 : i) - 1, 0, NV_RNG.length - 1)]; break; }
+    case 'nv-': { const i = NV_RNG.indexOf(nv.nm); nv.nm = NV_RNG[_mClamp((i < 0 ? 2 : i) + 1, 0, NV_RNG.length - 1)]; break; }
+    case 'nvc': nv.ctr = null; nv.cur = null; break;
     case 'help': msnHelp(); break;
     case 'close': msnShow(false); break;
-    case 'rtx': rdr.tx = !rdr.tx; _mNote(`레이더 ${rdr.tx ? 'TX' : 'STBY'}`); break;
-    case 'rng-': rdrRngStep(-1); break; case 'rng+': rdrRngStep(1); break;
-    case 'gain-': rdr.gain = Math.max(0, rdr.gain - 10); break; case 'gain+': rdr.gain = Math.min(100, rdr.gain + 10); break;
-    case 'stc-': rdr.stc = Math.max(0, rdr.stc - 10); break; case 'stc+': rdr.stc = Math.min(100, rdr.stc + 10); break;
-    case 'ftc': rdr.ftc = !rdr.ftc; break;
-    case 'nup': rdr.nup = !rdr.nup; if (rdr.pcv) rdr.pcv.getContext('2d').clearRect(0, 0, rdr.pcv.width, rdr.pcv.height); break;
+    case 'rcmd': rdr.cmd = RDR_CMDS[(RDR_CMDS.indexOf(rdr.cmd) + 1) % 3]; _mNote(`RDR > CMD ${rdr.cmd}`); break;
+    case 'rtx': case 'rmode': case 'rng-': case 'rng+': case 'tilt-': case 'tilt+': case 'gain-': case 'gain+': case 'rsec': case 'rfrz': case 'ronly':
+      if (!_rdrGuard(a)) break;
+      if (a === 'rtx') rdrTx(!rdr.tx);
+      else if (a === 'rmode') RDR_MENU.FNC[0].set(1);
+      else if (a === 'rng-') rdrRngStep(-1); else if (a === 'rng+') rdrRngStep(1);
+      else if (a === 'tilt-') rdr.tilt = Math.max(-30, rdr.tilt - 1); else if (a === 'tilt+') rdr.tilt = Math.min(30, rdr.tilt + 1);
+      else if (a === 'gain-') rdr.gain = Math.max(0, rdr.gain - 1); else if (a === 'gain+') rdr.gain = Math.min(30, rdr.gain + 1);
+      else if (a === 'rsec') RDR_MENU.FNC[5].set(1);
+      else if (a === 'rfrz') rdr.frz = !rdr.frz; else if (a === 'ronly') rdr.ronly = !rdr.ronly;
+      break;
     case 'r2eo': rdrSlaveEo(); break;
     case 'r2sl': if (rdr.tgt) srchMode('RDR'); else _mToast('먼저 레이더 화면에서 표적을 누르십시오'); break;
     case 'rclr': rdr.tgt = null; break;
@@ -788,7 +892,9 @@ function msnHelp() {
   const t = ['흰수리 전탐석 — EO/IR · SAR 레이더 · 서치라이트',
     '· 표시기: MULTI 4분할(왼쪽 위 지도 · 오른쪽 위 호이스트 카메라 · 왼쪽 아래 레이더 · 오른쪽 아래 EO/IR) · SPLIT 2분할(CH 로 짝 바꾸기) · V-IN 1~4 / VIDEO / NAVI 한 화면 · ▲▼ 밝기 · M-PWR',
     '· 탐색등 조작기(오른쪽 위): LAMP 켜고 끄기 · MAN/AUTO(EO/IR 연동) · 조이스틱으로 돌림 · INIT/STOW · 표시등(PWR · LAMP · AUTO · STW …) — 나머지 기능은 교범을 받아 더합니다',
-    '· 레이더 조작기(CLN): 손잡이 돌림 지도 확대 · 축소 · 8방향 커서 · 누름 표적 지정(0.5초 — 지도 가운데로) · MAP · ESC · CLR · WXR(레이더 표적 겹) · TWS(지형 겹)',
+    '· 탐색레이더(Seaspray 5000E · VCCP): RDR > CMD 가 CKPT(조종실)이면 전탐석은 다루지 못한다 — FNC 메뉴의 RDR > CMD 를 CABIN · SHARED 로',
+    '  손잡이 돌림 — 거리 10~200NM(메뉴가 열려 있으면 칸 옮기기) · 누름 — 메뉴 실행 · 커서 자리 표적 추적(TRK) · 4축 — 커서',
+    '  FNC 메인(MODE LRS·WX·PT·SART·ISAR · TX/STBY · CMD · TILT · GAIN · SCAN · FREEZE) · MAP(WXR · TWS · R ONLY · RANGE) · ESC · CLR · WXR 강수 겹 · TWS 지형 겹 · 다시 켜면 90초 예열',
     '· EO/IR: 조이스틱(화면 HCU 가운데 · 실제 조종 장치의 사이클릭 축)으로 터릿을 돌린다. ZOOM ▲확대 ▼축소 · VIC 센서(EOW → EON → IR) · 2X 전자 줌 · POL 백상/흑상',
     '· AVT: 한 번 누르면 게이트(ACQ) — 표적을 게이트에 넣고 한 번 더 누르면 잠금(LOCKED) · 1.5초 누르면 해제',
     '· AUTO: 지금 보는 자리를 좌표로 고정 · MANUAL: 수동 · AID: 지면 고정 보조 · ZMULTI: 화각에 맞춘 감도',
@@ -819,7 +925,7 @@ function _msnJoyAxes() {
 // 지도 하나를 그릇(_eoHost)에 담아 둔다 — 전탐석이 열려 있으면 그 화면 안에, 아니면 화면 밖에 두고
 // 조종석 SYSTEM 창 Video(Channel EO/IR) · 3D 조종석 MFD 가 그 그림을 옮겨 그린다(eoirVideoDrawTo).
 // 보는 곳이 없으면(5초) 거둔다 — 그래픽 부담.
-let _eoHost = null, _eoWantT = 0;
+let _eoHost = null, _eoWantT = -Infinity;   // 처음에는 아무도 보지 않는다(0 이면 페이지가 뜨자마자 5초 동안 3D 지도를 만들었다 — 페이지마다)
 const EO_IDLE_MS = 5000;
 function _eoNeed() { return msnOpen || performance.now() - _eoWantT < EO_IDLE_MS; }
 function _eoHostPlace() {
@@ -1092,45 +1198,93 @@ function _eoHud(cv, W, H) {
   _eoHudG(g, 0, 0, W, H, true);
 }
 // 레이더 화면
-function _rdrDraw(cv) {
-  if (!(cv.width > 0 && cv.height > 0)) return;
-  const g0 = cv.getContext('2d'); g0.setTransform(1, 0, 0, 1, 0, 0); g0.fillStyle = '#000'; g0.fillRect(0, 0, cv.width, cv.height);
-  const M = Math.min(cv.width, cv.height); g0.save(); g0.translate((cv.width - M) / 2, (cv.height - M) / 2);
-  try { _rdrDrawSq(g0, M); } finally { g0.restore(); }
+// 탐색레이더 화면 — 부채꼴(Sector · B-scope) · 240°(E-scan)는 가운데가 안테나
+function _rdrGeo(W, H) {
+  const top = 64, bot = 46;   // 위 — 채널 이름(CH2) 한 줄 + 머리 글 두 줄
+  if (rdr.sector <= 120) { const half = rdr.sector / 2 * _mD, R = Math.max(40, Math.min(H - top - bot - 8, (W / 2 - 12) / Math.max(0.5, Math.sin(half)))); return { ox: W / 2, oy: H - bot - 4, R }; }
+  const R = Math.max(40, Math.min(W / 2 - 14, (H - top - bot) / 2 - 4)); return { ox: W / 2, oy: top + (H - top - bot) / 2 + 4, R };
 }
-function _rdrDrawSq(g, M) {
-  const W = M, H = M;
-  const c = W / 2, R = W / 2 * 0.92, C = '#3dff6a', k = W / 400;
-  if (rdr.tx && rdr.pcv) g.drawImage(rdr.pcv, c - R, c - R, 2 * R, 2 * R);
-  g.strokeStyle = 'rgba(61,255,106,0.45)'; g.lineWidth = 1;
-  for (let i = 1; i <= 4; i++) { g.beginPath(); g.arc(c, c, R * i / 4, 0, 2 * Math.PI); g.stroke(); }
-  g.font = `${Math.round(11 * k)}px monospace`; g.fillStyle = C; g.textAlign = 'center';
-  const up = rdr.nup ? 0 : S.hdg;
-  for (let b = 0; b < 360; b += 30) { const a = (b - up) * _mD; g.fillText(String(b).padStart(3, '0'), c + Math.sin(a) * (R + 9 * k) * 0.97, c - Math.cos(a) * (R + 9 * k) * 0.97 + 4 * k); }
-  // 기수선 · 북쪽
-  const ha = (S.hdg - up) * _mD; g.strokeStyle = 'rgba(255,255,255,0.6)'; g.beginPath(); g.moveTo(c, c); g.lineTo(c + Math.sin(ha) * R, c - Math.cos(ha) * R); g.stroke();
-  // 소인선
-  if (rdr.tx) { const sa = rdr.ang * _mD; g.strokeStyle = 'rgba(120,255,150,0.9)'; g.lineWidth = 2; g.beginPath(); g.moveTo(c, c); g.lineTo(c + Math.sin(sa) * R, c - Math.cos(sa) * R); g.stroke(); }
-  const toXY = (brg, nm) => { const a = (brg - up) * _mD, r = R * nm / rdr.rng; return [c + Math.sin(a) * r, c - Math.cos(a) * r]; };
-  // EO/IR 시선 · 서치라이트 방향
-  if (eo.pwr && eo.mode !== 'STOW') {
-    const p = eoAimPoint(), brg = normA(S.hdg + eo.az);
-    g.strokeStyle = 'rgba(80,220,255,0.85)'; g.setLineDash([5, 4]); g.lineWidth = 1.5; const [x1, y1] = toXY(brg, rdr.rng); g.beginPath(); g.moveTo(c, c); g.lineTo(x1, y1); g.stroke(); g.setLineDash([]);
-    if (p) { const nm = distance(S.lat, S.lon, p.lat, p.lon); if (nm < rdr.rng) { const [x, y] = toXY(bearing(S.lat, S.lon, p.lat, p.lon), nm); g.strokeStyle = '#5df'; g.beginPath(); g.arc(x, y, 5 * k, 0, 2 * Math.PI); g.stroke(); } }
+function _rdrDraw(cv) {
+  const W = cv.width, H = cv.height; if (!(W > 0 && H > 0)) return;
+  const g = cv.getContext('2d'); g.setTransform(1, 0, 0, 1, 0, 0); g.fillStyle = '#000'; g.fillRect(0, 0, W, H);
+  const k = _mClamp(Math.min(W, H) / 420, 0.6, 2), C = '#3dff6a', A = '#ffc400', G = _rdrGeo(W, H), { ox, oy, R } = G;
+  const half = rdr.sector / 2, P = (rel, nm) => [ox + Math.sin(rel * _mD) * R * nm / rdr.rng, oy - Math.cos(rel * _mD) * R * nm / rdr.rng];
+  const sectorPath = () => { g.beginPath(); g.moveTo(ox, oy); g.arc(ox, oy, R, (-90 - half) * _mD, (-90 + half) * _mD); g.closePath(); };
+  // 바탕 · 지형(TWS) · 레이더 잔상
+  g.save(); sectorPath(); g.clip();
+  if (!rdr.ronly && rdr.tws) { g.fillStyle = '#0a1430'; g.fill(); _rdrTws(g, ox, oy, R); }
+  if (rdr.tx && rdr.pcv) { const N = rdr.pcv.width, s2 = R / (N / 2 - 2); g.drawImage(rdr.pcv, ox - N / 2 * s2, oy - N / 2 * s2, N * s2, N * s2); }
+  g.restore();
+  // 거리 호 · 방위 살
+  g.strokeStyle = 'rgba(61,255,106,0.5)'; g.lineWidth = 1; g.font = `bold ${Math.round(11 * k)}px monospace`; g.fillStyle = C; g.textAlign = 'left';
+  for (let i = 1; i <= 3; i++) { g.beginPath(); g.arc(ox, oy, R * i / 3, (-90 - half) * _mD, (-90 + half) * _mD); g.stroke(); const [lx, ly] = P(Math.min(half, 45) - 6, rdr.rng * i / 3); g.fillText(`${+(rdr.rng * i / 3).toFixed(1)}`, lx + 3, ly); }
+  for (let a = -Math.floor(half / 30) * 30; a <= half; a += 30) { const [x, y] = P(a, rdr.rng); g.beginPath(); g.moveTo(ox, oy); g.lineTo(x, y); g.stroke(); g.textAlign = 'center'; g.fillText(fmtA(S.hdg + a), ox + Math.sin(a * _mD) * (R + 11 * k), oy - Math.cos(a * _mD) * (R + 11 * k) + 4 * k); }
+  // 스캔선
+  if (rdr.tx && !rdr.frz) { const [x, y] = P(rdr.az, rdr.rng); g.strokeStyle = 'rgba(140,255,170,0.95)'; g.lineWidth = 2.5; g.beginPath(); g.moveTo(ox, oy); g.lineTo(x, y); g.stroke(); }
+  // EO/IR 시선 · 서치라이트
+  if (eo.pwr && eo.mode !== 'STOW' && Math.abs(eo.az) <= half) { const [x, y] = P(eo.az, rdr.rng); g.strokeStyle = 'rgba(80,220,255,0.85)'; g.setLineDash([5, 4]); g.lineWidth = 1.5; g.beginPath(); g.moveTo(ox, oy); g.lineTo(x, y); g.stroke(); g.setLineDash([]); }
+  if (typeof kgLt !== 'undefined' && kgLt.srch && Math.abs(kgLt.az) <= half) { const [x, y] = P(kgLt.az, rdr.rng * 0.4); g.strokeStyle = 'rgba(255,220,80,0.8)'; g.beginPath(); g.moveTo(ox, oy); g.lineTo(x, y); g.stroke(); }
+  // SART 응답 — 바깥쪽으로 점 12개(0.64NM)
+  const sr = rdrSartReply();
+  if (sr) { const rel = normAS(sr.brg - S.hdg); if (Math.abs(rel) <= half) { g.strokeStyle = '#5ef'; g.lineWidth = 2; for (let i = 0; i < 12; i++) { const nm = sr.nm + i * 0.64; if (nm > rdr.rng) break; const [x, y] = P(rel, nm); g.beginPath(); g.arc(x, y, 3.5 * k, 0, 2 * Math.PI); g.stroke(); } const [x, y] = P(rel, sr.nm); g.fillStyle = '#5ef'; g.textAlign = 'left'; g.fillText('SART', x + 8 * k, y - 6 * k); } }
+  // 추적 표적(TRK) — 상자 · 번호 · 침로 막대
+  const now = performance.now();
+  for (const [id, no] of Object.entries(rdr.trkNo)) {
+    const p = rdr.paint[id]; if (!p || p.nm > rdr.rng) continue;
+    const rel = normAS(p.brg - S.hdg); if (Math.abs(rel) > half) continue;
+    const [x, y] = P(rel, p.nm), s2 = 8 * k, sel = id === rdr.tgt;
+    g.strokeStyle = sel ? A : '#ff5050'; g.lineWidth = 2; g.strokeRect(x - s2, y - s2, 2 * s2, 2 * s2);
+    const T = rdr.trk[id];
+    if (T && T.spd > 1) { const [la, lo] = destPoint(...destPoint(S.lat, S.lon, p.brg, p.nm), T.cse, T.spd / 60 * 3); const [x2, y2] = P(normAS(bearing(S.lat, S.lon, la, lo) - S.hdg), distance(S.lat, S.lon, la, lo)); g.beginPath(); g.moveTo(x, y); g.lineTo(x2, y2); g.stroke(); }
+    g.fillStyle = sel ? A : '#ff7070'; g.textAlign = 'left'; g.fillText(`TRK${String(no).padStart(2, '0')}`, x + s2 + 2, y - s2);
   }
-  if (typeof kgLt !== 'undefined' && kgLt.srch) { const [x, y] = toXY(normA(S.hdg + kgLt.az), rdr.rng * 0.5); g.strokeStyle = 'rgba(255,220,80,0.8)'; g.lineWidth = 1.5; g.beginPath(); g.moveTo(c, c); g.lineTo(x, y); g.stroke(); }
-  // 지정 표적
-  if (rdr.tgt && rdr.paint[rdr.tgt]) {
-    const P = rdr.paint[rdr.tgt]; if (P.nm <= rdr.rng) {
-      const [x, y] = toXY(P.brg, P.nm), s = 9 * k; g.strokeStyle = '#ffc400'; g.lineWidth = 2; g.strokeRect(x - s, y - s, 2 * s, 2 * s);
-      const T = rdr.trk[rdr.tgt]; if (T && T.spd > 1) { const [x2, y2] = toXY(...(() => { const q = destPoint(...destPoint(S.lat, S.lon, P.brg, P.nm), T.cse, T.spd / 60 * 3); return [bearing(S.lat, S.lon, q[0], q[1]), distance(S.lat, S.lon, q[0], q[1])]; })()); g.beginPath(); g.moveTo(x, y); g.lineTo(x2, y2); g.stroke(); }
-      g.fillStyle = '#ffc400'; g.textAlign = 'left'; g.fillText(rdr.tgt, x + s + 2, y - s);
-    }
+  // 커서
+  { const [x, y] = P(rdr.cur.az, rdr.cur.nm); g.strokeStyle = A; g.lineWidth = 2; g.beginPath(); g.moveTo(x - 12 * k, y); g.lineTo(x + 12 * k, y); g.moveTo(x, y - 12 * k); g.lineTo(x, y + 12 * k); g.stroke(); g.lineWidth = 1; g.beginPath(); g.arc(x, y, 15 * k, 0, 2 * Math.PI); g.stroke(); }
+  // ISAR — 추적 표적 영상
+  if (rdr.mode === 'ISAR' && rdr.tx) _rdrIsar(g, W, k);
+  // 위 · 아래 글자
+  const T2 = (s3, x, y, col = C, al = 'left', n = 12) => { g.font = `bold ${Math.round(n * k)}px monospace`; g.textAlign = al; g.fillStyle = col; g.fillText(s3, x, y); };
+  const trk = Number.isFinite(S.trk) ? S.trk : S.hdg;
+  const h1 = `Hdg ${fmtA(S.hdg)}°  Trk ${fmtA(trk)}°  SRV RDR CMD `; T2(h1, 8 * k, 38 * k); T2(rdr.cmd, 8 * k + g.measureText(h1).width, 38 * k, rdr.cmd === 'CKPT' ? A : C);
+  T2(`${rdr.mode}  RNG ${rdr.rng}NM  Tilt ${rdr.tilt > 0 ? '+' : ''}${rdr.tilt.toFixed(1)}°  Gain ${rdr.gain}  SCN ${rdr.sector}°`, 8 * k, 54 * k);
+  const fl = []; if (rdr.frz) fl.push(['FREEZE', '#ff5050']); if (rdr.ronly) fl.push(['R ONLY', '#5ef']); if (rdr.wxr) fl.push(['WXR', C]); if (!rdr.tws) fl.push(['TWS OFF', '#888']);
+  try { if (typeof instFail !== 'undefined') { if (instFail.alt !== null) fl.push(['NO ALT', A]); if (instFail.hdg) fl.push(['NO HDG', A]); } } catch (e) { _swallow(e); }
+  T2(!rdr.pwr ? 'RDR OFF' : rdr.warm > 0 ? `RDR WARM ${Math.ceil(rdr.warm)}` : rdr.tx ? 'RDR TX' : 'RDR STBY', W - 8 * k, 18 * k, rdr.tx ? C : A, 'right', 13);
+  T2(fl.map(f => f[0]).join('  '), W - 8 * k, 38 * k, fl.length ? fl[0][1] : C, 'right');
+  let ra = 0; try { ra = radarAltFt(); } catch (e) { ra = 0; }
+  const [cl, cn] = destPoint(S.lat, S.lon, normA(rdr.cur.az + S.hdg), rdr.cur.nm), dm = (v, h) => { const a = Math.abs(v), d = Math.floor(a); return `${h}${d}°${((a - d) * 60).toFixed(2).padStart(5, '0')}'`; };
+  T2(`Alt ${Math.round(S.alt)}ft  RAlt ${Math.round(ra)}ft  GS ${Math.round(S.spd)}kt  ${dm(S.lat, S.lat >= 0 ? 'N' : 'S')} ${dm(S.lon, S.lon >= 0 ? 'E' : 'W')}`, 8 * k, H - 24 * k);
+  T2(`CUR ${rdr.cur.nm.toFixed(1)}NM ${fmtA(rdr.cur.az + S.hdg)}°  ${dm(cl, cl >= 0 ? 'N' : 'S')} ${dm(cn, cn >= 0 ? 'E' : 'W')}`, 8 * k, H - 8 * k, A);
+  if (!rdr.tx) T2(rdr.pwr ? (rdr.warm > 0 ? '예열 중 — 90초 뒤 TX' : 'STANDBY — TX 를 누르십시오') : '전원 꺼짐', W / 2, oy - R * 0.45, '#888', 'center', 13);
+  // 메뉴(FNC · MAP)
+  if (rdr.menu) {
+    const M = RDR_MENU[rdr.menu], mw = 250 * k, mh = (M.length * 20 + 34) * k, mx = W / 2 - mw / 2, my = 64 * k;
+    g.fillStyle = 'rgba(0,18,8,0.9)'; g.fillRect(mx, my, mw, mh); g.strokeStyle = C; g.lineWidth = 1; g.strokeRect(mx, my, mw, mh);
+    T2(rdr.menu === 'FNC' ? 'MAIN' : 'MAP', W / 2, my + 18 * k, C, 'center', 13);
+    M.forEach((m, i) => { const y = my + (40 + i * 20) * k; if (i === rdr.menuI) { g.fillStyle = 'rgba(61,255,106,0.25)'; g.fillRect(mx + 4, y - 14 * k, mw - 8, 18 * k); } T2(m.n, mx + 10 * k, y, C); T2(String(m.v()), mx + mw - 10 * k, y, i === rdr.menuI ? A : C, 'right'); });
   }
-  g.textAlign = 'left'; g.fillStyle = C; g.font = `bold ${Math.round(12 * k)}px monospace`;
-  g.fillText(rdr.tx ? 'TX' : 'STBY', 8 * k, H - 22 * k); g.fillText(`${rdr.rng}NM`, 8 * k, H - 8 * k);   // 왼쪽 위는 채널 이름(CH2) 자리
-  g.textAlign = 'right'; g.fillText(`${rdr.nup ? 'N UP' : 'H UP'}  G${rdr.gain}`, W - 8 * k, 16 * k); g.fillText(`STC${rdr.stc}${rdr.ftc ? ' FTC' : ''}`, W - 8 * k, 31 * k);
-  if (!rdr.tx) { g.textAlign = 'center'; g.fillStyle = '#888'; g.fillText('STANDBY — TX 를 누르십시오', c, c + 30 * k); }
+}
+// TWS — 지형 겹(육지를 어두운 녹색으로) · 2초마다 다시 셈
+function _rdrTws(g, ox, oy, R) {
+  const key = `${rdr.rng}|${Math.round(S.hdg)}|${S.lat.toFixed(3)}|${S.lon.toFixed(3)}|${rdr.sector}`, now = performance.now();
+  if (!rdr.twsC || (rdr.twsK !== key && now - rdr.twsT > 2000)) {
+    const N = 200, cv = rdr.twsC || document.createElement('canvas'); cv.width = cv.height = N; const q = cv.getContext('2d'); q.clearRect(0, 0, N, N);
+    q.fillStyle = 'rgba(70,95,55,0.75)'; const c = N / 2, Rr = N / 2 - 2, half = rdr.sector / 2;
+    for (let a = -half; a <= half; a += 3) for (let b = 1; b <= 30; b++) { const nm = rdr.rng * b / 30, [la, lo] = destPoint(S.lat, S.lon, normA(a + S.hdg), nm); if (!_mWater(la, lo)) { const r = Rr * b / 30; q.fillRect(c + Math.sin(a * _mD) * r - 3, c - Math.cos(a * _mD) * r - 3, 6, 6); } }
+    rdr.twsC = cv; rdr.twsK = key; rdr.twsT = now;
+  }
+  const N = rdr.twsC.width, s2 = R / (N / 2 - 2); g.drawImage(rdr.twsC, ox - N / 2 * s2, oy - N / 2 * s2, N * s2, N * s2);
+}
+// ISAR — 지정 표적의 옆모습(길이 · 도플러 줄)
+function _rdrIsar(g, W, k) {
+  const c = rdr.tgt && msnContacts().find(x => x.id === rdr.tgt);
+  const w = 170 * k, h = 96 * k, x = W - w - 8 * k, y = 62 * k;
+  g.fillStyle = 'rgba(0,10,0,0.9)'; g.fillRect(x, y, w, h); g.strokeStyle = '#3dff6a'; g.lineWidth = 1; g.strokeRect(x, y, w, h);
+  g.fillStyle = '#3dff6a'; g.font = `bold ${Math.round(11 * k)}px monospace`; g.textAlign = 'left';
+  if (!c) { g.fillText('ISAR — 표적을 추적하십시오', x + 6 * k, y + 16 * k); return; }
+  g.fillText(`ISAR TRK${String(rdr.trkNo[c.id] || 0).padStart(2, '0')}  ${Math.round(c.len)}M`, x + 6 * k, y + 15 * k);
+  const L = Math.min(w - 20 * k, (w - 20 * k) * c.len / 130 + 20 * k), cx = x + w / 2, cy = y + h * 0.66, t = performance.now() / 300;
+  for (let i = 0; i < 26; i++) { const px = cx - L / 2 + L * i / 25, hh = (c.kind === 'vsl' || c.kind === 'ship') ? (i > 8 && i < 16 ? 22 : 9) * k : 6 * k; g.fillStyle = `rgba(120,255,140,${(0.4 + 0.5 * Math.abs(Math.sin(t + i))).toFixed(2)})`; g.fillRect(px, cy - hh, Math.max(1.5, L / 30), hh); }
 }
 function msnRenderHcu() {
   if (!_msnEl) return;
@@ -1144,7 +1298,9 @@ function msnRenderPanels() {
   if (!_msnEl) return;
   const set = (a, on) => { const b = _msnEl.querySelector(`[data-mact="${a}"]`); if (b) b.classList.toggle('on', !!on); };
   set('fly', S.running); const fb = _msnEl.querySelector('[data-mact="fly"]'); if (fb) fb.textContent = S.running ? '❚❚ 멈춤' : '▶ 비행';
-  set('rtx', rdr.tx); set('ftc', rdr.ftc); const nb = _msnEl.querySelector('[data-mact="nup"]'); if (nb) nb.textContent = rdr.nup ? 'N UP' : 'H UP';
+  set('rtx', rdr.tx); set('rfrz', rdr.frz); set('ronly', rdr.ronly); set('rcmd', rdr.cmd !== 'CKPT');
+  const lb = (a, t) => { const b = _msnEl.querySelector(`[data-mact="${a}"]`); if (b) b.textContent = t; };
+  lb('rmode', `MODE ${rdr.mode}`); lb('rcmd', `CMD ${rdr.cmd}`); lb('rsec', `SCAN ${rdr.sector}°`); lb('rtx', rdr.tx ? 'TX' : rdr.warm > 0 ? `WARM ${Math.ceil(rdr.warm)}` : 'STBY');
   const sOn = typeof kgLt !== 'undefined' && kgLt.srch;
   set('slon', sOn); set('slman', srch.mode === 'MAN'); set('sleo', srch.mode === 'EO'); set('slrdr', srch.mode === 'RDR');
   const ac = _msnEl.querySelector('[data-m="ac"]'); if (ac) ac.textContent = `HDG ${fmtA(S.hdg)}  ALT ${Math.round(S.alt)}FT  GS ${Math.round(S.spd)}KT`;
@@ -1156,7 +1312,7 @@ function msnRenderPanels() {
   }
   slcRender();
   _msnEl.querySelectorAll('[data-dk]').forEach(b => { const k = b.dataset.dk; b.classList.toggle('on', (k === 'multi' && disp.lay === 'quad') || (k === 'split' && disp.lay === 'split') || (k === 'pip' && eo.pip !== 'OFF') || (k === 'pwr' && disp.pwr) || (k === 'navi' && disp.lay === 'one' && disp.ch === 4) || (k === 'v' + disp.ch && disp.lay === 'one')); });
-  _msnEl.querySelectorAll('[data-cln]').forEach(b => { const k = b.dataset.cln; if (k === 'wxr') b.classList.toggle('on', nv.wxr); if (k === 'tws') b.classList.toggle('on', nv.terr); });
+  _msnEl.querySelectorAll('[data-cln]').forEach(b => { const k = b.dataset.cln; if (k === 'wxr') b.classList.toggle('on', rdr.wxr); if (k === 'tws') b.classList.toggle('on', rdr.tws); if (k === 'map') b.classList.toggle('on', rdr.menu === 'MAP'); if (k === 'fnc') b.classList.toggle('on', rdr.menu === 'FNC'); });
   const sd = _msnEl.querySelector('[data-m="sdata"]');
   if (sd && typeof kgLt !== 'undefined') sd.textContent = `${sOn ? 'ON' : 'OFF'}  ${srch.mode === 'EO' ? 'EO/IR SLAVE' : srch.mode === 'RDR' ? 'RADAR SLAVE' : 'MANUAL'}${srch.lim ? '  LIMIT' : ''}\nAZ ${kgLt.az >= 0 ? '+' : ''}${kgLt.az.toFixed(0)}°  DN ${kgLt.el.toFixed(0)}°`;
 }
@@ -1182,7 +1338,6 @@ function _nvRender(cell) {
   const z = Math.log2(40075016.686 * Math.cos(S.lat * _mD) / (512 * mpp));
   let c = nv.ctr; if (!c) { const [la, lo] = destPoint(S.lat, S.lon, S.hdg, nv.nm * 0.45 * H / W); c = { lat: la, lon: lo }; }
   try { map.jumpTo({ center: [c.lon, c.lat], zoom: z, bearing: hdgUp ? S.hdg : 0, pitch: 0 }); } catch (e) { _swallow(e); }
-  el.style.opacity = nv.terr ? '1' : '0.35';
   const d = _msnFit(ov), k = d.W / Math.max(1, W), g = ov.getContext('2d');
   g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, d.W, d.H); g.setTransform(k, 0, 0, k, 0, 0);
   const P = (lat, lon) => { try { return map.project([lon, lat]); } catch (e) { return null; } };
@@ -1211,7 +1366,7 @@ function _nvRender(cell) {
   const now = performance.now();
   for (const c2 of msnContacts()) {
     const pnt = rdr.paint[c2.id], painted = pnt && now - pnt.t < RDR_RPM_S * 1500;
-    if (!(nv.wxr && painted) && c2.id !== rdr.tgt) continue;
+    if (!(rdr.tx && painted) && c2.id !== rdr.tgt) continue;
     const q = P(c2.lat, c2.lon); if (!q) continue;
     g.fillStyle = c2.kind === 'air' ? '#9ff' : '#ffef6a'; g.beginPath(); g.moveTo(q.x, q.y - 6); g.lineTo(q.x + 6, q.y); g.lineTo(q.x, q.y + 6); g.lineTo(q.x - 6, q.y); g.fill();
     if (c2.id === rdr.tgt) { g.strokeStyle = '#ffc400'; g.lineWidth = 2; g.strokeRect(q.x - 10, q.y - 10, 20, 20); g.fillStyle = '#ffc400'; g.font = 'bold 11px Arial'; g.textAlign = 'left'; g.fillText(c2.id, q.x + 12, q.y - 8); }
@@ -1227,11 +1382,11 @@ function _nvRender(cell) {
   tx(`${dms(ref.lat, ref.lat >= 0 ? 'N' : 'S')}, ${dms(ref.lon, ref.lon >= 0 ? 'E' : 'W')}`, W * 0.22, 46, '#3dff6a');
   g.textAlign = 'right'; tx(`${d2(t.getHours())}:${d2(t.getMinutes())}:${d2(t.getSeconds())}`, W - 10, 30, '#ffd23a');
   g.textAlign = 'left'; g.font = 'bold 11px Arial';
-  tx(`${nv.nm * 2}NM  ${hdgUp ? 'HDG UP' : 'N UP'}${nv.wxr ? '  WXR' : ''}${nv.terr ? '' : '  TERR OFF'}`, 8, H - 8, '#cfe');
+  tx(`${nv.nm * 2}NM  ${hdgUp ? 'HDG UP' : 'N UP'}`, 8, H - 8, '#cfe');
   g.setTransform(1, 0, 0, 1, 0, 0);
 }
 // ── 호이스트 카메라 칸(오른쪽 위) — 24-sar.js HOIST CAM 을 옮겨 그린다 ──
-let _hcWantT = 0;
+let _hcWantT = -Infinity;
 function msnHoistWant() { return performance.now() - _hcWantT < 3000; }
 function _hcRender(cell) {
   const cv = cell.querySelector('.hc-cv'), d = _msnFit(cv); if (!(d.W > 0)) return;

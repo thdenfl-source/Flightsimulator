@@ -94,7 +94,7 @@ export async function run(page, t) {
     const s = await tb.evaluate(() => ({ locked: window.gateLocked, shown: getComputedStyle(document.getElementById('gate-overlay')).display !== 'none',
       choose: getComputedStyle(document.getElementById('gate-mode')).display !== 'none', pwHidden: getComputedStyle(document.getElementById('gate-pw')).display === 'none',
       ac: document.querySelectorAll('.gate-ac-btn').length }));
-    t.ok(s.shown && s.choose && s.pwHidden && s.ac === 3, '절차 훈련판 — 비밀번호 없이 처음부터 화면 · 기종 고르기');
+    t.ok(s.shown && s.choose && s.pwHidden && s.ac === 4, `절차 훈련판 — 비밀번호 없이 처음부터 화면 · 기종 고르기(기종 ${s.ac} — 흰수리 · Bell · R22 · 전탐석)`);
     await tb.click('#gate-mode-pc'); await tb.waitForTimeout(500);
     const e = await tb.evaluate(() => ({ locked: window.gateLocked, shown: getComputedStyle(document.getElementById('gate-overlay')).display !== 'none', mode: sessionStorage.getItem('vfrStartMode') }));
     t.ok(!e.locked && !e.shown && e.mode === 'pc', '절차 훈련판 — 화면을 고르면 바로 열린다');
