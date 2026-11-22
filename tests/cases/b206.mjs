@@ -33,7 +33,7 @@ export async function run(page, t) {
     return o;
   });
   t.ok(A.ac === 'b206' && A.cls && A.info === 1, `?ac=b206 — 기종 Bell 206B-3(단발) (${A.ac})`);
-  t.ok(A.gate === 4 && /R22/.test(A.gateTxt) && /흰수리 전탐석/.test(A.gateTxt) && /KUH-1CG/.test(A.gateTxt) && !/AW189/.test(A.gateTxt) && /GLASS Cockpit/.test(A.gateSub), `시작 화면에 기종 고르기 버튼 넷(흰수리 · Bell 206 · R22 · 흰수리 전탐석) — 흰수리는 KUH-1CG (${A.gateTxt} · ${A.gateSub})`);
+  t.ok(A.gate === 3 && /R22/.test(A.gateTxt) && !/전탐석/.test(A.gateTxt) && /KUH-1CG/.test(A.gateTxt) && !/AW189/.test(A.gateTxt) && /GLASS Cockpit/.test(A.gateSub), `시작 화면에 기종 고르기 버튼 셋(흰수리 · Bell 206 · R22 — 전탐석은 LOFT 모드로) — 흰수리는 KUH-1CG (${A.gateTxt} · ${A.gateSub})`);
   t.ok(A.nB === 1 && A.nAI === 0, `PFD 창에는 유리 PFD 대신 Bell 206 아날로그 계기판 (b206Draw ${A.nB} · drawAI ${A.nAI})`);
   t.ok(A.v.nr > 95 && A.v.nr < 105 && A.v.n2 > 95 && A.v.n2 <= 100, `회전계 — NR ${A.v.nr.toFixed(0)}% · N2 ${A.v.n2.toFixed(0)}%`);
   t.ok(A.v.tq > 0 && A.v.tq < 100 && A.v.n1 > 60 && A.v.n1 < 106 && A.v.tot > 400 && A.v.tot < 810 && A.v.gal > 0 && A.v.gal <= 91,
@@ -85,12 +85,13 @@ export async function run(page, t) {
     const o = { ovhd: document.getElementById('lcon-wrap').parentElement.id, h: document.getElementById('lcon-wrap').getBoundingClientRect().height };
     exitSolo(); await w(500);
     o.back = document.getElementById('lcon-wrap').parentElement.id;
+    o.rightShows = rightSel === 'lcon' && (document.getElementById('right-panel').contains(document.getElementById('lcon-wrap')) || !!document.querySelector('#right-panel .mirror-box'));
     try { if (simModeOn) toggleSimMode(false); } catch (e) { /* 그만 */ }
     S.alt = 0; S.spd = 0; S.running = false;
     return o;
   });
   t.ok(U.ovhd === 'ck-mini-lcon' && U.h > 20, `LOWER 를 띄운 채 Cockpit 모드 — 하부 콘솔(무전 스택)이 조종석에 보인다 (${U.ovhd} · 높이 ${Math.round(U.h)})`);
-  t.ok(U.back === 'right-panel', `분할 화면으로 돌아오면 오른쪽 창으로 돌아간다 (${U.back})`);
+  t.ok(/^(right|mid)-panel$/.test(U.back) && U.rightShows, `분할 화면으로 돌아오면 창으로 돌아간다 · 오른쪽 창에 LOWER(진짜 또는 거울 — 가운데 창도 LOWER 면) (${U.back})`);
 
   // 기종 바꾸기 — 적어 두기만(다시 불러오지 않고)
   const P = await page.evaluate(() => { setAircraftType('aw189', false); const a = localStorage.getItem('shineAc'); setAircraftType('b206', false); return { a, b: localStorage.getItem('shineAc'), bad: setAircraftType('xx', false) }; });

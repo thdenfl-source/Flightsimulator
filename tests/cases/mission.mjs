@@ -2,7 +2,8 @@
 export const name = '흰수리 전탐석 — EO/IR · 레이더 · 서치라이트';
 
 export async function run(page, t) {
-  t.ok(await page.evaluate(() => !!document.querySelector('.gate-ac-btn[data-ac="kuhm"]')), '시작 화면 기종 고르기에 "흰수리 전탐석" 이 있다');
+  t.ok(await page.evaluate(() => !document.querySelector('.gate-ac-btn[data-ac="kuhm"]') && /LOFT/.test((document.getElementById('gate-mode-loft') || {}).textContent || '')),
+    '시작 화면 — 기종 고르기에서 전탐석을 빼고, 화면 고르기에 LOFT(조종석 + 전탐석) 모드');
   // 흰수리 조종석(전탐석이 아닌 페이지) — 아무도 EO/IR 영상을 보지 않으면 3D 지도를 만들지 않는다(페이지가 뜨자마자 만들어 CI 가 느려졌다)
   const idle = await page.evaluate(async () => { await new Promise(r => setTimeout(r, 400)); return { map: _eoMap, need: _eoNeed(), hw: msnHoistWant(), t: Math.round(performance.now()) }; });
   t.ok(idle.map === null && !idle.need && !idle.hw, `흰수리 조종석 — 보는 곳이 없으면 EO/IR · 호이스트 지도를 만들지 않는다(${idle.t}ms)`);
@@ -236,6 +237,21 @@ export async function run(page, t) {
   t.ok(D.dvExp && D.dvOff, 'USB 내보내기 — 채널마다 MJPEG AVI(RIFF · MJPG) · POWER OFF 면 녹화 멈춤');
   const errs = (page.errors || []).filter(e => !/Failed to fetch|NetworkError|tile/i.test(e));
   t.eq(errs.length, 0, `페이지 오류 없음${errs.length ? ' — ' + errs[0] : ''}`);
+  // ── LOFT — 조종석 오른쪽 버튼 줄 맨 아래 🎯 전탐석 · 전탐석 ⧉ 새 창 ──
+  const L = await page.evaluate(async () => {
+    const w = ms => new Promise(r => setTimeout(r, ms)), o = {};
+    msnShow(false); cockpitStart(); await w(1500);
+    const b = document.getElementById('msn-open-btn'), ctl = document.getElementById('ctl3d');
+    o.ctl = !!ctl && b.parentElement === ctl && ctl.lastElementChild === b;
+    o.split = [...ctl.children].some(c => /Split screen/.test(c.textContent));
+    b.click(); await w(200); o.open = msnOpen;
+    o.pop = msnPopout(); await w(800); o.popped = msnPopped() && document.getElementById('msn-root').ownerDocument !== window.document;
+    msnPopout(); await w(400); o.back = !msnPopped() && document.getElementById('msn-root').ownerDocument === window.document;
+    msnShow(false); try { exitSolo(); } catch (e) { /* */ } await w(300);
+    return o;
+  });
+  t.ok(L.ctl && L.split && L.open, `조종석(3D) 화면 — 🎯 전탐석 이 오른쪽 버튼 줄 맨 아래(Split screen 밑) · 누르면 전탐석 (${JSON.stringify(L)})`);
+  t.ok(L.pop && L.popped && L.back, 'LOFT — 전탐석 ⧉ 새 창(다른 모니터) · 다시 누르면 이 창으로');
   if (process.env.MSN_SHOT) { await page.evaluate(() => { msnSpawn(4); rdr.tx = true; }); await page.waitForTimeout(3500); await page.screenshot({ path: process.env.MSN_SHOT }); }
   // 다음 묶음이 전탐석을 물려받지 않게
   await page.evaluate(() => { msnShow(false); msnVslClear(); rdr.tx = false; });

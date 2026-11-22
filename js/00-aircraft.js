@@ -6,7 +6,8 @@
 //   r22   : R22 — 단발 터빈 · 아날로그 계기판(한서대 훈련기 HL9169 · HL9175 사진의 배치 · 25-b206panel.js r22Draw).
 //           Bell 206 과 같은 갈래(family) — 엔진 · 시동 · 연료 · 하부 콘솔 무전 · 컬렉티브 · SIM 을 함께 쓰고,
 //           이름 · 성능(00-params.js r22Perf) · 한계 · 무게 · 계기판 배치만 다르다. acIs('b206') 는 R22 에서도 참.
-//   kuhm  : 흰수리 전탐석 — 흰수리(aw189 갈래 · acIs('aw189') 참)에 전술 임무 조작석(EO/IR · SAR 레이더 · 서치라이트 · HCU)을 얹는다(37-mission.js)
+//   kuhm  : 흰수리 + 전탐석(LOFT) — 흰수리(aw189 갈래 · acIs('aw189') 참)에 전술 임무 조작석(EO/IR · SAR 레이더 · 서치라이트 · HCU)을 얹는다(37-mission.js).
+//           기종 고르기에는 없다 — 시작 화면의 LOFT 모드가 이 기종으로 Cockpit Mode 를 연다(00-gate.js)
 // (SHINE 저장소에서 만들어 가져왔다 — SHINE 은 b206 이 기본)
 // 고르는 길: 시작 화면(00-gate.js 기종 버튼) · 주소 ?ac=b206|aw189 · localStorage 'shineAc'.
 // 이 파일은 00-edition.js 바로 뒤(index.html <head>)에 읽힌다 — 다른 파일은 acIs('b206') 로 가른다.
@@ -17,7 +18,7 @@ const AC_TYPES = {
   aw189: { name: 'KUH-1CG',     full: 'KUH-1CG (흰수리)',        engines: 2 },
   r22:   { name: 'R22',         full: 'R22 (단발 터빈 훈련기)',    engines: 1, family: 'b206' },
   // 흰수리 전탐석(전술 임무 조작석) — 기체는 흰수리 그대로(aw189 갈래), 시작하면 전탐석 화면(37-mission.js)이 뜬다
-  kuhm:  { name: 'KUH-1CG MSN', full: 'KUH-1CG 전탐석 (EO/IR · SAR 레이더 · 서치라이트)', engines: 2, family: 'aw189' },
+  kuhm:  { name: 'KUH-1CG LOFT', full: 'KUH-1CG LOFT (조종석 + 전탐석 EO/IR · SAR 레이더 · 서치라이트)', engines: 2, family: 'aw189' },
 };
 const AC_PREF = 'shineAc';
 const AC_TYPE = (() => {

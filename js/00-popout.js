@@ -272,6 +272,17 @@
     try { if (typeof simLayoutSync === 'function') simLayoutSync(); } catch (e) { /* 무시 */ }
     return ok;
   }
+  // 요소 하나(패널 · 화면이 아닌 것 — 예: 전탐석 #msn-root)를 새 창으로. 같은 이름으로 한 번 더 부르면 제자리로
+  function popoutElement(key, elId, title, size) {
+    const side = 'el-' + key;
+    if (wins.some(w => w.side === side)) return popoutClose(side);
+    if (!gid(elId)) return false;
+    PANEL_ID[side] = elId; TITLE[side] = title || key;
+    if (size) SCR_SIZE[side.replace(/^scr-/, '')] = size;
+    return popoutOpen(side);
+  }
+  function popoutHas(side) { return wins.some(w => w.side === side && !w.win.closed); }
+  function popoutFocus(side) { const w = wins.find(x => x.side === side); try { if (w) w.win.focus(); } catch (e) { /* 무시 */ } return !!w; }
   function popoutScreens() { return wins.filter(w => w.side.indexOf('scr-') === 0).map(w => w.side.slice(4)); }
   function popoutCloseAll() { wins.slice().forEach(w => popoutClose(w.side)); }
 
@@ -309,5 +320,6 @@
 
   W.popoutOpen = popoutOpen; W.popoutTop = popoutTop; W.popoutClose = popoutClose; W.popoutToggle = popoutToggle;
   W.popoutGamepads = popoutGamepads; W.popoutSides = popoutSides;
+  W.popoutElement = popoutElement; W.popoutHas = popoutHas; W.popoutFocus = popoutFocus;
   W.popoutScreen = popoutScreen; W.popoutScreens = popoutScreens; W.popoutCloseAll = popoutCloseAll; W.POPOUT_SCREENS = SCR_TITLE;
 })();

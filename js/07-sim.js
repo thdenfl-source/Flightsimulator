@@ -960,15 +960,16 @@ function fixPanelDupes() {
   }
   // Bell 206 — CDU · UPPER 자리는 LOWER(항공전자 스택)로(00-aircraft.js acScrOk)
   if (typeof acScrOk === 'function') sides.forEach(k => { if (!acScrOk(panelGet(k))) panelSet(k, k === 'left' ? 'pfd' : k === 'right' ? 'map' : 'lcon'); });
-  const seen = new Set();
+  const seen = new Set(), seenV = new Set();
+  const mirOk = v => typeof MIRROR_OK !== 'undefined' && MIRROR_OK.has(v);   // 같은 화면을 두 창에 — 거울 창(38-mirror.js)
   sides.forEach(k => {
     let v = panelGet(k);
     const ok = x => typeof acScrOk !== 'function' || acScrOk(x);   // 기종에 없는 화면(Bell 206 — CDU · UPPER)은 고르지 않는다
-    if (seen.has(panelFam(v)) || !ok(v)) {
+    if ((seen.has(panelFam(v)) && !(seenV.has(v) && mirOk(v))) || !ok(v)) {
       v = (solo ? ['pfd', 'map', 'cdu', 'm3d', 'lcon', 'sysp'] : ['map', 'cdu', 'lcon', 'm3d', 'sysp']).find(x => ok(x) && !seen.has(panelFam(x))) || 'map';   // Bell 206 은 CDU 자리에 LOWER(무전 · 항법 스택)
       panelSet(k, v);
     }
-    seen.add(panelFam(v));
+    seen.add(panelFam(v)); seenV.add(v);
   });
 }
 
@@ -979,8 +980,11 @@ function selectPanel(side, sel, force) {
   // 같은 창을 이미 다른 패널이 갖고 있으면 서로 맞바꾼다(창이 사라지지 않게).
   // CDU 와 PLAN 은 '한 창의 두 화면' 이므로 같은 것으로 친다 — 따로 보면
   // 두 패널에 CDU 가 겹쳐 뜨고, 한쪽에서 FPL 을 눌러도 다른 쪽이 바뀐다.
+  // 다만 같은 화면(PFD · CDU · UPPER · LOWER · SYSTEM …)을 고르면 맞바꾸지 않고 둘 다 띄운다 — 한쪽은 거울 창(38-mirror.js)
   const holder = sides.find(k => k !== side && panelFam(get(k)) === panelFam(sel));
-  if (holder) set(holder, get(side));
+  //   (탭을 눌러 고를 때만 — 프로그램이 부르는 것(force)은 종전처럼 맞바꾼다: 단독 화면 · Flight Plan · SIM 창 배치 등)
+  const dup = !force && holder && get(holder) === sel && typeof MIRROR_OK !== 'undefined' && MIRROR_OK.has(sel);
+  if (holder && !dup) set(holder, get(side));
   set(side, sel);
   applyPanels();
 }
@@ -1053,6 +1057,8 @@ function applyPanels() {
     const pop = ckC(k, 'pop'); if (pop) return pop;
     let h = hostOf0(k);
     if ((k === 'ovhd' || k === 'lcon') && h && [L, M, R, B].includes(h) && !_vis(h)) h = null;
+    // CDU — 조종석만 띄운 Cockpit Mode 가 아니어도(분할 창 · SIM Mode 새 창의 3D 조종석) 다른 곳에 없으면 조종석 CDU 칸에
+    if (!h && k === 'cdu') { try { if (!cduOvActive()) return _ckCduSlot(); } catch (e) { _swallow(e); } }
     return h || (k === 'map' ? sysMapHost() : null) || ckC(k, 'mini');
   };
   ['pfd', 'map', 'cdu', 'm3d', 'plan', 'ovhd', 'sysp', 'lcon', 'grip'].forEach(k => {
@@ -1073,6 +1079,26 @@ function applyPanels() {
   if (hostOf('sysp')) { try { if (typeof sysShow === 'function') requestAnimationFrame(sysShow); } catch (e) { _swallow(e); } }
   if (hostOf('grip')) { try { if (typeof gripPanelRender === 'function') gripPanelRender(true); } catch (e) { _swallow(e); } }
   try { syncChinView(); } catch (e) { _swallow(e); }
+  // 거울 창(38-mirror.js) — 진짜 화면이 다른 곳에 있는 자리: ① 같은 화면을 고른 다른 창(패널) ② 3D 조종석의 작은 콘솔 · CDU 칸
+  try {
+    if (typeof mirrorSync === 'function') {
+      const want = [], srcOf = k => document.getElementById(wrapIds[k]);
+      const sideEl = { left: L, mid: M, right: R, bot: B };
+      panelSides().forEach(sd => {
+        const k = panelGet(sd), P = sideEl[sd];
+        if (!P || !MIRROR_OK.has(k) || (typeof acScrOk === 'function' && !acScrOk(k))) return;
+        const src = srcOf(k); if (!src || P.contains(src) || (k === 'cdu' && P.contains(document.getElementById('cdu-ov')))) return;
+        want.push({ host: P, k, src });
+      });
+      if (typeof ckpitWanted === 'function' && ckpitWanted()) ['ovhd', 'lcon', 'sysp', 'cdu'].forEach(k => {
+        const slot = document.getElementById('ck-mini-' + k), src = srcOf(k);
+        if (!slot || !src || slot.contains(src) || (typeof acScrOk === 'function' && !acScrOk(k))) return;
+        if (k === 'cdu' && slot.querySelector('#cdu-ov')) return;
+        want.push({ host: slot, k, src, passive: true });   // 누르면 그 칸이 크게(팝아웃 — 진짜 화면이 그리 온다)
+      });
+      mirrorSync(want);
+    }
+  } catch (e) { _swallow(e); }
 
   // PFD 호스트 패널은 FCP 조작부가 다 보이도록 넓게(2분할 55% / 3분할 1.4배)
   L.classList.toggle('pfd-host', leftSel === 'pfd');
