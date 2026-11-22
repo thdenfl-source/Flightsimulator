@@ -819,7 +819,7 @@ function _msnJoyAxes() {
 // 지도 하나를 그릇(_eoHost)에 담아 둔다 — 전탐석이 열려 있으면 그 화면 안에, 아니면 화면 밖에 두고
 // 조종석 SYSTEM 창 Video(Channel EO/IR) · 3D 조종석 MFD 가 그 그림을 옮겨 그린다(eoirVideoDrawTo).
 // 보는 곳이 없으면(5초) 거둔다 — 그래픽 부담.
-let _eoHost = null, _eoWantT = 0;
+let _eoHost = null, _eoWantT = -Infinity;   // 처음에는 아무도 보지 않는다(0 이면 페이지가 뜨자마자 5초 동안 3D 지도를 만들었다 — 페이지마다)
 const EO_IDLE_MS = 5000;
 function _eoNeed() { return msnOpen || performance.now() - _eoWantT < EO_IDLE_MS; }
 function _eoHostPlace() {
@@ -1231,7 +1231,7 @@ function _nvRender(cell) {
   g.setTransform(1, 0, 0, 1, 0, 0);
 }
 // ── 호이스트 카메라 칸(오른쪽 위) — 24-sar.js HOIST CAM 을 옮겨 그린다 ──
-let _hcWantT = 0;
+let _hcWantT = -Infinity;
 function msnHoistWant() { return performance.now() - _hcWantT < 3000; }
 function _hcRender(cell) {
   const cv = cell.querySelector('.hc-cv'), d = _msnFit(cv); if (!(d.W > 0)) return;

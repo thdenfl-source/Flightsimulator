@@ -3,6 +3,9 @@ export const name = '흰수리 전탐석 — EO/IR · 레이더 · 서치라이�
 
 export async function run(page, t) {
   t.ok(await page.evaluate(() => !!document.querySelector('.gate-ac-btn[data-ac="kuhm"]')), '시작 화면 기종 고르기에 "흰수리 전탐석" 이 있다');
+  // 흰수리 조종석(전탐석이 아닌 페이지) — 아무도 EO/IR 영상을 보지 않으면 3D 지도를 만들지 않는다(페이지가 뜨자마자 만들어 CI 가 느려졌다)
+  const idle = await page.evaluate(async () => { await new Promise(r => setTimeout(r, 400)); return { map: _eoMap, need: _eoNeed(), hw: msnHoistWant(), t: Math.round(performance.now()) }; });
+  t.ok(idle.map === null && !idle.need && !idle.hw, `흰수리 조종석 — 보는 곳이 없으면 EO/IR · 호이스트 지도를 만들지 않는다(${idle.t}ms)`);
   const u = new URL(page.url()); u.searchParams.set('ac', 'kuhm');
   await page.goto(u.toString());
   await page.waitForFunction(() => typeof S === 'object' && typeof msnShow === 'function', null, { timeout: 20000 });
