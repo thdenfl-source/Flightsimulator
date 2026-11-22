@@ -57,14 +57,17 @@ export async function run(page, t) {
     for (let i = 0; i < 80 && kgLt.ldgTgt !== null; i++) await w(50);
     o.stowL = { off: env.ldg === false, e: kgLt.ldgE, srch: kgLt.srch };
     ovhdSet('stowSel', 'SRCH'); ovhdSet('stowSel', 'CTR');
-    o.stowS = { off: !kgLt.srch, az: kgLt.az, el: kgLt.el, sw: ovhdGet('stowSel') };
+    o.stowS = { off: !kgLt.srch, stow: !!(hsl.mv && hsl.mv.to === 'STOW') || hsl.stowed, sw: ovhdGet('stowSel') };   // 흰수리 — 외장형 탐조등을 끄고 접는다(STOW 25초)
+    // SRCH LT — 접혀 있으면 INIT(8초) 뒤 저절로 켜진다(외장형 탐조등 HSL-1600)
+    hsl.mv = null; hsl.stowed = true; hsl.lamp = false; hsl.lit = false; hsl.autoLamp = false; kgSrchSet(true); o.init = !!(hsl.mv && hsl.mv.to === 'INIT') && kgLt.srch;
+    hslStep(9); hslStep(6); o.initLit = !hsl.stowed && hsl.lamp && hsl.lit;
     kgPress('ldgOn'); for (let i = 0; i < 60 && kgLt.ldgTgt !== null; i++) await w(50); o.reOn = kgLdgDown(); kgSrchSet(true);
     // SRCH CTR — 오른쪽으로 돌리고 아래로
-    kgLt.az = 0; kgLt.el = 30; kgPress('srchR'); _kgHold.tl -= 300; _kgHold.step(); _kgHoldStop(); kgPress('srchD'); _kgHold.tl -= 300; _kgHold.step(); _kgHoldStop();
-    o.az = kgLt.az; o.el = kgLt.el;
+    hsl.az = 0; hsl.el = -45; srch.mode = 'EO'; kgPress('srchR'); _kgHold.tl -= 300; _kgHold.step(); _kgHoldStop(); kgPress('srchD'); _kgHold.tl -= 300; _kgHold.step(); _kgHoldStop();
+    o.az = kgLt.az; o.el = kgLt.el; o.man = srch.mode === 'MAN' && hsl.az === kgLt.az;
     o.beams = kgBeams().length; o.env = envBeams().length;
     // 서치라이트 빛은 기수 오른쪽에 떨어진다
-    const b = envBeams().map(x => { const v = _envDist(S.lat, S.lon, x.lat, x.lon); return ((Math.atan2(v.e, v.n) * 180 / Math.PI - S.hdg) % 360 + 360) % 360; });
+    const b = envBeams().map(x => { const o0 = x.src || S, v = _envDist(o0.lat, o0.lon, x.lat, x.lon); return ((Math.atan2(v.e, v.n) * 180 / Math.PI - S.hdg) % 360 + 360) % 360; });
     o.right = b.some(a => a > 5 && a < 90);
     // COLL TRIM — 누르는 동안 VS ±100 씩
     const ad = applyDelta, calls = []; applyDelta = (f, d) => calls.push([f, d]);
@@ -81,7 +84,8 @@ export async function run(page, t) {
     kgPop('cyc'); await w(200); o.cycPop = document.querySelector('#kg-pop .kgp-t').textContent === 'CYCLIC' && !!document.querySelector('#kg-pop-body [data-kg="apDis"]');
     kgPop(null); await w(200); o.closed = getComputedStyle(document.getElementById('kg-pop')).display === 'none';
     // SRCH LT — 위아래로 광도 · 빛 무리 세기가 따른다
-    kgLt.br = 1; kgPress('srchDim'); _kgHoldStop(); kgPress('srchDim'); _kgHoldStop(); o.br = kgLt.br; o.brK = kgBeams().find(b => b.az === kgLt.az).k;
+    kgLt.br = 1; kgPress('srchDim'); _kgHoldStop(); kgPress('srchDim'); _kgHoldStop(); o.br = kgLt.br; o.brK = (kgBeams().find(b => b.hsl) || {}).k;
+    { kgLt.br = 1; const H = kgBeams().find(b => b.hsl) || { k: 0, reach: 0 }, f = Math.sqrt(8 / hsl.focus); o.hslK = H.k / f / KG_LDG.k; o.hslR = H.reach / Math.min(1.25, f) / KG_LDG.reach; o.hslSrc = H.src && H.src.r < 0 && H.src.f > 5; kgLt.br = 0.8; }
     kgPress('srchBrt'); _kgHoldStop(); o.br2 = kgLt.br; kgLt.br = 1;
     // AP FAST CUT OFF(빨간 단추) — AP1 · AP2 를 끊는다
     const a1 = ovhdGet('ap1'), a2 = ovhdGet('ap2');
@@ -104,14 +108,16 @@ export async function run(page, t) {
   t.ok(C.ext < 30 && C.ret && C.keep, `EXT 로 더 앞(${C.ext.toFixed(0)}°↓) · RET 로 접는 쪽 · ON/OFF 는 자리를 그대로 둔다`);
   t.ok(C.stowDef === 'mom|LDG,CTR,SRCH|CTR', `STOW SEL — 3방향 스프링 스위치 · 평소 가운데 (${C.stowDef})`);
   t.ok(C.stowL.off && C.stowL.e === 0 && C.stowL.srch, 'STOW SEL → LDG — 착륙등이 꺼지고 접힌다(서치라이트는 그대로)');
-  t.ok(C.stowS.off && C.stowS.az === 0 && C.stowS.el === 30 && C.stowS.sw === 'CTR', 'STOW SEL → SRCH — 서치라이트가 꺼지고 원위치(정면 · 아래 30°) · 스위치는 가운데로');
+  t.ok(C.stowS.off && C.stowS.stow && C.stowS.sw === 'CTR', 'STOW SEL → SRCH — 외장형 탐조등이 꺼지고 접힌다(STOW) · 스위치는 가운데로');
+  t.ok(C.init && C.initLit, 'SRCH LT — 탐조등이 접혀 있으면 INIT(8초) 뒤 저절로 켜진다(점화 5초)');
   t.ok(Math.abs(C.reOn - 30) < 0.5, '접은 뒤 컬렉티브 LDG LT 로 다시 켜면 다시 전방 30° 로 펼친다');
   t.ok(C.msg0 === '' && C.msgS === 'SRCH LT ON:' + C.grn && C.msgL === 'LDG LT ON:' + C.grn, `PFD 메시지 시현창 — 켜지면 녹색 조언 (${C.msgS} · ${C.msgL})`);
   t.ok(C.srchMin === 2.5, '서치라이트 — 아래로 2.5° 까지(종전의 두 배 앞)');
-  t.ok(C.az > 10 && C.el > 30 && C.beams === 2 && C.env >= 2 && C.right, `SRCH CTR — 서치라이트를 오른쪽 ${Math.round(C.az)}° · 아래 ${Math.round(C.el)}° 로 돌린다 · 착륙등과 함께 빛 무리 ${C.env}개`);
+  t.ok(C.az > 5 && C.el > 45 && C.man && C.beams === 2 && C.env >= 2 && C.right, `SRCH CTR — 외장형 탐조등을 오른쪽 ${Math.round(C.az)}° · 아래 ${Math.round(C.el)}° 로 돌린다(MAN — 연동 풀림) · 착륙등과 함께 빛 무리 ${C.env}개`);
+  t.ok(Math.abs(C.hslK - 2) < 1e-9 && Math.abs(C.hslR - 10) < 1e-9 && C.hslSrc, `외장형 탐조등 — 착륙등의 ${C.hslK}배 밝기 · ${C.hslR}배 거리 · 빛은 왼쪽 승무원 도어 밑에서`);
   t.ok(C.coll.up === 3 && C.coll.dn === 1, `COLL TRIM — 누르는 동안 VS +100 씩 이어진다(UP ${C.coll.up}번 · DN ${C.coll.dn}번)`);
   t.eq(C.cyc, 'dis,ftr,ftr-,beepF,beep-,beepL,beep-,ptt+,ptt-,gspd', '사이클릭 — DISENGAG · FORCE TRIM RELEASE · 4-WAY BEEP · PTT(누르는 동안) · G/SPEED');
-  t.ok(Math.abs(C.br - 0.8) < 1e-9 && Math.abs(C.brK - 0.72) < 1e-9 && Math.abs(C.br2 - 0.9) < 1e-9, `SRCH LT — 위아래로 광도(${Math.round(C.br * 100)}% → ${Math.round(C.br2 * 100)}%) · 누르면 ON/OFF`);
+  t.ok(Math.abs(C.br - 0.8) < 1e-9 && Math.abs(C.brK - 0.8 * 1.4 * 2) < 1e-9 && Math.abs(C.br2 - 0.9) < 1e-9, `SRCH LT — 위아래로 광도(${Math.round(C.br * 100)}% → ${Math.round(C.br2 * 100)}%) · 누르면 ON/OFF`);
   t.ok(C.cut, 'AP FAST CUT OFF(사이클릭 빨간 단추) — AP1 · AP2 를 한 번에 끊는다');
   t.ok(C.oeiSkip || (C.oei2 === 'HI' && C.oeiLo === 'LOW' && C.limLo === 600 && C.oeiHi === 'HI' && C.limHi === 150), 'OEI 스위치 — 한 엔진일 때 누를 때마다 HI(2.5분) ↔ LOW(10분) · 두 엔진이면 바뀌지 않는다');
   t.ok(C.cycL, '사이클릭 — 왼쪽 좌석도 오른쪽과 같은 방향 · 4-WAY BEEP 화살표는 왼쪽으로 30° 틀어짐');

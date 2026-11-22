@@ -315,6 +315,11 @@ function _h3BuildBody(ty = H3_OWN) {
   _h3Lathe(m, [7.70, 0, 0.62], H3Z, [[0, 0], [0.16, 0.02], [0.22, 0.14], [0.20, 0.28], [0.08, 0.34], [0, 0.34]], H3C.gray, 16);
   _h3Pod(m, 4.20, 5.20, 1.48, 3.78, 0.21, 0.21, H3C.dark, 3, 2);
   _h3Plate(m, [[4.4, 1.15], [5.0, 1.15], [5.0, 1.42], [4.4, 1.42]], [0, 0, 3.86], H3X, H3Y, H3Z, 0.10, H3C.dark);
+  // 외장형 탐조등(HSL-1600) 받침 — 왼쪽 승무원 도어 바로 밑(검정). 램프 머리는 따로(_h3BuildHsl · 조이스틱대로 돈다)
+  _h3Plate(m, [[H3_HSL.x - 0.28, H3_HSL.y - 0.16], [H3_HSL.x + 0.28, H3_HSL.y - 0.16], [H3_HSL.x + 0.28, H3_HSL.y + 0.16], [H3_HSL.x - 0.28, H3_HSL.y + 0.16]],
+           [0, 0, 0.90], H3X, H3Y, H3Z, 0.05, H3C.black);
+  _h3Lathe(m, [H3_HSL.x, H3_HSL.y, H3_HSL.z + 0.20], H3Z, [[0.09, 0], [0.09, 0.14], [0.13, 0.15], [0.13, 0.20], [0, 0.20]], H3C.black, 14);   // 방위 구동부
+  _h3Rod(m, [H3_HSL.x, H3_HSL.y, H3_HSL.z + 0.22], [H3_HSL.x, H3_HSL.y, H3_HSL.z + 0.06], 0.06, H3C.black);
   // 마스트 · 꼬리로터 기어 덮개
   _h3Lathe(m, [HELI3D_ROTOR.x, 0, 4.85], H3Z, [[0.24, 0], [0.18, 0.12], [0.18, HELI3D_ROTOR.z - 4.85 - 0.05]], H3C.dark, 14);
   _h3Pod(m, HELI3D_TAIL.x - 0.35, HELI3D_TAIL.x + 0.35, Math.sign(HELI3D_TAIL.y) * 0.16, HELI3D_TAIL.z, 0.18, 0.24, H3C.blue, 3, 2);
@@ -331,6 +336,30 @@ function _h3BuildBody(ty = H3_OWN) {
   // 수평 꼬리날개(붉은색) — 왼쪽에만 있다(꼬리로터는 오른쪽)
   _h3Plate(m, [[-7.00, -0.20], [-7.15, -2.25], [-7.90, -2.25], [-8.00, -0.20]], [0, 0, 3.05], H3X, H3Y, H3Z, 0.12, H3C.red);
   return m;
+}
+// 외장형 탐조등 머리(HSL-1600 · 검정) — 원점 = 고각 축(받침 아래). +X 가 빛 나가는 쪽. 렌즈는 따로(꺼짐 유리 · 켜짐 스스로 빛남)
+const H3_HSL = { x: 6.45, y: -1.05, z: 0.50 };
+function _h3BuildHsl() {
+  const m = _h3New(), B = H3C.black;
+  _h3Lathe(m, [-0.26, 0, 0], H3X, [[0, 0], [0.10, 0.01], [0.17, 0.10], [0.19, 0.30], [0.21, 0.44], [0.21, 0.50]], B, 18);   // 램프 몸통(뒤가 좁은 원통)
+  _h3Lathe(m, [0.24, 0, 0], H3X, [[0.21, 0], [0.235, 0.01], [0.235, 0.06], [0.20, 0.07]], B, 18);                          // 앞 테
+  [-1, 1].forEach(sd => {                                                                                                 // 멍에(좌우 팔) — 방위 축에서 내려와 고각 축을 잡는다
+    _h3Plate(m, [[-0.06, 0.24], [0.06, 0.24], [0.06, -0.04], [-0.06, -0.04]], [0, sd * 0.235, 0], H3X, H3Z, H3Y, 0.04, B);
+    _h3Lathe(m, [0, sd * 0.215, 0], H3Y, [[0.05, 0], [0.05, sd * 0.04], [0, sd * 0.04]], H3C.dark, 10);
+  });
+  _h3Plate(m, [[-0.06, -0.255], [0.06, -0.255], [0.06, 0.255], [-0.06, 0.255]], [0, 0, 0.26], H3X, H3Y, H3Z, 0.04, B);   // 멍에 위 가로대
+  return m;
+}
+function _h3BuildHslLens(on) {
+  const m = _h3New();
+  _h3Lathe(m, [0.245, 0, 0], H3X, [[0, 0.03], [0.20, 0.03], [0.20, 0.035], [0, 0.04]], on ? [1, 0.98, 0.86] : H3C.glass, 18);
+  if (on) for (let i = 9; i < m.length; i += 10) m[i] = -1;   // 스스로 빛난다
+  return m;
+}
+// 탐조등 머리가 가리키는 곳 — 37-mission.js hsl(방위 −150~+30° · 고각 −90~−20°) · 없으면 접힘(아래)
+function h3HslAim() {
+  try { if (typeof hsl !== 'undefined') return { az: hsl.az, el: hsl.el, lit: !!(hsl.lit && !hsl.ir) }; } catch (e) { _swallow(e); }
+  return { az: 0, el: -90, lit: false };
 }
 // 주로터(허브 가운데가 원점, Z 축으로 돈다)
 function _h3BuildRotor(SP = H3_SPECS[H3_OWN]) {
@@ -468,6 +497,7 @@ function _h3DrawLights(h, main, pose, mpp, st) {
 }
 // 어두울 때 빛 무리를 그릴 화면 자리(CSS px · 3D 지도 그림 기준) — 29-env.js envFxFrame 이 지도 위 겹에 그린다
 let _h3LtScr = null;
+let _h3HslScr = null;   // 외장형 탐조등 렌즈의 화면 자리(빛줄기 시작점)
 
 // ── 그리기(WebGL) ──
 const H3_VS = `
@@ -575,6 +605,7 @@ function _h3Set(h, ty) {
     body: _h3Upload(gl, _h3BuildBody(ty)), rotor: _h3Upload(gl, _h3BuildRotor(SP)), tail: _h3Upload(gl, _h3BuildTail(SP)),
     disc: _h3Upload(gl, _h3BuildDisc(SP.rotor.r, 'z')), tdisc: _h3Upload(gl, _h3BuildDisc(SP.tail.r, 'y')),
   };
+  if (ty !== 'b206') { parts.hsl = _h3Upload(gl, _h3BuildHsl()); parts.hslOff = _h3Upload(gl, _h3BuildHslLens(false)); parts.hslOn = _h3Upload(gl, _h3BuildHslLens(true)); }
   Object.values(parts).forEach(p => {
     if (vao) { p.vao = vao.create(); vao.bind(p.vao); }
     gl.bindBuffer(gl.ARRAY_BUFFER, p.buf);
@@ -713,7 +744,7 @@ const HELI3D_LAYER = {
 
     const pc = _h3PoseNow;
     const pose = (pc && simExtView && now - pc.t < 60) ? pc.pose : heli3dPose(this.map);
-    _h3DrawHeli(h, h.parts, H3_SPECS[H3_OWN], main, pose, _h3Phase, _h3TPhase, k > 0);
+    _h3DrawHeli(h, h.parts, H3_SPECS[H3_OWN], main, pose, _h3Phase, _h3TPhase, k > 0, h3HslAim());
     // 외부 등화(상부 콘솔 POSITION · ANTI COLLISION LTS)
     try {
       const st = extLightState(now / 1000);
@@ -723,7 +754,7 @@ const HELI3D_LAYER = {
 };
 
 // 헬기 한 대 그리기 — 부품(parts) · 치수(SP) · 자리(pose: lon · lat · alt(m, 화면 속) · hdg · pit · bnk) · 로터 위상
-function _h3DrawHeli(h, parts, SP, main, pose, ph, tph, spin) {
+function _h3DrawHeli(h, parts, SP, main, pose, ph, tph, spin, aim) {
   const gl = h.gl, RO = SP.rotor, TA = SP.tail;
   const mc = maplibregl.MercatorCoordinate.fromLngLat([pose.lon, pose.lat], pose.alt);
   const s = mc.meterInMercatorCoordinateUnits();
@@ -747,6 +778,22 @@ function _h3DrawHeli(h, parts, SP, main, pose, ph, tph, spin) {
   _h3Draw(h, parts.body, f32(base), rot3, 1);
   _h3Draw(h, parts.rotor, f32(rotorM), rotR([[ca, -sa, 0], [sa, ca, 0], [0, 0, 1]]), 1);
   _h3Draw(h, parts.tail, f32(tailM), rotR([[cb, 0, sb], [0, 1, 0], [-sb, 0, cb]]), 1);
+  // 외장형 탐조등 머리 — 방위(Z 축 · +오른쪽) 다음 고각(Y 축 · −아래)
+  if (parts.hsl) {
+    const A = aim || { az: 0, el: -90, lit: false }, za = A.az * Math.PI / 180, ze = A.el * Math.PI / 180;
+    const cz = Math.cos(za), sz = Math.sin(za), ce = Math.cos(ze), se = Math.sin(ze);
+    const Rh = _m3Mul([[cz, -sz, 0], [sz, cz, 0], [0, 0, 1]], [[ce, 0, -se], [0, 1, 0], [se, 0, ce]]);
+    const hM = _m4Mul(base, _m4From(Rh, [H3_HSL.x, H3_HSL.y, H3_HSL.z])), hr = rotR(Rh);
+    _h3Draw(h, parts.hsl, f32(hM), hr, 1);
+    _h3Draw(h, A.lit ? parts.hslOn : parts.hslOff, f32(hM), hr, 1);
+    // 렌즈의 화면 자리 — 29-env.js 빛줄기가 여기서 나간다(내 기체만 · aim 을 넘긴 것)
+    if (aim) {
+      const L = [H3_HSL.x + Rh[0][0] * 0.27, H3_HSL.y + Rh[1][0] * 0.27, H3_HSL.z + Rh[2][0] * 0.27], b = base, cv = gl.canvas;
+      const w = b[3] * L[0] + b[7] * L[1] + b[11] * L[2] + b[15];
+      _h3HslScr = w > 0 ? { t: performance.now(), x: (1 + (b[0] * L[0] + b[4] * L[1] + b[8] * L[2] + b[12]) / w) / 2 * (cv.clientWidth || cv.width),
+                                                  y: (1 - (b[1] * L[0] + b[5] * L[1] + b[9] * L[2] + b[13]) / w) / 2 * (cv.clientHeight || cv.height) } : null;
+    }
+  }
   // 도는 원판은 흐리게 — 깊이는 쓰지 않는다(뒤의 것을 가리지 않게)
   if (spin) {
     gl.depthMask(false);

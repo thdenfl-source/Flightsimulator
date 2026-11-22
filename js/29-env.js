@@ -226,18 +226,21 @@ function envBeams() {
   const out = []; let agl = 1000; try { agl = radarAltFt(); } catch (e) { _swallow(e); }
   const aglM = Math.max(1, agl * 0.3048), hd = S.hdg * _envD2R;
   // reach — 빛이 닿는 거리(m · 흰수리 서치라이트 1200 · 착륙등 2400) · wide — 빛 무리 너비(거리에 견준)
-  const beam = (downDeg, k, az = 0, reach = 600, wide = 0.18) => {
+  // src — 등 자리(기체 원점에서 앞 f · 오른쪽 r m · 흰수리 외장 탐조등은 왼쪽 승무원 도어 밑)
+  const beam = (downDeg, k, az = 0, reach = 600, wide = 0.18, src = null) => {
     const dn = Math.max(reach > 600 ? 1 : 4, downDeg + (S.pit || 0) * -1);
     const d = aglM / Math.tan(dn * _envD2R); if (!(d > 0) || d > reach) return;
     const h = hd + az * _envD2R;
-    const [la, lo] = _envOff(S.lat, S.lon, d * Math.cos(h), d * Math.sin(h));
-    out.push({ lat: la, lon: lo, r: Math.max(8, d * wide), k: k * Math.max(0, 1 - 0.75 * d / reach) });
+    let la0 = S.lat, lo0 = S.lon, sl = null;
+    if (src) { [la0, lo0] = _envOff(S.lat, S.lon, src.f * Math.cos(hd) - src.r * Math.sin(hd), src.f * Math.sin(hd) + src.r * Math.cos(hd)); sl = { lat: la0, lon: lo0 }; }
+    const [la, lo] = _envOff(la0, lo0, d * Math.cos(h), d * Math.sin(h));
+    out.push({ lat: la, lon: lo, r: Math.max(8, d * wide), k: k * Math.max(0, 1 - 0.75 * d / reach), src: sl });
   };
   try {
     if (typeof acB206 === 'function' && acB206() && typeof b206c !== 'undefined') {
       if (b206c.ldg) beam(14, 1);
       if (b206c.srch === 'ON') beam(b206c.srchExt ? 30 : 20, 0.9);
-    } else if (typeof kgBeams === 'function') kgBeams().forEach(b => beam(b.down, b.k, b.az, b.reach, b.wide));   // 흰수리 — 착륙등(펼침) · 서치라이트(35-kuhgrip.js)
+    } else if (typeof kgBeams === 'function') kgBeams().forEach(b => beam(b.down, b.k, b.az, b.reach, b.wide, b.src));   // 흰수리 — 착륙등(펼침) · 서치라이트(35-kuhgrip.js)
     else if (env.ldg) beam(14, 1);
   } catch (e) { _swallow(e); }
   return out;
@@ -367,9 +370,13 @@ function envLightVisible(m, eye, la, lo, hM) {
 // 빛줄기 — 등(1인칭이면 화면 아래 가운데 · 밖에서 보면 헬기 자리 위)에서 빛 무리까지 엷은 원뿔
 function envBeamCone(g, r, m, p, rp, b, first) {
   let s;
-  if (first) s = { x: r.width / 2, y: r.height + 10 };
+  const hs = b.src && typeof _h3HslScr !== 'undefined' && _h3HslScr && performance.now() - _h3HslScr.t < 500 ? _h3HslScr : null;
+  if (hs && !first) s = { x: hs.x, y: hs.y };                       // 외장형 탐조등 — 3D 모형의 렌즈에서
+  else if (first) s = { x: r.width / 2, y: r.height + 10 };
   else {                                                                // 헬기 자리 — 땅 위 점을 높이만큼(화면 축척) 위로
-    const a = m.project([S.lon, S.lat]), [la3, lo3] = _envOff(S.lat, S.lon, 0, 100), a2 = m.project([lo3, la3]);
+    // 축척(px/m)은 화면 가로(카메라 방위에 직각)로 잰다 — 앞뒤로 재면 원근에 눌려 빛줄기가 하늘에서 내려오는 것처럼 보였다
+    const cb = ((m.getBearing ? m.getBearing() : 0) + 90) * Math.PI / 180;
+    const o0 = b.src || { lat: S.lat, lon: S.lon }, a = m.project([o0.lon, o0.lat]), [la3, lo3] = _envOff(o0.lat, o0.lon, 100 * Math.cos(cb), 100 * Math.sin(cb)), a2 = m.project([lo3, la3]);
     const ppm = Math.hypot(a2.x - a.x, a2.y - a.y) / 100, agl = (typeof radarAltFt === 'function' ? radarAltFt() : S.alt || 0) * 0.3048;
     s = { x: a.x, y: a.y - Math.min(r.height * 0.6, Math.max(6, agl * ppm * Math.sin(((m.getPitch ? m.getPitch() : 60)) * Math.PI / 180))) };
   }
@@ -444,6 +451,11 @@ function envFxFrame() {
     const gr = g.createRadialGradient(p.x, p.y, 0, p.x, p.y, rp);
     gr.addColorStop(0, `rgba(255,248,220,${0.55 * b.k})`); gr.addColorStop(1, 'rgba(255,248,220,0)');
     g.save(); g.translate(p.x, p.y); g.scale(1, 0.55); g.translate(-p.x, -p.y); g.fillStyle = gr; g.beginPath(); g.arc(p.x, p.y, rp, 0, 7); g.fill(); g.restore();
+    if (b.k > 1.2) {   // 착륙등보다 센 빛(흰수리 외장형 탐조등) — 가운데가 더 하얗게 빛난다
+      const g2 = g.createRadialGradient(p.x, p.y, 0, p.x, p.y, rp * 0.55);
+      g2.addColorStop(0, `rgba(255,255,245,${Math.min(0.9, (b.k - 1) * 0.45)})`); g2.addColorStop(1, 'rgba(255,255,245,0)');
+      g.save(); g.translate(p.x, p.y); g.scale(1, 0.55); g.translate(-p.x, -p.y); g.fillStyle = g2; g.beginPath(); g.arc(p.x, p.y, rp * 0.55, 0, 7); g.fill(); g.restore();
+    }
   }
   if (!dark) { g.globalAlpha = 1; g.globalCompositeOperation = 'source-over'; return; }   // 낮 — 활주로 · 함정 불빛은 그리지 않는다
   for (const [la, lo, col, k] of _envLightPts(t)) {

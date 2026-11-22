@@ -475,6 +475,7 @@ const RDR_MENU = {
 //   LAMP ON → 5초 안에 켜진다 · 끄면 냉각팬 7분(그동안 전원을 끊지 않는다) · INIT/STOW(STOW 25초 · 램프 끄고 연동 풀고 −90°)
 //   MAN/AUTO — AUTO 는 EO/IR 터릿 연동(SLASS) · 경고: 10ft(3.04m) 안의 물체를 비추면 100~300℃ — 사람 · 가연물 금지
 //   주의: NVG 를 쓴 조종사의 허락 없이 가시광으로 켜지 않는다 · 조종석 컬렉티브 SRCH LT(35-kuhgrip.js kgLt)와는 다른 등이다
+const HSL_LDG_K = 2, HSL_LDG_REACH = 10;   // 외장형 탐조등 — 착륙등의 2배 밝기 · 10배 거리
 const HSL = { azMin: -150, azMax: 30, elMin: -90, elMax: -20, azRate: 25, elRate: 20, fMin: 4, fMax: 13, ignS: 5, stowS: 25, initS: 8, coolS: 420, reach: 1500, hazM: 3.04 };
 const hsl = { pwr: true, lamp: false, lit: false, ign: 0, ir: false, az: 0, el: -90, focus: 8, stowed: true, mv: null, cool: 0, fault: false, haz: false, _hazT: 0 };
 const srch = { mode: 'MAN', lim: false };            // MAN · EO(EO/IR 연동 — AUTO) · RDR(레이더 지정 표적)
@@ -492,14 +493,27 @@ function hslPwrSet(on) {
   hsl.pwr = !!on;
   if (!hsl.pwr) { hsl.lamp = false; hsl.lit = false; hsl.ign = 0; hsl.cool = 0; srch.mode = 'MAN'; }
 }
-function hslStow() { hslLampSet(false); srch.mode = 'MAN'; if (!hsl.pwr) return; hsl.mv = { to: 'STOW', t: HSL.stowS, az0: hsl.az, el0: hsl.el, T: HSL.stowS }; _mNote('탐조등 STOW(25초)'); }
+function hslStow() { hsl.autoLamp = false; hslLampSet(false); srch.mode = 'MAN'; if (!hsl.pwr) return; hsl.mv = { to: 'STOW', t: HSL.stowS, az0: hsl.az, el0: hsl.el, T: HSL.stowS }; _mNote('탐조등 STOW(25초)'); }
 function hslInit() { if (!hsl.pwr) { _mToast('SEARCH LT PWR 꺼짐'); return; } hsl.mv = { to: 'INIT', t: HSL.initS, az0: hsl.az, el0: hsl.el, T: HSL.initS }; hsl.fault = false; _mNote('탐조등 INIT'); }
+// ── 조종석 컬렉티브 SRCH LT · SRCH CTR(35-kuhgrip.js) · 배정한 조이스틱 단추 — 같은 외장형 탐조등을 다룬다 ──
+//   SRCH LT: 꺼져 있으면 — 접혀(STOW) 있으면 INIT(8초) 뒤 저절로 켠다 · 켜져 있으면 끈다(냉각팬 7분)
+//   SRCH CTR ◀▶▲▼: 수동(MAN)으로 돌린다(EO/IR · 레이더 연동은 풀린다) — 방위 −150~+30° · 고각 −90~−20°
+function hslLink() { return EO_ON; }
+function hslGripLamp() {
+  if (hsl.lamp || hsl.autoLamp) { hsl.autoLamp = false; hslLampSet(false); return false; }
+  if (!hsl.pwr) hslPwrSet(true);
+  if (hsl.stowed || (hsl.mv && hsl.mv.to === 'STOW')) { hsl.autoLamp = true; hslInit(); _mToast('탐조등 INIT — 8초 뒤 켜집니다'); return true; }
+  if (hsl.mv) { hsl.autoLamp = true; return true; }
+  return hslLampSet(true);
+}
+function hslGripMove(dir, dt) { srchMan(dir, dt); }
+function hslGripState() { return { on: !!(hsl.lamp || hsl.autoLamp), lit: hsl.lit, az: hsl.az, el: -hsl.el, mode: srch.mode }; }
 function srchMode(m) { srch.mode = m; _mNote(`탐조등 ${m === 'EO' ? 'AUTO — EO/IR 연동(SLASS)' : m === 'RDR' ? '레이더 표적 연동' : 'MAN'}`); }
 function hslStep(dt) {
   if (hsl.mv) {   // INIT(0° · −45°) · STOW(0° · −90°) — 걸린 시간만큼 고르게 옮긴다
     const M = hsl.mv; M.t -= dt; const f = Math.max(0, Math.min(1, 1 - M.t / M.T)), el1 = M.to === 'STOW' ? -90 : -45;
     hsl.az = M.az0 + (0 - M.az0) * f; hsl.el = M.el0 + (el1 - M.el0) * f;
-    if (M.t <= 0) { hsl.az = 0; hsl.el = el1; hsl.stowed = M.to === 'STOW'; hsl.mv = null; }
+    if (M.t <= 0) { hsl.az = 0; hsl.el = el1; hsl.stowed = M.to === 'STOW'; hsl.mv = null; if (M.to === 'INIT' && hsl.autoLamp) { hsl.autoLamp = false; hslLampSet(true); } }
   }
   if (hsl.lamp && hsl.ign > 0) { hsl.ign -= dt; if (hsl.ign <= 0) { hsl.ign = 0; hsl.lit = true; } }
   if (!hsl.lamp && hsl.cool > 0) hsl.cool = Math.max(0, hsl.cool - dt);
@@ -515,7 +529,10 @@ function hslBeam() {
   if (!hsl.lit) return null;
   if (hsl.ir && !(typeof env !== 'undefined' && env.nvg)) return null;
   const nar = Math.sqrt(8 / hsl.focus);
-  return { az: hsl.az, down: -hsl.el, k: (hsl.ir ? 0.6 : 1.0) * nar, reach: HSL.reach * Math.min(1.25, nar), wide: Math.tan(hsl.focus / 2 * _mD) * 2 };
+  // 착륙등(35-kuhgrip.js KG_LDG)보다 2배 밝고 10배 멀리 — 빛은 왼쪽 승무원 도어 밑 램프(앞 6.45m · 왼쪽 1.05m)에서 나간다
+  const L = typeof KG_LDG !== 'undefined' ? KG_LDG : { k: 1.4, reach: 2400 };
+  return { az: hsl.az, down: -hsl.el, k: (hsl.ir ? 0.6 : 1.0) * nar * L.k * HSL_LDG_K * (typeof kgLt !== 'undefined' ? kgLt.br : 1), reach: L.reach * HSL_LDG_REACH * Math.min(1.25, nar), wide: Math.tan(hsl.focus / 2 * _mD) * 2,
+           src: { f: 6.45, r: -1.05 }, hsl: true };
 }
 function srchStep(dt) {
   if (srch.mode === 'MAN' || !hsl.pwr || hsl.stowed || hsl.mv) { srch.lim = false; return; }
@@ -1313,6 +1330,7 @@ function msnHelp() {
     '· LRF: 한 번 측정 · 2초 누르면 연속 · LASER: MENU 에서 LASER ARM 일 때 누르는 동안 조사',
     '· MENU: ZOOM 으로 고르고 SENS 로 바꾼다(LASER ARM · 서치라이트 연동 · PIP · AVT MODE · 단위)',
     '· 레이더: TX 를 켜고 화면의 표적을 누르면 지정 → "EO/IR → 표적" 으로 터릿을, "서치라이트 → 표적" 으로 빛을 돌린다',
+    '· 외장형 탐조등(HSL-1600 · 왼쪽 승무원 도어 밑 검정 램프): 착륙등의 2배 밝기 · 10배 거리 · 조종석 컬렉티브 SRCH LT(접혀 있으면 INIT 뒤 켜짐) · SRCH CTR(◀▶▲▼) · 배정한 조이스틱 단추로도',
     '· 서치라이트: 수동(◀▲▼▶) · EO/IR 연동(시선이 닿는 자리를 비춘다 · HCU AUX) · 레이더 표적 연동',
     '· 조종석 SYSTEM 창 Video(CDU Aircraft Systems → Video → Channel EO/IR)에 같은 영상 · 오버레이가 나온다 — 전탐석이 터릿을 돌리면 조종사도 그대로 본다',
     '· 기체는 흰수리 그대로 난다 — "조종석 보기" 로 비행계획 · 자동비행을 다루고, 지도 왼쪽 아래 🎯 전탐석 으로 돌아온다'];
@@ -1870,6 +1888,7 @@ function msnStep() {
   try { eoStep(dt); } catch (e) { _swallow(e); }
   try { rdrStep(dt); } catch (e) { _swallow(e); }
   try { hslStep(dt); if (_slHold) srchMan(_slHold, dt); slcStep(dt); srchStep(dt); } catch (e) { _swallow(e); }
+  try { if (typeof _kgHslSync === 'function') _kgHslSync(); } catch (e) { _swallow(e); }   // 컬렉티브 SRCH 표시
   try { if (MSN_ON) dvrStep(dt); } catch (e) { _swallow(e); }
   try { msnRender(); } catch (e) { _swallow(e); }
   try { vccpRender(); } catch (e) { _swallow(e); }
