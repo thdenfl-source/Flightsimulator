@@ -1331,6 +1331,7 @@ function msnHelp() {
     '· MENU: ZOOM 으로 고르고 SENS 로 바꾼다(LASER ARM · 서치라이트 연동 · PIP · AVT MODE · 단위)',
     '· 레이더: TX 를 켜고 화면의 표적을 누르면 지정 → "EO/IR → 표적" 으로 터릿을, "서치라이트 → 표적" 으로 빛을 돌린다',
     '· 외장형 탐조등(HSL-1600 · 왼쪽 승무원 도어 밑 검정 램프): 착륙등의 2배 밝기 · 10배 거리 · 조종석 컬렉티브 SRCH LT(접혀 있으면 INIT 뒤 켜짐) · SRCH CTR(◀▶▲▼) · 배정한 조이스틱 단추로도',
+    '· EO/IR 영상: 탐조등 · 착륙등이 비춘 자리는 밤에도 밝게 보인다(주간 · 저광 카메라 — 열상 IR 은 가시광을 보지 못한다 · IR 탐조등은 EON 저광에만)',
     '· 서치라이트: 수동(◀▲▼▶) · EO/IR 연동(시선이 닿는 자리를 비춘다 · HCU AUX) · 레이더 표적 연동',
     '· 조종석 SYSTEM 창 Video(CDU Aircraft Systems → Video → Channel EO/IR)에 같은 영상 · 오버레이가 나온다 — 전탐석이 터릿을 돌리면 조종사도 그대로 본다',
     '· 기체는 흰수리 그대로 난다 — "조종석 보기" 로 비행계획 · 자동비행을 다루고, 지도 왼쪽 아래 🎯 전탐석 으로 돌아온다'];
@@ -1426,6 +1427,7 @@ function eoirVideoDrawTo(g, x, y, w, h) {
       try { g.drawImage(mc, ox, oy, cw * s, ch * s); } catch (e) { _swallow(e); }
       g.save(); g.translate(ox, oy); g.scale(s, s); try { _eoSpritesG(g, cw, ch); } catch (e) { _swallow(e); } g.restore();
       try { g.filter = 'none'; } catch (e) { _swallow(e); }
+      g.save(); g.translate(ox, oy); g.scale(s, s); try { _eoBeamsG(g, cw, ch); } catch (e) { _swallow(e); } g.restore();   // 빛 무리(필터 밖)
     }
   }
   try { _eoHudG(g, x, y, w, h, false); } catch (e) { _swallow(e); }
@@ -1471,7 +1473,61 @@ function _srchLights() {
   const p = eoLosPoint(); if (!p) return false;
   const a = eoAngTo(p.lat, p.lon, p.hM);
   const w = Math.max(3, hsl.focus / 2 + 1);
-  return a.rng < HSL.reach * 1.3 && Math.abs(normAS(a.az - hsl.az)) < w && Math.abs(a.el - hsl.el) < w;
+  const B = hslBeam(); return a.rng < (B ? B.reach : HSL.reach) * 1.3 && Math.abs(normAS(a.az - hsl.az)) < w && Math.abs(a.el - hsl.el) < w;
+}
+// 탐조등 · 착륙등 빛 무리 — EO/IR 영상 위(영상 필터 밖: 밤에 어둡게 깎인 영상 위로 빛난 자리가 밝게 보인다)
+//   주간 · 저광 카메라(EOW · EON)에 보인다. 열상(IR)은 가시광을 보지 못한다(IR 탐조등은 EON 저광에만).
+//   빛 무리 크기는 거리에 맞춰(초점거리 px ÷ 거리) · 내려다보는 각만큼 납작한 타원
+function eoBeamSpots() {
+  if (!_eoMap || !eo.pwr || eo.mode === 'STOW' || eo.sensor === 'IR') return [];
+  const out = [], losB = normA(S.hdg + eo.az), fov = eoFov();
+  let bs = []; try { bs = typeof envBeams === 'function' ? envBeams() : []; } catch (e) { _swallow(e); }
+  // IR 탐조등(맨눈 · NVG 없으면 envBeams 에 없다) — 저광(EON LL)은 근적외선을 본다
+  if (hsl.lit && hsl.ir && eo.sensor === 'EON' && eo.ll && typeof env !== 'undefined' && !env.nvg) {
+    const sv = env.nvg; env.nvg = true;
+    try { bs = bs.concat(envBeams().filter(b => b.src)); } catch (e) { _swallow(e); } finally { env.nvg = sv; }
+  }
+  for (const b of bs) {
+    const hM = _mGndFt(b.lat, b.lon) * 0.3048, a = eoAngTo(b.lat, b.lon, hM);
+    if (Math.abs(normAS(a.brg - losB)) > fov * 0.75 + 2 || Math.abs(a.el - eo.el) > fov * 0.75 + 2) continue;   // 화면 밖(뒤에 있으면 project 가 엉뚱한 자리를 준다)
+    out.push({ lat: b.lat, lon: b.lon, r: b.r, k: b.k, rng: a.rng, dn: Math.max(0.05, Math.sin(Math.max(1, -a.el) * _mD)) });
+  }
+  return out;
+}
+let _eoLitCv = null;
+function _eoBeamsG(g, W, H) {
+  const spots = eoBeamSpots(); if (!spots.length) return;
+  const tod = (typeof env !== 'undefined' && env.tod) || 'DAY', ll = eo.sensor === 'EON' && eo.ll;
+  let a0 = tod === 'NIGHT' ? 0.9 : tod === 'DUSK' ? 0.6 : 0.18;
+  if (eo.filt === 'ND') a0 *= 0.6;
+  const fx = (W / 2) / Math.tan(eoFov() / 2 * _mD), col = ll ? '255,255,255' : '255,246,222';
+  const mc = _eoMap.getCanvas();
+  g.save(); g.globalCompositeOperation = 'lighter';
+  for (const sp of spots) {
+    let pt; try { pt = _eoMap.project([sp.lon, sp.lat]); } catch (e) { continue; }
+    if (!pt || !Number.isFinite(pt.x) || pt.x < -W || pt.x > 2 * W || pt.y < -H || pt.y > 2 * H) continue;
+    const rp = _mClamp(fx * sp.r / Math.max(1, sp.rng), 4, Math.max(W, H) * 1.5), al = Math.min(1, a0 * Math.min(1.6, sp.k / 1.4));
+    // 비친 자리의 땅 · 바다가 낮처럼 보이게 — 영상(필터 전)을 그 타원에만 부드럽게 덧그린다
+    if (mc && mc.width && tod !== 'DAY') {
+      const bw = Math.ceil(rp * 2), bh = Math.max(2, Math.ceil(rp * 2 * sp.dn)), x0 = pt.x - rp, y0 = pt.y - rp * sp.dn;
+      if (!_eoLitCv) _eoLitCv = document.createElement('canvas');
+      const oc = _eoLitCv; if (oc.width < bw) oc.width = bw; if (oc.height < bh) oc.height = bh;
+      const q = oc.getContext('2d'); q.setTransform(1, 0, 0, 1, 0, 0); q.globalCompositeOperation = 'source-over'; q.clearRect(0, 0, oc.width, oc.height);
+      try { q.filter = ll ? 'grayscale(1) brightness(1.15)' : 'brightness(1.05) sepia(0.15)'; } catch (e) { _swallow(e); }
+      try { q.drawImage(mc, x0 * mc.width / W, y0 * mc.height / H, bw * mc.width / W, bh * mc.height / H, 0, 0, bw, bh); } catch (e) { _swallow(e); }
+      try { q.filter = 'none'; } catch (e) { _swallow(e); }
+      q.globalCompositeOperation = 'destination-in';
+      q.save(); q.translate(bw / 2, bh / 2); q.scale(1, sp.dn);
+      const m = q.createRadialGradient(0, 0, 0, 0, 0, rp); m.addColorStop(0, `rgba(0,0,0,${Math.min(1, al * 1.1).toFixed(3)})`); m.addColorStop(0.6, `rgba(0,0,0,${(al * 0.7).toFixed(3)})`); m.addColorStop(1, 'rgba(0,0,0,0)');
+      q.fillStyle = m; q.beginPath(); q.arc(0, 0, rp, 0, 2 * Math.PI); q.fill(); q.restore();
+      g.save(); g.globalCompositeOperation = 'source-over'; g.drawImage(oc, 0, 0, bw, bh, x0, y0, bw, bh); g.restore();
+    }
+    g.save(); g.translate(pt.x, pt.y); g.scale(1, sp.dn);
+    const gr = g.createRadialGradient(0, 0, 0, 0, 0, rp);
+    const ga = tod === 'DAY' ? al : al * 0.55; gr.addColorStop(0, `rgba(${col},${ga.toFixed(3)})`); gr.addColorStop(0.45, `rgba(${col},${(ga * 0.5).toFixed(3)})`); gr.addColorStop(1, `rgba(${col},0)`);
+    g.fillStyle = gr; g.beginPath(); g.arc(0, 0, rp, 0, 2 * Math.PI); g.fill(); g.restore();
+  }
+  g.restore();
 }
 // 선박 표적 — 지도 위에 실루엣(IR 에서는 뜨겁게). g 는 지도 그릇의 CSS px 좌표(W × H)
 function _eoSprites(cv, W, H) {
@@ -1624,6 +1680,10 @@ function _eoHudG(g, x0, y0, W, H, full) {
 }
 function _eoHud(cv, W, H) {
   const g = cv.getContext('2d'); g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, W, H);
+  if (_eoMap && eo.pwr) {   // 빛 무리(영상 필터 밖)
+    const el = _eoMap.getContainer(), cw = el.clientWidth || W, ch = el.clientHeight || H;
+    g.setTransform(W / cw, 0, 0, H / ch, 0, 0); try { _eoBeamsG(g, cw, ch); } catch (e) { _swallow(e); } g.setTransform(1, 0, 0, 1, 0, 0);
+  }
   _eoHudG(g, 0, 0, W, H, true);
 }
 // 레이더 화면

@@ -131,6 +131,15 @@ export async function run(page, t) {
     slc.joy.x = -1; slc.joy.y = 1; const az0 = hsl.az, el0 = hsl.el; slcStep(1); slc.joy.x = 0; slc.joy.y = 0; o.slew = [hsl.az - az0, hsl.el - el0];
     slc.joy.x = 1; for (let i = 0; i < 20; i++) slcStep(1); slc.joy.x = 0; o.azMax = hsl.az;
     hsl.focus = 4; const nb = hslBeam(); hsl.focus = 13; const wb = hslBeam(); o.focus = [nb.wide < wb.wide, nb.k > wb.k]; hsl.focus = 8;
+    // EO/IR 영상에 탐조등 빛 무리가 보인다(밤 · 주간 카메라) — 열상(IR)에는 안 보인다
+    { const alt0 = S.alt, tod0 = env.tod, sen0 = eo.sensor, az0 = eo.az, el0 = eo.el, mode0 = eo.mode;
+      S.alt = _mGndFt(S.lat, S.lon) + 800; envSet({ tod: 'NIGHT' }); Object.assign(eo, { pwr: true, mode: 'MAN', sensor: 'EOW', az: -30, el: -35 }); hsl.az = -30; hsl.el = -35;
+      _eoCamera(); await w(400); _eoCamera();
+      const cv = document.createElement('canvas'); cv.width = 400; cv.height = 300;
+      const lum = () => { const g = cv.getContext('2d'); g.clearRect(0, 0, 400, 300); eoirVideoDrawTo(g, 0, 0, 400, 300); const d = g.getImageData(0, 0, 400, 300).data; let t = 0; for (let i = 0; i < d.length; i += 4) t += d[i] + d[i + 1] + d[i + 2]; return t / (d.length / 4) / 3; };
+      o.eoSpot = eoBeamSpots().length; const on = lum(); hsl.lit = false; const off = lum(); hsl.lit = true; o.eoLum = [+on.toFixed(1), +off.toFixed(1)];
+      eo.sensor = 'IR'; o.eoSpotIr = eoBeamSpots().length;
+      Object.assign(eo, { sensor: sen0, az: az0, el: el0, mode: mode0 }); envSet({ tod: tod0 }); S.alt = alt0; }
     slcRender(); o.lm = [...document.querySelectorAll('#msn-root [data-sll].on')].map(e => e.dataset.sll).join(',');
     slcPress('lamp', true); slcPress('lamp', false); o.cool = [hsl.lit, Math.round(hsl.cool)];
     hslPwrSet(false); o.fault = hsl.fault; hslPwrSet(true); hsl.fault = false; hsl.cool = 0;
@@ -205,6 +214,7 @@ export async function run(page, t) {
   t.ok(!D.lampStowed && D.init[0] === false && D.init[1] === -45, `HSL-1600 — STOW 면 램프가 켜지지 않고 · INIT 로 풀면 −45° (${D.init})`);
   t.ok(!D.ign && D.lit && D.beam && D.beam.down === 45 && D.irBare === null, 'LAMP — 5초 안에 켜진다 · 3D 빛 무리 · IR 은 NVG 없이는 보이지 않는다');
   t.ok(D.auto === 'EO' && D.slew[0] < -20 && D.slew[1] > 15 && D.azMax === 30, `MAN/AUTO · 조이스틱 — 방위 ${D.slew[0].toFixed(0)}° · 고각 +${D.slew[1].toFixed(0)}°/s · 오른쪽 한계 +30°`);
+  t.ok(D.eoSpot >= 1 && D.eoLum[0] > D.eoLum[1] + 4 && D.eoSpotIr === 0, `EO/IR 영상에 탐조등 빛 무리 — 밤 주간 카메라(밝기 ${D.eoLum[1]} → ${D.eoLum[0]}) · 열상(IR)에는 없음`);
   t.ok(D.focus[0] && D.focus[1], 'FOCUS — 4°(Spot)는 좁고 밝게 · 13°(Flood)는 넓게');
   t.ok(/PWR/.test(D.lm) && /LAMP/.test(D.lm) && D.cool[0] === false && D.cool[1] === 420 && D.fault, `표시등(${D.lm}) · 끄면 냉각팬 7분(${D.cool[1]}s) · 그동안 전원을 끊으면 FAULT`);
   t.ok(D.stowMv === 'STOW' && D.stow[0] && D.stow[1] === 0 && D.stow[2] === -90, `INIT/STOW — STOW 25초 뒤 0° · −90° (${D.stow})`);
