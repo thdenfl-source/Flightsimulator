@@ -135,6 +135,12 @@ export async function run(page, t) {
     slcPress('lamp', true); slcPress('lamp', false); o.cool = [hsl.lit, Math.round(hsl.cool)];
     hslPwrSet(false); o.fault = hsl.fault; hslPwrSet(true); hsl.fault = false; hsl.cool = 0;
     slcPress('init', true); slcPress('init', false); o.stowMv = hsl.mv && hsl.mv.to; hslStep(25.1); o.stow = [hsl.stowed, hsl.az, hsl.el];
+    // ── 녹화기(DVR) — 자리 · POWER · REC 표시등 ──
+    const box = sel => document.querySelector('#msn-root ' + sel).getBoundingClientRect();
+    const bE = box('.msn-eohcu'), bD = box('.dvr'), bC = box('.cln'), bS = box('.slc');
+    o.dvrPos = bE.bottom <= bD.top + 2 && bD.bottom <= bC.top + 2 && bS.left >= bE.right - 2;
+    o.slcH = Math.round(bS.height); o.colAH = Math.round(bC.bottom - bE.top);
+    dvrPress('rec'); o.dvrOff = dvr.rec; dvrPress('power'); dvrPress('rec'); o.dvr = [dvr.pwr, dvr.rec, document.querySelector('[data-dvl="pwr"]').className]; dvrPress('power');
     // ── 탐색레이더 조작기(VCCP · Seaspray 5000E) ──
     S.hdg = 0; rdr.menu = null; rdr.rng = 20;
     rdr.cmd = 'CKPT'; clnPress('rot:1', true); o.ckpt = rdr.rng === 20;                     // 조종실이 쥐고 있으면 듣지 않는다
@@ -165,6 +171,8 @@ export async function run(page, t) {
   t.ok(D.focus[0] && D.focus[1], 'FOCUS — 4°(Spot)는 좁고 밝게 · 13°(Flood)는 넓게');
   t.ok(/PWR/.test(D.lm) && /LAMP/.test(D.lm) && D.cool[0] === false && D.cool[1] === 420 && D.fault, `표시등(${D.lm}) · 끄면 냉각팬 7분(${D.cool[1]}s) · 그동안 전원을 끊으면 FAULT`);
   t.ok(D.stowMv === 'STOW' && D.stow[0] && D.stow[1] === 0 && D.stow[2] === -90, `INIT/STOW — STOW 25초 뒤 0° · −90° (${D.stow})`);
+  t.ok(D.dvrPos && D.slcH > D.colAH * 0.6, `오른쪽 — EO/IR 조작기 밑에 녹화기, 그 밑에 레이더 조작기 · 옆에 키운 탐조등 조작기(높이 ${D.slcH} / ${D.colAH}px)`);
+  t.ok(!D.dvrOff && D.dvr[0] && D.dvr[1] && /on/.test(D.dvr[2]), '녹화기 — POWER 가 꺼져 있으면 REC 안 됨 · 켜면 POWER 표시등 · REC');
   t.ok(D.ckpt && D.cmd === 'CABIN' && D.esc, `RDR > CMD — CKPT 면 전탐석 조작을 듣지 않고 · FNC 메뉴로 ${D.cmd} 로 바꾼다 · ESC 로 닫는다`);
   t.ok(D.rUp === 50 && D.rDn === 10, `VCCP 손잡이 돌림 — 거리 20 → ${D.rUp} → ${D.rDn}NM`);
   t.ok(/^V/.test(D.tgt || '') && D.trk >= 1 && D.clr && D.wxr, `4축 커서로 옮겨 누르면 표적 추적(${D.tgt} · TRK${D.trk}) · CLR 로 풀기 · WXR 겹`);

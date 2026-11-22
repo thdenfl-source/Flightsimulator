@@ -585,7 +585,30 @@ function _msnCss() {
 .msn-dk i u.on{background:#1c6;color:#000}
 /* 오른쪽 — EO/IR 조작기 · 탐색등 조작기 · 레이더 조작기 */
 .msn-right{display:flex;flex-direction:column;gap:8px;min-height:0;overflow:auto}
-.msn-ctl{display:flex;gap:8px;align-items:flex-start;justify-content:space-between}
+.msn-ctl{display:grid;grid-template-columns:auto minmax(0,1fr);gap:8px;align-items:stretch}
+.msn-colA{display:flex;flex-direction:column;gap:6px;align-items:center}
+.msn-colB{display:flex;flex-direction:column;align-items:center;justify-content:flex-start;min-width:0}
+.msn-slcz{zoom:1.24}
+.msn-slcz .slc{gap:14px;padding-top:18px;padding-bottom:52px}
+.msn-slcz .slc-st{margin-top:10px}
+.msn-clnz{zoom:.82}
+.msn-dvrz{zoom:.86}
+/* 녹화기(DVR) — EO/IR · 레이더 · 호이스트 · 지도 화면 녹화(기능은 이후) */
+.dvr{width:350px;background:linear-gradient(#1f2226,#141619);border:2px solid #07080a;border-radius:6px;padding:12px 14px 10px;box-shadow:0 3px 8px #000b,inset 0 1px 0 #3a3f45;
+  display:grid;grid-template-columns:1fr 150px;grid-template-areas:"l pad" "t t" "ch ch" "slot slot";gap:8px 10px;font:bold 10px Arial;color:#9aa3ab}
+.dvr b{background:linear-gradient(#5b6168,#3c4146);border:1px solid #111;border-radius:4px;color:#c8ced3;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:inset 0 1px 0 #7a8187}
+.dvr b.dn{background:#2a2e32;color:#ffd23a}
+.dvr-l{grid-area:l;display:flex;flex-direction:column;gap:8px;justify-content:center}
+.dvr-r{display:flex;align-items:center;gap:10px}.dvr-r b{width:76px;height:20px;font-size:9px}
+.dvr-led{width:14px;height:14px;border-radius:50%;background:#9fb4c4;opacity:.35;box-shadow:inset 0 1px 2px #000}
+.dvr-led.on{opacity:1;background:#5f6;box-shadow:0 0 8px #5f6}.dvr-led.rec{opacity:1;background:#f44;box-shadow:0 0 8px #f44}
+.dvr-pad{grid-area:pad;display:grid;grid-template-columns:30px 1fr 30px;grid-template-rows:24px 40px 24px;gap:3px}
+.dvr-pad .u{grid-column:1/4;grid-row:1}.dvr-pad .d{grid-column:1/4;grid-row:3}.dvr-pad .l{grid-column:1;grid-row:2}.dvr-pad .r{grid-column:3;grid-row:2}.dvr-pad .e{grid-column:2;grid-row:2;font-size:10px}
+.dvr-t{grid-area:t;display:grid;grid-template-columns:repeat(3,44px) 1fr 54px 54px;gap:10px;height:28px}
+.dvr-ch{grid-area:ch;display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.dvr-ch div{display:flex;flex-direction:column;align-items:center;gap:4px}.dvr-ch .dvr-led{width:9px;height:9px}.dvr-ch b{width:56px;height:20px;font-size:9px}
+.dvr-slot{grid-area:slot;height:30px;border:1px solid #000;border-radius:3px;background:#0c0d0f;display:flex;align-items:center;justify-content:space-between;padding:0 10px;color:#e8e8e8;font:bold 14px Arial}
+.dvr-slot i{width:60px;height:22px;background:#1b1d20;border:1px solid #000}
 .msn-eohcu{zoom:.74;display:flex;flex-direction:column;align-items:center;gap:6px}
 .msn-panel{background:#11161b;border:1px solid #2f3b46;border-radius:6px;padding:6px 8px;font-size:11px}
 .msn-panel h4{margin:0 0 5px;font-size:11px;color:#9fb3c4;letter-spacing:1px}
@@ -719,7 +742,7 @@ function _msnBuild() {
         <div class="msn-dk">V-IN<i>${[1, 2, 3, 4].map(n => `<u data-dk="v${n}">${n}</u>`).join('')}</i></div>${dk('up', '&nbsp;', '▲')}${dk('dn', '&nbsp;', '▼')}${dk('bri', '&nbsp;', '☀')}${dk('pwr', 'M-PWR', '⏻')}</div>
     </div>
     <div class="msn-right">
-      <div class="msn-ctl">
+      <div class="msn-ctl"><div class="msn-colA">
         <div class="msn-eohcu">
           <div><div class="hcu-top">${HCU_TOP.map(([k, n]) => `<div class="hcu-key" data-hcu="${k}">${n}</div>`).join('')}</div></div>
           <div><div class="hcu-face">${HCU_SW.map(sw).join('')}
@@ -734,7 +757,22 @@ function _msnBuild() {
               </div>
             </div></div><div class="hcu-cap">EO/IR HAND CONTROLLER (HCU)</div></div>
         </div>
-        <div><div class="slc">
+      <div class="msn-dvrz"><div class="dvr">
+        <div class="dvr-l">${[['power', 'POWER', 'pwr'], ['rec', 'REC', 'rec'], ['playback', 'PLAYBACK', 'play']].map(([k, n, l]) => `<div class="dvr-r"><i class="dvr-led" data-dvl="${l}"></i><b data-dvr="${k}">${n}</b></div>`).join('')}</div>
+        <div class="dvr-pad"><b class="u" data-dvr="up">▲</b><b class="l" data-dvr="left">◀</b><b class="e" data-dvr="enter">ENTER</b><b class="r" data-dvr="right">▶</b><b class="d" data-dvr="down">▼</b></div>
+        <div class="dvr-t"><b data-dvr="rew">◀◀/◀</b><b data-dvr="play">❙❙▶</b><b data-dvr="ff">▶/▶▶</b><span></span><b data-dvr="menu">MENU</b><b data-dvr="back">↩</b></div>
+        <div class="dvr-ch">${[1, 2, 3, 4].map(n => `<div><i class="dvr-led" data-dvl="ch${n}"></i><b data-dvr="ch${n}">CH${n}</b></div>`).join('')}</div>
+        <div class="dvr-slot"><span>⟵ OPEN</span><i></i></div>
+      </div><div class="msn-cap2">VIDEO RECORDER — EO/IR · RADAR · HOIST · MAP</div></div>
+      <div class="msn-clnz"><div class="cln">
+        <div class="cln-k"><b data-cln="map">MAP</b><b data-cln="esc">ESC</b><b data-cln="com">COM</b><b data-cln="tfc">TFC</b></div>
+        <div class="cln-knob" data-m="clnknob"><div class="ring"></div><div class="cap" data-cln="push"></div>
+          ${[['n', 51, 0, '▲'], ['ne', 92, 10, '◥'], ['e', 102, 51, '▶'], ['se', 92, 92, '◢'], ['s', 51, 102, '▼'], ['sw', 10, 92, '◣'], ['w', 0, 51, '◀'], ['nw', 10, 10, '◤']].map(([d, x, y, t]) => `<em data-cln="pan:${d}" style="left:${x}px;top:${y}px">${t}</em>`).join('')}</div>
+        <div class="cln-rot"><b data-cln="rot:-1" title="왼쪽으로 돌림 — 넓게">⟲</b><b data-cln="rot:1" title="오른쪽으로 돌림 — 좁게">⟳</b></div>
+        <div class="cln-k"><b data-cln="clr">CLR</b><b data-cln="fnc">FNC</b><b data-cln="wxr">WXR</b><b data-cln="tws">TWS</b></div>
+      </div><div class="msn-cap2">SEARCH RADAR CONTROL — VCCP (SEASPRAY 5000E)</div></div>
+      </div><div class="msn-colB">
+        <div class="msn-slcz"><div class="slc">
           <div class="slc-top"><div class="slc-rk"><u data-slc="hdim:up">▲</u>HCU<br>DIM<u data-slc="hdim:dn">▼</u><span data-slc="test" style="margin-top:3px">TEST ▷</span></div>
             <div class="slc-lm" data-m="slclm">${['FAULT', 'LSR', 'LAMP', 'PWR', 'BLK', 'AUTO', 'IR', 'STW'].map(n => `<span data-sll="${n}">${n}</span>`).join('')}</div>
             <div class="slc-rk"><u data-slc="rdim:up">▲</u>RAD<br>DIM<u data-slc="rdim:dn">▼</u></div></div>
@@ -742,15 +780,8 @@ function _msnBuild() {
           <div class="slc-mid"><div class="slc-pb"><b data-slc="offset"></b>OFFSET</div><div class="slc-pb"><b data-slc="manauto"></b>MAN/AUTO</div><div class="slc-pb">FOCUS<div class="slc-fc" data-m="slfocus"></div></div></div>
           <div class="slc-st" data-m="slstick"><em style="left:37px;top:-1px">▲</em><em style="left:37px;bottom:-2px">▼</em><em style="left:1px;top:35px">◀</em><em style="right:1px;top:35px">▶</em><i></i></div>
           <div class="slc-xs">XS1</div>
-        </div><div class="msn-cap2">SEARCH LIGHT HCU (HSL-1600)</div><button class="msn-btn" data-mact="slpwr" style="width:178px;margin-top:4px">SEARCH LT PWR ON</button><div class="msn-tdata" data-m="sdata" style="width:178px"></div></div>
+        </div></div><div class="msn-cap2">SEARCH LIGHT HCU (HSL-1600)</div><button class="msn-btn" data-mact="slpwr" style="width:100%;margin-top:4px">SEARCH LT PWR ON</button><div class="msn-tdata" data-m="sdata"></div></div>
       </div>
-      <div><div class="cln">
-        <div class="cln-k"><b data-cln="map">MAP</b><b data-cln="esc">ESC</b><b data-cln="com">COM</b><b data-cln="tfc">TFC</b></div>
-        <div class="cln-knob" data-m="clnknob"><div class="ring"></div><div class="cap" data-cln="push"></div>
-          ${[['n', 51, 0, '▲'], ['ne', 92, 10, '◥'], ['e', 102, 51, '▶'], ['se', 92, 92, '◢'], ['s', 51, 102, '▼'], ['sw', 10, 92, '◣'], ['w', 0, 51, '◀'], ['nw', 10, 10, '◤']].map(([d, x, y, t]) => `<em data-cln="pan:${d}" style="left:${x}px;top:${y}px">${t}</em>`).join('')}</div>
-        <div class="cln-rot"><b data-cln="rot:-1" title="왼쪽으로 돌림 — 넓게">⟲</b><b data-cln="rot:1" title="오른쪽으로 돌림 — 좁게">⟳</b></div>
-        <div class="cln-k"><b data-cln="clr">CLR</b><b data-cln="fnc">FNC</b><b data-cln="wxr">WXR</b><b data-cln="tws">TWS</b></div>
-      </div><div class="msn-cap2">SEARCH RADAR CONTROL — VCCP (SEASPRAY 5000E)</div></div>
       <div class="msn-panel"><h4>SEARCH RADAR — 빠른 단추(메뉴 FNC · MAP 과 같다)</h4><div class="msn-keys">
         <button class="msn-btn" data-mact="rtx">TX</button><button class="msn-btn" data-mact="rmode">MODE</button><button class="msn-btn" data-mact="rcmd">CMD</button>
         <button class="msn-btn" data-mact="rng-">RNG −</button><button class="msn-btn" data-mact="rng+">RNG +</button>
@@ -772,6 +803,8 @@ function _msnBuild() {
     if (sl) { e.preventDefault(); const k = sl.dataset.slc; downK.set(e.pointerId, ['slc', k]); slcPress(k, true); try { sl.setPointerCapture(e.pointerId); } catch (er) { _swallow(er); } return; }
     const cl = e.target.closest('[data-cln]');
     if (cl) { e.preventDefault(); const k = cl.dataset.cln; downK.set(e.pointerId, ['cln', k]); clnPress(k, true); try { cl.setPointerCapture(e.pointerId); } catch (er) { _swallow(er); } return; }
+    const dv = e.target.closest('[data-dvr]');
+    if (dv) { e.preventDefault(); dvrPress(dv.dataset.dvr); return; }
     const d = e.target.closest('[data-dk]');
     if (d) { e.preventDefault(); dispKey(d.dataset.dk); }
   });
@@ -809,6 +842,23 @@ function _msnBuild() {
   });
   dispSet();
   return R;
+}
+// ══ 녹화기(DVR · 527) — EO/IR · 레이더 · 호이스트 · 지도 화면을 녹화한다. 지금은 표시등만(녹화 · 재생 기능은 이후) ══
+const dvr = { pwr: false, rec: false, play: false, ch: { 1: true, 2: true, 3: true, 4: true } };
+function dvrPress(k) {
+  if (k === 'power') { dvr.pwr = !dvr.pwr; if (!dvr.pwr) { dvr.rec = false; dvr.play = false; } }
+  else if (!dvr.pwr) _mToast('녹화기 POWER 가 꺼져 있습니다');
+  else if (k === 'rec') { dvr.rec = !dvr.rec; if (dvr.rec) dvr.play = false; _mNote(`녹화기 REC ${dvr.rec ? '시작' : '멈춤'}`); }
+  else if (k === 'playback') { dvr.play = !dvr.play; if (dvr.play) dvr.rec = false; }
+  else if (/^ch[1-4]$/.test(k)) dvr.ch[k[2]] = !dvr.ch[k[2]];
+  else _mToast('녹화기 — 이 단추의 기능은 이후에 갖춥니다');
+  dvrRender();
+}
+function dvrRender() {
+  if (!_msnEl) return;
+  const L = (n, c) => { const e = _msnEl.querySelector(`[data-dvl="${n}"]`); if (e) e.className = 'dvr-led' + (c ? ' ' + c : ''); };
+  L('pwr', dvr.pwr ? 'on' : ''); L('rec', dvr.pwr && dvr.rec && Math.floor(performance.now() / 500) % 2 === 0 ? 'rec' : ''); L('play', dvr.pwr && dvr.play ? 'on' : '');
+  [1, 2, 3, 4].forEach(n => L('ch' + n, dvr.pwr && dvr.ch[n] ? 'on' : ''));
 }
 // ══ 탐색등 조작기(HSL-1600 HCU) — LSR/OFF · IR/VIS · LAMP/OFF · INIT/STOW · OFFSET · MAN/AUTO · FOCUS · 조이스틱 · 표시등 ══
 //   (자세한 기능은 교범을 받아 더한다 — 지금은 켜고 끄기 · 수동/연동 · 지향 · 표시등)
@@ -1351,7 +1401,7 @@ function msnRenderPanels() {
     td.textContent = c ? `TGT ${c.id} (${c.name})\nRNG ${distance(S.lat, S.lon, c.lat, c.lon).toFixed(2)}NM  BRG ${fmtA(bearing(S.lat, S.lon, c.lat, c.lon))}°` +
       (T && T.spd != null ? `\nCSE ${fmtA(T.cse || 0)}°  SPD ${T.spd.toFixed(1)}KT` : '\nCSE ---  SPD ---') : (rdr.tx ? '표적을 누르면 지정합니다' : '');
   }
-  slcRender();
+  slcRender(); dvrRender();
   _msnEl.querySelectorAll('[data-dk]').forEach(b => { const k = b.dataset.dk; b.classList.toggle('on', (k === 'multi' && disp.lay === 'quad') || (k === 'split' && disp.lay === 'split') || (k === 'pip' && eo.pip !== 'OFF') || (k === 'pwr' && disp.pwr) || (k === 'navi' && disp.lay === 'one' && disp.ch === 4) || (k === 'v' + disp.ch && disp.lay === 'one')); });
   _msnEl.querySelectorAll('[data-cln]').forEach(b => { const k = b.dataset.cln; if (k === 'wxr') b.classList.toggle('on', rdr.wxr); if (k === 'tws') b.classList.toggle('on', rdr.tws); if (k === 'map') b.classList.toggle('on', rdr.menu === 'MAP'); if (k === 'fnc') b.classList.toggle('on', rdr.menu === 'FNC'); });
   const sd = _msnEl.querySelector('[data-m="sdata"]');
