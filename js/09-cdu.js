@@ -145,9 +145,9 @@ async function prefetchTiles() {
 
 // ⟳ 새로고침: 세션을 지우고 초기 상태로 리로드(백그라운드 복원 종료)
 // ⟳ 새로고침 — 잘못 눌러 비행이 날아가지 않게 먼저 묻는다(창 위 탭 · Cockpit Mode 버튼 줄 맨 아래)
-function hardReloadNow() {
+function hardReloadNow(url) {
   try { localStorage.removeItem(SESSION_KEY); } catch(e) { _swallow(e); }
-  location.reload();
+  if (url) location.replace(url); else location.reload();
 }
 // 저장 후 새로고침 — 지금 상태(위치 · 자세 · 속도 · 바람 · 연료 · 비행계획 등)를 시나리오로 적어 두고 새로 고친다.
 // 새로 고친 뒤 ⚙ 시나리오에서 '새로고침 전 …' 을 불러 같은 상황을 다시 연습한다(30-scenario.js scnSave · scnApply)
@@ -175,7 +175,11 @@ async function goStartScreen() {
   try { if (typeof uiConfirm === 'function') ok = await uiConfirm('처음 화면(화면 · 기종 고르기)으로 갈까요?\n지금 비행 상태는 처음으로 돌아갑니다.', { okText: '처음 화면', cancelText: '취소' }); } catch (e) { _swallow(e); }
   if (!ok) return;
   try { sessionStorage.setItem('vfrChooseAgain', '1'); sessionStorage.removeItem('vfrStartMode'); } catch (e) { _swallow(e); }
-  hardReloadNow();
+  // 표시를 주소에도 단다(?choose=1) — sessionStorage 에 적자마자 새로 고치면 브라우저가 그 값을 아직 적지 못한 채
+  // 다시 열어(부하가 있을 때) 처음 화면 대신 그냥 앱이 뜨는 일이 있었다. 주소의 표시는 비밀번호를 건너뛰게 하지 않는다(00-gate.js)
+  let url = null;
+  try { const u = new URL(location.href); u.searchParams.set('choose', '1'); url = u.toString(); } catch (e) { _swallow(e); }
+  hardReloadNow(url);
 }
 
 // 주기적 + 이탈 시점 저장

@@ -55,23 +55,36 @@ export async function run(page, t) {
     const tb2 = await browser.newPage();
     await tb2.addInitScript(() => { try { sessionStorage.setItem('vfrUnlocked', '1'); sessionStorage.setItem('vfrStartApt', '1'); } catch (e) {} });
     await tb2.goto(url); await ready(tb2);
-    await tb2.evaluate(() => { sessionStorage.setItem('vfrChooseAgain', '1'); });
-    await tb2.reload(); await ready(tb2);
+    // ⌂ 처음 화면 — 실제 단추 길(goStartScreen · 확인창은 '처음 화면')로. 표시는 sessionStorage 와 주소(?choose=1) 둘 다에 남는다
+    //   (새로 고치기 직전에 적은 sessionStorage 는 부하가 있으면 사라질 수 있어 — 종전 이 검사가 가끔 실패한 까닭 — 주소에도 단다)
+    await Promise.all([tb2.waitForNavigation({ timeout: 20000 }).catch(() => {}),
+      tb2.evaluate(() => { window.uiConfirm = () => Promise.resolve(true); goStartScreen(); }).catch(() => {})]);
+    await ready(tb2);
     const gateUp = () => tb2.waitForFunction(() => window.gateLocked === true && getComputedStyle(document.getElementById('gate-mode')).display !== 'none', null, { timeout: 10000 }).catch(() => {});
     await gateUp();
     const g = await tb2.evaluate(() => ({ locked: window.gateLocked, shown: getComputedStyle(document.getElementById('gate-overlay')).display !== 'none',
       choose: getComputedStyle(document.getElementById('gate-mode')).display !== 'none', pwHidden: getComputedStyle(document.getElementById('gate-pw')).display === 'none',
-      flag: sessionStorage.getItem('vfrChooseAgain') }));
+      flag: sessionStorage.getItem('vfrChooseAgain'), url: /[?&]choose=1/.test(location.search) }));
     await tb2.reload(); await ready(tb2); await gateUp();   // 고르기 전에 한 번 더 새로 불러도(서비스 워커 갱신 등) 처음 화면 그대로
     g.again = await tb2.evaluate(() => window.gateLocked && getComputedStyle(document.getElementById('gate-mode')).display !== 'none');
     await tb2.evaluate(() => document.getElementById('gate-mode-pc').click());   // (병렬 부하에서 playwright 의 '보일 때까지' 기다림이 늦게 풀려 직접 누른다)
     const open = await tb2.waitForFunction(() => !window.gateLocked, null, { timeout: 8000 }).then(() => true, () => false);
     g.flagAfter = await tb2.evaluate(() => sessionStorage.getItem('vfrChooseAgain'));
+    g.urlAfter = await tb2.evaluate(() => /[?&]choose=1/.test(location.search));
+    // 주소의 표시만 남고 sessionStorage 가 사라진 경우(새로 고침 경합)에도 처음 화면이 뜬다 · 잠금이 안 풀린 탭에서는 주소만으로 비밀번호를 건너뛰지 않는다
+    const lost = await tb2.evaluate(() => { const u = new URL(location.href); u.searchParams.set('choose', '1'); sessionStorage.removeItem('vfrChooseAgain'); return u.toString(); });
+    await tb2.goto(lost); await ready(tb2); await gateUp();
+    g.urlOnly = await tb2.evaluate(() => window.gateLocked && getComputedStyle(document.getElementById('gate-mode')).display !== 'none');
+    const tb3 = await browser.newPage();   // 잠금이 안 풀린 새 탭 — 주소에 ?choose=1 을 붙여 열어도
+    await tb3.goto(lost); await tb3.waitForFunction(() => typeof window.gateLocked === 'boolean', null, { timeout: 20000 });
+    g.noBypass = await tb3.evaluate(() => (typeof APP_EDITION !== 'undefined' && APP_EDITION === 'proc') ? 'proc' : (window.gateLocked && getComputedStyle(document.getElementById('gate-pw')).display !== 'none'));
+    await tb3.close();
     await tb2.close();
     t.ok(q.btns && q.ck, '창 위 탭에 ⌂ 처음 화면 · ⟳ 새로고침 · 3D(Cockpit) 버튼 줄 맨 아래에 ⟳ 새로고침');
     t.ok(q.askHome && q.cancelHome && q.askReload && q.okReload, '처음 화면 · 새로고침은 먼저 묻는다 — 취소하면 그대로 · 확인하면 새로고침');
     t.ok(q.extraBtn && q.saved, '저장 후 새로고침 — 지금 상태를 시나리오(새로고침 전 …)로 남기고 새로 고친다');
-    t.ok(g.locked && g.shown && g.choose && g.pwHidden && g.flag === '1' && g.again && open && g.flagAfter === null, `처음 화면 — 비밀번호 없이 화면 · 기종 고르기가 뜨고, 고르면 열린다 (${JSON.stringify(g)} · ${open})`);
+    t.ok(g.locked && g.shown && g.choose && g.pwHidden && g.flag === '1' && g.url && g.again && open && g.flagAfter === null && !g.urlAfter, `처음 화면 — 비밀번호 없이 화면 · 기종 고르기가 뜨고, 고르면 열린다(표시도 거둔다) (${JSON.stringify(g)} · ${open})`);
+    t.ok(g.urlOnly && (g.noBypass === true || g.noBypass === 'proc'), `sessionStorage 표시가 사라져도 주소(?choose=1)로 처음 화면이 뜬다 · 잠기지 않은 탭은 주소만으로 비밀번호를 건너뛰지 못한다 (${g.urlOnly} · ${g.noBypass})`);
   }
   // 절차 훈련판(Flightsimulator)은 비밀번호가 없다 — 처음 열면 곧바로 화면 · 기종 고르기
   const procEd = await page.evaluate(() => typeof APP_EDITION !== 'undefined' && APP_EDITION === 'proc');

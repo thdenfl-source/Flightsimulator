@@ -469,7 +469,9 @@ function _sarCamCreate(el, mode) {
   _sarCam.timer = setInterval(_sarCamUpdate, 50);
 }
 // Cockpit Mode SYSTEM MFD(15-heli3d.js ckpitDraw)가 부른다 — SYSTEM 창이 화면에 없으면 화면 밖에 지도를 두고
-// 그 그림(지도 + HUD)을 MFD 의 큰 칸(x, y, w, h)에 옮겨 그린다. 1.5초 동안 부르지 않으면 거둔다.
+// 그 그림(지도 + HUD)을 MFD 의 큰 칸(x, y, w, h)에 옮겨 그린다. SARCAM_OFF_IDLE_MS 동안 부르지 않으면 거둔다
+// (종전 1.5초 — 바쁜 컴퓨터에서 조종석 그리기가 잠깐 밀리면 3D 지도를 거뒀다 다시 만들어 더 무거워졌다)
+const SARCAM_OFF_IDLE_MS = 5000;
 function sarHoistCamDrawTo(g, x, y, w, h) {
   if (typeof maplibregl === 'undefined') return;
   if (!_sarCam.map) {
@@ -503,7 +505,7 @@ function _sarCamUpdate() {
   const w = el.clientWidth, H = el.clientHeight;
   // SYSTEM 창이 화면에서 내려갔으면(다른 창을 골랐거나 숨겼으면) 지도를 거둔다 — 그래픽 부담
   if (!el.isConnected || !(w > 0 && H > 0) || (typeof sysPage !== 'undefined' && (sysPage !== 'asys_video' || videoCfg.ch !== 'HOIST'))) { _sarCamDestroy(); return; }
-  if (_sarCam.mode === 'off' && performance.now() - _sarCam.offT > 1500) { _sarCamDestroy(); return; }   // 조종석 MFD 가 더는 그리지 않는다
+  if (_sarCam.mode === 'off' && performance.now() - _sarCam.offT > SARCAM_OFF_IDLE_MS) { _sarCamDestroy(); return; }   // 조종석 MFD 가 더는 그리지 않는다
   const [hl, ho] = sarHookLL();
   try { map.jumpTo({ center: [ho, hl], zoom: sarHoistCamZoom(w), bearing: S.hdg, pitch: 0 }); } catch (e) { _swallow(e); }
   // HUD — 가운데 십자(바로 아래 = 고리가 내려가는 자리) · 케이블 · 높이 차 · 거리 · 유지 시간
