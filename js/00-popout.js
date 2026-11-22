@@ -4,7 +4,7 @@
 // 화면의 세 패널(좌·중·우)을 각각 '⧉' 버튼으로 새 창에 옮겨 띄울 수 있다. 새 창은 앱을
 // 하나 더 여는 것이 아니라 그 패널(의 DOM)을 그대로 옮겨 간 것이다 — 시뮬·상태·조이스틱은
 // 이 창(본 창) 하나가 돌리고, 새 창은 그 화면을 보여 주고 입력을 받을 뿐이다. 그래서 창이
-// 몇 개든 비행 상태가 어긋나지 않는다. 새 창을 닫거나 '⧉ 복귀' 를 누르면 패널이 제자리로 돌아온다.
+// 몇 개든 비행 상태가 어긋나지 않는다. 새 창을 닫거나 '↩ 복귀' 를 누르면 패널이 제자리로 돌아온다.
 //
 // 그러려면 세 가지를 이어 준다.
 //  1) 이벤트 — 앱·라이브러리가 document·window 에 건 입력 이벤트(키·클릭·포인터·휠·리사이즈)를
@@ -78,13 +78,13 @@
         if (root) root.className = app.className + ' po-root';
       } catch (e) { /* 닫히는 중 */ }
       const b = w.panel.querySelector('.po-btn');
-      if (b) { b.textContent = '⧉ 복귀'; b.title = '이 패널을 본 창으로 되돌린다'; }
+      if (b) { b.textContent = '↩ 복귀'; b.dataset.short = '↩'; b.title = '이 패널을 본 창으로 되돌린다'; }
       const tb = w.panel.querySelector('.po-top-btn'); if (tb) { tb.classList.toggle('on', !!w.pip); tb.textContent = w.pip ? '📌 복귀' : '📌 Top'; }
     });
     ['left', 'mid', 'right', 'bot'].forEach(s => {
       if (wins.some(w => w.side === s)) return;
       const p = gid(PANEL_ID[s]); const b = p && p.querySelector('.po-btn');
-      if (b) { b.textContent = '⧉ POP UP'; b.title = '이 패널을 새 창으로 띄운다(다중 모니터에 따로 배치)'; }
+      if (b) { b.textContent = '⧉ POP UP'; b.dataset.short = '⧉'; b.title = '이 패널을 새 창으로 띄운다(다중 모니터에 따로 배치)'; }
       const tb = p && p.querySelector('.po-top-btn'); if (tb) { tb.classList.remove('on'); tb.textContent = '📌 Top'; }
     });
   }
@@ -117,7 +117,7 @@
       '#app.po-root{position:absolute;inset:0;display:flex !important;flex-direction:row;}' +
       '#app.po-root > #left-panel,#app.po-root > #mid-panel,#app.po-root > #right-panel,#app.po-root > #bot-panel' +
       '{display:flex !important;flex:1 1 0 !important;width:100% !important;min-width:0;}' +
-      '.po-top-btn{display:inline-block !important;}' +
+      '.po-top-btn{display:flex !important;}' +
       // 화면 하나만 띄운 창(SIM Mode 의 창 배치판) — 그 화면이 창을 가득 채운다
       '#app.po-root > .po-screen-host{display:flex !important;flex-direction:column;flex:1 1 0;width:100%;min-width:0;height:100%;}' +
       '#app.po-root > .po-screen-host > .page-content, #app.po-root > .po-screen-host > #pfd-wrap{display:block;flex:1 1 0;}';
