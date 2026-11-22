@@ -25,7 +25,11 @@ function kgLdgSet(on) {
   try { if (typeof envSet === 'function') envSet({ ldg: !!on }); else env.ldg = !!on; } catch (e) { _swallow(e); } kgRender(); _kgPfd(); }
 // PFD 메시지 시현창(LANDING LT ON · SEARCH LT ON — 03-pfd.js pfdMsgs)을 곧바로
 function _kgPfd() { try { if (typeof drawPFD === 'function') drawPFD(); } catch (e) { _swallow(e); } }
+// 흰수리 — 컬렉티브 SRCH LT · SRCH CTR 는 외장형 탐조등(HSL-1600 · 왼쪽 승무원 도어 밑 · 37-mission.js)을 다룬다
+function _kgHsl() { return typeof hslLink === 'function' && hslLink(); }
+function _kgHslSync() { if (!_kgHsl()) return; try { const h = hslGripState(); kgLt.srch = h.on; kgLt.az = h.az; kgLt.el = h.el; } catch (e) { _swallow(e); } }
 function kgSrchSet(on) {
+  if (_kgHsl()) { try { if (!!on !== hslGripState().on) hslGripLamp(); } catch (e) { _swallow(e); } _kgHslSync(); kgRender(); _kgPfd(); return; }
   kgLt.srch = !!on;
   try { if (typeof fdrNote === 'function') fdrNote(`서치라이트 ${kgLt.srch ? 'ON' : 'OFF'}`); } catch (e) { _swallow(e); }
   kgRender(); _kgPfd();
@@ -35,13 +39,14 @@ function kgBeams() {
   if (!kgOn()) return [];
   const out = [];
   if (_kgLdg() && kgLt.ldgE >= 1) out.push({ az: 0, down: kgLdgDown(), k: KG_LDG.k, reach: KG_LDG.reach, wide: 0.26 });   // 접혀 있으면 빛이 밖으로 나오지 않는다
-  if (kgLt.srch) out.push({ az: kgLt.az, down: kgLt.el, k: 0.9 * kgLt.br, reach: KG_SRCH.reach });
+  if (kgLt.srch && !_kgHsl()) out.push({ az: kgLt.az, down: kgLt.el, k: 0.9 * kgLt.br, reach: KG_SRCH.reach });   // 흰수리는 외장형 탐조등(hslBeam) 하나
   try { if (typeof hslBeam === 'function') { const b = hslBeam(); if (b) out.push(b); } } catch (e) { _swallow(e); }   // 전탐석 탐조등 HSL-1600(37-mission.js)
   return out;
 }
 // STOW SEL — LDG 쪽: 착륙등 끄고 접기 · SRCH 쪽: 서치라이트 끄고 원위치(정면 · 아래 30°)
 function kgStow(which) {
   if (which === 'LDG') { kgLt.ldgTgt = 0; if (_kgLdg()) kgLdgSet(false); }
+  else if (which === 'SRCH' && _kgHsl()) { try { hslStow(); } catch (e) { _swallow(e); } _kgHslSync(); }
   else if (which === 'SRCH') { if (kgLt.srch) kgSrchSet(false); kgLt.az = 0; kgLt.el = KG_SRCH.el0; }
   try { if (typeof fdrNote === 'function') fdrNote(`STOW SEL ${which} — ${which === 'LDG' ? '착륙등' : '서치라이트'} OFF · 원위치`); } catch (e) { _swallow(e); }
   kgRender();
@@ -89,6 +94,7 @@ function _kgHoldStart(k, step, end, first = 350, every = 80) {
 function _kgDt() { const now = performance.now(), h = _kgHold; if (!h) return 0; const dt = h.tl ? Math.min(0.3, (now - h.tl) / 1000) : 0.05; h.tl = now; return dt; }
 function _kgSrchMove(dir) {
   const dt = _kgDt();
+  if (_kgHsl()) { try { hslGripMove(dir, dt); } catch (e) { _swallow(e); } _kgHslSync(); return; }
   if (dir === 'L') kgLt.az = Math.max(-KG_SRCH.azMax, kgLt.az - KG_SRCH.azRate * dt);
   if (dir === 'R') kgLt.az = Math.min(KG_SRCH.azMax, kgLt.az + KG_SRCH.azRate * dt);
   if (dir === 'U') kgLt.el = Math.max(KG_SRCH.elMin, kgLt.el - KG_SRCH.elRate * dt);
