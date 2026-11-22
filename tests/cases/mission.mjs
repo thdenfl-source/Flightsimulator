@@ -35,10 +35,10 @@ export async function run(page, t) {
     // ── 선박 표적을 북쪽 1.5NM 에 놓고 레이더 → EO/IR SLEW → AVT 잠금 → LRF ──
     msnVslClear(); msnSpawn(1, { brg: 0, nm: 1.5, spd: 0, hdg: 90, type: '어선', anywhere: true });
     const v = msnVsl[0];
-    rdr.tx = true; rdr.rng = 5; rdr.paint = {};
+    rdr.cmd = 'CABIN'; rdr.warm = 0; rdr.tx = true; rdr.rng = 10; rdr.paint = {}; rdr.trkNo = {}; rdr.az = -5; rdr.dir = 1;
     for (let i = 0; i < 60; i++) rdrStep(0.05);
     o.paint = !!rdr.paint[v.id];
-    const pk = rdrPick(0, -1.5 / 5); o.pick = pk;
+    const pk = rdrPickRB(0, 1.5); o.pick = pk;
     o.slave = rdrSlaveEo() && eo.mode === 'SLEW';
     for (let i = 0; i < 60; i++) eoStep(0.05);
     const ang = eoAngTo(v.lat, v.lon, 0); o.aim = [eo.az - ang.az, eo.el - ang.el].map(x => Math.abs(x));
@@ -127,15 +127,23 @@ export async function run(page, t) {
     slcPress('init', true); slcPress('init', false); o.stow = [slc.stow, kgLt.srch];
     slcPress('init', true); slcPress('init', false); o.init = slc.stow;
     slcRender(); o.lm = [...document.querySelectorAll('#msn-root [data-sll].on')].map(e => e.dataset.sll).join(',');
-    // ── 레이더 · 지도 조작기(EuroNav CLN) ──
-    nv.nm = 5; clnPress('rot:1', true); o.zin = nv.nm; clnPress('rot:-1', true); clnPress('rot:-1', true); o.zout = nv.nm; nv.nm = 5;
-    msnVslClear(); msnSpawn(1, { brg: 90, nm: 2, spd: 0, anywhere: true }); rdr.tgt = null; nv.cur = null;
-    clnPress('push', true); clnPress('push', false); o.cur = !!nv.cur;
-    for (let i = 0; i < 5; i++) clnPress('pan:e', true);
-    clnPress('push', true); clnPress('push', false); o.tgt = rdr.tgt;
-    clnPress('clr', true); o.clr = rdr.tgt === null && nv.cur === null;
-    clnPress('wxr', true); o.wxr = nv.wxr; clnPress('wxr', true);
-    clnPress('map', true); o.mapKey = vis(); clnPress('esc', true); o.esc = vis();
+    // ── 탐색레이더 조작기(VCCP · Seaspray 5000E) ──
+    S.hdg = 0; rdr.menu = null; rdr.rng = 20;
+    rdr.cmd = 'CKPT'; clnPress('rot:1', true); o.ckpt = rdr.rng === 20;                     // 조종실이 쥐고 있으면 듣지 않는다
+    clnPress('fnc', true); rdr.menuI = 2; clnPress('push', true); clnPress('push', false); o.cmd = rdr.cmd; clnPress('esc', true); o.esc = rdr.menu === null;
+    clnPress('rot:1', true); o.rUp = rdr.rng; clnPress('rot:-1', true); clnPress('rot:-1', true); o.rDn = rdr.rng;
+    msnVslClear(); msnSpawn(1, { brg: 20, nm: 3, spd: 0, anywhere: true }); rdr.trkNo = {}; rdr.tgt = null; rdr.paint = {}; rdr.tx = true; rdr.frz = false; rdr.az = 0; rdr.dir = 1;
+    for (let i = 0; i < 80; i++) rdrStep(0.05);
+    rdr.cur = { az: 0, nm: 3 }; for (let i = 0; i < 10; i++) clnPress('pan:e', true);
+    clnPress('push', true); clnPress('push', false); o.tgt = rdr.tgt; o.trk = rdr.trkNo[rdr.tgt];
+    clnPress('clr', true); o.clr = rdr.tgt === null;
+    clnPress('wxr', true); o.wxr = rdr.wxr; clnPress('wxr', true);
+    clnPress('map', true); o.mapMenu = rdr.menu; const tws0 = rdr.tws; clnPress('rot:1', true); clnPress('push', true); clnPress('push', false); o.tws = rdr.tws !== tws0; clnPress('esc', true); rdr.tws = tws0;
+    const m0 = rdr.mode; msnAct('rmode'); o.mode = [m0, rdr.mode];
+    rdr.mode = 'SART'; sarPlaceAt(...destPoint(S.lat, S.lon, 10, 2)); o.sart = !!rdrSartReply(); rdr.mode = 'LRS';
+    rdr.frz = true; const az1 = rdr.az; rdrStep(0.5); o.frz = rdr.az === az1; rdr.frz = false;
+    rdrPower(false); rdrPower(true); o.warm = rdr.warm > 80 && !rdrTx(true); rdr.warm = 0; rdrTx(true);
+    const rc = document.querySelector('#msn-root .msn-rdr canvas'); _rdrDraw(rc); const dd = rc.getContext('2d').getImageData(0, 24, rc.width, 40).data; let gn = 0; for (let i = 0; i < dd.length; i += 4) if (dd[i + 1] > 150) gn++; o.hdr = gn;
     return o;
   });
   t.eq(D.quad, 'map,hoist,rdr,eo', 'MULTI — 4분할(지도 · 호이스트 · 레이더 · EO/IR)');
@@ -145,9 +153,13 @@ export async function run(page, t) {
   t.ok(D.nvMap && D.mapOv > 30 && D.hoistWant && /CH1 \/ 30fps/.test(D.labels), `지도 칸(좌표 · 기체 · ${D.mapOv}점) · 호이스트 카메라 칸 · 채널 이름`);
   t.ok(D.lamp && D.auto === 'EO' && D.slew > 5, `탐색등 조작기 — LAMP 켬 · MAN/AUTO 로 EO/IR 연동 · 조이스틱으로 돌림(${D.slew.toFixed(1)}°)`);
   t.ok(D.stow[0] && !D.stow[1] && !D.init && /PWR/.test(D.lm), `INIT/STOW — STOW 면 끄고 거둔다 · INIT 로 푼다 · 표시등 (${D.lm})`);
-  t.ok(D.zin === 2 && D.zout === 10, `레이더 조작기 손잡이 돌림 — 지도 확대 · 축소 (${D.zin} · ${D.zout}NM)`);
-  t.ok(D.cur && /^V/.test(D.tgt || '') && D.clr && D.wxr, `손잡이 누름 — 커서 · 8방향으로 옮겨 누르면 표적 지정(${D.tgt}) · CLR · WXR`);
-  t.ok(D.mapKey === 'map' && D.esc === 'map,hoist,rdr,eo', 'MAP — 지도 화면 · ESC — 4분할로');
+  t.ok(D.ckpt && D.cmd === 'CABIN' && D.esc, `RDR > CMD — CKPT 면 전탐석 조작을 듣지 않고 · FNC 메뉴로 ${D.cmd} 로 바꾼다 · ESC 로 닫는다`);
+  t.ok(D.rUp === 50 && D.rDn === 10, `VCCP 손잡이 돌림 — 거리 20 → ${D.rUp} → ${D.rDn}NM`);
+  t.ok(/^V/.test(D.tgt || '') && D.trk >= 1 && D.clr && D.wxr, `4축 커서로 옮겨 누르면 표적 추적(${D.tgt} · TRK${D.trk}) · CLR 로 풀기 · WXR 겹`);
+  t.ok(D.mapMenu === 'MAP' && D.tws, 'MAP 메뉴 — 손잡이로 고르고 눌러 TWS 지형 겹을 바꾼다');
+  t.ok(D.mode[0] === 'LRS' && D.mode[1] === 'WX' && D.sart, `모드 LRS → WX · SART 모드에서 요구조자 트랜스폰더 응답`);
+  t.ok(D.frz && D.warm, 'FREEZE — 화면 고정 · 전원을 다시 넣으면 90초 예열 동안 TX 안 됨');
+  t.ok(D.hdr > 40, `레이더 화면 위 — Hdg · Trk · SRV RDR CMD · RNG · Tilt · Gain (${D.hdr}점)`);
   const errs = (page.errors || []).filter(e => !/Failed to fetch|NetworkError|tile/i.test(e));
   t.eq(errs.length, 0, `페이지 오류 없음${errs.length ? ' — ' + errs[0] : ''}`);
   if (process.env.MSN_SHOT) { await page.evaluate(() => { msnSpawn(4); rdr.tx = true; }); await page.waitForTimeout(3500); await page.screenshot({ path: process.env.MSN_SHOT }); }
