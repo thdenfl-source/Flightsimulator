@@ -75,7 +75,7 @@ export async function run(page, t) {
     const w = ms => new Promise(res => setTimeout(res, ms));
     eo.mode = 'MAN'; eo.az = 0; eo.el = -8; rdr.tx = true;
     await w(1500);
-    const lit = (sel, wht) => { const c = document.querySelector(sel); if (!c || !c.width) return 0; const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data; let n = 0; for (let i = 0; i < d.length; i += 64) if (wht ? (d[i] > 225 && d[i + 1] > 225 && d[i + 2] > 225) : (d[i + 1] > 150 && d[i] < 120)) n++; return n; };
+    const lit = (sel, wht) => { const c = document.querySelector(sel); if (!c || !c.width) return 0; const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data; let n = 0; for (let i = 0; i < d.length; i += (wht ? 4 : 64)) if (wht ? (d[i] > 225 && d[i + 1] > 225 && d[i + 2] > 225) : (d[i + 1] > 150 && d[i] < 120)) n++; return n; };
     const o = { map: !!_eoMap && !!document.querySelector('#msn-root .eo-vid .eo-map'), hud: lit('#msn-root .eo-hud', true), rdr: lit('#msn-root .msn-rdr canvas'), filt: document.querySelector('#msn-root .eo-vid').style.filter };
     eo.sensor = 'IR'; eo.pol = 'BLK'; await w(150); o.ir = document.querySelector('#msn-root .eo-vid').style.filter;
     eo.sensor = 'EOW'; eo.pol = 'WHT';
@@ -100,6 +100,51 @@ export async function run(page, t) {
   t.ok(v.map && v.hud > 50 && v.rdr > 20, `EO/IR 영상(3D 지도) · 오버레이(${v.hud}) · 레이더 화면(${v.rdr})을 그린다`);
   t.ok(/grayscale/.test(v.ir) && /invert/.test(v.ir) && !/invert/.test(v.filt), 'IR 흑상(BLK) — 회색조 · 반전');
   t.ok(v.closed, '"조종석 보기" — 전탐석을 닫으면 EO/IR 지도는 화면 밖으로(조종석 SYSTEM 창이 계속 쓴다)');
+  // ── 전탐석 표시기 — 4분할 · 2분할 · 한 화면 · 칸 차례 ──
+  const D = await page.evaluate(async () => {
+    const w = ms => new Promise(res => setTimeout(res, ms));
+    const vis = () => ['map', 'hoist', 'rdr', 'eo'].filter(k => getComputedStyle(document.querySelector('#msn-root .c-' + k)).display !== 'none').join(',');
+    const pos = k => { const r = document.querySelector('#msn-root .c-' + k).getBoundingClientRect(); return [r.left, r.top]; };
+    const o = {};
+    dispKey('multi'); await w(50); o.quad = vis();
+    const pm = pos('map'), ph = pos('hoist'), pr = pos('rdr'), pe = pos('eo');
+    o.quadPos = pm[0] < ph[0] && pm[1] < pr[1] && pe[0] > pr[0] && pe[1] > ph[1];   // 왼쪽 위 지도 · 오른쪽 위 호이스트 · 왼쪽 아래 레이더 · 오른쪽 아래 EO/IR
+    dispKey('split'); await w(50); o.split = vis(); dispKey('ch'); await w(50); o.split2 = vis();
+    dispKey('v2'); await w(50); o.one = vis(); dispKey('ch'); await w(50); o.one2 = vis(); dispKey('navi'); await w(50); o.navi = vis();
+    dispKey('multi'); rdr.tx = true; await w(1200);
+    const px = sel => { const c = document.querySelector(sel); if (!c || !c.width) return 0; const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data; let n = 0; for (let i = 0; i < d.length; i += 64) if (d[i + 3] > 0 && (d[i] > 150 || d[i + 1] > 150)) n++; return n; };
+    o.mapOv = px('#msn-root .nv-ov'); o.nvMap = !!_nvMap; o.hoistWant = msnHoistWant();
+    o.labels = [...document.querySelectorAll('#msn-root .msn-chl')].map(e => e.textContent).join('|');
+    // ── 탐색등 조작기(HSL-1600) ──
+    srchMode('MAN'); if (kgLt.srch) kgSrchSet(false);
+    slcPress('lamp', true); slcPress('lamp', false); o.lamp = kgLt.srch;
+    slcPress('manauto', true); slcPress('manauto', false); o.auto = srch.mode;
+    slcPress('manauto', true); slcPress('manauto', false);
+    slc.joy.x = 1; const az0 = kgLt.az; slcStep(0.5); slc.joy.x = 0; o.slew = kgLt.az - az0;
+    slcPress('init', true); slcPress('init', false); o.stow = [slc.stow, kgLt.srch];
+    slcPress('init', true); slcPress('init', false); o.init = slc.stow;
+    slcRender(); o.lm = [...document.querySelectorAll('#msn-root [data-sll].on')].map(e => e.dataset.sll).join(',');
+    // ── 레이더 · 지도 조작기(EuroNav CLN) ──
+    nv.nm = 5; clnPress('rot:1', true); o.zin = nv.nm; clnPress('rot:-1', true); clnPress('rot:-1', true); o.zout = nv.nm; nv.nm = 5;
+    msnVslClear(); msnSpawn(1, { brg: 90, nm: 2, spd: 0, anywhere: true }); rdr.tgt = null; nv.cur = null;
+    clnPress('push', true); clnPress('push', false); o.cur = !!nv.cur;
+    for (let i = 0; i < 5; i++) clnPress('pan:e', true);
+    clnPress('push', true); clnPress('push', false); o.tgt = rdr.tgt;
+    clnPress('clr', true); o.clr = rdr.tgt === null && nv.cur === null;
+    clnPress('wxr', true); o.wxr = nv.wxr; clnPress('wxr', true);
+    clnPress('map', true); o.mapKey = vis(); clnPress('esc', true); o.esc = vis();
+    return o;
+  });
+  t.eq(D.quad, 'map,hoist,rdr,eo', 'MULTI — 4분할(지도 · 호이스트 · 레이더 · EO/IR)');
+  t.ok(D.quadPos, '4분할 자리 — 왼쪽 위 지도 · 오른쪽 위 호이스트 카메라 · 왼쪽 아래 레이더 · 오른쪽 아래 EO/IR');
+  t.ok(D.split === 'map,eo' && D.split2 === 'rdr,eo', `SPLIT — 2분할 · CH 로 짝 바꾸기 (${D.split} → ${D.split2})`);
+  t.ok(D.one === 'rdr' && D.one2 === 'hoist' && D.navi === 'map', `한 화면 — V-IN 2 레이더 · CH 다음 · NAVI 지도 (${D.one} · ${D.one2} · ${D.navi})`);
+  t.ok(D.nvMap && D.mapOv > 30 && D.hoistWant && /CH1 \/ 30fps/.test(D.labels), `지도 칸(좌표 · 기체 · ${D.mapOv}점) · 호이스트 카메라 칸 · 채널 이름`);
+  t.ok(D.lamp && D.auto === 'EO' && D.slew > 5, `탐색등 조작기 — LAMP 켬 · MAN/AUTO 로 EO/IR 연동 · 조이스틱으로 돌림(${D.slew.toFixed(1)}°)`);
+  t.ok(D.stow[0] && !D.stow[1] && !D.init && /PWR/.test(D.lm), `INIT/STOW — STOW 면 끄고 거둔다 · INIT 로 푼다 · 표시등 (${D.lm})`);
+  t.ok(D.zin === 2 && D.zout === 10, `레이더 조작기 손잡이 돌림 — 지도 확대 · 축소 (${D.zin} · ${D.zout}NM)`);
+  t.ok(D.cur && /^V/.test(D.tgt || '') && D.clr && D.wxr, `손잡이 누름 — 커서 · 8방향으로 옮겨 누르면 표적 지정(${D.tgt}) · CLR · WXR`);
+  t.ok(D.mapKey === 'map' && D.esc === 'map,hoist,rdr,eo', 'MAP — 지도 화면 · ESC — 4분할로');
   const errs = (page.errors || []).filter(e => !/Failed to fetch|NetworkError|tile/i.test(e));
   t.eq(errs.length, 0, `페이지 오류 없음${errs.length ? ' — ' + errs[0] : ''}`);
   if (process.env.MSN_SHOT) { await page.evaluate(() => { msnSpawn(4); rdr.tx = true; }); await page.waitForTimeout(3500); await page.screenshot({ path: process.env.MSN_SHOT }); }

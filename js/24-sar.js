@@ -504,7 +504,7 @@ function _sarCamUpdate() {
   if (!map || !el) return;
   const w = el.clientWidth, H = el.clientHeight;
   // SYSTEM 창이 화면에서 내려갔으면(다른 창을 골랐거나 숨겼으면) 지도를 거둔다 — 그래픽 부담
-  if (!el.isConnected || !(w > 0 && H > 0) || (typeof sysPage !== 'undefined' && (sysPage !== 'asys_video' || videoCfg.ch !== 'HOIST'))) { _sarCamDestroy(); return; }
+  if (!el.isConnected || !(w > 0 && H > 0) || (typeof sysPage !== 'undefined' && (sysPage !== 'asys_video' || videoCfg.ch !== 'HOIST') && !(typeof msnHoistWant === 'function' && msnHoistWant()))) { _sarCamDestroy(); return; }   // 전탐석 표시기(37-mission.js)가 쓰고 있으면 둔다
   if (_sarCam.mode === 'off' && performance.now() - _sarCam.offT > SARCAM_OFF_IDLE_MS) { _sarCamDestroy(); return; }   // 조종석 MFD 가 더는 그리지 않는다
   const [hl, ho] = sarHookLL();
   try { map.jumpTo({ center: [ho, hl], zoom: sarHoistCamZoom(w), bearing: S.hdg, pitch: 0 }); } catch (e) { _swallow(e); }
