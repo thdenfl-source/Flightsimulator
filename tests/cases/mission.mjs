@@ -49,10 +49,12 @@ export async function run(page, t) {
     const a2 = eoAngTo(v.lat, v.lon, 0); o.follow = Math.abs(normAS(eo.az - a2.az)) < 0.3 && Math.abs(eo.el - a2.el) < 0.3; o.azNow = eo.az;
     hcuPress('lrf', true); hcuPress('lrf', false); for (let i = 0; i < 10; i++) eoStep(0.05);
     o.lrf = [eo.lrf.st, eo.lrf.rng, a2.rng];
-    // ── 서치라이트 EO/IR 연동 ──
-    kgSrchSet(false); srchMode('EO'); for (let i = 0; i < 80; i++) srchStep(0.05);
-    o.srch = { on: kgLt.srch, az: kgLt.az - eo.az, dn: kgLt.el + eo.el };
-    srchMode('MAN'); kgSrchSet(false);
+    // ── 탐조등 AUTO(EO/IR 연동 SLASS) — 한계 안의 시선(방위 −40° · 고각 −30°)을 따라간다 ──
+    Object.assign(hsl, { pwr: true, stowed: false, mv: null, az: 0, el: -45, lamp: false, lit: false });
+    eo.mode = 'MAN'; eo.lock = null; eo.trk = 'IDLE'; eo.aid = false; eo.az = -40; eo.el = -30; srchMode('EO'); for (let i = 0; i < 120; i++) srchStep(0.05);
+    o.srch = { az: hsl.az - eo.az, el: hsl.el - eo.el, lim: srch.lim };
+    eo.az = 0; eo.el = -5; for (let i = 0; i < 40; i++) srchStep(0.05); o.srchLim = srch.lim && hsl.el === -20;   // 시선이 한계 밖(−5°) — −20° 에 멈추고 LIMIT
+    srchMode('MAN');
     // ── FWD · STOW · 메뉴(LASER ARM) ──
     hcuPress('slew:dn', true); hcuPress('slew:dn', false); for (let i = 0; i < 80; i++) eoStep(0.05); o.fwd = [eo.mode, +eo.az.toFixed(1), +eo.el.toFixed(1)];
     hcuPress('menu', true); hcuPress('menu', false); hcuPress('sens:up', true); hcuPress('sens:up', false); o.arm = eo.laserArm;
@@ -69,7 +71,7 @@ export async function run(page, t) {
   t.ok(/^LOCKED V/.test(r.lock), `AVT 두 번 — 게이트 안의 배에 잠금 (${r.lock})`);
   t.ok(r.follow && r.azNow < -1, `기체가 옮겨도 잠근 배를 따라간다 (방위 ${r.azNow.toFixed(1)}°)`);
   t.ok(r.lrf[0] === 'VALID' && Math.abs(r.lrf[1] - r.lrf[2]) < 30, `LRF — ${r.lrf[0]} ${Math.round(r.lrf[1])}m (실제 ${Math.round(r.lrf[2])}m)`);
-  t.ok(r.srch.on && Math.abs(r.srch.az) < 0.5 && Math.abs(r.srch.dn) < 0.5, `서치라이트 EO/IR 연동 — 켜지고 시선을 따라간다 (어긋남 ${r.srch.az.toFixed(2)} · ${r.srch.dn.toFixed(2)}°)`);
+  t.ok(Math.abs(r.srch.az) < 0.5 && Math.abs(r.srch.el) < 0.5 && !r.srch.lim && r.srchLim, `탐조등 AUTO(SLASS) — EO/IR 시선을 따라가고(어긋남 ${r.srch.az.toFixed(2)} · ${r.srch.el.toFixed(2)}°) 구동 한계(−20°) 밖이면 LIMIT`);
   t.ok(r.fwd[0] === 'FWD' && r.fwd[1] === 0 && r.fwd[2] === -5, `FWD — 전방 (${r.fwd.join(' ')})`);
   t.ok(r.arm && r.fire && /hcu-lamp g/.test(r.lamps) && /hcu-lamp a/.test(r.lamps), `MENU → LASER ARM · LASER 조사 · 표시등 ON(녹) · ARMED(황) (${r.lamps})`);
 
@@ -119,14 +121,20 @@ export async function run(page, t) {
     o.mapOv = px('#msn-root .nv-ov'); o.nvMap = !!_nvMap; o.hoistWant = msnHoistWant();
     o.labels = [...document.querySelectorAll('#msn-root .msn-chl')].map(e => e.textContent).join('|');
     // ── 탐색등 조작기(HSL-1600) ──
-    srchMode('MAN'); if (kgLt.srch) kgSrchSet(false);
-    slcPress('lamp', true); slcPress('lamp', false); o.lamp = kgLt.srch;
+    srchMode('MAN'); Object.assign(hsl, { pwr: true, stowed: true, mv: null, az: 0, el: -90, lamp: false, lit: false, cool: 0, fault: false, ir: false, focus: 8 });
+    slcPress('lamp', true); slcPress('lamp', false); o.lampStowed = hsl.lamp;                         // STOW 면 켜지지 않는다
+    slcPress('init', true); slcPress('init', false); hslStep(HSL.initS + 0.1); o.init = [hsl.stowed, hsl.el];
+    slcPress('lamp', true); slcPress('lamp', false); hslStep(2); o.ign = hsl.lit; hslStep(3.5); o.lit = hsl.lit;
+    o.beam = hslBeam(); hsl.ir = true; o.irBare = hslBeam(); hsl.ir = false;
     slcPress('manauto', true); slcPress('manauto', false); o.auto = srch.mode;
     slcPress('manauto', true); slcPress('manauto', false);
-    slc.joy.x = 1; const az0 = kgLt.az; slcStep(0.5); slc.joy.x = 0; o.slew = kgLt.az - az0;
-    slcPress('init', true); slcPress('init', false); o.stow = [slc.stow, kgLt.srch];
-    slcPress('init', true); slcPress('init', false); o.init = slc.stow;
+    slc.joy.x = -1; slc.joy.y = 1; const az0 = hsl.az, el0 = hsl.el; slcStep(1); slc.joy.x = 0; slc.joy.y = 0; o.slew = [hsl.az - az0, hsl.el - el0];
+    slc.joy.x = 1; for (let i = 0; i < 20; i++) slcStep(1); slc.joy.x = 0; o.azMax = hsl.az;
+    hsl.focus = 4; const nb = hslBeam(); hsl.focus = 13; const wb = hslBeam(); o.focus = [nb.wide < wb.wide, nb.k > wb.k]; hsl.focus = 8;
     slcRender(); o.lm = [...document.querySelectorAll('#msn-root [data-sll].on')].map(e => e.dataset.sll).join(',');
+    slcPress('lamp', true); slcPress('lamp', false); o.cool = [hsl.lit, Math.round(hsl.cool)];
+    hslPwrSet(false); o.fault = hsl.fault; hslPwrSet(true); hsl.fault = false; hsl.cool = 0;
+    slcPress('init', true); slcPress('init', false); o.stowMv = hsl.mv && hsl.mv.to; hslStep(25.1); o.stow = [hsl.stowed, hsl.az, hsl.el];
     // ── 탐색레이더 조작기(VCCP · Seaspray 5000E) ──
     S.hdg = 0; rdr.menu = null; rdr.rng = 20;
     rdr.cmd = 'CKPT'; clnPress('rot:1', true); o.ckpt = rdr.rng === 20;                     // 조종실이 쥐고 있으면 듣지 않는다
@@ -151,8 +159,12 @@ export async function run(page, t) {
   t.ok(D.split === 'map,eo' && D.split2 === 'rdr,eo', `SPLIT — 2분할 · CH 로 짝 바꾸기 (${D.split} → ${D.split2})`);
   t.ok(D.one === 'rdr' && D.one2 === 'hoist' && D.navi === 'map', `한 화면 — V-IN 2 레이더 · CH 다음 · NAVI 지도 (${D.one} · ${D.one2} · ${D.navi})`);
   t.ok(D.nvMap && D.mapOv > 30 && D.hoistWant && /CH1 \/ 30fps/.test(D.labels), `지도 칸(좌표 · 기체 · ${D.mapOv}점) · 호이스트 카메라 칸 · 채널 이름`);
-  t.ok(D.lamp && D.auto === 'EO' && D.slew > 5, `탐색등 조작기 — LAMP 켬 · MAN/AUTO 로 EO/IR 연동 · 조이스틱으로 돌림(${D.slew.toFixed(1)}°)`);
-  t.ok(D.stow[0] && !D.stow[1] && !D.init && /PWR/.test(D.lm), `INIT/STOW — STOW 면 끄고 거둔다 · INIT 로 푼다 · 표시등 (${D.lm})`);
+  t.ok(!D.lampStowed && D.init[0] === false && D.init[1] === -45, `HSL-1600 — STOW 면 램프가 켜지지 않고 · INIT 로 풀면 −45° (${D.init})`);
+  t.ok(!D.ign && D.lit && D.beam && D.beam.down === 45 && D.irBare === null, 'LAMP — 5초 안에 켜진다 · 3D 빛 무리 · IR 은 NVG 없이는 보이지 않는다');
+  t.ok(D.auto === 'EO' && D.slew[0] < -20 && D.slew[1] > 15 && D.azMax === 30, `MAN/AUTO · 조이스틱 — 방위 ${D.slew[0].toFixed(0)}° · 고각 +${D.slew[1].toFixed(0)}°/s · 오른쪽 한계 +30°`);
+  t.ok(D.focus[0] && D.focus[1], 'FOCUS — 4°(Spot)는 좁고 밝게 · 13°(Flood)는 넓게');
+  t.ok(/PWR/.test(D.lm) && /LAMP/.test(D.lm) && D.cool[0] === false && D.cool[1] === 420 && D.fault, `표시등(${D.lm}) · 끄면 냉각팬 7분(${D.cool[1]}s) · 그동안 전원을 끊으면 FAULT`);
+  t.ok(D.stowMv === 'STOW' && D.stow[0] && D.stow[1] === 0 && D.stow[2] === -90, `INIT/STOW — STOW 25초 뒤 0° · −90° (${D.stow})`);
   t.ok(D.ckpt && D.cmd === 'CABIN' && D.esc, `RDR > CMD — CKPT 면 전탐석 조작을 듣지 않고 · FNC 메뉴로 ${D.cmd} 로 바꾼다 · ESC 로 닫는다`);
   t.ok(D.rUp === 50 && D.rDn === 10, `VCCP 손잡이 돌림 — 거리 20 → ${D.rUp} → ${D.rDn}NM`);
   t.ok(/^V/.test(D.tgt || '') && D.trk >= 1 && D.clr && D.wxr, `4축 커서로 옮겨 누르면 표적 추적(${D.tgt} · TRK${D.trk}) · CLR 로 풀기 · WXR 겹`);

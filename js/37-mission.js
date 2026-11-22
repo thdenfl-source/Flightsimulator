@@ -10,7 +10,7 @@
 //      LRF(1회 · 2초 누름 연속) · LASER(ARMED 일 때) · GEO FOCUS · FOCUS · SENS · OFFSET · FILTER · SCENE · IR CAL · POL
 //   ② SAR 해상 수색 레이더 — PPI(2.5초에 한 바퀴) · 거리 2~40NM · 이득 · 해면 반사 억제(STC) · 우천 억제(FTC) · HUP/NUP
 //      표적(선박 · 함정 · 요구조자 · 항공기)을 누르면 지정 → 침로 · 속력(추적) → EO/IR · 서치라이트를 그리로
-//   ③ 서치라이트(35-kuhgrip.js kgLt) — 수동 · EO/IR 연동(시선 따라) · 레이더 표적 연동
+//   ③ 탐조등 HSL-1600 · HCU(FLM 5.22) — 수동 · AUTO(EO/IR 연동 SLASS) · 레이더 표적 연동 · VIS/IR · 빔폭 · INIT/STOW
 // 조작기(HCU) — 교범 그림(면판 17개 · 상부 버튼 14개)대로 화면에 그렸고, 조이스틱 버튼에도 배정할 수 있다(12-joystick.js).
 // 기준: KUH-1CG 비행교범(FLM 5.17) · 계통설명교범(SDS 23-71-00) — EO/IR HCU · MFD 오버레이 요약
 // 3D 전탐석 콘솔 모형은 사진을 받은 뒤 얹는다(지금은 MFD 테두리 · 콘솔 판 모양).
@@ -469,30 +469,72 @@ const RDR_MENU = {
   ],
 };
 
-// ══ ③ 서치라이트(35-kuhgrip.js kgLt) ══
-const srch = { mode: 'MAN', lim: false };            // MAN · EO(EO/IR 시선) · RDR(레이더 지정 표적)
-function srchMode(m) { srch.mode = m; if (m !== 'MAN' && typeof kgLt !== 'undefined' && !kgLt.srch && typeof kgSrchSet === 'function') kgSrchSet(true); _mNote(`서치라이트 ${m === 'EO' ? 'EO/IR 연동' : m === 'RDR' ? '레이더 표적 연동' : '수동'}`); }
+// ══ ③ 탐조등 HSL-1600 · 수동제어장치(HCU) — FLM 5.22 · SDS 33-41-06 ══
+//   중앙동체 왼쪽 바깥 · 1,600W(5,000 lx) · 가시광(VIS) · 적외선(IR) 한 램프 · 빔폭 4°(Spot) ~ 13°(Flood)
+//   구동: 고각 −20° ~ −90°(아래) · 방위 −150°(왼쪽) ~ +30°(오른쪽) · 전원 SEARCH LT PWR(28V DC · 65A · 승객실 항전장비실)
+//   LAMP ON → 5초 안에 켜진다 · 끄면 냉각팬 7분(그동안 전원을 끊지 않는다) · INIT/STOW(STOW 25초 · 램프 끄고 연동 풀고 −90°)
+//   MAN/AUTO — AUTO 는 EO/IR 터릿 연동(SLASS) · 경고: 10ft(3.04m) 안의 물체를 비추면 100~300℃ — 사람 · 가연물 금지
+//   주의: NVG 를 쓴 조종사의 허락 없이 가시광으로 켜지 않는다 · 조종석 컬렉티브 SRCH LT(35-kuhgrip.js kgLt)와는 다른 등이다
+const HSL = { azMin: -150, azMax: 30, elMin: -90, elMax: -20, azRate: 25, elRate: 20, fMin: 4, fMax: 13, ignS: 5, stowS: 25, initS: 8, coolS: 420, reach: 1500, hazM: 3.04 };
+const hsl = { pwr: true, lamp: false, lit: false, ign: 0, ir: false, az: 0, el: -90, focus: 8, stowed: true, mv: null, cool: 0, fault: false, haz: false, _hazT: 0 };
+const srch = { mode: 'MAN', lim: false };            // MAN · EO(EO/IR 연동 — AUTO) · RDR(레이더 지정 표적)
+function hslLampSet(on) {
+  if (on) {
+    if (!hsl.pwr) { _mToast('SEARCH LT PWR 꺼짐'); return false; }
+    if (hsl.stowed || hsl.mv) { _mToast(hsl.mv ? `탐조등 ${hsl.mv.to} 중 — 기다리십시오` : '탐조등 STOW — INIT 으로 먼저 푸십시오'); return false; }
+    if (!hsl.ir && typeof env !== 'undefined' && env.nvg) _mToast('⚠ 주의 — NVG 를 쓴 조종사의 허락 없이 가시광(VIS)으로 켜지 마십시오');
+    if (!hsl.lamp) { hsl.lamp = true; hsl.ign = HSL.ignS; _mNote(`탐조등 LAMP ON(${hsl.ir ? 'IR' : 'VIS'})`); }
+  } else if (hsl.lamp) { hsl.lamp = false; hsl.lit = false; hsl.ign = 0; hsl.cool = HSL.coolS; _mNote('탐조등 LAMP OFF — 냉각팬 7분'); }
+  return true;
+}
+function hslPwrSet(on) {
+  if (!on && hsl.pwr && (hsl.lamp || hsl.cool > 0)) { hsl.fault = true; _mToast('⚠ 냉각팬이 도는 중 전원을 끊었습니다 — 램프 소등 뒤 7분 기다려야 합니다(FAULT)'); }
+  hsl.pwr = !!on;
+  if (!hsl.pwr) { hsl.lamp = false; hsl.lit = false; hsl.ign = 0; hsl.cool = 0; srch.mode = 'MAN'; }
+}
+function hslStow() { hslLampSet(false); srch.mode = 'MAN'; if (!hsl.pwr) return; hsl.mv = { to: 'STOW', t: HSL.stowS, az0: hsl.az, el0: hsl.el, T: HSL.stowS }; _mNote('탐조등 STOW(25초)'); }
+function hslInit() { if (!hsl.pwr) { _mToast('SEARCH LT PWR 꺼짐'); return; } hsl.mv = { to: 'INIT', t: HSL.initS, az0: hsl.az, el0: hsl.el, T: HSL.initS }; hsl.fault = false; _mNote('탐조등 INIT'); }
+function srchMode(m) { srch.mode = m; _mNote(`탐조등 ${m === 'EO' ? 'AUTO — EO/IR 연동(SLASS)' : m === 'RDR' ? '레이더 표적 연동' : 'MAN'}`); }
+function hslStep(dt) {
+  if (hsl.mv) {   // INIT(0° · −45°) · STOW(0° · −90°) — 걸린 시간만큼 고르게 옮긴다
+    const M = hsl.mv; M.t -= dt; const f = Math.max(0, Math.min(1, 1 - M.t / M.T)), el1 = M.to === 'STOW' ? -90 : -45;
+    hsl.az = M.az0 + (0 - M.az0) * f; hsl.el = M.el0 + (el1 - M.el0) * f;
+    if (M.t <= 0) { hsl.az = 0; hsl.el = el1; hsl.stowed = M.to === 'STOW'; hsl.mv = null; }
+  }
+  if (hsl.lamp && hsl.ign > 0) { hsl.ign -= dt; if (hsl.ign <= 0) { hsl.ign = 0; hsl.lit = true; } }
+  if (!hsl.lamp && hsl.cool > 0) hsl.cool = Math.max(0, hsl.cool - dt);
+  // 10ft 열 위험 — 켜진 빛이 3.04m 안에 닿는가(지면 · 해면까지 비스듬한 거리)
+  let agl = 1000; try { agl = radarAltFt(); } catch (e) { agl = 1000; }
+  const slant = (agl * 0.3048) / Math.max(0.05, Math.sin(-hsl.el * _mD));
+  const haz = hsl.lit && slant <= HSL.hazM;
+  if (haz && !hsl.haz && performance.now() - hsl._hazT > 5000) { hsl._hazT = performance.now(); _mToast('⚠ WARNING — 탐조등이 10ft(3.04m) 안을 비춥니다: 100~300℃ — 사람 · 가연물 금지'); _mNote('탐조등 10ft 열 위험'); }
+  hsl.haz = haz;
+}
+// 3D 빛 무리(35-kuhgrip.js kgBeams → 29-env.js envBeams) — IR 은 NVG 로만 보인다 · 좁힐수록 밝고 멀리
+function hslBeam() {
+  if (!hsl.lit) return null;
+  if (hsl.ir && !(typeof env !== 'undefined' && env.nvg)) return null;
+  const nar = Math.sqrt(8 / hsl.focus);
+  return { az: hsl.az, down: -hsl.el, k: (hsl.ir ? 0.6 : 1.0) * nar, reach: HSL.reach * Math.min(1.25, nar), wide: Math.tan(hsl.focus / 2 * _mD) * 2 };
+}
 function srchStep(dt) {
-  if (typeof kgLt === 'undefined' || srch.mode === 'MAN') { srch.lim = false; return; }
+  if (srch.mode === 'MAN' || !hsl.pwr || hsl.stowed || hsl.mv) { srch.lim = false; return; }
   let p = null;
   if (srch.mode === 'EO') p = eo.pwr && eo.mode !== 'STOW' ? eoAimPoint() : null;
   else if (srch.mode === 'RDR' && rdr.tgt) { const c = msnContacts().find(x => x.id === rdr.tgt); if (c) p = c; }
   if (!p) return;
   const a = eoAngTo(p.lat, p.lon, p.hM);
-  const lim = typeof KG_SRCH !== 'undefined' ? KG_SRCH : { azMax: 120, elMin: 2.5, elMax: 80 };
-  const az = _mClamp(a.az, -lim.azMax, lim.azMax), dn = _mClamp(-a.el, lim.elMin, lim.elMax);
-  srch.lim = Math.abs(az - a.az) > 0.5 || Math.abs(dn + a.el) > 0.5;
-  const m = 45 * dt;
-  kgLt.az += _mClamp(az - kgLt.az, -m, m); kgLt.el += _mClamp(dn - kgLt.el, -m, m);
+  const az = _mClamp(a.az, HSL.azMin, HSL.azMax), el = _mClamp(a.el, HSL.elMin, HSL.elMax);
+  srch.lim = Math.abs(az - a.az) > 0.5 || Math.abs(el - a.el) > 0.5;
+  hsl.az += _mClamp(az - hsl.az, -HSL.azRate * dt, HSL.azRate * dt); hsl.el += _mClamp(el - hsl.el, -HSL.elRate * dt, HSL.elRate * dt);
 }
 function srchMan(dir, dt = 0.2) {
-  if (typeof kgLt === 'undefined') return;
+  if (!hsl.pwr || hsl.stowed || hsl.mv) return;
   srch.mode = 'MAN';
-  const lim = typeof KG_SRCH !== 'undefined' ? KG_SRCH : { azMax: 120, elMin: 2.5, elMax: 80 };
-  if (dir === 'L') kgLt.az = Math.max(-lim.azMax, kgLt.az - 45 * dt);
-  if (dir === 'R') kgLt.az = Math.min(lim.azMax, kgLt.az + 45 * dt);
-  if (dir === 'U') kgLt.el = Math.max(lim.elMin, kgLt.el - 25 * dt);
-  if (dir === 'D') kgLt.el = Math.min(lim.elMax, kgLt.el + 25 * dt);
+  if (dir === 'L') hsl.az = Math.max(HSL.azMin, hsl.az - HSL.azRate * dt);
+  if (dir === 'R') hsl.az = Math.min(HSL.azMax, hsl.az + HSL.azRate * dt);
+  if (dir === 'U') hsl.el = Math.min(HSL.elMax, hsl.el + HSL.elRate * dt);
+  if (dir === 'D') hsl.el = Math.max(HSL.elMin, hsl.el - HSL.elRate * dt);
 }
 
 // ══ 메뉴(MENU) — ZOOM 으로 고르고 SENS 로 바꾼다 ══
@@ -700,7 +742,7 @@ function _msnBuild() {
           <div class="slc-mid"><div class="slc-pb"><b data-slc="offset"></b>OFFSET</div><div class="slc-pb"><b data-slc="manauto"></b>MAN/AUTO</div><div class="slc-pb">FOCUS<div class="slc-fc" data-m="slfocus"></div></div></div>
           <div class="slc-st" data-m="slstick"><em style="left:37px;top:-1px">▲</em><em style="left:37px;bottom:-2px">▼</em><em style="left:1px;top:35px">◀</em><em style="right:1px;top:35px">▶</em><i></i></div>
           <div class="slc-xs">XS1</div>
-        </div><div class="msn-cap2">SEARCH LIGHT HCU</div><div class="msn-tdata" data-m="sdata" style="width:178px"></div></div>
+        </div><div class="msn-cap2">SEARCH LIGHT HCU (HSL-1600)</div><button class="msn-btn" data-mact="slpwr" style="width:178px;margin-top:4px">SEARCH LT PWR ON</button><div class="msn-tdata" data-m="sdata" style="width:178px"></div></div>
       </div>
       <div><div class="cln">
         <div class="cln-k"><b data-cln="map">MAP</b><b data-cln="esc">ESC</b><b data-cln="com">COM</b><b data-cln="tfc">TFC</b></div>
@@ -754,7 +796,7 @@ function _msnBuild() {
     fc.addEventListener('pointermove', e => { if (fy === null) return; by((fy - e.clientY) * 0.6); fy = e.clientY; });
     fc.addEventListener('pointerup', () => { fy = null; });
     fc.addEventListener('wheel', e => { e.preventDefault(); by(-e.deltaY * 0.05); }, { passive: false }); };
-  dial('[data-m="focus"]', eoFocusBy); dial('[data-m="slfocus"]', d => { slc.focus = _mClamp(slc.focus + d, 0, 100); });
+  dial('[data-m="focus"]', eoFocusBy); dial('[data-m="slfocus"]', d => { hsl.focus = _mClamp(hsl.focus + d * 0.08, HSL.fMin, HSL.fMax); });
   // 레이더 조작기 손잡이 — 휠로 돌린다
   R.querySelector('[data-m="clnknob"]').addEventListener('wheel', e => { e.preventDefault(); clnPress('rot:' + (e.deltaY > 0 ? -1 : 1), true); }, { passive: false });
   // 레이더 화면 — 누른 자리의 표적 지정
@@ -770,43 +812,39 @@ function _msnBuild() {
 }
 // ══ 탐색등 조작기(HSL-1600 HCU) — LSR/OFF · IR/VIS · LAMP/OFF · INIT/STOW · OFFSET · MAN/AUTO · FOCUS · 조이스틱 · 표시등 ══
 //   (자세한 기능은 교범을 받아 더한다 — 지금은 켜고 끄기 · 수동/연동 · 지향 · 표시등)
-const slc = { lsr: false, ir: false, stow: false, test: false, dim: 1, rdim: 1, focus: 50, joy: { x: 0, y: 0 }, down: {} };
+const slc = { lsr: false, ir: false, test: false, dim: 1, rdim: 1, joy: { x: 0, y: 0 }, down: {} };
 function slcPress(k, down) {
   if (down) slc.down[k] = true; else delete slc.down[k];
   if (k === 'test') slc.test = down;
   if (!down) { slcRender(); return; }
-  const on = typeof kgLt !== 'undefined' && kgLt.srch;
   switch (k) {
     case 'lsr': slc.lsr = !slc.lsr; break;
-    case 'ir': slc.ir = !slc.ir; break;
-    case 'lamp': if (slc.stow && !on) { _mToast('탐색등 STOW — INIT 으로 먼저 푸십시오'); break; } try { kgSrchSet(!on); } catch (e) { _swallow(e); } break;
-    case 'init':
-      if (slc.stow) { slc.stow = false; try { kgLt.az = 0; kgLt.el = KG_SRCH.el0; } catch (e) { _swallow(e); } _mNote('탐색등 INIT'); }
-      else { slc.stow = true; srch.mode = 'MAN'; try { if (kgLt.srch) kgSrchSet(false); kgLt.az = 0; kgLt.el = KG_SRCH.elMax; } catch (e) { _swallow(e); } _mNote('탐색등 STOW'); }
-      break;
-    case 'manauto': srchMode(srch.mode === 'MAN' ? 'EO' : 'MAN'); break;
-    case 'offset': _mToast('탐색등 OFFSET — 기능은 교범을 받아 더합니다'); break;
+    case 'ir': hsl.ir = !hsl.ir; slc.ir = hsl.ir; if (hsl.lamp && !hsl.ir && typeof env !== 'undefined' && env.nvg) _mToast('⚠ 주의 — NVG 를 쓴 조종사의 허락 없이 가시광(VIS)으로 바꾸지 마십시오'); _mNote(`탐조등 ${hsl.ir ? 'IR' : 'VIS'}`); break;
+    case 'lamp': hslLampSet(!hsl.lamp); break;
+    case 'init': if (hsl.stowed || (hsl.mv && hsl.mv.to === 'STOW')) hslInit(); else hslStow(); break;
+    case 'manauto': if (!hsl.pwr) { _mToast('SEARCH LT PWR 꺼짐'); break; } srchMode(srch.mode === 'MAN' ? 'EO' : 'MAN'); break;
+    case 'offset': _mToast('탐조등 OFFSET — 기능은 교범을 받아 더합니다'); break;
     case 'hdim:up': slc.dim = Math.min(1, slc.dim + 0.25); break; case 'hdim:dn': slc.dim = Math.max(0.25, slc.dim - 0.25); break;
     case 'rdim:up': slc.rdim = Math.min(1, slc.rdim + 0.25); break; case 'rdim:dn': slc.rdim = Math.max(0.25, slc.rdim - 0.25); break;
   }
   slcRender(); msnRenderPanels();
 }
 function slcStep(dt) {
-  const j = slc.joy; if (Math.hypot(j.x, j.y) < 0.05 || typeof kgLt === 'undefined' || slc.stow) return;
+  const j = slc.joy; if (Math.hypot(j.x, j.y) < 0.05 || !hsl.pwr || hsl.stowed || hsl.mv) return;
   srch.mode = 'MAN';
-  const lim = typeof KG_SRCH !== 'undefined' ? KG_SRCH : { azMax: 120, elMin: 2.5, elMax: 80 };
-  kgLt.az = _mClamp(kgLt.az + j.x * Math.abs(j.x) * 45 * dt, -lim.azMax, lim.azMax);
-  kgLt.el = _mClamp(kgLt.el - j.y * Math.abs(j.y) * 25 * dt, lim.elMin, lim.elMax);
+  hsl.az = _mClamp(hsl.az + j.x * Math.abs(j.x) * HSL.azRate * dt, HSL.azMin, HSL.azMax);
+  hsl.el = _mClamp(hsl.el + j.y * Math.abs(j.y) * HSL.elRate * dt, HSL.elMin, HSL.elMax);
 }
 function slcRender() {
   if (!_msnEl) return;
-  const on = typeof kgLt !== 'undefined' && kgLt.srch, T = slc.test;
-  const L = { FAULT: srch.lim, LSR: slc.lsr, LAMP: on, PWR: true, BLK: false, AUTO: srch.mode !== 'MAN', IR: slc.ir, STW: slc.stow };
-  _msnEl.querySelectorAll('[data-sll]').forEach(e => { const n = e.dataset.sll; e.classList.toggle('on', T || !!L[n]); e.classList.toggle('f', n === 'FAULT'); });
+  const T = slc.test, blink = Math.floor(performance.now() / 400) % 2 === 0;
+  const L = { FAULT: hsl.fault, LSR: slc.lsr, LAMP: hsl.lit || (hsl.lamp && blink), PWR: hsl.pwr, BLK: hsl.pwr && (hsl.stowed || !!hsl.mv), AUTO: srch.mode !== 'MAN', IR: hsl.ir, STW: hsl.stowed || (hsl.mv && hsl.mv.to === 'STOW' && blink) };
+  _msnEl.querySelectorAll('[data-sll]').forEach(e => { const n = e.dataset.sll; e.classList.toggle('on', !!(T || L[n])); e.classList.toggle('f', n === 'FAULT'); });
   const lm = _msnEl.querySelector('[data-m="slclm"]'); if (lm) { lm.classList.toggle('dim', slc.dim < 0.75); lm.style.opacity = String(0.4 + 0.6 * slc.dim); }
-  const kpos = { lsr: slc.lsr, ir: slc.ir, lamp: on, init: !slc.stow };
+  const kpos = { lsr: slc.lsr, ir: hsl.ir, lamp: hsl.lamp, init: !(hsl.stowed || (hsl.mv && hsl.mv.to === 'STOW')) };
   _msnEl.querySelectorAll('.slc-sw .k').forEach(e => { const v = kpos[e.dataset.slc]; e.classList.toggle('up', !!v); e.classList.toggle('dn', !v); });
   _msnEl.querySelectorAll('.slc-pb b').forEach(e => e.classList.toggle('dn', !!slc.down[e.dataset.slc]));
+  const pw = _msnEl.querySelector('[data-mact="slpwr"]'); if (pw) { pw.classList.toggle('on', hsl.pwr); pw.textContent = `SEARCH LT PWR ${hsl.pwr ? 'ON' : 'OFF'}`; }
 }
 // ══ 탐색레이더 조작기(VCCP — Video Converter Control Panel · FLM 5.20) ══
 //   MAP 지도 메뉴 · ESC 닫기 · CLR 지우기(메뉴 — 그 칸을 기본값으로) · FNC 메인 메뉴 · WXR 강수 겹 · TWS 지형 겹 · COM/TFC 쓰지 않음
@@ -880,18 +918,21 @@ function msnAct(a) {
     case 'r2eo': rdrSlaveEo(); break;
     case 'r2sl': if (rdr.tgt) srchMode('RDR'); else _mToast('먼저 레이더 화면에서 표적을 누르십시오'); break;
     case 'rclr': rdr.tgt = null; break;
-    case 'slon': try { kgSrchSet(!kgLt.srch); } catch (e) { _swallow(e); } break;
+    case 'slon': hslLampSet(!hsl.lamp); break;
+    case 'slpwr': hslPwrSet(!hsl.pwr); break;
     case 'slman': srchMode('MAN'); break;
     case 'sleo': srchMode('EO'); break;
     case 'slrdr': if (rdr.tgt) srchMode('RDR'); else _mToast('먼저 레이더 화면에서 표적을 누르십시오'); break;
-    case 'slctr': srch.mode = 'MAN'; try { kgLt.az = 0; kgLt.el = KG_SRCH.el0; } catch (e) { _swallow(e); } break;
+    case 'slctr': hslInit(); break;
   }
   msnRenderPanels();
 }
 function msnHelp() {
   const t = ['흰수리 전탐석 — EO/IR · SAR 레이더 · 서치라이트',
     '· 표시기: MULTI 4분할(왼쪽 위 지도 · 오른쪽 위 호이스트 카메라 · 왼쪽 아래 레이더 · 오른쪽 아래 EO/IR) · SPLIT 2분할(CH 로 짝 바꾸기) · V-IN 1~4 / VIDEO / NAVI 한 화면 · ▲▼ 밝기 · M-PWR',
-    '· 탐색등 조작기(오른쪽 위): LAMP 켜고 끄기 · MAN/AUTO(EO/IR 연동) · 조이스틱으로 돌림 · INIT/STOW · 표시등(PWR · LAMP · AUTO · STW …) — 나머지 기능은 교범을 받아 더합니다',
+    '· 탐조등 HSL-1600 조작기(오른쪽 위 · FLM 5.22): 처음엔 STOW — INIT 로 풀고(−45°) LAMP 를 켜면 5초 뒤 점등 · IR/VIS(IR 은 NVG 로만 보인다)',
+    '  MAN/AUTO(AUTO = EO/IR 연동 SLASS) · 조이스틱(고각 −20~−90° · 방위 −150~+30°) · FOCUS 빔폭 4~13° · STOW 25초 · 끄면 냉각팬 7분(그동안 SEARCH LT PWR 를 끄지 않는다)',
+    '  ⚠ 10ft(3.04m) 안의 물체를 비추면 100~300℃ · NVG 를 쓴 조종사 허락 없이 가시광 금지 · 조종석 컬렉티브 SRCH LT 와는 다른 등',
     '· 탐색레이더(Seaspray 5000E · VCCP): RDR > CMD 가 CKPT(조종실)이면 전탐석은 다루지 못한다 — FNC 메뉴의 RDR > CMD 를 CABIN · SHARED 로',
     '  손잡이 돌림 — 거리 10~200NM(메뉴가 열려 있으면 칸 옮기기) · 누름 — 메뉴 실행 · 커서 자리 표적 추적(TRK) · 4축 — 커서',
     '  FNC 메인(MODE LRS·WX·PT·SART·ISAR · TX/STBY · CMD · TILT · GAIN · SCAN · FREEZE) · MAP(WXR · TWS · R ONLY · RANGE) · ESC · CLR · WXR 강수 겹 · TWS 지형 겹 · 다시 켜면 90초 예열',
@@ -1038,11 +1079,11 @@ function eoFocusBlur() {
   return Math.min(8, Math.abs(eo.focus - eoIdealFocus()) * 0.05 * k);
 }
 function _srchLights() {
-  if (typeof kgLt === 'undefined' || !kgLt.srch) return false;
+  if (!hsl.lit || hsl.ir) return false;
   const p = eoLosPoint(); if (!p) return false;
   const a = eoAngTo(p.lat, p.lon, p.hM);
-  const reach = typeof KG_SRCH !== 'undefined' ? KG_SRCH.reach : 1200;
-  return a.rng < reach * 1.3 && Math.abs(normAS(a.az - kgLt.az)) < 8 && Math.abs(-a.el - kgLt.el) < 8;
+  const w = Math.max(3, hsl.focus / 2 + 1);
+  return a.rng < HSL.reach * 1.3 && Math.abs(normAS(a.az - hsl.az)) < w && Math.abs(a.el - hsl.el) < w;
 }
 // 선박 표적 — 지도 위에 실루엣(IR 에서는 뜨겁게). g 는 지도 그릇의 CSS px 좌표(W × H)
 function _eoSprites(cv, W, H) {
@@ -1184,7 +1225,7 @@ function _eoHudG(g, x0, y0, W, H, full) {
   if (!full) return;
   // ── 전탐석 화면만 ──
   if (eo.mode === 'SLEW' && eo.slewTgt) T(`CUE ${eo.slewTgt.kind === 'obj' ? eo.slewTgt.id : 'POI'}`, cx, cy + 52 * k, 'center', 13, '#ffd23a');
-  if (typeof kgLt !== 'undefined' && kgLt.srch) T(`SRCH ${srch.mode === 'EO' ? 'SLAVE' : srch.mode}${srch.lim ? ' LIMIT' : ''}`, R, y0 + 92 * k, 'right', 12, srch.lim ? '#ffd23a' : '#f4f6f4');
+  if (hsl.lit) T(`SRCH ${hsl.ir ? 'IR ' : ''} ${srch.mode === 'EO' ? 'SLAVE' : srch.mode}${srch.lim ? ' LIMIT' : ''}`, R, y0 + 92 * k, 'right', 12, srch.lim ? '#ffd23a' : '#f4f6f4');
   if (eo.pip === 'RDR') { const pc = _msnEl && _msnEl.querySelector('.msn-rdr canvas'); if (pc && pc.width) { const s2 = 150 * k; g.drawImage(pc, x0 + W - s2 - 14 * k, y0 + 100 * k, s2, s2); g.strokeStyle = '#f4f6f4'; g.lineWidth = 1; g.strokeRect(x0 + W - s2 - 14 * k, y0 + 100 * k, s2, s2); } }
   if (eo.menu) {
     const mw = 290 * k, mh = (MSN_MENU.length * 21 + 36) * k, mx2 = cx - mw / 2, my = cy - mh / 2;
@@ -1223,7 +1264,7 @@ function _rdrDraw(cv) {
   if (rdr.tx && !rdr.frz) { const [x, y] = P(rdr.az, rdr.rng); g.strokeStyle = 'rgba(140,255,170,0.95)'; g.lineWidth = 2.5; g.beginPath(); g.moveTo(ox, oy); g.lineTo(x, y); g.stroke(); }
   // EO/IR 시선 · 서치라이트
   if (eo.pwr && eo.mode !== 'STOW' && Math.abs(eo.az) <= half) { const [x, y] = P(eo.az, rdr.rng); g.strokeStyle = 'rgba(80,220,255,0.85)'; g.setLineDash([5, 4]); g.lineWidth = 1.5; g.beginPath(); g.moveTo(ox, oy); g.lineTo(x, y); g.stroke(); g.setLineDash([]); }
-  if (typeof kgLt !== 'undefined' && kgLt.srch && Math.abs(kgLt.az) <= half) { const [x, y] = P(kgLt.az, rdr.rng * 0.4); g.strokeStyle = 'rgba(255,220,80,0.8)'; g.beginPath(); g.moveTo(ox, oy); g.lineTo(x, y); g.stroke(); }
+  if (hsl.lit && Math.abs(hsl.az) <= half) { const [x, y] = P(hsl.az, rdr.rng * 0.4); g.strokeStyle = 'rgba(255,220,80,0.8)'; g.beginPath(); g.moveTo(ox, oy); g.lineTo(x, y); g.stroke(); }
   // SART 응답 — 바깥쪽으로 점 12개(0.64NM)
   const sr = rdrSartReply();
   if (sr) { const rel = normAS(sr.brg - S.hdg); if (Math.abs(rel) <= half) { g.strokeStyle = '#5ef'; g.lineWidth = 2; for (let i = 0; i < 12; i++) { const nm = sr.nm + i * 0.64; if (nm > rdr.rng) break; const [x, y] = P(rel, nm); g.beginPath(); g.arc(x, y, 3.5 * k, 0, 2 * Math.PI); g.stroke(); } const [x, y] = P(rel, sr.nm); g.fillStyle = '#5ef'; g.textAlign = 'left'; g.fillText('SART', x + 8 * k, y - 6 * k); } }
@@ -1301,7 +1342,7 @@ function msnRenderPanels() {
   set('rtx', rdr.tx); set('rfrz', rdr.frz); set('ronly', rdr.ronly); set('rcmd', rdr.cmd !== 'CKPT');
   const lb = (a, t) => { const b = _msnEl.querySelector(`[data-mact="${a}"]`); if (b) b.textContent = t; };
   lb('rmode', `MODE ${rdr.mode}`); lb('rcmd', `CMD ${rdr.cmd}`); lb('rsec', `SCAN ${rdr.sector}°`); lb('rtx', rdr.tx ? 'TX' : rdr.warm > 0 ? `WARM ${Math.ceil(rdr.warm)}` : 'STBY');
-  const sOn = typeof kgLt !== 'undefined' && kgLt.srch;
+  const sOn = hsl.lit;
   set('slon', sOn); set('slman', srch.mode === 'MAN'); set('sleo', srch.mode === 'EO'); set('slrdr', srch.mode === 'RDR');
   const ac = _msnEl.querySelector('[data-m="ac"]'); if (ac) ac.textContent = `HDG ${fmtA(S.hdg)}  ALT ${Math.round(S.alt)}FT  GS ${Math.round(S.spd)}KT`;
   const td = _msnEl.querySelector('[data-m="tdata"]');
@@ -1314,7 +1355,12 @@ function msnRenderPanels() {
   _msnEl.querySelectorAll('[data-dk]').forEach(b => { const k = b.dataset.dk; b.classList.toggle('on', (k === 'multi' && disp.lay === 'quad') || (k === 'split' && disp.lay === 'split') || (k === 'pip' && eo.pip !== 'OFF') || (k === 'pwr' && disp.pwr) || (k === 'navi' && disp.lay === 'one' && disp.ch === 4) || (k === 'v' + disp.ch && disp.lay === 'one')); });
   _msnEl.querySelectorAll('[data-cln]').forEach(b => { const k = b.dataset.cln; if (k === 'wxr') b.classList.toggle('on', rdr.wxr); if (k === 'tws') b.classList.toggle('on', rdr.tws); if (k === 'map') b.classList.toggle('on', rdr.menu === 'MAP'); if (k === 'fnc') b.classList.toggle('on', rdr.menu === 'FNC'); });
   const sd = _msnEl.querySelector('[data-m="sdata"]');
-  if (sd && typeof kgLt !== 'undefined') sd.textContent = `${sOn ? 'ON' : 'OFF'}  ${srch.mode === 'EO' ? 'EO/IR SLAVE' : srch.mode === 'RDR' ? 'RADAR SLAVE' : 'MANUAL'}${srch.lim ? '  LIMIT' : ''}\nAZ ${kgLt.az >= 0 ? '+' : ''}${kgLt.az.toFixed(0)}°  DN ${kgLt.el.toFixed(0)}°`;
+  if (sd) {
+    const lamp = !hsl.pwr ? 'PWR OFF' : hsl.lit ? `LAMP ${hsl.ir ? 'IR' : 'VIS'}` : hsl.lamp ? `IGN ${Math.ceil(hsl.ign)}s` : hsl.cool > 0 ? `FAN ${Math.floor(hsl.cool / 60)}:${String(Math.floor(hsl.cool % 60)).padStart(2, '0')}` : 'OFF';
+    const pos = hsl.mv ? `${hsl.mv.to} ${Math.ceil(hsl.mv.t)}s` : hsl.stowed ? 'STOWED' : srch.mode === 'EO' ? 'AUTO(SLASS)' : srch.mode === 'RDR' ? 'RDR SLAVE' : 'MAN';
+    sd.textContent = `${lamp}  ${pos}${srch.lim ? '  LIMIT' : ''}\nAZ ${hsl.az >= 0 ? '+' : ''}${hsl.az.toFixed(0)}°  EL ${hsl.el.toFixed(0)}°  BEAM ${hsl.focus.toFixed(1)}°${hsl.haz ? '\n⚠ 10ft THERMAL HAZARD' : ''}`;
+    sd.style.color = hsl.haz ? '#ff6060' : '';
+  }
 }
 function _msnFit(cv) { const r = cv.getBoundingClientRect(), d = Math.min(2, window.devicePixelRatio || 1), w = Math.round(r.width * d), h = Math.round(r.height * d); if (w > 0 && (cv.width !== w || cv.height !== h)) { cv.width = w; cv.height = h; } return { W: w, H: h }; }
 // ── NAVI 지도 칸(왼쪽 위) — 위성 지도 · 기체(원 안의 헬기 · 기수) · 비행계획 · 항적선 · 레이더 표적 · EO/IR 시선 · 커서 ──
@@ -1352,7 +1398,7 @@ function _nvRender(cell) {
     if (f) { g.strokeStyle = '#3dff6a'; g.lineWidth = 2; g.beginPath(); g.moveTo(a.x, a.y); g.lineTo(f.x, f.y); g.stroke(); }
     // EO/IR 시선(하늘색 점선) · 서치라이트(노랑)
     if (eo.pwr && eo.mode !== 'STOW') { const [la, lo] = destPoint(S.lat, S.lon, normA(S.hdg + eo.az), nv.nm * 2), q = P(la, lo), pt = eoAimPoint(); if (q) { g.setLineDash([5, 4]); g.strokeStyle = 'rgba(120,230,255,0.9)'; g.beginPath(); g.moveTo(a.x, a.y); g.lineTo(q.x, q.y); g.stroke(); g.setLineDash([]); } if (pt) { const r = P(pt.lat, pt.lon); if (r) { g.strokeStyle = '#7df'; g.beginPath(); g.arc(r.x, r.y, 6, 0, 2 * Math.PI); g.stroke(); } } }
-    if (typeof kgLt !== 'undefined' && kgLt.srch) { const [la, lo] = destPoint(S.lat, S.lon, normA(S.hdg + kgLt.az), nv.nm * 0.6), q = P(la, lo); if (q) { g.strokeStyle = 'rgba(255,220,80,0.85)'; g.beginPath(); g.moveTo(a.x, a.y); g.lineTo(q.x, q.y); g.stroke(); } }
+    if (hsl.lit) { const [la, lo] = destPoint(S.lat, S.lon, normA(S.hdg + hsl.az), nv.nm * 0.6), q = P(la, lo); if (q) { g.strokeStyle = 'rgba(255,220,80,0.85)'; g.beginPath(); g.moveTo(a.x, a.y); g.lineTo(q.x, q.y); g.stroke(); } }
     // 기체 — 원 안의 헬기 · 위에 기수
     const rot = (hdgUp ? 0 : S.hdg) * _mD;
     g.save(); g.translate(a.x, a.y);
@@ -1441,7 +1487,7 @@ function msnStep() {
   try { if (run) _vslStep(dt * ((typeof simSpeed !== 'undefined' && Number(simSpeed)) || 1)); } catch (e) { _swallow(e); }
   try { eoStep(dt); } catch (e) { _swallow(e); }
   try { rdrStep(dt); } catch (e) { _swallow(e); }
-  try { if (_slHold) srchMan(_slHold, dt); slcStep(dt); srchStep(dt); } catch (e) { _swallow(e); }
+  try { hslStep(dt); if (_slHold) srchMan(_slHold, dt); slcStep(dt); srchStep(dt); } catch (e) { _swallow(e); }
   try { msnRender(); } catch (e) { _swallow(e); }
 }
 // 흰수리(전탐석 · 조종석 모두)는 EO/IR 터릿이 돈다 — 조종석 SYSTEM 창 Video(EO/IR) 가 영상을 띄운다

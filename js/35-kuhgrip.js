@@ -36,6 +36,7 @@ function kgBeams() {
   const out = [];
   if (_kgLdg() && kgLt.ldgE >= 1) out.push({ az: 0, down: kgLdgDown(), k: KG_LDG.k, reach: KG_LDG.reach, wide: 0.26 });   // 접혀 있으면 빛이 밖으로 나오지 않는다
   if (kgLt.srch) out.push({ az: kgLt.az, down: kgLt.el, k: 0.9 * kgLt.br, reach: KG_SRCH.reach });
+  try { if (typeof hslBeam === 'function') { const b = hslBeam(); if (b) out.push(b); } } catch (e) { _swallow(e); }   // 전탐석 탐조등 HSL-1600(37-mission.js)
   return out;
 }
 // STOW SEL — LDG 쪽: 착륙등 끄고 접기 · SRCH 쪽: 서치라이트 끄고 원위치(정면 · 아래 30°)
