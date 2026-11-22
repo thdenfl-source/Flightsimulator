@@ -192,7 +192,7 @@ const HELP_ITEMS = [
   ['🎬 SCN', '시나리오 — 자리 · 고도 · 바람 · 환경 · 연료 · 비행계획 · SAR 를 이름 붙여 저장하고 불러온다. 파일로 내보내 교관끼리 나눈다.'],
   ['🌙 ENV', '환경 — 시간대(주간 · 황혼 · 야간) · 시정 · 비 · NVG · 바다 상태 · 돌풍 · 구름 밑면 · 흰수리 착륙등 · RA 콜아웃.'],
   ['📋 DEBRIEF', '비행 기록 · 강평 — 항적 · 그래프 · 사건 · 다시 보기(×1 · ×2 · ×4 · ×8 · ×10 — 느릴 때는 1초 기록 사이를 이어 매끄럽게) · 3D 다시 보기 · A/B 구간 채점 · CSV · 비행 저장 · 보고서(인쇄).'],
-  ['🧑‍✈️ IOS', '교관 화면 — 같은 기기에 교관 창을 따로 열거나, 교관 태블릿으로 메인 기기의 연결 요청 QR 을 찍어 잇는다(메인 기기에서 수락). 고장 · 환경 · 바람 · 메시지 · 시나리오를 건다.'],
+  ['🧑‍✈️ IOS', '교관 화면 — 같은 기기에 교관 창을 따로 열거나, 교관 태블릿으로 메인 기기의 연결 요청 QR 을 찍어 잇는다(메인 기기에서 수락). 고장 · 환경 · 바람 · 메시지 · 시나리오를 건다. 위 막대(교관 · PFD · UPPER · LOWER · SYSTEM · CYC · COLL · MAP · COCKPIT)로 교육생 화면을 그대로 본다 — SYSTEM 은 교육생의 연료 · 엔진(FADEC) · 전기 · AFCS 상태를 그리고, 볼 계통 화면(Fuel · Engine · Elec …)은 교관이 따로 고른다(흰수리만).'],
   ['🛟 SAR', '요구조자(익수자 · 육상)와 호이스트 구조 훈련. 밤에는 스트로브가 번쩍이고 서치라이트에 반사판이 빛난다.'],
   ['W&B (Bell)', 'Bell 계기판 FUEL QTY 를 누르거나 컬렉티브 창 W&B — 무게 · 무게중심 · 연료 · 호버 성능(HIGE/HOGE).'],
   ['HORN MUTE (Bell)', '계기판 왼쪽 위 — 울리는 경고음(ENG OUT · 낮은 RPM)을 끈다. 경고가 풀리면 다시 산다.'],
@@ -239,7 +239,7 @@ function toggleHelp() {
 try { appRegister({ openIos, toggleHelp }); } catch (e) { _swallow(e); }
 
 // ══════════════════════════════════════════════════════
-// ⑧ 교관 화면 페이지 — 위 막대: 교관 · PFD · UPPER · LOWER · CYC · COLL · MAP · COCKPIT
+// ⑧ 교관 화면 페이지 — 위 막대: 교관 · PFD · UPPER · LOWER · SYSTEM · CYC · COLL · MAP · COCKPIT
 //   교관 창도 같은 앱이라, 교육생 창의 상태를 0.2초마다 그대로 받아(미러) 제 화면(PFD · 콘솔 · 지도 · 3D 조종석)에 그린다.
 //   교관 창은 스스로 계산하지 않는다(S.running 꺼 둠) — 보이는 값은 모두 교육생 창의 것.
 //   교관이 콘솔 스위치 · 컬렉티브 · 사이클릭을 누르면 교육생 창으로 보내 그쪽에서 조작한다.
@@ -248,7 +248,9 @@ try { appRegister({ openIos, toggleHelp }); } catch (e) { _swallow(e); }
 const IOS_MIRROR_G = ['selSpd', 'selAlt', 'selHht', 'selCrht', 'selHdg', 'selVS', 'hdgSelOn', 'altHoldOn', 'gsArmed', 'gsOn', 'simModeOn', 'simIasOn',
   'gspdOn', 'crhtOn', 'navApOn', 'rollApOn', 'iasNsOn', 'vsModeOn', 'gaOn', 'windDir', 'windSpd', 'obsOn', 'vorObsCrs', 'hdgRef', 'dgErr', 'slipBall', 'spdTrend',
   'holdOn', 'hoverPageOn', 'hoverPosOn', 'simNr', 'simEng', 'simOeiT', 'simOeiMode', 'NR_GOV', 'simTq', 'env', 'kgLt',
-  'b206c', 'b206r', 'b206Wb', '_b206Gal', 'b206Hyd', 'c5', 'npx', 'instFail', 'shipVisible', 'shipLat', 'shipLon', 'shipHdg'];
+  'b206c', 'b206r', 'b206Wb', '_b206Gal', 'b206Hyd', 'c5', 'npx', 'instFail', 'shipVisible', 'shipLat', 'shipLon', 'shipHdg',
+  // SYSTEM(MFD 계통 화면 · 18-system.js · 36-kuhsys.js) — 연료 · 엔진(FADEC) · 전기 · AFCS · MFD 상태(화면 고르기 sysPage 는 교관 몫)
+  'fuel', 'fuelCfg', 'auxPump', 'fuelSys', 'sysFltSec', 'fadec', 'elecFault', 'elecGcu', 'elecBatt', 'afcsFault', 'afcsPft', 'afcsLast', 'mfdSys'];
 const _iosGet = n => { try { return (0, eval)(n); } catch (e) { return undefined; } };
 // 다른 파일이 미러할 이름을 더한다 — iosMirrorAdd(['이름', …]) (있으면 부른다)
 function iosMirrorAdd(names) { for (const n of [].concat(names || [])) if (!IOS_MIRROR_G.includes(n)) IOS_MIRROR_G.push(n); }
@@ -317,8 +319,8 @@ if (IOS_MODE) try { ovhdOn((id, v) => { if (!_iosApplying) iosCmd('ovhd', { id, 
 if (IOS_MODE) setInterval(() => iosCmd('ping'), 1000);
 
 // ── 페이지 ──
-const IOS_PAGES = [['ios', '교관'], ['pfd', 'PFD'], ['ovhd', 'UPPER'], ['lcon', 'LOWER'], ['grip', 'CYC · COLL'], ['map', 'MAP'], ['cockpit', 'COCKPIT']]
-  .filter(([k]) => !(k === 'ovhd' && typeof acScrOk === 'function' && !acScrOk('ovhd')));
+const IOS_PAGES = [['ios', '교관'], ['pfd', 'PFD'], ['ovhd', 'UPPER'], ['lcon', 'LOWER'], ['sysp', 'SYSTEM'], ['grip', 'CYC · COLL'], ['map', 'MAP'], ['cockpit', 'COCKPIT']]
+  .filter(([k]) => !((k === 'ovhd' || k === 'sysp') && typeof acScrOk === 'function' && !acScrOk(k)));   // Bell 206 · R22 — UPPER · SYSTEM 없음
 let iosPage = 'ios';
 function iosPagesBuild() {
   if (document.getElementById('ios-pages')) return;
