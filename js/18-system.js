@@ -526,6 +526,11 @@ function _sysPaint(g, c, W, H, dpr, own, half) {
     // EO/IR — 전탐석(37-mission.js)이 움직이는 터릿 영상 + 오버레이(실기 Video 화면 배치)
     eoirVideoDrawTo(g, 227, 49, 766, 574);
   }
+  else if (sysPage === 'asys_video' && videoCfg.ch === 'RADAR' && typeof rdrDrawTo === 'function' && typeof EO_ON !== 'undefined' && EO_ON) {
+    // 탐색레이더(Seaspray 5000E) — 전탐석과 같은 화면 · 같은 상태(37-mission.js) · CDU 노브 · 하부 콘솔 VCCP 로 다룬다
+    rdrDrawTo(g, 227, 49, 766, 574);
+    try { if (typeof radarDraw === 'function') radarDraw(g, 224, 262, 772, 300); } catch (e) { _swallow(e); }   // CDU 조이스틱 누름(Push:Radar) — 레이더 제어 차림
+  }
   else if (sysPage === 'asys_video') {
     g.fillStyle = '#4a6a7a'; g.textAlign = 'center'; g.font = 'bold 26px Helvetica Neue, Arial, sans-serif';
     g.fillText(`VIDEO — ${videoCfg.ch}`, 610, 300);
@@ -564,6 +569,7 @@ function _sysPaintHalf(g, F, own = true) {
     if (id === 'asys_hocas') _sysHocasPage(g, x, y, w, h);
     else if (id === 'tcas') _sysTcasPage(g, x, y, w, h);
     else if (id === 'asys_video' && videoCfg.ch === 'EO/IR' && typeof eoirVideoDrawTo === 'function' && typeof EO_ON !== 'undefined' && EO_ON) eoirVideoDrawTo(g, x + 2, y + 17, w - 4, h - 19);   // EO/IR 영상은 반쪽에도
+    else if (id === 'asys_video' && videoCfg.ch === 'RADAR' && typeof rdrDrawTo === 'function' && typeof EO_ON !== 'undefined' && EO_ON) rdrDrawTo(g, x + 2, y + 17, w - 4, h - 19);   // 탐색레이더도 반쪽에
     else if (id === 'map' || id === 'asys_video') {
       g.fillStyle = '#4a6a7a'; g.textAlign = 'center'; g.font = 'bold 20px Helvetica Neue, Arial, sans-serif';
       g.fillText((SYS_PAGES[id] || '').toUpperCase(), x + w / 2, y + h / 2 - 8);

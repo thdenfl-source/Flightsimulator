@@ -593,7 +593,7 @@ function _msnCss() {
 .msn-slcz .slc-st{margin-top:10px}
 .msn-clnz{zoom:.82}
 .msn-dvrz{zoom:.86}
-/* 녹화기(DVR) — EO/IR · 레이더 · 호이스트 · 지도 화면 녹화(기능은 이후) */
+/* 녹화기(DVR) — EO/IR · 레이더 · 호이스트 · 지도 화면 녹화· 재생 · USB(FLM 5.19) */
 .dvr{width:350px;background:linear-gradient(#1f2226,#141619);border:2px solid #07080a;border-radius:6px;padding:12px 14px 10px;box-shadow:0 3px 8px #000b,inset 0 1px 0 #3a3f45;
   display:grid;grid-template-columns:1fr 150px;grid-template-areas:"l pad" "t t" "ch ch" "slot slot";gap:8px 10px;font:bold 10px Arial;color:#9aa3ab}
 .dvr b{background:linear-gradient(#5b6168,#3c4146);border:1px solid #111;border-radius:4px;color:#c8ced3;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:inset 0 1px 0 #7a8187}
@@ -602,6 +602,14 @@ function _msnCss() {
 .dvr-r{display:flex;align-items:center;gap:10px}.dvr-r b{width:76px;height:20px;font-size:9px}
 .dvr-led{width:14px;height:14px;border-radius:50%;background:#9fb4c4;opacity:.35;box-shadow:inset 0 1px 2px #000}
 .dvr-led.on{opacity:1;background:#5f6;box-shadow:0 0 8px #5f6}.dvr-led.rec{opacity:1;background:#f44;box-shadow:0 0 8px #f44}
+.dvr-led.red{opacity:1;background:#f44;box-shadow:0 0 8px #f44}.dvr-led.blue{opacity:1;background:#3af;box-shadow:0 0 8px #3af}
+.dvr-st{font:bold 10px Arial;color:#7fffb0;letter-spacing:.5px}
+.msn-cell canvas.dvr-pb{z-index:3}
+.dvr-osd{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:6;min-width:300px;max-width:90%;background:rgba(6,12,20,.92);border:2px solid #3af;border-radius:6px;padding:10px 14px;color:#dfe8ef;font:13px Arial}
+.dvr-osd h4{margin:0 0 6px;color:#4aa8ff;font-size:14px}.dvr-osd p{margin:2px 0;padding:2px 6px;border-radius:3px}.dvr-osd p.sel,.dvr-osd span.sel{background:#3af;color:#001}
+.dvr-osd small{display:block;margin-top:6px;color:#8aa}.dvr-dt{font:bold 18px monospace;margin:4px 0}.dvr-dt span{padding:0 2px;border-radius:2px}
+.dvr-cal{display:grid;grid-template-columns:repeat(7,26px);gap:2px;margin:6px 0;font:11px Arial;text-align:center}.dvr-cal i{font-style:normal;padding:2px 0;color:#9ab}
+.dvr-cal i.rec{background:#1f6f3f;color:#fff;border-radius:3px}.dvr-cal i.cur{outline:1px solid #3af}
 .dvr-pad{grid-area:pad;display:grid;grid-template-columns:30px 1fr 30px;grid-template-rows:24px 40px 24px;gap:3px}
 .dvr-pad .u{grid-column:1/4;grid-row:1}.dvr-pad .d{grid-column:1/4;grid-row:3}.dvr-pad .l{grid-column:1;grid-row:2}.dvr-pad .r{grid-column:3;grid-row:2}.dvr-pad .e{grid-column:2;grid-row:2;font-size:10px}
 .dvr-t{grid-area:t;display:grid;grid-template-columns:repeat(3,44px) 1fr 54px 54px;gap:10px;height:28px}
@@ -674,6 +682,11 @@ function _msnCss() {
 .cln-knob em{position:absolute;width:16px;height:16px;font:bold 11px/16px Arial;text-align:center;color:#9fb;cursor:pointer;font-style:normal}
 .cln-rot{display:flex;flex-direction:column;gap:6px}
 .cln-rot b{width:26px;height:22px;border-radius:4px;background:#1c2226;border:1px solid #000;color:#cde;font:bold 12px Arial;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.vccp-l{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:linear-gradient(#2b3135,#1a1e21);border-radius:6px}
+.vccp-z{zoom:.86}
+.vccp-cap{font:bold 9px Arial;color:#9aa;letter-spacing:1px;margin-top:2px}
+.vccp-cmd{position:absolute;right:8px;top:4px;font:bold 9px Arial;color:#7fffb0}
+.vccp-cmd.lock{color:#ffb000}
 .msn-cap2{font:bold 9px Arial;color:#9aa;text-align:center;letter-spacing:1px;margin-top:3px}
 #msn-open-btn{position:fixed;left:8px;bottom:60px;z-index:3900;display:none;background:#0d2a40;border:1px solid #3a8fd0;color:#cfe8ff;border-radius:6px;padding:7px 11px;font:bold 12px Arial;cursor:pointer;box-shadow:0 2px 6px #000a}
 html.ac-kuhm #msn-open-btn{display:block}
@@ -719,6 +732,44 @@ function dispKey(k) {
   else if (k === 'pwr') dispSet({ pwr: !disp.pwr });
   else if (k === 'menu') _mToast('표시기 MENU — 기능은 이후에 갖춥니다');
 }
+// VCCP 면판(DOM) — 전탐석 · 조종석 하부 콘솔 ⑮ 가 같은 것을 쓴다
+function _clnHtml() {
+  return `<div class="cln">
+        <div class="cln-k"><b data-cln="map">MAP</b><b data-cln="esc">ESC</b><b data-cln="com">COM</b><b data-cln="tfc">TFC</b></div>
+        <div class="cln-knob" data-m="clnknob"><div class="ring"></div><div class="cap" data-cln="push"></div>
+          ${[['n', 51, 0, '▲'], ['ne', 92, 10, '◥'], ['e', 102, 51, '▶'], ['se', 92, 92, '◢'], ['s', 51, 102, '▼'], ['sw', 10, 92, '◣'], ['w', 0, 51, '◀'], ['nw', 10, 10, '◤']].map(([d, x, y, t]) => `<em data-cln="pan:${d}" style="left:${x}px;top:${y}px">${t}</em>`).join('')}</div>
+        <div class="cln-rot"><b data-cln="rot:-1" title="왼쪽으로 돌림 — 넓게">⟲</b><b data-cln="rot:1" title="오른쪽으로 돌림 — 좁게">⟳</b></div>
+        <div class="cln-k"><b data-cln="clr">CLR</b><b data-cln="fnc">FNC</b><b data-cln="wxr">WXR</b><b data-cln="tws">TWS</b></div>
+      </div>`;
+}
+function _clnLeds(root) {
+  if (!root) return;
+  root.querySelectorAll('[data-cln]').forEach(b => { const k = b.dataset.cln; if (k === 'wxr') b.classList.toggle('on', rdr.wxr); if (k === 'tws') b.classList.toggle('on', rdr.tws); if (k === 'map') b.classList.toggle('on', rdr.menu === 'MAP'); if (k === 'fnc') b.classList.toggle('on', rdr.menu === 'FNC'); });
+}
+// ── 조종석 하부 콘솔 ⑮ VCCP(19-lower.js 'html' 자리 #vccpL) — 전탐석 VCCP 와 같은 면판 · 같은 레이더. 권한은 조종실(CKPT · SHARED)
+//   화면은 조종석 SYSTEM 창 Video(Channel RADAR) — 전탐석 레이더 화면과 같다(rdrDrawTo)
+function vccpBuild() {
+  const host = document.getElementById('vccpL');
+  if (!host || host.dataset.built) return;
+  host.dataset.built = '1'; _msnCss();
+  host.innerHTML = `<div class="vccp-l"><div class="vccp-z">${_clnHtml()}</div><div class="vccp-cap">VCCP — SEARCH RADAR (CKPT)</div><div class="vccp-cmd" data-m="vccmd"></div></div>`;
+  const downK = new Map();
+  host.addEventListener('pointerdown', e => {
+    const cl = e.target.closest('[data-cln]'); if (!cl) return;
+    e.preventDefault(); e.stopPropagation(); const k = cl.dataset.cln; downK.set(e.pointerId, k); clnPress(k, true, 'CKPT');
+    try { cl.setPointerCapture(e.pointerId); } catch (er) { _swallow(er); }
+  });
+  const up = e => { const k = downK.get(e.pointerId); if (k == null) return; downK.delete(e.pointerId); clnPress(k, false, 'CKPT'); };
+  host.addEventListener('pointerup', up); host.addEventListener('pointercancel', up);
+  vccpRender();
+}
+let _vccpKey = '';
+function vccpRender() {
+  const host = document.getElementById('vccpL'); if (!host || !host.dataset.built) return;
+  const key = `${rdr.wxr}${rdr.tws}${rdr.menu}${rdr.cmd}`; if (key === _vccpKey) return; _vccpKey = key;
+  _clnLeds(host);
+  const c = host.querySelector('[data-m="vccmd"]'); if (c) { c.textContent = `RDR CMD ${rdr.cmd}`; c.classList.toggle('lock', !rdrCkptOk()); }
+}
 function _msnBuild() {
   if (_msnEl) return _msnEl;
   _msnCss();
@@ -762,15 +813,9 @@ function _msnBuild() {
         <div class="dvr-pad"><b class="u" data-dvr="up">▲</b><b class="l" data-dvr="left">◀</b><b class="e" data-dvr="enter">ENTER</b><b class="r" data-dvr="right">▶</b><b class="d" data-dvr="down">▼</b></div>
         <div class="dvr-t"><b data-dvr="rew">◀◀/◀</b><b data-dvr="play">❙❙▶</b><b data-dvr="ff">▶/▶▶</b><span></span><b data-dvr="menu">MENU</b><b data-dvr="back">↩</b></div>
         <div class="dvr-ch">${[1, 2, 3, 4].map(n => `<div><i class="dvr-led" data-dvl="ch${n}"></i><b data-dvr="ch${n}">CH${n}</b></div>`).join('')}</div>
-        <div class="dvr-slot"><span>⟵ OPEN</span><i></i></div>
+        <div class="dvr-slot"><span>⟵ OPEN</span><em class="dvr-st" data-m="dvrst"></em><i></i></div>
       </div><div class="msn-cap2">VIDEO RECORDER — EO/IR · RADAR · HOIST · MAP</div></div>
-      <div class="msn-clnz"><div class="cln">
-        <div class="cln-k"><b data-cln="map">MAP</b><b data-cln="esc">ESC</b><b data-cln="com">COM</b><b data-cln="tfc">TFC</b></div>
-        <div class="cln-knob" data-m="clnknob"><div class="ring"></div><div class="cap" data-cln="push"></div>
-          ${[['n', 51, 0, '▲'], ['ne', 92, 10, '◥'], ['e', 102, 51, '▶'], ['se', 92, 92, '◢'], ['s', 51, 102, '▼'], ['sw', 10, 92, '◣'], ['w', 0, 51, '◀'], ['nw', 10, 10, '◤']].map(([d, x, y, t]) => `<em data-cln="pan:${d}" style="left:${x}px;top:${y}px">${t}</em>`).join('')}</div>
-        <div class="cln-rot"><b data-cln="rot:-1" title="왼쪽으로 돌림 — 넓게">⟲</b><b data-cln="rot:1" title="오른쪽으로 돌림 — 좁게">⟳</b></div>
-        <div class="cln-k"><b data-cln="clr">CLR</b><b data-cln="fnc">FNC</b><b data-cln="wxr">WXR</b><b data-cln="tws">TWS</b></div>
-      </div><div class="msn-cap2">SEARCH RADAR CONTROL — VCCP (SEASPRAY 5000E)</div></div>
+      <div class="msn-clnz">${_clnHtml()}<div class="msn-cap2">SEARCH RADAR CONTROL — VCCP (SEASPRAY 5000E)</div></div>
       </div><div class="msn-colB">
         <div class="msn-slcz"><div class="slc">
           <div class="slc-top"><div class="slc-rk"><u data-slc="hdim:up">▲</u>HCU<br>DIM<u data-slc="hdim:dn">▼</u><span data-slc="test" style="margin-top:3px">TEST ▷</span></div>
@@ -843,22 +888,288 @@ function _msnBuild() {
   dispSet();
   return R;
 }
-// ══ 녹화기(DVR · 527) — EO/IR · 레이더 · 호이스트 · 지도 화면을 녹화한다. 지금은 표시등만(녹화 · 재생 기능은 이후) ══
-const dvr = { pwr: false, rec: false, play: false, ch: { 1: true, 2: true, 3: true, 4: true } };
+// ══ 녹화기(DVR · FLM 5.19) — 호이스트 카메라 · 탐색레이더 · EO/IR · 지도 화면을 SSD 에 녹화(.MUX) · 재생 · USB 로 AVI 내보내기 ══
+//   POWER(빨강 표시등) · REC(전체 녹화 — 녹화 중 초록 깜박 · 멈춤 초록) · PLAYBACK(파랑 — 재생 0.5~256배 · 앞 · 뒤)
+//   CH1 호이스트 카메라(12V) · CH2 탐색레이더 · CH3 EO/IR · CH4 DMM 지도 — 채널 단추로 그 채널 녹화를 켜고 끈다
+//     채널 표시등: 녹화 중 초록 깜박 · 멈춤 초록 · 연결 안 됨(호이스트 전원 꺼짐 등) 꺼짐
+//   ▲▼◀▶ · ENTER — 메뉴 · 날짜/시간 검색 / 재생 중: ◀▶ 10초 앞뒤 · ▲▼ 속도 · ENTER 멈춤/재생 · ↩ 뒤로(메뉴 닫기 · 재생 끝)
+//   ◀◀/◀ · ❙❙▶ · ▶/▶▶ — 뒤로 빨리(누를 때마다 2 · 4 · … 256배) · 재생/멈춤 · 앞으로 빨리
+//   (시뮬레이터 — 채널마다 2초에 한 장(320×240 JPEG)을 메모리에 담는다. 가장 오래된 것부터 지워 1시간 분량까지 둔다. 실기 SSD 는 5시간 넘게)
+const DVR_CH = { 1: 'HOIST CAM', 2: 'RADAR', 3: 'EO/IR', 4: 'DMM MAP' };
+const DVR_CELL = { 1: 'hoist', 2: 'rdr', 3: 'eo', 4: 'map' };       // 표시기 칸
+const DVR_W = 320, DVR_H = 240, DVR_DT = 2000, DVR_KEEP = 1800, DVR_BOOT_S = 3, DVR_SSD_H = 5.5;
+const DVR_SPEEDS = [0.5, 1, 2, 4, 8, 16, 32, 64, 128, 256];
+const DVR_MENU = ['SEARCH — 날짜 · 시간', 'PLAYBACK VIEW', 'EXPORT → USB (AVI)', 'SSD INFO', 'SSD FORMAT'];
+const DVR_VIEWS = ['QUAD', 'CH1', 'CH2', 'CH3', 'CH4'];
+const dvr = { pwr: false, boot: 0, rec: false, play: false, ch: { 1: true, 2: true, 3: true, 4: true },
+  fr: [], seg: [], capT: 0, pb: { t: 0, si: 1, dir: 1, pause: false }, menu: null, menuI: 0, view: 0,
+  srch: { t: 0, f: 3 }, fmtArm: false, exp: null, info: '' };
+// 채널이 연결(신호가 들어오는가) — CH1 호이스트 카메라는 호이스트 전원(12V)
+function dvrConn(n) {
+  if (n === 1) { try { return typeof hoistPowered !== 'function' || hoistPowered(); } catch (e) { return false; } }
+  if (n === 2) return rdr.pwr;
+  if (n === 3) return eo.pwr;
+  return true;
+}
+function dvrRecCh(n) { return dvr.pwr && dvr.boot <= 0 && dvr.rec && dvr.ch[n] && dvrConn(n); }
+const _dvrT = t => { const d = new Date(t), p = v => String(v).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`; };
+const _dvrHm = s => `${Math.floor(s / 3600)}h ${String(Math.floor(s % 3600 / 60)).padStart(2, '0')}m`;
+function dvrSpeed() { return DVR_SPEEDS[dvr.pb.si]; }
+// 채널 한 장 그리기(320×240)
+let _dvrCv = null;
+function _dvrGrab(n) {
+  if (!_dvrCv) { _dvrCv = document.createElement('canvas'); _dvrCv.width = DVR_W; _dvrCv.height = DVR_H; }
+  const g = _dvrCv.getContext('2d'); g.setTransform(1, 0, 0, 1, 0, 0); g.filter = 'none'; g.fillStyle = '#000'; g.fillRect(0, 0, DVR_W, DVR_H);
+  try {
+    if (n === 1 && typeof sarHoistCamDrawTo === 'function') sarHoistCamDrawTo(g, 0, 0, DVR_W, DVR_H);
+    else if (n === 2) { g.save(); _rdrPaint(g, DVR_W, DVR_H); g.restore(); }
+    else if (n === 3) eoirVideoDrawTo(g, 0, 0, DVR_W, DVR_H);
+    else if (n === 4) {
+      const cell = _msnEl && _msnEl.querySelector('.c-map');
+      const mc = _nvMap && _cellVis(cell) ? _nvMap.getCanvas() : null, ov = cell && cell.querySelector('.nv-ov');
+      if (mc && mc.width) { g.drawImage(mc, 0, 0, DVR_W, DVR_H); if (ov && ov.width) g.drawImage(ov, 0, 0, DVR_W, DVR_H); }
+      else { g.fillStyle = '#5a6a75'; g.font = 'bold 14px Arial'; g.textAlign = 'center'; g.fillText('DMM MAP — NO VIDEO', DVR_W / 2, DVR_H / 2); }
+    }
+  } catch (e) { _swallow(e); }
+  g.setTransform(1, 0, 0, 1, 0, 0); g.filter = 'none';
+  g.font = 'bold 10px Arial'; g.textAlign = 'left'; g.fillStyle = '#fff'; g.strokeStyle = '#000'; g.lineWidth = 3;
+  const s = `CH${n} ${DVR_CH[n]}  ${_dvrT(Date.now())}`; g.strokeText(s, 4, DVR_H - 5); g.fillText(s, 4, DVR_H - 5);
+  try { return _dvrCv.toDataURL('image/jpeg', 0.6); } catch (e) { return null; }
+}
+function dvrCapture(now) {
+  const c = {}; let any = false;
+  for (const n of [1, 2, 3, 4]) if (dvrRecCh(n)) { const u = _dvrGrab(n); if (u) { c[n] = u; any = true; } }
+  if (!any) return;
+  dvr.fr.push({ t: now, c });
+  const sg = dvr.seg[dvr.seg.length - 1];
+  if (sg && now - sg.t1 <= DVR_DT * 3) sg.t1 = now; else dvr.seg.push({ t0: now, t1: now });
+  while (dvr.fr.length > DVR_KEEP) { dvr.fr.shift(); const s0 = dvr.seg[0]; if (s0 && dvr.fr[0]) { if (s0.t1 < dvr.fr[0].t) dvr.seg.shift(); else s0.t0 = Math.max(s0.t0, dvr.fr[0].t); } }
+}
+// 재생 자리 pb.t 에 맞는 장(그 시각 이전의 마지막 장)
+function dvrFrameAt(t) {
+  const F = dvr.fr; if (!F.length) return -1;
+  let lo = 0, hi = F.length - 1; if (t < F[0].t) return 0;
+  while (lo < hi) { const m = (lo + hi + 1) >> 1; if (F[m].t <= t) lo = m; else hi = m - 1; }
+  return lo;
+}
+function dvrSeek(t) {
+  const F = dvr.fr; if (!F.length) return;
+  t = _mClamp(t, F[0].t, F[F.length - 1].t);
+  // 녹화가 끊긴 틈에 들면 가는 쪽의 다음 녹화로 건너뛴다
+  const i = dvrFrameAt(t);
+  if (t - F[i].t > DVR_DT * 3) t = dvr.pb.dir > 0 && F[i + 1] ? F[i + 1].t : F[i].t;
+  dvr.pb.t = t;
+}
+function dvrPlay(on, t) {
+  if (on && !dvr.fr.length) { _mToast('녹화기 — 녹화된 영상이 없습니다'); dvr.play = false; return; }
+  dvr.play = !!on;
+  if (dvr.play) { dvr.pb.pause = false; dvr.pb.si = 1; dvr.pb.dir = 1; dvrSeek(t != null ? t : (dvr.seg.length ? dvr.seg[dvr.seg.length - 1].t0 : dvr.fr[0].t)); _mNote('녹화기 PLAYBACK'); }
+  dvrView();
+}
+// 재생 화면 차림 — QUAD(4분할) · 한 채널 전체
+function dvrView() {
+  if (!dvr.play) return;
+  const v = DVR_VIEWS[dvr.view];
+  if (v === 'QUAD') dispSet({ lay: 'quad' });
+  else { const cell = DVR_CELL[+v[2]], ch = +Object.keys(DISP_CH).find(k => DISP_CH[k] === cell); dispSet({ lay: 'one', ch }); }
+}
+function dvrStep(dt) {
+  if (!dvr.pwr) return;
+  if (dvr.boot > 0) { dvr.boot -= dt; return; }
+  const now = Date.now();
+  if (dvr.rec && now - dvr.capT >= DVR_DT) { dvr.capT = now; try { dvrCapture(now); } catch (e) { _swallow(e); } }
+  if (dvr.play && !dvr.pb.pause && dvr.fr.length) {
+    const F = dvr.fr, t = dvr.pb.t + dt * 1000 * dvrSpeed() * dvr.pb.dir;
+    if (t >= F[F.length - 1].t && dvr.pb.dir > 0) { dvr.pb.t = F[F.length - 1].t; dvr.pb.pause = true; }
+    else if (t <= F[0].t && dvr.pb.dir < 0) { dvr.pb.t = F[0].t; dvr.pb.pause = true; }
+    else dvrSeek(t);
+  }
+}
+function _dvrSpeedStep(dir) {
+  const pb = dvr.pb;
+  if (pb.pause) { pb.pause = false; pb.dir = dir; pb.si = dir > 0 ? 1 : 2; return; }
+  if (pb.dir !== dir) { pb.dir = dir; pb.si = dir > 0 ? 1 : 2; return; }
+  pb.si = Math.min(DVR_SPEEDS.length - 1, pb.si + 1);
+}
 function dvrPress(k) {
-  if (k === 'power') { dvr.pwr = !dvr.pwr; if (!dvr.pwr) { dvr.rec = false; dvr.play = false; } }
-  else if (!dvr.pwr) _mToast('녹화기 POWER 가 꺼져 있습니다');
-  else if (k === 'rec') { dvr.rec = !dvr.rec; if (dvr.rec) dvr.play = false; _mNote(`녹화기 REC ${dvr.rec ? '시작' : '멈춤'}`); }
-  else if (k === 'playback') { dvr.play = !dvr.play; if (dvr.play) dvr.rec = false; }
-  else if (/^ch[1-4]$/.test(k)) dvr.ch[k[2]] = !dvr.ch[k[2]];
-  else _mToast('녹화기 — 이 단추의 기능은 이후에 갖춥니다');
+  if (k === 'power') {
+    dvr.pwr = !dvr.pwr;
+    if (dvr.pwr) dvr.boot = DVR_BOOT_S; else { dvr.rec = false; dvr.play = false; dvr.menu = null; dvr.boot = 0; }
+    _mNote(`녹화기 POWER ${dvr.pwr ? 'ON' : 'OFF'}`); dvrRender(); return;
+  }
+  if (!dvr.pwr) { _mToast('녹화기 POWER 가 꺼져 있습니다'); return; }
+  if (dvr.boot > 0) { _mToast(`녹화기 시동 중 — ${Math.ceil(dvr.boot)}초`); return; }
+  const pb = dvr.pb;
+  if (k === 'rec') { dvr.rec = !dvr.rec; dvr.capT = 0; _mNote(`녹화기 REC ${dvr.rec ? '시작' : '멈춤'}`); }
+  else if (k === 'playback') dvrPlay(!dvr.play);
+  else if (/^ch[1-4]$/.test(k)) { const n = +k[2]; if (!dvrConn(n)) _mToast(`CH${n} ${DVR_CH[n]} — 신호 없음(연결 안 됨)`); dvr.ch[n] = !dvr.ch[n]; }
+  else if (k === 'menu') { dvr.menu = dvr.menu ? null : 'MAIN'; dvr.menuI = 0; dvr.fmtArm = false; }
+  else if (k === 'back') { if (dvr.menu === 'MAIN') dvr.menu = null; else if (dvr.menu) { dvr.menu = 'MAIN'; dvr.fmtArm = false; } else if (dvr.play) dvrPlay(false); }
+  else if (dvr.menu) _dvrMenuKey(k);
+  else if (k === 'play') { if (!dvr.play) dvrPlay(true); else if (pb.si !== 1 || pb.dir < 0) { pb.si = 1; pb.dir = 1; pb.pause = false; } else pb.pause = !pb.pause; }
+  else if (!dvr.play) { if (['rew', 'ff', 'left', 'right', 'up', 'down', 'enter'].includes(k)) _mToast('녹화기 — PLAYBACK 이나 MENU 에서 씁니다'); }
+  else if (k === 'ff') _dvrSpeedStep(1);
+  else if (k === 'rew') _dvrSpeedStep(-1);
+  else if (k === 'left' || k === 'right') dvrSeek(pb.t + (k === 'right' ? 10000 : -10000));
+  else if (k === 'up') { pb.si = Math.min(DVR_SPEEDS.length - 1, pb.si + 1); pb.pause = false; }
+  else if (k === 'down') { pb.si = Math.max(0, pb.si - 1); pb.pause = false; }
+  else if (k === 'enter') pb.pause = !pb.pause;
   dvrRender();
+}
+function _dvrMenuKey(k) {
+  if (dvr.menu === 'MAIN') {
+    if (k === 'up' || k === 'down') { dvr.menuI = (dvr.menuI + (k === 'down' ? 1 : -1) + DVR_MENU.length) % DVR_MENU.length; dvr.fmtArm = false; }
+    else if (k === 'enter' || k === 'right') {
+      const i = dvr.menuI;
+      if (i === 0) { dvr.menu = 'SEARCH'; dvr.srch.t = dvr.fr.length ? (dvr.play ? dvr.pb.t : dvr.seg[dvr.seg.length - 1].t0) : Date.now(); dvr.srch.f = 3; }
+      else if (i === 1) { dvr.view = (dvr.view + 1) % DVR_VIEWS.length; dvrView(); }
+      else if (i === 2) dvrExport();
+      else if (i === 3) dvr.menu = 'INFO';
+      else if (i === 4) { if (!dvr.fmtArm) { dvr.fmtArm = true; _mToast('SSD FORMAT — ENTER 를 한 번 더 누르면 모든 녹화를 지웁니다'); } else { dvr.fr = []; dvr.seg = []; dvr.play = false; dvr.fmtArm = false; _mNote('녹화기 SSD FORMAT'); } }
+    }
+    return;
+  }
+  if (dvr.menu === 'SEARCH') {
+    // 칸: 0 년 · 1 월 · 2 일 · 3 시 · 4 분 · 5 초 — ◀▶ 칸 · ▲▼ 값 · ENTER 그 시각부터 재생
+    const s = dvr.srch;
+    if (k === 'left') s.f = Math.max(0, s.f - 1);
+    else if (k === 'right') s.f = Math.min(5, s.f + 1);
+    else if (k === 'up' || k === 'down') {
+      const d = new Date(s.t), v = k === 'up' ? 1 : -1;
+      [() => d.setFullYear(d.getFullYear() + v), () => d.setMonth(d.getMonth() + v), () => d.setDate(d.getDate() + v),
+       () => d.setHours(d.getHours() + v), () => d.setMinutes(d.getMinutes() + v), () => d.setSeconds(d.getSeconds() + v)][s.f]();
+      s.t = d.getTime();
+    } else if (k === 'enter') {
+      if (!dvr.fr.length) { _mToast('녹화기 — 녹화된 영상이 없습니다'); return; }
+      const F = dvr.fr; let t = s.t;
+      if (t < F[0].t || t > F[F.length - 1].t) { _mToast('그 시각에는 녹화가 없습니다 — 가장 가까운 녹화부터'); }
+      dvr.menu = null; dvrPlay(true, t);
+    }
+    return;
+  }
+  if (dvr.menu === 'INFO' && (k === 'enter' || k === 'left')) dvr.menu = 'MAIN';
+}
+// SSD 사용량 — 실기 용량(5.5시간)에 견준다
+function dvrSsd() {
+  let sec = 0; for (const s of dvr.seg) sec += (s.t1 - s.t0 + DVR_DT) / 1000;
+  return { sec, pct: Math.min(100, sec / (DVR_SSD_H * 3600) * 100), left: Math.max(0, DVR_SSD_H * 3600 - sec), clips: dvr.seg.length };
+}
+// ── USB 내보내기 — 지금 재생 중인 녹화(없으면 마지막 녹화)를 채널마다 MJPEG AVI 로 묶어 ZIP 으로 내려받는다 ──
+function _dvrB64(u) { const b = atob(u.slice(u.indexOf(',') + 1)), a = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) a[i] = b.charCodeAt(i); return a; }
+function dvrAvi(jpegs, frameMs, w, h) {
+  const n = jpegs.length, pad = x => x + (x & 1);
+  let movi = 4; for (const j of jpegs) movi += 8 + pad(j.length);
+  const hdrl = 4 + (8 + 56) + (8 + 4 + (8 + 56) + (8 + 40)), idx = 16 * n;
+  const total = 12 + (8 + hdrl) + (8 + movi) + (8 + idx), buf = new ArrayBuffer(total), v = new DataView(buf), u8 = new Uint8Array(buf);
+  let p = 0; const S4 = s => { for (let i = 0; i < 4; i++) v.setUint8(p++, s.charCodeAt(i)); }, U32 = x => { v.setUint32(p, x, true); p += 4; }, U16 = x => { v.setUint16(p, x, true); p += 2; };
+  const maxJ = jpegs.reduce((m, j) => Math.max(m, j.length), 0);
+  S4('RIFF'); U32(total - 8); S4('AVI ');
+  S4('LIST'); U32(hdrl); S4('hdrl');
+  S4('avih'); U32(56); U32(Math.round(frameMs * 1000)); U32(Math.ceil(maxJ * 1000 / frameMs)); U32(0); U32(0x10); U32(n); U32(0); U32(1); U32(maxJ); U32(w); U32(h); U32(0); U32(0); U32(0); U32(0);
+  S4('LIST'); U32(4 + 64 + 48); S4('strl');
+  S4('strh'); U32(56); S4('vids'); S4('MJPG'); U32(0); U16(0); U16(0); U32(0); U32(frameMs); U32(1000); U32(0); U32(n); U32(maxJ); U32(0xFFFFFFFF); U32(0); U16(0); U16(0); U16(w); U16(h);
+  S4('strf'); U32(40); U32(40); U32(w); U32(h); U16(1); U16(24); S4('MJPG'); U32(w * h * 3); U32(0); U32(0); U32(0); U32(0);
+  S4('LIST'); U32(movi); const m0 = p; S4('movi');
+  const offs = [];
+  for (const j of jpegs) { offs.push(p - m0); S4('00dc'); U32(j.length); u8.set(j, p); p += pad(j.length); }
+  S4('idx1'); U32(idx);
+  jpegs.forEach((j, i) => { S4('00dc'); U32(0x10); U32(offs[i]); U32(j.length); });
+  return buf;
+}
+async function dvrExport() {
+  if (!dvr.fr.length) { _mToast('녹화기 — 내보낼 녹화가 없습니다'); return null; }
+  const t = dvr.play ? dvr.pb.t : dvr.seg[dvr.seg.length - 1].t0;
+  const sg = dvr.seg.find(s => t >= s.t0 - 1 && t <= s.t1 + 1) || dvr.seg[dvr.seg.length - 1];
+  const fr = dvr.fr.filter(f => f.t >= sg.t0 && f.t <= sg.t1), stamp = _dvrT(sg.t0).replace(/[-: ]/g, '').replace(/^(\d{8})/, '$1_');
+  const files = {};
+  for (const n of [1, 2, 3, 4]) {
+    const js = fr.filter(f => f.c[n]).map(f => _dvrB64(f.c[n]));
+    if (js.length) files[`DVR_${stamp}_CH${n}_${DVR_CH[n].replace(/[^A-Z]/g, '')}.avi`] = dvrAvi(js, DVR_DT, DVR_W, DVR_H);
+  }
+  dvr.exp = { name: `DVR_${stamp}.zip`, n: Object.keys(files).length, frames: fr.length };
+  _mNote(`녹화기 USB 내보내기 ${dvr.exp.name}`);
+  try {
+    if (typeof JSZip === 'undefined') throw new Error('zip');
+    const z = new JSZip(); for (const [f, b] of Object.entries(files)) z.file(f, b);
+    const blob = await z.generateAsync({ type: 'blob' });
+    dvr.exp.size = blob.size;
+    if (!window.__dvrNoDl) { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = dvr.exp.name; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 4000); }
+    _mToast(`USB — ${dvr.exp.name} (AVI ${dvr.exp.n}개 · ${fr.length}장)`);
+  } catch (e) { _swallow(e); _mToast('USB 내보내기 실패'); }
+  dvrRender();
+  return files;
+}
+// ── 표시 — 표시등 · 재생 화면(칸마다 그 채널) · 메뉴 OSD ──
+const _dvrImg = new Map();
+function _dvrImgOf(u) {
+  let im = _dvrImg.get(u);
+  if (!im) { im = new Image(); im.src = u; _dvrImg.set(u, im); if (_dvrImg.size > 40) _dvrImg.delete(_dvrImg.keys().next().value); }
+  return im;
 }
 function dvrRender() {
   if (!_msnEl) return;
+  const blink = Math.floor(performance.now() / 500) % 2 === 0, on = dvr.pwr && dvr.boot <= 0;
   const L = (n, c) => { const e = _msnEl.querySelector(`[data-dvl="${n}"]`); if (e) e.className = 'dvr-led' + (c ? ' ' + c : ''); };
-  L('pwr', dvr.pwr ? 'on' : ''); L('rec', dvr.pwr && dvr.rec && Math.floor(performance.now() / 500) % 2 === 0 ? 'rec' : ''); L('play', dvr.pwr && dvr.play ? 'on' : '');
-  [1, 2, 3, 4].forEach(n => L('ch' + n, dvr.pwr && dvr.ch[n] ? 'on' : ''));
+  L('pwr', dvr.pwr ? 'red' : ''); L('rec', on ? (dvr.rec ? (blink ? 'on' : '') : 'on') : ''); L('play', on && dvr.play ? 'blue' : '');
+  [1, 2, 3, 4].forEach(n => L('ch' + n, on && dvrConn(n) && dvr.ch[n] ? (dvr.rec ? (blink ? 'on' : '') : 'on') : ''));
+  const sl = _msnEl.querySelector('[data-m="dvrst"]');
+  if (sl) { const s = dvrSsd(); sl.textContent = !dvr.pwr ? '' : dvr.boot > 0 ? 'BOOT…' : `${dvr.rec ? '●REC ' : ''}${dvr.play ? (dvr.pb.pause ? '❙❙ ' : (dvr.pb.dir < 0 ? '◀' : '▶') + dvrSpeed() + 'x ') : ''}SSD ${s.pct.toFixed(1)}%`; }
+  _dvrOsd();
+}
+function _dvrOsd() {
+  const scr = _msnEl.querySelector('.msn-scr'); if (!scr) return;
+  let o = scr.querySelector('.dvr-osd');
+  if (!o) { o = document.createElement('div'); o.className = 'dvr-osd'; scr.appendChild(o); }
+  const show = dvr.pwr && dvr.boot <= 0 && dvr.menu;
+  o.style.display = show ? '' : 'none';
+  if (!show) return;
+  const esc = s => String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]);
+  let h = '';
+  if (dvr.menu === 'MAIN') h = `<h4>DVR MENU</h4>` + DVR_MENU.map((m, i) => `<p class="${i === dvr.menuI ? 'sel' : ''}">${esc(m)}${i === 1 ? ` : <b>${DVR_VIEWS[dvr.view]}</b>` : ''}${i === 4 && dvr.fmtArm ? ' — ENTER 다시' : ''}</p>`).join('') + `<small>▲▼ 고르기 · ENTER · ↩ 닫기</small>`;
+  else if (dvr.menu === 'SEARCH') {
+    const d = new Date(dvr.srch.t), p = v => String(v).padStart(2, '0');
+    const fld = [d.getFullYear(), p(d.getMonth() + 1), p(d.getDate()), p(d.getHours()), p(d.getMinutes()), p(d.getSeconds())].map((v, i) => `<span class="${i === dvr.srch.f ? 'sel' : ''}">${v}</span>`);
+    // 달력 — 녹화가 있는 날은 초록
+    const y = d.getFullYear(), mo = d.getMonth(), first = new Date(y, mo, 1).getDay(), days = new Date(y, mo + 1, 0).getDate();
+    const has = new Set(dvr.seg.filter(s => { const a = new Date(s.t0); return a.getFullYear() === y && a.getMonth() === mo; }).map(s => new Date(s.t0).getDate()));
+    let cal = '<div class="dvr-cal">' + '일월화수목금토'.split('').map(x => `<i>${x}</i>`).join('') + '<i></i>'.repeat(first);
+    for (let i = 1; i <= days; i++) cal += `<i class="${has.has(i) ? 'rec' : ''}${i === d.getDate() ? ' cur' : ''}">${i}</i>`;
+    cal += '</div>';
+    const list = dvr.seg.slice(-5).reverse().map(s => `<p>● ${_dvrT(s.t0)} ~ ${_dvrT(s.t1).slice(11)}</p>`).join('') || '<p>녹화 없음</p>';
+    h = `<h4>SEARCH — 날짜 · 시간</h4><div class="dvr-dt">${fld[0]}-${fld[1]}-${fld[2]} ${fld[3]}:${fld[4]}:${fld[5]}</div>${cal}${list}<small>◀▶ 칸 · ▲▼ 값 · ENTER 재생 · ↩ 뒤로</small>`;
+  } else if (dvr.menu === 'INFO') {
+    const s = dvrSsd();
+    h = `<h4>SSD INFO</h4><p>사용 ${_dvrHm(s.sec)} / ${DVR_SSD_H}h (${s.pct.toFixed(1)}%)</p><p>남은 녹화 ${_dvrHm(s.left)}</p><p>녹화 ${s.clips}개 · ${dvr.fr.length}장 (.MUX)</p>` +
+      [1, 2, 3, 4].map(n => `<p>CH${n} ${DVR_CH[n]} — ${dvrConn(n) ? (dvr.ch[n] ? 'REC ON' : 'REC OFF') : 'NO SIGNAL'}</p>`).join('') +
+      (dvr.exp ? `<p>USB: ${esc(dvr.exp.name)}</p>` : '') + `<small>↩ 뒤로</small>`;
+  }
+  if (o._h !== h) { o.innerHTML = h; o._h = h; }
+}
+// 재생 — 보이는 칸마다 그 채널의 녹화 장을 덮어 그린다
+function dvrPlayDraw() {
+  if (!_msnEl) return;
+  const on = dvr.pwr && dvr.boot <= 0 && dvr.play && dvr.fr.length;
+  const i = on ? dvrFrameAt(dvr.pb.t) : -1, f = i >= 0 ? dvr.fr[i] : null;
+  for (const n of [1, 2, 3, 4]) {
+    const cell = _msnEl.querySelector('.c-' + DVR_CELL[n]); if (!cell) continue;
+    let cv = cell.querySelector('canvas.dvr-pb');
+    if (!on) { if (cv) cv.style.display = 'none'; continue; }
+    if (!cv) { cv = document.createElement('canvas'); cv.className = 'dvr-pb'; cell.appendChild(cv); }
+    cv.style.display = '';
+    if (!_cellVis(cell)) continue;
+    const d = _msnFit(cv), g = cv.getContext('2d'); g.setTransform(1, 0, 0, 1, 0, 0); g.fillStyle = '#000'; g.fillRect(0, 0, d.W, d.H);
+    const u = f && f.c[n];
+    if (u) { const im = _dvrImgOf(u); if (im.complete && im.naturalWidth) { const s = Math.min(d.W / DVR_W, d.H / DVR_H); g.drawImage(im, (d.W - DVR_W * s) / 2, (d.H - DVR_H * s) / 2, DVR_W * s, DVR_H * s); } }
+    else { g.fillStyle = '#667'; g.font = `bold ${Math.round(d.H / 14)}px Arial`; g.textAlign = 'center'; g.fillText(`CH${n} — NO RECORD`, d.W / 2, d.H / 2); }
+    const k = Math.max(1, d.H / 300); g.font = `bold ${Math.round(12 * k)}px Arial`; g.textAlign = 'left';
+    const pb = dvr.pb, st = pb.pause ? '❙❙ PAUSE' : `${pb.dir < 0 ? '◀◀' : '▶'} ${dvrSpeed()}x`;
+    g.fillStyle = '#4aa8ff'; g.fillText(`PLAYBACK  ${st}`, 8 * k, 16 * k);
+    g.fillStyle = '#fff'; g.textAlign = 'right'; g.fillText(_dvrT(pb.t), d.W - 8 * k, 16 * k);
+    // 시간 막대 — 처음 ~ 끝 · 녹화 구간 · 지금 자리
+    const F = dvr.fr, a = F[0].t, b = Math.max(a + 1, F[F.length - 1].t), x0 = 8 * k, x1 = d.W - 8 * k, y = d.H - 10 * k, X = t => x0 + (x1 - x0) * (t - a) / (b - a);
+    g.fillStyle = '#333'; g.fillRect(x0, y, x1 - x0, 4 * k); g.fillStyle = '#2f8f4f'; for (const s of dvr.seg) g.fillRect(X(s.t0), y, Math.max(2, X(s.t1) - X(s.t0)), 4 * k);
+    g.fillStyle = '#4aa8ff'; g.fillRect(X(pb.t) - 2 * k, y - 4 * k, 4 * k, 12 * k);
+  }
 }
 // ══ 탐색등 조작기(HSL-1600 HCU) — LSR/OFF · IR/VIS · LAMP/OFF · INIT/STOW · OFFSET · MAN/AUTO · FOCUS · 조이스틱 · 표시등 ══
 //   (자세한 기능은 교범을 받아 더한다 — 지금은 켜고 끄기 · 수동/연동 · 지향 · 표시등)
@@ -901,20 +1212,27 @@ function slcRender() {
 //   손잡이: 돌림 — 메뉴가 없으면 거리(RNG), 메뉴가 있으면 칸 옮기기 / 누름 — 메뉴 칸 실행 · 없으면 커서 자리 표적 추적(TRK) / 4축(8방향) — 커서
 const nv = { nm: 5, cur: null, ctr: null, pushT: 0 };
 const NV_RNG = [1, 2, 5, 10, 20, 40];
+// 조종실(하부 콘솔 ⑮ VCCP · CDU 노브)이 다룰 수 있는가 — CABIN 이면 전탐석만
+function rdrCkptOk() { return rdr.cmd !== 'CABIN'; }
+function rdrSideOk(side) { return side === 'CKPT' ? rdrCkptOk() : rdrCabinOk(); }
+let _clnSide = 'CABIN';
 function _rdrGuard(k) {
-  if (rdrCabinOk()) return true;
-  // CKPT — 메뉴를 열어 RDR > CMD 만 바꿀 수 있다
+  if (rdrSideOk(_clnSide)) return true;
+  // 권한이 없는 쪽 — 메뉴를 열어 RDR > CMD 만 바꿀 수 있다
   if (k === 'fnc' || k === 'esc' || (rdr.menu && (k.startsWith('rot:') || k === 'push'))) return true;
-  _mToast('RDR CMD CKPT — 조종실이 레이더를 쥐고 있습니다(FNC → RDR > CMD 를 CABIN · SHARED 로)');
+  _mToast(_clnSide === 'CKPT' ? 'RDR CMD CABIN — 전탐석이 레이더를 쥐고 있습니다(FNC → RDR > CMD 를 CKPT · SHARED 로)'
+                              : 'RDR CMD CKPT — 조종실이 레이더를 쥐고 있습니다(FNC → RDR > CMD 를 CABIN · SHARED 로)');
   return false;
 }
-function clnPress(k, down) {
+// side: 'CABIN'(전탐석 VCCP · 처음) · 'CKPT'(조종석 하부 콘솔 ⑮ VCCP) — 두 VCCP 는 같은 레이더(rdr)를 다룬다
+function clnPress(k, down, side) {
+  _clnSide = side === 'CKPT' ? 'CKPT' : 'CABIN';
   if (k === 'push') {
     if (down) { nv.pushT = performance.now(); return; }
     if (!_rdrGuard('push')) return;
-    if (rdr.menu) { const m = RDR_MENU[rdr.menu][rdr.menuI]; if (m && (rdrCabinOk() || m.any)) m.set(1); else if (m) _mToast('RDR CMD CKPT — RDR > CMD 만 바꿀 수 있습니다'); }
+    if (rdr.menu) { const m = RDR_MENU[rdr.menu][rdr.menuI]; if (m && (rdrSideOk(_clnSide) || m.any)) m.set(1); else if (m) _mToast(`RDR CMD ${rdr.cmd} — RDR > CMD 만 바꿀 수 있습니다`); }
     else rdrCursorTrk();
-    msnRenderPanels(); return;
+    msnRenderPanels(); vccpRender(); return;
   }
   if (!down || !_rdrGuard(k)) return;
   if (k.startsWith('rot:')) { const d = +k.slice(4); if (rdr.menu) rdr.menuI = (rdr.menuI + d + RDR_MENU[rdr.menu].length) % RDR_MENU[rdr.menu].length; else rdrRngStep(d); return; }
@@ -935,7 +1253,7 @@ function clnPress(k, down) {
     case 'tws': rdr.tws = !rdr.tws; break;
     case 'com': case 'tfc': break;   // 쓰지 않는다
   }
-  msnRenderPanels();
+  msnRenderPanels(); vccpRender();
 }
 function nvPickAt(lat, lon) {
   let best = null, bd = nv.nm * 0.12;
@@ -984,6 +1302,8 @@ function msnHelp() {
     '  MAN/AUTO(AUTO = EO/IR 연동 SLASS) · 조이스틱(고각 −20~−90° · 방위 −150~+30°) · FOCUS 빔폭 4~13° · STOW 25초 · 끄면 냉각팬 7분(그동안 SEARCH LT PWR 를 끄지 않는다)',
     '  ⚠ 10ft(3.04m) 안의 물체를 비추면 100~300℃ · NVG 를 쓴 조종사 허락 없이 가시광 금지 · 조종석 컬렉티브 SRCH LT 와는 다른 등',
     '· 탐색레이더(Seaspray 5000E · VCCP): RDR > CMD 가 CKPT(조종실)이면 전탐석은 다루지 못한다 — FNC 메뉴의 RDR > CMD 를 CABIN · SHARED 로',
+    '· 조종석에서도 같은 레이더: 하부 콘솔 ⑮ VCCP(같은 면판 · CKPT/SHARED 일 때) · SYSTEM 창 Video Channel RADAR 가 이 레이더 화면 그대로 · CDU 조이스틱 Push:Radar',
+    '· 녹화기(DVR): POWER(빨강) → 3초 뒤 REC(초록 깜박) · CH1 호이스트 · CH2 레이더 · CH3 EO/IR · CH4 지도 · PLAYBACK(파랑) ▶▶/◀◀ 0.5~256배 · ◀▶ 10초 · MENU — 날짜/시간 검색 · QUAD/한 채널 · USB(AVI) · SSD INFO',
     '  손잡이 돌림 — 거리 10~200NM(메뉴가 열려 있으면 칸 옮기기) · 누름 — 메뉴 실행 · 커서 자리 표적 추적(TRK) · 4축 — 커서',
     '  FNC 메인(MODE LRS·WX·PT·SART·ISAR · TX/STBY · CMD · TILT · GAIN · SCAN · FREEZE) · MAP(WXR · TWS · R ONLY · RANGE) · ESC · CLR · WXR 강수 겹 · TWS 지형 겹 · 다시 켜면 90초 예열',
     '· EO/IR: 조이스틱(화면 HCU 가운데 · 실제 조종 장치의 사이클릭 축)으로 터릿을 돌린다. ZOOM ▲확대 ▼축소 · VIC 센서(EOW → EON → IR) · 2X 전자 줌 · POL 백상/흑상',
@@ -1297,7 +1617,17 @@ function _rdrGeo(W, H) {
 }
 function _rdrDraw(cv) {
   const W = cv.width, H = cv.height; if (!(W > 0 && H > 0)) return;
-  const g = cv.getContext('2d'); g.setTransform(1, 0, 0, 1, 0, 0); g.fillStyle = '#000'; g.fillRect(0, 0, W, H);
+  const g = cv.getContext('2d'); g.setTransform(1, 0, 0, 1, 0, 0);
+  _rdrPaint(g, W, H);
+}
+// 조종석 SYSTEM 창 Video(Channel RADAR) · 3D 조종석 MFD — 그 칸(x, y, w, h)에 전탐석과 같은 탐색레이더 화면(18-system.js 가 부른다)
+function rdrDrawTo(g, x, y, w, h) {
+  g.save(); g.beginPath(); g.rect(x, y, w, h); g.clip(); g.translate(x, y);
+  try { _rdrPaint(g, w, h); } finally { g.restore(); }
+}
+// 탐색레이더 화면 한 장 — (0,0)~(W,H) 에 그린다
+function _rdrPaint(g, W, H) {
+  g.fillStyle = '#000'; g.fillRect(0, 0, W, H);
   const k = _mClamp(Math.min(W, H) / 420, 0.6, 2), C = '#3dff6a', A = '#ffc400', G = _rdrGeo(W, H), { ox, oy, R } = G;
   const half = rdr.sector / 2, P = (rel, nm) => [ox + Math.sin(rel * _mD) * R * nm / rdr.rng, oy - Math.cos(rel * _mD) * R * nm / rdr.rng];
   const sectorPath = () => { g.beginPath(); g.moveTo(ox, oy); g.arc(ox, oy, R, (-90 - half) * _mD, (-90 + half) * _mD); g.closePath(); };
@@ -1403,7 +1733,7 @@ function msnRenderPanels() {
   }
   slcRender(); dvrRender();
   _msnEl.querySelectorAll('[data-dk]').forEach(b => { const k = b.dataset.dk; b.classList.toggle('on', (k === 'multi' && disp.lay === 'quad') || (k === 'split' && disp.lay === 'split') || (k === 'pip' && eo.pip !== 'OFF') || (k === 'pwr' && disp.pwr) || (k === 'navi' && disp.lay === 'one' && disp.ch === 4) || (k === 'v' + disp.ch && disp.lay === 'one')); });
-  _msnEl.querySelectorAll('[data-cln]').forEach(b => { const k = b.dataset.cln; if (k === 'wxr') b.classList.toggle('on', rdr.wxr); if (k === 'tws') b.classList.toggle('on', rdr.tws); if (k === 'map') b.classList.toggle('on', rdr.menu === 'MAP'); if (k === 'fnc') b.classList.toggle('on', rdr.menu === 'FNC'); });
+  _clnLeds(_msnEl);
   const sd = _msnEl.querySelector('[data-m="sdata"]');
   if (sd) {
     const lamp = !hsl.pwr ? 'PWR OFF' : hsl.lit ? `LAMP ${hsl.ir ? 'IR' : 'VIS'}` : hsl.lamp ? `IGN ${Math.ceil(hsl.ign)}s` : hsl.cool > 0 ? `FAN ${Math.floor(hsl.cool / 60)}:${String(Math.floor(hsl.cool % 60)).padStart(2, '0')}` : 'OFF';
@@ -1419,6 +1749,7 @@ function _nvEnsure(el) {
   if (_nvMap || typeof maplibregl === 'undefined' || !(el.clientWidth > 20 && el.clientHeight > 20)) return _nvMap;
   try {
     _nvMap = new maplibregl.Map({ container: el, style: _map3dStyle(), center: [S.lon, S.lat], zoom: 11, pitch: 0, bearing: 0, interactive: false, attributionControl: false,
+      canvasContextAttributes: { preserveDrawingBuffer: true },   // 녹화기 CH4 가 옮겨 담을 수 있게
       pixelRatio: (typeof map3dPixelRatio === 'function') ? map3dPixelRatio(true) : 1 });
     _nvMap.on('error', e => console.warn('[NAVI]', e && e.error ? e.error.message : e));
   } catch (e) { console.warn('[NAVI] map failed:', e); _nvMap = null; }
@@ -1517,6 +1848,7 @@ function msnRender() {
   if (_cellVis(crd) || eo.pip === 'RDR') _rdrDraw(rc);
   const cmap = _msnEl.querySelector('.c-map'); if (_cellVis(cmap)) _nvRender(cmap); else if (_nvMap && !_cellVis(cmap)) _nvDrop();
   const chc = _msnEl.querySelector('.c-hoist'); if (_cellVis(chc)) _hcRender(chc);
+  try { dvrPlayDraw(); } catch (e) { _swallow(e); }
   if (performance.now() - _msnTickT > 300) { _msnTickT = performance.now(); msnRenderPanels(); }
 }
 function msnShow(on) {
@@ -1538,7 +1870,9 @@ function msnStep() {
   try { eoStep(dt); } catch (e) { _swallow(e); }
   try { rdrStep(dt); } catch (e) { _swallow(e); }
   try { hslStep(dt); if (_slHold) srchMan(_slHold, dt); slcStep(dt); srchStep(dt); } catch (e) { _swallow(e); }
+  try { if (MSN_ON) dvrStep(dt); } catch (e) { _swallow(e); }
   try { msnRender(); } catch (e) { _swallow(e); }
+  try { vccpRender(); } catch (e) { _swallow(e); }
 }
 // 흰수리(전탐석 · 조종석 모두)는 EO/IR 터릿이 돈다 — 조종석 SYSTEM 창 Video(EO/IR) 가 영상을 띄운다
 if (EO_ON) setInterval(msnStep, 50);

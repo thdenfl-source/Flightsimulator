@@ -33,8 +33,10 @@ export async function run(page, t) {
     cduKnobSync(); o.pushRadar = /Push:Radar/.test(document.getElementById('cdu-lbl-L').textContent);
     cduKnobOp('L', 'push'); o.rOpen = radarCtl.open && !knobPtr.on;
     cduKnobOp('L', 'rot', 1); cduKnobOp('R', 'rot', 1); cduKnobOp('R', 'rotIn', -1); cduKnobOp('R', 'push');
-    o.radar = `${radarCtl.range}:${radarCtl.tilt}:${radarCtl.gain}:${radarCtl.tx}`;
-    const rv = texts(() => { const cv = document.createElement('canvas'); cv.width = 1000; cv.height = 630; sysDrawTo(cv); }); o.rDraw = rv.includes('RADAR CONTROL');
+    o.radar = `${rdr.rng}:${rdr.tilt}:${rdr.gain}:${rdr.tx}`;     // 흰수리 — 전탐석과 같은 레이더(rdr)
+    const rv = texts(() => { const cv = document.createElement('canvas'); cv.width = 1000; cv.height = 630; sysDrawTo(cv); });
+    o.rDraw = rv.includes('RADAR CONTROL') && rv.some(x => /RDR TX|SRV RDR CMD|CKPT/.test(x));   // 전탐석 레이더 화면(머리 글자) + 제어 차림
+    rdr.cmd = 'CABIN'; const g0 = rdr.gain; cduKnobOp('R', 'rotIn', 1); o.rCabin = rdr.gain === g0; rdr.cmd = 'CKPT';   // 전탐석 권한이면 조종실 노브는 듣지 않는다
     cduKnobOp('L', 'push'); o.rClose = !radarCtl.open; sysPageSet('asys_fuel');
     // ── Config Mode ──
     CDU_ACT.switchMode('ACSYS'); CDU_ACT.acSysOpen('asys_maint'); await w(20);
@@ -101,7 +103,7 @@ export async function run(page, t) {
   t.ok(/^\d{3}\.\d{3}$/.test(r.k833[1]) && r.k833[1] !== r.k833[0] && r.k833[2] === r.k833[1] && r.k833b !== r.k833[1], `8.33 kHz — 채널(.005 · .010 · .015 …) · XXX.XXX 시현 (${r.k833.join(' → ')} · ${r.k833b})`);
   t.ok(/^\d{3}\.\d{2}$/.test(r.k25), `25 kHz — XXX.XX 시현 (${r.k25})`);
   t.ok(r.fidLbl && r.fid1 === 'L' && r.fid2 === 'T' && r.cur && r.fid.startsWith('LT'), `Flight ID — Data Entry · 작은 노브 K→L · 큰 노브 커서 · 누름 Enter (${r.fid})`);
-  t.ok(r.pushRadar && r.rOpen && r.radar === '40:1:15:true' && r.rDraw && r.rClose, `Push:Radar — 레이더 제어 · 거리 · TILT · GAIN · TX (${r.radar})`);
+  t.ok(r.pushRadar && r.rOpen && r.radar === '50:1:14:true' && r.rDraw && r.rCabin && r.rClose, `Push:Radar — 전탐석과 같은 레이더(rdr) · 거리 · TILT · GAIN · TX · CABIN 권한 (${r.radar} ${r.rDraw} ${r.rCabin})`);
   t.ok(r.cfg && r.cfgPage === 'Knobs' && r.cfgIn && r.cfgKnob, 'Config Mode — 큰 노브 장 · 누름 들어감 · Knobs 장이 노브 입력을 보인다');
   t.ok(r.push && r.swap, 'NAV — 새 활성이 들어오면 앞 활성은 예비로 · ↕ 교환');
   t.ok(r.dme, 'DME HOLD — 다시 튜닝해도 잡아 둔 국의 거리(ident 뒤 H)');

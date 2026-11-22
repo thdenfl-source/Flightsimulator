@@ -140,7 +140,7 @@ export async function run(page, t) {
     const bE = box('.msn-eohcu'), bD = box('.dvr'), bC = box('.cln'), bS = box('.slc');
     o.dvrPos = bE.bottom <= bD.top + 2 && bD.bottom <= bC.top + 2 && bS.left >= bE.right - 2;
     o.slcH = Math.round(bS.height); o.colAH = Math.round(bC.bottom - bE.top);
-    dvrPress('rec'); o.dvrOff = dvr.rec; dvrPress('power'); dvrPress('rec'); o.dvr = [dvr.pwr, dvr.rec, document.querySelector('[data-dvl="pwr"]').className]; dvrPress('power');
+    dvrPress('rec'); o.dvrOff = dvr.rec; dvrPress('power'); dvrPress('rec'); o.dvrBoot = !dvr.rec && dvr.boot > 0; dvr.boot = 0; dvrPress('rec'); dvrRender(); o.dvr = [dvr.pwr, dvr.rec, document.querySelector('[data-dvl="pwr"]').className]; dvrPress('rec'); dvrPress('power');
     // ── 탐색레이더 조작기(VCCP · Seaspray 5000E) ──
     S.hdg = 0; rdr.menu = null; rdr.rng = 20;
     rdr.cmd = 'CKPT'; clnPress('rot:1', true); o.ckpt = rdr.rng === 20;                     // 조종실이 쥐고 있으면 듣지 않는다
@@ -158,6 +158,43 @@ export async function run(page, t) {
     rdr.frz = true; const az1 = rdr.az; rdrStep(0.5); o.frz = rdr.az === az1; rdr.frz = false;
     rdrPower(false); rdrPower(true); o.warm = rdr.warm > 80 && !rdrTx(true); rdr.warm = 0; rdrTx(true);
     const rc = document.querySelector('#msn-root .msn-rdr canvas'); _rdrDraw(rc); const dd = rc.getContext('2d').getImageData(0, 24, rc.width, 40).data; let gn = 0; for (let i = 0; i < dd.length; i += 4) if (dd[i + 1] > 150) gn++; o.hdr = gn;
+    // ── 조종석 하부 콘솔 ⑮ VCCP — 같은 면판 · 같은 레이더 · 권한 CKPT/SHARED ──
+    try { lconShow(); } catch (e) { o.lconErr = String(e); }
+    const vh = document.getElementById('vccpL'); o.vccp = !!(vh && vh.querySelector('.cln [data-cln="push"]') && vh.querySelectorAll('[data-cln]').length === document.querySelectorAll('#msn-root [data-cln]').length);
+    const vp = k => { const b = vh.querySelector(`[data-cln="${k}"]`); b.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerId: 7 })); b.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerId: 7 })); };
+    rdr.menu = null; rdr.rng = 20; rdr.cmd = 'CABIN'; vp('rot:1'); o.vcCabin = rdr.rng === 20;
+    rdr.cmd = 'SHARED'; vp('rot:1'); o.vcShared = rdr.rng === 50; vp('wxr'); vccpRender(); o.vcLed = vh.querySelector('[data-cln="wxr"]').classList.contains('on') && rdr.wxr; vp('wxr');
+    rdr.cmd = 'CKPT'; clnPress('rot:1', true); o.cabCkpt = rdr.rng === 50; vp('rot:-1'); o.vcCkpt = rdr.rng === 20;
+    // ── 조종석 SYSTEM 창 Video(Channel RADAR) — 전탐석 레이더 화면 그대로 ──
+    { const seen = [], f = CanvasRenderingContext2D.prototype.fillText; CanvasRenderingContext2D.prototype.fillText = function (x, ...a) { seen.push(String(x)); return f.call(this, x, ...a); };
+      const ch0 = videoCfg.ch, pg0 = sysPage, lay0 = sysLayout;
+      try { videoCfg.ch = 'RADAR'; sysLayout = 'FULL'; sysPageSet('asys_video'); const cv = document.createElement('canvas'); cv.width = 1000; cv.height = 630; sysDrawTo(cv);
+        const px = cv.getContext('2d').getImageData(227, 49, 766, 574).data; let gn = 0; for (let i = 0; i < px.length; i += 16) if (px[i + 1] > 150 && px[i] < 120) gn++; o.sysGreen = gn;
+      } finally { CanvasRenderingContext2D.prototype.fillText = f; videoCfg.ch = ch0; sysLayout = lay0; try { sysPageSet(pg0); } catch (e) { /* */ } }
+      o.sysRdr = seen.some(x => /SRV RDR CMD/.test(x)) && seen.some(x => /RDR (TX|STBY)/.test(x)); }
+    // ── 녹화기(DVR · FLM 5.19) — 녹화 · 재생 · 메뉴 · 검색 · USB(AVI) ──
+    { msnShow(true); dispSet({ lay: 'quad' }); dvr.fr = []; dvr.seg = []; dvr.pwr = false; dvrPress('power'); dvr.boot = 0; dvrPress('rec');
+      const t0 = Date.now() - 60000; for (let i = 0; i < 6; i++) dvrCapture(t0 + i * 2000); for (let i = 0; i < 3; i++) dvrCapture(t0 + 40000 + i * 2000);
+      o.dvRec = [dvr.fr.length, dvr.seg.length, !!dvr.fr[0].c[2], !!dvr.fr[0].c[3], !!dvr.fr[0].c[1] === dvrConn(1)].join();
+      dvrRender(); o.dvLed = [document.querySelector('[data-dvl="ch1"]').className.includes('on') ? 1 : 0, dvrConn(1) ? 1 : 0];
+      dvrPress('rec'); dvrRender(); o.dvStop = !dvr.rec && /on/.test(document.querySelector('[data-dvl="rec"]').className) && /on/.test(document.querySelector('[data-dvl="ch2"]').className);
+      dvrPress('playback'); o.dvPlay = dvr.play && dvr.pb.t === dvr.seg[1].t0 && /blue/.test(document.querySelector('[data-dvl="play"]').className);
+      dvrPress('ff'); dvrPress('ff'); o.dvFf = dvrSpeed() === 4 && dvr.pb.dir === 1; for (let i = 0; i < 12; i++) dvrPress('ff'); o.dvMax = dvrSpeed();
+      dvrPress('rew'); o.dvRew = dvr.pb.dir === -1 && dvrSpeed() === 2; dvrPress('play'); o.dvPlay1 = dvrSpeed() === 1 && dvr.pb.dir === 1;
+      dvrPress('down'); o.dvHalf = dvrSpeed();
+      dvrSeek(dvr.seg[0].t0); dvrPress('right'); o.dvGap = dvr.pb.t === dvr.seg[0].t1;    // +10초가 끝을 넘으면 그 녹화 끝(틈 앞)
+      dvrSeek(dvr.seg[0].t0 + 1000); dvr.pb.dir = 1; dvr.pb.si = 1; dvr.pb.pause = false; const pt = dvr.pb.t; dvrStep(2); o.dvStep = dvr.pb.t - pt;
+      dvrPlayDraw(); const pc = document.querySelector('#msn-root .c-rdr canvas.dvr-pb'); o.dvDraw = !!pc && pc.style.display !== 'none';
+      dvrPress('menu'); o.dvMenu = dvr.menu === 'MAIN' && /DVR MENU/.test(document.querySelector('#msn-root .dvr-osd').textContent);
+      dvrPress('down'); dvrPress('enter'); o.dvView = DVR_VIEWS[dvr.view] === 'CH1' && disp.lay === 'one' && DISP_CH[disp.ch] === 'hoist';
+      dvrPress('up'); dvrPress('enter'); o.dvSrch = dvr.menu === 'SEARCH' && /SEARCH/.test(document.querySelector('#msn-root .dvr-osd').textContent) && !!document.querySelector('#msn-root .dvr-cal i.rec');
+      dvr.srch.t = dvr.seg[0].t0; dvr.srch.f = 5; dvrPress('up'); dvrPress('up'); dvrPress('enter'); o.dvGo = dvr.menu === null && dvr.play && dvr.pb.t >= dvr.seg[0].t0 + 2000 && dvr.pb.t < dvr.seg[0].t0 + 3000;
+      window.__dvrNoDl = true; const files = await dvrExport(); const names = Object.keys(files || {});
+      const av = files && files[names.find(n => /CH2/.test(n))], hd = av ? String.fromCharCode(...new Uint8Array(av).slice(0, 12)) : '';
+      o.dvExp = names.length >= 2 && /^RIFF....AVI $/s.test(hd) && new TextDecoder().decode(new Uint8Array(av)).includes('MJPG') && dvr.exp.frames === 6;
+      dvrPress('menu'); dvr.menuI = 3; dvrPress('enter'); o.dvInfo = /SSD INFO/.test(document.querySelector('#msn-root .dvr-osd').textContent) && dvrSsd().sec === 18;
+      dvrPress('back'); dvrPress('back'); dvrPress('back'); o.dvEnd = !dvr.menu && !dvr.play;
+      dvrPress('power'); o.dvOff = !dvr.pwr && !dvr.rec; dvr.fr = []; dvr.seg = []; dvr.view = 0; dispSet({ lay: 'quad' }); }
     return o;
   });
   t.eq(D.quad, 'map,hoist,rdr,eo', 'MULTI — 4분할(지도 · 호이스트 · 레이더 · EO/IR)');
@@ -172,7 +209,7 @@ export async function run(page, t) {
   t.ok(/PWR/.test(D.lm) && /LAMP/.test(D.lm) && D.cool[0] === false && D.cool[1] === 420 && D.fault, `표시등(${D.lm}) · 끄면 냉각팬 7분(${D.cool[1]}s) · 그동안 전원을 끊으면 FAULT`);
   t.ok(D.stowMv === 'STOW' && D.stow[0] && D.stow[1] === 0 && D.stow[2] === -90, `INIT/STOW — STOW 25초 뒤 0° · −90° (${D.stow})`);
   t.ok(D.dvrPos && D.slcH > D.colAH * 0.6, `오른쪽 — EO/IR 조작기 밑에 녹화기, 그 밑에 레이더 조작기 · 옆에 키운 탐조등 조작기(높이 ${D.slcH} / ${D.colAH}px)`);
-  t.ok(!D.dvrOff && D.dvr[0] && D.dvr[1] && /on/.test(D.dvr[2]), '녹화기 — POWER 가 꺼져 있으면 REC 안 됨 · 켜면 POWER 표시등 · REC');
+  t.ok(!D.dvrOff && D.dvrBoot && D.dvr[0] && D.dvr[1] && /red/.test(D.dvr[2]), '녹화기 — POWER 가 꺼져 있으면 REC 안 됨 · 켜면 빨강 POWER 표시등 · 시동 3초 뒤 REC');
   t.ok(D.ckpt && D.cmd === 'CABIN' && D.esc, `RDR > CMD — CKPT 면 전탐석 조작을 듣지 않고 · FNC 메뉴로 ${D.cmd} 로 바꾼다 · ESC 로 닫는다`);
   t.ok(D.rUp === 50 && D.rDn === 10, `VCCP 손잡이 돌림 — 거리 20 → ${D.rUp} → ${D.rDn}NM`);
   t.ok(/^V/.test(D.tgt || '') && D.trk >= 1 && D.clr && D.wxr, `4축 커서로 옮겨 누르면 표적 추적(${D.tgt} · TRK${D.trk}) · CLR 로 풀기 · WXR 겹`);
@@ -180,6 +217,13 @@ export async function run(page, t) {
   t.ok(D.mode[0] === 'LRS' && D.mode[1] === 'WX' && D.sart, `모드 LRS → WX · SART 모드에서 요구조자 트랜스폰더 응답`);
   t.ok(D.frz && D.warm, 'FREEZE — 화면 고정 · 전원을 다시 넣으면 90초 예열 동안 TX 안 됨');
   t.ok(D.hdr > 40, `레이더 화면 위 — Hdg · Trk · SRV RDR CMD · RNG · Tilt · Gain (${D.hdr}점)`);
+  t.ok(D.vccp && D.vcCabin && D.vcShared && D.vcLed && D.cabCkpt && D.vcCkpt, `조종석 하부 콘솔 ⑮ VCCP — 전탐석과 같은 면판 · 같은 레이더 · CABIN 이면 듣지 않고 SHARED · CKPT 에서 다룬다 (${[D.vccp, D.vcCabin, D.vcShared, D.vcLed, D.cabCkpt, D.vcCkpt]}${D.lconErr ? ' ' + D.lconErr : ''})`);
+  t.ok(D.sysRdr && D.sysGreen > 50, `조종석 SYSTEM 창 Video RADAR — 전탐석 레이더 화면(머리 글자 · 녹색 ${D.sysGreen}점)`);
+  t.ok(D.dvRec === '9,2,true,true,true' && D.dvLed[0] === D.dvLed[1] && D.dvStop, `녹화기 REC — 채널마다 한 장씩(${D.dvRec}) · 녹화 두 토막 · CH1 은 호이스트 전원 · 멈추면 초록 표시등`);
+  t.ok(D.dvPlay && D.dvFf && D.dvMax === 256 && D.dvRew && D.dvPlay1 && D.dvHalf === 0.5, `PLAYBACK(파랑) — ▶▶ 2 · 4 … ${D.dvMax}배 · ◀◀ 뒤로 · ❙❙▶ 1배 · ▼ ${D.dvHalf}배`);
+  t.ok(D.dvGap && D.dvStep === 2000 && D.dvDraw, `재생 — ◀▶ 10초 · 2초 지나면 2초 앞 (${D.dvStep}ms) · 칸마다 녹화 장`);
+  t.ok(D.dvMenu && D.dvView && D.dvSrch && D.dvGo && D.dvInfo && D.dvEnd, `MENU — PLAYBACK VIEW(QUAD · CH1 전체) · 날짜/시간 검색(달력) · ENTER 그 시각부터 재생 · SSD INFO · ↩ (${[D.dvMenu, D.dvView, D.dvSrch, D.dvGo, D.dvInfo, D.dvEnd]})`);
+  t.ok(D.dvExp && D.dvOff, 'USB 내보내기 — 채널마다 MJPEG AVI(RIFF · MJPG) · POWER OFF 면 녹화 멈춤');
   const errs = (page.errors || []).filter(e => !/Failed to fetch|NetworkError|tile/i.test(e));
   t.eq(errs.length, 0, `페이지 오류 없음${errs.length ? ' — ' + errs[0] : ''}`);
   if (process.env.MSN_SHOT) { await page.evaluate(() => { msnSpawn(4); rdr.tx = true; }); await page.waitForTimeout(3500); await page.screenshot({ path: process.env.MSN_SHOT }); }
