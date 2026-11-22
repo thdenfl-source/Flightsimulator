@@ -42,11 +42,8 @@ const LCON_PLATES = [
   ]},
   // ⑮ 비디오 컨버터 제어패널
   { x: 10, y: 480, w: 490, h: 140, items: [
-    { t: 'key', id: 'vcMap', x: 60, y: 45, label: 'MAP' }, { t: 'key', id: 'vcEsc', x: 132, y: 45, label: 'ESC' },
-    { t: 'key', id: 'vcCom', x: 60, y: 100, label: 'COM' }, { t: 'key', id: 'vcTfc', x: 132, y: 100, label: 'TFC' },
-    { t: 'dim', id: 'vcKnob', x: 245, y: 72, def: 5 },
-    { t: 'key', id: 'vcClr', x: 358, y: 45, label: 'CLR' }, { t: 'key', id: 'vcFnc', x: 430, y: 45, label: 'FNC' },
-    { t: 'key', id: 'vcWxr', x: 358, y: 100, label: 'WXR' }, { t: 'key', id: 'vcTws', x: 430, y: 100, label: 'TWS' },
+    // 탐색레이더 VCCP(Seaspray 5000E) — 전탐석과 같은 면판 · 같은 레이더(37-mission.js vccpBuild · 권한 RDR > CMD)
+    { t: 'html', hid: 'vccpL', x: 0, y: 0, w: 490, h: 140 },
   ]},
   // ⑭ 비상부주(EMERG FLOATS) 제어패널
   { x: 10, y: 630, w: 490, h: 200, items: [
@@ -157,7 +154,7 @@ function avcsActive() {
 }
 // (AVCS 를 처음부터 켜 둔 판보다 먼저 저장된 꺼짐 값은 한 번 켠 쪽으로 맞춘다)
 try { if (!localStorage.getItem('avcsDefOn')) { localStorage.setItem('avcsDefOn', '1'); if (ovhdGet('avcsPower') !== 'IN') ovhdSet('avcsPower', 'IN'); } } catch (e) { _swallow(e); }
-function lconShow() { consoleBuild('lcon'); consoleFit('lcon'); if (typeof c5Build === 'function') c5Build(); if (typeof npxBuild === 'function') npxBuild(); if (typeof b206rBuild === 'function') b206rBuild(); }   // C-5000(21-c5000.js) · NPX138(22-npx138.js)
+function lconShow() { consoleBuild('lcon'); consoleFit('lcon'); if (typeof c5Build === 'function') c5Build(); if (typeof npxBuild === 'function') npxBuild(); if (typeof b206rBuild === 'function') b206rBuild(); if (typeof vccpBuild === 'function') vccpBuild(); }   // C-5000(21-c5000.js) · NPX138(22-npx138.js)
 try {
   const w = document.getElementById('lcon-wrap');
   if (w && !w.classList.contains('page-hidden')) lconShow();

@@ -18,7 +18,7 @@ export async function run(page, t) {
   });
   t.ok(info.shown && info.tab, 'LOWER 탭으로 하부 콘솔이 열린다');
   t.eq(info.plates, 15, '판 열다섯 장(왼쪽 ⑰ ~ ⑪ · 빈 판 둘 · 오른쪽 ⑥ ~ ⑩ · NOSE WHEEL LOCK/PARKING BRAKE)');
-  t.ok(info.ctrls === info.defs && info.ctrls >= 70 && info.lamps === 8, `스위치·버튼이 다 그려진다 (${info.ctrls}/${info.defs}개 · 표시등 ${info.lamps})`);
+  t.ok(info.ctrls === info.defs && info.ctrls >= 60 && info.lamps === 8, `스위치·버튼이 다 그려진다 (${info.ctrls}/${info.defs}개 · 표시등 ${info.lamps})`);   // ⑮ VCCP 9개는 전탐석과 같은 면판(html)으로
   t.eq(info.panels.length, 0, `그림의 패널 글자가 다 있다${info.panels.length ? ' (없음: ' + info.panels.join(', ') + ')' : ''}`);
 
   const press = async (sel, hold = 0) => {

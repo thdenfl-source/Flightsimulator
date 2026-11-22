@@ -507,6 +507,18 @@ function kuhKnob(k, op, a) {
   }
   if (cfgMode.on) cfgMode.last = `${k} ${op}`;
   if (k === 'L' && op === 'push' && radarShown()) { radarCtl.open = !radarCtl.open; try { sysDraw(); } catch (e) { _swallow(e); } return true; }
+  if (radarCtl.open && radarShown() && typeof rdr !== 'undefined' && typeof rdrRngStep === 'function') {
+    // 흰수리 — 전탐석과 같은 탐색레이더(37-mission.js rdr). 조종실 권한(RDR > CMD 가 CABIN 이면 듣지 않는다)
+    if (!['rot', 'rotIn', 'push', 'hold'].includes(op)) return false;
+    if (!rdrCkptOk()) { try { uiToast('RDR CMD CABIN — 전탐석이 레이더를 쥐고 있습니다', '', 2200); } catch (e) { _swallow(e); } return true; }
+    if (k === 'L' && op === 'rot') rdrRngStep(a);
+    else if (k === 'R' && op === 'rot') rdr.tilt = Math.max(-15, Math.min(15, rdr.tilt + a));
+    else if (k === 'R' && op === 'rotIn') rdr.gain = Math.max(0, Math.min(30, rdr.gain + a));
+    else if (k === 'R' && op === 'push') rdrTx(!rdr.tx);
+    else if (k === 'R' && op === 'hold') rdr.frz = !rdr.frz;
+    else return false;
+    try { sysDraw(); } catch (e) { _swallow(e); } return true;
+  }
   if (radarCtl.open && radarShown()) {
     if (k === 'L' && op === 'rot') { const i = RADAR_RNG.indexOf(radarCtl.range); radarCtl.range = RADAR_RNG[Math.max(0, Math.min(RADAR_RNG.length - 1, (i < 0 ? 3 : i) + a))]; }
     else if (k === 'R' && op === 'rot') radarCtl.tilt = Math.max(-15, Math.min(15, radarCtl.tilt + a));
@@ -522,22 +534,28 @@ function kuhKnob(k, op, a) {
 function kuhKnobLabels() {
   const o = {};
   if (radarShown()) o.L = ['− Range +', `Push:Radar ${radarCtl.open ? '<b>ON</b>' : ''}`];
-  if (radarCtl.open && radarShown()) o.R = ['Tilt · Gain', `<b>${radarCtl.tilt > 0 ? '+' : ''}${radarCtl.tilt}° · G${radarCtl.gain}</b>`, 'Push:TX Hold:FRZ'];
+  if (radarCtl.open && radarShown()) { const R = _radarVals(); o.R = ['Tilt · Gain', `<b>${R.tilt > 0 ? '+' : ''}${R.tilt}° · G${R.gain}</b>`, 'Push:TX Hold:FRZ']; }
   if (cfgMode.on) o.R = ['Config Mode', `<b>${CFG_PAGES[cfgMode.page]}</b>`, 'Push:Menu'];
   return o;
 }
 // SYSTEM 창 Video RADAR — 레이더 제어 차림(메인: RNG · RDR TX · R ONLY · FREEZE · SEARCH · MAINT / 기상: TILT · GAIN)
+// 지금 값 — 흰수리는 전탐석과 같은 레이더(rdr), 없으면 이 창의 값(radarCtl)
+function _radarVals() {
+  if (typeof rdr !== 'undefined') return { range: rdr.rng, tx: rdr.tx, rOnly: rdr.ronly, freeze: rdr.frz, mode: rdr.mode, tilt: rdr.tilt, gain: rdr.gain, cmd: rdr.cmd };
+  return radarCtl;
+}
 function radarDraw(g, x, y, w, h) {
   if (!radarCtl.open) return;
+  const radarCtl_ = _radarVals();
   const bx = x + w - 230, by = y + 60;
   g.fillStyle = 'rgba(0,0,0,0.85)'; g.fillRect(bx, by, 210, 250); g.strokeStyle = '#2fe0e0'; g.lineWidth = 2; g.strokeRect(bx, by, 210, 250);
   g.font = 'bold 15px Helvetica Neue, Arial, sans-serif'; g.textAlign = 'center'; g.fillStyle = '#2fe0e0'; g.fillText('RADAR CONTROL', bx + 105, by + 24);
-  const rows = [['RNG', `${radarCtl.range} NM`], ['RDR TX', radarCtl.tx ? 'ON' : 'STBY'], ['R ONLY', radarCtl.rOnly ? 'ON' : 'OFF'], ['FREEZE', radarCtl.freeze ? 'ON' : 'OFF'],
-                ['MODE', radarCtl.mode], ['TILT', `${radarCtl.tilt > 0 ? '+' : ''}${radarCtl.tilt}°`], ['GAIN', String(radarCtl.gain)]];
+  const rows = [['RNG', `${radarCtl_.range} NM`], ['RDR TX', radarCtl_.tx ? 'ON' : 'STBY'], ['R ONLY', radarCtl_.rOnly ? 'ON' : 'OFF'], ['FREEZE', radarCtl_.freeze ? 'ON' : 'OFF'],
+                ['MODE', radarCtl_.mode], ['TILT', `${radarCtl_.tilt > 0 ? '+' : ''}${radarCtl_.tilt}°`], ['GAIN', String(radarCtl_.gain)]];
   rows.forEach(([k, v], i) => {
     const yy = by + 54 + i * 27;
     g.textAlign = 'left'; g.fillStyle = '#9ab'; g.font = '14px Helvetica Neue, Arial, sans-serif'; g.fillText(k, bx + 14, yy);
-    g.textAlign = 'right'; g.fillStyle = (k === 'RDR TX' && radarCtl.tx) || (k === 'FREEZE' && radarCtl.freeze) ? '#22e022' : '#fff'; g.font = 'bold 14px Helvetica Neue, Arial, sans-serif'; g.fillText(v, bx + 196, yy);
+    g.textAlign = 'right'; g.fillStyle = (k === 'RDR TX' && radarCtl_.tx) || (k === 'FREEZE' && radarCtl_.freeze) ? '#22e022' : '#fff'; g.font = 'bold 14px Helvetica Neue, Arial, sans-serif'; g.fillText(v, bx + 196, yy);
   });
 }
 
