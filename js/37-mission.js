@@ -16,6 +16,7 @@
 // 3D 전탐석 콘솔 모형은 사진을 받은 뒤 얹는다(지금은 MFD 테두리 · 콘솔 판 모양).
 // ══════════════════════════════════════════════════════
 const MSN_ON = typeof acExact === 'function' && acExact('kuhm');
+const EO_ON = typeof acIs === 'function' && acIs('aw189');   // 흰수리 갈래 — EO/IR 영상은 조종석 SYSTEM 창에도 나온다
 const MSN_RE = 6371000 * 4 / 3;                     // 대기 굴절을 넣은 지구 반지름(m) — 시선 · 레이더 수평선
 const _mD = Math.PI / 180;
 const _mClamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -427,7 +428,7 @@ const MSN_MENU = [
 ];
 
 // ══ 화면 ══
-let msnOpen = false, _msnEl = null, _eoMap = null, _eoMapCfg = '', _msnTickT = 0;
+let msnOpen = false, _msnEl = null, _eoMap = null, _msnTickT = 0;
 function _mToast(t) { try { uiToast(t, '', 2200); } catch (e) { _swallow(e); } }
 function _mNote(t) { try { if (typeof fdrNote === 'function') fdrNote('전탐석 — ' + t); } catch (e) { _swallow(e); } }
 function _msnCss() {
@@ -501,7 +502,7 @@ function _msnBuild() {
     <button data-mact="fly">▶ 비행</button><button data-mact="spawn">선박 표적 생성</button><button data-mact="clear">표적 지우기</button>
     <button data-mact="help">❓</button><button data-mact="close">조종석 보기 ⤴</button></div>
   <div class="msn-body">
-    <div class="msn-mfd msn-eo"><div class="eo-vid"><div class="eo-map"></div><canvas class="eo-spr"></canvas></div><canvas class="eo-hud"></canvas></div>
+    <div class="msn-mfd msn-eo"><div class="eo-vid"><canvas class="eo-spr"></canvas></div><canvas class="eo-hud"></canvas></div>
     <div class="msn-right">
       <div class="msn-mfd msn-rdr"><canvas></canvas></div>
       <div class="msn-panel"><h4>SAR RADAR</h4><div class="msn-keys">
@@ -602,6 +603,7 @@ function msnHelp() {
     '· MENU: ZOOM 으로 고르고 SENS 로 바꾼다(LASER ARM · 서치라이트 연동 · PIP · AVT MODE · 단위)',
     '· 레이더: TX 를 켜고 화면의 표적을 누르면 지정 → "EO/IR → 표적" 으로 터릿을, "서치라이트 → 표적" 으로 빛을 돌린다',
     '· 서치라이트: 수동(◀▲▼▶) · EO/IR 연동(시선이 닿는 자리를 비춘다 · HCU AUX) · 레이더 표적 연동',
+    '· 조종석 SYSTEM 창 Video(CDU Aircraft Systems → Video → Channel EO/IR)에 같은 영상 · 오버레이가 나온다 — 전탐석이 터릿을 돌리면 조종사도 그대로 본다',
     '· 기체는 흰수리 그대로 난다 — "조종석 보기" 로 비행계획 · 자동비행을 다루고, 지도 왼쪽 아래 🎯 전탐석 으로 돌아온다'];
   try { uiAlert(t.join('\n')); } catch (e) { _swallow(e); }
 }
@@ -620,14 +622,32 @@ function _msnJoyAxes() {
 }
 
 // ── EO/IR 영상(3D 지도) ──
+// 지도 하나를 그릇(_eoHost)에 담아 둔다 — 전탐석이 열려 있으면 그 화면 안에, 아니면 화면 밖에 두고
+// 조종석 SYSTEM 창 Video(Channel EO/IR) · 3D 조종석 MFD 가 그 그림을 옮겨 그린다(eoirVideoDrawTo).
+// 보는 곳이 없으면(5초) 거둔다 — 그래픽 부담.
+let _eoHost = null, _eoWantT = 0;
+const EO_IDLE_MS = 5000;
+function _eoNeed() { return msnOpen || performance.now() - _eoWantT < EO_IDLE_MS; }
+function _eoHostPlace() {
+  if (!_eoHost) { _eoHost = document.createElement('div'); _eoHost.className = 'eo-map'; }
+  const vid = msnOpen && _msnEl ? _msnEl.querySelector('.eo-vid') : null;
+  const want = vid || document.body;
+  if (_eoHost.parentElement !== want) {
+    if (vid) { _eoHost.style.cssText = 'position:absolute;inset:0;width:100%;height:100%'; vid.insertBefore(_eoHost, vid.firstChild); }
+    else { _eoHost.style.cssText = 'position:fixed;left:-10000px;top:0;width:768px;height:576px;pointer-events:none;overflow:hidden'; document.body.appendChild(_eoHost); }
+    try { if (_eoMap) _eoMap.resize(); } catch (e) { _swallow(e); }
+  }
+  return _eoHost;
+}
 function _eoMapEnsure() {
-  if (!_msnEl || typeof maplibregl === 'undefined') return null;
+  if (typeof maplibregl === 'undefined' || !document.body) return null;
+  const el = _eoHostPlace();
   if (_eoMap) return _eoMap;
-  const el = _msnEl.querySelector('.eo-map');
   if (!(el.clientWidth > 20 && el.clientHeight > 20)) return null;
   try {
     const map = new maplibregl.Map({ container: el, style: _map3dStyle(), center: [S.lon, S.lat], zoom: 14, pitch: 80, bearing: S.hdg, maxPitch: 180, maxZoom: 24,
-      interactive: false, attributionControl: false, pixelRatio: (typeof map3dPixelRatio === 'function') ? map3dPixelRatio(true) : 1 });
+      interactive: false, attributionControl: false, pixelRatio: (typeof map3dPixelRatio === 'function') ? map3dPixelRatio(true) : 1,
+      canvasContextAttributes: { preserveDrawingBuffer: true } });   // 조종석 SYSTEM 창 · MFD 로 옮겨 그릴 수 있게
     map.on('error', e => console.warn('[EO/IR]', e && e.error ? e.error.message : e));
     map.on('style.load', () => {
       try { if (typeof _ship3dAddTo === 'function' && !map.getSource('ship-3d')) _ship3dAddTo(map); } catch (e) { _swallow(e); }
@@ -643,7 +663,7 @@ function _eoMapEnsure() {
   } catch (e) { console.warn('[EO/IR] map failed:', e); _eoMap = null; }
   return _eoMap;
 }
-function _eoMapDrop() { try { if (_eoMap) _eoMap.remove(); } catch (e) { _swallow(e); } _eoMap = null; _eoMapCfg = ''; }
+function _eoMapDrop() { try { if (_eoMap) _eoMap.remove(); } catch (e) { _swallow(e); } _eoMap = null; try { if (_eoHost) _eoHost.remove(); } catch (e) { _swallow(e); } _eoHost = null; }
 function _eoCamera() {
   const map = _eoMapEnsure(); if (!map) return;
   const el = map.getContainer(), W = el.clientWidth, Hh = el.clientHeight;
@@ -657,6 +677,31 @@ function _eoCamera() {
   const p = eoLosPoint(), dist = _mClamp(p ? p.gnd : 5000, 150, 30000);
   try { map.jumpTo(_ml3dCamOptions(S.lon, S.lat, camAlt, normA(S.hdg + eo.az), _mClamp(90 + eo.el, 0, 180), 0, dist, map)); } catch (e) { _swallow(e); }
 }
+// 조종석 SYSTEM 창 Video(Channel EO/IR) · 3D 조종석 MFD — 그 칸(x, y, w, h)에 EO/IR 영상 + 오버레이를 그린다(18-system.js 가 부른다)
+//   전탐석에서 터릿을 움직이면 그대로 보인다. CDU Video 의 Brightness · Contrast · Saturation 도 먹는다.
+function eoirVideoDrawTo(g, x, y, w, h) {
+  _eoWantT = performance.now();
+  g.save();
+  g.beginPath(); g.rect(x, y, w, h); g.clip();
+  g.fillStyle = '#000'; g.fillRect(x, y, w, h);
+  const map = _eoMapEnsure();
+  if (map && eo.pwr && eo.mode !== 'STOW') {
+    const mc = map.getCanvas(), el = map.getContainer(), cw = el.clientWidth, ch = el.clientHeight;
+    if (mc && mc.width && cw > 0) {
+      // 칸을 다 채우게(가운데를 기준으로 남는 쪽을 자른다)
+      const s = Math.max(w / cw, h / ch), ox = x + (w - cw * s) / 2, oy = y + (h - ch * s) / 2;
+      let f = eoVideoFilter();
+      try { const V = typeof videoCfg !== 'undefined' ? videoCfg : null; if (V) f += ` brightness(${(V.bri / 50).toFixed(2)}) contrast(${(V.con / 50).toFixed(2)}) saturate(${(V.sat / 50).toFixed(2)})`; } catch (e) { _swallow(e); }
+      try { g.filter = f; } catch (e) { _swallow(e); }
+      try { g.drawImage(mc, ox, oy, cw * s, ch * s); } catch (e) { _swallow(e); }
+      g.save(); g.translate(ox, oy); g.scale(s, s); try { _eoSpritesG(g, cw, ch); } catch (e) { _swallow(e); } g.restore();
+      try { g.filter = 'none'; } catch (e) { _swallow(e); }
+    }
+  }
+  try { _eoHudG(g, x, y, w, h, false); } catch (e) { _swallow(e); }
+  g.restore();
+}
+function eoirVideoShown() { return !!_eoMap; }
 // 영상 필터 — 센서 · 밤낮 · 시정 · 비 · 극성 · 수동 감도 · 초점
 function eoVideoFilter() {
   const E = typeof env !== 'undefined' ? env : {};
@@ -698,9 +743,16 @@ function _srchLights() {
   const reach = typeof KG_SRCH !== 'undefined' ? KG_SRCH.reach : 1200;
   return a.rng < reach * 1.3 && Math.abs(normAS(a.az - kgLt.az)) < 8 && Math.abs(-a.el - kgLt.el) < 8;
 }
-// 선박 표적 — 지도 위에 실루엣(IR 에서는 뜨겁게)
+// 선박 표적 — 지도 위에 실루엣(IR 에서는 뜨겁게). g 는 지도 그릇의 CSS px 좌표(W × H)
 function _eoSprites(cv, W, H) {
-  const g = cv.getContext('2d'); g.clearRect(0, 0, W, H);
+  const g = cv.getContext('2d'); g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, W, H);
+  if (!_eoMap) return;
+  const el = _eoMap.getContainer(), cw = el.clientWidth || W, ch = el.clientHeight || H;
+  g.setTransform(W / cw, 0, 0, H / ch, 0, 0);
+  _eoSpritesG(g, cw, ch);
+  g.setTransform(1, 0, 0, 1, 0, 0);
+}
+function _eoSpritesG(g, W, H) {
   if (!_eoMap || !eo.pwr) return;
   const fx = (W / 2) / Math.tan(eoFov() / 2 * _mD), ir = eo.sensor === 'IR', tod = (typeof env !== 'undefined' && env.tod) || 'DAY';
   const losB = normA(S.hdg + eo.az);
@@ -718,81 +770,131 @@ function _eoSprites(cv, W, H) {
       g.fillStyle = dir > 0 ? '#3f3' : '#f33'; g.fillRect(pt.x - 1.5, pt.y - hh - cab - 2, 3, 3);
       g.fillStyle = '#fff'; g.fillRect(pt.x - 1, pt.y - hh - cab * 2 - 3, 2, 2); continue;
     }
-    // 항적(흰 물결)
-    if (c.spd > 2 && !ir) { g.fillStyle = 'rgba(240,250,255,0.55)'; g.fillRect(pt.x - dir * Lp * 0.5 - dir * Lp * 0.9, pt.y - hh * 0.3, dir * Lp * 0.9, hh * 0.35); }
+    if (c.spd > 2 && !ir) { g.fillStyle = 'rgba(240,250,255,0.55)'; g.fillRect(pt.x - dir * Lp * 0.5 - dir * Lp * 0.9, pt.y - hh * 0.3, dir * Lp * 0.9, hh * 0.35); }   // 항적(흰 물결)
     g.fillStyle = ir ? 'rgb(225,225,225)' : '#3b4148';
     g.beginPath(); g.moveTo(pt.x - Lp / 2, pt.y - hh); g.lineTo(pt.x + Lp / 2, pt.y - hh); g.lineTo(pt.x + Lp / 2 - dir * Lp * 0.1, pt.y); g.lineTo(pt.x - Lp / 2 + dir * Lp * 0.05, pt.y); g.closePath(); g.fill();
     g.fillStyle = ir ? 'rgb(255,255,255)' : '#dfe3e6'; g.fillRect(pt.x - dir * Lp * 0.15 - Lp * 0.12, pt.y - hh - cab, Lp * 0.24, cab);
     if (ir) { g.fillStyle = 'rgba(255,255,255,0.95)'; g.fillRect(pt.x - dir * Lp * 0.38, pt.y - hh * 0.8, Math.max(1.5, Lp * 0.08), hh * 0.7); }   // 기관실 열
   }
-  // 레이저 조사 점(IR 에서 보인다)
-  if (eo.laserFire && ir) { g.fillStyle = '#fff'; g.beginPath(); g.arc(W / 2, H / 2, 3, 0, 2 * Math.PI); g.fill(); }
+  if (eo.laserFire && ir) { g.fillStyle = '#fff'; g.beginPath(); g.arc(W / 2, H / 2, 3, 0, 2 * Math.PI); g.fill(); }   // 레이저 조사 점(IR 에서 보인다)
 }
-// MFD 오버레이 — 헤더 · 조준선 · 게이트 · 고각 · 방위 눈금 · 표적 정보
-function _eoHud(cv, W, H) {
-  const g = cv.getContext('2d'); g.clearRect(0, 0, W, H);
-  const k = _mClamp(W / 760, 0.65, 1.5), C = '#3dff6a', A = '#ffc400', fs = n => `bold ${Math.round(n * k)}px Consolas, "Courier New", monospace`;
-  const T = (s, x, y, col = C, al = 'left', n = 13) => { g.font = fs(n); g.textAlign = al; g.fillStyle = 'rgba(0,0,0,0.55)'; const w = g.measureText(s).width, x0 = al === 'center' ? x - w / 2 : al === 'right' ? x - w : x; g.fillRect(x0 - 2, y - 12 * k, w + 4, 15 * k); g.fillStyle = col; g.fillText(s, x, y); };
-  if (!eo.pwr) { g.fillStyle = '#000'; g.fillRect(0, 0, W, H); T('EO/IR OFF', W / 2, H / 2, '#777', 'center', 18); return; }
-  const now = new Date(), d2 = n => String(n).padStart(2, '0');
+// 도 · 분 · 초(37:31:25N)
+function eoDms(v, h) { const a = Math.abs(v); let d = Math.floor(a), m = Math.floor((a - d) * 60), sc = Math.round(((a - d) * 60 - m) * 60); if (sc === 60) { sc = 0; m++; } if (m === 60) { m = 0; d++; } const p2 = n => String(n).padStart(2, '0'); return `${d}:${p2(m)}:${p2(sc)}${v >= 0 ? h[0] : h[1]}`; }
+function eoZoomStep() {
+  if (eo.sensor === 'EOW') return Math.round(Math.log(EO_FOV.EOW[0] / eo.fovW) / Math.log(EO_FOV.EOW[0] / EO_FOV.EOW[1]) * 9) + 1;
+  return eo.step[eo.sensor] + 1;
+}
+// EO/IR 영상 오버레이 — 흰수리 SYSTEM 창 Video(실기 사진) 배치 · 흰 글씨에 검은 테
+//   왼쪽 위: 날짜 · 모드(AUTO 등은 반전) · VIC · 초점 MAN/GEO · 현지 시각 · UTC 차
+//   가운데 위: 센서(EOW · EON · IR — 테두리) · 필터 표시
+//   오른쪽 위: 줌 단계 · COL/WHT/BLK · AUTO/MAN · 장면(DFLT) · 감도 · 초점(∞)
+//   왼쪽: 고각 띠(10° 눈금 — 01 · 00 · −01) · 가운데 작은 + · 북쪽 화살표
+//   아래: ACFT 위경도 · 기수 · 고도 | 시선 방위 띠(34 35 00 01) | 표적 높이 · 거리 · LOS/LRF | 레이저 · 추적 · MAP TGT 좌표
+//   full(전탐석 화면)일 때만 AVT 게이트 · MENU · PIP · CUE 를 더 그린다
+function _eoHudG(g, x0, y0, W, H, full) {
+  const k = _mClamp(Math.min(W / 760, H / 560), 0.45, 1.6), F = n => `${Math.round(n * k)}px Consolas, "Lucida Console", "Courier New", monospace`;
+  const T = (s, x, y, al = 'left', n = 15, col = '#f4f6f4', inv = false) => {
+    g.font = F(n); g.textAlign = al; g.lineJoin = 'round';
+    if (inv) { const w = g.measureText(s).width, xl = al === 'center' ? x - w / 2 : al === 'right' ? x - w : x; g.fillStyle = '#f4f6f4'; g.fillRect(xl - 3 * k, y - 13 * k, w + 6 * k, 17 * k); g.fillStyle = '#111'; g.fillText(s, x, y); return; }
+    g.lineWidth = 3 * k; g.strokeStyle = 'rgba(0,0,0,0.85)'; g.strokeText(s, x, y); g.fillStyle = col; g.fillText(s, x, y);
+  };
+  const L = x0 + 14 * k, R = x0 + W - 14 * k, cx = x0 + W / 2, cy = y0 + H / 2;
+  if (!eo.pwr) { T('EO/IR OFF', cx, cy, 'center', 20, '#888'); return; }
+  // ── 왼쪽 위 ──
+  const now = new Date(), tzh = -now.getTimezoneOffset() / 60, loc = new Date(now.getTime() + tzh * 3600000), d2 = n => String(n).padStart(2, '0');
   const MON = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
-  T(`${d2(now.getUTCDate())}${MON[now.getUTCMonth()]}${now.getUTCFullYear()} ${d2(now.getUTCHours())}:${d2(now.getUTCMinutes())}:${d2(now.getUTCSeconds())}Z`, 8, 18 * k);
-  const modeTxt = eo.mode === 'AVT' ? `AVT ${eo.trk === 'ACQ' ? 'INIT ACQN' : eo.trk}` : eo.mode === 'MAN' && eo.aid ? 'RAID' : eo.mode === 'AUTO' ? 'AUTO' : eo.mode;
-  T(modeTxt, 8, 36 * k, eo.trk === 'LOCKED' ? A : C, 'left', 15);
-  T(`${eoSensorLabel()}  ${eoFov().toFixed(eoFov() < 2 ? 2 : 1)}°  ${Math.round(eoFocalMm())}mm  ${eo.ez}X`, W / 2, 18 * k, C, 'center', 14);
-  T(`${eo.sensor === 'IR' ? 'GATE ' + eo.irGate : eo.filt}  ${eo.imgAuto ? 'AUTO' : 'MAN'}  ${eo.imgAuto ? 'SPA' : 'TEM'}  ${eo.scene}`, W / 2, 36 * k, C, 'center', 12);
-  T(`CTRL ${eo.ctrl}${eo.tx ? '  TX' : ''}${eo.geo ? '  GEO' + (eo.geoTrim ? (eo.geoTrim > 0 ? '+' : '') + Math.round(eo.geoTrim) + '%' : '') : '  FOC ' + Math.round(eo.focus)}`, W - 8, 18 * k, C, 'right', 12);
-  T(`HDG ${fmtA(S.hdg)}  ${Math.round(S.alt)}FT  ${Math.round(S.spd)}KT`, W - 8, 36 * k, C, 'right', 12);
-  if (eo.mode === 'STOW') { g.fillStyle = 'rgba(0,0,0,0.85)'; g.fillRect(0, 50 * k, W, H - 100 * k); T('STOW', W / 2, H / 2, A, 'center', 22); }
-  if (eo.cal > 0) { g.fillStyle = 'rgba(80,80,80,0.92)'; g.fillRect(0, 50 * k, W, H - 100 * k); T('IR CAL', W / 2, H / 2, C, 'center', 20); }
-  // 조준선
-  const cx = W / 2, cy = H / 2, r = 9 * k, L = 34 * k;
-  g.strokeStyle = C; g.lineWidth = 2;
-  g.beginPath(); g.moveTo(cx - L, cy); g.lineTo(cx - r, cy); g.moveTo(cx + r, cy); g.lineTo(cx + L, cy); g.moveTo(cx, cy - L); g.lineTo(cx, cy - r); g.moveTo(cx, cy + r); g.lineTo(cx, cy + L); g.stroke();
-  // AVT 게이트
-  if (eo.mode === 'AVT') {
-    const gw = EO_GATE_K[eo.gate] * W / 2, b = 12 * k, col = eo.trk === 'LOCKED' ? A : C;
-    let gx = cx, gy = cy;
-    g.strokeStyle = col; g.lineWidth = 2;
-    [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([sx, sy]) => { g.beginPath(); g.moveTo(gx + sx * gw, gy + sy * gw - sy * b); g.lineTo(gx + sx * gw, gy + sy * gw); g.lineTo(gx + sx * gw - sx * b, gy + sy * gw); g.stroke(); });
-    T(`${eo.gate} · ${eo.alg}`, gx, gy - gw - 6 * k, col, 'center', 11);
-    if (eo.trk === 'LOCKED' && eo.lock && eo.lock.kind === 'obj') T(`TRK ${eo.lock.id}`, gx, gy + gw + 16 * k, col, 'center', 11);
+  const mode = eo.mode === 'MAN' ? (eo.aid ? 'RAID' : 'MAN') : eo.mode === 'AVT' ? 'AVT' : eo.mode;
+  T(`${d2(loc.getUTCDate())}${MON[loc.getUTCMonth()]}${loc.getUTCFullYear()}`, L, y0 + 28 * k);
+  T(mode, L + 128 * k, y0 + 28 * k, 'left', 15, '#f4f6f4', mode !== 'FWD' && mode !== 'MAN');
+  T('VIC', L + 196 * k, y0 + 28 * k);
+  T(`${d2(loc.getUTCHours())}:${d2(loc.getUTCMinutes())}:${d2(loc.getUTCSeconds())}`, L, y0 + 46 * k);
+  T(eo.geo ? 'GEO' : 'MAN', L + 196 * k, y0 + 46 * k);
+  T(`UTC${tzh >= 0 ? '+' : ''}${tzh.toFixed(1)}`, L, y0 + 64 * k);
+  // ── 가운데 위: 센서(테두리) ──
+  const sn = eo.sensor === 'EON' ? (eo.ll ? 'EON LL' : 'EON') : eo.sensor;
+  g.font = F(15); const sw = g.measureText(sn).width;
+  g.strokeStyle = '#f4f6f4'; g.lineWidth = 1.5 * k; g.fillStyle = 'rgba(0,0,0,0.35)'; g.fillRect(cx - sw / 2 - 4 * k, y0 + 14 * k, sw + 8 * k, 19 * k); g.strokeRect(cx - sw / 2 - 4 * k, y0 + 14 * k, sw + 8 * k, 19 * k);
+  T(sn, cx, y0 + 29 * k, 'center');
+  if (eo.sensor !== 'IR' && eo.filt !== 'CLR') T('≋', cx, y0 + 50 * k, 'center', 13);
+  if (eo.ez > 1) T(`${eo.ez}X`, cx + sw / 2 + 12 * k, y0 + 29 * k, 'left', 13);
+  // ── 오른쪽 위 ──
+  T(`${eoZoomStep()}  ${eo.sensor === 'IR' ? eo.pol : 'COL'}  ${eo.imgAuto ? 'AUTO' : 'MAN'}`, R - 30 * k, y0 + 28 * k, 'right');
+  T(`${eo.scene === 'NORM' ? 'DFLT' : eo.scene}  ${Math.round(eo.sens)}`, R - 30 * k, y0 + 46 * k, 'right');
+  const ideal = eoIdealFocus(), fc = eo.geo ? ideal + eo.geoTrim * 0.3 : eo.focus;
+  T(fc >= 96 ? '∞' : String(Math.round(fc)), R, y0 + 30 * k, 'right', 17);
+  // ── 북쪽 화살표 ──
+  const losB = normA(S.hdg + eo.az), na = -losB * _mD, nx = L + 22 * k, ny = y0 + 0.2 * H;
+  g.save(); g.translate(nx, ny); g.rotate(na);
+  g.strokeStyle = 'rgba(0,0,0,0.8)'; g.lineWidth = 3.5 * k; g.beginPath(); g.moveTo(0, 14 * k); g.lineTo(0, -14 * k); g.moveTo(-4 * k, -8 * k); g.lineTo(0, -14 * k); g.lineTo(4 * k, -8 * k); g.stroke();
+  g.strokeStyle = '#f4f6f4'; g.lineWidth = 1.5 * k; g.stroke();
+  g.restore();
+  T('N', nx + Math.sin(-na) * 0 + 9 * k, ny + 4 * k, 'left', 12);
+  // ── 왼쪽 고각 띠(10° 마다 두 자리 · 사이 점) ──
+  const tx = L + 4 * k, sp = 36 * k;
+  for (let d = Math.floor((eo.el - 60) / 10) * 10; d <= eo.el + 60; d += 5) {
+    const yy = cy - (d - eo.el) / 10 * sp;
+    if (yy < y0 + 0.28 * H || yy > y0 + 0.74 * H) continue;
+    if (d % 10 === 0) { const n = d / 10; T(`${n < 0 ? '-' : ''}${String(Math.abs(n)).padStart(2, '0')}-`, tx, yy + 5 * k, 'left', 14); }
+    else { g.fillStyle = '#f4f6f4'; g.fillRect(tx + 28 * k, yy - 1, 2 * k, 2 * k); }
   }
-  if (eo.mode === 'SLEW' && eo.slewTgt) T(`CUE ${eo.slewTgt.kind === 'obj' ? eo.slewTgt.id : 'POI'}`, cx, cy + 50 * k, A, 'center', 12);
-  // 고각 눈금(왼쪽 · +20 ~ −90)
-  const ex = 22 * k, et = 70 * k, eh = H - 190 * k;
-  g.strokeStyle = C; g.lineWidth = 1.5; g.beginPath(); g.moveTo(ex, et); g.lineTo(ex, et + eh); g.stroke();
-  for (let i = 20; i >= -90; i -= 10) { const y = et + (20 - i) / 110 * eh; g.beginPath(); g.moveTo(ex, y); g.lineTo(ex + (i % 30 === 0 ? 10 : 5) * k, y); g.stroke(); if (i % 30 === 0 || i === 20) T(String(i), ex + 13 * k, y + 4 * k, C, 'left', 10); }
-  const ey = et + (20 - eo.el) / 110 * eh;
-  g.fillStyle = A; g.beginPath(); g.moveTo(ex - 2, ey); g.lineTo(ex - 11 * k, ey - 6 * k); g.lineTo(ex - 11 * k, ey + 6 * k); g.fill();
-  // 방위 눈금(아래 · −180 ~ +180)
-  const ay = H - 92 * k, al = 70 * k, aw = W - 140 * k;
-  g.beginPath(); g.moveTo(al, ay); g.lineTo(al + aw, ay); g.stroke();
-  for (let dg = -180; dg <= 180; dg += 30) { const x = al + (dg + 180) / 360 * aw; g.beginPath(); g.moveTo(x, ay); g.lineTo(x, ay + (dg % 90 === 0 ? 9 : 5) * k); g.stroke(); if (dg % 90 === 0) T(String(dg), x, ay + 21 * k, C, 'center', 10); }
-  const axp = al + (eo.az + 180) / 360 * aw;
-  g.fillStyle = A; g.beginPath(); g.moveTo(axp, ay - 2); g.lineTo(axp - 6 * k, ay - 11 * k); g.lineTo(axp + 6 * k, ay - 11 * k); g.fill();
-  // 표적 정보(아래)
-  const p = eoAimPoint();
-  const lrfOk = eo.lrf.st === 'VALID' && eo.lrf.rng;
-  const rngM = lrfOk ? eo.lrf.rng : p ? eoAngTo(p.lat, p.lon, p.hM).rng : null;
-  const rs = rngM == null ? '-----' : eo.units === 'NM' ? `${(rngM / 1852).toFixed(2)}NM` : (rngM < 1000 ? `${Math.round(rngM)}M` : `${(rngM / 1000).toFixed(2)}KM`);
+  // ── 가운데 작은 + ──
+  g.strokeStyle = 'rgba(0,0,0,0.8)'; g.lineWidth = 3 * k; g.beginPath(); g.moveTo(cx - 6 * k, cy); g.lineTo(cx + 6 * k, cy); g.moveTo(cx, cy - 6 * k); g.lineTo(cx, cy + 6 * k); g.stroke();
+  g.strokeStyle = '#f4f6f4'; g.lineWidth = 1.2 * k; g.stroke();
+  // ── 아래 가운데 시선 방위 띠(10° 마다 두 자리) ──
+  const by = y0 + H - 42 * k, bs = 34 * k;
+  for (let d = Math.floor((losB - 40) / 5) * 5; d <= losB + 40; d += 5) {
+    const xx = cx - (normAS(losB - d)) / 10 * bs;
+    if (d % 10 === 0) { T(String(normA(d) / 10).padStart(2, '0'), xx, by, 'center', 15); g.fillStyle = '#f4f6f4'; g.fillRect(xx - 0.5, by - 22 * k, 1.5 * k, 5 * k); }
+    else { g.fillStyle = '#f4f6f4'; g.fillRect(xx - 0.5, by - 20 * k, 1.5 * k, 3 * k); }
+  }
+  g.fillStyle = '#f4f6f4'; g.fillRect(cx - 0.75 * k, by - 28 * k, 1.5 * k, 12 * k);
+  // ── 아래 왼쪽: ACFT ──
+  T('ACFT', L - 4 * k, y0 + H - 62 * k);
+  T(`${eoDms(S.lat, 'NS')} ${fmtA(S.hdg)}°`, L + 16 * k, y0 + H - 43 * k);
+  T(`${eoDms(S.lon, 'EW')}  ${Math.round(S.alt)}FT`, L, y0 + H - 24 * k);
+  // ── 표적 — 높이 · 거리 · 거리 출처 · 좌표 ──
+  const p = eoAimPoint(), lrfOk = eo.lrf.st === 'VALID' && eo.lrf.rng;
   const tp = (lrfOk && eo.lrf.pt) || p;
-  const dm = (v, h) => { const a = Math.abs(v), dd = Math.floor(a), mm = (a - dd) * 60; return `${dd}°${mm.toFixed(2).padStart(5, '0')}'${v >= 0 ? h[0] : h[1]}`; };
-  T(tp ? `TGT ${dm(tp.lat, 'NS')} ${dm(tp.lon, 'EW')}  ELV ${Math.round((tp.hM || 0) / 0.3048)}FT` : 'TGT ---', 8, H - 46 * k, C, 'left', 12);
-  T(`RNG ${lrfOk ? 'L' : 'P'} ${rs}  BRG ${fmtA(S.hdg + eo.az)}°  EL ${eo.el.toFixed(1)}°  AZ ${eo.az >= 0 ? '+' : ''}${eo.az.toFixed(1)}°`, 8, H - 28 * k, C, 'left', 12);
-  const ls = eo.lrf.cont ? `LRF CONT ${eo.lrf.st}` : `LRF ${eo.lrf.st}`;
-  T(ls, W - 8, H - 46 * k, eo.lrf.st === 'FAIL' ? '#ff5050' : eo.lrf.st === 'RANGING' ? A : C, 'right', 12);
-  T(eo.laserFire ? 'LASER ACTIVE' : eo.laserArm ? 'LASER ARMED' : 'LASER SAFE', W - 8, H - 28 * k, eo.laserFire ? '#ff5050' : eo.laserArm ? A : C, 'right', 12);
-  if (typeof kgLt !== 'undefined' && kgLt.srch) T(`SRCH ${srch.mode === 'EO' ? 'SLAVE' : srch.mode}${srch.lim ? ' LIMIT' : ''}`, W - 8, 54 * k, srch.lim ? A : C, 'right', 11);
-  // PIP — 레이더
-  if (eo.pip === 'RDR') { const pc = _msnEl && _msnEl.querySelector('.msn-rdr canvas'); if (pc && pc.width) { const s = 150 * k; g.drawImage(pc, W - s - 10, 64 * k, s, s); g.strokeStyle = C; g.strokeRect(W - s - 10, 64 * k, s, s); } }
-  // 메뉴
-  if (eo.menu) {
-    const mw = 280 * k, mh = (MSN_MENU.length * 20 + 34) * k, mx = cx - mw / 2, my = cy - mh / 2;
-    g.fillStyle = 'rgba(0,20,0,0.85)'; g.fillRect(mx, my, mw, mh); g.strokeStyle = C; g.strokeRect(mx, my, mw, mh);
-    T('MAIN MENU', cx, my + 18 * k, C, 'center', 13);
-    MSN_MENU.forEach((m, i) => { const y = my + (40 + i * 20) * k; if (i === eo.menuI) { g.fillStyle = 'rgba(61,255,106,0.25)'; g.fillRect(mx + 4, y - 14 * k, mw - 8, 18 * k); } T(m.n, mx + 12 * k, y, C, 'left', 12); T(String(m.v()), mx + mw - 12 * k, y, i === eo.menuI ? A : C, 'right', 12); });
+  const rngM = lrfOk ? eo.lrf.rng : tp ? eoAngTo(tp.lat, tp.lon, tp.hM).rng : null;
+  const rs = rngM == null ? '' : eo.units === 'KM' ? `${(rngM / 1000).toFixed(1)}KM` : `${(rngM / 1852).toFixed(1)}NM`;
+  const mx = x0 + W * 0.69;
+  T(tp ? `${Math.round((tp.hM || 0) / 0.3048)}FT` : '', mx - 70 * k, y0 + H - 16 * k, 'right');
+  if (rs) T(`${rs} ${lrfOk ? 'LRF' : 'LOS'}`, mx + 50 * k, y0 + H - 16 * k, 'right');
+  const lzr = eo.laserFire ? 'FIRE' : eo.laserArm ? 'ARM' : 'OFF', avt = eo.mode !== 'AVT' ? 'NONE' : eo.trk === 'LOCKED' ? 'LOCK' : eo.trk === 'ACQ' ? 'ACQ' : eo.trk;
+  T(`${eo.lrf.cont ? 'CONT' : eo.lrf.st === 'RANGING' ? 'RNG' : lzr}  ${avt}`, R, y0 + H - 74 * k, 'right', 15, eo.laserFire ? '#ff6060' : '#f4f6f4');
+  T('MAP TGT', R, y0 + H - 54 * k, 'right');
+  if (tp) {
+    T(`${fmtA(bearing(S.lat, S.lon, tp.lat, tp.lon))}°  ${eoDms(tp.lat, 'NS')}`, R, y0 + H - 36 * k, 'right');
+    T(eoDms(tp.lon, 'EW'), R, y0 + H - 18 * k, 'right');
+  } else {
+    T(`${fmtA(losB)}°  NO TGT SOL`, R, y0 + H - 36 * k, 'right');
+    T('ENABLE LRF', R, y0 + H - 18 * k, 'right');
   }
+  if (eo.mode === 'STOW') { g.fillStyle = 'rgba(0,0,0,0.85)'; g.fillRect(x0, y0 + 80 * k, W, H - 170 * k); T('STOW', cx, cy, 'center', 22); }
+  if (eo.cal > 0) { g.fillStyle = 'rgba(80,80,80,0.92)'; g.fillRect(x0, y0 + 80 * k, W, H - 170 * k); T('IR CAL', cx, cy, 'center', 20); }
+  // ── AVT 게이트(조종석에도 보인다) ──
+  if (eo.mode === 'AVT') {
+    const gw = EO_GATE_K[eo.gate] * W / 2, b = 12 * k, col = eo.trk === 'LOCKED' ? '#ffd23a' : '#f4f6f4';
+    g.strokeStyle = col; g.lineWidth = 2 * k;
+    [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([sx, sy]) => { g.beginPath(); g.moveTo(cx + sx * gw, cy + sy * gw - sy * b); g.lineTo(cx + sx * gw, cy + sy * gw); g.lineTo(cx + sx * gw - sx * b, cy + sy * gw); g.stroke(); });
+    if (full) T(`${eo.gate} ${eo.alg}`, cx, cy - gw - 6 * k, 'center', 12, col);
+    if (eo.trk === 'LOCKED' && eo.lock && eo.lock.kind === 'obj') T(`TRK ${eo.lock.id}`, cx, cy + gw + 16 * k, 'center', 12, col);
+  }
+  if (!full) return;
+  // ── 전탐석 화면만 ──
+  if (eo.mode === 'SLEW' && eo.slewTgt) T(`CUE ${eo.slewTgt.kind === 'obj' ? eo.slewTgt.id : 'POI'}`, cx, cy + 52 * k, 'center', 13, '#ffd23a');
+  if (typeof kgLt !== 'undefined' && kgLt.srch) T(`SRCH ${srch.mode === 'EO' ? 'SLAVE' : srch.mode}${srch.lim ? ' LIMIT' : ''}`, R, y0 + 92 * k, 'right', 12, srch.lim ? '#ffd23a' : '#f4f6f4');
+  if (eo.pip === 'RDR') { const pc = _msnEl && _msnEl.querySelector('.msn-rdr canvas'); if (pc && pc.width) { const s2 = 150 * k; g.drawImage(pc, x0 + W - s2 - 14 * k, y0 + 100 * k, s2, s2); g.strokeStyle = '#f4f6f4'; g.lineWidth = 1; g.strokeRect(x0 + W - s2 - 14 * k, y0 + 100 * k, s2, s2); } }
+  if (eo.menu) {
+    const mw = 290 * k, mh = (MSN_MENU.length * 21 + 36) * k, mx2 = cx - mw / 2, my = cy - mh / 2;
+    g.fillStyle = 'rgba(0,0,0,0.78)'; g.fillRect(mx2, my, mw, mh); g.strokeStyle = '#f4f6f4'; g.lineWidth = 1; g.strokeRect(mx2, my, mw, mh);
+    T('MAIN MENU', cx, my + 20 * k, 'center', 14);
+    MSN_MENU.forEach((m, i) => { const yy = my + (42 + i * 21) * k; T(m.n, mx2 + 12 * k, yy, 'left', 13, '#f4f6f4', i === eo.menuI); T(String(m.v()), mx2 + mw - 12 * k, yy, 'right', 13, i === eo.menuI ? '#ffd23a' : '#f4f6f4'); });
+  }
+}
+function _eoHud(cv, W, H) {
+  const g = cv.getContext('2d'); g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, W, H);
+  _eoHudG(g, 0, 0, W, H, true);
 }
 // 레이더 화면
 function _rdrDraw(cv) {
@@ -857,8 +959,14 @@ function msnRenderPanels() {
 }
 function _msnFit(cv) { const r = cv.getBoundingClientRect(), d = Math.min(2, window.devicePixelRatio || 1), w = Math.round(r.width * d), h = Math.round(r.height * d); if (w > 0 && (cv.width !== w || cv.height !== h)) { cv.width = w; cv.height = h; } return { W: w, H: h }; }
 function msnRender() {
+  if (_eoNeed()) _eoCamera(); else if (_eoMap) _eoMapDrop();
+  // 조종석 SYSTEM 창이 EO/IR 영상을 띄우고 있으면 자주 다시 그린다(평소 4번/초 → 10번/초)
+  try {
+    if (typeof sysPage !== 'undefined' && (sysPage === 'asys_video' || (typeof sysLayout !== 'undefined' && sysLayout === 'HALF' && (sysHalf.L === 'asys_video' || sysHalf.R === 'asys_video'))) && typeof videoCfg !== 'undefined' && videoCfg.ch === 'EO/IR' && (_msnFrame++ % 2 === 0)) {
+      const w = document.getElementById('sysp-wrap'); if (w && !w.classList.contains('page-hidden') && w.clientWidth > 40) sysDraw();
+    }
+  } catch (e) { _swallow(e); }
   if (!msnOpen || !_msnEl) return;
-  _eoCamera();
   const vid = _msnEl.querySelector('.eo-vid'), f = eo.pwr && eo.mode !== 'STOW' ? eoVideoFilter() : 'brightness(0)';
   if (vid.style.filter !== f) vid.style.filter = f;
   const spr = _msnEl.querySelector('.eo-spr'), s = _msnFit(spr); _eoSprites(spr, s.W, s.H);
@@ -871,11 +979,11 @@ function msnShow(on) {
   const R = _msnBuild();
   msnOpen = on !== undefined ? !!on : !msnOpen;
   R.classList.toggle('on', msnOpen);
-  if (!msnOpen) _eoMapDrop();
+  if (_eoMap) _eoHostPlace();                 // 지도를 전탐석 화면 ⇄ 화면 밖으로 옮긴다(조종석 SYSTEM 창이 계속 쓸 수 있게)
   msnRenderHcu(); msnRenderPanels();
 }
 // 한 걸음(전탐석이 닫혀 있어도 — 선박 · 서치라이트 연동 · 터릿 · 레이더는 계속 돈다)
-let _msnT = 0;
+let _msnT = 0, _msnFrame = 0;
 function msnStep() {
   const now = performance.now(), dt = _msnT ? Math.min(0.25, (now - _msnT) / 1000) : 0; _msnT = now;
   if (!dt) return;
@@ -886,8 +994,11 @@ function msnStep() {
   try { if (_slHold) srchMan(_slHold, dt); srchStep(dt); } catch (e) { _swallow(e); }
   try { msnRender(); } catch (e) { _swallow(e); }
 }
+// 흰수리(전탐석 · 조종석 모두)는 EO/IR 터릿이 돈다 — 조종석 SYSTEM 창 Video(EO/IR) 가 영상을 띄운다
+if (EO_ON) setInterval(msnStep, 50);
 if (MSN_ON) {
-  setInterval(msnStep, 50);
+  // 전탐석 — CDU Video Channel 을 따로 고른 적이 없으면 EO/IR 로(조종석 SYSTEM 창 Video 에 전탐석 영상이 나온다)
+  try { if (!localStorage.getItem('videoCfg') && typeof videoCfg !== 'undefined') videoCfg.ch = 'EO/IR'; } catch (e) { _swallow(e); }
   // 시작 잠금(비밀번호 · 화면 고르기)이 풀리면 전탐석을 연다 — 지도 왼쪽 아래 🎯 전탐석 으로 다시 연다
   const _open0 = setInterval(() => { if (window.gateLocked) return; clearInterval(_open0); try { msnShow(true); } catch (e) { _swallow(e); } }, 400);
   try {
@@ -905,6 +1016,6 @@ if (MSN_ON) {
     add('hcuLaser', 'LASER (누르는 동안)', 'laser'); add('hcuAux', 'AUX — 서치라이트 EO/IR 연동', 'aux', 'press');
     const s = { id: 'hcuSrch', grp: '전탐석 HCU', label: '서치라이트 ON/OFF', kind: 'press', run: () => msnAct('slon') }; JOY_ACTIONS.push(s); JOY_ACT_BY_ID[s.id] = s;
   } catch (e) { _swallow(e); }
-  try { if (typeof HELP_ITEMS !== 'undefined') HELP_ITEMS.push(['🎯 흰수리 전탐석', '시작 화면에서 "흰수리 전탐석"을 고르면 전탐석(EO/IR · SAR 레이더 · 서치라이트 · HCU 조작기) 화면이 뜬다. 기체는 흰수리 그대로 난다 — "조종석 보기"로 비행을 다루고 지도 왼쪽 아래 🎯 전탐석 으로 돌아온다. 전탐석 위 막대 ❓ 에 조작법.']); } catch (e) { _swallow(e); }
+  try { if (typeof HELP_ITEMS !== 'undefined') HELP_ITEMS.push(['🎯 흰수리 전탐석', '시작 화면에서 "흰수리 전탐석"을 고르면 전탐석(EO/IR · SAR 레이더 · 서치라이트 · HCU 조작기) 화면이 뜬다. 기체는 흰수리 그대로 난다 — "조종석 보기"로 비행을 다루고 지도 왼쪽 아래 🎯 전탐석 으로 돌아온다. 전탐석이 움직이는 EO/IR 영상은 조종석 SYSTEM 창 Video(Channel EO/IR)에도 나온다. 전탐석 위 막대 ❓ 에 조작법.']); } catch (e) { _swallow(e); }
 }
 try { appRegister({ msnShow, msnAct, msnSpawn, hcuPress }); } catch (e) { _swallow(e); }

@@ -522,6 +522,10 @@ function _sysPaint(g, c, W, H, dpr, own, half) {
     g.font = '14px Helvetica Neue, Arial, sans-serif'; g.fillStyle = '#789';
     g.fillText('호이스트 붐에서 바로 아래를 봅니다 — SYSTEM 창에 영상이 보입니다', 610, 330);
   }
+  else if (sysPage === 'asys_video' && videoCfg.ch === 'EO/IR' && typeof eoirVideoDrawTo === 'function' && typeof EO_ON !== 'undefined' && EO_ON) {
+    // EO/IR — 전탐석(37-mission.js)이 움직이는 터릿 영상 + 오버레이(실기 Video 화면 배치)
+    eoirVideoDrawTo(g, 227, 49, 766, 574);
+  }
   else if (sysPage === 'asys_video') {
     g.fillStyle = '#4a6a7a'; g.textAlign = 'center'; g.font = 'bold 26px Helvetica Neue, Arial, sans-serif';
     g.fillText(`VIDEO — ${videoCfg.ch}`, 610, 300);
@@ -559,6 +563,7 @@ function _sysPaintHalf(g, F, own = true) {
     g.save(); g.beginPath(); g.rect(x, y, w, h); g.clip();
     if (id === 'asys_hocas') _sysHocasPage(g, x, y, w, h);
     else if (id === 'tcas') _sysTcasPage(g, x, y, w, h);
+    else if (id === 'asys_video' && videoCfg.ch === 'EO/IR' && typeof eoirVideoDrawTo === 'function' && typeof EO_ON !== 'undefined' && EO_ON) eoirVideoDrawTo(g, x + 2, y + 17, w - 4, h - 19);   // EO/IR 영상은 반쪽에도
     else if (id === 'map' || id === 'asys_video') {
       g.fillStyle = '#4a6a7a'; g.textAlign = 'center'; g.font = 'bold 20px Helvetica Neue, Arial, sans-serif';
       g.fillText((SYS_PAGES[id] || '').toUpperCase(), x + w / 2, y + h / 2 - 8);
