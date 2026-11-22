@@ -60,10 +60,14 @@ export async function run(page, t) {
   const [ios] = await Promise.all([page.waitForEvent('popup'), page.evaluate(() => document.getElementById('map-ios-btn').click())]);
   await ios.waitForFunction(() => !!document.getElementById('ios-pages') && !!document.getElementById('ios-root'), null, { timeout: 20000 });
   const P = await ios.evaluate(() => [...document.querySelectorAll('#ios-pages [data-iosp]')].map(b => b.textContent));
-  t.eq(P.join('|'), '교관|PFD|UPPER|LOWER|CYC · COLL|MAP|COCKPIT', '교관 화면 위 막대 — 교관 · PFD · UPPER · LOWER · CYC · COLL · MAP · COCKPIT');
+  t.eq(P.join('|'), '교관|PFD|UPPER|LOWER|SYSTEM|CYC · COLL|MAP|COCKPIT', '교관 화면 위 막대 — 교관 · PFD · UPPER · LOWER · SYSTEM · CYC · COLL · MAP · COCKPIT');
   // 미러 — 교육생 창의 값이 교관 창에 그대로
-  await page.evaluate(() => { S.alt = 2345; S.hdg = 123; S.spd = 88; ovhdSet('pitotHeat', 'AUTO'); });
-  await ios.waitForFunction(() => S.alt === 2345 && S.hdg === 123 && ovhdGet('pitotHeat') === 'AUTO', null, { timeout: 8000 }).catch(() => {});
+  await page.evaluate(() => { S.alt = 2345; S.hdg = 123; S.spd = 88; ovhdSet('pitotHeat', 'AUTO'); window.__ft1 = fuel.ft1; fuel.ft1 = 111; fadec.e[1].tgt = 777; elecBatt.soc = 63; });
+  await ios.waitForFunction(() => S.alt === 2345 && S.hdg === 123 && ovhdGet('pitotHeat') === 'AUTO' && fuel.ft1 === 111, null, { timeout: 8000 }).catch(() => {});
+  const SY = await ios.evaluate(() => ({ ft1: fuel.ft1, tgt: fadec.e[1].tgt, soc: elecBatt.soc, mainL: fuel.mainL }));
+  t.ok(SY.ft1 === 111 && SY.tgt === 777 && Math.abs(SY.soc - 63) < 1 && Number.isFinite(SY.mainL),
+    `SYSTEM 미러 — 연료 FT1 ${SY.ft1}lb · 1번 엔진 TGT ${SY.tgt}℃ · 배터리 ${Math.round(SY.soc)}% 가 교관 창에 그대로`);
+  await page.evaluate(() => { fuel.ft1 = window.__ft1; fadec.e[1].tgt = 15; elecBatt.soc = 100; });
   const M = await ios.evaluate(() => ({ alt: S.alt, hdg: S.hdg, run: S.running, ov: ovhdGet('pitotHeat'), n: iosMirrorN }));
   t.ok(M.alt === 2345 && M.hdg === 123 && M.run === false && M.ov === 'AUTO' && M.n > 0, `미러 — 고도 ${M.alt} · 기수 ${M.hdg} · 콘솔 PITOT HEAT ${M.ov} · 교관 창은 스스로 계산하지 않는다`);
   // 페이지마다 그 화면
@@ -71,11 +75,13 @@ export async function run(page, t) {
     return ios.evaluate(() => {
       const vis = id => { const e = document.getElementById(id); return !!e && e.offsetParent !== null && e.getBoundingClientRect().height > 50; };
       return { ios: document.documentElement.classList.contains('ios-mode'), pfd: vis('pfd-wrap'), ovhd: vis('ovhd-wrap'), lcon: vis('lcon-wrap'), map: vis('map-wrap'),
+        sys: vis('sysp-wrap') && !!document.querySelector('#sysp-wrap canvas') && document.querySelector('#sysp-wrap canvas').width > 50,
         grip: !!document.querySelector('#ios-root .ios-grip svg') && getComputedStyle(document.querySelector('#ios-root .ios-grip')).display !== 'none', ck: !!window._cockpitOn };
     }); };
-  const V = { pfd: await pg('pfd'), ovhd: await pg('ovhd'), lcon: await pg('lcon'), grip: await pg('grip'), map: await pg('map'), ck: await pg('cockpit') };
+  const V = { pfd: await pg('pfd'), ovhd: await pg('ovhd'), lcon: await pg('lcon'), sys: await pg('sysp'), grip: await pg('grip'), map: await pg('map'), ck: await pg('cockpit') };
   t.ok(!V.pfd.ios && V.pfd.pfd, 'PFD 페이지 — PFD 화면 가득');
   t.ok(V.ovhd.ovhd && V.lcon.lcon, 'UPPER · LOWER 페이지 — 상부 · 하부 콘솔');
+  t.ok(!V.sys.ios && V.sys.sys, 'SYSTEM 페이지 — 계통(MFD) 화면');
   t.ok(V.grip.ios && V.grip.grip, 'CYC · COLL 페이지 — 컬렉티브 · 사이클릭');
   t.ok(V.map.map && V.ck.ck, 'MAP · COCKPIT 페이지 — 지도 · 3D 조종석');
   // 교관 창에서 누른 조작이 교육생 창에 걸린다 — 콘솔 스위치 · 서치라이트
