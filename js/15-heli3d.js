@@ -443,17 +443,31 @@ function _h3DrawLights(h, main, pose, mpp, st) {
   const rot3 = new Float32Array([1, 0, 0, 0, 1, 0, 0, 0, 1]);
   const keyOf = c => c === LT_COL.green ? 'green' : c === LT_COL.white ? 'white' : 'red';
   mpp = Number.isFinite(mpp) && mpp > 0 ? mpp : 0.05;
+  // 어두울 때(황혼 · 밤 · NVG)는 3D 지도 그림 전체를 CSS 로 어둡게 깎는다(index.html html.env-night .maplibregl-canvas —
+  // brightness 0.22). 같은 그림에 그린 불빛도 함께 22% 로 꺼져 보이지 않았다 — 그래서 어두울 때는 빛 무리를 지도 위 겹
+  // (29-env.js envFxFrame — 어둡게 깎지 않는다)에 그리도록 화면 자리만 넘기고, 여기서는 등 알맹이만 그린다
+  const dark = !!(typeof env !== 'undefined' && (env.tod !== 'DAY' || env.nvg));
+  const cw = gl.canvas.clientWidth || gl.canvas.width, ch = gl.canvas.clientHeight || gl.canvas.height, scr = [];
   gl.useProgram(h.prog);
   gl.depthMask(false);
   for (const L of st.pts) {
     const part = _h3GlowPart(h, keyOf(L.col)), k = Math.max(0, Math.min(1, L.k));
     const at = r => new Float32Array(_m4Mul(base, _m4From([[r, 0, 0], [0, r, 0], [0, 0, r]], L.p)));
     const halo = Math.max(0.25, (3 + 14 * k) * mpp) * (st.nvg ? 1.8 : 1);   // NVG — 고글이 빛을 번지게 한다
-    [[1, 0.18], [0.6, 0.28], [0.32, 0.45]].forEach(([f, a]) => _h3Draw(h, part, at(halo * f), rot3, Math.min(1, a * (0.35 + 0.65 * k) * 1.4)));
+    if (dark) {
+      const [x, y, z] = L.p, b = base, w = b[3] * x + b[7] * y + b[11] * z + b[15];
+      if (w > 0) scr.push({ id: L.id, x: (1 + (b[0] * x + b[4] * y + b[8] * z + b[12]) / w) / 2 * cw, y: (1 - (b[1] * x + b[5] * y + b[9] * z + b[13]) / w) / 2 * ch,
+                            r: halo / mpp, col: L.col, k });
+    } else {
+      [[1, 0.18], [0.6, 0.28], [0.32, 0.45]].forEach(([f, a]) => _h3Draw(h, part, at(halo * f), rot3, Math.min(1, a * (0.35 + 0.65 * k) * 1.4)));
+    }
     _h3Draw(h, part, at(Math.max(0.08, 1.4 * mpp)), rot3, Math.min(1, 0.45 + 0.55 * k));
   }
   gl.depthMask(true);
+  _h3LtScr = dark ? { t: performance.now(), w: cw, h: ch, pts: scr } : null;
 }
+// 어두울 때 빛 무리를 그릴 화면 자리(CSS px · 3D 지도 그림 기준) — 29-env.js envFxFrame 이 지도 위 겹에 그린다
+let _h3LtScr = null;
 
 // ── 그리기(WebGL) ──
 const H3_VS = `
@@ -703,7 +717,7 @@ const HELI3D_LAYER = {
     // 외부 등화(상부 콘솔 POSITION · ANTI COLLISION LTS)
     try {
       const st = extLightState(now / 1000);
-      if (st.pts.length) _h3DrawLights(h, main, pose, HELI3D_LEN / Math.max(1, heli3dScreenLen(this.map)), st);
+      if (st.pts.length) _h3DrawLights(h, main, pose, HELI3D_LEN / Math.max(1, heli3dScreenLen(this.map)), st); else _h3LtScr = null;
     } catch (e) { _swallow(e); }
   },
 };
