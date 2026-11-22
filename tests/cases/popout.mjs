@@ -14,17 +14,17 @@ export async function run(page, t) {
   });
   t.ok(tabs.tri && tabs.sel === 'pfd·cdu·map', `처음에는 3분할 PFD · CDU · MAP (${tabs.sel})`);
   t.ok(/^PFD\|SYSTEM\|▦ 4분할\|⊞ 창 배치\|⧉ POP UP$/.test(tabs.L), `PFD 창 탭: PFD · SYSTEM · 분할(→4분할) · 창 배치 · POP UP (+ 📌 Top) (${tabs.L})`);
-  // 제일 왼쪽 창의 SYSTEM 탭 — PFD 자리에 SYSTEM 창, PFD 탭으로 돌아온다(다른 창이 SYSTEM 이면 맞바꾼다)
+  // 제일 왼쪽 창의 SYSTEM 탭 — PFD 자리에 SYSTEM 창, PFD 탭으로 돌아온다(다른 창도 SYSTEM 이면 그쪽은 거울 창 — 38-mirror.js)
   const lsys = await page.evaluate(() => {
     const where = () => [leftSel, document.getElementById('sysp-wrap').parentElement.id, document.getElementById('pfd-wrap').classList.contains('page-hidden')];
     selectPanel('right', 'sysp');
-    document.querySelector('#left-tabs [data-sel="sysp"]').click(); const a = where(), r = rightSel;
+    document.querySelector('#left-tabs [data-sel="sysp"]').click(); const a = where(), r = rightSel, mir = !!document.querySelector('#right-panel .mirror-box');
     document.querySelector('#left-tabs [data-sel="pfd"]').click(); const b = where();
     selectPanel('right', 'map');
-    return { a, r, b };
+    return { a, r, b, mir };
   });
-  t.ok(lsys.a.join() === 'sysp,left-panel,true' && lsys.r !== 'sysp' && lsys.b[0] === 'pfd' && lsys.b[2] === false,
-    `왼쪽 창 SYSTEM 탭 — PFD 자리에 SYSTEM, PFD 탭으로 돌아온다 (${lsys.a.join(' ')} · 우측 ${lsys.r} · ${lsys.b.join(' ')})`);
+  t.ok(lsys.a.join() === 'sysp,left-panel,true' && lsys.r === 'sysp' && lsys.mir && lsys.b[0] === 'pfd' && lsys.b[2] === false,
+    `왼쪽 창 SYSTEM 탭 — PFD 자리에 SYSTEM(우측도 SYSTEM 이면 맞바꾸지 않고 거울 창) · PFD 탭으로 돌아온다 (${lsys.a.join(' ')} · 우측 ${lsys.r} 거울 ${lsys.mir} · ${lsys.b.join(' ')})`);
   t.ok(tabs.M === 'CDU|MAP|UPPER|LOWER|SYSTEM|CONTROL|⛶ Cockpit|⧉ POP UP|⌂|⟳', `CDU 창 탭: CDU · MAP · UPPER · LOWER · SYSTEM · CONTROL · Cockpit Mode · POP UP · 처음 화면 · 새로고침 (+ 📌 Top) — 모든 줄이 같은 차례 (${tabs.M})`);
   t.ok(tabs.R === 'CDU|MAP|UPPER|LOWER|SYSTEM|CONTROL|⛶ Cockpit|⧉ POP UP', `MAP 창 탭: CDU · MAP · UPPER · LOWER · SYSTEM · CONTROL · Cockpit Mode · POP UP (+ 📌 Top) (${tabs.R})`);
   // 모든 줄이 같은 화면 탭 차례 · 같은 색 · 이름이 잘리지 않는다(좁으면 줄임말 UPR · LWR · SYS · CTRL)

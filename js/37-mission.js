@@ -707,6 +707,7 @@ function _msnCss() {
 .msn-cap2{font:bold 9px Arial;color:#9aa;text-align:center;letter-spacing:1px;margin-top:3px}
 #msn-open-btn{position:fixed;left:8px;bottom:60px;z-index:3900;display:none;background:#0d2a40;border:1px solid #3a8fd0;color:#cfe8ff;border-radius:6px;padding:7px 11px;font:bold 12px Arial;cursor:pointer;box-shadow:0 2px 6px #000a}
 html.ac-kuhm #msn-open-btn{display:block}
+#msn-open-btn.in-ctl{position:static;left:auto;bottom:auto;z-index:auto;box-shadow:none;padding:4px 6px;font:bold 11px Arial;border-radius:4px;background:#0d2a40;border:1px solid #3a8fd0;color:#cfe8ff}
 @media (max-width:1100px){.msn-body{grid-template-columns:1fr;overflow:auto}.msn-disp{min-height:70vh}.msn-right{overflow:visible}}
 `;
   document.head.appendChild(st);
@@ -797,7 +798,7 @@ function _msnBuild() {
   R.innerHTML = `
   <div class="msn-top"><b>흰수리 전탐석 · MISSION CONSOLE</b><span class="msn-ac" data-m="ac"></span><span class="msn-sp"></span>
     <button data-mact="fly">▶ 비행</button><button data-mact="spawn">선박 표적 생성</button><button data-mact="clear">표적 지우기</button>
-    <button data-mact="help">❓</button><button data-mact="close">조종석 보기 ⤴</button></div>
+    <button data-mact="help">❓</button><button data-mact="popout" title="전탐석을 새 창으로 — 다른 모니터에서 전탐요원이 · 조종석은 이 창에(LOFT)">⧉ 새 창</button><button data-mact="close">조종석 보기 ⤴</button></div>
   <div class="msn-body">
     <div class="msn-disp">
       <div class="msn-scr">
@@ -1288,7 +1289,8 @@ function msnAct(a) {
     case 'nv-': { const i = NV_RNG.indexOf(nv.nm); nv.nm = NV_RNG[_mClamp((i < 0 ? 2 : i) + 1, 0, NV_RNG.length - 1)]; break; }
     case 'nvc': nv.ctr = null; nv.cur = null; break;
     case 'help': msnHelp(); break;
-    case 'close': msnShow(false); break;
+    case 'close': if (msnPopped()) { try { popoutElement('msn'); } catch (e) { _swallow(e); } } msnShow(false); break;
+    case 'popout': msnPopout(); break;
     case 'rcmd': rdr.cmd = RDR_CMDS[(RDR_CMDS.indexOf(rdr.cmd) + 1) % 3]; _mNote(`RDR > CMD ${rdr.cmd}`); break;
     case 'rtx': case 'rmode': case 'rng-': case 'rng+': case 'tilt-': case 'tilt+': case 'gain-': case 'gain+': case 'rsec': case 'rfrz': case 'ronly':
       if (!_rdrGuard(a)) break;
@@ -1929,6 +1931,16 @@ function msnRender() {
   try { dvrPlayDraw(); } catch (e) { _swallow(e); }
   if (performance.now() - _msnTickT > 300) { _msnTickT = performance.now(); msnRenderPanels(); }
 }
+// 전탐석을 새 창으로(00-popout.js popoutElement) — LOFT: 조종사는 이 창의 조종석, 전탐요원은 다른 모니터의 전탐석
+function msnPopped() { return typeof popoutHas === 'function' && popoutHas('el-msn'); }
+function msnPopout() {
+  if (typeof popoutElement !== 'function') return false;
+  if (msnPopped()) { popoutElement('msn'); return true; }   // 다시 누르면 이 창으로
+  msnShow(true);
+  const ok = popoutElement('msn', 'msn-root', '흰수리 전탐석', [1500, 900]);
+  if (ok) { _mNote('전탐석 새 창(LOFT)'); setTimeout(() => { try { dispSet(); msnRenderPanels(); } catch (e) { _swallow(e); } }, 300); }
+  return ok;
+}
 function msnShow(on) {
   if (!MSN_ON) return;
   const R = _msnBuild();
@@ -1959,10 +1971,24 @@ if (MSN_ON) {
   // 전탐석 — CDU Video Channel 을 따로 고른 적이 없으면 EO/IR 로(조종석 SYSTEM 창 Video 에 전탐석 영상이 나온다)
   try { if (!localStorage.getItem('videoCfg') && typeof videoCfg !== 'undefined') videoCfg.ch = 'EO/IR'; } catch (e) { _swallow(e); }
   // 시작 잠금(비밀번호 · 화면 고르기)이 풀리면 전탐석을 연다 — 지도 왼쪽 아래 🎯 전탐석 으로 다시 연다
-  const _open0 = setInterval(() => { if (window.gateLocked) return; clearInterval(_open0); try { msnShow(true); } catch (e) { _swallow(e); } }, 400);
+  //   LOFT(조종석 + 전탐석)는 조종석으로 시작한다 — 전탐석은 오른쪽 버튼 줄 맨 아래 🎯 전탐석(⧉ 새 창으로 다른 모니터에)
+  const _open0 = setInterval(() => {
+    if (window.gateLocked) return; clearInterval(_open0);
+    let m = null; try { m = window.vfrStartMode || sessionStorage.getItem('vfrStartMode'); } catch (e) { _swallow(e); }
+    if (m === 'loft') { _mToast('LOFT — 조종석으로 시작합니다 · 전탐석은 오른쪽 버튼 줄 맨 아래 🎯 전탐석(⧉ 새 창으로 다른 모니터에)'); return; }
+    try { msnShow(true); } catch (e) { _swallow(e); }
+  }, 400);
+  // 🎯 전탐석 — 3D 조종석 화면이면 오른쪽 버튼 줄(#ctl3d) 맨 아래, 아니면 지도 왼쪽 아래
+  setInterval(() => {
+    const b = document.getElementById('msn-open-btn'); if (!b) return;
+    const ctl = document.getElementById('ctl3d'), inCtl = !!(ctl && ctl.offsetParent);
+    if (inCtl) { if (ctl.lastElementChild !== b) ctl.appendChild(b); b.classList.add('sim-btn', 'in-ctl'); }
+    else if (b.parentElement !== document.body) { document.body.appendChild(b); b.classList.remove('sim-btn', 'in-ctl'); }
+    const t = msnPopped() ? '🎯 전탐석 창' : '🎯 전탐석'; if (b.textContent !== t) b.textContent = t;
+  }, 500);
   try {
     const b = document.createElement('button'); b.id = 'msn-open-btn'; b.type = 'button'; b.textContent = '🎯 전탐석';
-    b.addEventListener('click', () => msnShow(true));
+    b.addEventListener('click', () => { if (msnPopped() && popoutFocus('el-msn')) return; msnShow(true); });
     (document.body ? Promise.resolve() : new Promise(r => document.addEventListener('DOMContentLoaded', r))).then(() => { _msnCss(); document.body.appendChild(b); });
   } catch (e) { _swallow(e); }
   // 조이스틱 버튼에 HCU 동작을 배정할 수 있게(12-joystick.js 설정 화면 '전탐석 HCU' 묶음)
@@ -1975,6 +2001,6 @@ if (MSN_ON) {
     add('hcuLaser', 'LASER (누르는 동안)', 'laser'); add('hcuAux', 'AUX — 서치라이트 EO/IR 연동', 'aux', 'press');
     const s = { id: 'hcuSrch', grp: '전탐석 HCU', label: '서치라이트 ON/OFF', kind: 'press', run: () => msnAct('slon') }; JOY_ACTIONS.push(s); JOY_ACT_BY_ID[s.id] = s;
   } catch (e) { _swallow(e); }
-  try { if (typeof HELP_ITEMS !== 'undefined') HELP_ITEMS.push(['🎯 흰수리 전탐석', '시작 화면에서 "흰수리 전탐석"을 고르면 전탐석(EO/IR · SAR 레이더 · 서치라이트 · HCU 조작기) 화면이 뜬다. 기체는 흰수리 그대로 난다 — "조종석 보기"로 비행을 다루고 지도 왼쪽 아래 🎯 전탐석 으로 돌아온다. 전탐석이 움직이는 EO/IR 영상은 조종석 SYSTEM 창 Video(Channel EO/IR)에도 나온다. 전탐석 위 막대 ❓ 에 조작법.']); } catch (e) { _swallow(e); }
+  try { if (typeof HELP_ITEMS !== 'undefined') HELP_ITEMS.push(['🎯 LOFT · 흰수리 전탐석', '시작 화면에서 LOFT(Line-Oriented Flight Training)를 고르면 흰수리 조종석(Cockpit Mode)과 전탐석(EO/IR · SAR 레이더 · 서치라이트 · HCU 조작기)이 한 비행으로 묶인다 — 조종사와 전탐요원이 함께 훈련. 조종석 오른쪽 버튼 줄 맨 아래 🎯 전탐석 으로 전탐석을 열고, 전탐석 위 막대 ⧉ 새 창 으로 다른 모니터에 띄운다(조종석은 이 창 그대로). "조종석 보기"로 돌아온다. 전탐석이 움직이는 EO/IR 영상은 조종석 SYSTEM 창 Video(Channel EO/IR)에도 나온다. 전탐석 위 막대 ❓ 에 조작법.']); } catch (e) { _swallow(e); }
 }
 try { appRegister({ msnShow, msnAct, msnSpawn, hcuPress }); } catch (e) { _swallow(e); }

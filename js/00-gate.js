@@ -101,6 +101,8 @@
     acBtns.forEach(b => b.addEventListener('click', () => { ac = b.dataset.ac; acMark(); }));
     acMark();
     const pick = mode => {
+      // LOFT — 기종은 흰수리 + 전탐석(kuhm)으로 묶는다 · 다른 화면을 고르면 전탐석 없는 흰수리로(전탐석은 기종 고르기에서 뺐다)
+      if (mode === 'loft') ac = 'kuhm'; else if (ac === 'kuhm') ac = 'aw189';
       try { sessionStorage.setItem('vfrStartMode', mode); sessionStorage.removeItem('vfrChooseAgain'); } catch (e) { /* 이번만 */ }
       // 주소의 처음 화면 표시(?choose=1)도 거둔다 — 그대로 두면 다음 새로고침에 또 처음 화면이 뜬다
       try { if (/[?&]choose=1(?:&|$)/.test(location.search)) { const u = new URL(location.href); u.searchParams.delete('choose'); history.replaceState(history.state, '', u.toString()); } } catch (e) { /* 그만 */ }

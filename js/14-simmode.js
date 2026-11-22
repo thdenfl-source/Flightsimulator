@@ -2274,7 +2274,8 @@ function simFly(dt) {
     if (mode === 'sim') { setTimeout(() => { try { simLayoutStart(); } catch (e) { _swallow(e); } }, 400); return; }   // SIM Mode — 창 배치판
     if (mode === 'simple') { setTimeout(() => { try { simpleModeStart('pfd'); } catch (e) { _swallow(e); } }, 300); return; }   // Simple mode — 창 하나씩
     // Cockpit Mode — 3D 조종석(07-sim.js cockpitStart). 예전 '3D 단독 모드'(3d)로 적혀 있던 탭도 이리로
-    if (mode === 'cockpit' || mode === '3d') { setTimeout(() => { try { cockpitStart(); } catch (e) { _swallow(e); } }, 300); return; }
+    // LOFT — Cockpit Mode 로 들어가고 전탐석은 오른쪽 버튼 줄 맨 아래 🎯 전탐석(37-mission.js · 새 창으로 띄울 수 있다)
+    if (mode === 'cockpit' || mode === '3d' || mode === 'loft') { setTimeout(() => { try { cockpitStart(); } catch (e) { _swallow(e); } }, 300); return; }
   }, 200);
 })();
 // toggleFcp3d 는 04-map.js 에 있다(그 파일은 appRegister 보다 먼저 읽혀 여기서 연결한다)
