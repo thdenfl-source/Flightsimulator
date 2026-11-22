@@ -457,6 +457,22 @@ function envFxFrame() {
     gr.addColorStop(0, col); gr.addColorStop(0.35, col + '88'.slice(0, col.length === 7 ? 2 : 0)); gr.addColorStop(1, 'rgba(0,0,0,0)');
     g.globalAlpha = a; g.fillStyle = gr; g.beginPath(); g.arc(p.x, p.y, sz * 3, 0, 7); g.fill();
   }
+  // 내 기체의 위치표시등 · 충돌방지등(15-heli3d.js _h3DrawLights 가 넘긴 화면 자리 · 멈춰 있으면 지도를 드물게 다시 그리므로 2초까지 쓴다) — 어두울 때 지도 그림은 CSS 로 깎이므로
+  // 빛 무리는 이 겹에 그린다. 밤에는 낮보다 번져 크게 · 진하게(눈이 어둠에 익어 같은 등이 더 밝아 보인다)
+  try {
+    const L = (typeof _h3LtScr !== 'undefined') ? _h3LtScr : null;
+    if (L && performance.now() - L.t < 2000 && (typeof heli3dShown !== 'function' || heli3dShown())) {
+      const sx = r.width / Math.max(1, L.w), sy = r.height / Math.max(1, L.h), night = env.tod === 'NIGHT' || env.nvg;
+      for (const p of L.pts) {
+        const x = p.x * sx, y = p.y * sy; if (!(x > -50 && x < r.width + 50 && y > -50 && y < r.height + 50)) continue;
+        const rad = Math.max(4, Math.min(60, p.r * (night ? 2.2 : 1.6))), a = Math.min(1, (0.35 + 0.65 * p.k) * (night ? 1.25 : 1));
+        const c = p.col.map(v => Math.round(Math.min(1, v) * 255)).join(',');
+        const gr = g.createRadialGradient(x, y, 0, x, y, rad);
+        gr.addColorStop(0, `rgba(255,255,255,${a})`); gr.addColorStop(0.18, `rgba(${c},${a})`); gr.addColorStop(0.5, `rgba(${c},${a * 0.35})`); gr.addColorStop(1, `rgba(${c},0)`);
+        g.globalAlpha = 1; g.fillStyle = gr; g.beginPath(); g.arc(x, y, rad, 0, 7); g.fill();
+      }
+    }
+  } catch (e) { _swallow(e); }
   g.globalAlpha = 1; g.globalCompositeOperation = 'source-over';
 }
 (function envFxLoop() { try { envFxFrame(); } catch (e) { _swallow(e); } requestAnimationFrame(envFxLoop); })();

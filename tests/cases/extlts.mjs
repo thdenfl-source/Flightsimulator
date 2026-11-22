@@ -91,6 +91,27 @@ export async function run(page, t) {
   const on = await pixel(page, geo.x, geo.y);
   await page.evaluate(() => { pfdOvOn = window.__pfdOvWas; pfdOverlaySync(); });
   t.ok(on[0] - off[0] > 25 && on[0] > on[1] + 20, `3D 모형 왼쪽 위치표시등이 빨갛게 빛난다 (OFF ${off} → ON ${on})`);
+  // ── 밤 · 황혼 — 3D 지도 그림은 CSS 로 어둡게 깎이므로(brightness 0.22) 빛 무리는 그 위 겹(env-fx)에 그린다 ──
+  const nt = await page.evaluate(async () => {
+    const w = ms => new Promise(r => setTimeout(r, ms));
+    const lit = () => { const cv = document.querySelector('#map3d .env-fx'); if (!cv || !cv.width) return 0;
+      const d = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data; let n = 0;
+      for (let i = 3; i < d.length; i += 16) if (d[i] > 40) n++; return n; };
+    const tod0 = env.tod, o = {};
+    ovhdSet('display', 'DAY'); ovhdSet('posLts', '5'); ovhdSet('acolMode', 'OFF');
+    for (const tod of ['NIGHT', 'DUSK']) {
+      envSet({ tod }); ovhdSet('posMode', 'STEADY'); _ml3d.triggerRepaint(); await w(600);
+      o[tod] = { lit: lit(), n: _h3LtScr ? _h3LtScr.pts.length : 0 };
+    }
+    envSet({ tod: 'NIGHT' }); ovhdSet('posMode', 'OFF'); _ml3d.triggerRepaint(); await w(600); o.off = lit();
+    ovhdSet('posMode', 'STEADY'); envSet({ tod: 'DAY' }); _ml3d.triggerRepaint(); await w(400); o.day = _h3LtScr;
+    envSet({ tod: tod0 });
+    return o;
+  });
+  t.ok(nt.NIGHT.n === 3 && nt.NIGHT.lit > 50 && nt.DUSK.n === 3 && nt.DUSK.lit > 30,
+    `밤 · 황혼에도 위치표시등이 빛난다 — 어둡게 깎이지 않는 겹에 빛 무리 (밤 ${nt.NIGHT.lit} · 황혼 ${nt.DUSK.lit}점)`);
+  t.ok(nt.off < 5 && nt.day === null, `OFF 면 밤에도 빛 무리가 없다(${nt.off}) · 낮에는 종전처럼 모형 위에 그린다`);
+
   const errs = (page.errors || []).filter(e => !/Failed to fetch|NetworkError|tile/i.test(e));
   t.eq(errs.length, 0, `페이지 오류 없음${errs.length ? ' — ' + errs[0] : ''}`);
 }
