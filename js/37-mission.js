@@ -443,22 +443,33 @@ function _msnCss() {
 .msn-top button,.msn-btn{background:#1c2733;border:1px solid #3a4b5c;color:#cfe;border-radius:4px;padding:4px 9px;font-size:11px;font-weight:bold;cursor:pointer}
 .msn-top button.on,.msn-btn.on{background:#0d4a2a;border-color:#2ecc71;color:#bfffd5}
 .msn-sp{flex:1}
-.msn-body{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1.6fr) minmax(280px,1fr);grid-template-rows:minmax(0,1fr) auto;gap:8px;padding:8px;
-  background:linear-gradient(#262c33,#1b2026)}
-.msn-mfd{position:relative;background:#000;border:12px solid #2c3137;border-radius:12px;box-shadow:inset 0 0 0 2px #000,0 3px 8px #000a,0 0 0 1px #45505b;overflow:hidden;min-height:0}
-.msn-eo{grid-column:1;grid-row:1}
-.msn-eo .eo-vid{position:absolute;inset:0}
-.msn-eo .eo-map,.msn-eo .eo-spr{position:absolute;inset:0;width:100%;height:100%}
-.msn-eo .eo-hud{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
-.msn-right{grid-column:2;grid-row:1/span 2;display:flex;flex-direction:column;gap:8px;min-height:0;overflow:auto}
-.msn-rdr{aspect-ratio:1/1;width:100%;flex:0 0 auto}
-.msn-rdr canvas{position:absolute;inset:0;width:100%;height:100%;cursor:crosshair}
-.msn-keys{display:flex;flex-wrap:wrap;gap:4px}
-.msn-keys .msn-btn{flex:1 1 auto}
+.msn-body{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) 560px;gap:10px;padding:8px;background:linear-gradient(#262c33,#1b2026)}
+/* 전탐석 표시기 — 4분할(MULTI) · 2분할(SPLIT) · 한 화면 */
+.msn-disp{display:flex;flex-direction:column;min-height:0;background:#1d2a2c;border:3px solid #0e1415;border-radius:16px;box-shadow:inset 0 1px 0 #3d4d50,0 4px 10px #000b;padding:14px 14px 8px}
+.msn-scr{flex:1;min-height:0;position:relative;display:grid;gap:2px;background:#9aa;border:10px solid #101617;border-radius:6px;box-shadow:inset 0 0 0 1px #000}
+.msn-scr.dark{filter:brightness(0)}
+.msn-cell{position:relative;background:#000;overflow:hidden;min-width:0;min-height:0}
+.msn-cell canvas,.msn-cell .nv-map{position:absolute;inset:0;width:100%;height:100%}
+.msn-cell .eo-vid{position:absolute;inset:0}
+.msn-cell .eo-spr,.msn-cell .eo-map{position:absolute;inset:0;width:100%;height:100%}
+.msn-cell .eo-hud,.msn-cell .nv-ov{pointer-events:none}
+.msn-chl{position:absolute;left:8px;top:6px;font:bold 15px "Segoe UI",Arial,sans-serif;color:#fff;text-shadow:0 0 3px #000,0 0 2px #000;pointer-events:none;z-index:3}
+.msn-dkeys{display:flex;align-items:flex-end;justify-content:center;gap:9px;padding-top:7px;flex-wrap:wrap}
+.msn-dk{display:flex;flex-direction:column;align-items:center;gap:3px;font:bold 10px Arial;color:#cde}
+.msn-dk b{min-width:34px;height:26px;border-radius:4px;background:linear-gradient(#2b3436,#151b1c);border:1px solid #000;box-shadow:inset 0 1px 0 #4a5759;color:#eef;font:bold 13px Arial;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0 4px}
+.msn-dk b.on{color:#7fffb0;box-shadow:inset 0 0 6px #2ecc71}
+.msn-dk i{font-style:normal;display:flex;gap:2px}
+.msn-dk i u{width:16px;height:16px;border-radius:50%;background:#0b0f10;border:1px solid #556;text-decoration:none;font:bold 9px Arial;color:#9ab;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.msn-dk i u.on{background:#1c6;color:#000}
+/* 오른쪽 — EO/IR 조작기 · 탐색등 조작기 · 레이더 조작기 */
+.msn-right{display:flex;flex-direction:column;gap:8px;min-height:0;overflow:auto}
+.msn-ctl{display:flex;gap:8px;align-items:flex-start;justify-content:space-between}
+.msn-eohcu{zoom:.74;display:flex;flex-direction:column;align-items:center;gap:6px}
 .msn-panel{background:#11161b;border:1px solid #2f3b46;border-radius:6px;padding:6px 8px;font-size:11px}
 .msn-panel h4{margin:0 0 5px;font-size:11px;color:#9fb3c4;letter-spacing:1px}
-.msn-tdata{font-family:monospace;font-size:11px;color:#9f9;min-height:30px;white-space:pre}
-.msn-hcu{grid-column:1;grid-row:2;display:flex;gap:10px;justify-content:center;align-items:flex-start;flex-wrap:wrap}
+.msn-keys{display:flex;flex-wrap:wrap;gap:4px}
+.msn-keys .msn-btn{flex:1 1 auto;padding:3px 6px;font-size:10px}
+.msn-tdata{font-family:monospace;font-size:11px;color:#9f9;min-height:28px;white-space:pre}
 .hcu-top,.hcu-face{background:linear-gradient(#3a4047,#2b3036);border:2px solid #15191d;border-radius:14px;box-shadow:0 3px 6px #000a,inset 0 1px 0 #5a636c;padding:8px 10px}
 .hcu-top{display:grid;grid-template-columns:repeat(7,44px);gap:6px}
 .hcu-key{height:34px;border-radius:5px;background:linear-gradient(#20252a,#121518);border:1px solid #000;box-shadow:inset 0 1px 0 #444,0 1px 0 #555;color:#e8e8e8;
@@ -482,9 +493,46 @@ function _msnCss() {
 .hcu-lamp{width:14px;height:14px;border-radius:50%;background:#2a2a2a;border:2px solid #111;box-shadow:inset 0 1px 2px #000}
 .hcu-lamp.g{background:#3f3;box-shadow:0 0 8px #3f3}.hcu-lamp.a{background:#fb0;box-shadow:0 0 8px #fb0}.hcu-lamp.r{background:#f33;box-shadow:0 0 8px #f33}
 .hcu-cap{font:bold 9px Arial;color:#9aa;text-align:center;margin-top:3px;letter-spacing:1px}
+/* 탐색등 조작기(HSL-1600 HCU) */
+.slc{width:178px;background:linear-gradient(#2c3034,#1c1f22);border:2px solid #0c0e10;border-radius:34px 34px 46px 46px/30px 30px 120px 120px;padding:12px 10px 18px;box-shadow:0 3px 8px #000b,inset 0 1px 0 #4a5056;
+  display:flex;flex-direction:column;align-items:center;gap:7px;font:bold 9px Arial;color:#d8dde2;position:relative}
+.slc-top{display:grid;grid-template-columns:22px 1fr 22px;gap:4px;align-items:center;width:100%}
+.slc-rk{display:flex;flex-direction:column;align-items:center;gap:1px;font:bold 7px/1 Arial;color:#cfd4d8;cursor:pointer;text-align:center}
+.slc-rk u{text-decoration:none;font-size:9px;color:#9aa}
+.slc-lm{display:grid;grid-template-columns:repeat(4,1fr);gap:2px;background:#0a0c0d;border:2px solid #000;border-radius:4px;padding:2px}
+.slc-lm span{font:bold 8.5px Arial;color:#69707a;background:#191c1f;border-radius:2px;text-align:center;padding:4px 0}
+.slc-lm span.on{color:#fff;background:#3a4a2a;text-shadow:0 0 5px #9f9}
+.slc-lm span.on.f{background:#5a2020;text-shadow:0 0 5px #f88}
+.slc-lm.dim span.on{opacity:.55}
+.slc-sw{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;width:100%}
+.slc-sw div{display:flex;flex-direction:column;align-items:center;gap:2px;font:bold 8px Arial}
+.slc-sw .k{width:26px;height:26px;border-radius:50%;background:radial-gradient(circle at 40% 35%,#4b535b,#14171a);border:2px solid #000;position:relative;cursor:pointer}
+.slc-sw .k i{position:absolute;left:8px;width:6px;height:6px;border-radius:50%;background:#aab;top:8px;transition:top .08s}
+.slc-sw .k.up i{top:2px}.slc-sw .k.dn i{top:14px}
+.slc-mid{display:grid;grid-template-columns:1fr 1fr 40px;gap:4px;width:100%;align-items:center}
+.slc-pb{display:flex;flex-direction:column;align-items:center;gap:2px;font:bold 7px Arial}
+.slc-pb b{width:14px;height:14px;border-radius:50%;background:radial-gradient(#eee,#9aa);border:2px solid #222;cursor:pointer}
+.slc-pb b.dn{background:radial-gradient(#9aa,#566)}
+.slc-fc{width:10px;height:44px;border-radius:5px;background:repeating-linear-gradient(#1a1a1a 0 3px,#3a3a3a 3px 5px);border:1px solid #000;margin:0 auto;cursor:ns-resize;touch-action:none}
+.slc-st{width:86px;height:86px;border-radius:50%;background:radial-gradient(#23272b,#0f1113);border:2px solid #000;position:relative;touch-action:none;cursor:grab;margin-top:2px}
+.slc-st i{position:absolute;left:25px;top:25px;width:32px;height:32px;border-radius:50%;background:repeating-radial-gradient(circle,#d8dcdf 0 3px,#b8bcbf 3px 5px);box-shadow:0 2px 4px #000}
+.slc-st em{position:absolute;color:#8a9298;font-style:normal;font-size:10px}
+.slc-xs{font:bold 11px Arial;color:#aab;margin-top:2px}
+/* 레이더 조작기(EuroNav CLN) */
+.cln{display:flex;align-items:center;justify-content:center;gap:10px;background:linear-gradient(#30363b,#1d2124);border:2px solid #0c0e10;border-radius:8px;padding:10px 14px;box-shadow:0 3px 8px #000b,inset 0 1px 0 #4b5257}
+.cln-k{display:grid;grid-template-columns:44px 44px;gap:8px}
+.cln-k b{height:38px;border-radius:5px;background:linear-gradient(#22272b,#111416);border:2px solid #000;box-shadow:inset 0 0 0 2px #3a4046;color:#eee;font:bold 11px Arial;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.cln-k b.on{color:#7fffb0}
+.cln-knob{width:118px;height:118px;position:relative}
+.cln-knob .ring{position:absolute;inset:14px;border-radius:50%;background:repeating-conic-gradient(#3b4248 0 6deg,#23282c 6deg 12deg);border:2px solid #000;box-shadow:0 2px 5px #000}
+.cln-knob .cap{position:absolute;inset:26px;border-radius:50%;background:radial-gradient(circle at 40% 35%,#4c545b,#1a1e21);border:2px solid #000;cursor:pointer}
+.cln-knob em{position:absolute;width:16px;height:16px;font:bold 11px/16px Arial;text-align:center;color:#9fb;cursor:pointer;font-style:normal}
+.cln-rot{display:flex;flex-direction:column;gap:6px}
+.cln-rot b{width:26px;height:22px;border-radius:4px;background:#1c2226;border:1px solid #000;color:#cde;font:bold 12px Arial;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.msn-cap2{font:bold 9px Arial;color:#9aa;text-align:center;letter-spacing:1px;margin-top:3px}
 #msn-open-btn{position:fixed;left:8px;bottom:60px;z-index:3900;display:none;background:#0d2a40;border:1px solid #3a8fd0;color:#cfe8ff;border-radius:6px;padding:7px 11px;font:bold 12px Arial;cursor:pointer;box-shadow:0 2px 6px #000a}
 html.ac-kuhm #msn-open-btn{display:block}
-@media (max-width:980px){.msn-body{grid-template-columns:1fr;grid-template-rows:auto auto auto;overflow:auto}.msn-eo{aspect-ratio:4/3}.msn-right{grid-column:1;grid-row:2}.msn-hcu{grid-row:3}.msn-rdr{max-width:420px;margin:0 auto}}
+@media (max-width:1100px){.msn-body{grid-template-columns:1fr;overflow:auto}.msn-disp{min-height:70vh}.msn-right{overflow:visible}}
 `;
   document.head.appendChild(st);
 }
@@ -492,80 +540,223 @@ const HCU_TOP = [['menu', 'MENU'], ['laser', 'LASER'], ['geo', 'GEO<br>FOCUS'], 
                  ['aux', 'AUX'], ['lrf', 'LRF'], ['tx', 'TX'], ['ctrl', 'CTRL<br>AUTH'], ['pol', 'POL'], ['ircal', 'IR<br>CAL'], ['scene', 'SCENE']];
 const HCU_SW = [['zoom', 'ZOOM', ''], ['vic', 'VIC', ''], ['avtg', 'AVT<br>GATE', 'AVT<br>MODE'], ['steer', 'AUTO', 'MANUAL'], ['aid', 'AID', 'ZMULTI'],
                 ['slew', 'SLEW', 'FWD'], ['img', 'MAN/<br>AUTO', 'FILTER'], ['pip', 'IMAGE<br>INT', 'IMAGE<br>MODE']];
+// 표시기 칸 — CH1 EO/IR · CH2 레이더 · CH3 호이스트 카메라 · NAVI 지도(4분할: 왼쪽 위 지도 · 오른쪽 위 호이스트 · 왼쪽 아래 레이더 · 오른쪽 아래 EO/IR)
+const DISP_CH = { 1: 'eo', 2: 'rdr', 3: 'hoist', 4: 'map' };
+const DISP_PAIRS = [['map', 'eo'], ['rdr', 'eo'], ['hoist', 'eo'], ['map', 'rdr']];
+const disp = { lay: 'quad', ch: 1, pair: 0, bri: 100, pwr: true };
+function dispSet(o) {
+  Object.assign(disp, o || {});
+  if (!_msnEl) return;
+  const scr = _msnEl.querySelector('.msn-scr'); if (!scr) return;
+  const cells = { map: '.c-map', hoist: '.c-hoist', rdr: '.c-rdr', eo: '.c-eo' }, el = k => scr.querySelector(cells[k]);
+  let show = [];
+  if (disp.lay === 'quad') { scr.style.gridTemplate = '1fr 1fr / 1fr 1fr'; show = [['map', 1, 1], ['hoist', 1, 2], ['rdr', 2, 1], ['eo', 2, 2]]; }
+  else if (disp.lay === 'split') { scr.style.gridTemplate = '1fr / 1fr 1fr'; const P = DISP_PAIRS[disp.pair % DISP_PAIRS.length]; show = [[P[0], 1, 1], [P[1], 1, 2]]; }
+  else { scr.style.gridTemplate = '1fr / 1fr'; show = [[DISP_CH[disp.ch] || 'eo', 1, 1]]; }
+  Object.keys(cells).forEach(k => { const e = el(k); if (e) e.style.display = 'none'; });
+  show.forEach(([k, r, c]) => { const e = el(k); if (e) { e.style.display = ''; e.style.gridRow = r; e.style.gridColumn = c; } });
+  scr.classList.toggle('dark', !disp.pwr);
+  scr.style.filter = disp.pwr && disp.bri !== 100 ? `brightness(${disp.bri / 100})` : '';
+  try { if (_nvMap) _nvMap.resize(); if (_eoMap) { _eoHostPlace(); _eoMap.resize(); } } catch (e) { _swallow(e); }
+  msnRenderPanels();
+}
+function dispKey(k) {
+  if (k === 'multi') dispSet({ lay: 'quad' });
+  else if (k === 'split') dispSet(disp.lay === 'split' ? { pair: disp.pair + 1 } : { lay: 'split' });
+  else if (k === 'navi') dispSet({ lay: 'one', ch: 4 });
+  else if (k === 'video') dispSet({ lay: 'one', ch: disp.ch === 4 ? 1 : disp.ch });
+  else if (k === 'ch') { if (disp.lay === 'split') dispSet({ pair: disp.pair + 1 }); else if (disp.lay === 'one') dispSet({ ch: disp.ch % 4 + 1 }); else dispSet({ lay: 'one', ch: 1 }); }
+  else if (/^v[1-4]$/.test(k)) dispSet({ lay: 'one', ch: +k[1] });
+  else if (k === 'pip') { eo.pip = eo.pip === 'OFF' ? 'RDR' : 'OFF'; }
+  else if (k === 'up') dispSet({ bri: Math.min(100, disp.bri + 10) });
+  else if (k === 'dn') dispSet({ bri: Math.max(20, disp.bri - 10) });
+  else if (k === 'bri') dispSet({ bri: disp.bri >= 100 ? 60 : 100 });
+  else if (k === 'pwr') dispSet({ pwr: !disp.pwr });
+  else if (k === 'menu') _mToast('표시기 MENU — 기능은 이후에 갖춥니다');
+}
 function _msnBuild() {
   if (_msnEl) return _msnEl;
   _msnCss();
   const R = document.createElement('div'); R.id = 'msn-root';
   const sw = ([k, u, d]) => `<div class="hcu-tg"><div class="lb">${u}</div><div class="sw" data-sw="${k}"><i></i><b class="u" data-hcu="${k}:up"></b><b class="d" data-hcu="${k}:dn"></b></div><div class="lb">${d}</div></div>`;
+  const dk = (k, lbl, face) => `<div class="msn-dk">${lbl}<b data-dk="${k}">${face}</b></div>`;
+  const slsw = (k, u, d) => `<div>${u}<span class="k" data-slc="${k}"><i></i></span>${d}</div>`;
   R.innerHTML = `
   <div class="msn-top"><b>흰수리 전탐석 · MISSION CONSOLE</b><span class="msn-ac" data-m="ac"></span><span class="msn-sp"></span>
     <button data-mact="fly">▶ 비행</button><button data-mact="spawn">선박 표적 생성</button><button data-mact="clear">표적 지우기</button>
     <button data-mact="help">❓</button><button data-mact="close">조종석 보기 ⤴</button></div>
   <div class="msn-body">
-    <div class="msn-mfd msn-eo"><div class="eo-vid"><canvas class="eo-spr"></canvas></div><canvas class="eo-hud"></canvas></div>
+    <div class="msn-disp">
+      <div class="msn-scr">
+        <div class="msn-cell c-map"><div class="nv-map"></div><canvas class="nv-ov"></canvas></div>
+        <div class="msn-cell c-hoist"><canvas class="hc-cv"></canvas><span class="msn-chl">CH3 / 28fps</span></div>
+        <div class="msn-cell msn-rdr c-rdr"><canvas></canvas><span class="msn-chl">CH2 / 28fps</span></div>
+        <div class="msn-cell msn-eo c-eo"><div class="eo-vid"><canvas class="eo-spr"></canvas></div><canvas class="eo-hud"></canvas><span class="msn-chl">CH1 / 30fps</span></div>
+      </div>
+      <div class="msn-dkeys">${dk('navi', 'NAVI', 'N')}${dk('video', 'VIDEO', 'V')}${dk('pip', 'PIP', '◰')}${dk('split', 'SPLIT', '◫')}${dk('multi', 'MULTI', '⊞')}${dk('ch', 'CH', 'CH')}${dk('menu', 'MENU', 'M')}
+        <div class="msn-dk">V-IN<i>${[1, 2, 3, 4].map(n => `<u data-dk="v${n}">${n}</u>`).join('')}</i></div>${dk('up', '&nbsp;', '▲')}${dk('dn', '&nbsp;', '▼')}${dk('bri', '&nbsp;', '☀')}${dk('pwr', 'M-PWR', '⏻')}</div>
+    </div>
     <div class="msn-right">
-      <div class="msn-mfd msn-rdr"><canvas></canvas></div>
+      <div class="msn-ctl">
+        <div class="msn-eohcu">
+          <div><div class="hcu-top">${HCU_TOP.map(([k, n]) => `<div class="hcu-key" data-hcu="${k}">${n}</div>`).join('')}</div></div>
+          <div><div class="hcu-face">${HCU_SW.map(sw).join('')}
+            <div class="hcu-row2">
+              <div style="display:flex;flex-direction:column;align-items:center;gap:2px;font:bold 8px Arial;color:#eee">AVT<div class="hcu-avt" data-hcu="avt"></div>FOCUS<div class="hcu-focus" data-m="focus"></div></div>
+              <div><div class="hcu-stick" data-m="stick"><i></i></div></div>
+              <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;align-items:start">
+                <div class="hcu-lamps">ARMED<span class="hcu-lamp" data-lamp="armed"></span>ACTIVE<span class="hcu-lamp" data-lamp="active"></span></div>
+                <div class="hcu-lamps">ON<span class="hcu-lamp" data-lamp="on"></span></div>
+                <div class="hcu-lamps"><span>POWER</span><div class="hcu-tg"><div class="sw" data-sw="pwr"><i></i><b class="u" data-hcu="pwr"></b><b class="d" data-hcu="pwr"></b></div></div></div>
+                ${sw(['sens', 'SENS', ''])}${sw(['off', 'OFFSET', ''])}<div></div>
+              </div>
+            </div></div><div class="hcu-cap">EO/IR HAND CONTROLLER (HCU)</div></div>
+        </div>
+        <div><div class="slc">
+          <div class="slc-top"><div class="slc-rk"><u data-slc="hdim:up">▲</u>HCU<br>DIM<u data-slc="hdim:dn">▼</u><span data-slc="test" style="margin-top:3px">TEST ▷</span></div>
+            <div class="slc-lm" data-m="slclm">${['FAULT', 'LSR', 'LAMP', 'PWR', 'BLK', 'AUTO', 'IR', 'STW'].map(n => `<span data-sll="${n}">${n}</span>`).join('')}</div>
+            <div class="slc-rk"><u data-slc="rdim:up">▲</u>RAD<br>DIM<u data-slc="rdim:dn">▼</u></div></div>
+          <div class="slc-sw">${slsw('lsr', 'LSR', 'OFF')}${slsw('ir', 'IR', 'VIS')}${slsw('lamp', 'LAMP', 'OFF')}${slsw('init', 'INIT', 'STOW')}</div>
+          <div class="slc-mid"><div class="slc-pb"><b data-slc="offset"></b>OFFSET</div><div class="slc-pb"><b data-slc="manauto"></b>MAN/AUTO</div><div class="slc-pb">FOCUS<div class="slc-fc" data-m="slfocus"></div></div></div>
+          <div class="slc-st" data-m="slstick"><em style="left:37px;top:-1px">▲</em><em style="left:37px;bottom:-2px">▼</em><em style="left:1px;top:35px">◀</em><em style="right:1px;top:35px">▶</em><i></i></div>
+          <div class="slc-xs">XS1</div>
+        </div><div class="msn-cap2">SEARCH LIGHT HCU</div><div class="msn-tdata" data-m="sdata" style="width:178px"></div></div>
+      </div>
+      <div><div class="cln">
+        <div class="cln-k"><b data-cln="map">MAP</b><b data-cln="esc">ESC</b><b data-cln="com">COM</b><b data-cln="tfc">TFC</b></div>
+        <div class="cln-knob" data-m="clnknob"><div class="ring"></div><div class="cap" data-cln="push"></div>
+          ${[['n', 51, 0, '▲'], ['ne', 92, 10, '◥'], ['e', 102, 51, '▶'], ['se', 92, 92, '◢'], ['s', 51, 102, '▼'], ['sw', 10, 92, '◣'], ['w', 0, 51, '◀'], ['nw', 10, 10, '◤']].map(([d, x, y, t]) => `<em data-cln="pan:${d}" style="left:${x}px;top:${y}px">${t}</em>`).join('')}</div>
+        <div class="cln-rot"><b data-cln="rot:-1" title="왼쪽으로 돌림 — 넓게">⟲</b><b data-cln="rot:1" title="오른쪽으로 돌림 — 좁게">⟳</b></div>
+        <div class="cln-k"><b data-cln="clr">CLR</b><b data-cln="fnc">FNC</b><b data-cln="wxr">WXR</b><b data-cln="tws">TWS</b></div>
+      </div><div class="msn-cap2">RADAR / MAP CONTROL UNIT (CLN)</div></div>
       <div class="msn-panel"><h4>SAR RADAR</h4><div class="msn-keys">
         <button class="msn-btn" data-mact="rtx">TX</button><button class="msn-btn" data-mact="rng-">RNG −</button><button class="msn-btn" data-mact="rng+">RNG +</button>
         <button class="msn-btn" data-mact="gain-">GAIN −</button><button class="msn-btn" data-mact="gain+">GAIN +</button>
         <button class="msn-btn" data-mact="stc-">STC −</button><button class="msn-btn" data-mact="stc+">STC +</button>
-        <button class="msn-btn" data-mact="ftc">FTC</button><button class="msn-btn" data-mact="nup">H UP</button></div>
-        <div class="msn-keys" style="margin-top:4px"><button class="msn-btn" data-mact="r2eo">EO/IR → 표적</button><button class="msn-btn" data-mact="r2sl">서치라이트 → 표적</button><button class="msn-btn" data-mact="rclr">지정 해제</button></div>
+        <button class="msn-btn" data-mact="ftc">FTC</button><button class="msn-btn" data-mact="nup">H UP</button>
+        <button class="msn-btn" data-mact="r2eo">EO/IR → 표적</button><button class="msn-btn" data-mact="r2sl">서치라이트 → 표적</button></div>
         <div class="msn-tdata" data-m="tdata"></div></div>
-      <div class="msn-panel"><h4>SEARCH LIGHT</h4><div class="msn-keys">
-        <button class="msn-btn" data-mact="slon">ON/OFF</button><button class="msn-btn" data-mact="slman">MAN</button><button class="msn-btn" data-mact="sleo">EO/IR 연동</button><button class="msn-btn" data-mact="slrdr">레이더 연동</button></div>
-        <div class="msn-keys" style="margin-top:4px"><button class="msn-btn" data-slh="L">◀</button><button class="msn-btn" data-slh="U">▲ 멀리</button><button class="msn-btn" data-slh="D">▼ 가까이</button><button class="msn-btn" data-slh="R">▶</button>
-        <button class="msn-btn" data-mact="slctr">CTR</button></div>
-        <div class="msn-tdata" data-m="sdata"></div></div>
-    </div>
-    <div class="msn-hcu">
-      <div><div class="hcu-top">${HCU_TOP.map(([k, n]) => `<div class="hcu-key" data-hcu="${k}">${n}</div>`).join('')}</div><div class="hcu-cap">TOP PLATE</div></div>
-      <div><div class="hcu-face">${HCU_SW.map(sw).join('')}
-        <div class="hcu-row2">
-          <div style="display:flex;flex-direction:column;align-items:center;gap:2px;font:bold 8px Arial;color:#eee">AVT<div class="hcu-avt" data-hcu="avt"></div>FOCUS<div class="hcu-focus" data-m="focus"></div></div>
-          <div><div class="hcu-stick" data-m="stick"><i></i></div></div>
-          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;align-items:start">
-            <div class="hcu-lamps">ARMED<span class="hcu-lamp" data-lamp="armed"></span>ACTIVE<span class="hcu-lamp" data-lamp="active"></span></div>
-            <div class="hcu-lamps">ON<span class="hcu-lamp" data-lamp="on"></span></div>
-            <div class="hcu-lamps"><span>POWER</span><div class="hcu-tg"><div class="sw" data-sw="pwr"><i></i><b class="u" data-hcu="pwr"></b><b class="d" data-hcu="pwr"></b></div></div></div>
-            ${sw(['sens', 'SENS', ''])}${sw(['off', 'OFFSET', ''])}<div></div>
-          </div>
-        </div></div><div class="hcu-cap">HAND CONTROLLER (HCU) — FACE PLATE</div></div>
     </div>
   </div>`;
   document.body.appendChild(R);
   _msnEl = R;
-  // HCU 누름 · 뗌
+  // HCU 누름 · 뗌(EO/IR · 탐색등 · 레이더 조작기)
   const downK = new Map();
   R.addEventListener('pointerdown', e => {
     const h = e.target.closest('[data-hcu]');
-    if (h) { e.preventDefault(); const k = h.dataset.hcu; downK.set(e.pointerId, k); hcuPress(k, true); try { h.setPointerCapture(e.pointerId); } catch (er) { _swallow(er); } return; }
-    const sl = e.target.closest('[data-slh]');
-    if (sl) { e.preventDefault(); _slHold = sl.dataset.slh; try { sl.setPointerCapture(e.pointerId); } catch (er) { _swallow(er); } }
+    if (h) { e.preventDefault(); const k = h.dataset.hcu; downK.set(e.pointerId, ['hcu', k]); hcuPress(k, true); try { h.setPointerCapture(e.pointerId); } catch (er) { _swallow(er); } return; }
+    const sl = e.target.closest('[data-slc]');
+    if (sl) { e.preventDefault(); const k = sl.dataset.slc; downK.set(e.pointerId, ['slc', k]); slcPress(k, true); try { sl.setPointerCapture(e.pointerId); } catch (er) { _swallow(er); } return; }
+    const cl = e.target.closest('[data-cln]');
+    if (cl) { e.preventDefault(); const k = cl.dataset.cln; downK.set(e.pointerId, ['cln', k]); clnPress(k, true); try { cl.setPointerCapture(e.pointerId); } catch (er) { _swallow(er); } return; }
+    const d = e.target.closest('[data-dk]');
+    if (d) { e.preventDefault(); dispKey(d.dataset.dk); }
   });
-  const up = e => { const k = downK.get(e.pointerId); if (k) { downK.delete(e.pointerId); hcuPress(k, false); } if (_slHold) _slHold = null; };
+  const up = e => { const k = downK.get(e.pointerId); if (!k) return; downK.delete(e.pointerId); if (k[0] === 'hcu') hcuPress(k[1], false); else if (k[0] === 'slc') slcPress(k[1], false); else clnPress(k[1], false); };
   R.addEventListener('pointerup', up); R.addEventListener('pointercancel', up);
   R.addEventListener('click', e => { const b = e.target.closest('[data-mact]'); if (b) msnAct(b.dataset.mact); });
   // 조이스틱(화면) — 끌면 기울기 · 놓으면 가운데
-  const st = R.querySelector('[data-m="stick"]'), knob = st.querySelector('i');
-  const stMove = e => { const r = st.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2, m = r.width / 2 - 14;
-    let x = (e.clientX - cx) / m, y = (e.clientY - cy) / m; const L = Math.hypot(x, y); if (L > 1) { x /= L; y /= L; }
-    eo.joy.x = x; eo.joy.y = -y; knob.style.transform = `translate(${x * m * 0.6}px,${y * m * 0.6}px)`; };
-  st.addEventListener('pointerdown', e => { e.preventDefault(); st.setPointerCapture(e.pointerId); st._on = true; stMove(e); });
-  st.addEventListener('pointermove', e => { if (st._on) stMove(e); });
-  const stUp = () => { st._on = false; eo.joy.x = 0; eo.joy.y = 0; knob.style.transform = ''; };
-  st.addEventListener('pointerup', stUp); st.addEventListener('pointercancel', stUp);
+  const stick = (sel, J) => {
+    const st = R.querySelector(sel), knob = st.querySelector('i');
+    const mv = e => { const r = st.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2, m = r.width / 2 - 14;
+      let x = (e.clientX - cx) / m, y = (e.clientY - cy) / m; const L = Math.hypot(x, y); if (L > 1) { x /= L; y /= L; }
+      J.x = x; J.y = -y; knob.style.transform = `translate(${x * m * 0.6}px,${y * m * 0.6}px)`; };
+    st.addEventListener('pointerdown', e => { if (e.target.closest('[data-slc],[data-hcu]')) return; e.preventDefault(); st.setPointerCapture(e.pointerId); st._on = true; mv(e); });
+    st.addEventListener('pointermove', e => { if (st._on) mv(e); });
+    const end = () => { st._on = false; J.x = 0; J.y = 0; knob.style.transform = ''; };
+    st.addEventListener('pointerup', end); st.addEventListener('pointercancel', end);
+  };
+  stick('[data-m="stick"]', eo.joy); stick('[data-m="slstick"]', slc.joy);
   // FOCUS 다이얼 — 위아래로 끌기 · 휠
-  const fc = R.querySelector('[data-m="focus"]');
-  let fy = null;
-  fc.addEventListener('pointerdown', e => { fy = e.clientY; fc.setPointerCapture(e.pointerId); });
-  fc.addEventListener('pointermove', e => { if (fy === null) return; eoFocusBy((fy - e.clientY) * 0.6); fy = e.clientY; });
-  fc.addEventListener('pointerup', () => { fy = null; });
-  fc.addEventListener('wheel', e => { e.preventDefault(); eoFocusBy(-e.deltaY * 0.05); }, { passive: false });
-  // 레이더 — 누른 자리의 표적 지정
+  const dial = (sel, by) => { const fc = R.querySelector(sel); let fy = null;
+    fc.addEventListener('pointerdown', e => { fy = e.clientY; fc.setPointerCapture(e.pointerId); });
+    fc.addEventListener('pointermove', e => { if (fy === null) return; by((fy - e.clientY) * 0.6); fy = e.clientY; });
+    fc.addEventListener('pointerup', () => { fy = null; });
+    fc.addEventListener('wheel', e => { e.preventDefault(); by(-e.deltaY * 0.05); }, { passive: false }); };
+  dial('[data-m="focus"]', eoFocusBy); dial('[data-m="slfocus"]', d => { slc.focus = _mClamp(slc.focus + d, 0, 100); });
+  // 레이더 조작기 손잡이 — 휠로 돌린다
+  R.querySelector('[data-m="clnknob"]').addEventListener('wheel', e => { e.preventDefault(); clnPress('rot:' + (e.deltaY > 0 ? -1 : 1), true); }, { passive: false });
+  // 레이더 화면 — 누른 자리의 표적 지정
   const rc = R.querySelector('.msn-rdr canvas');
-  rc.addEventListener('pointerdown', e => { const r = rc.getBoundingClientRect(); const nx = (e.clientX - r.left) / r.width * 2 - 1, ny = (e.clientY - r.top) / r.height * 2 - 1; rdrPick(nx / 0.92, ny / 0.92); });
+  rc.addEventListener('pointerdown', e => { const r = rc.getBoundingClientRect(), M = Math.min(r.width, r.height); const nx = (e.clientX - r.left - r.width / 2) / (M / 2), ny = (e.clientY - r.top - r.height / 2) / (M / 2); rdrPick(nx / 0.92, ny / 0.92); });
+  dispSet();
   return R;
+}
+// ══ 탐색등 조작기(HSL-1600 HCU) — LSR/OFF · IR/VIS · LAMP/OFF · INIT/STOW · OFFSET · MAN/AUTO · FOCUS · 조이스틱 · 표시등 ══
+//   (자세한 기능은 교범을 받아 더한다 — 지금은 켜고 끄기 · 수동/연동 · 지향 · 표시등)
+const slc = { lsr: false, ir: false, stow: false, test: false, dim: 1, rdim: 1, focus: 50, joy: { x: 0, y: 0 }, down: {} };
+function slcPress(k, down) {
+  if (down) slc.down[k] = true; else delete slc.down[k];
+  if (k === 'test') slc.test = down;
+  if (!down) { slcRender(); return; }
+  const on = typeof kgLt !== 'undefined' && kgLt.srch;
+  switch (k) {
+    case 'lsr': slc.lsr = !slc.lsr; break;
+    case 'ir': slc.ir = !slc.ir; break;
+    case 'lamp': if (slc.stow && !on) { _mToast('탐색등 STOW — INIT 으로 먼저 푸십시오'); break; } try { kgSrchSet(!on); } catch (e) { _swallow(e); } break;
+    case 'init':
+      if (slc.stow) { slc.stow = false; try { kgLt.az = 0; kgLt.el = KG_SRCH.el0; } catch (e) { _swallow(e); } _mNote('탐색등 INIT'); }
+      else { slc.stow = true; srch.mode = 'MAN'; try { if (kgLt.srch) kgSrchSet(false); kgLt.az = 0; kgLt.el = KG_SRCH.elMax; } catch (e) { _swallow(e); } _mNote('탐색등 STOW'); }
+      break;
+    case 'manauto': srchMode(srch.mode === 'MAN' ? 'EO' : 'MAN'); break;
+    case 'offset': _mToast('탐색등 OFFSET — 기능은 교범을 받아 더합니다'); break;
+    case 'hdim:up': slc.dim = Math.min(1, slc.dim + 0.25); break; case 'hdim:dn': slc.dim = Math.max(0.25, slc.dim - 0.25); break;
+    case 'rdim:up': slc.rdim = Math.min(1, slc.rdim + 0.25); break; case 'rdim:dn': slc.rdim = Math.max(0.25, slc.rdim - 0.25); break;
+  }
+  slcRender(); msnRenderPanels();
+}
+function slcStep(dt) {
+  const j = slc.joy; if (Math.hypot(j.x, j.y) < 0.05 || typeof kgLt === 'undefined' || slc.stow) return;
+  srch.mode = 'MAN';
+  const lim = typeof KG_SRCH !== 'undefined' ? KG_SRCH : { azMax: 120, elMin: 2.5, elMax: 80 };
+  kgLt.az = _mClamp(kgLt.az + j.x * Math.abs(j.x) * 45 * dt, -lim.azMax, lim.azMax);
+  kgLt.el = _mClamp(kgLt.el - j.y * Math.abs(j.y) * 25 * dt, lim.elMin, lim.elMax);
+}
+function slcRender() {
+  if (!_msnEl) return;
+  const on = typeof kgLt !== 'undefined' && kgLt.srch, T = slc.test;
+  const L = { FAULT: srch.lim, LSR: slc.lsr, LAMP: on, PWR: true, BLK: false, AUTO: srch.mode !== 'MAN', IR: slc.ir, STW: slc.stow };
+  _msnEl.querySelectorAll('[data-sll]').forEach(e => { const n = e.dataset.sll; e.classList.toggle('on', T || !!L[n]); e.classList.toggle('f', n === 'FAULT'); });
+  const lm = _msnEl.querySelector('[data-m="slclm"]'); if (lm) { lm.classList.toggle('dim', slc.dim < 0.75); lm.style.opacity = String(0.4 + 0.6 * slc.dim); }
+  const kpos = { lsr: slc.lsr, ir: slc.ir, lamp: on, init: !slc.stow };
+  _msnEl.querySelectorAll('.slc-sw .k').forEach(e => { const v = kpos[e.dataset.slc]; e.classList.toggle('up', !!v); e.classList.toggle('dn', !v); });
+  _msnEl.querySelectorAll('.slc-pb b').forEach(e => e.classList.toggle('dn', !!slc.down[e.dataset.slc]));
+}
+// ══ 레이더 · 지도 조작기(EuroNav CLN) — MAP · ESC · CLR · FNC · WXR · TWS · 손잡이(돌림 · 8방향 · 누름) ══
+//   교범(EuroNav Control Unit): 돌리면 지도 확대 · 축소, 8방향으로 밀면 커서, 누르면 확인, 0.5초 누르면 커서 자리를 지도 가운데로
+const NV_RNG = [1, 2, 5, 10, 20, 40];
+const nv = { nm: 5, cur: null, ctr: null, wxr: false, terr: true, pushT: 0 };
+function clnPress(k, down) {
+  if (k === 'push') {
+    if (down) { nv.pushT = performance.now(); return; }
+    const held = (performance.now() - nv.pushT) / 1000;
+    if (held >= 0.5 && nv.cur) { nv.ctr = { lat: nv.cur.lat, lon: nv.cur.lon }; _mToast('지도 가운데를 커서 자리로'); }
+    else if (!nv.cur) nv.cur = { lat: S.lat, lon: S.lon };
+    else { const id = nvPickAt(nv.cur.lat, nv.cur.lon); if (id) { rdr.tgt = id; _mToast(`표적 지정 — ${id}`); _mNote(`표적 지정(CLN) — ${id}`); } }
+    msnRenderPanels(); return;
+  }
+  if (!down) return;
+  if (k.startsWith('rot:')) { const i = NV_RNG.indexOf(nv.nm); nv.nm = NV_RNG[_mClamp((i < 0 ? 2 : i) - +k.slice(4), 0, NV_RNG.length - 1)]; return; }
+  if (k.startsWith('pan:')) {
+    const d = k.slice(4), brg = { n: 0, ne: 45, e: 90, se: 135, s: 180, sw: 225, w: 270, nw: 315 }[d];
+    const base = nv.cur || { lat: S.lat, lon: S.lon }; const [la, lo] = destPoint(base.lat, base.lon, brg, nv.nm * 0.08);
+    nv.cur = { lat: la, lon: lo }; return;
+  }
+  switch (k) {
+    case 'map': dispSet({ lay: 'one', ch: 4 }); break;
+    case 'esc': if (nv.cur || nv.ctr) { nv.cur = null; nv.ctr = null; } else dispSet({ lay: 'quad' }); break;
+    case 'fnc': dispSet({ lay: 'quad' }); break;
+    case 'clr': rdr.tgt = null; nv.cur = null; break;
+    case 'wxr': nv.wxr = !nv.wxr; if (nv.wxr && !rdr.tx) rdr.tx = true; break;
+    case 'tws': nv.terr = !nv.terr; break;
+    case 'com': case 'tfc': break;   // 쓰지 않는다(교범)
+  }
+  msnRenderPanels();
+}
+function nvPickAt(lat, lon) {
+  let best = null, bd = nv.nm * 0.12;
+  for (const c of msnContacts()) { const d = distance(lat, lon, c.lat, c.lon); if (d < bd) { bd = d; best = c.id; } }
+  return best;
 }
 let _slHold = null;
 function eoFocusBy(d) { if (eo.geo) eo.geoTrim = _mClamp(eo.geoTrim + d, -99, 99); else eo.focus = _mClamp(eo.focus + d, 0, 100); }
@@ -595,6 +786,9 @@ function msnAct(a) {
 }
 function msnHelp() {
   const t = ['흰수리 전탐석 — EO/IR · SAR 레이더 · 서치라이트',
+    '· 표시기: MULTI 4분할(왼쪽 위 지도 · 오른쪽 위 호이스트 카메라 · 왼쪽 아래 레이더 · 오른쪽 아래 EO/IR) · SPLIT 2분할(CH 로 짝 바꾸기) · V-IN 1~4 / VIDEO / NAVI 한 화면 · ▲▼ 밝기 · M-PWR',
+    '· 탐색등 조작기(오른쪽 위): LAMP 켜고 끄기 · MAN/AUTO(EO/IR 연동) · 조이스틱으로 돌림 · INIT/STOW · 표시등(PWR · LAMP · AUTO · STW …) — 나머지 기능은 교범을 받아 더합니다',
+    '· 레이더 조작기(CLN): 손잡이 돌림 지도 확대 · 축소 · 8방향 커서 · 누름 표적 지정(0.5초 — 지도 가운데로) · MAP · ESC · CLR · WXR(레이더 표적 겹) · TWS(지형 겹)',
     '· EO/IR: 조이스틱(화면 HCU 가운데 · 실제 조종 장치의 사이클릭 축)으로 터릿을 돌린다. ZOOM ▲확대 ▼축소 · VIC 센서(EOW → EON → IR) · 2X 전자 줌 · POL 백상/흑상',
     '· AVT: 한 번 누르면 게이트(ACQ) — 표적을 게이트에 넣고 한 번 더 누르면 잠금(LOCKED) · 1.5초 누르면 해제',
     '· AUTO: 지금 보는 자리를 좌표로 고정 · MANUAL: 수동 · AID: 지면 고정 보조 · ZMULTI: 화각에 맞춘 감도',
@@ -630,7 +824,8 @@ const EO_IDLE_MS = 5000;
 function _eoNeed() { return msnOpen || performance.now() - _eoWantT < EO_IDLE_MS; }
 function _eoHostPlace() {
   if (!_eoHost) { _eoHost = document.createElement('div'); _eoHost.className = 'eo-map'; }
-  const vid = msnOpen && _msnEl ? _msnEl.querySelector('.eo-vid') : null;
+  let vid = msnOpen && _msnEl ? _msnEl.querySelector('.eo-vid') : null;
+  if (vid && !(vid.clientWidth > 20 && vid.clientHeight > 20)) vid = null;   // 표시기에 EO/IR 칸이 없으면 화면 밖에
   const want = vid || document.body;
   if (_eoHost.parentElement !== want) {
     if (vid) { _eoHost.style.cssText = 'position:absolute;inset:0;width:100%;height:100%'; vid.insertBefore(_eoHost, vid.firstChild); }
@@ -898,8 +1093,13 @@ function _eoHud(cv, W, H) {
 }
 // 레이더 화면
 function _rdrDraw(cv) {
-  const W = cv.width, H = cv.height; if (!(W > 0)) return;
-  const g = cv.getContext('2d'); g.fillStyle = '#000'; g.fillRect(0, 0, W, H);
+  if (!(cv.width > 0 && cv.height > 0)) return;
+  const g0 = cv.getContext('2d'); g0.setTransform(1, 0, 0, 1, 0, 0); g0.fillStyle = '#000'; g0.fillRect(0, 0, cv.width, cv.height);
+  const M = Math.min(cv.width, cv.height); g0.save(); g0.translate((cv.width - M) / 2, (cv.height - M) / 2);
+  try { _rdrDrawSq(g0, M); } finally { g0.restore(); }
+}
+function _rdrDrawSq(g, M) {
+  const W = M, H = M;
   const c = W / 2, R = W / 2 * 0.92, C = '#3dff6a', k = W / 400;
   if (rdr.tx && rdr.pcv) g.drawImage(rdr.pcv, c - R, c - R, 2 * R, 2 * R);
   g.strokeStyle = 'rgba(61,255,106,0.45)'; g.lineWidth = 1;
@@ -928,7 +1128,7 @@ function _rdrDraw(cv) {
     }
   }
   g.textAlign = 'left'; g.fillStyle = C; g.font = `bold ${Math.round(12 * k)}px monospace`;
-  g.fillText(rdr.tx ? 'TX' : 'STBY', 8 * k, 16 * k); g.fillText(`${rdr.rng}NM`, 8 * k, 31 * k);
+  g.fillText(rdr.tx ? 'TX' : 'STBY', 8 * k, H - 22 * k); g.fillText(`${rdr.rng}NM`, 8 * k, H - 8 * k);   // 왼쪽 위는 채널 이름(CH2) 자리
   g.textAlign = 'right'; g.fillText(`${rdr.nup ? 'N UP' : 'H UP'}  G${rdr.gain}`, W - 8 * k, 16 * k); g.fillText(`STC${rdr.stc}${rdr.ftc ? ' FTC' : ''}`, W - 8 * k, 31 * k);
   if (!rdr.tx) { g.textAlign = 'center'; g.fillStyle = '#888'; g.fillText('STANDBY — TX 를 누르십시오', c, c + 30 * k); }
 }
@@ -954,10 +1154,96 @@ function msnRenderPanels() {
     td.textContent = c ? `TGT ${c.id} (${c.name})\nRNG ${distance(S.lat, S.lon, c.lat, c.lon).toFixed(2)}NM  BRG ${fmtA(bearing(S.lat, S.lon, c.lat, c.lon))}°` +
       (T && T.spd != null ? `\nCSE ${fmtA(T.cse || 0)}°  SPD ${T.spd.toFixed(1)}KT` : '\nCSE ---  SPD ---') : (rdr.tx ? '표적을 누르면 지정합니다' : '');
   }
+  slcRender();
+  _msnEl.querySelectorAll('[data-dk]').forEach(b => { const k = b.dataset.dk; b.classList.toggle('on', (k === 'multi' && disp.lay === 'quad') || (k === 'split' && disp.lay === 'split') || (k === 'pip' && eo.pip !== 'OFF') || (k === 'pwr' && disp.pwr) || (k === 'navi' && disp.lay === 'one' && disp.ch === 4) || (k === 'v' + disp.ch && disp.lay === 'one')); });
+  _msnEl.querySelectorAll('[data-cln]').forEach(b => { const k = b.dataset.cln; if (k === 'wxr') b.classList.toggle('on', nv.wxr); if (k === 'tws') b.classList.toggle('on', nv.terr); });
   const sd = _msnEl.querySelector('[data-m="sdata"]');
   if (sd && typeof kgLt !== 'undefined') sd.textContent = `${sOn ? 'ON' : 'OFF'}  ${srch.mode === 'EO' ? 'EO/IR SLAVE' : srch.mode === 'RDR' ? 'RADAR SLAVE' : 'MANUAL'}${srch.lim ? '  LIMIT' : ''}\nAZ ${kgLt.az >= 0 ? '+' : ''}${kgLt.az.toFixed(0)}°  DN ${kgLt.el.toFixed(0)}°`;
 }
 function _msnFit(cv) { const r = cv.getBoundingClientRect(), d = Math.min(2, window.devicePixelRatio || 1), w = Math.round(r.width * d), h = Math.round(r.height * d); if (w > 0 && (cv.width !== w || cv.height !== h)) { cv.width = w; cv.height = h; } return { W: w, H: h }; }
+// ── NAVI 지도 칸(왼쪽 위) — 위성 지도 · 기체(원 안의 헬기 · 기수) · 비행계획 · 항적선 · 레이더 표적 · EO/IR 시선 · 커서 ──
+let _nvMap = null;
+function _nvEnsure(el) {
+  if (_nvMap || typeof maplibregl === 'undefined' || !(el.clientWidth > 20 && el.clientHeight > 20)) return _nvMap;
+  try {
+    _nvMap = new maplibregl.Map({ container: el, style: _map3dStyle(), center: [S.lon, S.lat], zoom: 11, pitch: 0, bearing: 0, interactive: false, attributionControl: false,
+      pixelRatio: (typeof map3dPixelRatio === 'function') ? map3dPixelRatio(true) : 1 });
+    _nvMap.on('error', e => console.warn('[NAVI]', e && e.error ? e.error.message : e));
+  } catch (e) { console.warn('[NAVI] map failed:', e); _nvMap = null; }
+  return _nvMap;
+}
+function _nvDrop() { try { if (_nvMap) _nvMap.remove(); } catch (e) { _swallow(e); } _nvMap = null; }
+function _nvRender(cell) {
+  const el = cell.querySelector('.nv-map'), ov = cell.querySelector('.nv-ov');
+  const map = _nvEnsure(el); if (!map) return;
+  const W = el.clientWidth, H = el.clientHeight;
+  // 기수가 위 · 기체는 아래쪽(앞을 넓게) — 커서로 가운데를 옮겼으면 그 자리 · 북쪽 위
+  const hdgUp = !nv.ctr, mpp = nv.nm * 1852 * 2 / Math.max(50, W);
+  const z = Math.log2(40075016.686 * Math.cos(S.lat * _mD) / (512 * mpp));
+  let c = nv.ctr; if (!c) { const [la, lo] = destPoint(S.lat, S.lon, S.hdg, nv.nm * 0.45 * H / W); c = { lat: la, lon: lo }; }
+  try { map.jumpTo({ center: [c.lon, c.lat], zoom: z, bearing: hdgUp ? S.hdg : 0, pitch: 0 }); } catch (e) { _swallow(e); }
+  el.style.opacity = nv.terr ? '1' : '0.35';
+  const d = _msnFit(ov), k = d.W / Math.max(1, W), g = ov.getContext('2d');
+  g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, d.W, d.H); g.setTransform(k, 0, 0, k, 0, 0);
+  const P = (lat, lon) => { try { return map.project([lon, lat]); } catch (e) { return null; } };
+  // 비행계획(빨강) · 항적선(초록)
+  try {
+    const wps = (S.wps || []).filter(w => w && Number.isFinite(w.lat));
+    if (wps.length > 1) { g.strokeStyle = '#ff5a5a'; g.lineWidth = 1.5; g.beginPath(); wps.forEach((w, i) => { const q = P(w.lat, w.lon); if (q) i ? g.lineTo(q.x, q.y) : g.moveTo(q.x, q.y); }); g.stroke(); }
+  } catch (e) { _swallow(e); }
+  const a = P(S.lat, S.lon);
+  if (a) {
+    const [fl, fo] = destPoint(S.lat, S.lon, S.hdg, nv.nm * 3), f = P(fl, fo);
+    if (f) { g.strokeStyle = '#3dff6a'; g.lineWidth = 2; g.beginPath(); g.moveTo(a.x, a.y); g.lineTo(f.x, f.y); g.stroke(); }
+    // EO/IR 시선(하늘색 점선) · 서치라이트(노랑)
+    if (eo.pwr && eo.mode !== 'STOW') { const [la, lo] = destPoint(S.lat, S.lon, normA(S.hdg + eo.az), nv.nm * 2), q = P(la, lo), pt = eoAimPoint(); if (q) { g.setLineDash([5, 4]); g.strokeStyle = 'rgba(120,230,255,0.9)'; g.beginPath(); g.moveTo(a.x, a.y); g.lineTo(q.x, q.y); g.stroke(); g.setLineDash([]); } if (pt) { const r = P(pt.lat, pt.lon); if (r) { g.strokeStyle = '#7df'; g.beginPath(); g.arc(r.x, r.y, 6, 0, 2 * Math.PI); g.stroke(); } } }
+    if (typeof kgLt !== 'undefined' && kgLt.srch) { const [la, lo] = destPoint(S.lat, S.lon, normA(S.hdg + kgLt.az), nv.nm * 0.6), q = P(la, lo); if (q) { g.strokeStyle = 'rgba(255,220,80,0.85)'; g.beginPath(); g.moveTo(a.x, a.y); g.lineTo(q.x, q.y); g.stroke(); } }
+    // 기체 — 원 안의 헬기 · 위에 기수
+    const rot = (hdgUp ? 0 : S.hdg) * _mD;
+    g.save(); g.translate(a.x, a.y);
+    g.strokeStyle = '#fff'; g.lineWidth = 2; g.beginPath(); g.arc(0, 0, 18, 0, 2 * Math.PI); g.stroke();
+    g.rotate(rot); g.beginPath(); g.moveTo(-14, -9); g.lineTo(14, 9); g.moveTo(14, -9); g.lineTo(-14, 9); g.moveTo(0, -8); g.lineTo(0, 14); g.stroke();
+    g.restore();
+    g.font = 'bold 15px Arial'; g.textAlign = 'center'; g.fillStyle = '#fff'; g.strokeStyle = '#000'; g.lineWidth = 3;
+    g.strokeText(fmtA(S.hdg), a.x, a.y - 26); g.fillText(fmtA(S.hdg), a.x, a.y - 26);
+  }
+  // 레이더 표적(WXR 이 켜져 있으면 레이더가 그린 것 · 아니면 지정 표적만)
+  const now = performance.now();
+  for (const c2 of msnContacts()) {
+    const pnt = rdr.paint[c2.id], painted = pnt && now - pnt.t < RDR_RPM_S * 1500;
+    if (!(nv.wxr && painted) && c2.id !== rdr.tgt) continue;
+    const q = P(c2.lat, c2.lon); if (!q) continue;
+    g.fillStyle = c2.kind === 'air' ? '#9ff' : '#ffef6a'; g.beginPath(); g.moveTo(q.x, q.y - 6); g.lineTo(q.x + 6, q.y); g.lineTo(q.x, q.y + 6); g.lineTo(q.x - 6, q.y); g.fill();
+    if (c2.id === rdr.tgt) { g.strokeStyle = '#ffc400'; g.lineWidth = 2; g.strokeRect(q.x - 10, q.y - 10, 20, 20); g.fillStyle = '#ffc400'; g.font = 'bold 11px Arial'; g.textAlign = 'left'; g.fillText(c2.id, q.x + 12, q.y - 8); }
+  }
+  // 커서
+  if (nv.cur) { const q = P(nv.cur.lat, nv.cur.lon); if (q) { g.strokeStyle = '#fff'; g.lineWidth = 1.5; g.beginPath(); g.moveTo(q.x - 12, q.y); g.lineTo(q.x + 12, q.y); g.moveTo(q.x, q.y - 12); g.lineTo(q.x, q.y + 12); g.stroke(); } }
+  // 위 — 좌표(초록) · 시각(노랑) · 아래 — 축척 · 레이어
+  const dms = (v, h) => { const x = Math.abs(v), dd = Math.floor(x), mm = Math.floor((x - dd) * 60), ss = ((x - dd) * 60 - mm) * 60; return `${h}${dd}°${String(mm).padStart(2, '0')}'${ss.toFixed(3).padStart(6, '0')}"`; };
+  const ref = nv.cur || { lat: S.lat, lon: S.lon }, t = new Date(), d2 = n => String(n).padStart(2, '0');
+  g.textAlign = 'left'; g.font = 'bold 14px Arial'; g.lineWidth = 3; g.strokeStyle = '#000';
+  const tx = (s2, x, y, col) => { g.strokeText(s2, x, y); g.fillStyle = col; g.fillText(s2, x, y); };
+  tx('----- ----- -----', W * 0.22, 26, '#fff');
+  tx(`${dms(ref.lat, ref.lat >= 0 ? 'N' : 'S')}, ${dms(ref.lon, ref.lon >= 0 ? 'E' : 'W')}`, W * 0.22, 46, '#3dff6a');
+  g.textAlign = 'right'; tx(`${d2(t.getHours())}:${d2(t.getMinutes())}:${d2(t.getSeconds())}`, W - 10, 30, '#ffd23a');
+  g.textAlign = 'left'; g.font = 'bold 11px Arial';
+  tx(`${nv.nm * 2}NM  ${hdgUp ? 'HDG UP' : 'N UP'}${nv.wxr ? '  WXR' : ''}${nv.terr ? '' : '  TERR OFF'}`, 8, H - 8, '#cfe');
+  g.setTransform(1, 0, 0, 1, 0, 0);
+}
+// ── 호이스트 카메라 칸(오른쪽 위) — 24-sar.js HOIST CAM 을 옮겨 그린다 ──
+let _hcWantT = 0;
+function msnHoistWant() { return performance.now() - _hcWantT < 3000; }
+function _hcRender(cell) {
+  const cv = cell.querySelector('.hc-cv'), d = _msnFit(cv); if (!(d.W > 0)) return;
+  const g = cv.getContext('2d'); g.setTransform(1, 0, 0, 1, 0, 0); g.fillStyle = '#000'; g.fillRect(0, 0, d.W, d.H);
+  if (typeof sarHoistCamDrawTo !== 'function') return;
+  _hcWantT = performance.now();
+  const s = Math.min(d.W / 640, d.H / 480);   // 다 보이게(글씨가 잘리지 않게)
+  g.save(); g.beginPath(); g.rect(0, 0, d.W, d.H); g.clip();
+  try { sarHoistCamDrawTo(g, (d.W - 640 * s) / 2, (d.H - 480 * s) / 2, 640 * s, 480 * s); } catch (e) { _swallow(e); }
+  g.restore();
+}
+const _cellVis = c => c && c.style.display !== 'none' && c.clientWidth > 20 && c.clientHeight > 20;
 function msnRender() {
   if (_eoNeed()) _eoCamera(); else if (_eoMap) _eoMapDrop();
   // 조종석 SYSTEM 창이 EO/IR 영상을 띄우고 있으면 자주 다시 그린다(평소 4번/초 → 10번/초)
@@ -967,11 +1253,19 @@ function msnRender() {
     }
   } catch (e) { _swallow(e); }
   if (!msnOpen || !_msnEl) return;
-  const vid = _msnEl.querySelector('.eo-vid'), f = eo.pwr && eo.mode !== 'STOW' ? eoVideoFilter() : 'brightness(0)';
-  if (vid.style.filter !== f) vid.style.filter = f;
-  const spr = _msnEl.querySelector('.eo-spr'), s = _msnFit(spr); _eoSprites(spr, s.W, s.H);
-  const hud = _msnEl.querySelector('.eo-hud'), h = _msnFit(hud); _eoHud(hud, h.W, h.H);
-  const rc = _msnEl.querySelector('.msn-rdr canvas'); _msnFit(rc); _rdrDraw(rc);
+  if (!disp.pwr) return;
+  const ceo = _msnEl.querySelector('.c-eo');
+  if (_cellVis(ceo)) {
+    if (_eoMap && _eoHost && !ceo.contains(_eoHost)) _eoHostPlace();
+    const vid = ceo.querySelector('.eo-vid'), f = eo.pwr && eo.mode !== 'STOW' ? eoVideoFilter() : 'brightness(0)';
+    if (vid.style.filter !== f) vid.style.filter = f;
+    const spr = ceo.querySelector('.eo-spr'), s = _msnFit(spr); _eoSprites(spr, s.W, s.H);
+    const hud = ceo.querySelector('.eo-hud'), h = _msnFit(hud); _eoHud(hud, h.W, h.H);
+  } else if (_eoHost && ceo && ceo.contains(_eoHost)) _eoHostPlace();
+  const crd = _msnEl.querySelector('.c-rdr'), rc = crd.querySelector('canvas'); _msnFit(rc);
+  if (_cellVis(crd) || eo.pip === 'RDR') _rdrDraw(rc);
+  const cmap = _msnEl.querySelector('.c-map'); if (_cellVis(cmap)) _nvRender(cmap); else if (_nvMap && !_cellVis(cmap)) _nvDrop();
+  const chc = _msnEl.querySelector('.c-hoist'); if (_cellVis(chc)) _hcRender(chc);
   if (performance.now() - _msnTickT > 300) { _msnTickT = performance.now(); msnRenderPanels(); }
 }
 function msnShow(on) {
@@ -979,6 +1273,7 @@ function msnShow(on) {
   const R = _msnBuild();
   msnOpen = on !== undefined ? !!on : !msnOpen;
   R.classList.toggle('on', msnOpen);
+  if (!msnOpen) _nvDrop(); else dispSet();
   if (_eoMap) _eoHostPlace();                 // 지도를 전탐석 화면 ⇄ 화면 밖으로 옮긴다(조종석 SYSTEM 창이 계속 쓸 수 있게)
   msnRenderHcu(); msnRenderPanels();
 }
@@ -991,7 +1286,7 @@ function msnStep() {
   try { if (run) _vslStep(dt * ((typeof simSpeed !== 'undefined' && Number(simSpeed)) || 1)); } catch (e) { _swallow(e); }
   try { eoStep(dt); } catch (e) { _swallow(e); }
   try { rdrStep(dt); } catch (e) { _swallow(e); }
-  try { if (_slHold) srchMan(_slHold, dt); srchStep(dt); } catch (e) { _swallow(e); }
+  try { if (_slHold) srchMan(_slHold, dt); slcStep(dt); srchStep(dt); } catch (e) { _swallow(e); }
   try { msnRender(); } catch (e) { _swallow(e); }
 }
 // 흰수리(전탐석 · 조종석 모두)는 EO/IR 터릿이 돈다 — 조종석 SYSTEM 창 Video(EO/IR) 가 영상을 띄운다
