@@ -305,7 +305,10 @@ export async function run(page, t) {
     out.simBtn = vis('ckpit-btn'); out.offPanel = vis('sim-ckpit');
     btn.click(); await w(400);
     const lit = [...document.querySelectorAll('#sim-ckpit canvas.ck-scr')].map(c => {
-      const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data; let n = 0;
+      // MAP MFD 는 위성 타일을 crossOrigin 없이 그린다(15-heli3d.js _ckTile) — 타일이 받아지면(인터넷이 되는 CI) 캔버스를
+      // 읽을 수 없게 된다(tainted). 그건 타일이 실제로 그려졌다는 뜻이므로 켜진 것으로 센다
+      let d; try { d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data; } catch (e) { return /tainted|SecurityError/i.test(String(e)) ? 9999 : -1; }
+      let n = 0;
       for (let i = 0; i < d.length; i += 64) if (d[i] + d[i + 1] + d[i + 2] > 60) n++;
       return n;
     });

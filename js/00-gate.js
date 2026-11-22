@@ -67,7 +67,10 @@
   try { ok = sessionStorage.getItem(LOCK_KEY) === '1'; } catch (e) { ok = false; }
   // '⌂ 처음 화면' 단추(09-cdu.js goStartScreen)로 다시 불렀으면 — 비밀번호는 묻지 않고 화면 · 기종 고르기부터
   // (표시는 화면을 고를 때 지운다 — 고르기 전에 한 번 더 새로 불러도(서비스 워커 갱신 등) 처음 화면이 그대로 뜨게)
-  try { again = ok && sessionStorage.getItem('vfrChooseAgain') === '1'; } catch (e) { again = false; }
+  // 표시는 sessionStorage 와 주소(?choose=1 — 09-cdu.js goStartScreen) 둘 중 하나만 있어도 된다(새로 고침 직전에 적은 sessionStorage 는
+  // 브라우저가 미처 적지 못해 사라질 수 있다). 주소의 표시는 잠금이 이미 풀린(ok) 탭에서만 듣는다 — 비밀번호를 건너뛰게 하지 않는다
+  const urlAgain = /[?&]choose=1(?:&|$)/.test(location.search);
+  try { again = ok && (sessionStorage.getItem('vfrChooseAgain') === '1' || urlAgain); if (again) sessionStorage.setItem('vfrChooseAgain', '1'); } catch (e) { again = false; }
   window.gateLocked = !ok || again;
   window.lockCheck = pw => sha256Hex(String(pw)) === LOCK_HASH;
   window.vfrSha256 = str => sha256Hex(String(str));   // 다른 접근 코드(공항 ALL 등)도 평문 없이 해시로 견준다
@@ -99,6 +102,8 @@
     acMark();
     const pick = mode => {
       try { sessionStorage.setItem('vfrStartMode', mode); sessionStorage.removeItem('vfrChooseAgain'); } catch (e) { /* 이번만 */ }
+      // 주소의 처음 화면 표시(?choose=1)도 거둔다 — 그대로 두면 다음 새로고침에 또 처음 화면이 뜬다
+      try { if (/[?&]choose=1(?:&|$)/.test(location.search)) { const u = new URL(location.href); u.searchParams.delete('choose'); history.replaceState(history.state, '', u.toString()); } } catch (e) { /* 그만 */ }
       window.vfrStartMode = mode;
       setUnlocked();
       if (ac && typeof AC_TYPE !== 'undefined' && ac !== AC_TYPE && typeof setAircraftType === 'function') setAircraftType(ac);

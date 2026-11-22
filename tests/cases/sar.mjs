@@ -132,7 +132,9 @@ export async function run(page, t) {
     cockpitStart(); await w(2500);
     const o = { mode: _sarCam.mode, on: sarHoistCamOn(), white: 0 };
     const c = [...document.querySelectorAll('#sim-ckpit canvas.ck-scr')].find(x => CKPIT_SCR[+x.dataset.i].k === 'sys');
-    for (let k = 0; k < 20 && c && !(o.white > 0); k++, await w(250)) {   // 바쁠 때는 한 박자 늦게 그려진다   // 큰 칸 가운데의 십자(흰색) — HUD 가 옮겨 그려졌는지
+    // 화면 밖 지도(mode 'off')와 옮겨 그린 십자가 다 갖춰질 때까지(바쁠 때는 한 박자 늦다 — 최대 5초)
+    for (let k = 0; k < 20 && c && !(o.white > 0 && o.mode === 'off'); k++, await w(250)) {
+      o.mode = _sarCam.mode; o.on = sarHoistCamOn();   // 큰 칸 가운데의 십자(흰색) — HUD 가 옮겨 그려졌는지
       const g = c.getContext('2d'), kk = Math.min(c.width / SYS_W, c.height / SYS_H);
       const ox = (c.width - SYS_W * kk) / 2, oy = (c.height - SYS_H * kk) / 2;
       const cx = Math.round(ox + (227 + 383) * kk), cy = Math.round(oy + (49 + 287) * kk);
