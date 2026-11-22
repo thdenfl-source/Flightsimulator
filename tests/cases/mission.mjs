@@ -75,17 +75,31 @@ export async function run(page, t) {
     const w = ms => new Promise(res => setTimeout(res, ms));
     eo.mode = 'MAN'; eo.az = 0; eo.el = -8; rdr.tx = true;
     await w(1500);
-    const lit = sel => { const c = document.querySelector(sel); if (!c || !c.width) return 0; const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data; let n = 0; for (let i = 0; i < d.length; i += 64) if (d[i + 1] > 150 && d[i] < 120) n++; return n; };
-    const o = { map: !!_eoMap, hud: lit('#msn-root .eo-hud'), rdr: lit('#msn-root .msn-rdr canvas'), filt: document.querySelector('#msn-root .eo-vid').style.filter };
+    const lit = (sel, wht) => { const c = document.querySelector(sel); if (!c || !c.width) return 0; const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data; let n = 0; for (let i = 0; i < d.length; i += 64) if (wht ? (d[i] > 225 && d[i + 1] > 225 && d[i + 2] > 225) : (d[i + 1] > 150 && d[i] < 120)) n++; return n; };
+    const o = { map: !!_eoMap && !!document.querySelector('#msn-root .eo-vid .eo-map'), hud: lit('#msn-root .eo-hud', true), rdr: lit('#msn-root .msn-rdr canvas'), filt: document.querySelector('#msn-root .eo-vid').style.filter };
     eo.sensor = 'IR'; eo.pol = 'BLK'; await w(150); o.ir = document.querySelector('#msn-root .eo-vid').style.filter;
     eo.sensor = 'EOW'; eo.pol = 'WHT';
-    msnShow(false); o.closed = !document.getElementById('msn-root').classList.contains('on') && !_eoMap;
+    // ── 조종석 SYSTEM 창 Video(EO/IR) — 전탐석 영상 · 오버레이가 그대로 ──
+    const keep = { ch: videoCfg.ch, lay: sysLayout, pg: sysPage };
+    videoCfg.ch = 'EO/IR'; sysLayout = 'FULL';
+    let calls = 0; const real = window.eoirVideoDrawTo; window.eoirVideoDrawTo = (...a) => { calls++; return real(...a); };
+    const cv = document.createElement('canvas'); cv.width = 1024; cv.height = 548;
+    eo.mode = 'MAN'; eo.az = 30; eo.el = -6; eoStep(0.05);
+    sysDrawTo(cv, 'asys_video');
+    const d = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data; let wht = 0; for (let i = 0; i < d.length; i += 32) if (d[i] > 225 && d[i + 1] > 225 && d[i + 2] > 225) wht++;
+    o.ck = { calls, wht };
+    sysLayout = 'HALF'; sysHalf.L = 'asys_video'; calls = 0; sysDrawTo(cv, 'asys_video'); o.ck.half = calls;
+    window.eoirVideoDrawTo = real; videoCfg.ch = keep.ch; sysLayout = keep.lay; sysPage = keep.pg; sysHalf.L = 'asys_hocas';
+    o.dms = eoDms(37.52361, 'NS'); o.zs = eoZoomStep();
+    msnShow(false); o.closed = !document.getElementById('msn-root').classList.contains('on') && !(document.querySelector('#msn-root .eo-map'));
     msnShow(true);
     return o;
   });
+  t.ok(v.ck.calls === 1 && v.ck.wht > 100 && v.ck.half === 1, `조종석 SYSTEM 창 Video(EO/IR) — 전탐석 영상 · 오버레이를 그린다(흰 글씨 ${v.ck.wht}점 · FULL · HALF 모두)`);
+  t.eq(v.dms + ' ' + v.zs, '37:31:25N 1', '오버레이 위경도는 도:분:초(37:31:25N) · 넓은 화각은 줌 단계 1');
   t.ok(v.map && v.hud > 50 && v.rdr > 20, `EO/IR 영상(3D 지도) · 오버레이(${v.hud}) · 레이더 화면(${v.rdr})을 그린다`);
   t.ok(/grayscale/.test(v.ir) && /invert/.test(v.ir) && !/invert/.test(v.filt), 'IR 흑상(BLK) — 회색조 · 반전');
-  t.ok(v.closed, '"조종석 보기" — 전탐석을 닫으면 EO/IR 지도도 거둔다');
+  t.ok(v.closed, '"조종석 보기" — 전탐석을 닫으면 EO/IR 지도는 화면 밖으로(조종석 SYSTEM 창이 계속 쓴다)');
   const errs = (page.errors || []).filter(e => !/Failed to fetch|NetworkError|tile/i.test(e));
   t.eq(errs.length, 0, `페이지 오류 없음${errs.length ? ' — ' + errs[0] : ''}`);
   if (process.env.MSN_SHOT) { await page.evaluate(() => { msnSpawn(4); rdr.tx = true; }); await page.waitForTimeout(3500); await page.screenshot({ path: process.env.MSN_SHOT }); }
