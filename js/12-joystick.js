@@ -334,8 +334,44 @@ function joyClearBind(actId) {
   const c = joyBindOf(actId);
   if (c) { delete joyBinds[c]; joySave(); }
 }
-function joyBeginCapture(actId) { joyCapture = actId; joyLastCode = ''; }
+// 버튼 값(0…1) — 리눅스 등 몇몇 브라우저 · 장치는 눌린 버튼을 pressed=true 로만 알리고 value 를 0 으로 둔다
+//   (입력 진단에는 눌린 것으로 보이는데 배정 · 동작은 안 되던 까닭). 아날로그 버튼(트리거)은 value 그대로.
+function joyBtnVal(b) {
+  if (b == null) return 0;
+  if (typeof b !== 'object') return +b || 0;
+  const v = Number(b.value);
+  if (b.pressed && !(v > 0)) return 1;
+  return Number.isFinite(v) ? v : (b.pressed ? 1 : 0);
+}
+// 배정 대기 — 조종 장치 기능이 꺼져 있으면 켠다(배정하려는 것이 곧 쓰려는 것이다 · 꺼져 있으면 아무 입력도 안 듣는다)
+function joyBeginCapture(actId) {
+  joyCapture = actId; joyLastCode = '';
+  for (const k in _joyCapPrev) delete _joyCapPrev[k];
+  if (!joyOn) { toggleJoy(); try { uiToast('조종 장치 기능을 켰습니다', '', 2000); } catch (e) { _swallow(e); } }
+}
 function joyCancelCapture() { joyCapture = null; }
+// 배정 대기 중 — '꺼짐' 장치의 버튼도 본다. 새로 누른 버튼(뗀 것을 본 뒤 누름)이 있으면 그 장치를 켜고 그 버튼으로 잡는다
+//   (같은 조이스틱이 두 대로 올라오는 리눅스 등에서 진짜 장치를 꺼 두면 입력 진단에는 보이는데 잡히지 않았다)
+const _joyCapPrev = {};
+function _joyCapOffScan(pads, now) {
+  for (const p of pads) {
+    if (!joyCapture) return;
+    if (!joyDevIsOff(p)) continue;
+    const k = joyDevKey(p), pre = k + ':';
+    (p.buttons || []).forEach((b, i) => {
+      if (!joyCapture) return;
+      const code = pre + 'b' + i, was = _joyCapPrev[code], v = joyBtnVal(b);
+      const on = was ? v > JOY_OFF : v >= JOY_ON;
+      _joyCapPrev[code] = on;
+      if (on && was === false) {
+        joyDevToggle(k);
+        _joyPadList = pads;
+        try { uiToast(`${joyDevShort(k)} — 꺼져 있던 장치를 켰습니다`, '', 2500); } catch (e) { _swallow(e); }
+        _joyEdge(code, true, now);
+      }
+    });
+  }
+}
 function toggleJoy() {
   joyOn = !joyOn;
   try { localStorage.setItem('joyOn', joyOn ? '1' : '0'); } catch (e) { _swallow(e); }
@@ -382,7 +418,7 @@ function joyWhyNoPad() {
 function joyPadActive(p) {
   const neu = _joyNeutral[p.index] || [];
   const btn = (p.buttons || []).some(b => {
-    const v = (typeof b === 'object') ? (b.value != null ? b.value : (b.pressed ? 1 : 0)) : b;
+    const v = joyBtnVal(b);
     return v >= JOY_ON;
   });
   if (btn) return true;
@@ -654,6 +690,7 @@ function joyPoll(now) {
   if (!joyOn) return;
   if (joyAxCapture) _joyAxCaptureStep(use);
   use.forEach(p => _joyPollPad(p, now));
+  if (joyCapture && use.length < pads.length) _joyCapOffScan(pads, now);
   const pd = use.find(q => (q.axes || []).length > 5) || use[0];
   if (pd) joyAxApplyDefault(pd, _joyNeutral[pd.index], use.length > 1 ? joyDevKey(pd) : '');
   if (!joyLookDefaultDone) joyLookDefault(_joyHadSaved);
@@ -663,7 +700,7 @@ function joyPoll(now) {
 function _joyPollPad(p, now) {
   const neu = _joyNeutral[p.index], pre = joyDevKey(p) + ':';
   (p.buttons || []).forEach((b, i) => {
-    const v = (typeof b === 'object') ? (b.value != null ? b.value : (b.pressed ? 1 : 0)) : b;
+    const v = joyBtnVal(b);
     const code = pre + 'b' + i;
     const on = _joyDown[code] ? (v > JOY_OFF) : (v >= JOY_ON);
     _joyEdge(code, on, now);
@@ -721,12 +758,12 @@ function joyMonitor() {
   const hat = _joyHat[p.index] || {};
   const btns = [];
   (p.buttons || []).forEach((b, i) => {
-    const v = (typeof b === 'object') ? (b.value != null ? b.value : (b.pressed ? 1 : 0)) : b;
+    const v = joyBtnVal(b);
     if (v > 0.2) btns.push({ i, v });
   });
   const axes = (p.axes || []).map((v, i) => ({ i, v, hat: !!hat[i] }));
   const one = q => { const h = _joyHat[q.index] || {}, bs = [];
-    (q.buttons || []).forEach((b, i) => { const v = (typeof b === 'object') ? (b.value != null ? b.value : (b.pressed ? 1 : 0)) : b; if (v > 0.2) bs.push({ i, v }); });
+    (q.buttons || []).forEach((b, i) => { const v = joyBtnVal(b); if (v > 0.2) bs.push({ i, v }); });
     return { index: q.index, id: q.id || '', key: joyDevKey(q), off: joyDevIsOff(q), act: joyPadActive(q), btns: bs, axes: (q.axes || []).map((v, i) => ({ i, v, hat: !!h[i] })) }; };
   return { id: p.id || '', mapping: p.mapping || '', btns, axes, index: p.index,
            pads: pads.map(one) };

@@ -568,6 +568,40 @@ export async function run(page, t) {
   t.ok(rst.b0 === 'lookMod' && rst.b1 === 'apOff', `되돌리면 B0 = 시야 둘러보기 · B1 = 상위모드 해제 (${rst.b0} · ${rst.b1})`);
   t.ok(rst.dir === 'L' && rst.trim && !rst.held, '되돌린 뒤 B0 + 햇으로 다시 둘러본다(트림은 그대로)');
 
+  // ── 리눅스에서 버튼이 입력 진단에는 보이는데 배정이 안 되던 경우 셋 ──
+  const lnx = await page.evaluate(`(() => {
+    (${SETUP.toString()})();
+    const keepOff = JSON.stringify(joyDevOff); joyDevOff = {};
+    const o = {}; let now = 5000;
+    // ① pressed=true · value=0 으로 오는 버튼
+    joyPoll(now); joyBeginCapture('gspd');
+    _pad.buttons[7] = { pressed: true, value: 0 }; joyPoll(now += 16);
+    o.zero = joyBindOf('gspd'); _press(7, false); joyPoll(now += 16);
+    o.mon = (() => { _pad.buttons[7] = { pressed: true, value: 0 }; const m = joyMonitor(); _press(7, false); return m.btns.map(x => x.i).join(','); })();
+    // ② 조종 장치 기능이 꺼져 있었다 — 배정하려 하면 켠다
+    joyOn = false; joyBeginCapture('gspd'); o.onAfter = joyOn;
+    joyPoll(now += 16); _press(3, true); joyPoll(now += 16); o.joyOff = joyBindOf('gspd'); _press(3, false); joyPoll(now += 16);
+    // ③ 같은 장치가 두 대로 올라오고 진짜 장치(버튼이 들어오는 쪽)를 꺼 두었다
+    const shell = { index: 1, id: 'TEST STICK', mapping: '', buttons: Array.from({ length: 16 }, () => ({ pressed: false, value: 0 })), axes: [0, 0, 0, 0] };
+    navigator.getGamepads = () => [window._pad, shell];
+    joyPoll(now += 16);
+    const kReal = joyDevKey(_pad); joyDevOff[kReal] = true;
+    joyPoll(now += 16); joyBeginCapture('gspd');
+    _press(9, true); joyPoll(now += 16); joyPoll(now += 16);   // 처음 본 순간 눌려 있던 것은 잡지 않는다
+    o.held = joyBindOf('gspd');
+    _press(9, false); joyPoll(now += 16); _press(9, true); joyPoll(now += 16);
+    o.off = joyBindOf('gspd'); o.nowOn = !joyDevIsOff(_pad); o.capDone = joyCapture === null;
+    _press(9, false); joyPoll(now += 16);
+    navigator.getGamepads = () => [window._pad];
+    joyDevOff = JSON.parse(keepOff);
+    return o;
+  })()`);
+  t.eq(lnx.zero, 'b7', 'pressed=true · value=0 으로 오는 버튼도 잡힌다(리눅스)');
+  t.eq(lnx.mon, '7', '입력 진단도 같은 버튼을 눌린 것으로 보인다');
+  t.ok(lnx.onAfter && lnx.joyOff === 'b3', `조종 장치 기능이 꺼져 있어도 배정하려 하면 켜고 잡는다 (${lnx.joyOff})`);
+  t.ok(lnx.held === 'b3' && /:b9$/.test(lnx.off) && lnx.nowOn && lnx.capDone,
+    `꺼 둔 장치의 버튼을 누르면 그 장치를 켜고 잡는다 (${lnx.off}) · 처음부터 눌려 있던 것은 잡지 않는다`);
+
   // 뒷정리 — 다음 검사가 가짜 패드를 물려받지 않도록
   await page.evaluate(() => {
     navigator.getGamepads = () => [];
