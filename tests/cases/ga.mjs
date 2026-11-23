@@ -1,6 +1,6 @@
 // G/A(복행) — FCP FORCE TRIM 아래 버튼. 누르면 컬렉티브·피치 축이 GA 가 된다.
 //   ① 40kt 미만: 기수를 지금 자세에서 7.5° 숙여 증속 · 컬렉티브는 고도가 떨어지지 않게만
-//   ② 40kt 넘으면: 선택 상승률(기본 1000fpm · 최저 300)로 오르며 속도는 Vy(Vy~VNE 면 지금 속도 · VNE 넘으면 VNE)로
+//   ② 40kt 넘으면: 선택 상승률(기본 1000fpm)로 · 끝나면 VS(부호 있는 승강률 — 반시계로 − 강하) 오르며 속도는 Vy(Vy~VNE 면 지금 속도 · VNE 넘으면 VNE)로
 // 목표 속도에 닿고 상승률이 다 붙으면 컬렉티브 VS · 피치 IAS 로 넘어간다. 롤 축은 손대지 않는다.
 import { SIM_SETUP_SRC, SIM_FLY_SRC } from './simmode.mjs';
 export const name = 'G/A';
@@ -37,9 +37,9 @@ export async function run(page, t) {
     o.fma1 = fma();
     fly(15);
     o.vsSteady = S.vs; o.minAlt = minAlt - 1000; o.maxVs = maxVs;
-    // VS ▼ 로 내려도 300fpm 아래로는 가지 않는다
+    // VS 는 부호 있는 승강률 — ▼(반시계)로 0 을 지나 − 강하, FMA 도 − 로
     for (let i = 0; i < 20; i++) applyDelta('vs', -100);
-    o.vsMin = selVS;
+    o.vsMin = selVS; o.fmaDn = fma().find(x => /^VS /.test(x)); o.cmdDn = simAfcsVsCmd(); applyDelta('vs', 2000);
     // 전진 중(60kt · 40kt 넘음)이면 곧바로 ② 상승 · 목표 Vy
     gaRelease(); S.spd = 60; S.bnk = 0; simTrim.roll = 0; gaEngage(); o.fwd = { ph: _gaPhase, tgt: _gaSpdTgt };
     // Vy~VNE 사이(100kt) 면 지금 속도 그대로
@@ -70,13 +70,13 @@ export async function run(page, t) {
   t.eq(r.end.vsm, true, '컬렉티브는 VS 모드로 넘어간다');
   t.eq(r.end.sel, r.vy, `피치는 IAS(Vy) 로 넘어간다 (${r.end.sel})`);
   t.eq(r.end.iasOn, true, 'IAS 가 걸려 있다');
-  t.ok(r.fma1.includes('VS 1000') && r.fma1.includes('IAS') && !r.fma1.includes('GA'),
-    `FMA 가 VS 1000 · IAS 로 바뀐다 (${r.fma1.filter(s => /^(VS|IAS|GA)/.test(s)).join(' / ')})`);
+  t.ok(r.fma1.includes('VS +1000') && r.fma1.includes('IAS') && !r.fma1.includes('GA'),
+    `FMA 가 VS +1000 · IAS 로 바뀐다 (${r.fma1.filter(s => /^(VS|IAS|GA)/.test(s)).join(' / ')})`);
   t.eq(r.end.hdg, false, '롤 축은 커플되지 않는다(HDG 는 조종사 몫)');
   t.ok(r.end.bnk > 5, `기울어 있던 뱅크가 그대로다 (${r.end.bnk.toFixed(1)}°)`);
   t.ok(r.minAlt > -30, `고도가 시작 고도 아래로 빠지지 않는다 (최저 ${r.minAlt.toFixed(0)}ft)`);
   t.ok(r.vsSteady > 700 && r.vsSteady < 1300, `VS 모드에서 약 1000fpm 으로 계속 오른다 (${r.vsSteady.toFixed(0)}fpm)`);
-  t.eq(r.vsMin, 300, `VS 는 최저 300fpm 까지만 내려간다 (${r.vsMin})`);
+  t.ok(r.vsMin === -1000 && r.fmaDn === 'VS −1000' && r.cmdDn === -1000, `VS 를 반시계로 돌리면 0 을 지나 − 강하율 — FMA ${r.fmaDn} · 명령 ${r.cmdDn}fpm`);
   t.eq(r.fwd.ph, 2, `40kt 넘어서 누르면 곧바로 ② 상승 (${r.fwd.ph})`);
   t.eq(r.fwd.tgt, r.vy, '60kt 면 목표는 Vy');
   t.eq(r.keep, 100, `Vy~VNE 사이면 지금 속도를 지킨다 (${r.keep})`);

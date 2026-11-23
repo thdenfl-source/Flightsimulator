@@ -43,13 +43,16 @@ function applyDelta(field, d){
       }
       break;
     case 'vs':
-      if ((typeof gaOn !== 'undefined') && (gaOn || vsModeOn) && !altHoldOn && !crhtOn) {
-        selVS = Math.max(GA_VS_MIN, Math.min(3000, selVS + d));   // G/A · VS — 상승률(최저 300fpm)
+      if ((typeof gaOn !== 'undefined') && gaOn && !altHoldOn && !crhtOn) {
+        selVS = Math.max(GA_VS_MIN, Math.min(3000, selVS + d));   // G/A — 상승률(최저 300fpm)
+      } else if ((typeof vsModeOn !== 'undefined') && vsModeOn && !altHoldOn && !crhtOn) {
+        // VS — 부호 있는 승강률: 시계 방향 +(상승) · 반시계로 0 을 지나 −(강하) · ±3,000fpm
+        selVS = Math.max(-3000, Math.min(3000, selVS + d));
       } else if (altHoldOn || crhtOn) {
         // Hold mode active: VS ▲/▼ adjusts the convergence rate preselect.
         // altHoldOn uses selVS directly; crhtOn uses fixed 500 fpm but
         // pre-setting selVS here means it takes effect if ALT hold is engaged next.
-        selVS = Math.max(50, Math.min(3000, selVS + d));
+        selVS = Math.max(50, Math.min(3000, Math.abs(selVS) + d));   // (VS 에서 강하로 둔 값이면 크기만)
       } else {
         S.vs = Math.max(-3000, Math.min(3000, S.vs + d));
       }

@@ -86,8 +86,8 @@ export async function run(page, t) {
     // 지도 표식을 끌어 옮긴다
     _sarMk.setLatLng([37.46, 126.36]); _sarMk.fire('dragend');
     o.drag = { n: S.wps.filter(x => x.ident === 'SAR01').length, lat: w().lat, lon: w().lon, s: [sar.lat, sar.lon] };
-    // 표류는 SAR01 을 바꾸지 않는다(보고된 자리)
-    sar.lvl = 'HI'; sarTick(10); o.drift = { wp: w().lat, sar: sar.lat }; sar.lvl = 'MID';
+    // 표류하면 SAR01(HSI · 지도 표식)도 지금 자리를 따라간다
+    sar.lvl = 'HI'; sarTick(10); sarWptFollow(true); o.drift = { wp: w().lat, wpo: w().lon, sar: +sar.lat.toFixed(6), saro: +sar.lon.toFixed(6), moved: w().lat !== 37.46 || w().lon !== 126.36 }; sar.lvl = 'MID';
     // 경로 계산(GPS) — 활성 구간이 SAR01
     updateNav(); o.dist = distance(S.lat, S.lon, w().lat, w().lon);
     // 다른 계획이 있으면 끝에 붙고 활성은 그대로
@@ -100,7 +100,7 @@ export async function run(page, t) {
   });
   t.ok(W.add.n === 1 && W.add.lat === 37.45 && W.add.act && W.add.dis, '요구조자를 놓으면 비행계획에 SAR01 이 들어가 활성 구간이 된다(기체는 그대로)');
   t.ok(W.drag.n === 1 && W.drag.lat === 37.46 && W.drag.lon === 126.36 && W.drag.s[0] === 37.46, `지도에서 끌어 옮기면 SAR01 좌표도 같이 바뀐다 (${W.drag.lat}, ${W.drag.lon})`);
-  t.ok(W.drift.wp === 37.46 && W.drift.sar !== 37.46, 'SAR01 은 보고된 자리 — 표류해도 그대로');
+  t.ok(W.drift.moved && W.drift.wp === W.drift.sar && W.drift.wpo === W.drift.saro, `요구조자가 표류하면 SAR01(HSI 표식)도 지금 자리로 따라간다 (${W.drift.wp}, ${W.drift.wpo})`);
   t.ok(W.off, '요구조자를 끄면 SAR01 을 지운다');
   t.ok(W.app.last === 'SAR01' && W.app.awp === 'AAA', `비행계획이 있으면 끝에 SAR01 을 붙이고 활성 구간은 그대로 (${W.app.last} · ${W.app.awp})`);
 

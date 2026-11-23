@@ -440,7 +440,7 @@ function simAfcsVsCmd() {
   // G/A · VS — 선택 상승률로 오른다(G/A 처음 몇 초는 점점 붙인다 · 내려가지는 않는다)
   if (tdOn) return _tdVsCmd();
   if ((gaOn || vsModeOn) && !altHoldOn && !crhtOn && !(gsOn && _simGs())) {
-    return gaOn ? gaVsCmd() : Math.max(GA_VS_MIN, selVS);
+    return gaOn ? gaVsCmd() : Math.max(-3000, Math.min(3000, selVS));   // VS — 부호대로(− 면 강하)
   }
   // CRHT 는 전파고도(AGL)를 지킨다 — 기압고도로 바꾸면 '발밑 땅 + 선택 높이'
   const g = _simGs();
