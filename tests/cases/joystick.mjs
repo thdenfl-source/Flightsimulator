@@ -118,10 +118,10 @@ export async function run(page, t) {
     joySetBind('a0+', 'spdUp');
     joySetBind('a0-', 'spdDn');
     joySetBind('a2+', 'altUp');
-    S.spd = 100; selAlt = 1000;
+    S.spd = 100; selAlt = 1000; altaSel = 1000;   // ALT ± 는 ALT.A 목표 고도(01-state.js)
     let now = 1000;
     joyPoll(now);                            // 중립 학습 — 쉬는 값이 눌림이 되면 안 된다
-    const idle = { spd: S.spd, alt: selAlt };
+    const idle = { spd: S.spd, alt: altaSel };
     _axis(0, 1);  joyPoll(now += 16);
     const plus = S.spd;
     _axis(0, 0);  joyPoll(now += 16);
@@ -129,7 +129,7 @@ export async function run(page, t) {
     const minus = S.spd;
     _axis(0, 0);  joyPoll(now += 16);
     _axis(2, 0);  joyPoll(now += 16);        // 햇을 밀면 중립(-1)에서 +1 만큼
-    const hat = selAlt;
+    const hat = altaSel;
     _axis(2, -1); joyPoll(now += 16);
     return { idle, plus, minus, hat };
   })()`);
