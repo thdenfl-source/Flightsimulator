@@ -1044,21 +1044,21 @@ function drawFMA(x, y, w) {
     // GSPD engaged: both yaw/roll (mid) and pitch (right) are driven by
     // body-frame ground speed; capture GS on both axes.
     // 컬렉티브 축은 조종사가 ALT · CRHT 를 걸었을 때만 물린다(GSPD 가 저절로 걸지 않는다)
-    left   = crhtOn ? 'CRHT' : (altHoldOn && Math.abs(selAlt - S.alt) > 20 ? 'ALT.A' : 'ALT');
+    left   = crhtOn ? 'CRHT' : 'ALT';
     leftOn = altHoldOn || crhtOn;
     // GSPD 는 요/롤 축을 가져간다 — NAV · HDG 가 켜져 있어도 칸에는 GSPD 의 GS 만(GS/NAV · GS/HDG 같은 모드는 없다)
     mid    = 'GS';
     midOn  = true;
     right  = 'GS'; rightOn = true;
   } else {
-    // ALT 가 선택 고도로 가는 중이면(기준이 지금 고도와 20ft 넘게 떨어져 있으면) ALT.A
-    left   = crhtOn ? 'CRHT' : (altHoldOn && Math.abs(selAlt - S.alt) > 20 ? 'ALT.A' : 'ALT');
+    // (ALT.A 는 VS 로 가다 300ft 전에 ALT 가 걸린다 — 가는 동안 칸은 VS · 옆에 흰 ALT 무장)
+    left   = crhtOn ? 'CRHT' : 'ALT';
     leftOn = altHoldOn || crhtOn;     // dim ALT if both collective holds off
     right  = 'IAS';
     // SIM 모드에서는 IAS 를 건 동안만 켜진다(풀려 있으면 기수 자세는 조종간 몫)
     rightOn = (typeof iasModeOn === 'function') ? iasModeOn() : (!simModeOn || simIasOn);   // FCP IAS 를 누르면 꺼진다(SIM 이 꺼져 있어도 — 07-sim.js iasNsOn)
     // G/A — 컬렉티브·피치 축이 GA, 끝나면 컬렉티브 VS(선택 상승률) · 피치 IAS
-    const ga = (typeof gaOn !== 'undefined') && simModeOn && gaOn, vsm = (typeof vsModeOn !== 'undefined') && simModeOn && vsModeOn;
+    const ga = (typeof gaOn !== 'undefined') && simModeOn && gaOn, vsm = (typeof vsModeOn !== 'undefined') && vsModeOn;   // VS 는 SIM 이 아니어도(절차 훈련)
     const td = (typeof tdOn !== 'undefined') && simModeOn && tdOn;
     if (td) { left = 'TDH'; leftOn = true; right = 'TDH'; rightOn = true; }   // T/D to H
     else if (ga) { left = 'GA'; leftOn = true; right = 'GA'; rightOn = true; }
@@ -1074,6 +1074,7 @@ function drawFMA(x, y, w) {
   let leftArm = '';
   if (typeof gsOn !== 'undefined' && gsOn) { left = 'G/S'; leftOn = true; }
   else if (typeof gsArmed !== 'undefined' && gsArmed) { leftArm = 'G/S'; }
+  else if (typeof altArmed !== 'undefined' && altArmed) { leftArm = 'ALT'; }   // ALT.A — VS 옆에 흰 ALT(300ft 전에 걸린다)
 
   const modes  = [left,   mid,    right  ];
   const active = [leftOn, midOn,  rightOn];
@@ -1808,7 +1809,9 @@ function drawAltTape(x, y, w, h) {
 
   // ── ALT setting + change-rate box (top header) ──
   // Active when ALT hold is engaged; dim otherwise. Tappable for selAlt edit.
-  const on = altHoldOn;
+  const on = altHoldOn || (typeof altArmed !== 'undefined' && altArmed);
+  // 위 칸 — ALT 가 걸려 있으면 그 기준, 아니면 ALT.A 로 고른 목표 고도
+  const altBoxV = altHoldOn ? selAlt : (typeof altaSelGet === 'function' ? altaSelGet() : selAlt);
   ctx.fillStyle = '#000';
   ctx.fillRect(x + 1, y + 1, w - 2, HEAD_H - 2);
   ctx.strokeStyle = on ? '#00cfff' : '#333';
@@ -1823,20 +1826,20 @@ function drawAltTape(x, y, w, h) {
   ctx.font      = `bold ${Math.max(10, w * 0.16)}px Helvetica Neue, Arial, sans-serif`;
   ctx.textAlign = 'right';
   ctx.fillStyle = on ? '#fff' : '#777';
-  ctx.fillText(Math.round(selAlt * acv), x + w - 4, y + 11);
+  ctx.fillText(Math.round(altBoxV * acv), x + w - 4, y + 11);
 
   // Line 2: VS preselect (selVS) — pilot-settable rate for ALT hold mode.
   // When ALT hold is active, shows signed rate matching convergence direction.
   // When idle/off, shows the preselected magnitude (so the pilot can confirm
   // their setting before engaging). Tap the VS row to change selVS.
   let vsStr;
-  if (on) {
+  const _vsmOn = typeof vsModeOn !== 'undefined' && vsModeOn;
+  if (_vsmOn) vsStr = (selVS > 0 ? '+' : selVS < 0 ? '−' : '') + Math.abs(Math.round(selVS));   // VS(ALT.A 무장 포함) — 부호 있는 승강률
+  else if (on) {
     const d = selAlt - S.alt;
     vsStr = Math.abs(d) < 1 ? '0' : (d > 0 ? '+' : '−') + Math.abs(selVS);
   } else {
-    // VS 모드는 부호 있는 승강률(− 강하) — 상승 · 강하를 헷갈리지 않게
-    const vsm = typeof vsModeOn !== 'undefined' && vsModeOn && simModeOn;
-    vsStr = vsm ? (selVS > 0 ? '+' : selVS < 0 ? '−' : '') + Math.abs(Math.round(selVS)) : String(Math.abs(selVS));
+    vsStr = (selVS > 0 ? '+' : selVS < 0 ? '−' : '') + Math.abs(Math.round(selVS));   // 고른 승강률(부호)
   }
   ctx.font      = `${Math.max(8, w * 0.13)}px Helvetica Neue, Arial, sans-serif`;
   ctx.textAlign = 'left';

@@ -1319,9 +1319,9 @@ async function part3(page, t) {
 
     // ⑤ 조종 장치 설정에서 ↑ 키를 다른 동작(ALT +)에 배정해 두면 키보드 트림은 비켜선다
     joySetBind('kArrowUp', 'altUp');
-    const alt0 = selAlt;
+    const alt0 = altaSelGet();   // ALT + 는 ALT.A 목표 고도를 고른다(01-state.js)
     key('keydown', 'ArrowUp'); key('keyup', 'ArrowUp');
-    const boundKey = { pitch: simTrim.pitch, alt: selAlt - alt0 };
+    const boundKey = { pitch: simTrim.pitch, alt: altaSel - alt0 };
     simTrimReset(); selAlt = alt0; altHoldOn = false;
 
     joyBinds = savedBinds; joySave(); kbdShortcuts = savedKbd;
@@ -2285,7 +2285,7 @@ async function part4(page, t) {
     `수평 자세로 ${climbSpd.vs.toFixed(0)}fpm 오르는 중 — 120kt 에 남는 토크만큼(최대 +20kt) (${climbSpd.spd.toFixed(1)}kt · 피치 ${climbSpd.pit.toFixed(1)}°)`);
   t.ok(Math.abs(climbSpd.iasPit) < 0.01, `IAS 120kt 의 자세는 오르내려도 수평이다 (${climbSpd.iasPit.toFixed(2)}° — 종전 기수 숙임)`);
 
-  // ── ALT 버튼은 누른 순간의 고도를 지킨다 · 다른 고도로 가는 동안은 ALT.A ──
+  // ── ALT 버튼은 누른 순간의 고도를 지킨다 · ALT.A 노브는 고르기만(누르면 VS + ALT 무장 — alta.mjs) ──
   const altCap = await page.evaluate(() => {
     if (simModeOn) toggleSimMode(false);
     S.alt = 1234; altHoldOn = false; crhtOn = false; selAlt = 3000;
@@ -2297,15 +2297,15 @@ async function part4(page, t) {
       return texts;
     };
     const out = { on: altHoldOn, sel: selAlt, f1: fma() };
-    applyDelta('alt', 100); out.sel2 = selAlt; out.f2 = fma();
+    altaSel = null; applyDelta('alt', 100); out.sel2 = selAlt; out.alta = altaSel; out.f2 = fma();   // ALT.A 노브는 고르기만(ALT 기준은 그대로)
     toggleAltHold(); toggleAltHold(); out.recap = selAlt;      // 다시 누르면 다시 지금 고도
     altHoldOn = false;
-    return { on: out.on, sel: out.sel, sel2: out.sel2, recap: out.recap,
-             hold: out.f1.includes('ALT') && !out.f1.includes('ALT.A'), acq: out.f2.includes('ALT.A') };
+    return { on: out.on, sel: out.sel, sel2: out.sel2, alta: out.alta, recap: out.recap,
+             hold: out.f1.includes('ALT') && !out.f1.includes('ALT.A'), acq: out.f2.includes('ALT') };
   });
   t.ok(altCap.on && altCap.sel === 1234, `ALT 를 누르면 그 순간의 고도(1,234ft)가 기준이다 (${altCap.sel}ft · 종전 3,000ft 로 갔다)`);
   t.ok(altCap.hold, 'FMA 는 지금 고도를 지키는 동안 ALT');
-  t.ok(altCap.sel2 === 1300 && altCap.acq, `ALT ▲ 로 기준을 옮기면 그 고도로 가는 동안 ALT.A (${altCap.sel2}ft)`);
+  t.ok(altCap.sel2 === 1234 && altCap.alta >= 1300 && altCap.acq, `ALT.A 노브는 목표만 고른다 — ALT 기준(${altCap.sel2}ft)은 그대로 · 누르기 전까지 ALT 유지 (ALT.A ${altCap.alta}ft)`);
   t.eq(altCap.recap, 1234, '풀었다 다시 누르면 다시 그 순간의 고도');
 
 }

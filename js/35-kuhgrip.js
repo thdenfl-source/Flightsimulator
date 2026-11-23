@@ -104,8 +104,9 @@ function _kgSrchMove(dir) {
 function kgPress(k) {
   switch (k) {
     // 컬렉티브
-    case 'collDn': return _kgHoldStart(k, () => applyDelta('vs', -100));
-    case 'collUp': return _kgHoldStart(k, () => applyDelta('vs', 100));
+    // COLL TRIM — VS 면 승강률 ±100 · ALT 면 기준 고도 ±10ft · CRHT 면 ±10ft(01-state.js collTrimStep)
+    case 'collDn': return _kgHoldStart(k, () => collTrimStep(-1));
+    case 'collUp': return _kgHoldStart(k, () => collTrimStep(1));
     // EXT — 누르는 동안 더 펼쳐 앞(수평 쪽)으로 · RET — 접는 쪽으로(끝까지 접으면 빛이 들어간다). 초당 40°
     case 'ldgExt': return _kgHoldStart(k, () => { kgLt.ldgTgt = null; kgLt.ldgE = Math.min(KG_LDG.max, kgLt.ldgE + KG_LDG.rate * _kgDt()); }, 0, 50);
     case 'ldgRet': return _kgHoldStart(k, () => { kgLt.ldgTgt = null; kgLt.ldgE = Math.max(0, kgLt.ldgE - KG_LDG.rate * _kgDt()); }, 0, 50);

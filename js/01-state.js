@@ -657,14 +657,84 @@ function toggleGspd() {
   try { updateApInhibit(); } catch(e) { _swallow(e); }
 }
 
+// ══ VS · ALT.A(고도 선택) — 실기 FCP 처럼: 노브는 미리 고르기만 하고, 누르면(PUSH) 건다 ══
+//   VS  : 노브로 승강률(부호 있는 ±3,000fpm — 시계 + 상승 · 반시계 − 강하)을 고르고 누르면 그 승강률로 계속 오르내린다(VS 녹색).
+//         다시 누르면 푼다. 걸린 동안 노브 · 컬렉티브 COLL TRIM 으로 승강률을 고친다.
+//   ALT.A: 노브로 목표 고도를 고르는 동안은 아무 일도 없다. 누르면 VS 가 목표 쪽으로(크기는 지금 VS · 없으면 1,000fpm) 녹색으로 걸리고
+//         FMA 의 VS 옆에 ALT 가 흰색으로 무장된다. 목표 1,000ft 전에 '삐'(1초) · 300ft 전에 VS 가 사라지고 ALT 가 걸려 목표에 수렴한다.
+//         ALT 가 걸린 뒤 COLL TRIM 은 ALT 기준 고도를 옮긴다(10ft 씩).
+let altaSel = null, altArmed = false, _altaAlerted = false;
+const ALTA_CAP_FT = 300, ALTA_ALERT_FT = 1000, ALTA_VS_DEF = 1000;
+function altaSelGet() { if (altaSel === null) altaSel = Math.round((S.alt || 0) / 100) * 100; return altaSel; }
+function _vsOn(v) { try { vsModeOn = !!v; } catch (e) { /* 14-simmode 앞 */ } }
+function _vsIsOn() { try { return !!vsModeOn; } catch (e) { return false; } }
+function _vertOff() { try { gaOn = false; tdOn = false; } catch (e) { /* 14-simmode 앞 */ } }
+function _vertSync() { try { updateGaBtn(); } catch (e) { /* 14-simmode 앞 */ } try { updateHoverBtns(); } catch (e) { /* 그만 */ } }
+// ALT.A PUSH — 목표가 300ft 안이면 곧바로 ALT, 아니면 VS(목표 쪽) + ALT 무장
+function altaPush() {
+  afcsCmd();
+  const tgt = altaSelGet(), d = tgt - S.alt;
+  _vertOff(); crhtOn = false;
+  if (Math.abs(d) <= ALTA_CAP_FT) { altArmed = false; _vsOn(false); selAlt = tgt; altHoldOn = true; }
+  else {
+    const r = Math.abs(selVS) >= 100 ? Math.abs(selVS) : ALTA_VS_DEF;
+    selVS = Math.sign(d) * r; altHoldOn = false; _vsOn(true); altArmed = true;
+    _altaAlerted = Math.abs(d) <= ALTA_ALERT_FT;   // 이미 1,000ft 안이면 알림은 건너뛴다
+    try { if (typeof fdrNote === 'function') fdrNote(`ALT.A ${tgt}ft — VS ${selVS > 0 ? '+' : ''}${selVS} · ALT 무장`); } catch (e) { _swallow(e); }
+  }
+  _vertSync();
+}
+// VS PUSH — 고른 승강률로 건다 · 걸려 있으면 푼다(ALT 무장도 거둔다)
+function vsPush() {
+  afcsCmd();
+  if (_vsIsOn()) { _vsOn(false); altArmed = false; if (typeof simModeOn !== 'undefined' && !simModeOn) S.vs = 0; _vertSync(); return; }
+  _vertOff(); altHoldOn = false; crhtOn = false; altArmed = false; _vsOn(true);
+  try { if (typeof fdrNote === 'function') fdrNote(`VS ${selVS > 0 ? '+' : ''}${Math.round(selVS)}fpm`); } catch (e) { _swallow(e); }
+  _vertSync();
+}
+// 컬렉티브 COLL TRIM(누르는 동안 되풀이) — VS 면 승강률 ±100 · ALT 면 기준 고도 ±10ft · CRHT 면 기준 높이 ±10ft · 아무것도 없으면 승강(절차 훈련)
+function collTrimStep(dir) {
+  afcsCmd();
+  const g = (() => { try { return gaOn; } catch (e) { return false; } })();
+  if (_vsIsOn() && !g) selVS = Math.max(-3000, Math.min(3000, selVS + 100 * dir));
+  else if (altHoldOn) selAlt = Math.max(0, Math.min(45000, Math.round(selAlt) + 10 * dir));
+  else if (crhtOn) selCrht = Math.max(0, Math.min(45000, Math.round(selCrht) + 10 * dir));
+  else if (typeof applyDelta === 'function') { _collTrimNoMode = true; try { applyDelta('vs', 100 * dir); } finally { _collTrimNoMode = false; } }
+}
+// 목표 1,000ft 전 알림(1초 '삐')
+function altAlertTone() {
+  try {
+    if (!_fmaAc) { const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return; _fmaAc = new AC(); }
+    const ac = _fmaAc; if (ac.state !== 'running') return;
+    const o = ac.createOscillator(), g = ac.createGain(), t = ac.currentTime;
+    o.type = 'sine'; o.frequency.value = 1000; g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.09, t + 0.02);
+    g.gain.setValueAtTime(0.09, t + 0.97); g.gain.linearRampToValueAtTime(0, t + 1.0);
+    o.connect(g); g.connect(ac.destination); o.start(t); o.stop(t + 1.05);
+  } catch (e) { _swallow(e); }
+}
+let altAlertCount = 0;
+// 한 걸음 — 1,000ft 전 알림 · 300ft 전 VS → ALT(무장이 걸린다)
+function altaStep() {
+  if (!altArmed) return;
+  if (!_vsIsOn()) { altArmed = false; return; }       // VS 가 풀렸으면(G/A · ALT · CRHT · 모두 해제) 무장도 거둔다
+  const d = altaSelGet() - S.alt;
+  if (!_altaAlerted && Math.abs(d) <= ALTA_ALERT_FT) { _altaAlerted = true; altAlertCount++; altAlertTone(); try { if (typeof fdrNote === 'function') fdrNote(`ALT.A — 목표 ${altaSel}ft 1,000ft 전`); } catch (e) { _swallow(e); } }
+  if (Math.abs(d) <= ALTA_CAP_FT) {
+    altArmed = false; _vsOn(false); selAlt = altaSel; altHoldOn = true; crhtOn = false;
+    try { if (typeof fdrNote === 'function') fdrNote(`ALT.A — ALT ${altaSel}ft 포착(300ft 전)`); } catch (e) { _swallow(e); }
+    _vertSync();
+  }
+}
+setInterval(() => { try { altaStep(); } catch (e) { _swallow(e); } }, 100);
 function toggleAltHold() {
   afcsCmd();
   altHoldOn = !altHoldOn;
   if (altHoldOn) {
     // ALT 버튼은 '지금 고도를 지킨다' — 누른 순간의 고도가 기준이다.
-    // 다른 고도로 가려면(ALT.A) ALT ▲▼ 로 기준을 옮긴다(07-sim.js applyDelta 'alt').
+    // 다른 고도로 가려면 ALT.A 노브로 고도를 고르고 눌러 건다(altaPush — VS 로 가다 300ft 전에 ALT).
     selAlt = Math.round(S.alt);
     crhtOn = false;  // mutually exclusive
+    altArmed = false;   // ALT.A 무장도 거둔다(지금 고도를 지킨다)
     try { gaOn = false; vsModeOn = false; tdOn = false; updateGaBtn(); } catch (e) { /* 14-simmode 앞 */ }   // ALT 가 컬렉티브를 가져간다
   } else if (!simModeOn) {
     S.vs = 0;  // prevent unintended climb/descent after disengagement
@@ -683,6 +753,7 @@ function toggleCrht() {
     // CRHT 는 전파고도(지면 위 높이 — 05-gps.js radarAltFt)를 지킨다.
     selCrht   = Math.round(radarAltFt());
     altHoldOn = false;
+    altArmed = false;
     try { gaOn = false; vsModeOn = false; tdOn = false; updateGaBtn(); } catch (e) { /* 14-simmode 앞 */ }
   } else if (!simModeOn) {
     S.vs = 0;  // prevent unintended climb/descent after disengagement

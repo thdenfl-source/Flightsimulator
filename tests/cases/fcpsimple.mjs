@@ -25,7 +25,7 @@ export async function run(page, t) {
     const ws0 = windSpd; turn('wspd', 'up'); o.wspd = windSpd - ws0; windSpd = ws0;
     // 노브 — 돌리면 지금 FCP 와 같은 값이 움직인다
     const hdg0 = selHdg; turn('hdg', 'up'); o.hdg = (selHdg - hdg0 + 360) % 360;
-    const alt0 = selAlt; turn('alta', 'up'); o.alt = selAlt - alt0;
+    const alt0 = altaSelGet(); turn('alta', 'up'); o.alt = altaSel - alt0;   // ALT.A 노브는 목표 고도만 고른다
     const crht0 = selCrht; turn('crht', 'dn'); o.crht = selCrht - crht0;
     const hht0 = selHht; turn('hht', 'up'); o.hht = selHht - hht0;
     window._qnhHpa = 1013; turn('baro', 'up'); o.baro = window._qnhHpa;

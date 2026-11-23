@@ -2175,7 +2175,7 @@ appRegister({
   popoutTop: (side, el) => popoutTop(side, el),
   toggleCtl3d,
   cycleMap3dQuality,
-  toggleAltHold,
+  toggleAltHold, altaPush, vsPush,
   toggleAspcPanel,
   toggleAwyLayer,
   toggleSusp,

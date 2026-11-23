@@ -10,6 +10,7 @@
 // 노브를 돌리면 다시 걸린다. (SIM 이 꺼져 있으면 속도는 노브로만 바뀌므로 풀어도 지금 속도 그대로 난다)
 let iasNsOn = true;
 function iasModeOn() { return (typeof simModeOn !== 'undefined' && simModeOn) ? simIasOn : iasNsOn; }
+let _collTrimNoMode = false;   // COLL TRIM 이 부른 'vs' — 걸린 수직 모드가 없으면 승강(01-state.js collTrimStep)
 function applyDelta(field, d){
   afcsCmd();
   switch(field){
@@ -45,28 +46,20 @@ function applyDelta(field, d){
     case 'vs':
       if ((typeof gaOn !== 'undefined') && gaOn && !altHoldOn && !crhtOn) {
         selVS = Math.max(GA_VS_MIN, Math.min(3000, selVS + d));   // G/A — 상승률(최저 300fpm)
-      } else if ((typeof vsModeOn !== 'undefined') && vsModeOn && !altHoldOn && !crhtOn) {
-        // VS — 부호 있는 승강률: 시계 방향 +(상승) · 반시계로 0 을 지나 −(강하) · ±3,000fpm
-        selVS = Math.max(-3000, Math.min(3000, selVS + d));
-      } else if (altHoldOn || crhtOn) {
-        // Hold mode active: VS ▲/▼ adjusts the convergence rate preselect.
-        // altHoldOn uses selVS directly; crhtOn uses fixed 500 fpm but
-        // pre-setting selVS here means it takes effect if ALT hold is engaged next.
-        selVS = Math.max(50, Math.min(3000, Math.abs(selVS) + d));   // (VS 에서 강하로 둔 값이면 크기만)
+      } else if (field === 'vs' && d && Math.abs(d) <= 100 && _collTrimNoMode) {
+        S.vs = Math.max(-3000, Math.min(3000, S.vs + d));        // (COLL TRIM — 걸린 수직 모드가 없을 때의 승강 · 절차 훈련)
       } else {
-        S.vs = Math.max(-3000, Math.min(3000, S.vs + d));
+        // VS 노브 — 부호 있는 승강률(시계 + 상승 · 반시계로 0 을 지나 − 강하 · ±3,000fpm)을 고른다.
+        // 고르기만 한다 — 누르면(vsPush) 건다. VS 가 걸려 있으면 곧바로 그 승강률로 · ALT 가 걸려 있으면 수렴 빠르기(크기)
+        selVS = Math.max(-3000, Math.min(3000, selVS + d));
       }
       break;
     case 'alt':
-      // ALT +/- now adjusts the AFCS target (selAlt). Auto-engages ALT hold so
-      // S.alt converges to the new target at selVS rate. Disengages CRHT.
-      // 기준이 그 단위가 아니면(누른 순간 고도 1,237 처럼) 먼저 그 단위로 맞춘다(▲ 1,300 · ▼ 1,200)
-      { const st = Math.abs(d) || 100;
-        const next = d > 0 ? Math.floor(selAlt / st) * st + st : Math.ceil(selAlt / st) * st - st;
-        selAlt = Math.max(0, Math.min(45000, next)); }
-      altHoldOn = true;
-      crhtOn    = false;
-      updateHoverBtns();
+      // 기준이 그 단위가 아니면(1,237 처럼) 먼저 그 단위로 맞춘다(▲ 1,300 · ▼ 1,200)
+      // ALT.A 노브 — 목표 고도(altaSel)를 고르기만 한다. 누르면(altaPush) VS + ALT 무장(01-state.js)
+      { const st = Math.abs(d) || 100, a = altaSelGet();
+        const next = d > 0 ? Math.floor(a / st) * st + st : Math.ceil(a / st) * st - st;
+        altaSel = Math.max(0, Math.min(45000, next)); }
       break;
     case 'crht': {
       // CRHT +/- adjusts selCrht in fine 10 ft steps. Auto-engages CRHT hold.
@@ -566,6 +559,10 @@ function simStep(ts, noLoop){   // noLoop — 새 창이 대신 한 프레임을
             S.alt = Math.max(0, Math.min(45000, S.alt + step));
             S.vs  = Math.sign(diff) * 500;
           }
+        } else if (typeof vsModeOn !== 'undefined' && vsModeOn && !simModeOn) {
+          // VS — 고른 승강률로 계속 오르내린다(ALT.A 무장이면 300ft 전에 ALT 로 — 01-state.js altaStep)
+          S.vs = selVS;
+          S.alt = Math.max(0, Math.min(45000, S.alt + S.vs / 60 * dt));
         } else if (S.vs !== 0) {
           S.alt = Math.max(0, Math.min(45000, S.alt + S.vs / 60 * dt));
         }
@@ -2038,8 +2035,8 @@ function cockpitExit() {
 const FCPS_KNOBS = {
   ias:  { lbl: 'IAS',   rot: ['spd', 1],   push: ['fcpSync', 'ias'] },
   hdg:  { lbl: 'HDG',   rot: ['hdg', 1],   push: ['fcpSync', 'hdg'] },
-  vs:   { lbl: 'VS',    rot: ['vs', 100] },
-  alta: { lbl: 'ALT.A', rot: ['alt', 100] },
+  vs:   { lbl: 'VS',    rot: ['vs', 100],  push: ['vsPush'] },     // 돌려 고르고 누르면 건다(01-state.js)
+  alta: { lbl: 'ALT.A', rot: ['alt', 100], push: ['altaPush'] },   // 돌려 목표 고도 · 누르면 VS + ALT 무장
   crht: { lbl: 'CR.HT', rot: ['crht', 10], push: ['toggleCrht'] },
   hht:  { lbl: 'H.HT',  rot: ['hht', 10] },
   baro: { lbl: 'BARO',  rot: ['baro', 1],  push: ['fcpsBaroStd'] },
@@ -2126,9 +2123,8 @@ function fcpsSync() {
   const _b206 = typeof acIs === 'function' && acIs('b206');
   set('ias', String(Math.round(simModeOn && (!_b206 || simIasOn) ? selSpd : S.spd)));
   set('hdg', String(((Math.round(selHdg) + 359) % 360) + 1).padStart(3, '0') + '°');
-  const vsSel = g(() => ((gaOn || vsModeOn) && !altHoldOn && !crhtOn) || altHoldOn || crhtOn, false);
-  set('vs', String(Math.round(vsSel ? selVS : S.vs)));
-  set('alta', String(Math.round(selAlt)));
+  { const v = Math.round(selVS); set('vs', (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v)); }   // 고른 승강률(부호)
+  set('alta', String(Math.round(g(() => altaSelGet(), selAlt))));                                   // 고른 목표 고도
   set('crht', String(Math.round(selCrht)));
   set('hht', String(Math.round(selHht)));
   { const q = g(() => (Number.isFinite(window._qnhHpa) ? window._qnhHpa : QNH_STD), QNH_STD);
@@ -2138,6 +2134,8 @@ function fcpsSync() {
   on('hdg', g(() => hdgSelOn, false));
   on('crht', g(() => crhtOn, false));
   on('alt', g(() => altHoldOn, false));
+  on('vs', g(() => vsModeOn, false));
+  on('alta', g(() => altArmed, false));
   on('navd', g(() => navApOn, false));
   on('tdh', g(() => tdOn, false));
   set('wdir', fmtA(toMag(windDir)) + '°');
