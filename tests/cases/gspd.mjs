@@ -16,9 +16,12 @@ export async function run(page, t) {
     out.title = document.getElementById('fks-navd').title;
     // NAV 를 켠 채 GSPD 중이면 FMA 중앙이 대기 표기
     navApOn = true; hdgSelOn = false;
-    out.fmaNav = (() => {
-      // FMA 문자열 생성 로직과 같은 조건으로 확인
-      return gspdOn ? (navApOn ? 'GS/NAV' : (hdgSelOn ? 'GS/HDG' : 'GS')) : null;
+    out.fmaNav = (() => {   // 실제 PFD 가 그리는 글자(FMA 띠)
+      const seen = [], f = CanvasRenderingContext2D.prototype.fillText;
+      CanvasRenderingContext2D.prototype.fillText = function (x, ...a) { seen.push(String(x)); return f.call(this, x, ...a); };
+      try { drawPFD(); } finally { CanvasRenderingContext2D.prototype.fillText = f; }
+      if (seen.some(x => /^GS\/(NAV|HDG)$/.test(x))) return 'GS/NAV';
+      return seen.includes('GS') ? 'GS' : seen.join('|').slice(0, 80);
     })();
     // 실제 조향 불가 확인: 뱅크를 줘도 기수가 안 바뀐다
     S.hdg = 90; S.bnk = 20; S.spd = 60;
@@ -42,7 +45,7 @@ export async function run(page, t) {
   t.eq(r.onNav, true, 'GSPD 켜짐 — NAVD CPL 버튼 무력화 표시');
   t.eq(r.onObs, true, '(인터셉트 버튼은 없앴다)');
   t.ok(/ANTI-TORQUE/.test(r.title), `NAV 버튼 안내 문구: ${r.title.slice(0, 40)}…`);
-  t.eq(r.fmaNav, 'GS/NAV', 'FMA 중앙이 NAV 대기 표기');
+  t.eq(r.fmaNav, 'GS', 'FMA 중앙은 NAV 가 켜져 있어도 GS(GSPD) 만 — GS/NAV 같은 모드는 없다');
   t.eq(r.hdgLocked, true, 'GSPD 중 뱅크를 줘도 기수 불변(설계상)');
   t.eq(r.afterNavOn, true, 'GSPD 해제 후에도 NAV 설정 유지');
   t.eq(r.afterInh, false, 'GSPD 해제 후 무력화 표시 사라짐');

@@ -1046,10 +1046,8 @@ function drawFMA(x, y, w) {
     // 컬렉티브 축은 조종사가 ALT · CRHT 를 걸었을 때만 물린다(GSPD 가 저절로 걸지 않는다)
     left   = crhtOn ? 'CRHT' : (altHoldOn && Math.abs(selAlt - S.alt) > 20 ? 'ALT.A' : 'ALT');
     leftOn = altHoldOn || crhtOn;
-    // GSPD 는 요/롤 축을 가져간다. NAV·HDG SEL 이 켜져 있어도 조향하지 못하므로
-    // 켜진 채 방치하지 말고 "대기"임을 분명히 적는다.
-    // (버튼은 초록인데 기체가 안 도는 상황을 화면만 보고 알 수 있어야 한다)
-    mid    = navApOn ? 'GS/NAV' : (hdgSelOn ? 'GS/HDG' : 'GS');
+    // GSPD 는 요/롤 축을 가져간다 — NAV · HDG 가 켜져 있어도 칸에는 GSPD 의 GS 만(GS/NAV · GS/HDG 같은 모드는 없다)
+    mid    = 'GS';
     midOn  = true;
     right  = 'GS'; rightOn = true;
   } else {
@@ -1064,7 +1062,7 @@ function drawFMA(x, y, w) {
     const td = (typeof tdOn !== 'undefined') && simModeOn && tdOn;
     if (td) { left = 'TDH'; leftOn = true; right = 'TDH'; rightOn = true; }   // T/D to H
     else if (ga) { left = 'GA'; leftOn = true; right = 'GA'; rightOn = true; }
-    else if (vsm && !altHoldOn && !crhtOn) { left = 'VS ' + Math.round(selVS); leftOn = true; }
+    else if (vsm && !altHoldOn && !crhtOn) { left = 'VS ' + (selVS > 0 ? '+' : selVS < 0 ? '−' : '') + Math.abs(Math.round(selVS)); leftOn = true; }   // − 강하 · + 상승
     // Vy 이상에서 ALT 단독이면 ALT 는 피치 축(오른쪽 칸) — 컬렉티브 칸은 비고 조종사 손이다(14-simmode.js afcsAltPitch)
     else if (typeof afcsAltPitch === 'function' && afcsAltPitch()) { right = left; rightOn = true; left = ''; leftOn = false; }
   }
@@ -1836,7 +1834,9 @@ function drawAltTape(x, y, w, h) {
     const d = selAlt - S.alt;
     vsStr = Math.abs(d) < 1 ? '0' : (d > 0 ? '+' : '−') + Math.abs(selVS);
   } else {
-    vsStr = String(Math.abs(selVS));
+    // VS 모드는 부호 있는 승강률(− 강하) — 상승 · 강하를 헷갈리지 않게
+    const vsm = typeof vsModeOn !== 'undefined' && vsModeOn && simModeOn;
+    vsStr = vsm ? (selVS > 0 ? '+' : selVS < 0 ? '−' : '') + Math.abs(Math.round(selVS)) : String(Math.abs(selVS));
   }
   ctx.font      = `${Math.max(8, w * 0.13)}px Helvetica Neue, Arial, sans-serif`;
   ctx.textAlign = 'left';

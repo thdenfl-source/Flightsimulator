@@ -63,7 +63,8 @@ function sarPlaceAt(lat, lon) {
 // 요구조자를 놓으면 비행계획 끝에 SAR01 로 넣고(이미 있으면 좌표만 고친다), 지도 표식을 끌어 옮기거나
 // 위치 버튼으로 다시 놓으면 SAR01 좌표도 같이 고친다. 계획이 비어 있었으면 SAR01 을 활성(Direct)으로 삼아
 // GPS 항법(HSI · 거리 · 방위)이 곧장 그리로 이끈다 — 출발지로 기체를 옮기지는 않는다.
-// 표류(움직임 상 · 중)는 좌표를 바꾸지 않는다 — SAR01 은 보고된 자리(datum)다. 요구조자를 끄면 SAR01 을 지운다.
+// 표류(움직임 상 · 중 · 바다 상태)로 요구조자가 움직이면 SAR01 도 1초마다 따라간다(HSI · 지도 표식 · 거리 · 방위가 지금 자리를 가리킨다 — sarWptFollow).
+// 요구조자를 끄면 SAR01 을 지운다.
 const SAR_WPT = 'SAR01';
 function sarWptIndex() { try { return S.wps.findIndex(w => w && w.sar === true && w.ident === SAR_WPT); } catch (e) { return -1; } }
 function sarWptSync() {
@@ -84,6 +85,20 @@ function sarWptSync() {
   S.wps.push({ ident: SAR_WPT, lat, lon, sar: true });
   if (S.awp < 0) { try { selectWP(S.wps.length - 1); } catch (e) { refresh(); } }
   else refresh();
+}
+// 요구조자가 움직였으면 SAR01 을 그 자리로(1초마다 · 3m 넘게 움직였을 때) — 활성 구간이면 항법(거리 · 방위 · HSI)을 다시 셈한다
+let _sarWptT = 0;
+function sarWptFollow(force) {
+  if (!sar.on || sar.lat === null || sar.state === 'aboard') return false;
+  const now = performance.now(); if (!force && now - _sarWptT < 1000) return false;
+  _sarWptT = now;
+  const i = sarWptIndex(); if (i < 0) return false;
+  const w = S.wps[i], [n, e] = _sarNE(w.lat, w.lon, sar.lat, sar.lon);
+  if (!force && Math.hypot(n, e) < 3) return false;
+  w.lat = +sar.lat.toFixed(6); w.lon = +sar.lon.toFixed(6);
+  try { if (typeof updateWpMarkers === 'function') updateWpMarkers(); } catch (e) { _swallow(e); }
+  try { if (typeof updateNav === 'function') updateNav(); } catch (e) { _swallow(e); }
+  return true;
 }
 function sarPlaceAhead() { const [lat, lon] = _sarOff(S.lat, S.lon, 100 * Math.cos(S.hdg * Math.PI / 180), 100 * Math.sin(S.hdg * Math.PI / 180)); sarPlaceAt(lat, lon); }
 function sarPlaceCenter() {
@@ -145,6 +160,7 @@ setInterval(() => {
   sarTick(dt * k);
   if (sar.on || hoistFt > 0) _sarRepaint();
   if (now - _sarUiT > 250) { _sarUiT = now; _sarMarker(); sarPanelRender(); }
+  try { sarWptFollow(); } catch (e) { _swallow(e); }   // HSI · 비행계획의 SAR01 이 요구조자를 따라간다
 }, 100);
 
 // ── 2D 지도 표식 ──
