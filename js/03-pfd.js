@@ -550,6 +550,8 @@ function pfdMsgs() {
   });
   // AFCS CAS(23-afcs.js afcsCas) — AFCS FAIL(적) · 1 · 2 APM OFF · AFCS DEGRADED · BOTH ON AHRS/ADC(황)
   try { if (typeof afcsCas === 'function') out.unshift(...afcsCas()); } catch (e) { _swallow(e); }
+  // UPLIM · DH 고도 경고(01-state.js altLimMsgs) — UPLIM · MINIMUMS(황)
+  try { if (typeof altLimMsgs === 'function') out.unshift(...altLimMsgs()); } catch (e) { _swallow(e); }
   // 연료 계통 CAS(18-system.js fuelCas) — 1 · 2 F/L PRES · FUEL IMBALANCE · FUEL 1 · 2 LOW(황) · FUEL XFEED(녹)
   try { if (typeof fuelCas === 'function') fuelCas().forEach(m => out.push({ t: m.t, c: m.amber ? PFD_MSG_AMBER : PFD_MSG_GREEN })); } catch (e) { _swallow(e); }
   // 하부 콘솔 레버 SET, 또는 SIM 스페이스 두 번(simParkBrakeOn). 걸린 채 활주 착륙하면 빨갛게(simParkWarnOn)
@@ -1044,7 +1046,7 @@ function drawFMA(x, y, w) {
     // GSPD engaged: both yaw/roll (mid) and pitch (right) are driven by
     // body-frame ground speed; capture GS on both axes.
     // 컬렉티브 축은 조종사가 ALT · CRHT 를 걸었을 때만 물린다(GSPD 가 저절로 걸지 않는다)
-    left   = crhtOn ? 'CRHT' : 'ALT';
+    left   = crhtOn ? (typeof hhtOn !== 'undefined' && hhtOn ? 'HHT' : 'CRHT') : 'ALT';
     leftOn = altHoldOn || crhtOn;
     // GSPD 는 요/롤 축을 가져간다 — NAV · HDG 가 켜져 있어도 칸에는 GSPD 의 GS 만(GS/NAV · GS/HDG 같은 모드는 없다)
     mid    = 'GS';
@@ -1052,7 +1054,7 @@ function drawFMA(x, y, w) {
     right  = 'GS'; rightOn = true;
   } else {
     // (ALT.A 는 VS 로 가다 300ft 전에 ALT 가 걸린다 — 가는 동안 칸은 VS · 옆에 흰 ALT 무장)
-    left   = crhtOn ? 'CRHT' : 'ALT';
+    left   = crhtOn ? (typeof hhtOn !== 'undefined' && hhtOn ? 'HHT' : 'CRHT') : 'ALT';
     leftOn = altHoldOn || crhtOn;     // dim ALT if both collective holds off
     right  = 'IAS';
     // SIM 모드에서는 IAS 를 건 동안만 켜진다(풀려 있으면 기수 자세는 조종간 몫)
@@ -1078,7 +1080,7 @@ function drawFMA(x, y, w) {
 
   const modes  = [left,   mid,    right  ];
   const active = [leftOn, midOn,  rightOn];
-  const armed  = [leftArm, '',    ''      ];
+  const armed  = [leftArm, (typeof navArmed !== 'undefined' && navArmed && !navApOn) ? 'NAV' : '', ''];   // NAVD CPL 무장 — 지금 롤 모드 옆에 흰 NAV
   // AFCS 가용성(23-afcs.js afcsAxes) — AP1·AP2 모두 OFF · TRIM FEEL REL · AUTO TRIM OFF · AHRS BACKUP 이면
   // 그 축이 기본 안정 증대(SAS)로 내려가 황색 SAS. AFCS FAIL(DC 전원 없음)이면 세 칸 모두 꺼진다.
   try {

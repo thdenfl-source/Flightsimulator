@@ -659,7 +659,7 @@ function toggleGspd() {
 
 // ══ VS · ALT.A(고도 선택) — 실기 FCP 처럼: 노브는 미리 고르기만 하고, 누르면(PUSH) 건다 ══
 //   VS  : 노브로 승강률(부호 있는 ±3,000fpm — 시계 + 상승 · 반시계 − 강하)을 고르고 누르면 그 승강률로 계속 오르내린다(VS 녹색).
-//         다시 누르면 푼다. 걸린 동안 노브 · 컬렉티브 COLL TRIM 으로 승강률을 고친다.
+//         다시 누르면 푼다(ALT.A 로 가는 중이면 ALT 무장만 거두고 VS 로). 걸린 동안 노브 · 컬렉티브 COLL TRIM 으로 승강률을 고친다.
 //   ALT.A: 노브로 목표 고도를 고르는 동안은 아무 일도 없다. 누르면 VS 가 목표 쪽으로(크기는 지금 VS · 없으면 1,000fpm) 녹색으로 걸리고
 //         FMA 의 VS 옆에 ALT 가 흰색으로 무장된다. 목표 1,000ft 전에 '삐'(1초) · 300ft 전에 VS 가 사라지고 ALT 가 걸려 목표에 수렴한다.
 //         ALT 가 걸린 뒤 COLL TRIM 은 ALT 기준 고도를 옮긴다(10ft 씩).
@@ -674,7 +674,7 @@ function _vertSync() { try { updateGaBtn(); } catch (e) { /* 14-simmode 앞 */ }
 function altaPush() {
   afcsCmd();
   const tgt = altaSelGet(), d = tgt - S.alt;
-  _vertOff(); crhtOn = false;
+  _vertOff(); crhtOn = false; hhtOn = false;
   if (Math.abs(d) <= ALTA_CAP_FT) { altArmed = false; _vsOn(false); selAlt = tgt; altHoldOn = true; }
   else {
     const r = Math.abs(selVS) >= 100 ? Math.abs(selVS) : ALTA_VS_DEF;
@@ -687,8 +687,9 @@ function altaPush() {
 // VS PUSH — 고른 승강률로 건다 · 걸려 있으면 푼다(ALT 무장도 거둔다)
 function vsPush() {
   afcsCmd();
+  if (_vsIsOn() && altArmed) { altArmed = false; _vertSync(); return; }   // ALT.A 중 — VS 만 남긴다(지금 승강률 그대로 · ALT 무장은 거둔다)
   if (_vsIsOn()) { _vsOn(false); altArmed = false; if (typeof simModeOn !== 'undefined' && !simModeOn) S.vs = 0; _vertSync(); return; }
-  _vertOff(); altHoldOn = false; crhtOn = false; altArmed = false; _vsOn(true);
+  _vertOff(); altHoldOn = false; crhtOn = false; hhtOn = false; altArmed = false; _vsOn(true);
   try { if (typeof fdrNote === 'function') fdrNote(`VS ${selVS > 0 ? '+' : ''}${Math.round(selVS)}fpm`); } catch (e) { _swallow(e); }
   _vertSync();
 }
@@ -698,6 +699,7 @@ function collTrimStep(dir) {
   const g = (() => { try { return gaOn; } catch (e) { return false; } })();
   if (_vsIsOn() && !g) selVS = Math.max(-3000, Math.min(3000, selVS + 100 * dir));
   else if (altHoldOn) selAlt = Math.max(0, Math.min(45000, Math.round(selAlt) + 10 * dir));
+  else if (crhtOn && hhtOn) selHht = Math.max(20, Math.min(1000, Math.round(selHht) + 10 * dir));   // HHT — 호버 높이
   else if (crhtOn) selCrht = Math.max(0, Math.min(45000, Math.round(selCrht) + 10 * dir));
   else if (typeof applyDelta === 'function') { _collTrimNoMode = true; try { applyDelta('vs', 100 * dir); } finally { _collTrimNoMode = false; } }
 }
@@ -726,9 +728,55 @@ function altaStep() {
   }
 }
 setInterval(() => { try { altaStep(); } catch (e) { _swallow(e); } }, 100);
+// ══ UPLIM · DH — 고도 경고(상한 · 하한) ══
+//   노브로 경계 고도를 고르고(0 아래로 돌리면 OFF) · 누르면 기준을 RA(전파고도) ⇄ BARO(기압고도)로 바꾼다.
+//   UPLIM: 그 고도 위로 올라서면 알림음 두 번 + PFD 메시지 UPLIM(황) · DH: 그 아래로 내려가면 알림음 + MINIMUMS(황)
+//   (경계에서 30ft 돌아와야 다시 울린다)
+const altLim = { up: { v: 0, src: 'BARO', over: false }, dh: { v: 0, src: 'RA', over: false } };
+const ALTLIM_HYS = 30;
+function _altLimNow(src) { return src === 'RA' ? (typeof radarAltFt === 'function' ? radarAltFt() : S.alt) : S.alt; }
+function altLimStep(k, d) {
+  const L = altLim[k]; if (!L) return;
+  const st = L.src === 'RA' ? 10 : 100;
+  if (!(L.v > 0) && d > 0) L.v = Math.max(st, Math.round(_altLimNow(L.src) / st) * st);   // 처음 켤 때는 지금 고도 언저리에서
+  else L.v = Math.max(0, Math.min(45000, Math.round(L.v / st) * st + d * st));
+  L.over = false;
+}
+function altLimSrc(k) { const L = altLim[k]; if (!L) return; L.src = L.src === 'RA' ? 'BARO' : 'RA'; L.over = false; }
+function altLimTone(n) {
+  try {
+    if (!_fmaAc) { const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return; _fmaAc = new AC(); }
+    const ac = _fmaAc; if (ac.state !== 'running') return;
+    for (let i = 0; i < n; i++) {
+      const o = ac.createOscillator(), g = ac.createGain(), t = ac.currentTime + i * 0.35;
+      o.type = 'square'; o.frequency.value = 750; g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.05, t + 0.01);
+      g.gain.setValueAtTime(0.05, t + 0.22); g.gain.linearRampToValueAtTime(0, t + 0.25);
+      o.connect(g); g.connect(ac.destination); o.start(t); o.stop(t + 0.3);
+    }
+  } catch (e) { _swallow(e); }
+}
+let altLimAlertCount = 0;
+function altLimTick() {
+  [['up', 1], ['dh', -1]].forEach(([k, dir]) => {
+    const L = altLim[k];
+    if (!(L.v > 0)) { L.over = false; return; }
+    const h = _altLimNow(L.src);
+    const past = dir > 0 ? h > L.v : h < L.v, back = dir > 0 ? h < L.v - ALTLIM_HYS : h > L.v + ALTLIM_HYS;
+    if (past && !L.over) { L.over = true; altLimAlertCount++; altLimTone(dir > 0 ? 2 : 3); try { if (typeof fdrNote === 'function') fdrNote(`${k === 'up' ? 'UPLIM' : 'DH'} ${L.v}ft ${L.src} — 경고`, 'warn'); } catch (e) { _swallow(e); } }
+    else if (back) L.over = false;
+  });
+}
+setInterval(() => { try { altLimTick(); } catch (e) { _swallow(e); } }, 200);
+function altLimMsgs() {
+  const out = [];
+  if (altLim.up.over) out.push({ t: 'UPLIM', c: (typeof PFD_MSG_AMBER !== 'undefined' ? PFD_MSG_AMBER : '#ffb000') });
+  if (altLim.dh.over) out.push({ t: 'MINIMUMS', c: (typeof PFD_MSG_AMBER !== 'undefined' ? PFD_MSG_AMBER : '#ffb000') });
+  return out;
+}
 function toggleAltHold() {
   afcsCmd();
   altHoldOn = !altHoldOn;
+  if (altHoldOn) hhtOn = false;
   if (altHoldOn) {
     // ALT 버튼은 '지금 고도를 지킨다' — 누른 순간의 고도가 기준이다.
     // 다른 고도로 가려면 ALT.A 노브로 고도를 고르고 눌러 건다(altaPush — VS 로 가다 300ft 전에 ALT).
@@ -743,6 +791,21 @@ function toggleAltHold() {
   updateHoverBtns();
 }
 
+// ── FCP 노브 미리 고르기(IAS · HDG · CR.HT) — 돌리면 기준만 바뀌고 누르면 켜고 끈다 ──
+//   꺼진 채 돌려 고른 값이 있으면 누를 때 그 값으로 건다. 돌리지 않고 누르면 지금 값(속도 · 헤딩 · 전파고도)으로 건다.
+const fcpPre = { ias: false, hdg: false, crht: false };
+// HHT — T/D to H 가 다 내려와 넘기는 호버 높이 유지(H.HT 노브 값 · 전파고도). CRHT 와 같은 길로 지키되 기준은 selHht, FMA 는 HHT
+let hhtOn = false;
+function crhtTgtFt() { return hhtOn ? selHht : selCrht; }
+// CR.HT 노브 누름 — 켜져 있으면 끄고, 꺼져 있으면 고른 값(없으면 지금 전파고도)으로 건다
+function crhtPush() {
+  if (crhtOn) { toggleCrht(); return; }
+  const pre = fcpPre.crht ? selCrht : null;
+  toggleCrht();
+  if (pre !== null) selCrht = pre;
+  fcpPre.crht = false;
+  try { updateHoverBtns(); } catch (e) { _swallow(e); }
+}
 function toggleCrht() {
   afcsCmd();
   crhtOn = !crhtOn;
@@ -754,9 +817,11 @@ function toggleCrht() {
     selCrht   = Math.round(radarAltFt());
     altHoldOn = false;
     altArmed = false;
+    hhtOn = false;
     try { gaOn = false; vsModeOn = false; tdOn = false; updateGaBtn(); } catch (e) { /* 14-simmode 앞 */ }
-  } else if (!simModeOn) {
-    S.vs = 0;  // prevent unintended climb/descent after disengagement
+  } else {
+    hhtOn = false;
+    if (!simModeOn) S.vs = 0;  // prevent unintended climb/descent after disengagement
   }
   updateHoverBtns();
 }
@@ -876,9 +941,11 @@ function startTrimHold(dir) {
       }, SIM_TRIM_HOLD_MS - SIM_TRIM_REP_MS);
     } else {
       const d = dir === 'F' ? 1 : -1;
-      applyDelta('spd', d);
+      // 4-WAY 전후 트림은 속도를 곧바로 옮긴다(IAS 노브의 '고르기만' 과 다르다 — 07-sim.js applyDelta 'spd')
+      const spdTrim = () => { _spdDirect = true; try { applyDelta('spd', d); } finally { _spdDirect = false; } };
+      spdTrim();
       trimHoldTimer = setTimeout(() => {
-        trimHoldInt = _trimRep(() => applyDelta('spd', d), 80);
+        trimHoldInt = _trimRep(spdTrim, 80);
       }, 350);
     }
   }
@@ -1033,9 +1100,38 @@ function toggleObs() {
   try { updateApInhibit(); } catch(e) { _swallow(e); }
 }
 
+// ── NAVD CPL — 코스에서 좌우 50° 안으로 다가가고(코스와 기수 각) 코스선에서 RNP 안이면 결합(녹색), 아니면 무장(흰색)만 ──
+//   무장 중에는 지금 롤 모드(HDG 등)가 그대로 몰고, 조건에 들면 저절로 결합한다. 다시 누르면 무장을 거둔다.
+const NAV_CAP_DEG = 50;
+let navArmed = false;
+function navCaptureOk() {
+  try {
+    const L = typeof activeCourseLine === 'function' ? activeCourseLine() : null;
+    if (!L) return false;
+    const xtk = Math.abs(courseXtk(L)), crs = activeCrs();
+    const ang = Math.abs(normAS(S.hdg - crs));
+    return Number.isFinite(xtk) && xtk <= Math.max(0.05, rnp) && ang <= NAV_CAP_DEG;
+  } catch (e) { return false; }
+}
+function navArmStep() {
+  if (!navArmed) return;
+  if (navApOn) { navArmed = false; return; }
+  if (navCaptureOk()) { navArmed = false; _navEngage(); try { if (typeof fdrNote === 'function') fdrNote('NAV 결합(무장 → 포착)'); } catch (e) { _swallow(e); } }
+}
+setInterval(() => { try { navArmStep(); } catch (e) { _swallow(e); } }, 200);
+// NAVD CPL 누름 — 결합 · 무장 · 해제
+function navCplPush() {
+  afcsCmd();
+  if (navApOn) { toggleNavAp(); return; }
+  if (navArmed) { navArmed = false; try { updateApInhibit(); } catch (e) { _swallow(e); } return; }
+  if (navCaptureOk()) _navEngage();
+  else { navArmed = true; try { updateApInhibit(); } catch (e) { _swallow(e); } }
+}
+function _navEngage() { if (!navApOn) toggleNavAp(); }
 function toggleNavAp() {
   afcsCmd();
   navApOn = !navApOn;
+  navArmed = false;
   _shipNavPhase = null;              // 함정 접근 차례는 걸 때마다 처음부터 고른다
   { const b = document.getElementById('nav-ap-btn'); if (b) b.classList.toggle('on', navApOn); }   // FCP NAV 는 없앴다(SIMPLE 패널 NAVD CPL)
   if (!navApOn) {

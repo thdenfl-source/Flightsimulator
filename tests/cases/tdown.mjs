@@ -63,7 +63,7 @@ export async function run(page, t) {
       if (!tdOn) { o.doneAt = i; break; }
     }
     fly(30);
-    o.end = { ra: radarAltFt(), gs: Math.hypot(gspdActFwd, gspdActLat), td: tdOn, gspd: gspdOn, crht: crhtOn, selCrht };
+    o.end = { ra: radarAltFt(), gs: Math.hypot(gspdActFwd, gspdActLat), td: tdOn, gspd: gspdOn, crht: crhtOn, hht: hhtOn, selHht, selCrht };
     o.fma1 = fma().map(x => x[0]);
     o.amber = amber; o.decpl = decpl; o.hdgAt50 = hdgAt50; o.maxVs = maxVs; o.path = path;
     // 맞바람 20kt — 땅 위 3° 로 내려가 그 자리에 멈춘다(바람에 흘러가지 않는다)
@@ -112,8 +112,8 @@ export async function run(page, t) {
   t.ok(r.decpl && !r.decpl.hdg && !r.decpl.roll, `30kt 밑이면 롤 축이 풀린다 (${r.decpl && r.decpl.spd.toFixed(0)}kt)`);
   t.ok(Math.abs(r.end.ra - 50) < 8, `HHT(50ft)에서 멈춘다 (RA ${r.end.ra.toFixed(0)}ft)`);
   t.ok(r.end.gs < 1.5, `지상속도가 0 에 모인다 (${r.end.gs.toFixed(1)}kt · ${r.doneAt}s)`);
-  t.ok(!r.end.td && r.end.gspd && r.end.crht && r.end.selCrht === 50 && r.fma1.includes('CRHT') && r.fma1.includes('GS'),
-    `다 내려오면 GSPD 0 + CRHT(HHT) 호버로 넘긴다 (${r.fma1.filter(x => /^(CRHT|GS|TDH)/.test(x)).join(' ')})`);
+  t.ok(!r.end.td && r.end.gspd && r.end.crht && r.end.hht && r.end.selHht === 50 && r.fma1.includes('HHT') && r.fma1.includes('GS'),
+    `다 내려오면 GSPD 0 + HHT(H.HT 50ft) 호버로 넘긴다 — CR.HT 값은 따로 (${r.fma1.filter(x => /^(CRHT|HHT|GS|TDH)/.test(x)).join(' ')})`);
   t.ok(r.wOn && r.wind.gspd && r.wind.crht && Math.abs(r.wind.ra - 50) < 8,
     `맞바람 20kt 에서도 HHT 호버로 끝난다 (RA ${r.wind.ra.toFixed(0)}ft · ${r.wDone}s)`);
   t.ok(r.wind.drift < 15, `바람에 흘러가지 않는다 — 30초 동안 ${r.wind.drift.toFixed(1)}ft`);

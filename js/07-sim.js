@@ -10,7 +10,7 @@
 // 노브를 돌리면 다시 걸린다. (SIM 이 꺼져 있으면 속도는 노브로만 바뀌므로 풀어도 지금 속도 그대로 난다)
 let iasNsOn = true;
 function iasModeOn() { return (typeof simModeOn !== 'undefined' && simModeOn) ? simIasOn : iasNsOn; }
-let _collTrimNoMode = false;   // COLL TRIM 이 부른 'vs' — 걸린 수직 모드가 없으면 승강(01-state.js collTrimStep)
+let _collTrimNoMode = false, _spdDirect = false;   // _spdDirect — 4-WAY 전후 트림(속도를 곧바로)   // COLL TRIM 이 부른 'vs' — 걸린 수직 모드가 없으면 승강(01-state.js collTrimStep)
 function applyDelta(field, d){
   afcsCmd();
   switch(field){
@@ -18,9 +18,16 @@ function applyDelta(field, d){
       // SIM 모드에서는 속도를 곧바로 바꾸지 않는다 — IAS 기준 속도를 옮기고(꺼져 있으면
       // 지금 속도에서 켠다) 기수 자세가 그 속도로 데려간다(14-simmode.js)
       if (simModeOn) { simIasStep(d); break; }
-      iasNsOn = true;
-      S.spd = Math.max(0, Math.min((typeof acIs === 'function' && acIs('b206')) ? B206P.vne : 320, S.spd + d));   // Bell 206 은 VNE 130 · R22 100
-      S.pit = pitchFromSpd(S.spd);   // auto pitch from speed
+      if (typeof acIs === 'function' && acIs('b206')) {   // Bell 206 — AFCS 가 없다: 속도를 곧바로
+        S.spd = Math.max(0, Math.min(B206P.vne, S.spd + d)); S.pit = pitchFromSpd(S.spd); break;
+      }
+      if (_spdDirect) { iasNsOn = true; S.spd = Math.max(0, Math.min(320, S.spd + d)); S.pit = pitchFromSpd(S.spd); selSpd = S.spd; break; }
+      // IAS 노브는 기준 속도만 고른다 — 걸려 있으면 그 속도로, 꺼져 있으면 누를 때(fcpSync 'ias') 그 속도로 건다
+      if (iasNsOn) selSpd = S.spd;                                  // 걸려 있으면(SIM 이 아니면 속도가 곧 기준) 지금 속도에서
+      else if (!fcpPre.ias) selSpd = Math.round(S.spd);
+      if (!iasNsOn) fcpPre.ias = true;
+      selSpd = Math.max(0, Math.min(320, selSpd + d));
+      if (iasNsOn) { S.spd = selSpd; S.pit = pitchFromSpd(S.spd); }   // auto pitch from speed
       break;
     case 'hdg':
       // GSPD(호버) 중에는 HDG 화살표와 기수를 분리 — 요 조작은 ANTI-TORQUE PEDAL로만
@@ -28,8 +35,8 @@ function applyDelta(field, d){
       // 기수를 즉시 돌리지 않고 선택 헤딩(HDG bug)만 이동 → AFCS가 표준선회로 추종
       if (hdgTurnDir && Math.sign(d) !== hdgTurnDir) hdgTurnDir = 0;   // 마킹을 도는 반대쪽으로 돌리면 방향을 다시 고른다
       selHdg = ((Math.round(selHdg + d) + 359) % 360) + 1;   // 1–360
-      hdgSelOn = true;
-      rollApOn = true;
+      // HDG 노브는 버그만 옮긴다 — HDG 가 걸려 있으면 그리로 돌고, 꺼져 있으면 누를 때(fcpSync 'hdg') 그 버그로 건다
+      if (!hdgSelOn) fcpPre.hdg = true;
       break;
     case 'yaw':
       // ANTI-TORQUE PEDAL — 뱅크 없이 기수만 즉시 회전(홀드 시 약 12°/s)
@@ -65,11 +72,12 @@ function applyDelta(field, d){
       // CRHT +/- adjusts selCrht in fine 10 ft steps. Auto-engages CRHT hold.
       // 기준이 10 단위가 아니면(지금 고도로 걸면 1,237 처럼) 먼저 10 단위로 맞춘다 —
       // ▲ 는 위의 10 단위(1,240), ▼ 는 아래의 10 단위(1,230)로 간다.
+      // CR.HT 노브는 기준 높이만 고른다 — 걸려 있으면 그 높이로, 꺼져 있으면 누를 때(crhtPush) 그 높이로 건다
+      if (!crhtOn && !fcpPre.crht) selCrht = Math.round(radarAltFt());
+      if (!crhtOn) fcpPre.crht = true;
       const st = Math.abs(d) || 10;
       const next = d > 0 ? Math.floor(selCrht / st) * st + st : Math.ceil(selCrht / st) * st - st;
       selCrht   = Math.max(0, Math.min(45000, next));
-      crhtOn    = true;
-      altHoldOn = false;
       updateHoverBtns();
       break;
     }
@@ -77,6 +85,8 @@ function applyDelta(field, d){
       // HHT — T/D to H 가 내려가 멈출 호버 높이(전파고도). 10ft 단위 · 20~1,000ft. 모드는 걸지 않는다.
       selHht = Math.max(20, Math.min(1000, Math.round(selHht / 10) * 10 + d));
       break;
+    case 'uplim': altLimStep('up', Math.sign(d)); break;   // UPLIM · DH — 고도 경고 경계(01-state.js)
+    case 'dh':    altLimStep('dh', Math.sign(d)); break;
     case 'wdir': windDir = normA(windDir + d); break;
     case 'wspd': windSpd = Math.max(0, Math.min(150, windSpd + d));    break;
   }
@@ -114,17 +124,24 @@ function afcsReleaseAll() {
 function fcpSync(which) {
   afcsCmd();
   if (which === 'ias') {
-    if (simModeOn) simIasToggle();
-    else { iasNsOn = !iasNsOn; if (iasNsOn) selSpd = Math.max(0, Math.round(S.spd)); }   // 한 번 더 누르면 푼다
+    // 켜져 있으면 끄고, 꺼져 있으면 건다 — 노브로 고른 속도가 있으면 그 속도로, 없으면 지금 속도로
+    const pre = fcpPre.ias ? selSpd : null; fcpPre.ias = false;
+    if (simModeOn) { const was = simIasOn; simIasToggle(); if (!was && simIasOn && pre !== null) selSpd = simIasClamp(pre); }
+    else {
+      iasNsOn = !iasNsOn;
+      if (iasNsOn) { if (pre !== null) { S.spd = pre; S.pit = pitchFromSpd(S.spd); } selSpd = Math.max(0, Math.round(S.spd)); }
+    }
     try { drawPFD(); fcpsSync(); } catch (e) { _swallow(e); }
   } else if (which === 'hdg') {
     // IAS·ALT 처럼 한 번 더 누르면 푼다. NAV 가 걸려 있으면 HDG 로 넘긴다(지금 헤딩 유지).
     if (navApOn) toggleNavAp();
     else if (hdgSelOn) hdgRelease();
     else {
-      selHdg = ((Math.round(hdgInd()) + 359) % 360) + 1;   // 1–360
-      hdgSelOn = true; bankTarget = 0; rollApOn = true;  // 현재 헤딩 유지
+      // 노브로 버그를 옮겨 두었으면 그 버그로, 아니면 지금 헤딩으로 건다
+      if (!fcpPre.hdg) selHdg = ((Math.round(hdgInd()) + 359) % 360) + 1;   // 1–360
+      hdgSelOn = true; bankTarget = 0; rollApOn = true;
     }
+    fcpPre.hdg = false;
   } else if (which === 'crs') {
     S.dtoLive = false;   // 코스를 손으로 정하는 순간 '현 위치 기준' 은 끝난다
     // 코스선은 '그 지점을 지나고, 그 지점에서의 방위가 CRS 인 대권' 이다.
@@ -136,7 +153,7 @@ function fcpSync(which) {
     if ((navSrc !== 'FMS') && navLat !== null) {
       vorObsCrs = normA(bearing(navLat, navLon, S.lat, S.lon) + 180);
       updateNav();
-    } else if (navSrc === 'FMS' && S.awp >= 0) {
+    } else if (navSrc === 'FMS' && S.awp >= 0 && obsOn) {   // FMS — OBS 가 켜져 있을 때만(꺼져 있으면 비행계획의 코스 그대로)
       const _w = S.wps[S.awp];
       S.crs = normA(bearing(_w.lat, _w.lon, S.lat, S.lon) + 180);
       S.fwp = -1;   // 이전 leg 대신 활성 WP 를 지나는 S.crs 선을 추적
@@ -552,8 +569,8 @@ function simStep(ts, noLoop){   // noLoop — 새 창이 대신 한 프레임을
         } else if (crhtOn && !simModeOn) {
           // CRHT hold: always 500 fpm — rate is NOT user-configurable.
           // 전파고도(AGL)를 지킨다 — 땅이 오르면 따라 오르고, 바다 위면 기압고도와 같다
-          const diff = selCrht - radarAltFt();
-          if (Math.abs(diff) < 0.5) { S.alt = selCrht + radarGroundFt(); S.vs = 0; }
+          const ct = crhtTgtFt(), diff = ct - radarAltFt();   // CRHT(또는 HHT)
+          if (Math.abs(diff) < 0.5) { S.alt = ct + radarGroundFt(); S.vs = 0; }
           else {
             const step = Math.sign(diff) * Math.min(Math.abs(diff), 500 / 60 * dt);
             S.alt = Math.max(0, Math.min(45000, S.alt + step));
@@ -2037,12 +2054,12 @@ const FCPS_KNOBS = {
   hdg:  { lbl: 'HDG',   rot: ['hdg', 1],   push: ['fcpSync', 'hdg'] },
   vs:   { lbl: 'VS',    rot: ['vs', 100],  push: ['vsPush'] },     // 돌려 고르고 누르면 건다(01-state.js)
   alta: { lbl: 'ALT.A', rot: ['alt', 100], push: ['altaPush'] },   // 돌려 목표 고도 · 누르면 VS + ALT 무장
-  crht: { lbl: 'CR.HT', rot: ['crht', 10], push: ['toggleCrht'] },
+  crht: { lbl: 'CR.HT', rot: ['crht', 10], push: ['crhtPush'] },   // 돌려 고르고 누르면 켜고 끈다
   hht:  { lbl: 'H.HT',  rot: ['hht', 10] },
   baro: { lbl: 'BARO',  rot: ['baro', 1],  push: ['fcpsBaroStd'] },
-  uplim:{ lbl: 'UPLIM', none: true },
+  uplim:{ lbl: 'UPLIM', rot: ['uplim', 1], push: ['altLimSrc', 'up'] },   // 고도 경고 상한 · 누르면 RA ⇄ BARO
   crs:  { lbl: 'CRS',   rot: ['crs', 1],   push: ['fcpSync', 'crs'] },
-  dh:   { lbl: 'DH',    none: true },
+  dh:   { lbl: 'DH',    rot: ['dh', 1],    push: ['altLimSrc', 'dh'] },   // 고도 경고 하한 · 누르면 RA ⇄ BARO
   // 오른쪽 영역(사용자 기능) — 바람
   wdir: { lbl: 'WIND DIR', rot: ['wdir', 5] },
   wspd: { lbl: 'WIND SPD', rot: ['wspd', 1] },
@@ -2064,7 +2081,7 @@ function _fcpsBuild() {
   const p = document.createElement('div'); p.id = 'fcp-simple';
   p.innerHTML = `<div class="fks-main"><div class="fks-l">` +
       _fcpsKnob('ias') + _fcpsKnob('hdg') + _fcpsKnob('vs') + _fcpsKnob('alta') + _fcpsBtn('alt', 'ALT', 'toggleAltHold', true) + _fcpsKnob('crht') +
-      _fcpsBtn('b1', '', '') + _fcpsBtn('navd', 'NAVD CPL', 'toggleNavAp', true) + _fcpsBtn('b2', '', '') +
+      _fcpsBtn('b1', '', '') + _fcpsBtn('navd', 'NAVD CPL', 'navCplPush', true) + _fcpsBtn('b2', '', '') +
       _fcpsBtn('tdown', 'T-DOWN', 'tdownSet') + _fcpsBtn('tdh', 'T.D.HOV', 'tdhEngage') + _fcpsKnob('hht') +
     `</div><div class="fks-div"></div><div class="fks-r">` +
       _fcpsKnob('baro') + _fcpsKnob('uplim') + _fcpsKnob('crs') + _fcpsKnob('dh') + `</div></div>` +
@@ -2110,7 +2127,14 @@ function fcpsBaro(d) {
   window._qnhHpa = Math.max(940, Math.min(1060, nq));
   try { drawPFD(); } catch (e) { _swallow(e); }
 }
-function fcpsBaroStd() { window._qnhHpa = QNH_STD; try { drawPFD(); } catch (e) { _swallow(e); } fcpsSync(); }
+// BARO 노브 누름 — STD(1013) ⇄ 앞서 쓰던 QNH
+let _baroQnhPrev = null;
+function fcpsBaroStd() {
+  const q = Number.isFinite(window._qnhHpa) ? window._qnhHpa : QNH_STD;
+  if (Math.abs(q - QNH_STD) < 0.01 && _baroQnhPrev !== null) { window._qnhHpa = _baroQnhPrev; _baroQnhPrev = null; }
+  else { _baroQnhPrev = q; window._qnhHpa = QNH_STD; }
+  try { drawPFD(); } catch (e) { _swallow(e); } fcpsSync();
+}
 // 노브 아래 작은 값 · 걸린 모드는 노브 테·버튼이 녹색
 function fcpsSync() {
   const p = document.getElementById('fcp-simple');
@@ -2121,12 +2145,14 @@ function fcpsSync() {
   // 노브가 실제로 옮기는 값을 보인다(applyDelta 와 같은 갈래)
   // Bell 206 은 AFCS 가 없는 기체 — IAS 가 걸려 있지 않으면 지금 속도(속도계와 같은 값)를 보인다
   const _b206 = typeof acIs === 'function' && acIs('b206');
-  set('ias', String(Math.round(simModeOn && (!_b206 || simIasOn) ? selSpd : S.spd)));
+  set('ias', String(Math.round(_b206 ? (simIasOn ? selSpd : S.spd) : (iasModeOn() || g(() => fcpPre.ias, false) ? selSpd : S.spd))));   // 걸렸거나 고르는 중이면 기준 · 아니면 지금 속도
   set('hdg', String(((Math.round(selHdg) + 359) % 360) + 1).padStart(3, '0') + '°');
   { const v = Math.round(selVS); set('vs', (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v)); }   // 고른 승강률(부호)
   set('alta', String(Math.round(g(() => altaSelGet(), selAlt))));                                   // 고른 목표 고도
   set('crht', String(Math.round(selCrht)));
   set('hht', String(Math.round(selHht)));
+  { const L = g(() => altLim, null), f = x => (x && x.v > 0) ? `${x.v} ${x.src}` : `OFF ${x ? x.src : ''}`;   // UPLIM · DH — 경계 · 기준(RA/BARO)
+    if (L) { set('uplim', f(L.up)); set('dh', f(L.dh)); on('uplim', L.up.v > 0); on('dh', L.dh.v > 0); } }
   { const q = g(() => (Number.isFinite(window._qnhHpa) ? window._qnhHpa : QNH_STD), QNH_STD);
     set('baro', (typeof pfdBaroUnit !== 'undefined' && pfdBaroUnit === 'IN') ? (q / HPA_PER_IN).toFixed(2) : String(Math.round(q))); }
   set('crs', fmtA(g(() => (navSrc !== 'FMS' ? vorObsCrs : S.crs), S.crs)) + '°');
@@ -2137,6 +2163,7 @@ function fcpsSync() {
   on('vs', g(() => vsModeOn, false));
   on('alta', g(() => altArmed, false));
   on('navd', g(() => navApOn, false));
+  { const nv = document.getElementById('fks-navd'); if (nv) nv.classList.toggle('arm', g(() => navArmed && !navApOn, false)); }   // NAV 무장(흰 테)
   on('tdh', g(() => tdOn, false));
   set('wdir', fmtA(toMag(windDir)) + '°');
   set('wspd', Math.round(windSpd) + 'kt');
