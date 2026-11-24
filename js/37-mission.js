@@ -1410,7 +1410,7 @@ function _eoMapEnsure() {
       interactive: false, attributionControl: false, pixelRatio: (typeof map3dPixelRatio === 'function') ? map3dPixelRatio(true) : 1,
       canvasContextAttributes: { preserveDrawingBuffer: true } });   // 조종석 SYSTEM 창 · MFD 로 옮겨 그릴 수 있게
     map.on('error', e => console.warn('[EO/IR]', e && e.error ? e.error.message : e));
-    try { if (typeof mapGlGuard === 'function') mapGlGuard(map, 'EO/IR', _eoMapDrop); } catch (e) { _swallow(e); }   // 그래픽 문맥을 잃고 안 돌아오면 거둔다(다음 그림에서 새로 만든다)
+    try { if (typeof mapGlGuard === 'function') mapGlGuard(map, 'EO/IR', m => { if (_eoMap === m) _eoMapDrop(); }); } catch (e) { _swallow(e); }   // 그래픽 문맥을 잃고 안 돌아오면 거둔다(다음 그림에서 새로 만든다)
     map.on('style.load', () => {
       try { if (typeof _ship3dAddTo === 'function' && !map.getSource('ship-3d')) _ship3dAddTo(map); } catch (e) { _swallow(e); }
       try { if (typeof _sarLayer === 'function' && !map.getLayer('sar-3d')) map.addLayer(_sarLayer(true)); } catch (e) { _swallow(e); }
@@ -1869,7 +1869,7 @@ function _nvEnsure(el) {
       canvasContextAttributes: { preserveDrawingBuffer: true },   // 녹화기 CH4 가 옮겨 담을 수 있게
       pixelRatio: (typeof map3dPixelRatio === 'function') ? map3dPixelRatio(true) : 1 });
     _nvMap.on('error', e => console.warn('[NAVI]', e && e.error ? e.error.message : e));
-    try { if (typeof mapGlGuard === 'function') mapGlGuard(_nvMap, '전탐석 지도', _nvDrop); } catch (e) { _swallow(e); }
+    try { if (typeof mapGlGuard === 'function') mapGlGuard(_nvMap, '전탐석 지도', m => { if (_nvMap === m) _nvDrop(); }); } catch (e) { _swallow(e); }
   } catch (e) { console.warn('[NAVI] map failed:', e); _nvMap = null; }
   return _nvMap;
 }

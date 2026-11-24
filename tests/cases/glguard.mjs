@@ -33,11 +33,15 @@ export async function run(page, t) {
     const g = old.getCanvas().getContext('webgl2') || old.getCanvas().getContext('webgl'), ext = g && g.getExtension('WEBGL_lose_context');
     if (!ext) return { skip: true };
     ext.loseContext(); await w(3800); const dropped = _eoMap === null || _eoMap !== old;
-    eoirVideoDrawTo(cv.getContext('2d'), 0, 0, 200, 150); await w(300);
-    return { dropped, again: !!_eoMap && _eoMap !== old };
+    let again = false, err = null;
+    for (let i = 0; i < 10 && !again; i++) { try { eoirVideoDrawTo(cv.getContext('2d'), 0, 0, 200, 150); } catch (e) { err = String(e); } await w(200); again = !!_eoMap && _eoMap !== old; }
+    // 다시 만든 지도는 3초가 지나도 거둬지지 않는다(옛 지도를 거둘 때 나는 신호에 속지 않는다)
+    const now = _eoMap; for (let i = 0; i < 17; i++) { eoirVideoDrawTo(cv.getContext('2d'), 0, 0, 200, 150); await w(200); }   // 계속 본다(안 보면 3초 뒤 거두는 것은 따로다)
+    const kept = again && _eoMap === now;
+    return { dropped, again, kept, err, n: typeof mapGlRebuiltN !== 'undefined' ? mapGlRebuiltN : null };
   });
   if (b.skip) t.ok(true, '(EO/IR 지도 없음 — 건너뜀)');
-  else t.ok(b.dropped && b.again, `EO/IR — 문맥이 돌아오지 않으면 거두고 다음 그림에서 새로 만든다 (${JSON.stringify(b)})`);
+  else t.ok(b.dropped && b.again && b.kept, `EO/IR — 문맥이 돌아오지 않으면 거두고 다음 그림에서 새로 만들고, 새 지도는 그대로 둔다 (${JSON.stringify(b)})`);
   const errs = (page.errors || []).filter(e => !/Failed to fetch|NetworkError|tile/i.test(e));
   t.eq(errs.length, 0, `페이지 오류 없음${errs.length ? ' — ' + errs[0] : ''}`);
   await page.evaluate(() => selectPanel('right', 'map'));
