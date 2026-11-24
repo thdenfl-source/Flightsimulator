@@ -695,16 +695,20 @@ function mapGlGuard(map, name, rebuild, waitMs = 3000) {
   if (!map || typeof map.on !== 'function') return;
   let t = null;
   map.on('webglcontextlost', () => {
+    if (map._glGone) return;   // 거둔 지도(remove — 그래픽을 놓으며 이 신호를 낸다)
     mapGlLostN++; map._glLost = true;
     try { _swallow(new Error(`3D 지도(${name}) 그래픽 문맥을 잃었다 — ${waitMs / 1000}초 안에 돌아오지 않으면 새로 만든다`)); } catch (e) { /* 그만 */ }
     clearTimeout(t);
-    t = setTimeout(() => { if (!map._glLost) return; mapGlRebuiltN++; try { rebuild(); } catch (e) { _swallow(e); } }, waitMs);
+    t = setTimeout(() => { if (!map._glLost || map._glGone) return; mapGlRebuiltN++; try { rebuild(map); } catch (e) { _swallow(e); } }, waitMs);
   });
   map.on('webglcontextrestored', () => { map._glLost = false; clearTimeout(t); try { map.triggerRepaint(); } catch (e) { _swallow(e); } });
+  // 거둘 때(remove) — 그 뒤의 신호는 듣지 않는다(새로 만든 지도를 잘못 거두지 않게)
+  const rm = map.remove.bind(map);
+  map.remove = function () { map._glGone = true; clearTimeout(t); return rm(); };
 }
 // 본 3D 지도를 새로 만든다(문맥을 잃은 채 돌아오지 않을 때) — 모형 · 꾸밈은 style.load 에서 다시 얹힌다
-function _ml3dRebuild() {
-  const old = _ml3d; if (!old) return;
+function _ml3dRebuild(map) {
+  const old = _ml3d; if (!old || (map && map !== old)) return;
   try { old.remove(); } catch (e) { _swallow(e); }
   try { if (_ml3dMarker) _ml3dMarker.remove(); } catch (e) { _swallow(e); }
   _ml3d = null; _ml3dMarker = null; _ml3dReady = false;
