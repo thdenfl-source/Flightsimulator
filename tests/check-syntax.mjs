@@ -50,6 +50,19 @@ srcs.forEach(rel => {
   });
 }
 
+// 오프라인 캐시(sw.js CORE) — index.html 이 읽는 파일(스크립트 · 꾸밈 · vendor)이 다 들어 있어야 한다.
+// 빠지면 오프라인(비행 중 · 함정)에서 그 파일만 못 받아 앱이 깨진다(새 파일을 만들 때 손으로 넣다 빠뜨리기 쉽다)
+{
+  const sw = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
+  const core = new Set([...(sw.match(/const CORE\s*=\s*\[([\s\S]*?)\];/) || [, ''])[1].matchAll(/'([^']+)'/g)].map(m => m[1].replace(/^\.\//, '')));
+  const used = [...html.matchAll(/<(?:script[^>]*\ssrc|link[^>]*rel="stylesheet"[^>]*\shref)="(?!https?:|data:)([^"]+)"/g)].map(m => m[1].replace(/^\.\//, '').replace(/\?.*$/, ''));
+  const miss = [...new Set(used)].filter(f => !core.has(f));
+  if (!core.size) { failed++; console.error('✗ sw.js 의 CORE 목록을 찾지 못했습니다'); }
+  miss.forEach(f => { failed++; console.error(`✗ sw.js CORE(오프라인 캐시)에 없는 파일: ${f} — sw.js 의 CORE 목록에 './${f}' 를 넣으세요`); });
+  const gone = [...core].filter(f => !fs.existsSync(path.join(ROOT, f)));
+  gone.forEach(f => { failed++; console.error(`✗ sw.js CORE 에 있는데 저장소에 없는 파일: ${f}`); });
+}
+
 if (!blocks.length && !srcs.length) {
   console.error('검사할 스크립트를 찾지 못했습니다 — index.html 을 확인하세요.');
   process.exit(1);
