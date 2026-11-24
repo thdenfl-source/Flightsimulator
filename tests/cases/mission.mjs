@@ -2,17 +2,34 @@
 export const name = '흰수리 전탐석 — EO/IR · 레이더 · 서치라이트';
 
 export async function run(page, t) {
-  t.ok(await page.evaluate(() => !document.querySelector('.gate-ac-btn[data-ac="kuhm"]') && /LOFT/.test((document.getElementById('gate-mode-loft') || {}).textContent || '')),
-    '시작 화면 — 기종 고르기에서 전탐석을 빼고, 화면 고르기에 LOFT(조종석 + 전탐석) 모드');
-  // 흰수리 조종석(전탐석이 아닌 페이지) — 아무도 EO/IR 영상을 보지 않으면 3D 지도를 만들지 않는다(페이지가 뜨자마자 만들어 CI 가 느려졌다)
+  t.ok(await page.evaluate(() => !document.querySelector('.gate-ac-btn[data-ac="kuhm"]') && !document.getElementById('gate-mode-loft')),
+    '시작 화면 — 기종 · 화면 고르기에 전탐석 · LOFT 가 없다(흰수리 창 위 탭 Vendor 로)');
+  // 흰수리 — Vendor 창을 열지 않았으면(아무도 EO/IR 영상을 보지 않으면) 3D 지도를 만들지 않는다(페이지가 뜨자마자 만들어 CI 가 느려졌다)
   const idle = await page.evaluate(async () => { await new Promise(r => setTimeout(r, 400)); return { map: _eoMap, need: _eoNeed(), hw: msnHoistWant(), t: Math.round(performance.now()) }; });
   t.ok(idle.map === null && !idle.need && !idle.hw, `흰수리 조종석 — 보는 곳이 없으면 EO/IR · 호이스트 지도를 만들지 않는다(${idle.t}ms)`);
-  const u = new URL(page.url()); u.searchParams.set('ac', 'kuhm');
-  await page.goto(u.toString());
-  await page.waitForFunction(() => typeof S === 'object' && typeof msnShow === 'function', null, { timeout: 20000 });
-  await page.getByText('시작하기').click().catch(() => {});
-  await page.waitForFunction(() => { const r = document.getElementById('msn-root'); return r && r.classList.contains('on'); }, null, { timeout: 10000 });
-  const a0 = await page.evaluate(() => ({ kuhm: acExact('kuhm'), fam: acIs('aw189'), sys: acScrOk('sysp'), hcu: document.querySelectorAll('#msn-root [data-hcu]').length,
+  // ── Vendor — 창 위 탭(가운데 · 우측 · 아래)에 있고, 고르면 그 창에 전탐석이 뜬다 · 다른 탭을 고르면 닫힌다 ──
+  const V = await page.evaluate(async () => {
+    const w = ms => new Promise(r => setTimeout(r, ms)), o = {};
+    o.tabs = ['mid-tabs', 'page-tabs', 'bot-tabs'].map(id => !!document.querySelector('#' + id + ' [data-sel="msn"]')).join(',');
+    o.tabTxt = (document.querySelector('#page-tabs [data-sel="msn"]') || {}).textContent;
+    o.tabVis = getComputedStyle(document.querySelector('#page-tabs [data-sel="msn"]')).display !== 'none';
+    document.querySelector('#page-tabs [data-sel="msn"]').click(); await w(400);
+    const R = document.getElementById('msn-root'), W = document.getElementById('msn-wrap');
+    o.inWrap = !!R && W.contains(R) && document.getElementById('right-panel').contains(W) && R.classList.contains('on') && msnOpen && msnInPanel();
+    const rb = R.getBoundingClientRect(), pb = document.getElementById('right-panel').getBoundingClientRect();
+    o.fit = rb.width > 100 && rb.left >= pb.left - 1 && rb.right <= pb.right + 1;
+    o.pfd = !document.getElementById('pfd-wrap').classList.contains('page-hidden');
+    o.close = getComputedStyle(R.querySelector('[data-mact="close"]')).display === 'none';
+    document.querySelector('#page-tabs [data-sel="map"]').click(); await w(400);
+    o.off = !msnOpen && !msnInPanel() && R.parentElement === document.body && !R.classList.contains('on');
+    return o;
+  });
+  t.ok(V.tabs === 'true,true,true' && V.tabTxt === 'Vendor' && V.tabVis, `창 위 탭 Vendor — 가운데 · 우측 · 아래 창 (${V.tabs} · ${V.tabTxt})`);
+  t.ok(V.inWrap && V.fit && V.pfd && V.close, `Vendor 를 누르면 그 창(우측)에 전탐석 — PFD 와 나란히 (${JSON.stringify(V)})`);
+  t.ok(V.off, 'MAP 탭으로 바꾸면 전탐석이 닫힌다');
+  // (아래 묶음은 전탐석을 화면 가득 띄워 본다)
+  await page.evaluate(() => msnShow(true));
+  const a0 = await page.evaluate(() => ({ kuhm: !acExact('kuhm'), fam: acIs('aw189'), sys: acScrOk('sysp'), hcu: document.querySelectorAll('#msn-root [data-hcu]').length,
     top: [...document.querySelectorAll('#msn-root .hcu-key')].map(b => b.textContent).join(','), joy: !!JOY_ACT_BY_ID.hcuAvt && !!JOY_ACT_BY_ID.hcuLrf }));
   t.ok(a0.kuhm && a0.fam && a0.sys, '전탐석은 흰수리 갈래 — 흰수리 계통(SYSTEM 등)을 그대로 쓴다');
   t.eq(a0.top, 'MENU,LASER,GEOFOCUS,MAP,2X,IRGATE,STOW,AUX,LRF,TX,CTRLAUTH,POL,IRCAL,SCENE', 'HCU 상부 버튼 14개(교범 그림 차례)');
@@ -135,7 +152,7 @@ export async function run(page, t) {
     // EO/IR 영상에 탐조등 빛 무리가 보인다(밤 · 주간 카메라) — 열상(IR)에는 안 보인다
     { const alt0 = S.alt, tod0 = env.tod, sen0 = eo.sensor, az0 = eo.az, el0 = eo.el, mode0 = eo.mode;
       S.alt = _mGndFt(S.lat, S.lon) + 800; envSet({ tod: 'NIGHT' }); Object.assign(eo, { pwr: true, mode: 'MAN', sensor: 'EOW', az: -30, el: -35 }); hsl.az = -30; hsl.el = -35;
-      _eoCamera(); await w(400); _eoCamera();
+      _eoCamera(); await w(400); _eoCamera(); try { if (_eoMap && !_eoMap.loaded()) await new Promise(r => { _eoMap.once("idle", r); setTimeout(r, 3000); }); } catch (e) { /* */ } await w(200);
       const cv = document.createElement('canvas'); cv.width = 400; cv.height = 300;
       const lum = () => { const g = cv.getContext('2d'); g.clearRect(0, 0, 400, 300); eoirVideoDrawTo(g, 0, 0, 400, 300); const d = g.getImageData(0, 0, 400, 300).data; let t = 0; for (let i = 0; i < d.length; i += 4) t += d[i] + d[i + 1] + d[i + 2]; return t / (d.length / 4) / 3; };
       o.eoSpot = eoBeamSpots().length; const on = lum(); hsl.lit = false; const off = lum(); hsl.lit = true; o.eoLum = [+on.toFixed(1), +off.toFixed(1)];
@@ -237,7 +254,7 @@ export async function run(page, t) {
   t.ok(D.dvExp && D.dvOff, 'USB 내보내기 — 채널마다 MJPEG AVI(RIFF · MJPG) · POWER OFF 면 녹화 멈춤');
   const errs = (page.errors || []).filter(e => !/Failed to fetch|NetworkError|tile/i.test(e));
   t.eq(errs.length, 0, `페이지 오류 없음${errs.length ? ' — ' + errs[0] : ''}`);
-  // ── LOFT — 조종석 오른쪽 버튼 줄 맨 아래 🎯 전탐석 · 전탐석 ⧉ 새 창 ──
+  // ── Cockpit Mode — 오른쪽 버튼 줄 맨 아래 🎯 Vendor · 전탐석 ⧉ 새 창 ──
   const L = await page.evaluate(async () => {
     const w = ms => new Promise(r => setTimeout(r, ms)), o = {};
     msnShow(false); cockpitStart(); await w(1500);
@@ -250,8 +267,8 @@ export async function run(page, t) {
     msnShow(false); try { exitSolo(); } catch (e) { /* */ } await w(300);
     return o;
   });
-  t.ok(L.ctl && L.split && L.open, `조종석(3D) 화면 — 🎯 전탐석 이 오른쪽 버튼 줄 맨 아래(Split screen 밑) · 누르면 전탐석 (${JSON.stringify(L)})`);
-  t.ok(L.pop && L.popped && L.back, 'LOFT — 전탐석 ⧉ 새 창(다른 모니터) · 다시 누르면 이 창으로');
+  t.ok(L.ctl && L.split && L.open, `조종석(3D) 화면 — 🎯 Vendor 가 오른쪽 버튼 줄 맨 아래(Split screen 밑) · 누르면 전탐석 (${JSON.stringify(L)})`);
+  t.ok(L.pop && L.popped && L.back, '전탐석 ⧉ 새 창(다른 모니터) · 다시 누르면 이 창으로');
   if (process.env.MSN_SHOT) { await page.evaluate(() => { msnSpawn(4); rdr.tx = true; }); await page.waitForTimeout(3500); await page.screenshot({ path: process.env.MSN_SHOT }); }
   // 다음 묶음이 전탐석을 물려받지 않게
   await page.evaluate(() => { msnShow(false); msnVslClear(); rdr.tx = false; });
