@@ -2274,7 +2274,7 @@ function simFly(dt) {
     if (mode === 'sim') { setTimeout(() => { try { simLayoutStart(); } catch (e) { _swallow(e); } }, 400); return; }   // SIM Mode — 창 배치판
     if (mode === 'simple') { setTimeout(() => { try { simpleModeStart('pfd'); } catch (e) { _swallow(e); } }, 300); return; }   // Simple mode — 창 하나씩
     // Cockpit Mode — 3D 조종석(07-sim.js cockpitStart). 예전 '3D 단독 모드'(3d)로 적혀 있던 탭도 이리로
-    // LOFT — Cockpit Mode 로 들어가고 전탐석은 오른쪽 버튼 줄 맨 아래 🎯 전탐석(37-mission.js · 새 창으로 띄울 수 있다)
+    // (예전 LOFT 값 'loft' — Cockpit Mode 로 · 전탐석은 이제 창 위 탭 Vendor · 조종석에서는 🎯 Vendor)
     if (mode === 'cockpit' || mode === '3d' || mode === 'loft') { setTimeout(() => { try { cockpitStart(); } catch (e) { _swallow(e); } }, 300); return; }
   }, 200);
 })();

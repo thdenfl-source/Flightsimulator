@@ -17,11 +17,11 @@
      CDN 을 쓰면 한 번이라도 못 받는 순간 앱이 통째로 죽는다 — 비행 중에는
      그럴 여지를 두지 않는다. -->
 <!-- 패널 새 창(다중 모니터) — 라이브러리가 거는 이벤트까지 받아 적어야 하므로 맨 먼저 -->
-<script src="js/00-edition.js?v=734"></script>
-<script src="js/00-aircraft.js?v=734"></script>
-<script src="js/00-params.js?v=734"></script>
-<script src="js/00-sched.js?v=734"></script>
-<script src="js/00-popout.js?v=734"></script>
+<script src="js/00-edition.js?v=735"></script>
+<script src="js/00-aircraft.js?v=735"></script>
+<script src="js/00-params.js?v=735"></script>
+<script src="js/00-sched.js?v=735"></script>
+<script src="js/00-popout.js?v=735"></script>
 <link rel="stylesheet" href="vendor/leaflet.css"/>
 <script src="vendor/leaflet.js"></script>
 <link rel="stylesheet" href="vendor/leaflet-velocity.min.css"/>
@@ -2540,6 +2540,8 @@ html.ed-proc #gyro-btn, html.ed-proc #gyro-align-btn { display: none !important;
 /* Bell 206 — CDU · UPPER CONSOLE 이 없다(00-aircraft.js acScrOk) — 탭 · 단독 · 조종석 버튼을 감춘다 */
 html.ac-b206 .page-tab[data-sel="cdu"], html.ac-b206 .page-tab[data-sel="ovhd"], html.ac-b206 .page-tab[data-sel="sysp"], html.ac-b206 #cdu-solo-btn,
 html.ac-b206 #ctl3d #cduov-btn, html.ac-b206 #ctl3d #upperc-btn, html.ac-b206 #ctl3d #upperc-btn.show { display: none !important; }
+html:not(.ac-aw189) .page-tab.msn-tab { display: none !important; }   /* Vendor(전탐석) — 흰수리만 */
+#msn-wrap { position: relative; overflow: hidden; background: #1b2026; }
 html.ac-b206 #lcon-wrap .ov-reset-btn, html.ac-b206 #lcon-wrap .ov-zones-btn { display: none; }   /* 스위치 판이 없다 */
 #b206rad { display: flex; flex-direction: column; gap: 6px; background: #121314; font-family: Arial, sans-serif; color: #c9cdd1; }
 #b206rad button { font-family: Arial, sans-serif; cursor: pointer; }
@@ -2765,12 +2767,10 @@ body.simple-mode #simple-view { display: flex; position: fixed; left: 0; right: 
       <button type="button" class="gate-mode-btn" id="gate-mode-cockpit" data-mode="cockpit"><b>Cockpit Mode</b><span>3D 조종석 — 1인칭 조종석 시야에 MFD · 위아래 콘솔 · CDU(누르면 가운데에 크게) · 태블릿에 알맞습니다</span></button>
       <button type="button" class="gate-mode-btn" id="gate-mode-simple" data-mode="simple"><b>Simple Mode</b><span>창 하나씩 화면 가득 — 위 막대에서 PFD · 3D · MAP · CDU · UPPER · LOWER · SYSTEM 을 고른다</span></button>
       <button type="button" class="gate-mode-btn" id="gate-mode-sim" data-mode="sim"><b>SIM Mode</b><span>SIM 조종 · 화면마다 새 창으로 따로 배치(다중 모니터)</span></button>
-      <!-- LOFT — 흰수리 조종석(Cockpit Mode)과 전탐석(37-mission.js)을 한 비행으로 묶는다: 조종사 · 전탐요원이 함께 훈련(기종은 흰수리 · 전탐석은 새 창으로 다른 모니터에) -->
-      <button type="button" class="gate-mode-btn" id="gate-mode-loft" data-mode="loft"><b>LOFT</b><span>Line-Oriented Flight Training — 흰수리 조종석 + 전탐석(EO/IR · SAR 레이더 · 서치라이트)을 한 비행으로 · 조종사와 전탐요원이 함께 훈련(전탐석은 ⧉ 새 창으로 다른 모니터에)</span></button>
     </div>
   </form>
 </div>
-<script src="js/00-gate.js?v=734"></script>
+<script src="js/00-gate.js?v=735"></script>
 <!-- ── 단일화면 선택 바 (기본 숨김) ── -->
 <!-- ── 시작 안내(사용법/키보드) 오버레이 ── -->
 <div id="help-overlay" style="display:none;">
@@ -3725,6 +3725,7 @@ body.simple-mode #simple-view { display: flex; position: fixed; left: 0; right: 
       <button class="page-tab" data-sel="lcon" data-short="LWR" data-act="selectPanel" data-arg='["mid", "lcon"]' title="LOWER CONSOLE — 하부 콘솔(AHRS · AFCAU · FUEL · MPP · PARKING BRAKE 등)">LOWER</button>
       <button class="page-tab" data-sel="sysp" data-short="SYS" data-act="selectPanel" data-arg='["mid", "sysp"]' title="SYSTEM — MFD 계통 화면(CDU 의 Aircraft Systems 버튼으로 화면을 고른다)">SYSTEM</button>
       <button class="page-tab grip-tab" data-sel="grip" data-short="CTRL" data-act="selectPanel" data-arg='["mid", "grip"]' title="CONTROL — 컬렉티브 · 사이클릭(교관 화면과 같다 · 누르면 그대로 조작)">CONTROL</button>
+      <button class="page-tab msn-tab" data-sel="msn" data-short="VND" data-act="selectPanel" data-arg='["mid", "msn"]' title="Vendor — 흰수리 전탐석(EO/IR · SAR 레이더 · 서치라이트 · HCU · DVR)을 이 창에(조종석과 나란히 · 다른 모니터는 ⧉ POP UP)">Vendor</button>
       <button class="page-tab tab-act ck-mode-tab" data-short="⛶" data-act="cockpitToggle" title="Cockpit Mode — 3D 조종석(3D 를 화면 가득 · 1인칭 조종석 시야 · MFD · 콘솔 · CDU). 한 번 더 누르면 원래 배치">⛶ Cockpit</button>
       <button class="page-tab tab-act split-tab" data-short="⛶" id="map-solo-btn" data-act="panelSolo" data-arg='["map"]' title="MAP 단독 — 지도만 화면 가득(한 번 더 누르면 원래 배치)">⛶ MAP 단독</button>
       <button class="page-tab tab-act po-btn" data-short="⧉" data-act="popoutToggle" data-arg='["mid"]' title="이 패널을 새 창으로 띄운다(다중 모니터에 따로 배치)">⧉ POP UP</button>
@@ -3742,6 +3743,7 @@ body.simple-mode #simple-view { display: flex; position: fixed; left: 0; right: 
       <button class="page-tab" data-sel="lcon" data-short="LWR" data-act="selectPanel" data-arg='["right", "lcon"]' title="LOWER CONSOLE — 하부 콘솔(AHRS · AFCAU · FUEL · MPP · PARKING BRAKE 등)">LOWER</button>
       <button class="page-tab" data-sel="sysp" data-short="SYS" data-act="selectPanel" data-arg='["right", "sysp"]' title="SYSTEM — MFD 계통 화면(CDU 의 Aircraft Systems 버튼으로 화면을 고른다)">SYSTEM</button>
       <button class="page-tab grip-tab" data-sel="grip" data-short="CTRL" data-act="selectPanel" data-arg='["right", "grip"]' title="CONTROL — 컬렉티브 · 사이클릭(교관 화면과 같다 · 누르면 그대로 조작)">CONTROL</button>
+      <button class="page-tab msn-tab" data-sel="msn" data-short="VND" data-act="selectPanel" data-arg='["right", "msn"]' title="Vendor — 흰수리 전탐석(EO/IR · SAR 레이더 · 서치라이트 · HCU · DVR)을 이 창에(조종석과 나란히 · 다른 모니터는 ⧉ POP UP)">Vendor</button>
       <button class="page-tab tab-act split-tab ck-mode-tab" data-short="⛶" id="m3d-only-btn" data-act="cockpitToggle" title="Cockpit Mode — 3D 조종석(3D 를 화면 가득 · 1인칭 조종석 시야 · MFD · 콘솔 · CDU). 한 번 더 누르면 원래 배치">⛶ Cockpit</button>
       <button class="page-tab tab-act split-tab" data-short="⛶" id="cdu-solo-btn" data-act="panelSolo" data-arg='["cdu"]' title="CDU 단독 — CDU 만 화면 가득(한 번 더 누르면 원래 배치)">⛶ CDU 단독</button>
       <button class="page-tab tab-act po-btn" data-short="⧉" data-act="popoutToggle" data-arg='["right"]' title="이 패널을 새 창으로 띄운다(다중 모니터에 따로 배치)">⧉ POP UP</button>
@@ -3761,6 +3763,8 @@ body.simple-mode #simple-view { display: flex; position: fixed; left: 0; right: 
     <div id="sysp-wrap" class="page-content page-hidden"></div>
     <!-- CYC · COLL — 컬렉티브 · 사이클릭 그림(35-kuhgrip.js gripPanelRender · 교관 화면의 같은 페이지) -->
     <div id="grip-wrap" class="page-content page-hidden"></div>
+    <!-- Vendor — 흰수리 전탐석(js/37-mission.js · #msn-root 가 이 안으로 옮겨 온다) -->
+    <div id="msn-wrap" class="page-content page-hidden"></div>
 
     <!-- Page 1: Map -->
     <div id="map-wrap" class="page-content tcut-off">
@@ -4174,6 +4178,7 @@ body.simple-mode #simple-view { display: flex; position: fixed; left: 0; right: 
       <button class="page-tab" data-sel="lcon" data-short="LWR" data-act="selectPanel" data-arg='["bot", "lcon"]' title="LOWER CONSOLE — 하부 콘솔(AHRS · AFCAU · FUEL · MPP · PARKING BRAKE 등)">LOWER</button>
       <button class="page-tab" data-sel="sysp" data-short="SYS" data-act="selectPanel" data-arg='["bot", "sysp"]' title="SYSTEM — MFD 계통 화면(CDU 의 Aircraft Systems 버튼으로 화면을 고른다)">SYSTEM</button>
       <button class="page-tab grip-tab" data-sel="grip" data-short="CTRL" data-act="selectPanel" data-arg='["bot", "grip"]' title="CONTROL — 컬렉티브 · 사이클릭(교관 화면과 같다 · 누르면 그대로 조작)">CONTROL</button>
+      <button class="page-tab msn-tab" data-sel="msn" data-short="VND" data-act="selectPanel" data-arg='["bot", "msn"]' title="Vendor — 흰수리 전탐석(EO/IR · SAR 레이더 · 서치라이트 · HCU · DVR)을 이 창에(조종석과 나란히 · 다른 모니터는 ⧉ POP UP)">Vendor</button>
       <button class="page-tab tab-act ck-mode-tab" data-short="⛶" data-act="cockpitToggle" title="Cockpit Mode — 3D 조종석(3D 를 화면 가득 · 1인칭 조종석 시야 · MFD · 콘솔 · CDU). 한 번 더 누르면 원래 배치">⛶ Cockpit</button>
       <button class="page-tab tab-act po-btn" data-short="⧉" data-act="popoutToggle" data-arg='["bot"]' title="이 패널을 새 창으로 띄운다(다중 모니터에 따로 배치)">⧉ POP UP</button>
       <button class="page-tab tab-act po-top-btn" data-short="📌" data-act="popoutTop" data-arg='["bot", "$el"]' title="Top — 이 창을 다른 창들보다 늘 위에 띄운다(한 번 더 누르면 본 창으로)">📌 Top</button>
@@ -4188,57 +4193,57 @@ body.simple-mode #simple-view { display: flex; position: fixed; left: 0; right: 
 <!-- 앱 코드 — 클래식 스크립트(모듈 아님)라 전역 스코프를 공유한다.
      순서가 곧 실행 순서이므로 임의로 바꾸지 말 것. -->
   <!-- AIP 데이터 — 코드보다 먼저 로드한다 -->
-  <script src="js/data/terminal-fixes.js?v=734"></script>
-  <script src="js/data/ifr-fixes.js?v=734"></script>
-  <script src="js/data/ifr-procedures.js?v=734"></script>
-  <script src="js/data/airfield-info.js?v=734"></script>
-  <script src="js/data/enr-vors.js?v=734"></script>
-  <script src="js/data/loc-stations.js?v=734"></script>
-  <script src="js/data/enr-routes.js?v=734"></script>
-  <script src="js/data/airspace.js?v=734"></script>
-  <script src="js/data/runways.js?v=734"></script>
+  <script src="js/data/terminal-fixes.js?v=735"></script>
+  <script src="js/data/ifr-fixes.js?v=735"></script>
+  <script src="js/data/ifr-procedures.js?v=735"></script>
+  <script src="js/data/airfield-info.js?v=735"></script>
+  <script src="js/data/enr-vors.js?v=735"></script>
+  <script src="js/data/loc-stations.js?v=735"></script>
+  <script src="js/data/enr-routes.js?v=735"></script>
+  <script src="js/data/airspace.js?v=735"></script>
+  <script src="js/data/runways.js?v=735"></script>
   <!-- 앱 코드 -->
-  <script src="js/00-ui.js?v=734"></script>
-  <script src="js/01-state.js?v=734"></script>
-  <script src="js/02-math.js?v=734"></script>
-  <script src="js/03-pfd.js?v=734"></script>
-  <script src="js/04-map.js?v=734"></script>
-  <script src="js/05-gps.js?v=734"></script>
-  <script src="js/06-nav.js?v=734"></script>
-  <script src="js/07-sim.js?v=734"></script>
-  <script src="js/08-ifrdb.js?v=734"></script>
-  <script src="js/09a-start.js?v=734"></script>
-  <script src="js/09-cdu.js?v=734"></script>
-  <script src="js/09b-cdu-screens.js?v=734"></script>
-  <script src="js/10-tools.js?v=734"></script>
-  <script src="js/11-charts.js?v=734"></script>
-  <script src="js/12-joystick.js?v=734"></script>
-  <script src="js/13-joyhid.js?v=734"></script>
-  <script src="js/14-simmode.js?v=734"></script>
-  <script src="js/15-heli3d.js?v=734"></script>
-  <script src="js/16-sound.js?v=734"></script>
-  <script src="js/17-upper.js?v=734"></script>
-  <script src="js/18-system.js?v=734"></script>
-  <script src="js/19-lower.js?v=734"></script>
-  <script src="js/20-navaids.js?v=734"></script>
-  <script src="js/21-c5000.js?v=734"></script>
-  <script src="js/22-npx138.js?v=734"></script>
-  <script src="js/23-afcs.js?v=734"></script>
-  <script src="js/24-sar.js?v=734"></script>
-  <script src="js/25-b206panel.js?v=734"></script>
-  <script src="js/26-b206radio.js?v=734"></script>
-  <script src="js/27-b206coll.js?v=734"></script>
-  <script src="js/28-debrief.js?v=734"></script>
-  <script src="js/29-env.js?v=734"></script>
-  <script src="js/30-scenario.js?v=734"></script>
-  <script src="js/31-ios.js?v=734"></script>
-  <script src="js/32-callout.js?v=734"></script>
-  <script src="js/33-train4.js?v=734"></script>
-  <script src="js/34-infra.js?v=734"></script>
-  <script src="js/35-kuhgrip.js?v=734"></script>
-  <script src="js/36-kuhsys.js?v=734"></script>
-  <script src="js/37-mission.js?v=734"></script>
-  <script src="js/38-mirror.js?v=734"></script>
+  <script src="js/00-ui.js?v=735"></script>
+  <script src="js/01-state.js?v=735"></script>
+  <script src="js/02-math.js?v=735"></script>
+  <script src="js/03-pfd.js?v=735"></script>
+  <script src="js/04-map.js?v=735"></script>
+  <script src="js/05-gps.js?v=735"></script>
+  <script src="js/06-nav.js?v=735"></script>
+  <script src="js/07-sim.js?v=735"></script>
+  <script src="js/08-ifrdb.js?v=735"></script>
+  <script src="js/09a-start.js?v=735"></script>
+  <script src="js/09-cdu.js?v=735"></script>
+  <script src="js/09b-cdu-screens.js?v=735"></script>
+  <script src="js/10-tools.js?v=735"></script>
+  <script src="js/11-charts.js?v=735"></script>
+  <script src="js/12-joystick.js?v=735"></script>
+  <script src="js/13-joyhid.js?v=735"></script>
+  <script src="js/14-simmode.js?v=735"></script>
+  <script src="js/15-heli3d.js?v=735"></script>
+  <script src="js/16-sound.js?v=735"></script>
+  <script src="js/17-upper.js?v=735"></script>
+  <script src="js/18-system.js?v=735"></script>
+  <script src="js/19-lower.js?v=735"></script>
+  <script src="js/20-navaids.js?v=735"></script>
+  <script src="js/21-c5000.js?v=735"></script>
+  <script src="js/22-npx138.js?v=735"></script>
+  <script src="js/23-afcs.js?v=735"></script>
+  <script src="js/24-sar.js?v=735"></script>
+  <script src="js/25-b206panel.js?v=735"></script>
+  <script src="js/26-b206radio.js?v=735"></script>
+  <script src="js/27-b206coll.js?v=735"></script>
+  <script src="js/28-debrief.js?v=735"></script>
+  <script src="js/29-env.js?v=735"></script>
+  <script src="js/30-scenario.js?v=735"></script>
+  <script src="js/31-ios.js?v=735"></script>
+  <script src="js/32-callout.js?v=735"></script>
+  <script src="js/33-train4.js?v=735"></script>
+  <script src="js/34-infra.js?v=735"></script>
+  <script src="js/35-kuhgrip.js?v=735"></script>
+  <script src="js/36-kuhsys.js?v=735"></script>
+  <script src="js/37-mission.js?v=735"></script>
+  <script src="js/38-mirror.js?v=735"></script>
 
 <input type="file" id="zipFileInput" accept=".zip,application/zip,application/x-zip-compressed,application/octet-stream" style="display:none" onchange="handleZipFile(this.files[0]); this.value='';"></body>
 </html>

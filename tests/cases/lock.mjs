@@ -183,8 +183,8 @@ export async function run(page, t) {
     `SIM Mode 를 고르면 SIM 조종이 켜지고 창 배치판(화면마다 새 창 버튼)이 뜬다 (${ms.end.btns})`);
   else t.ok(await page.evaluate(() => { const b = document.getElementById('gate-mode-sim'); return !b || getComputedStyle(b).display === 'none'; }),
     '절차 훈련판 — 화면 고르기에 SIM Mode 가 없다');
-  t.ok(!mq.end.locked && mq.end.mode === 'simple' && mq.end.simple && mq.end.sbar === 'PFD,COCKPIT,MAP,CDU,UPPER,LOWER,SYSTEM,CONTROL' && mq.end.pfdIn === 'simple-host',
-    `Simple Mode 를 고르면 위 막대(창 이름 일곱)와 PFD 하나만 화면 가득 (${mq.end.sbar} · ${mq.end.pfdIn})`);
+  t.ok(!mq.end.locked && mq.end.mode === 'simple' && mq.end.simple && mq.end.sbar === 'PFD,COCKPIT,MAP,CDU,UPPER,LOWER,SYSTEM,CONTROL,Vendor' && mq.end.pfdIn === 'simple-host',
+    `Simple Mode 를 고르면 위 막대(창 이름 아홉 · 흰수리는 Vendor 까지)와 PFD 하나만 화면 가득 (${mq.end.sbar} · ${mq.end.pfdIn})`);
 
   // 비밀번호 글자는 앱 파일 어디에도 없다(SHA-256 값만 둔다)
   if (PW) {
