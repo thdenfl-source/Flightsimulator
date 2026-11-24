@@ -9,6 +9,6 @@ const cur = +((sw.match(/vfr-flight-v(\d+)/) || [])[1]);
 if (!cur) { console.error('sw.js 에서 CACHE 번호를 찾지 못했습니다'); process.exit(1); }
 const next = process.argv[2] ? +process.argv[2] : cur + 1;
 fs.writeFileSync('sw.js', sw.replace(/vfr-flight-v\d+/, 'vfr-flight-v' + next));
-const n = (html.match(/\.js\?v=\d+"/g) || []).length;
-fs.writeFileSync('index.html', html.replace(/\.js\?v=\d+"/g, `.js?v=${next}"`));
-console.log(`캐시 v${cur} → v${next} (index.html 스크립트 ${n}개)`);
+const n = (html.match(/\.(js|css)\?v=\d+"/g) || []).length;
+fs.writeFileSync('index.html', html.replace(/\.(js|css)\?v=\d+"/g, (m, e) => `.${e}?v=${next}"`));   // 앱 스크립트 · 꾸밈(css/app.css)
+console.log(`캐시 v${cur} → v${next} (index.html 스크립트 · 꾸밈 ${n}개)`);

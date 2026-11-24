@@ -21,7 +21,7 @@
 - **고칠 일은 shinesong 에서 한다.** 끝나면 Flightsimulator 로 그대로 복사해 PR 을 하나 더 올린다
   (`.git` · `.github` · `.nojekyll` · `.gitignore` · `CLAUDE.md` · `node_modules` 만 그 저장소 것을 둔다).
 - SIM 기능은 SIM 파일(14-simmode · 15-heli3d · 16-sound) 안에 두고, 다른 파일에서 부를 때는 '있으면 부른다'로 짠다.
-  사이클릭(피치 · 롤)으로만 쓰는 새 버튼은 `index.html` 의 `html.ed-proc …` 규칙(지금은 GYRO)에 넣는다.
+  사이클릭(피치 · 롤)으로만 쓰는 새 버튼은 `css/app.css` 의 `html.ed-proc …` 규칙(지금은 GYRO)에 넣는다.
 - 검사: Flightsimulator 경로(또는 `EDITION=proc`)에서는 SIM 을 켜는 검사 파일(toggleSimMode(true) · SIM_SETUP ·
   simModeOn = true)을 건너뛴다. 절차 훈련판을 shinesong 에서 미리 보려면 `EDITION=proc node tests/run.mjs` · 주소 `?edition=proc`.
 

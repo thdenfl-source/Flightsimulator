@@ -1,9 +1,10 @@
 // VFR Flight Sim — Service Worker
 // 버전을 올리면 캐시가 갱신됩니다
-const CACHE = 'vfr-flight-v735';
+const CACHE = 'vfr-flight-v736';
 const TILE_CACHES = ['vfr-sat-tiles', 'vfr-dem-tiles', 'vfr-tiles'];
 const CORE  = [
   './index.html',
+  './css/app.css',
   './manifest.json',
   './icon.png',
   './icon-512.png',
@@ -45,6 +46,8 @@ const CORE  = [
   './js/05-gps.js',
   './js/06-nav.js',
   './js/07-sim.js',
+  './js/07a-panels.js',
+  './js/07b-fcp.js',
   './js/08-ifrdb.js',
   './js/09a-start.js',
   './js/09-cdu.js',

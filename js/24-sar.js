@@ -441,7 +441,7 @@ setInterval(() => {
 }, 500);
 
 // ── HOIST CAM — SYSTEM 창 Video(Channel HOIST) 큰 칸에 붐에서 바로 아래를 보는 3D 지도 ──
-const _sarCam = { map: null, el: null, hud: null, rect: null, timer: null, mode: null, offT: 0 };
+const _sarCam = { map: null, el: null, hud: null, rect: null, timer: null, mode: null, offT: 0, seq: 0, view: '', hudKey: '' };   // seq — 지도 · HUD 가 새로 그려질 때마다 하나씩(옮겨 그리는 쪽이 바뀐 때만 옮기게)
 const HOISTCAM_FOV = 60;                                // 가로 화각(°)
 // 18-system.js _sysPaint 가 부른다 — show: 보일 때 · rect: 큰 칸(창 안 px)
 function sarHoistCamSlot(show, rect) {
@@ -466,6 +466,7 @@ function sarHoistCamSlot(show, rect) {
 // 지도 · HUD 를 그 그릇(el)에 만든다 — mode 'slot'(SYSTEM 창 큰 칸) · 'off'(화면 밖 — Cockpit Mode MFD 에 옮겨 그린다)
 function _sarCamCreate(el, mode) {
   const mapEl = document.createElement('div'); mapEl.className = 'hcam-map';
+  mapEl.style.cssText = 'position:absolute;inset:0';   // 화면 밖 그릇(#hoist-off)에서도 크기를 갖게(종전 높이 0 — 전탐석 · 조종석 MFD 호이스트 영상에 지도가 없었다)
   const hud = document.createElement('canvas'); hud.className = 'hcam-hud';
   el.appendChild(mapEl); el.appendChild(hud);
   _sarCam.el = el; _sarCam.hud = hud; _sarCam.mode = mode; _sarCam.offT = performance.now();
@@ -474,6 +475,7 @@ function _sarCamCreate(el, mode) {
       maxZoom: 24, interactive: false, attributionControl: false, pixelRatio: (typeof map3dPixelRatio === 'function') ? map3dPixelRatio(true) : 1,
       canvasContextAttributes: { preserveDrawingBuffer: true } });   // 조종석 MFD 캔버스로 옮겨 그릴 수 있게
     map.on('error', e => console.warn('[HOIST CAM]', e && e.error ? e.error.message : e));
+    map.on('render', () => { _sarCam.seq++; });
     // 꾸밈이 서면 함정 · 요구조자 · 고리를 얹고(타일을 기다리지 않는다), 다 뜨면 지형을 건다
     map.on('style.load', () => {
       try { if (typeof _ship3dAddTo === 'function' && !map.getSource('ship-3d')) _ship3dAddTo(map); } catch (e) { _swallow(e); }
@@ -504,9 +506,10 @@ function _sarCamDestroy() {
   clearInterval(_sarCam.timer); _sarCam.timer = null;
   try { if (_sarCam.map) _sarCam.map.remove(); } catch (e) { _swallow(e); }
   try { if (_sarCam.el) _sarCam.el.remove(); } catch (e) { _swallow(e); }
-  _sarCam.map = null; _sarCam.el = null; _sarCam.hud = null; _sarCam.rect = null; _sarCam.mode = null;
+  _sarCam.map = null; _sarCam.el = null; _sarCam.hud = null; _sarCam.rect = null; _sarCam.mode = null; _sarCam.view = ''; _sarCam.hudKey = '';
 }
 function sarHoistCamOn() { return !!_sarCam.map; }
+function sarHoistCamSeq() { _sarCam.offT = performance.now(); return _sarCam.seq; }   // (부르는 쪽이 아직 쓰고 있다 — 화면 밖 지도를 거두지 않게)   // 지도 · HUD 가 바뀌었는가(37-mission.js 호이스트 카메라 칸)
 // 붐 끝 높이(전파고도 + 붐 높이)에서 가로 화각 60° 로 보이는 넓이에 맞춰 확대 단계를 고른다
 function sarHoistCamZoom(wPx) {
   const hM = Math.max(1.5, (_sarRa() + HOIST_Z_FT) * 0.3048);
@@ -523,11 +526,18 @@ function _sarCamUpdate() {
   if (!el.isConnected || !(w > 0 && H > 0) || (typeof sysPage !== 'undefined' && (sysPage !== 'asys_video' || videoCfg.ch !== 'HOIST') && !(typeof msnHoistWant === 'function' && msnHoistWant()))) { _sarCamDestroy(); return; }   // 전탐석 표시기(37-mission.js)가 쓰고 있으면 둔다
   if (_sarCam.mode === 'off' && performance.now() - _sarCam.offT > SARCAM_OFF_IDLE_MS) { _sarCamDestroy(); return; }   // 조종석 MFD 가 더는 그리지 않는다
   const [hl, ho] = sarHookLL();
-  try { map.jumpTo({ center: [ho, hl], zoom: sarHoistCamZoom(w), bearing: S.hdg, pitch: 0 }); } catch (e) { _swallow(e); }
+  // 시점이 그대로면 움직이지 않는다(jumpTo 가 지도를 다시 그리게 해 — 멈춰 있어도 초당 20번 그렸다)
+  const z = sarHoistCamZoom(w), view = `${ho.toFixed(7)},${hl.toFixed(7)},${z.toFixed(3)},${(+S.hdg).toFixed(1)}`;
+  if (view !== _sarCam.view) { _sarCam.view = view; try { map.jumpTo({ center: [ho, hl], zoom: z, bearing: S.hdg, pitch: 0 }); } catch (e) { _swallow(e); } }
   // HUD — 가운데 십자(바로 아래 = 고리가 내려가는 자리) · 케이블 · 높이 차 · 거리 · 유지 시간
   const c = _sarCam.hud; if (!c || !(w > 0 && H > 0)) return;
   const dpr = window.devicePixelRatio || 1;
   if (c.width !== Math.round(w * dpr) || c.height !== Math.round(H * dpr)) { c.width = Math.round(w * dpr); c.height = Math.round(H * dpr); }
+  // 보일 것이 그대로면 HUD 를 다시 그리지 않는다
+  const G0 = sarGeom(), hudKey = [w, H, dpr, view, hoistPowered(), Math.round(hoistFt), Math.round(_sarRa()), sar.on, sar.state, Math.round(G0.dh),
+    G0.dist === null ? '' : Math.round(G0.dist), Math.round(((G0.brg - S.hdg + 360) % 360) / 30), (+sar.hold || 0).toFixed(1)].join('|');
+  if (hudKey === _sarCam.hudKey) return;
+  _sarCam.hudKey = hudKey; _sarCam.seq++;
   const g = c.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, w, H);
   const k = Math.max(0.6, Math.min(1.4, w / 760));
   g.strokeStyle = 'rgba(255,255,255,0.85)'; g.lineWidth = 1.5;
