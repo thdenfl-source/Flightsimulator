@@ -2150,7 +2150,7 @@ async function part4(page, t) {
   // 지금 고도로 걸면 1,237 처럼 끝자리가 남는다. ▲ 는 위의 10 단위, ▼ 는 아래의 10 단위로.
   const crs = await page.evaluate(() => {
     const keep = { crht: crhtOn, alt: altHoldOn, sel: selCrht };
-    const go = (from, d) => { selCrht = from; applyDelta('crht', d); return selCrht; };
+    const go = (from, d) => { crhtOn = true; selCrht = from; applyDelta('crht', d); return selCrht; };   // (걸린 채 — 기준을 옮긴다)
     const out = { up: go(1237, 10), dn: go(1237, -10), up0: go(1240, 10), dn0: go(1240, -10), low: go(4, -10) };
     crhtOn = keep.crht; altHoldOn = keep.alt; selCrht = keep.sel; updateHoverBtns();
     return out;

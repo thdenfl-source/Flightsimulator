@@ -340,7 +340,7 @@ function tdownSet() {
   gaOn = false; vsModeOn = false;
   selSpd = TDN_SPD;
   if (simModeOn) simIasOn = true;
-  selCrht = TDN_AGL; crhtOn = true; altHoldOn = false;
+  selCrht = TDN_AGL; crhtOn = true; hhtOn = false; altHoldOn = false;
   updateGaBtn();
   try { updateHoverBtns(); updateApInhibit(); } catch (e) { _swallow(e); }
   const b = document.getElementById('tdown-btn');
@@ -368,7 +368,7 @@ function tdhEngage() {
   }
   try { if (gspdOn) toggleGspd(); } catch (e) { _swallow(e); }
   gsOn = false; gsArmed = false; try { gsAutoLatch(); updateGsBtn(); } catch (e) { _swallow(e); }
-  altHoldOn = false; crhtOn = false; gaOn = false; vsModeOn = false;
+  altHoldOn = false; crhtOn = false; hhtOn = false; gaOn = false; vsModeOn = false;
   _tdV0 = Math.max(0, tdGsFwd()); _tdH0 = Math.max(1, ra - selHht); _tdDecpl = false; _tdDone = false;
   simIasOn = true; selSpd = S.spd;
   tdOn = true;
@@ -394,7 +394,7 @@ function tdStep(dt) {
   if (h < 3 || vg < 3) {
     // 다 내려왔다 — 땅 위 제자리 호버로 넘긴다: GSPD 0kt(바람이 있어도 제자리) + CRHT = HHT(전파고도)
     tdOn = false; _tdDone = false;
-    selCrht = selHht; crhtOn = true; altHoldOn = false;
+    hhtOn = true; crhtOn = true; altHoldOn = false;   // HHT — H.HT 노브 값(전파고도)으로 호버 높이를 지킨다(CR.HT 값은 그대로 · FMA HHT)
     try { if (!gspdOn) toggleGspd(); gspdRefFwd = 0; gspdRefLat = 0; } catch (e) { _swallow(e); }
     updateGaBtn();
     try { updateHoverBtns(); updateApInhibit(); } catch (e) { _swallow(e); }
@@ -452,7 +452,7 @@ function simAfcsVsCmd() {
     const corr = Math.max(-400, Math.min(400, (g.path - ahead) * 0.5));
     return Math.max(-2000, Math.min(500, -base + corr));
   }
-  const tgt = altHoldOn ? selAlt : selCrht + crhtGroundFt();
+  const tgt = altHoldOn ? selAlt : crhtTgtFt() + crhtGroundFt();   // CRHT(또는 HHT — H.HT 값)
   const rate = altHoldOn ? Math.max(50, Math.abs(selVS)) : 500;
   const ahead = S.alt + (S.vs || 0) / 60 * SIM_AFCS_LEAD;
   return Math.max(-rate, Math.min(rate, (tgt - ahead) * SIM_AFCS_ALT_K));

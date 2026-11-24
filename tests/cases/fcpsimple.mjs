@@ -26,7 +26,7 @@ export async function run(page, t) {
     // 노브 — 돌리면 지금 FCP 와 같은 값이 움직인다
     const hdg0 = selHdg; turn('hdg', 'up'); o.hdg = (selHdg - hdg0 + 360) % 360;
     const alt0 = altaSelGet(); turn('alta', 'up'); o.alt = altaSel - alt0;   // ALT.A 노브는 목표 고도만 고른다
-    const crht0 = selCrht; turn('crht', 'dn'); o.crht = selCrht - crht0;
+    fcpPre.crht = true; selCrht = 500; const crht0 = selCrht; turn('crht', 'dn'); o.crht = selCrht - crht0; fcpPre.crht = false;   // (고르는 중 — 기준만 옮긴다)
     const hht0 = selHht; turn('hht', 'up'); o.hht = selHht - hht0;
     window._qnhHpa = 1013; turn('baro', 'up'); o.baro = window._qnhHpa;
     document.querySelector('#fcp-simple [data-k="baro"] .fks-push').click(); o.std = window._qnhHpa;
@@ -41,8 +41,8 @@ export async function run(page, t) {
     // 누름 · 버튼
     altHoldOn = false; document.getElementById('fks-alt').click(); o.altBtn = altHoldOn;
     fcpsSync(); o.altLit = document.getElementById('fks-alt').classList.contains('on');
-    const nav0 = navApOn; document.getElementById('fks-navd').click(); o.navd = navApOn !== nav0; if (navApOn !== nav0) toggleNavAp();
-    o.uplimOff = document.querySelector('#fcp-simple [data-k="uplim"]').classList.contains('fks-none');
+    const nav0 = navApOn; document.getElementById('fks-navd').click(); o.navd = navApOn !== nav0 || navArmed; if (navApOn !== nav0) toggleNavAp(); navArmed = false;   // 조건 밖이면 무장
+    o.uplimOff = !document.querySelector('#fcp-simple [data-k="uplim"]').classList.contains('fks-none') && !!document.querySelector('#fcp-simple [data-k="dh"] .fks-push[data-act="altLimSrc"]');
     window._qnhHpa = 1013;
     return o;
   });
@@ -55,6 +55,6 @@ export async function run(page, t) {
   t.ok(r.baro === 1014 && r.std === 1013.25, `BARO — 돌리면 1 hPa, 누르면 STD 1013.25 hPa (${r.baro} → ${r.std})`);
   t.ok(r.stdIn === '29.92' && r.pfdIn === '29.92 IN' && r.inStep === '29.93', `IN 으로 보면 STD 29.92 · PFD 29.92 IN · 돌리면 0.01 (${r.stdIn} · ${r.pfdIn} · ${r.inStep})`);
   t.ok(r.altBtn && r.altLit, 'ALT 버튼 — ALT 유지가 걸리고 녹색으로 켜진다');
-  t.ok(r.navd, 'NAVD CPL — NAV 결합(지금 FCP 의 NAV 와 같다)');
-  t.ok(r.uplimOff, 'UPLIM · DH 는 아직 기능 없이 자리만');
+  t.ok(r.navd, 'NAVD CPL — NAV 결합(조건 밖이면 무장)');
+  t.ok(r.uplimOff, 'UPLIM · DH — 고도 경고 노브(누르면 RA ⇄ BARO)');
 }
