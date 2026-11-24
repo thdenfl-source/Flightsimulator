@@ -55,8 +55,8 @@ export async function run(page, t) {
     applyDelta('spd', 5); o.m3 = iasModeOn(); applyDelta('spd', -5); afcsReleaseAll();
     return o;
   });
-  t.ok(!I.sim && !I.m0 && I.m1 && !I.m2 && I.m3 && I.c0 !== I.c1 && I.c2 === I.c0,
-    `IAS 는 풀린 채 시작 · FCP IAS 를 누르면 AFCS 상태 띠의 IAS 가 켜지고, 다시 누르면 꺼진다 · 노브를 돌리면 다시 걸린다 (${I.c0} → ${I.c1} → ${I.c2})`);
+  t.ok(!I.sim && !I.m0 && I.m1 && !I.m2 && !I.m3 && I.c0 !== I.c1 && I.c2 === I.c0,
+    `IAS 는 풀린 채 시작 · FCP IAS 를 누르면 AFCS 상태 띠의 IAS 가 켜지고, 다시 누르면 꺼진다 · 노브를 돌리면 기준만 바뀌고 걸리지 않는다 (${I.c0} → ${I.c1} → ${I.c2})`);
 
   // ── PFD 팝아웃 — PFD 화면만(계기 · 소프트키 · FCP). 종전의 지도 칸은 없다 ──
   const pm = await page.evaluate(async () => {
