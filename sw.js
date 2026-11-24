@@ -4,7 +4,6 @@ const CACHE = 'vfr-flight-v736';
 const TILE_CACHES = ['vfr-sat-tiles', 'vfr-dem-tiles', 'vfr-tiles'];
 const CORE  = [
   './index.html',
-  './css/app.css',
   './manifest.json',
   './icon.png',
   './icon-512.png',
@@ -32,6 +31,7 @@ const CORE  = [
   './js/data/airspace.js',
   './js/data/runways.js',
   // 앱 코드 — index.html 에서 분리한 조각들(로드 순서 = 실행 순서)
+  './js/00-style.js',
   './js/00-edition.js',
   './js/00-aircraft.js',
   './js/00-params.js',

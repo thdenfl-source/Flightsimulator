@@ -22,11 +22,25 @@ const _mD = Math.PI / 180;
 const _mClamp = (v, a, b) => Math.max(a, Math.min(b, v));
 function _mGndFt(lat, lon) { let f = null; try { f = terrainFtAt(lat, lon); } catch (e) { f = null; } return Number.isFinite(f) ? f : 0; }
 // 지도 시점을 옮긴다 — 그대로면 손대지 않는다(jumpTo 는 같은 자리여도 지도를 다시 그려, 기체가 멈춰 있어도 초당 10번 넘게 그렸다)
-function _mJump(map, o) {
-  const key = JSON.stringify(o, (k, v) => typeof v === 'number' ? +v.toFixed(6) : v);
-  if (map._mJumpKey === key) return;
-  map._mJumpKey = key;
+//   live — 시점 말고도 그림이 바뀌는 지도(EO/IR — 탐조등 빛 · 움직이는 선박 · 요구조자): live 값(탐조등 · 환경)이 바뀌면 곧바로,
+//          그대로여도 초당 4번은 다시 그린다(종전 초당 20번)
+function _mJump(map, o, live, dyn = true) {
+  const key = JSON.stringify(o, (k, v) => typeof v === 'number' ? +v.toFixed(6) : v) + (live === undefined ? '' : '|' + live), now = performance.now();
+  if (map._mJumpKey === key) {
+    if (live !== undefined && dyn && now - (map._mRepT || 0) > 250) { map._mRepT = now; try { map.jumpTo(o); } catch (e) { _swallow(e); } }   // (다시 그리기만으로는 탐조등 빛 · 지형이 덜 따라와 시점을 다시 건다)
+    return;
+  }
+  map._mJumpKey = key; map._mRepT = now;
   map.jumpTo(o);
+}
+// 시점이 그대로여도 그림이 움직이는가 — 탐조등이 켜졌거나 · 선박 · 요구조자 · 교통이 있거나 · 비행 중
+function _eoDyn() {
+  try { return !!(hsl.lit || msnVsl.length || (typeof S !== 'undefined' && S.running) || (typeof sar !== 'undefined' && sar.on) || (typeof traffic !== 'undefined' && traffic.length)); } catch (e) { return true; }
+}
+// EO/IR 지도 그림에 들어가는 것 — 탐조등 · 환경(시간대 · 시정 · NVG)
+function _eoLiveKey() {
+  let e = ''; try { if (typeof env !== 'undefined') e = [env.tod, env.vis, env.nvg, env.rain].join(','); } catch (er) { _swallow(er); }
+  return [hsl.lit ? 1 : 0, hsl.ir ? 1 : 0, Math.round(hsl.az), Math.round(hsl.el), Math.round(hsl.focus * 10), e].join(',');
 }
 function _mWater(lat, lon) { try { const m = _tcElev(lat, lon); return m == null || m <= 1; } catch (e) { return true; } }
 function _mAltM() { return Math.max(0, Number(S.alt) || 0) * 0.3048; }
@@ -1419,7 +1433,7 @@ function _eoCamera() {
   const phys = _mGndFt(S.lat, S.lon) * 0.3048, agl = Math.max(2, _mAltM() - phys);
   const camAlt = (Number.isFinite(drawn) ? drawn : phys) + agl - 1.2;
   const p = eoLosPoint(), dist = _mClamp(p ? p.gnd : 5000, 150, 30000);
-  try { _mJump(map, _ml3dCamOptions(S.lon, S.lat, camAlt, normA(S.hdg + eo.az), _mClamp(90 + eo.el, 0, 180), 0, dist, map)); } catch (e) { _swallow(e); }
+  try { _mJump(map, _ml3dCamOptions(S.lon, S.lat, camAlt, normA(S.hdg + eo.az), _mClamp(90 + eo.el, 0, 180), 0, dist, map), _eoLiveKey(), _eoDyn()); } catch (e) { _swallow(e); }
 }
 // 조종석 SYSTEM 창 Video(Channel EO/IR) · 3D 조종석 MFD — 그 칸(x, y, w, h)에 EO/IR 영상 + 오버레이를 그린다(18-system.js 가 부른다)
 //   전탐석에서 터릿을 움직이면 그대로 보인다. CDU Video 의 Brightness · Contrast · Saturation 도 먹는다.
@@ -1906,13 +1920,14 @@ function _nvRender(cell) {
 // ── 호이스트 카메라 칸(오른쪽 위) — 24-sar.js HOIST CAM 을 옮겨 그린다 ──
 let _hcWantT = -Infinity;
 function msnHoistWant() { return performance.now() - _hcWantT < 3000; }
-let _hcSeen = '';
+let _hcSeen = '', _hcCopyT = 0;
 function _hcRender(cell) {
   const cv = cell.querySelector('.hc-cv'), d = _msnFit(cv); if (!(d.W > 0)) return;
   // 지도 · HUD 가 새로 그려졌을 때만 옮긴다 — 3D 지도 그림(WebGL)을 2D 캔버스로 옮기는 것이 무거워(초당 20번이면 CPU 를 크게 먹었다)
   const seq = typeof sarHoistCamSeq === 'function' && typeof sarHoistCamOn === 'function' && sarHoistCamOn() ? sarHoistCamSeq() : -1, key = `${seq}|${d.W}x${d.H}`;
-  if (seq >= 0 && key === _hcSeen) { _hcWantT = performance.now(); return; }
-  _hcSeen = key;
+  const now = performance.now();
+  if (seq >= 0 && (key === _hcSeen || (key.split('|')[1] === _hcSeen.split('|')[1] && now - _hcCopyT < 100))) { _hcWantT = now; return; }   // 바뀌어도 초당 10번까지
+  _hcSeen = key; _hcCopyT = now;
   const g = cv.getContext('2d'); g.setTransform(1, 0, 0, 1, 0, 0); g.fillStyle = '#000'; g.fillRect(0, 0, d.W, d.H);
   if (typeof sarHoistCamDrawTo !== 'function') return;
   _hcWantT = performance.now();

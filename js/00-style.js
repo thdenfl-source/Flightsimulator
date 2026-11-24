@@ -1,4 +1,10 @@
-/* 앱 화면 꾸밈 — index.html 에서 뺐다(파일이 너무 커서). index.html 의 <link rel="stylesheet" href="css/app.css?v=…"> 가 읽는다 */
+// 00-style.js — 앱 화면 꾸밈(CSS). index.html 이 너무 커서 따로 뺐다 — <head> 에서 곧바로 <style> 로 넣는다
+//   (<link rel=stylesheet> 로 따로 읽으면 새 창 · 늘 위 창(Document PiP)으로 꾸밈을 옮겨 붙일 때 파일로 연 앱(file://)이 멈추기도 했다 —
+//    <style> 이면 예전 index.html 안의 꾸밈과 똑같이 돈다)
+// 고칠 때: 아래 CSS 안에 역따옴표(`) · 역빗금(\) · '${' 를 쓰지 않는다(글 묶음이 깨진다 — 필요하면 \5C 같은 CSS 이스케이프로)
+(function () {
+  const st = document.createElement('style'); st.id = 'app-style';
+  st.textContent = String.raw`
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
 html, body {
   width: 100%; height: 100%;
@@ -2709,3 +2715,6 @@ body.simple-mode #simple-view { display: flex; position: fixed; left: 0; right: 
 #simple-host > .page-content, #simple-host > #pfd-wrap { flex: 1 1 0; }
 #pfdov-size { position: static; align-items: center; }
 #pfdov-size span { flex: 0 0 auto; min-width: 34px; text-align: center; color: #9fb4c6; font: bold 10px 'Helvetica Neue', Arial, sans-serif; }
+`;
+  (document.head || document.documentElement).appendChild(st);
+})();

@@ -499,6 +499,13 @@ function sarHoistCamDrawTo(g, x, y, w, h) {
     _sarCamCreate(el, 'off');
   }
   _sarCam.offT = performance.now();
+  // 화면 밖 지도는 옮겨 그릴 칸 크기만큼만(최근 1.5초 동안 가장 큰 칸 · 160~640px) — 크게 그려 작은 칸에 옮기면 헛일이다(3D 그림 옮기기가 무겁다)
+  if (_sarCam.mode === 'off' && _sarCam.el) {
+    const now = performance.now(), want = Math.max(160, Math.min(640, Math.round(w)));
+    if (!_sarCam.want || want >= _sarCam.want || now - _sarCam.wantT > 1500) { _sarCam.want = want; _sarCam.wantT = now; }
+    const W = _sarCam.want, H = Math.round(W * 0.75);
+    if (Math.abs(_sarCam.el.clientWidth - W) > 8) { _sarCam.el.style.width = W + 'px'; _sarCam.el.style.height = H + 'px'; try { _sarCam.map.resize(); } catch (e) { _swallow(e); } }
+  }
   try { const mc = _sarCam.map.getCanvas(); if (mc && mc.width) g.drawImage(mc, x, y, w, h); } catch (e) { _swallow(e); }
   try { if (_sarCam.hud && _sarCam.hud.width) g.drawImage(_sarCam.hud, x, y, w, h); } catch (e) { _swallow(e); }
 }
@@ -506,7 +513,7 @@ function _sarCamDestroy() {
   clearInterval(_sarCam.timer); _sarCam.timer = null;
   try { if (_sarCam.map) _sarCam.map.remove(); } catch (e) { _swallow(e); }
   try { if (_sarCam.el) _sarCam.el.remove(); } catch (e) { _swallow(e); }
-  _sarCam.map = null; _sarCam.el = null; _sarCam.hud = null; _sarCam.rect = null; _sarCam.mode = null; _sarCam.view = ''; _sarCam.hudKey = '';
+  _sarCam.map = null; _sarCam.el = null; _sarCam.hud = null; _sarCam.rect = null; _sarCam.mode = null; _sarCam.view = ''; _sarCam.hudKey = ''; _sarCam.want = 0;
 }
 function sarHoistCamOn() { return !!_sarCam.map; }
 function sarHoistCamSeq() { _sarCam.offT = performance.now(); return _sarCam.seq; }   // (부르는 쪽이 아직 쓰고 있다 — 화면 밖 지도를 거두지 않게)   // 지도 · HUD 가 바뀌었는가(37-mission.js 호이스트 카메라 칸)
@@ -528,7 +535,8 @@ function _sarCamUpdate() {
   const [hl, ho] = sarHookLL();
   // 시점이 그대로면 움직이지 않는다(jumpTo 가 지도를 다시 그리게 해 — 멈춰 있어도 초당 20번 그렸다)
   const z = sarHoistCamZoom(w), view = `${ho.toFixed(7)},${hl.toFixed(7)},${z.toFixed(3)},${(+S.hdg).toFixed(1)}`;
-  if (view !== _sarCam.view) { _sarCam.view = view; try { map.jumpTo({ center: [ho, hl], zoom: z, bearing: S.hdg, pitch: 0 }); } catch (e) { _swallow(e); } }
+  if (view !== _sarCam.view) { _sarCam.view = view; _sarCam.repT = performance.now(); try { map.jumpTo({ center: [ho, hl], zoom: z, bearing: S.hdg, pitch: 0 }); } catch (e) { _swallow(e); } }
+  else if (performance.now() - (_sarCam.repT || 0) > 250) { _sarCam.repT = performance.now(); try { map.jumpTo({ center: [ho, hl], zoom: z, bearing: S.hdg, pitch: 0 }); } catch (e) { _swallow(e); } }   // 요구조자 · 함정이 움직인다 — 그대로여도 초당 4번
   // HUD — 가운데 십자(바로 아래 = 고리가 내려가는 자리) · 케이블 · 높이 차 · 거리 · 유지 시간
   const c = _sarCam.hud; if (!c || !(w > 0 && H > 0)) return;
   const dpr = window.devicePixelRatio || 1;

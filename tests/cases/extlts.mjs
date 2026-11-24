@@ -100,10 +100,10 @@ export async function run(page, t) {
     const tod0 = env.tod, o = {};
     ovhdSet('display', 'DAY'); ovhdSet('posLts', '5'); ovhdSet('acolMode', 'OFF');
     for (const tod of ['NIGHT', 'DUSK']) {
-      envSet({ tod }); ovhdSet('posMode', 'STEADY'); _ml3d.triggerRepaint(); await w(600);
+      envSet({ tod }); ovhdSet('posMode', 'STEADY'); _ml3d.triggerRepaint(); await w(600); await __mapsIdle(4000); _ml3d.triggerRepaint(); await w(150);
       o[tod] = { lit: lit(), n: _h3LtScr ? _h3LtScr.pts.length : 0 };
     }
-    envSet({ tod: 'NIGHT' }); ovhdSet('posMode', 'OFF'); _ml3d.triggerRepaint(); await w(600); o.off = lit();
+    envSet({ tod: 'NIGHT' }); ovhdSet('posMode', 'OFF'); _ml3d.triggerRepaint(); await w(600); await __mapsIdle(4000); _ml3d.triggerRepaint(); await w(150); o.off = lit();
     ovhdSet('posMode', 'STEADY'); envSet({ tod: 'DAY' }); _ml3d.triggerRepaint(); await w(400); o.day = _h3LtScr;
     envSet({ tod: tod0 });
     return o;

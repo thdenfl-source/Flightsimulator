@@ -26,7 +26,7 @@ export function buildEnv() {
   }
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'vfrsim-test-'));
   _tmpDirs.push(dir);
-  for (const d of ['vendor', 'js', 'css', 'sounds']) {
+  for (const d of ['vendor', 'js', 'sounds']) {
     const src = path.join(ROOT, d);
     if (fs.existsSync(src)) fs.cpSync(src, path.join(dir, d), { recursive: true });
   }
