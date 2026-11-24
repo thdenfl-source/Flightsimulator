@@ -49,6 +49,19 @@ export async function openApp(browser, { cdu = false } = {}) {
     try { sessionStorage.setItem('vfrUnlocked', '1'); sessionStorage.setItem('vfrStartApt', '1'); }
     catch (e) { /* 없으면 그만 */ }
   });
+  // 검사 도구 — 3D 지도(maplibre)가 다 그려질 때(idle)까지 기다린다(최대 ms). 지도 그림을 재는 검사는 고정 대기 대신 이것을 쓴다
+  //   (바쁜 CI 에서는 타일 · 지형이 늦게 와 고정 대기 뒤에 재면 덜 그려진 그림을 재 가끔 실패했다)
+  //   await page.evaluate(() => __mapsIdle())  또는 page.evaluate 안에서 await __mapsIdle(5000)
+  await page.addInitScript(() => {
+    window.__mapsIdle = async (ms = 4000) => {
+      const maps = [];
+      const add = f => { try { const m = f(); if (m && typeof m.loaded === 'function') maps.push(m); } catch (e) { /* 아직 없다 */ } };
+      add(() => _ml3d); add(() => _eoMap); add(() => _nvMap); add(() => _sarCam.map);
+      await Promise.all(maps.map(m => m.loaded() ? null : new Promise(r => { m.once('idle', r); setTimeout(r, ms); })));
+      await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));   // 그린 것이 화면 캔버스에 오르게 두 프레임
+      return maps.length;
+    };
+  });
   const errors = [];
   page.on('pageerror', e => errors.push(e.message));
   page.errors = errors;

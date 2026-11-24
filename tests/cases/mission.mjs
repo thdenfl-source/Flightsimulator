@@ -134,7 +134,7 @@ export async function run(page, t) {
     o.quadPos = pm[0] < ph[0] && pm[1] < pr[1] && pe[0] > pr[0] && pe[1] > ph[1];   // 왼쪽 위 지도 · 오른쪽 위 호이스트 · 왼쪽 아래 레이더 · 오른쪽 아래 EO/IR
     dispKey('split'); await w(50); o.split = vis(); dispKey('ch'); await w(50); o.split2 = vis();
     dispKey('v2'); await w(50); o.one = vis(); dispKey('ch'); await w(50); o.one2 = vis(); dispKey('navi'); await w(50); o.navi = vis();
-    dispKey('multi'); rdr.tx = true; await w(1200);
+    dispKey('multi'); rdr.tx = true; await w(1200); await __mapsIdle(4000); await w(200);
     const px = sel => { const c = document.querySelector(sel); if (!c || !c.width) return 0; const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data; let n = 0; for (let i = 0; i < d.length; i += 64) if (d[i + 3] > 0 && (d[i] > 150 || d[i + 1] > 150)) n++; return n; };
     o.mapOv = px('#msn-root .nv-ov'); o.nvMap = !!_nvMap; o.hoistWant = msnHoistWant();
     o.labels = [...document.querySelectorAll('#msn-root .msn-chl')].map(e => e.textContent).join('|');
@@ -152,7 +152,7 @@ export async function run(page, t) {
     // EO/IR 영상에 탐조등 빛 무리가 보인다(밤 · 주간 카메라) — 열상(IR)에는 안 보인다
     { const alt0 = S.alt, tod0 = env.tod, sen0 = eo.sensor, az0 = eo.az, el0 = eo.el, mode0 = eo.mode;
       S.alt = _mGndFt(S.lat, S.lon) + 800; envSet({ tod: 'NIGHT' }); Object.assign(eo, { pwr: true, mode: 'MAN', sensor: 'EOW', az: -30, el: -35 }); hsl.az = -30; hsl.el = -35;
-      _eoCamera(); await w(400); _eoCamera(); try { if (_eoMap && !_eoMap.loaded()) await new Promise(r => { _eoMap.once("idle", r); setTimeout(r, 3000); }); } catch (e) { /* */ } await w(200);
+      _eoCamera(); await w(400); _eoCamera(); await __mapsIdle(4000);
       const cv = document.createElement('canvas'); cv.width = 400; cv.height = 300;
       const lum = () => { const g = cv.getContext('2d'); g.clearRect(0, 0, 400, 300); eoirVideoDrawTo(g, 0, 0, 400, 300); const d = g.getImageData(0, 0, 400, 300).data; let t = 0; for (let i = 0; i < d.length; i += 4) t += d[i] + d[i + 1] + d[i + 2]; return t / (d.length / 4) / 3; };
       o.eoSpot = eoBeamSpots().length; const on = lum(); hsl.lit = false; const off = lum(); hsl.lit = true; o.eoLum = [+on.toFixed(1), +off.toFixed(1)];

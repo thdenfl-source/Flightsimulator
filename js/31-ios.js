@@ -77,6 +77,7 @@ function iosHandle(m) {
     else if (c === 'debrief' && typeof dbfOpen === 'function') dbfOpen();
     else if (c === 'ping') { _iosPeerT = Date.now(); return; }                 // 교관 창이 있다 — 미러를 보낸다
     else if (c === 'ovhd' && typeof ovhdSet === 'function') ovhdSet(m.id, m.v);  // 교관 창에서 바꾼 콘솔 스위치
+    else if (c === 'msn' && typeof msnRemoteCmd === 'function') msnRemoteCmd(m);  // 교관 화면 Vendor(전탐석)의 조작 — 37-mission.js
     else if (c === 'kg' && typeof kgPress === 'function') { if (m.on) kgPress(m.k); else if (typeof _kgHoldStop === 'function') _kgHoldStop(); }
     else if (c === 'bc' && typeof b206c !== 'undefined') {                         // Bell 컬렉티브
       const k = m.k;
@@ -192,7 +193,7 @@ const HELP_ITEMS = [
   ['🎬 SCN', '시나리오 — 자리 · 고도 · 바람 · 환경 · 연료 · 비행계획 · SAR 를 이름 붙여 저장하고 불러온다. 파일로 내보내 교관끼리 나눈다.'],
   ['🌙 ENV', '환경 — 시간대(주간 · 황혼 · 야간) · 시정 · 비 · NVG · 바다 상태 · 돌풍 · 구름 밑면 · 흰수리 착륙등 · RA 콜아웃.'],
   ['📋 DEBRIEF', '비행 기록 · 강평 — 항적 · 그래프 · 사건 · 다시 보기(×1 · ×2 · ×4 · ×8 · ×10 — 느릴 때는 1초 기록 사이를 이어 매끄럽게) · 3D 다시 보기 · A/B 구간 채점 · CSV · 비행 저장 · 보고서(인쇄).'],
-  ['🧑‍✈️ IOS', '교관 화면 — 같은 기기에 교관 창을 따로 열거나, 교관 태블릿으로 메인 기기의 연결 요청 QR 을 찍어 잇는다(메인 기기에서 수락). 고장 · 환경 · 바람 · 메시지 · 시나리오를 건다. 위 막대(교관 · PFD · UPPER · LOWER · SYSTEM · CYC · COLL · MAP · COCKPIT)로 교육생 화면을 그대로 본다 — SYSTEM 은 교육생의 연료 · 엔진(FADEC) · 전기 · AFCS 상태를 그리고, 볼 계통 화면(Fuel · Engine · Elec …)은 교관이 따로 고른다(흰수리만).'],
+  ['🧑‍✈️ IOS', '교관 화면 — 같은 기기에 교관 창을 따로 열거나, 교관 태블릿으로 메인 기기의 연결 요청 QR 을 찍어 잇는다(메인 기기에서 수락). 고장 · 환경 · 바람 · 메시지 · 시나리오를 건다. 위 막대(교관 · PFD · UPPER · LOWER · SYSTEM · CYC · COLL · MAP · COCKPIT · Vendor)로 교육생 화면을 그대로 본다 — Vendor(흰수리)는 다른 기기에서 전탐요원이 전탐석을 그대로 다룬다(조작은 조종석 기기로 가고, 조종사 화면의 EO/IR 영상 · 탐조등과 같다) — SYSTEM 은 교육생의 연료 · 엔진(FADEC) · 전기 · AFCS 상태를 그리고, 볼 계통 화면(Fuel · Engine · Elec …)은 교관이 따로 고른다(흰수리만).'],
   ['🛟 SAR', '요구조자(익수자 · 육상)와 호이스트 구조 훈련. 밤에는 스트로브가 번쩍이고 서치라이트에 반사판이 빛난다.'],
   ['W&B (Bell)', 'Bell 계기판 FUEL QTY 를 누르거나 컬렉티브 창 W&B — 무게 · 무게중심 · 연료 · 호버 성능(HIGE/HOGE).'],
   ['HORN MUTE (Bell)', '계기판 왼쪽 위 — 울리는 경고음(ENG OUT · 낮은 RPM)을 끈다. 경고가 풀리면 다시 산다.'],
@@ -264,7 +265,7 @@ function iosMirrorCheck() {
   return real;
 }
 // 보낼 것 — 지난번과 달라진 것만(가볍게) · full 이면 다 보낸다(2초마다 · 처음)
-const _iosMirLast = { S: {}, g: {}, ov: {} };
+const _iosMirLast = { S: {}, g: {}, ov: {}, msn: {} };
 function _iosDiff(cur, last, out) {
   let n = 0;
   for (const [k, v] of Object.entries(cur)) {
@@ -276,13 +277,15 @@ function _iosDiff(cur, last, out) {
   return n;
 }
 function iosMirror(full) {
-  if (full) { _iosMirLast.S = {}; _iosMirLast.g = {}; _iosMirLast.ov = {}; }
+  if (full) { _iosMirLast.S = {}; _iosMirLast.g = {}; _iosMirLast.ov = {}; _iosMirLast.msn = {}; }
   const g = {};
   for (const n of IOS_MIRROR_G) { const v = _iosGet(n); if (v !== undefined && typeof v !== 'function') g[n] = v; }
   const s = Object.assign({}, S); delete s.trail;
   const m = { type: 'mirror', full: !!full, S: {}, g: {} };
   let n = _iosDiff(s, _iosMirLast.S, m.S) + _iosDiff(g, _iosMirLast.g, m.g);
   if (typeof ovhdState !== 'undefined') { m.ov = {}; n += _iosDiff(ovhdState, _iosMirLast.ov, m.ov); }
+  // Vendor(전탐석 · 37-mission.js) — EO/IR · 레이더 · 탐조등 · 선박 · 표시기 · DVR 상태
+  try { const ms = typeof msnSyncState === 'function' ? msnSyncState() : null; if (ms) { m.msn = {}; n += _iosDiff(ms, _iosMirLast.msn, m.msn); } } catch (e) { _swallow(e); }
   return (n || full) ? m : null;
 }
 // 교육생 창 — 교관 창이 있다고 알려 오면(ping) 0.2초마다 보낸다(콘솔은 1초마다)
@@ -308,6 +311,7 @@ function iosMirrorApply(m) {
         else { window.__iosV = v; (0, eval)(n + ' = window.__iosV'); }
       } catch (e) { /* const 이거나 없는 이름 — 넘어간다 */ }
     }
+    if (m.msn && typeof msnSyncApply === 'function') { try { msnSyncApply(m.msn); } catch (e) { _swallow(e); } }
     if (m.ov && typeof ovhdSet === 'function') for (const [id, v] of Object.entries(m.ov)) { try { if (ovhdState[id] !== v) ovhdSet(id, v); } catch (e) { _swallow(e); } }
   } finally { _iosApplying = false; }
   try { if (typeof updateAcOnMap === 'function') updateAcOnMap(); } catch (e) { _swallow(e); }
@@ -319,8 +323,8 @@ if (IOS_MODE) try { ovhdOn((id, v) => { if (!_iosApplying) iosCmd('ovhd', { id, 
 if (IOS_MODE) setInterval(() => iosCmd('ping'), 1000);
 
 // ── 페이지 ──
-const IOS_PAGES = [['ios', '교관'], ['pfd', 'PFD'], ['ovhd', 'UPPER'], ['lcon', 'LOWER'], ['sysp', 'SYSTEM'], ['grip', 'CYC · COLL'], ['map', 'MAP'], ['cockpit', 'COCKPIT']]
-  .filter(([k]) => !((k === 'ovhd' || k === 'sysp') && typeof acScrOk === 'function' && !acScrOk(k)));   // Bell 206 · R22 — UPPER · SYSTEM 없음
+const IOS_PAGES = [['ios', '교관'], ['pfd', 'PFD'], ['ovhd', 'UPPER'], ['lcon', 'LOWER'], ['sysp', 'SYSTEM'], ['grip', 'CYC · COLL'], ['map', 'MAP'], ['cockpit', 'COCKPIT'], ['msn', 'Vendor']]
+  .filter(([k]) => !((k === 'ovhd' || k === 'sysp' || k === 'msn') && typeof acScrOk === 'function' && !acScrOk(k)));   // Vendor(전탐석) — 흰수리만 · 다른 기기에서 전탐요원이   // Bell 206 · R22 — UPPER · SYSTEM 없음
 let iosPage = 'ios';
 function iosPagesBuild() {
   if (document.getElementById('ios-pages')) return;

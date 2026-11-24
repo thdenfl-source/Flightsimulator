@@ -60,7 +60,7 @@ export async function run(page, t) {
   const [ios] = await Promise.all([page.waitForEvent('popup'), page.evaluate(() => document.getElementById('map-ios-btn').click())]);
   await ios.waitForFunction(() => !!document.getElementById('ios-pages') && !!document.getElementById('ios-root'), null, { timeout: 20000 });
   const P = await ios.evaluate(() => [...document.querySelectorAll('#ios-pages [data-iosp]')].map(b => b.textContent));
-  t.eq(P.join('|'), '교관|PFD|UPPER|LOWER|SYSTEM|CYC · COLL|MAP|COCKPIT', '교관 화면 위 막대 — 교관 · PFD · UPPER · LOWER · SYSTEM · CYC · COLL · MAP · COCKPIT');
+  t.eq(P.join('|'), '교관|PFD|UPPER|LOWER|SYSTEM|CYC · COLL|MAP|COCKPIT|Vendor', '교관 화면 위 막대 — 교관 · PFD · UPPER · LOWER · SYSTEM · CYC · COLL · MAP · COCKPIT · Vendor(흰수리 전탐석)');
   // 미러 — 교육생 창의 값이 교관 창에 그대로
   await page.evaluate(() => { S.alt = 2345; S.hdg = 123; S.spd = 88; ovhdSet('pitotHeat', 'AUTO'); window.__ft1 = fuel.ft1; fuel.ft1 = 111; fadec.e[1].tgt = 777; elecBatt.soc = 63; });
   await ios.waitForFunction(() => S.alt === 2345 && S.hdg === 123 && ovhdGet('pitotHeat') === 'AUTO' && fuel.ft1 === 111, null, { timeout: 8000 }).catch(() => {});

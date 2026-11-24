@@ -21,6 +21,27 @@ const MSN_RE = 6371000 * 4 / 3;                     // 대기 굴절을 넣은 �
 const _mD = Math.PI / 180;
 const _mClamp = (v, a, b) => Math.max(a, Math.min(b, v));
 function _mGndFt(lat, lon) { let f = null; try { f = terrainFtAt(lat, lon); } catch (e) { f = null; } return Number.isFinite(f) ? f : 0; }
+// 지도 시점을 옮긴다 — 그대로면 손대지 않는다(jumpTo 는 같은 자리여도 지도를 다시 그려, 기체가 멈춰 있어도 초당 10번 넘게 그렸다)
+//   live — 시점 말고도 그림이 바뀌는 지도(EO/IR — 탐조등 빛 · 움직이는 선박 · 요구조자): live 값(탐조등 · 환경)이 바뀌면 곧바로,
+//          그대로여도 초당 4번은 다시 그린다(종전 초당 20번)
+function _mJump(map, o, live, dyn = true) {
+  const key = JSON.stringify(o, (k, v) => typeof v === 'number' ? +v.toFixed(6) : v) + (live === undefined ? '' : '|' + live), now = performance.now();
+  if (map._mJumpKey === key) {
+    if (live !== undefined && dyn && now - (map._mRepT || 0) > 250) { map._mRepT = now; try { map.jumpTo(o); } catch (e) { _swallow(e); } }   // (다시 그리기만으로는 탐조등 빛 · 지형이 덜 따라와 시점을 다시 건다)
+    return;
+  }
+  map._mJumpKey = key; map._mRepT = now;
+  map.jumpTo(o);
+}
+// 시점이 그대로여도 그림이 움직이는가 — 탐조등이 켜졌거나 · 선박 · 요구조자 · 교통이 있거나 · 비행 중
+function _eoDyn() {
+  try { return !!(hsl.lit || msnVsl.length || (typeof S !== 'undefined' && S.running) || (typeof sar !== 'undefined' && sar.on) || (typeof traffic !== 'undefined' && traffic.length)); } catch (e) { return true; }
+}
+// EO/IR 지도 그림에 들어가는 것 — 탐조등 · 환경(시간대 · 시정 · NVG)
+function _eoLiveKey() {
+  let e = ''; try { if (typeof env !== 'undefined') e = [env.tod, env.vis, env.nvg, env.rain].join(','); } catch (er) { _swallow(er); }
+  return [hsl.lit ? 1 : 0, hsl.ir ? 1 : 0, Math.round(hsl.az), Math.round(hsl.el), Math.round(hsl.focus * 10), e].join(',');
+}
 function _mWater(lat, lon) { try { const m = _tcElev(lat, lon); return m == null || m <= 1; } catch (e) { return true; } }
 function _mAltM() { return Math.max(0, Number(S.alt) || 0) * 0.3048; }
 
@@ -1347,7 +1368,7 @@ function msnHelp() {
 function _msnJoyAxes() {
   if (!msnOpen || typeof joyAxVal !== 'function' || typeof joyOn === 'undefined' || !joyOn) return null;
   try {
-    if (typeof simModeOn !== 'undefined' && simModeOn) return null;   // SIM 으로 몰고 있으면 사이클릭은 비행에 쓴다
+    if (!MSN_REMOTE && typeof simModeOn !== 'undefined' && simModeOn) return null;   // SIM 으로 몰고 있으면 사이클릭은 비행에 쓴다(다른 기기의 Vendor 는 제 장치)
     if (joyAxes.roll || joyAxes.pitch) return { x: joyAxVal('roll'), y: -joyAxVal('pitch') };
     const pads = joyPads(); const p = pads.find(q => q.index === joyActiveIdx) || pads[0];
     if (!p) return null;
@@ -1412,7 +1433,7 @@ function _eoCamera() {
   const phys = _mGndFt(S.lat, S.lon) * 0.3048, agl = Math.max(2, _mAltM() - phys);
   const camAlt = (Number.isFinite(drawn) ? drawn : phys) + agl - 1.2;
   const p = eoLosPoint(), dist = _mClamp(p ? p.gnd : 5000, 150, 30000);
-  try { map.jumpTo(_ml3dCamOptions(S.lon, S.lat, camAlt, normA(S.hdg + eo.az), _mClamp(90 + eo.el, 0, 180), 0, dist, map)); } catch (e) { _swallow(e); }
+  try { _mJump(map, _ml3dCamOptions(S.lon, S.lat, camAlt, normA(S.hdg + eo.az), _mClamp(90 + eo.el, 0, 180), 0, dist, map), _eoLiveKey(), _eoDyn()); } catch (e) { _swallow(e); }
 }
 // 조종석 SYSTEM 창 Video(Channel EO/IR) · 3D 조종석 MFD — 그 칸(x, y, w, h)에 EO/IR 영상 + 오버레이를 그린다(18-system.js 가 부른다)
 //   전탐석에서 터릿을 움직이면 그대로 보인다. CDU Video 의 Brightness · Contrast · Saturation 도 먹는다.
@@ -1848,7 +1869,7 @@ function _nvRender(cell) {
   const hdgUp = !nv.ctr, mpp = nv.nm * 1852 * 2 / Math.max(50, W);
   const z = Math.log2(40075016.686 * Math.cos(S.lat * _mD) / (512 * mpp));
   let c = nv.ctr; if (!c) { const [la, lo] = destPoint(S.lat, S.lon, S.hdg, nv.nm * 0.45 * H / W); c = { lat: la, lon: lo }; }
-  try { map.jumpTo({ center: [c.lon, c.lat], zoom: z, bearing: hdgUp ? S.hdg : 0, pitch: 0 }); } catch (e) { _swallow(e); }
+  try { _mJump(map, { center: [c.lon, c.lat], zoom: z, bearing: hdgUp ? S.hdg : 0, pitch: 0 }); } catch (e) { _swallow(e); }
   const d = _msnFit(ov), k = d.W / Math.max(1, W), g = ov.getContext('2d');
   g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, d.W, d.H); g.setTransform(k, 0, 0, k, 0, 0);
   const P = (lat, lon) => { try { return map.project([lon, lat]); } catch (e) { return null; } };
@@ -1899,8 +1920,14 @@ function _nvRender(cell) {
 // ── 호이스트 카메라 칸(오른쪽 위) — 24-sar.js HOIST CAM 을 옮겨 그린다 ──
 let _hcWantT = -Infinity;
 function msnHoistWant() { return performance.now() - _hcWantT < 3000; }
+let _hcSeen = '', _hcCopyT = 0;
 function _hcRender(cell) {
   const cv = cell.querySelector('.hc-cv'), d = _msnFit(cv); if (!(d.W > 0)) return;
+  // 지도 · HUD 가 새로 그려졌을 때만 옮긴다 — 3D 지도 그림(WebGL)을 2D 캔버스로 옮기는 것이 무거워(초당 20번이면 CPU 를 크게 먹었다)
+  const seq = typeof sarHoistCamSeq === 'function' && typeof sarHoistCamOn === 'function' && sarHoistCamOn() ? sarHoistCamSeq() : -1, key = `${seq}|${d.W}x${d.H}`;
+  const now = performance.now();
+  if (seq >= 0 && (key === _hcSeen || (key.split('|')[1] === _hcSeen.split('|')[1] && now - _hcCopyT < 100))) { _hcWantT = now; return; }   // 바뀌어도 초당 10번까지
+  _hcSeen = key; _hcCopyT = now;
   const g = cv.getContext('2d'); g.setTransform(1, 0, 0, 1, 0, 0); g.fillStyle = '#000'; g.fillRect(0, 0, d.W, d.H);
   if (typeof sarHoistCamDrawTo !== 'function') return;
   _hcWantT = performance.now();
@@ -1993,6 +2020,12 @@ let _msnT = 0, _msnFrame = 0;
 function msnStep() {
   const now = performance.now(), dt = _msnT ? Math.min(0.25, (now - _msnT) / 1000) : 0; _msnT = now;
   if (!dt) return;
+  if (MSN_REMOTE) {   // 다른 기기의 Vendor — 계산은 조종석 기기가 하고(상태를 받는다) 여기서는 레이더 그림 · 화면만
+    try { rdrStep(dt); } catch (e) { _swallow(e); }
+    try { msnRender(); } catch (e) { _swallow(e); }
+    return;
+  }
+  if (_msnRjT && now - _msnRjT > 1000) { eo.joy.x = eo.joy.y = 0; slc.joy.x = slc.joy.y = 0; _msnRjT = 0; }   // 다른 기기의 조이스틱 소식이 끊기면 가운데로
   const run = typeof S !== 'undefined' && S.running;
   try { if (run) _vslStep(dt * ((typeof simSpeed !== 'undefined' && Number(simSpeed)) || 1)); } catch (e) { _swallow(e); }
   try { eoStep(dt); } catch (e) { _swallow(e); }
@@ -2002,6 +2035,54 @@ function msnStep() {
   try { if (MSN_ON) dvrStep(dt); } catch (e) { _swallow(e); }
   try { msnRender(); } catch (e) { _swallow(e); }
   try { vccpRender(); } catch (e) { _swallow(e); }
+}
+// ══ Vendor 를 다른 기기에서 — 교관 화면(?ios=1 · 같은 브라우저 · 다른 기기는 QR 연결)의 위 막대 Vendor ══
+//   조종석 기기가 계산한다(EO/IR 터릿 · 레이더 · 탐조등 · 선박 · DVR) — 교관 화면은 그 상태를 받아(31-ios.js iosMirror → msnSyncApply) 그린다
+//   교관 화면에서 누른 HCU · 탐조등 · 레이더 조작기 · 표시기 단추 · 조이스틱은 조종석 기기로 보내 그쪽에서 누른다(msnRemoteCmd)
+//   그래서 조종사 SYSTEM 창 EO/IR 영상 · 3D 탐조등 빛과 다른 기기의 Vendor 가 늘 같다
+const MSN_REMOTE = MSN_ON && typeof IOS_MODE !== 'undefined' && IOS_MODE;
+const MSN_RCMD = ['hcuPress', 'slcPress', 'clnPress', 'dvrPress', 'dispKey', 'rdrPickRB', 'eoFocusBy', 'msnSpawn', 'msnVslClear', 'srchMode', 'rdrTrack', 'msnAct'];
+const MSN_LOCAL_ACT = new Set(['help', 'close', 'popout', 'fly']);   // 이 기기에서만(화면 · 도움말) — 비행 시작/멈춤은 교관 화면의 단추로
+let _msnRjT = 0;
+// 보낼 상태 — 그림(캔버스) · 누르고 있는 단추 · 녹화 영상은 빼고 값만
+function msnSyncState() {
+  if (!MSN_ON) return null;
+  const { pcv, ...r } = rdr, { down, ...sl } = slc;
+  return { eo, rdr: r, hsl, srch, disp, slc: sl, nv, vsl: msnVsl,
+    dvr: { pwr: dvr.pwr, boot: dvr.boot, rec: dvr.rec, play: dvr.play, ch: dvr.ch, menu: dvr.menu, menuI: dvr.menuI, view: dvr.view, pb: dvr.pb } };
+}
+// 받은 상태를 넣는다(교관 화면) — 조이스틱 객체(eo.joy · slc.joy)는 화면 스틱이 쥐고 있어 바꿔 끼우지 않는다
+function msnSyncApply(o) {
+  if (!MSN_ON || !o) return;
+  const put = (t, v, keep = []) => { if (!v || typeof v !== 'object') return; const k0 = {}; keep.forEach(k => { k0[k] = t[k]; }); Object.assign(t, v); Object.assign(t, k0); };
+  put(eo, o.eo, ['joy']); put(rdr, o.rdr, ['pcv']); put(hsl, o.hsl); put(srch, o.srch); put(slc, o.slc, ['joy', 'down']); put(nv, o.nv); put(dvr, o.dvr);
+  if (o.disp) { const was = JSON.stringify(disp); Object.assign(disp, o.disp); if (JSON.stringify(disp) !== was) { try { dispSet(); } catch (e) { _swallow(e); } } }
+  if (Array.isArray(o.vsl)) { msnVsl.length = 0; msnVsl.push(...o.vsl); }
+}
+// 조종석 기기 — 교관 화면이 보낸 조작(이름이 정해진 것만)
+function msnRemoteCmd(m) {
+  if (!MSN_ON || MSN_REMOTE || !m) return;
+  if (m.f === '_joy') { const a = (m.a || []).map(v => _mClamp(+v || 0, -1, 1)); eo.joy.x = a[0]; eo.joy.y = a[1]; slc.joy.x = a[2]; slc.joy.y = a[3]; _msnRjT = performance.now(); return; }
+  if (!MSN_RCMD.includes(m.f) || (m.f === 'msnAct' && MSN_LOCAL_ACT.has((m.a || [])[0]))) return;
+  const fn = window[m.f]; if (typeof fn !== 'function') return;
+  try { fn(...(Array.isArray(m.a) ? m.a.slice(0, 4) : [])); } catch (e) { _swallow(e); }
+}
+if (MSN_REMOTE) {
+  // 조작은 조종석 기기로 — 이 기기의 같은 이름 함수를 '보내기'로 바꿔 낀다(화면 단추 · 조이스틱 배정이 모두 이 이름을 부른다)
+  for (const f of MSN_RCMD) {
+    const orig = window[f]; if (typeof orig !== 'function') continue;
+    window[f] = function (...a) {
+      if (f === 'msnAct' && MSN_LOCAL_ACT.has(a[0])) return orig.apply(this, a);
+      try { iosCmd('msn', { f, a }); } catch (e) { _swallow(e); }
+    };
+  }
+  // 조이스틱(화면 스틱 · 이 기기에 꽂은 장치) — 바뀌면 보낸다(움직이는 동안은 0.3초마다 다시)
+  let _rjLast = '', _rjT = 0;
+  setInterval(() => {
+    const pj = _msnJoyAxes(), x = _mClamp(eo.joy.x + (pj ? pj.x : 0), -1, 1), y = _mClamp(eo.joy.y + (pj ? pj.y : 0), -1, 1);
+    const a = [x, y, slc.joy.x, slc.joy.y].map(v => +v.toFixed(3)), k = a.join(','), moving = a.some(v => v !== 0), now = performance.now();
+    if (k !== _rjLast || (moving && now - _rjT > 300)) { _rjLast = k; _rjT = now; try { iosCmd('msn', { f: '_joy', a }); } catch (e) { _swallow(e); } }
+  }, 100);
 }
 // 흰수리(전탐석 · 조종석 모두)는 EO/IR 터릿이 돈다 — 조종석 SYSTEM 창 Video(EO/IR) 가 영상을 띄운다
 if (EO_ON) setInterval(msnStep, 50);
