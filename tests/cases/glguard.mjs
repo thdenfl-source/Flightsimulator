@@ -1,0 +1,44 @@
+// 3D 지도 그래픽(WebGL) 문맥을 잃었을 때(GPU 메모리 · 절전) — 돌아오면 그대로, 3초 안에 돌아오지 않으면 그 지도를 새로 만든다(04-map.js mapGlGuard)
+export const name = '3D 지도 문맥 복구';
+
+export async function run(page, t) {
+  // 본 3D 지도 — 우측 창 3D
+  await page.evaluate(() => selectPanel('right', 'm3d'));
+  await page.waitForFunction(() => typeof _ml3d !== 'undefined' && _ml3d && _ml3d.getCanvas(), null, { timeout: 15000 });
+  await page.waitForTimeout(800);
+  const a = await page.evaluate(async () => {
+    const w = ms => new Promise(r => setTimeout(r, ms));
+    const old = _ml3d, n0 = mapGlRebuiltN, ext = (() => { const c = old.getCanvas(); const g = c.getContext('webgl2') || c.getContext('webgl'); return g && g.getExtension('WEBGL_lose_context'); })();
+    if (!ext) return { skip: true };
+    // ① 잃었다가 곧 돌아오면 — 같은 지도
+    ext.loseContext(); await w(300); const lost1 = !!old._glLost; ext.restoreContext(); await w(3500);
+    const same = _ml3d === old && !old._glLost && mapGlRebuiltN === n0;
+    // ② 돌아오지 않으면 — 3초 뒤 새 지도
+    const ext2 = (() => { const c = _ml3d.getCanvas(); const g = c.getContext('webgl2') || c.getContext('webgl'); return g.getExtension('WEBGL_lose_context'); })();
+    const before = _ml3d; ext2.loseContext(); await w(3800);
+    return { lost1, same, rebuilt: _ml3d && _ml3d !== before && mapGlRebuiltN === n0 + 1, inDom: !!(_ml3d && _ml3d.getContainer().isConnected) };
+  });
+  if (a.skip) { t.ok(true, '(이 브라우저는 문맥 잃기를 흉내 낼 수 없다 — 건너뜀)'); }
+  else {
+    t.ok(a.lost1 && a.same, `본 3D — 문맥을 잃었다가 돌아오면 그 지도 그대로 (${JSON.stringify(a)})`);
+    t.ok(a.rebuilt && a.inDom, '본 3D — 3초 안에 돌아오지 않으면 새로 만든다');
+  }
+  // EO/IR 지도(흰수리) — 돌아오지 않으면 거두고, 다음 그림에서 새로 만든다
+  const b = await page.evaluate(async () => {
+    const w = ms => new Promise(r => setTimeout(r, ms));
+    if (typeof _eoMapEnsure !== 'function') return { skip: true };
+    const cv = document.createElement('canvas'); cv.width = 200; cv.height = 150;
+    eoirVideoDrawTo(cv.getContext('2d'), 0, 0, 200, 150); await w(800);
+    const old = _eoMap; if (!old) return { skip: true };
+    const g = old.getCanvas().getContext('webgl2') || old.getCanvas().getContext('webgl'), ext = g && g.getExtension('WEBGL_lose_context');
+    if (!ext) return { skip: true };
+    ext.loseContext(); await w(3800); const dropped = _eoMap === null || _eoMap !== old;
+    eoirVideoDrawTo(cv.getContext('2d'), 0, 0, 200, 150); await w(300);
+    return { dropped, again: !!_eoMap && _eoMap !== old };
+  });
+  if (b.skip) t.ok(true, '(EO/IR 지도 없음 — 건너뜀)');
+  else t.ok(b.dropped && b.again, `EO/IR — 문맥이 돌아오지 않으면 거두고 다음 그림에서 새로 만든다 (${JSON.stringify(b)})`);
+  const errs = (page.errors || []).filter(e => !/Failed to fetch|NetworkError|tile/i.test(e));
+  t.eq(errs.length, 0, `페이지 오류 없음${errs.length ? ' — ' + errs[0] : ''}`);
+  await page.evaluate(() => selectPanel('right', 'map'));
+}

@@ -595,6 +595,9 @@ function _msnCss() {
   st.textContent = `
 #msn-root{position:fixed;inset:0;z-index:4000;display:none;flex-direction:column;background:#1b2026;color:#cfd8df;font-family:"Helvetica Neue",Arial,sans-serif;user-select:none;-webkit-user-select:none}
 #msn-root.on{display:flex}
+.msn-link{display:none;font:bold 11px monospace;padding:2px 7px;border-radius:9px;border:1px solid #3a4b5c}
+.msn-link.ok{color:#7fffb0;border-color:#2ecc71}.msn-link.slow{color:#ffb000;border-color:#ffb000}.msn-link.lost{color:#ff5050;border-color:#ff5050;animation:msnBlink 1s steps(2) infinite}.msn-link.wait{color:#9ab}
+@keyframes msnBlink{50%{opacity:.35}}
 #msn-root.in-panel{position:absolute;z-index:auto;container-type:size}
 #msn-root.in-panel [data-mact="close"],#msn-root.in-panel [data-mact="fly"]{display:none}
 .msn-top{display:flex;align-items:center;gap:8px;padding:5px 10px;background:#0b0e11;border-bottom:1px solid #2a3540;font-size:12px;flex-wrap:wrap}
@@ -821,7 +824,7 @@ function _msnBuild() {
   const dk = (k, lbl, face) => `<div class="msn-dk">${lbl}<b data-dk="${k}">${face}</b></div>`;
   const slsw = (k, u, d) => `<div>${u}<span class="k" data-slc="${k}"><i></i></span>${d}</div>`;
   R.innerHTML = `
-  <div class="msn-top"><b>Vendor · 흰수리 전탐석 MISSION CONSOLE</b><span class="msn-ac" data-m="ac"></span><span class="msn-sp"></span>
+  <div class="msn-top"><b>Vendor · 흰수리 전탐석 MISSION CONSOLE</b><span class="msn-ac" data-m="ac"></span><span class="msn-link" data-m="link"></span><span class="msn-sp"></span>
     <button data-mact="fly">▶ 비행</button><button data-mact="spawn">선박 표적 생성</button><button data-mact="clear">표적 지우기</button>
     <button data-mact="help">❓</button><button data-mact="popout" title="전탐석을 새 창으로 — 다른 모니터에서 전탐요원이 · 조종석은 이 창에">⧉ 새 창</button><button data-mact="close">조종석 보기 ⤴</button></div>
   <div class="msn-body">
@@ -1407,6 +1410,7 @@ function _eoMapEnsure() {
       interactive: false, attributionControl: false, pixelRatio: (typeof map3dPixelRatio === 'function') ? map3dPixelRatio(true) : 1,
       canvasContextAttributes: { preserveDrawingBuffer: true } });   // 조종석 SYSTEM 창 · MFD 로 옮겨 그릴 수 있게
     map.on('error', e => console.warn('[EO/IR]', e && e.error ? e.error.message : e));
+    try { if (typeof mapGlGuard === 'function') mapGlGuard(map, 'EO/IR', _eoMapDrop); } catch (e) { _swallow(e); }   // 그래픽 문맥을 잃고 안 돌아오면 거둔다(다음 그림에서 새로 만든다)
     map.on('style.load', () => {
       try { if (typeof _ship3dAddTo === 'function' && !map.getSource('ship-3d')) _ship3dAddTo(map); } catch (e) { _swallow(e); }
       try { if (typeof _sarLayer === 'function' && !map.getLayer('sar-3d')) map.addLayer(_sarLayer(true)); } catch (e) { _swallow(e); }
@@ -1830,6 +1834,14 @@ function msnRenderPanels() {
   const sOn = hsl.lit;
   set('slon', sOn); set('slman', srch.mode === 'MAN'); set('sleo', srch.mode === 'EO'); set('slrdr', srch.mode === 'RDR');
   const ac = _msnEl.querySelector('[data-m="ac"]'); if (ac) ac.textContent = `HDG ${fmtA(S.hdg)}  ALT ${Math.round(S.alt)}FT  GS ${Math.round(S.spd)}KT`;
+  // 다른 기기의 Vendor — 조종석 기기와의 연결(받은 지 얼마 · 왕복 시간). 끊기면 화면이 멈춘 채 보이므로 빨갛게 깜박인다
+  const lk = _msnEl.querySelector('[data-m="link"]');
+  if (lk && MSN_REMOTE && typeof iosLinkState === 'function') {
+    const L = iosLinkState(), sec = L.age === null ? 0 : Math.round(L.age / 1000);
+    const t = L.st === 'wait' ? '○ 조종석 기다림' : L.st === 'lost' ? `● 연결 끊김 ${sec}초` : L.st === 'slow' ? `● 응답 늦음 ${sec}초` : `● 조종석 연결 ${L.rtt === null ? '' : L.rtt + 'ms'}`;
+    lk.style.display = 'inline-block'; lk.className = 'msn-link ' + L.st; if (lk.textContent !== t) lk.textContent = t;
+    lk.title = '조종석 기기와의 연결 — 왕복 시간 · 마지막으로 상태를 받은 뒤 지난 시간(끊기면 화면은 마지막 상태로 멈춘다)';
+  }
   const td = _msnEl.querySelector('[data-m="tdata"]');
   if (td) {
     const c = rdr.tgt && msnContacts().find(x => x.id === rdr.tgt), T = rdr.tgt && rdr.trk[rdr.tgt];
@@ -1857,6 +1869,7 @@ function _nvEnsure(el) {
       canvasContextAttributes: { preserveDrawingBuffer: true },   // 녹화기 CH4 가 옮겨 담을 수 있게
       pixelRatio: (typeof map3dPixelRatio === 'function') ? map3dPixelRatio(true) : 1 });
     _nvMap.on('error', e => console.warn('[NAVI]', e && e.error ? e.error.message : e));
+    try { if (typeof mapGlGuard === 'function') mapGlGuard(_nvMap, '전탐석 지도', _nvDrop); } catch (e) { _swallow(e); }
   } catch (e) { console.warn('[NAVI] map failed:', e); _nvMap = null; }
   return _nvMap;
 }

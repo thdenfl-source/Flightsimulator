@@ -75,7 +75,7 @@ function iosHandle(m) {
     else if (c === 'scn' && typeof scnApply === 'function') scnApply(scnList()[+m.i]);
     else if (c === 'sar' && typeof sarPlaceAhead === 'function') { if (m.on) sarPlaceAhead(); else if (sar.on) sarToggleOn(); }
     else if (c === 'debrief' && typeof dbfOpen === 'function') dbfOpen();
-    else if (c === 'ping') { _iosPeerT = Date.now(); return; }                 // 교관 창이 있다 — 미러를 보낸다
+    else if (c === 'ping') { _iosPeerT = Date.now(); if (m.pt) _iosPingEcho = m.pt; return; }   // 교관 창이 있다 — 미러를 보낸다(받은 시각은 되돌려 보내 왕복 시간을 잰다)
     else if (c === 'ovhd' && typeof ovhdSet === 'function') ovhdSet(m.id, m.v);  // 교관 창에서 바꾼 콘솔 스위치
     else if (c === 'msn' && typeof msnRemoteCmd === 'function') msnRemoteCmd(m);  // 교관 화면 Vendor(전탐석)의 조작 — 37-mission.js
     else if (c === 'kg' && typeof kgPress === 'function') { if (m.on) kgPress(m.k); else if (typeof _kgHoldStop === 'function') _kgHoldStop(); }
@@ -286,10 +286,11 @@ function iosMirror(full) {
   if (typeof ovhdState !== 'undefined') { m.ov = {}; n += _iosDiff(ovhdState, _iosMirLast.ov, m.ov); }
   // Vendor(전탐석 · 37-mission.js) — EO/IR · 레이더 · 탐조등 · 선박 · 표시기 · DVR 상태
   try { const ms = typeof msnSyncState === 'function' ? msnSyncState() : null; if (ms) { m.msn = {}; n += _iosDiff(ms, _iosMirLast.msn, m.msn); } } catch (e) { _swallow(e); }
+  if (_iosPingEcho) { m.echo = _iosPingEcho; _iosPingEcho = 0; n++; }   // 교관 창이 보낸 ping 시각 — 교관 창이 왕복 시간을 잰다
   return (n || full) ? m : null;
 }
 // 교육생 창 — 교관 창이 있다고 알려 오면(ping) 0.2초마다 보낸다(콘솔은 1초마다)
-let _iosPeerT = 0, _iosMirN = 0;
+let _iosPeerT = 0, _iosMirN = 0, _iosPingEcho = 0;
 if (!IOS_MODE) setInterval(() => {
   if (Date.now() - _iosPeerT > 3000) return;
   if (_iosMirN === 0) iosMirrorCheck();
@@ -299,9 +300,17 @@ if (!IOS_MODE) setInterval(() => {
 }, 200);
 // 교관 창 — 받은 상태를 제 앱에 넣는다
 let _iosApplying = false, iosMirrorN = 0;
+// 교관 창이 본 연결 상태 — 마지막으로 상태를 받은 때 · 왕복 시간(ms) — Vendor(37-mission.js) 위 막대가 보인다
+const iosLink = { lastT: 0, rtt: null };
+function iosLinkState() {
+  if (!iosLink.lastT) return { st: 'wait', age: null, rtt: null };
+  const age = Date.now() - iosLink.lastT;
+  return { st: age > 5000 ? 'lost' : age > 1500 ? 'slow' : 'ok', age, rtt: iosLink.rtt };
+}
 function iosMirrorApply(m) {
   if (!m || m.type !== 'mirror') return;
   _iosApplying = true; iosMirrorN++;
+  iosLink.lastT = Date.now(); if (m.echo) iosLink.rtt = Math.max(0, Date.now() - m.echo);
   try {
     if (m.S) { Object.assign(S, m.S); S.running = false; }
     for (const [n, v] of Object.entries(m.g || {})) {
@@ -320,7 +329,7 @@ function iosMirrorApply(m) {
 }
 // 교관 창에서 콘솔 스위치를 바꾸면 교육생 창으로
 if (IOS_MODE) try { ovhdOn((id, v) => { if (!_iosApplying) iosCmd('ovhd', { id, v }); }); } catch (e) { _swallow(e); }
-if (IOS_MODE) setInterval(() => iosCmd('ping'), 1000);
+if (IOS_MODE) setInterval(() => iosCmd('ping', { pt: Date.now() }), 1000);
 
 // ── 페이지 ──
 const IOS_PAGES = [['ios', '교관'], ['pfd', 'PFD'], ['ovhd', 'UPPER'], ['lcon', 'LOWER'], ['sysp', 'SYSTEM'], ['grip', 'CYC · COLL'], ['map', 'MAP'], ['cockpit', 'COCKPIT'], ['msn', 'Vendor']]

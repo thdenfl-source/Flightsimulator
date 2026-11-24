@@ -476,6 +476,7 @@ function _sarCamCreate(el, mode) {
       canvasContextAttributes: { preserveDrawingBuffer: true } });   // 조종석 MFD 캔버스로 옮겨 그릴 수 있게
     map.on('error', e => console.warn('[HOIST CAM]', e && e.error ? e.error.message : e));
     map.on('render', () => { _sarCam.seq++; });
+    try { if (typeof mapGlGuard === 'function') mapGlGuard(map, '호이스트 카메라', _sarCamDestroy); } catch (e) { _swallow(e); }   // 그래픽 문맥을 잃고 안 돌아오면 거둔다(쓰는 쪽이 다시 만든다)
     // 꾸밈이 서면 함정 · 요구조자 · 고리를 얹고(타일을 기다리지 않는다), 다 뜨면 지형을 건다
     map.on('style.load', () => {
       try { if (typeof _ship3dAddTo === 'function' && !map.getSource('ship-3d')) _ship3dAddTo(map); } catch (e) { _swallow(e); }

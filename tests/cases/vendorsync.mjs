@@ -39,6 +39,17 @@ export async function run(page, t) {
     return { same: S.running === run0, j1, j2: eo.joy.x };
   });
   t.ok(d.same && d.j1 === 0.5 && d.j2 === 0, `정해진 조작만(비행 시작/멈춤은 안 받는다) · 조이스틱 소식이 1초 끊기면 가운데 (${JSON.stringify(d)})`);
+  // 연결 상태(위 막대) — 왕복 시간 · 소식이 끊기면 빨갛게
+  await ios.waitForFunction(() => iosLink.rtt !== null, null, { timeout: 4000 }).catch(() => {});
+  await ios.waitForTimeout(400);
+  const L = await ios.evaluate(async () => {
+    const lk = () => { const e = document.querySelector('#msn-root [data-m="link"]'); return { c: e.className, t: e.textContent, d: getComputedStyle(e).display }; };
+    const ok = lk(); iosLink.lastT = Date.now() - 2500; msnRenderPanels(); const slow = lk(); iosLink.lastT = Date.now() - 6000; msnRenderPanels(); const lost = lk();
+    return { ok, slow, lost, rtt: iosLink.rtt };
+  });
+  const mainLk = await page.evaluate(() => { msnShow(true); msnRenderPanels(); const d = getComputedStyle(document.querySelector('#msn-root [data-m="link"]')).display; msnShow(false); return d; });
+  t.ok(/ok/.test(L.ok.c) && /조종석 연결 \d+ms/.test(L.ok.t) && L.ok.d !== 'none' && /slow/.test(L.slow.c) && /응답 늦음/.test(L.slow.t) && /lost/.test(L.lost.c) && /연결 끊김 6초/.test(L.lost.t) && mainLk === 'none',
+    `Vendor 위 막대에 조종석 연결 상태 — ${L.ok.t} · ${L.slow.t} · ${L.lost.t} (조종석 창에는 없음)`);
   await ios.close();
   await page.evaluate(() => { msnVslClear(); eo.joy.x = eo.joy.y = 0; rdr.rng = 20; rdr.cmd = 'CKPT'; msnShow(false); });
 }
