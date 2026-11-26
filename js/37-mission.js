@@ -328,14 +328,17 @@ function msnContacts() {
 //   제어 권한(RDR > CMD): CKPT(조종실 · 처음) · CABIN(전탐석) · SHARED(함께) — CKPT 이면 전탐석 VCCP 는 CMD 말고는 듣지 않는다
 //   화면: 위 Hdg · Trk · SRV RDR CMD · RNG · Tilt · Gain / 아래 Alt · RAlt · GS · 위경도 · 커서 거리 · 방위 / RDR TX · STBY · FREEZE · R ONLY · NO ALT · NO HDG · NO POS
 const RDR_RNG = [10, 20, 50, 100, 200];
-const RDR_MODES = ['LRS', 'WX', 'PT', 'SART', 'ISAR'];
+const RDR_MODES = ['PT', 'LRS', 'WX', 'TURB', 'SART', 'STM', 'MTI', 'ISAR'];   // FLM 5.20 표 4 — PT · LRS · WX · TURB · SART · STM(탐색 · 추적) · MTI(움직이는 표적) · ISAR
+const RDR_CMD_NM = { CKPT: 'CKPT', CABIN: 'CABIN', SHARED: 'INTRLV' };   // RDR > CMD — INTRLV(번갈아 · 함께 쓰기)는 안에서 SHARED
+const _rdrWx = () => rdr.mode === 'WX' || rdr.mode === 'TURB';
 const RDR_CMDS = ['CKPT', 'CABIN', 'SHARED'];
 const RDR_SECTORS = [120, 60, 20, 240];
 const RDR_SWEEP = 45;                                  // 스캔 속도(°/s)
 const RDR_WARM_S = 90;                                 // 다시 켠 뒤 예열(초)
 const RDR_RPM_S = 2 * 120 / RDR_SWEEP;                 // 한 번 오가는 시간(초) — 칠해진 표적이 살아 있는 시간에 쓴다
 const rdr = { pwr: true, warm: 0, tx: false, mode: 'LRS', cmd: 'CKPT', rng: 20, tilt: 0, gain: 15, sector: 120, frz: false, ronly: false, wxr: false, tws: true,
-  az: 0, dir: 1, cur: { az: 0, nm: 10 }, tgt: null, trkNo: {}, nTrk: 0, menu: null, menuI: 0, paint: {}, trk: {}, pcv: null, wx: null };
+  az: 0, dir: 1, cur: { az: 0, nm: 10 }, tgt: null, trkNo: {}, nTrk: 0, menu: null, menuI: 0, paint: {}, trk: {}, pcv: null, wx: null,
+  sub: null, subI: 0, menuT: 0, agc: false, sts: false, tails: false, grey: false, link: false, flt: 'ALL', lblAll: true, info: '', infoT: 0 };
 // 전탐석 VCCP 가 다룰 수 있는가 — 제어 권한
 function rdrCabinOk() { return rdr.cmd !== 'CKPT'; }
 function rdrPower(on) { rdr.pwr = !!on; if (rdr.pwr) rdr.warm = RDR_WARM_S; else { rdr.tx = false; rdr.warm = 0; } }
@@ -351,7 +354,8 @@ function rdrDetNm(c) {
   let rcsNm = c.kind === 'surv' ? Math.max(0.3, 1.6 * (1 - sea / 7)) : c.rcs * (1 - sea * 0.06);
   if (rdr.mode === 'LRS') rcsNm *= c.kind === 'surv' ? 0.7 : 1.6;           // 장거리 — 큰 표적은 멀리 · 아주 작은 것은 클러터 억제에 묻힌다
   else if (rdr.mode === 'PT') rcsNm *= c.rcs <= 10 ? 1.4 : 1;               // 소형 표적 우선
-  else if (rdr.mode === 'WX') rcsNm *= 0.5;
+  else if (rdr.mode === 'MTI' && !(c.spd > 1)) return 0;                      // MTI — 멈춰 있는 것은 걸러 낸다
+  else if (_rdrWx()) rcsNm *= 0.5;
   rcsNm *= 0.55 + rdr.gain / 30 * 0.6;
   // 기울기 — 표적 높이 쪽에서 멀어질수록 약해진다(해상 표적은 0° 근처 · 위로 들면 약해진다)
   rcsNm *= Math.max(0.3, 1 - Math.abs(rdr.tilt - (c.kind === 'air' ? 2 : -1)) / 35);
@@ -370,6 +374,8 @@ function _rdrWxCells() {
 }
 function rdrStep(dt) {
   if (rdr.pwr && rdr.warm > 0) rdr.warm = Math.max(0, rdr.warm - dt);
+  if (rdr.menu && rdr.menuT && performance.now() - rdr.menuT > 10000) { rdr.menu = null; rdr.sub = null; }   // 10초 동안 조작이 없으면 메뉴를 닫는다(FLM 5.20 NOTE)
+  if (rdr.agc) { const sea = (typeof env !== 'undefined' && env.sea) || 0; rdr.gain = _mClamp(Math.round(17 - sea * 1.5), 6, 22); }   // AUTO GAIN — 해면 상태에 맞춰
   if (!rdr.tx || !rdr.pwr) return;
   if (rdr.frz) return;                                 // FREEZE — 화면을 붙든다(안테나는 돌지만 그림을 바꾸지 않는다)
   // 부채꼴 스캔 — 기수 기준 ±sector/2 를 오간다
@@ -391,7 +397,8 @@ function rdrStep(dt) {
       if (hrs > 0) { T.spd = distance(a.lat, a.lon, b.lat, b.lon) / hrs; T.cse = bearing(a.lat, a.lon, b.lat, b.lon); }
     }
     // PT — 소형 표적은 저절로 추적
-    if (rdr.mode === 'PT' && c.rcs <= 10 && !rdr.trkNo[c.id]) rdrTrack(c.id, true);
+    if (((rdr.mode === 'PT' && c.rcs <= 10) || rdr.mode === 'STM') && !rdr.trkNo[c.id]) rdrTrack(c.id, true);   // STM — 잡히는 대로 추적
+    if (rdr.trkNo[c.id]) { T.tail = T.tail || []; const L = T.tail[T.tail.length - 1]; if (!L || now - L.t > 4000) { T.tail.push({ lat: c.lat, lon: c.lon, t: now }); if (T.tail.length > 10) T.tail.shift(); } }   // 꼬리(CONTACT TAILS)
   }
   _rdrPaintBeam(lo, hi - lo, dt);
 }
@@ -400,10 +407,10 @@ function _rdrPaintBeam(a0, sweep, dt) {
   const N = 360;
   if (!rdr.pcv) { rdr.pcv = document.createElement('canvas'); rdr.pcv.width = rdr.pcv.height = N; }
   const g = rdr.pcv.getContext('2d'), c = N / 2, R = N / 2 - 2;
-  g.fillStyle = `rgba(0,0,0,${(1 - Math.exp(-dt / 2.4)).toFixed(3)})`; g.fillRect(0, 0, N, N);
+  g.fillStyle = `rgba(0,0,0,${(1 - Math.exp(-dt / (rdr.sts ? 7 : 2.4))).toFixed(3)})`; g.fillRect(0, 0, N, N);   // STS(Scan-To-Scan) — 잔상을 오래
   const sea = (typeof env !== 'undefined' && env.sea) || 0, gk = rdr.gain / 30;
-  const clutNm = (0.3 + sea * 0.45) * (rdr.mode === 'LRS' ? 0.35 : 1) * Math.max(0.2, 1 - rdr.tilt / 30);
-  const cells = (rdr.mode === 'WX' || rdr.wxr) ? _rdrWxCells() : [];
+  const clutNm = rdr.mode === 'MTI' ? 0 : (0.3 + sea * 0.45) * (rdr.mode === 'LRS' ? 0.35 : 1) * Math.max(0.2, 1 - rdr.tilt / 30);   // MTI — 해면 반사 · 육지는 걸러 낸다
+  const cells = (_rdrWx() || rdr.wxr) ? _rdrWxCells() : [];
   const steps = Math.max(1, Math.ceil(sweep / 1.2));
   for (let s = 0; s <= steps; s++) {
     const rel = a0 + sweep * s / steps, brg = normA(rel + S.hdg);
@@ -413,10 +420,11 @@ function _rdrPaintBeam(a0, sweep, dt) {
       const nm = rdr.rng * b / bins, r = R * b / bins;
       let v = 0, col = '80,255,120';
       const [la, lo] = destPoint(S.lat, S.lon, brg, nm);
-      if (rdr.mode !== 'WX' && !_mWater(la, lo)) v = Math.max(v, 0.5 + 0.4 * gk);                                     // 육지 반사(해안선)
+      if (!_rdrWx() && rdr.mode !== 'MTI' && !_mWater(la, lo)) v = Math.max(v, 0.5 + 0.4 * gk);                                     // 육지 반사(해안선)
       if (nm < clutNm && Math.random() < (1 - nm / clutNm) * 0.8 * gk) v = Math.max(v, 0.25 + 0.5 * Math.random());   // 해면 반사
-      for (const w of cells) { const d = distance(la, lo, w.lat, w.lon); if (d < w.r) { const k = w.k * (1 - d / w.r); const wk = k > 0.6 ? '255,60,60' : k > 0.35 ? '255,200,0' : '40,200,60'; if (k > v || rdr.mode === 'WX') { v = Math.max(v, 0.35 + k * 0.6); col = wk; } } }
+      for (const w of cells) { const d = distance(la, lo, w.lat, w.lon); if (d < w.r) { const k = w.k * (1 - d / w.r); const wk = rdr.mode === 'TURB' ? (k > 0.45 ? '255,60,255' : '40,120,60') : k > 0.6 ? '255,60,60' : k > 0.35 ? '255,200,0' : '40,200,60'; if (k > v || _rdrWx()) { v = Math.max(v, 0.35 + k * 0.6); col = wk; } } }
       if (Math.random() < gk * gk * 0.02) v = Math.max(v, 0.2);                                                         // 잡음
+      if (rdr.grey && col === '80,255,120') col = '205,215,205';   // GREY-GREEN — 회색 화면
       if (v > 0) { g.fillStyle = `rgba(${col},${v.toFixed(2)})`; g.fillRect(c + sx * r - 1.5, c + sy * r - 1.5, 3.2, 3.2); }
     }
   }
@@ -426,12 +434,14 @@ function _rdrPaintBeam(a0, sweep, dt) {
     if (now - p.t > 120 || p.nm > rdr.rng) continue;
     const rel = normAS(p.brg - S.hdg), r = R * p.nm / rdr.rng;
     const sz = p.kind === 'surv' ? 2.5 : Math.min(8, 2.2 + p.rcs / 6) * Math.max(0.5, 20 / rdr.rng);
-    g.fillStyle = p.kind === 'air' ? 'rgba(160,255,255,0.95)' : 'rgba(190,255,190,1)';
+    g.fillStyle = p.kind === 'air' ? 'rgba(160,255,255,0.95)' : rdr.grey ? 'rgba(235,235,235,1)' : 'rgba(190,255,190,1)';
     g.beginPath(); g.arc(c + Math.sin(rel * _mD) * r, c - Math.cos(rel * _mD) * r, Math.max(1.8, sz), 0, 2 * Math.PI); g.fill();
   }
 }
 function rdrClearPicture() { if (rdr.pcv) rdr.pcv.getContext('2d').clearRect(0, 0, rdr.pcv.width, rdr.pcv.height); }
-function rdrRngStep(d) { const i = RDR_RNG.indexOf(rdr.rng); rdr.rng = RDR_RNG[_mClamp((i < 0 ? 1 : i) + d, 0, RDR_RNG.length - 1)]; rdr.cur.nm = Math.min(rdr.cur.nm, rdr.rng); rdrClearPicture(); }
+function rdrRngStep(d) { const i = RDR_RNG.indexOf(rdr.rng); rdr.rng = RDR_RNG[_mClamp((i < 0 ? 1 : i) + d, 0, RDR_RNG.length - 1)]; rdr.cur.nm = Math.min(rdr.cur.nm, rdr.rng); rdrClearPicture(); if (rdr.link) rdrLinkMap(); }
+// LINK R — 전탐석 지도(NAVI) 거리를 레이더 거리에 맞춘다
+function rdrLinkMap() { try { nv.nm = NV_RNG.reduce((b, v) => Math.abs(v - rdr.rng / 2) < Math.abs(b - rdr.rng / 2) ? v : b, NV_RNG[0]); } catch (e) { _swallow(e); } }
 // 추적(TRK) — 번호를 붙인다(최대 200)
 function rdrTrack(id, on) {
   if (on) { if (!rdr.trkNo[id]) { if (Object.keys(rdr.trkNo).length >= 200) return false; rdr.trkNo[id] = ++rdr.nTrk; } rdr.tgt = id; _mNote(`레이더 추적 TRK${String(rdr.trkNo[id]).padStart(2, '0')} — ${id}`); }
@@ -471,17 +481,65 @@ function rdrSartReply() {
   const nm = distance(S.lat, S.lon, sar.lat, sar.lon); if (nm > 10) return null;
   return { brg: bearing(S.lat, S.lon, sar.lat, sar.lon), nm };
 }
-// ══ 메뉴(FNC 메인 · MAP) — VCCP 손잡이로 고르고 누른다 ══
+// ══ 메뉴 — FLM 5.20 · SDS 34-47-01 표 2(메인 페이지 메뉴) · 표 4(레이더 화면 메뉴) ══
+//   FNC 를 누르면 레이더 화면 왼쪽에 세로 메뉴가 뜨고, ▷ 가 붙은 항목을 누르면(VCCP 손잡이 누름) 바로 오른쪽에 하위 메뉴가 뜬다
+//   손잡이 돌림 — 고르기 · 누름 — 실행 / 하위 메뉴 열기 · ESC · CLR — 하위 메뉴 닫기 → 메뉴 닫기 · FNC — 메뉴 켜고 끄기
+//   10초 동안 아무 조작이 없으면 저절로 닫힌다(교범 NOTE) · MAP 키는 지도 겹 메뉴(종전 그대로)
+const _rdrTog = (n, k, after) => ({ n, v: () => rdr[k] ? 'ON' : 'OFF', set: () => { rdr[k] = !rdr[k]; if (after) after(); } });
+const _rdrInfo = t => { rdr.info = t; rdr.infoT = performance.now(); _mNote('레이더 ' + t); };
+// 추적 목록(번호 차례) · 커서 둘레의 표적
+function _rdrTrkList() { return Object.entries(rdr.trkNo).sort((a, b) => a[1] - b[1]).map(([id]) => id); }
+function _rdrFltOk(p) { return rdr.flt === 'ALL' || (rdr.flt === 'AIR' ? p.kind === 'air' : p.kind !== 'air'); }
+function _rdrInArea() {
+  const out = [], rad = Math.max(0.5, rdr.rng * 0.15), [cl, cn] = destPoint(S.lat, S.lon, normA(rdr.cur.az + S.hdg), rdr.cur.nm);
+  for (const [id, p] of Object.entries(rdr.paint)) { const [la, lo] = destPoint(S.lat, S.lon, p.brg, p.nm); if (distance(cl, cn, la, lo) <= rad && _rdrFltOk(p)) out.push(id); }
+  return out;
+}
+function _rdrSelTrk(id) { if (!id) { _mToast('추적 중인 표적이 없습니다'); return; } rdr.tgt = id; const p = rdr.paint[id]; if (p) rdr.cur = { az: _mClamp(normAS(p.brg - S.hdg), -rdr.sector / 2, rdr.sector / 2), nm: Math.min(rdr.rng, p.nm) }; }
+const RDR_MAIN = [
+  { n: 'RDR RNG +', v: () => `${rdr.rng}NM`, set: () => rdrRngStep(1) },
+  { n: 'RDR RNG -', v: () => `${rdr.rng}NM`, set: () => rdrRngStep(-1) },
+  { n: 'MODE', v: () => rdr.mode, sub: RDR_MODES.map(m => ({ n: m, v: () => rdr.mode === m ? '●' : '', set: () => { rdr.mode = m; rdrClearPicture(); } })) },
+  { n: 'CMD', any: true, v: () => RDR_CMD_NM[rdr.cmd], sub: RDR_CMDS.map(c => ({ n: RDR_CMD_NM[c], any: true, v: () => rdr.cmd === c ? '●' : '', set: () => { rdr.cmd = c; _mNote(`RDR > CMD ${RDR_CMD_NM[c]}`); } })) },
+  { n: 'R SET', v: () => '', sub: [
+    { n: 'TILT +', v: () => `${rdr.tilt > 0 ? '+' : ''}${rdr.tilt}°`, set: () => { rdr.tilt = _mClamp(rdr.tilt + 1, -30, 30); } },
+    { n: 'TILT -', v: () => `${rdr.tilt > 0 ? '+' : ''}${rdr.tilt}°`, set: () => { rdr.tilt = _mClamp(rdr.tilt - 1, -30, 30); } },
+    { n: 'GAIN +', v: () => rdr.agc ? 'AUTO' : String(rdr.gain), set: () => { rdr.agc = false; rdr.gain = _mClamp(rdr.gain + 1, 0, 30); } },
+    { n: 'GAIN -', v: () => rdr.agc ? 'AUTO' : String(rdr.gain), set: () => { rdr.agc = false; rdr.gain = _mClamp(rdr.gain - 1, 0, 30); } },
+    _rdrTog('AUTO GAIN', 'agc'), _rdrTog('STS', 'sts'), _rdrTog('CONTACT TAILS', 'tails'), _rdrTog('GREY-GREEN', 'grey', rdrClearPicture),
+    _rdrTog('LINK R', 'link', () => { if (rdr.link) rdrLinkMap(); }),
+  ] },
+  { n: 'TRACK', v: () => `${Object.keys(rdr.trkNo).length}`, sub: [
+    { n: 'MK TRK', v: () => '', set: () => rdrCursorTrk() },
+    { n: 'IN AREA', v: () => '', set: () => { const L = _rdrInArea(); L.forEach(id => rdrTrack(id, true)); _rdrInfo(`IN AREA — ${L.length}개 추적`); } },
+    { n: 'EX AREA', v: () => '', set: () => { const L = _rdrInArea().filter(id => rdr.trkNo[id]); L.forEach(id => rdrTrack(id, false)); _rdrInfo(`EX AREA — ${L.length}개 풀기`); } },
+    { n: 'DEL ALL', v: () => '', set: () => { rdr.trkNo = {}; rdr.tgt = null; _rdrInfo('DEL ALL — 추적 모두 지움'); } },
+    { n: 'FILTER', v: () => rdr.flt, set: () => { rdr.flt = { ALL: 'SURF', SURF: 'AIR', AIR: 'ALL' }[rdr.flt]; } },
+  ] },
+  { n: 'SCN/BLK', v: () => `${rdr.sector}°`, sub: [
+    { n: 'BLN 20°', v: () => rdr.sector === 20 ? '●' : '', set: () => { rdr.sector = 20; rdrClearPicture(); } },
+    { n: 'BLN 60°', v: () => rdr.sector === 60 ? '●' : '', set: () => { rdr.sector = 60; rdrClearPicture(); } },
+    { n: 'MAP OVERLAY', v: () => rdr.ronly ? 'OFF' : 'ON', set: () => { rdr.ronly = !rdr.ronly; } },
+    { n: 'SEARCH', v: () => rdr.sector === 240 ? '●' : '', set: () => { rdr.sector = 240; rdrClearPicture(); } },
+    { n: 'SCAN 120°', v: () => rdr.sector === 120 ? '●' : '', set: () => { rdr.sector = 120; rdrClearPicture(); } },
+  ] },
+  { n: 'SEARCH', v: () => '', sub: [
+    ...[1, 2, 3, 4, 5, 6].map(n => ({ n: `USER ${n}`, v: () => { const id = _rdrTrkList()[n - 1]; return id ? `TRK${String(rdr.trkNo[id]).padStart(2, '0')}` : '—'; }, set: () => _rdrSelTrk(_rdrTrkList()[n - 1]) })),
+    _rdrTog('ALL', 'lblAll'),
+    { n: 'BY DISTANCE', v: () => '', set: () => { const L = _rdrTrkList().filter(id => rdr.paint[id]).sort((a, b) => rdr.paint[a].nm - rdr.paint[b].nm); _rdrSelTrk(L[0]); } },
+    { n: 'STEER CAM', v: () => '', set: () => rdrSlaveEo() },
+  ] },
+  { n: 'MAINT', v: () => '', sub: [
+    { n: 'FAULTS LOG', v: () => '', set: () => { let f = []; try { if (typeof instFail !== 'undefined') { if (instFail.alt !== null) f.push('NO ALT'); if (instFail.hdg) f.push('NO HDG'); } } catch (e) { _swallow(e); } _rdrInfo(`FAULTS LOG — ${f.length ? f.join(' · ') : 'NO FAULTS'}`); } },
+    { n: 'SYS BIT RESULT', v: () => '', set: () => _rdrInfo(rdr.pwr ? 'BIT T3 PASS · T4 PASS · T5 PASS · T6 PASS' : 'BIT — RDR OFF') },
+    { n: 'RDR NAV', v: () => '', set: () => { let h = 'AHRS'; try { if (typeof instFail !== 'undefined' && instFail.hdg) h = 'NO HDG'; } catch (e) { _swallow(e); } _rdrInfo(`RDR NAV — POS GPS · HDG ${h} · ALT ${Math.round(S.alt)}FT`); } },
+  ] },
+  { n: 'RDR TX', v: () => rdr.tx ? '✓' : 'STBY', set: () => rdrTx(!rdr.tx) },
+  { n: 'R ONLY', v: () => rdr.ronly ? '✓' : '', set: () => { rdr.ronly = !rdr.ronly; } },
+  { n: 'FREEZE', v: () => rdr.frz ? '✓' : '', set: () => { rdr.frz = !rdr.frz; } },
+];
 const RDR_MENU = {
-  FNC: [
-    { n: 'MODE', v: () => rdr.mode, set: d => { rdr.mode = RDR_MODES[(RDR_MODES.indexOf(rdr.mode) + (d || 1) + RDR_MODES.length) % RDR_MODES.length]; rdrClearPicture(); } },
-    { n: 'TX / STBY', v: () => rdr.tx ? 'TX' : 'STBY', set: () => rdrTx(!rdr.tx) },
-    { n: 'RDR > CMD', v: () => rdr.cmd, set: d => { rdr.cmd = RDR_CMDS[(RDR_CMDS.indexOf(rdr.cmd) + (d || 1) + 3) % 3]; }, any: true },
-    { n: 'TILT', v: () => `${rdr.tilt > 0 ? '+' : ''}${rdr.tilt}°`, set: d => { rdr.tilt = _mClamp(rdr.tilt + (d || 1), -30, 30); }, def: () => { rdr.tilt = 0; } },
-    { n: 'GAIN', v: () => String(rdr.gain), set: d => { rdr.gain = _mClamp(rdr.gain + (d || 1), 0, 30); }, def: () => { rdr.gain = 15; } },
-    { n: 'SECTOR', v: () => `${rdr.sector}°`, set: d => { rdr.sector = RDR_SECTORS[(RDR_SECTORS.indexOf(rdr.sector) + (d || 1) + RDR_SECTORS.length) % RDR_SECTORS.length]; rdrClearPicture(); }, def: () => { rdr.sector = 120; } },
-    { n: 'FREEZE', v: () => rdr.frz ? 'ON' : 'OFF', set: () => { rdr.frz = !rdr.frz; } },
-  ],
+  FNC: RDR_MAIN,
   MAP: [
     { n: 'WXR LAYER', v: () => rdr.wxr ? 'ON' : 'OFF', set: () => { rdr.wxr = !rdr.wxr; } },
     { n: 'TWS TERRAIN', v: () => rdr.tws ? 'ON' : 'OFF', set: () => { rdr.tws = !rdr.tws; } },
@@ -1279,7 +1337,7 @@ function slcRender() {
   const pw = _msnEl.querySelector('[data-mact="slpwr"]'); if (pw) { pw.classList.toggle('on', hsl.pwr); pw.textContent = `SEARCH LT PWR ${hsl.pwr ? 'ON' : 'OFF'}`; }
 }
 // ══ 탐색레이더 조작기(VCCP — Video Converter Control Panel · FLM 5.20) ══
-//   MAP 지도 메뉴 · ESC 닫기 · CLR 지우기(메뉴 — 그 칸을 기본값으로) · FNC 메인 메뉴 · WXR 강수 겹 · TWS 지형 겹 · COM/TFC 쓰지 않음
+//   MAP 지도 메뉴 · ESC · CLR 뒤로(하위 메뉴 → 메뉴 닫기) · 메뉴 밖 CLR 은 추적 풀기 · FNC 메인 메뉴(화면 왼쪽 세로) · WXR 강수 겹 · TWS 지형 겹 · COM/TFC 쓰지 않음
 //   손잡이: 돌림 — 메뉴가 없으면 거리(RNG), 메뉴가 있으면 칸 옮기기 / 누름 — 메뉴 칸 실행 · 없으면 커서 자리 표적 추적(TRK) / 4축(8방향) — 커서
 const nv = { nm: 5, cur: null, ctr: null, pushT: 0 };
 const NV_RNG = [1, 2, 5, 10, 20, 40];
@@ -1290,23 +1348,46 @@ let _clnSide = 'CABIN';
 function _rdrGuard(k) {
   if (rdrSideOk(_clnSide)) return true;
   // 권한이 없는 쪽 — 메뉴를 열어 RDR > CMD 만 바꿀 수 있다
-  if (k === 'fnc' || k === 'esc' || (rdr.menu && (k.startsWith('rot:') || k === 'push'))) return true;
-  _mToast(_clnSide === 'CKPT' ? 'RDR CMD CABIN — 전탐석이 레이더를 쥐고 있습니다(FNC → RDR > CMD 를 CKPT · SHARED 로)'
-                              : 'RDR CMD CKPT — 조종실이 레이더를 쥐고 있습니다(FNC → RDR > CMD 를 CABIN · SHARED 로)');
+  if (k === 'fnc' || k === 'esc' || (rdr.menu && (k.startsWith('rot:') || k === 'push' || k === 'clr' || /^n[1-9]$/.test(k)))) return true;
+  _mToast(_clnSide === 'CKPT' ? 'RDR CMD CABIN — 전탐석이 레이더를 쥐고 있습니다(FNC → CMD ▷ 를 CKPT · INTRLV 로)'
+                              : 'RDR CMD CKPT — 조종실이 레이더를 쥐고 있습니다(FNC → CMD ▷ 를 CABIN · INTRLV 로)');
   return false;
 }
+// 메뉴 — 누름(실행 · 하위 메뉴 열기) · 뒤로(하위 메뉴 닫기 → 메뉴 닫기)
+function rdrMenuPush() {
+  const M = RDR_MENU[rdr.menu]; if (!M) return;
+  rdr.menuT = performance.now();
+  const ok = it => rdrSideOk(_clnSide) || it.any;
+  if (rdr.sub !== null) {
+    const it = M[rdr.sub].sub[rdr.subI]; if (!it) return;
+    if (!ok(it)) { _mToast(`RDR CMD ${RDR_CMD_NM[rdr.cmd]} — CMD 만 바꿀 수 있습니다`); return; }
+    it.set(1); return;
+  }
+  const it = M[rdr.menuI]; if (!it) return;
+  if (it.sub) { if (!ok(it)) { _mToast(`RDR CMD ${RDR_CMD_NM[rdr.cmd]} — CMD 만 바꿀 수 있습니다`); return; } rdr.sub = rdr.menuI; rdr.subI = 0; return; }
+  if (!ok(it)) { _mToast(`RDR CMD ${RDR_CMD_NM[rdr.cmd]} — CMD 만 바꿀 수 있습니다`); return; }
+  it.set(1);
+}
+function rdrMenuBack() { if (rdr.sub !== null) rdr.sub = null; else rdr.menu = null; }
 // side: 'CABIN'(전탐석 VCCP · 처음) · 'CKPT'(조종석 하부 콘솔 ⑮ VCCP) — 두 VCCP 는 같은 레이더(rdr)를 다룬다
 function clnPress(k, down, side) {
   _clnSide = side === 'CKPT' ? 'CKPT' : 'CABIN';
   if (k === 'push') {
     if (down) { nv.pushT = performance.now(); return; }
     if (!_rdrGuard('push')) return;
-    if (rdr.menu) { const m = RDR_MENU[rdr.menu][rdr.menuI]; if (m && (rdrSideOk(_clnSide) || m.any)) m.set(1); else if (m) _mToast(`RDR CMD ${rdr.cmd} — RDR > CMD 만 바꿀 수 있습니다`); }
+    if (rdr.menu) rdrMenuPush();
     else rdrCursorTrk();
     msnRenderPanels(); vccpRender(); return;
   }
   if (!down || !_rdrGuard(k)) return;
-  if (k.startsWith('rot:')) { const d = +k.slice(4); if (rdr.menu) rdr.menuI = (rdr.menuI + d + RDR_MENU[rdr.menu].length) % RDR_MENU[rdr.menu].length; else rdrRngStep(d); return; }
+  if (rdr.menu) rdr.menuT = performance.now();
+  if (k.startsWith('rot:')) {
+    const d = +k.slice(4);
+    if (rdr.menu && rdr.sub !== null) { const L = RDR_MENU[rdr.menu][rdr.sub].sub.length; rdr.subI = (rdr.subI + d + L) % L; }
+    else if (rdr.menu) rdr.menuI = (rdr.menuI + d + RDR_MENU[rdr.menu].length) % RDR_MENU[rdr.menu].length; else rdrRngStep(d);
+    return;
+  }
+  if (/^n[1-9]$/.test(k)) { if (rdr.menu && rdr.sub !== null) { const L = RDR_MENU[rdr.menu][rdr.sub].sub; const i = +k[1] - 1; if (i < L.length) { rdr.subI = i; rdrMenuPush(); } } msnRenderPanels(); vccpRender(); return; }   // 하위 메뉴 번호 바로 고르기
   if (k.startsWith('pan:')) {
     const d = k.slice(4), lim = rdr.sector / 2;
     if (d.includes('n')) rdr.cur.nm = Math.min(rdr.rng, rdr.cur.nm + rdr.rng * 0.04);
@@ -1316,10 +1397,10 @@ function clnPress(k, down, side) {
     return;
   }
   switch (k) {
-    case 'map': rdr.menu = rdr.menu === 'MAP' ? null : 'MAP'; rdr.menuI = 0; break;
-    case 'fnc': rdr.menu = rdr.menu === 'FNC' ? null : 'FNC'; rdr.menuI = 0; break;
-    case 'esc': rdr.menu = null; break;
-    case 'clr': if (rdr.menu) { const m = RDR_MENU[rdr.menu][rdr.menuI]; if (m && m.def) m.def(); } else { if (rdr.tgt) rdrTrack(rdr.tgt, false); rdr.cur = { az: 0, nm: rdr.rng / 2 }; } break;
+    case 'map': rdr.menu = rdr.menu === 'MAP' ? null : 'MAP'; rdr.menuI = 0; rdr.sub = null; rdr.menuT = performance.now(); break;
+    case 'fnc': rdr.menu = rdr.menu === 'FNC' ? null : 'FNC'; rdr.menuI = 0; rdr.sub = null; rdr.menuT = performance.now(); break;
+    case 'esc': rdrMenuBack(); break;
+    case 'clr': if (rdr.menu) rdrMenuBack(); else { if (rdr.tgt) rdrTrack(rdr.tgt, false); rdr.cur = { az: 0, nm: rdr.rng / 2 }; } break;
     case 'wxr': rdr.wxr = !rdr.wxr; rdrClearPicture(); break;
     case 'tws': rdr.tws = !rdr.tws; break;
     case 'com': case 'tfc': break;   // 쓰지 않는다
@@ -1348,11 +1429,11 @@ function msnAct(a) {
     case 'rtx': case 'rmode': case 'rng-': case 'rng+': case 'tilt-': case 'tilt+': case 'gain-': case 'gain+': case 'rsec': case 'rfrz': case 'ronly':
       if (!_rdrGuard(a)) break;
       if (a === 'rtx') rdrTx(!rdr.tx);
-      else if (a === 'rmode') RDR_MENU.FNC[0].set(1);
+      else if (a === 'rmode') { rdr.mode = RDR_MODES[(RDR_MODES.indexOf(rdr.mode) + 1) % RDR_MODES.length]; rdrClearPicture(); }
       else if (a === 'rng-') rdrRngStep(-1); else if (a === 'rng+') rdrRngStep(1);
       else if (a === 'tilt-') rdr.tilt = Math.max(-30, rdr.tilt - 1); else if (a === 'tilt+') rdr.tilt = Math.min(30, rdr.tilt + 1);
       else if (a === 'gain-') rdr.gain = Math.max(0, rdr.gain - 1); else if (a === 'gain+') rdr.gain = Math.min(30, rdr.gain + 1);
-      else if (a === 'rsec') RDR_MENU.FNC[5].set(1);
+      else if (a === 'rsec') { rdr.sector = RDR_SECTORS[(RDR_SECTORS.indexOf(rdr.sector) + 1) % RDR_SECTORS.length]; rdrClearPicture(); }
       else if (a === 'rfrz') rdr.frz = !rdr.frz; else if (a === 'ronly') rdr.ronly = !rdr.ronly;
       break;
     case 'r2eo': rdrSlaveEo(); break;
@@ -1373,12 +1454,13 @@ function msnHelp() {
     '· 탐조등 HSL-1600 조작기(오른쪽 위 · FLM 5.22): 처음엔 STOW — INIT 로 풀고(−45°) LAMP 를 켜면 5초 뒤 점등 · IR/VIS(IR 은 NVG 로만 보인다)',
     '  MAN/AUTO(AUTO = EO/IR 연동 SLASS) · 조이스틱(고각 −20~−90° · 방위 −150~+30°) · FOCUS 빔폭 4~13° · STOW 25초 · 끄면 냉각팬 7분(그동안 SEARCH LT PWR 를 끄지 않는다)',
     '  ⚠ 10ft(3.04m) 안의 물체를 비추면 100~300℃ · NVG 를 쓴 조종사 허락 없이 가시광 금지 · 조종석 컬렉티브 SRCH LT 와는 다른 등',
-    '· 탐색레이더(Seaspray 5000E · VCCP): RDR > CMD 가 CKPT(조종실)이면 전탐석은 다루지 못한다 — FNC 메뉴의 RDR > CMD 를 CABIN · SHARED 로',
+    '· 탐색레이더(Seaspray 5000E · VCCP): RDR > CMD 가 CKPT(조종실)이면 전탐석은 다루지 못한다 — FNC 메뉴의 CMD ▷ 를 CABIN · INTRLV 로',
     '· 조종석에서도 같은 레이더: 하부 콘솔 ⑮ VCCP(같은 면판 · CKPT/SHARED 일 때) · SYSTEM 창 Video Channel RADAR 가 이 레이더 화면 그대로 · CDU 조이스틱 Push:Radar',
     '· 전원: 하부 콘솔 MPP 패널 DMM ON → 녹화기(가운데) POWER → 3초 뒤 표시기 화면 전체가 들어온다(DMM 을 끄면 함께 꺼진다)',
     '· 녹화기(DVR): POWER(빨강) → 3초 뒤 REC(초록 깜박) · CH1 EO/IR · CH2 레이더 · CH3 호이스트 · CH4 지도 · PLAYBACK(파랑) ▶▶/◀◀ 0.5~256배 · ◀▶ 10초 · MENU — 날짜/시간 검색 · QUAD/한 채널 · USB(AVI) · SSD INFO',
     '  손잡이 돌림 — 거리 10~200NM(메뉴가 열려 있으면 칸 옮기기) · 누름 — 메뉴 실행 · 커서 자리 표적 추적(TRK) · 4축 — 커서',
-    '  FNC 메인(MODE LRS·WX·PT·SART·ISAR · TX/STBY · CMD · TILT · GAIN · SCAN · FREEZE) · MAP(WXR · TWS · R ONLY · RANGE) · ESC · CLR · WXR 강수 겹 · TWS 지형 겹 · 다시 켜면 90초 예열',
+    '  FNC — 화면 왼쪽 세로 메뉴(FLM 5.20 표 2 · 표 4): RDR RNG ± · MODE ▷(PT · LRS · WX · TURB · SART · STM · MTI · ISAR) · CMD ▷(CKPT · CABIN · INTRLV) · R SET ▷(TILT · GAIN · AUTO GAIN · STS · CONTACT TAILS · GREY-GREEN · LINK R) · TRACK ▷(MK TRK · IN/EX AREA · DEL ALL · FILTER) · SCN/BLK ▷ · SEARCH ▷(USER 1~6 · ALL · BY DISTANCE · STEER CAM) · MAINT ▷(FAULTS · BIT · RDR NAV) · RDR TX · R ONLY · FREEZE',
+    '  손잡이 돌림 고르기 · 누름 실행(▷ 는 오른쪽에 하위 메뉴) · ESC/CLR 뒤로 · 10초 조작 없으면 닫힘 · 키보드(마우스를 Vendor 위에): M 메뉴 · ↑↓ · Enter · 1~9 · Esc · MAP(WXR · TWS · R ONLY · RANGE) · 다시 켜면 90초 예열',
     '· EO/IR: 조이스틱(화면 HCU 가운데 · 실제 조종 장치의 사이클릭 축)으로 터릿을 돌린다. ZOOM ▲확대 ▼축소 · VIC 센서(EOW → EON → IR) · 2X 전자 줌 · POL 백상/흑상',
     '· AVT: 한 번 누르면 게이트(ACQ) — 표적을 게이트에 넣고 한 번 더 누르면 잠금(LOCKED) · 1.5초 누르면 해제',
     '· AUTO: 지금 보는 자리를 좌표로 고정 · MANUAL: 수동 · AID: 지면 고정 보조 · ZMULTI: 화각에 맞춘 감도',
@@ -1792,7 +1874,8 @@ function _rdrPaint(g, W, H) {
     g.strokeStyle = sel ? A : '#ff5050'; g.lineWidth = 2; g.strokeRect(x - s2, y - s2, 2 * s2, 2 * s2);
     const T = rdr.trk[id];
     if (T && T.spd > 1) { const [la, lo] = destPoint(...destPoint(S.lat, S.lon, p.brg, p.nm), T.cse, T.spd / 60 * 3); const [x2, y2] = P(normAS(bearing(S.lat, S.lon, la, lo) - S.hdg), distance(S.lat, S.lon, la, lo)); g.beginPath(); g.moveTo(x, y); g.lineTo(x2, y2); g.stroke(); }
-    g.fillStyle = sel ? A : '#ff7070'; g.textAlign = 'left'; g.fillText(`TRK${String(no).padStart(2, '0')}`, x + s2 + 2, y - s2);
+    if (rdr.tails && T && T.tail) { g.fillStyle = sel ? A : '#ff7070'; for (const q of T.tail) { const rq = normAS(bearing(S.lat, S.lon, q.lat, q.lon) - S.hdg), nq = distance(S.lat, S.lon, q.lat, q.lon); if (Math.abs(rq) > half || nq > rdr.rng) continue; const [tx, ty] = P(rq, nq); g.beginPath(); g.arc(tx, ty, 1.8 * k, 0, 2 * Math.PI); g.fill(); } }   // CONTACT TAILS
+    if (rdr.lblAll || sel) { g.fillStyle = sel ? A : '#ff7070'; g.textAlign = 'left'; g.fillText(`TRK${String(no).padStart(2, '0')}`, x + s2 + 2, y - s2); }   // SEARCH > ALL 꺼지면 고른 표적만 번호
   }
   // 커서
   { const [x, y] = P(rdr.cur.az, rdr.cur.nm); g.strokeStyle = A; g.lineWidth = 2; g.beginPath(); g.moveTo(x - 12 * k, y); g.lineTo(x + 12 * k, y); g.moveTo(x, y - 12 * k); g.lineTo(x, y + 12 * k); g.stroke(); g.lineWidth = 1; g.beginPath(); g.arc(x, y, 15 * k, 0, 2 * Math.PI); g.stroke(); }
@@ -1813,12 +1896,31 @@ function _rdrPaint(g, W, H) {
   T2(`CUR ${rdr.cur.nm.toFixed(1)}NM ${fmtA(rdr.cur.az + S.hdg)}°  ${dm(cl, cl >= 0 ? 'N' : 'S')} ${dm(cn, cn >= 0 ? 'E' : 'W')}`, 8 * k, H - 8 * k, A);
   if (!rdr.tx) T2(rdr.pwr ? (rdr.warm > 0 ? '예열 중 — 90초 뒤 TX' : 'STANDBY — TX 를 누르십시오') : '전원 꺼짐', W / 2, oy - R * 0.45, '#888', 'center', 13);
   // 메뉴(FNC · MAP)
+  // 메뉴 — 화면 왼쪽 세로(x 10~155) · 하위 메뉴는 그 오른쪽 상자(FLM 5.20 표 2 · 표 4)
   if (rdr.menu) {
-    const M = RDR_MENU[rdr.menu], mw = 250 * k, mh = (M.length * 20 + 34) * k, mx = W / 2 - mw / 2, my = 64 * k;
-    g.fillStyle = 'rgba(0,18,8,0.9)'; g.fillRect(mx, my, mw, mh); g.strokeStyle = C; g.lineWidth = 1; g.strokeRect(mx, my, mw, mh);
-    T2(rdr.menu === 'FNC' ? 'MAIN' : 'MAP', W / 2, my + 18 * k, C, 'center', 13);
-    M.forEach((m, i) => { const y = my + (40 + i * 20) * k; if (i === rdr.menuI) { g.fillStyle = 'rgba(61,255,106,0.25)'; g.fillRect(mx + 4, y - 14 * k, mw - 8, 18 * k); } T2(m.n, mx + 10 * k, y, C); T2(String(m.v()), mx + mw - 10 * k, y, i === rdr.menuI ? A : C, 'right'); });
+    const M = RDR_MENU[rdr.menu], row = 19 * k, mx = 10 * k, mw = 145 * k, my = 66 * k, mh = M.length * row + 26 * k;
+    g.fillStyle = 'rgba(0,18,8,0.92)'; g.fillRect(mx, my, mw, mh); g.strokeStyle = C; g.lineWidth = 1; g.strokeRect(mx, my, mw, mh);
+    T2(rdr.menu === 'FNC' ? 'RDR MENU' : 'MAP', mx + mw / 2, my + 15 * k, C, 'center', 12);
+    M.forEach((m, i) => {
+      const y = my + 22 * k + (i + 0.75) * row, sel = i === rdr.menuI;
+      if (sel) { g.fillStyle = rdr.sub === i ? 'rgba(255,210,60,0.22)' : 'rgba(61,255,106,0.25)'; g.fillRect(mx + 3, y - 13 * k, mw - 6, row - 2); }
+      T2(m.n + (m.sub ? ' ▷' : ''), mx + 7 * k, y, C, 'left', 11);
+      const v = String(m.v()); if (v) T2(v, mx + mw - 6 * k, y, sel ? A : C, 'right', 11);
+    });
+    if (rdr.sub !== null && M[rdr.sub] && M[rdr.sub].sub) {
+      const L = M[rdr.sub].sub, sx = mx + mw + 5 * k, sw = 160 * k, sh = L.length * row + 24 * k;
+      let sy = my + 22 * k + rdr.sub * row - 4 * k; sy = Math.max(my, Math.min(sy, H - 40 * k - sh));
+      g.fillStyle = 'rgba(0,18,8,0.95)'; g.fillRect(sx, sy, sw, sh); g.strokeStyle = A; g.strokeRect(sx, sy, sw, sh);
+      T2(M[rdr.sub].n, sx + sw / 2, sy + 14 * k, A, 'center', 11);
+      L.forEach((m, i) => {
+        const y = sy + 20 * k + (i + 0.75) * row, sel = i === rdr.subI;
+        if (sel) { g.fillStyle = 'rgba(61,255,106,0.25)'; g.fillRect(sx + 3, y - 13 * k, sw - 6, row - 2); }
+        T2(`${i + 1} ${m.n}`, sx + 7 * k, y, C, 'left', 11);
+        const v = String(m.v()); if (v) T2(v, sx + sw - 6 * k, y, sel ? A : C, 'right', 11);
+      });
+    }
   }
+  if (rdr.info && performance.now() - rdr.infoT < 8000) T2(rdr.info, W / 2, H - 42 * k, A, 'center', 12);   // MAINT · TRACK 결과 한 줄(8초)
 }
 // TWS — 지형 겹(육지를 어두운 녹색으로) · 2초마다 다시 셈
 function _rdrTws(g, ox, oy, R) {
@@ -2075,6 +2177,26 @@ function msnStep() {
   try { if (MSN_ON) dvrStep(dt); } catch (e) { _swallow(e); }
   try { msnRender(); } catch (e) { _swallow(e); }
   try { vccpRender(); } catch (e) { _swallow(e); }
+}
+// ══ 레이더 메뉴 키보드(FLM 5.20) — Vendor 위에 마우스가 있을 때만: M 메뉴 · ↑↓ 고르기 · Enter 실행 · 1~9 하위 메뉴 · Esc 뒤로 ══
+//   (마우스가 Vendor 밖이면 이 키들은 종전처럼 비행 조작에 쓰인다)
+let _msnHover = false;
+if (MSN_ON) {
+  document.addEventListener('pointerover', e => { _msnHover = !!(_msnEl && e.target && _msnEl.contains(e.target)); }, true);
+  document.addEventListener('keydown', e => {
+    if (!_msnHover || !msnOpen || e.ctrlKey || e.altKey || e.metaKey) return;
+    const t = e.target; if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+    let k = null;
+    if (e.key === 'm' || e.key === 'M') k = 'fnc';
+    else if (rdr.menu) {
+      if (e.key === 'ArrowUp') k = 'rot:-1'; else if (e.key === 'ArrowDown') k = 'rot:1';
+      else if (e.key === 'Enter') k = 'push'; else if (e.key === 'Escape') k = 'esc';
+      else if (/^[1-9]$/.test(e.key)) k = 'n' + e.key;
+    }
+    if (!k) return;
+    e.preventDefault(); e.stopPropagation();
+    if (k === 'push') { clnPress('push', true); clnPress('push', false); } else clnPress(k, true);
+  }, true);
 }
 // ══ Vendor 를 다른 기기에서 — 교관 화면(?ios=1 · 같은 브라우저 · 다른 기기는 QR 연결)의 위 막대 Vendor ══
 //   조종석 기기가 계산한다(EO/IR 터릿 · 레이더 · 탐조등 · 선박 · DVR) — 교관 화면은 그 상태를 받아(31-ios.js iosMirror → msnSyncApply) 그린다
