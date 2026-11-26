@@ -120,7 +120,7 @@ function fdrSaveCsv() {
 const _dbf = { open: false, cur: -1, frac: 0, live: true, play: 0, playT: null, track: null, tab: 'ev' };
 // 재생 배속 — 누를 때마다 ×1 → ×2 → ×4 → ×8 → ×10. 기록은 1초에 한 줄이라 ×1 · ×2 처럼 느릴 때는
 // 줄 사이를 이어(보간) 3D · 계기가 1초마다 뚝뚝 끊기지 않게 한다(_rpApply)
-const DBF_SPEEDS = [1, 2, 4, 8, 10], DBF_TICK_MS = 50;
+const DBF_SPEEDS = [1, 2, 4, 8, 10, 0.5], DBF_TICK_MS = 50;   // (0.5 — 3D 다시 보기에서 착함 · 호버를 천천히)
 function _dbfSpdNext() { const i = DBF_SPEEDS.indexOf(_dbf.play); _dbf.play = DBF_SPEEDS[(i + 1) % DBF_SPEEDS.length]; }
 function _dbfSpd() { return DBF_SPEEDS.includes(_dbf.play) ? _dbf.play : DBF_SPEEDS[0]; }
 const _hms = s => { s = Math.max(0, Math.round(s)); const h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60, x = s % 60; return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(x).padStart(2, '0'); };
@@ -230,7 +230,10 @@ function _dbfStep(sec) {
     if (left < need) { _dbf.frac += left / gap; left = 0; }
     else { left -= need; _dbf.cur++; _dbf.frac = 0; }
   }
-  if (_dbf.cur >= n - 1) { _dbf.cur = n - 1; _dbf.frac = 0; _dbfPlay(false); }
+  // 3D 다시 보기의 A ~ B 구간 반복 — B 를 지나면 A 로 돌아간다
+  if (_rp.on && _rp.loop && _grade.a >= 0 && _grade.b > _grade.a && _dbf.cur >= _grade.b) { _dbf.cur = _grade.a; _dbf.frac = 0; }
+  else if (_dbf.cur >= n - 1) { _dbf.cur = n - 1; _dbf.frac = 0; _dbfPlay(false); }
+  if (_rp.on && _dbf.cur > c0) _rpEvents(c0, _dbf.cur);
   if (_dbf.cur !== c0) dbfRender();      // 그래프 · 표는 줄이 바뀔 때만 다시 그린다
   _rpApply();
 }
@@ -497,7 +500,26 @@ function fdrReport() {
 
 // ── 3D 다시 보기 — 기록한 자리 · 고도 · 자세를 비행 상태(S)에 얹어 3D 화면(조종석 · 외부)이 그대로 따라 그린다 ──
 // 비행은 멈추고(PAUSE), 강평 창은 화면 아래 작은 막대로 줄어든다. 끝내면 다시 보기 전 상태로 돌아간다.
-const _rp = { on: false, snap: null };
+const _rp = { on: false, snap: null, loop: false, evTxt: '', evT: 0 };
+// 다시 보는 동안 지나간 사건(이륙 · 착륙 · 모드 풀림 · 한계 넘음)을 막대 위에 잠깐 띄운다
+function _rpEvents(i0, i1) {
+  const e = fdr.ev.filter(x => x.i > i0 && x.i <= i1).pop();
+  if (e) { _rp.evTxt = `${_hms(e.t)} ${e.txt}`; _rp.evKind = e.kind || ''; _rp.evT = performance.now(); }
+}
+// 사건 사이 건너뛰기(dir −1 · +1) — 지금 줄 앞 · 뒤의 가장 가까운 사건으로
+function _rpJumpEv(dir) {
+  const ci = Math.max(0, _dbf.cur), L = fdr.ev.map(x => x.i).filter(i => i >= 0 && i < fdr.rows.length).sort((a, b) => a - b);
+  const to = dir > 0 ? L.find(i => i > ci) : L.filter(i => i < ci).pop();
+  if (to === undefined) return false;
+  _dbf.cur = to; _dbf.frac = 0; _rpEvents(to - 1, to); _rpApply(); dbfRender(); return true;
+}
+// 시간으로 앞뒤(초)
+function _rpSkip(sec) {
+  const rows = fdr.rows; if (rows.length < 2) return;
+  const t = (rows[Math.max(0, _dbf.cur)] || rows[0]).t + sec;
+  let i = rows.findIndex(r => r.t >= t); if (i < 0) i = rows.length - 1;
+  _dbf.cur = Math.max(0, i); _dbf.frac = 0; _rpApply(); dbfRender();
+}
 function _rpApply() {
   if (!_rp.on) return;
   const i = _dbf.cur < 0 ? fdr.rows.length - 1 : _dbf.cur, r0 = fdr.rows[i]; if (!r0) return;
@@ -522,7 +544,7 @@ function dbfReplay(on) {
     try { if (typeof _soloActive !== 'undefined' && !_soloActive && typeof enterSolo === 'function') { enterSolo('m3d'); _rp.solo = true; } } catch (e) { _swallow(e); }
     _rpApply(); _dbfPlay(true);
   } else if (!on && _rp.on) {
-    _dbfPlay(false); _rp.on = false;
+    _dbfPlay(false); _rp.on = false; _rp.loop = false; _rp.evTxt = '';
     const sn = _rp.snap; if (sn) { Object.assign(S, { lat: sn.lat, lon: sn.lon, alt: sn.alt, hdg: sn.hdg, pit: sn.pit, bnk: sn.bnk, spd: sn.spd, vs: sn.vs }); S.trail = sn.trail; bankTarget = sn.bnk; S.lastT = null; }
     try { updateAcOnMap(); drawPFD(); } catch (e) { _swallow(e); }
     const m = document.getElementById('dbf-mini'); if (m) m.style.display = 'none';
@@ -535,8 +557,11 @@ function _rpMini() {
   let m = document.getElementById('dbf-mini');
   if (!m) {
     m = document.createElement('div'); m.id = 'dbf-mini';
-    m.innerHTML = `<b>3D 다시 보기</b><button class="sim-btn" data-rp="play">❚❚</button><button class="sim-btn" data-rp="spd">×1</button>` +
-      `<input type="range" min="0" max="0" value="0" data-rp="rng"><span data-rp="t"></span><button class="sim-btn" data-rp="ext" title="외부 시점(SIM)">EXT</button><button class="sim-btn" data-rp="end">✕ 끝내기</button>`;
+    m.innerHTML = `<div class="rp-ev" data-rp="ev"></div><b>3D 다시 보기</b><button class="sim-btn" data-rp="evp" title="앞 사건">⏮</button><button class="sim-btn" data-rp="b10" title="10초 뒤로">⏪</button>` +
+      `<button class="sim-btn" data-rp="play">❚❚</button><button class="sim-btn" data-rp="f10" title="10초 앞으로">⏩</button><button class="sim-btn" data-rp="evn" title="다음 사건">⏭</button><button class="sim-btn" data-rp="spd">×1</button>` +
+      `<div class="rp-bar"><input type="range" min="0" max="0" value="0" data-rp="rng"><div class="rp-marks" data-rp="marks"></div></div><span data-rp="t"></span>` +
+      `<button class="sim-btn" data-rp="loop" title="A ~ B 구간 반복(강평 창 채점의 A · B, 없으면 지금 자리에서 A → 다시 누르면 B)">⟲ A~B</button>` +
+      `<button class="sim-btn" data-rp="ext" title="외부 시점(SIM)">EXT</button><button class="sim-btn" data-rp="end">✕ 끝내기</button>`;
     document.body.appendChild(m);
     m.addEventListener('click', e => {
       const b = e.target.closest('button[data-rp]'); if (!b) return;
@@ -544,7 +569,18 @@ function _rpMini() {
       if (k === 'play') _dbfPlay(!_dbf.playT);
       else if (k === 'spd') _dbfSpdNext();
       else if (k === 'ext') { try { if (typeof toggleExtView === 'function') toggleExtView(); else if (typeof simExtView !== 'undefined') simExtView = !simExtView; } catch (er) { _swallow(er); } }
-      else if (k === 'end') dbfReplay(false);
+      else if (k === 'end') { dbfReplay(false); return; }
+      else if (k === 'b10') _rpSkip(-10);
+      else if (k === 'f10') _rpSkip(10);
+      else if (k === 'evp') _rpJumpEv(-1);
+      else if (k === 'evn') _rpJumpEv(1);
+      else if (k === 'loop') {
+        const ci = Math.max(0, _dbf.cur);
+        if (_rp.loop) _rp.loop = false;
+        else if (_grade.a >= 0 && _grade.b > _grade.a) { _rp.loop = true; if (ci < _grade.a || ci > _grade.b) { _dbf.cur = _grade.a; _dbf.frac = 0; _rpApply(); } }
+        else if (_grade.a < 0 || _grade.b >= 0) { _grade.a = ci; _grade.b = -1; try { uiToast('구간 A 를 정했습니다 — B 자리에서 한 번 더 누르십시오'); } catch (er) { _swallow(er); } }
+        else if (ci > _grade.a) { _grade.b = ci; _rp.loop = true; _dbf.cur = _grade.a; _dbf.frac = 0; _rpApply(); }
+      }
       _rpMini();
     });
     m.querySelector('[data-rp="rng"]').addEventListener('input', e => { _dbf.cur = +e.target.value; _dbf.frac = 0; _rpApply(); });
@@ -555,6 +591,17 @@ function _rpMini() {
   const rng = m.querySelector('[data-rp="rng"]'); rng.max = String(Math.max(0, n - 1)); rng.value = String(ci);
   m.querySelector('[data-rp="play"]').textContent = _dbf.playT ? '❚❚' : '▶';
   m.querySelector('[data-rp="spd"]').textContent = '×' + _dbfSpd();
-  m.querySelector('[data-rp="t"]').textContent = r ? `${_hms(r.t)} · ${r.alt.toFixed(0)}ft · ${r.ias.toFixed(0)}kt` : '';
+  m.querySelector('[data-rp="t"]').textContent = r ? `${_hms(r.t)} · ${r.alt.toFixed(0)}ft · ${r.ias.toFixed(0)}kt · TQ ${(+r.tq || 0).toFixed(0)}%` : '';
+  const lp = m.querySelector('[data-rp="loop"]'); lp.classList.toggle('on', !!_rp.loop);
+  lp.textContent = _rp.loop ? `⟲ ${_hms(fdr.rows[_grade.a].t)}~${_hms(fdr.rows[_grade.b].t)}` : (_grade.a >= 0 && _grade.b < 0 ? '⟲ B?' : '⟲ A~B');
+  // 사건 눈금(막대 위) · 구간 · 지나간 사건 글
+  const mk = m.querySelector('[data-rp="marks"]'), key = n + ':' + fdr.ev.length + ':' + _grade.a + ':' + _grade.b;
+  if (mk.dataset.k !== key) {
+    mk.dataset.k = key; const pc = i => (100 * i / Math.max(1, n - 1)).toFixed(2) + '%';
+    mk.innerHTML = (_grade.a >= 0 && _grade.b > _grade.a ? `<i class="rp-seg" style="left:${pc(_grade.a)};width:calc(${pc(_grade.b)} - ${pc(_grade.a)})"></i>` : '') +
+      fdr.ev.filter(e => e.i >= 0 && e.i < n).map(e => `<i class="rp-mk ${e.kind || ''}" style="left:${pc(e.i)}" title="${_hms(e.t)} ${String(e.txt).replace(/"/g, '&quot;')}"></i>`).join('');
+  }
+  const ev = m.querySelector('[data-rp="ev"]'), show = _rp.evTxt && performance.now() - _rp.evT < 3500;
+  ev.textContent = show ? _rp.evTxt : ''; ev.className = 'rp-ev ' + (show ? 'show ' + (_rp.evKind || '') : '');
 }
 try { appRegister({ toggleDebrief, dbfOpen, dbfClose, fdrSaveCsv, dbfReplay }); } catch (e) { _swallow(e); }

@@ -1140,11 +1140,11 @@ html.env-rain1 .env-rain { display: block; opacity: 0.45; } html.env-rain2 .env-
 #map-tools-btn { flex: none !important; min-width: 64px; padding-left: 8px; padding-right: 8px; white-space: nowrap; }
 #tools-menu { display: none; position: fixed; z-index: 30003; background: #121a21; border: 1px solid #3a4a58; border-radius: 8px; padding: 6px; box-shadow: 0 6px 18px rgba(0,0,0,0.5); }
 #tools-menu .sim-btn { display: block; width: 100%; margin: 3px 0; text-align: left; padding: 8px 12px; font-size: 14px; }
-#set-wrap, #rtc-wrap, #diag-wrap, #tileprep-wrap { display: none; position: fixed; inset: 0; z-index: 30002; background: rgba(0,0,0,0.45); align-items: center; justify-content: center; }
-#set-wrap .set-box, #rtc-wrap .set-box, #diag-wrap .set-box, #tileprep-wrap .set-box { width: min(520px, 96vw); max-height: 88vh; overflow-y: auto; background: #121a21; border: 1px solid #3a4a58; border-radius: 8px; color: #dfe6ec; font-size: 14px; padding-bottom: 10px; }
+#set-wrap, #rtc-wrap, #diag-wrap, #tileprep-wrap, #iimc-wrap, #bingo-wrap, #radio-wrap { display: none; position: fixed; inset: 0; z-index: 30002; background: rgba(0,0,0,0.45); align-items: center; justify-content: center; }
+#set-wrap .set-box, #rtc-wrap .set-box, #diag-wrap .set-box, #tileprep-wrap .set-box, #iimc-wrap .set-box, #bingo-wrap .set-box, #radio-wrap .set-box { width: min(520px, 96vw); max-height: 88vh; overflow-y: auto; background: #121a21; border: 1px solid #3a4a58; border-radius: 8px; color: #dfe6ec; font-size: 14px; padding-bottom: 10px; }
 .set-box .set-bar { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; background: #1b2731; margin-bottom: 4px; }
 .set-box .set-row { display: flex; align-items: center; gap: 8px; padding: 5px 12px; } .set-box .set-row > span { width: 150px; flex: none; color: #8aa0b0; }
-.set-box .set-row > div { display: flex; flex-wrap: wrap; gap: 4px; flex: 1; } .set-box .sim-btn { width: auto; flex: none; padding: 4px 10px; margin: 0; }
+.set-box .set-row > div { display: flex; flex-wrap: wrap; gap: 4px; flex: 1; align-items: center; } .set-box .set-gap { width: 10px; } .set-box .set-sum { color: #8aa0b0; font-size: 12px; margin-left: 6px; } .set-box .sim-btn { width: auto; flex: none; padding: 4px 10px; margin: 0; }
 .set-box .sim-btn.on { border-color: #00e5ff; color: #00e5ff; } .set-box .set-note { padding: 6px 12px; color: #8aa0b0; font-size: 12px; }
 .set-box select { flex: 1; min-width: 0; max-width: 100%; background: #0b1218; color: #fff; border: 1px solid #3a4a58; border-radius: 4px; padding: 5px 6px; font-size: 13px; }
 .set-box input[type=text] { flex: 1; min-width: 0; background: #0b1218; color: #fff; border: 1px solid #3a4a58; border-radius: 4px; padding: 5px 8px; font-size: 14px; }
@@ -1177,6 +1177,7 @@ html.ios-win #simple-bar { display: none !important; }
 html.ios-win #gate-overlay, html.ios-win #help-overlay, html.ios-win .ui-dlg-back:has(.start-apt) { display: none !important; }
 html.ios-win body.solo-mode #map3d-wrap, html.ios-win body.solo-mode .solo-panel-visible { top: calc(40px + env(safe-area-inset-top)) !important; }
 html.ios-win #ios-root { padding-top: 50px; }
+html.ios-obs #ios-root [data-ios]:not([data-ios="rtc"]), html.ios-obs #msn-root [data-mact]:not([data-mact="help"]) { opacity: 0.45; pointer-events: none; } html.ios-obs #ios-root::before { content: '👀 관찰 기기 — 보기만 합니다'; display: block; padding: 4px 10px; background: #1d3a52; color: #cfe8ff; font-size: 13px; }
 html.ios-win:not(.ios-mode) #ios-root { display: none !important; }
 #ios-root .ios-grip { display: none; }
 #ios-root.ios-grip-on > :not(.ios-grip) { display: none !important; }
@@ -1249,6 +1250,13 @@ html.ios-mode body { background: #0b1218; overflow: auto; }
 #dbf-mini { display: none; position: fixed; left: 50%; bottom: 12px; transform: translateX(-50%); z-index: 30000; gap: 6px; align-items: center; padding: 6px 10px;
   background: rgba(18,26,33,0.92); border: 1px solid #3a4a58; border-radius: 8px; color: #dfe6ec; font-size: 13px; width: min(720px, 94vw); }
 #dbf-mini .sim-btn { width: auto; flex: none; padding: 3px 8px; margin: 0; } #dbf-mini input { flex: 1; min-width: 60px; }
+#dbf-mini { width: min(940px, 96vw); flex-wrap: wrap; } #dbf-mini .rp-bar { position: relative; flex: 1; min-width: 120px; display: flex; } #dbf-mini .rp-bar input { width: 100%; }
+#dbf-mini .rp-marks { position: absolute; left: 8px; right: 8px; top: -3px; height: 6px; pointer-events: none; }
+#dbf-mini .rp-mk { position: absolute; width: 2px; height: 8px; background: #8fd3ff; transform: translateX(-1px); } #dbf-mini .rp-mk.warn { background: #ffb000; } #dbf-mini .rp-mk.err { background: #ff5252; }
+#dbf-mini .rp-seg { position: absolute; top: 2px; height: 3px; background: rgba(120,255,160,0.55); }
+#dbf-mini .rp-ev { position: absolute; left: 50%; bottom: 100%; transform: translateX(-50%); margin-bottom: 6px; padding: 3px 10px; border-radius: 6px; background: rgba(18,26,33,0.92); border: 1px solid #3a4a58; white-space: nowrap; opacity: 0; transition: opacity .3s; pointer-events: none; }
+#dbf-mini .rp-ev.show { opacity: 1; } #dbf-mini .rp-ev.warn { color: #ffb000; } #dbf-mini .rp-ev.err { color: #ff5252; }
+#dbf-mini .sim-btn.on { background: #2e7d32; }
 #dbf-wrap .dbf-ev div { cursor: pointer; padding: 1px 0; } #dbf-wrap .dbf-ev .warn { color: #ffb000; } #dbf-wrap .dbf-ev .err { color: #ff5252; }
 #dbf-wrap .dbf-ev .cur { background: #22384a; }
 @media (max-width: 700px) { #dbf-wrap .dbf-main { flex-direction: column; } #dbf-wrap .dbf-bot { flex-direction: column; height: 200px; } }
@@ -1642,6 +1650,14 @@ html.ac-b206 #pfd-ov { background: transparent; border: 0; box-shadow: none; min
 
 /* 진단 기록(34-infra.js) */
 #diag-wrap .diag-box { width: min(680px, 96vw); }
+#tileprep-wrap .tp-area { display: inline-flex; gap: 2px; } #tileprep-wrap .tp-none, #radio-wrap .tp-none { color: #8aa0b0; }
+#iimc-wrap .set-box, #radio-wrap .set-box { width: min(620px, 96vw); } #iimc-wrap .gr-t { border-collapse: collapse; width: calc(100% - 24px); margin: 6px 12px; font-size: 13px; }
+#iimc-wrap .gr-t th, #iimc-wrap .gr-t td { padding: 3px 6px; border-bottom: 1px solid #26323c; text-align: left; } #iimc-wrap .gr-sum { padding: 6px 12px; font-size: 15px; }
+#iimc-wrap .ok, #bingo-wrap .ok, #radio-wrap .ok { color: #7dff3a; } #iimc-wrap .bad, #bingo-wrap .bad, #radio-wrap .bad { color: #ff5252; } #bingo-wrap .warn { color: #ffb000; }
+#iimc-wrap .gr-우수 { color: #7dff3a; } #iimc-wrap .gr-만족 { color: #4fc3f7; } #iimc-wrap .gr-보통 { color: #ffb000; } #iimc-wrap .gr-미흡, #iimc-wrap .gr-불만족 { color: #ff5252; }
+#iimc-wrap .sim-btn.on, #bingo-wrap .sim-btn.on, #radio-wrap .sim-btn.on { background: #1d5a7a; color: #fff; }
+#radio-wrap textarea { width: 100%; background: #0d1318; color: #dfe6ec; border: 1px solid #3a4a58; border-radius: 4px; font-size: 13px; } #radio-wrap .radio-ex { flex: 1; color: #bfe3ff; font-size: 13px; }
+#radio-wrap .radio-chk { font-size: 13px; line-height: 1.6; } #radio-wrap .radio-chk span { margin-right: 6px; white-space: nowrap; }
 #tileprep-wrap .sim-btn.on { background: #1d5a7a; color: #fff; } #tileprep-wrap .tp-bar { height: 8px; background: #26323c; border-radius: 4px; overflow: hidden; margin-bottom: 4px; } #tileprep-wrap .tp-bar i { display: block; height: 100%; background: #3fb950; }
 .diag-box .diag-h { padding: 8px 12px 2px; color: #ffcc66; font-weight: bold; font-size: 13px; }
 .diag-box .diag-list { margin: 0 12px; max-height: 150px; overflow-y: auto; background: #0b1218; border: 1px solid #2a3a48; border-radius: 4px; padding: 4px 6px; font: 11px/1.45 monospace; color: #cfd8df; }

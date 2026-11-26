@@ -47,6 +47,8 @@ function iosState() {
 // 교육생 창 — 명령을 받는다
 function iosHandle(m) {
   if (!m || m.type !== 'cmd') return;
+  // 확인 번호(qid)가 붙은 명령 — 받았다고 알리고(ACK), 다시 온 것(중계가 늦게 · 두 길로)은 한 번만 한다
+  if (m.qid) { _iosAck(m.qid); if (_iosSeenIds.includes(m.qid)) return; _iosSeenIds.push(m.qid); if (_iosSeenIds.length > 200) _iosSeenIds.splice(0, 100); }   // (m.id 는 콘솔 스위치 이름 — 확인 번호는 qid)
   const c = m.c;
   try {
     if (c === 'run' && !S.running) toggleSim();
@@ -75,6 +77,7 @@ function iosHandle(m) {
     else if (c === 'scn' && typeof scnApply === 'function') scnApply(scnList()[+m.i]);
     else if (c === 'sar' && typeof sarPlaceAhead === 'function') { if (m.on) sarPlaceAhead(); else if (sar.on) sarToggleOn(); }
     else if (c === 'debrief' && typeof dbfOpen === 'function') dbfOpen();
+    else if (c === 'iimc' && typeof iimcStart === 'function') { if (m.on === false) { if (typeof iimcEnd === 'function') iimcEnd('교관이 멈춤'); } else iimcStart(); }
     else if (c === 'ping') { _iosPeerT = Date.now(); if (m.pt) _iosPingEcho = m.pt; return; }   // 교관 창이 있다 — 미러를 보낸다(받은 시각은 되돌려 보내 왕복 시간을 잰다)
     else if (c === 'ovhd' && typeof ovhdSet === 'function') ovhdSet(m.id, m.v);  // 교관 창에서 바꾼 콘솔 스위치
     else if (c === 'msn' && typeof msnRemoteCmd === 'function') msnRemoteCmd(m);  // 교관 화면 Vendor(전탐석)의 조작 — 37-mission.js
@@ -98,8 +101,52 @@ function iosHandle(m) {
 }
 // 같은 브라우저(BroadcastChannel)와 다른 기기(WebRTC — 33-train4.js rtcSend) 둘 다로 보낸다
 function iosSend() { if (IOS_MODE) return; const m = iosState(); try { if (_iosCh) _iosCh.postMessage(m); } catch (e) { _swallow(e); } try { if (typeof rtcSend === 'function') rtcSend(m); } catch (e) { _swallow(e); } }
-function iosCmd(c, o = {}) { const m = Object.assign({ type: 'cmd', c }, o); try { if (_iosCh) _iosCh.postMessage(m); } catch (e) { _swallow(e); } try { if (typeof rtcSend === 'function') rtcSend(m); } catch (e) { _swallow(e); } }
-if (_iosCh) _iosCh.onmessage = e => { if (IOS_MODE) { if (e.data && e.data.type === 'mirror') iosMirrorApply(e.data); else iosRender(e.data); } else iosHandle(e.data); };
+function _iosPost(m) { try { if (_iosCh) _iosCh.postMessage(m); } catch (e) { _swallow(e); } try { if (typeof rtcSend === 'function') rtcSend(m); } catch (e) { _swallow(e); } }
+// ── 명령 확인(ACK) · 다시 보내기 — 인터넷 중계(MQTT QoS 0)는 가끔 하나를 잃는다 ──
+//   교관 쪽: 명령마다 번호를 붙여 보내고, 1.5초 안에 받았다는 답이 없으면 3번까지 다시 보낸다 · 그래도 없으면 알린다
+//   교육생 쪽: 번호를 기억해 같은 명령은 한 번만 하고, 받을 때마다 답한다. ping · 손잡이 이어 누름 · 조이스틱처럼 잦은 것은 번호 없이
+let _iosCmdSeq = 0, _iosNoAckWarnT = 0;
+const _iosPend = new Map(), _iosSeenIds = [];
+const _iosNoAck = (c, o) => c === 'ping' || c === 'kg' || (c === 'msn' && o && o.f === '_joy');
+function _iosAck(qid) { _iosPost({ type: 'ack', qid }); }
+function iosCmd(c, o = {}) {
+  if (IOS_MODE && typeof rtc !== 'undefined' && rtc.obs && c !== 'ping') { try { uiToast('👀 관찰 기기 — 보기만 합니다(조작은 교관 기기에서)', 'warn', 2500); } catch (e) { _swallow(e); } return false; }
+  const m = Object.assign({ type: 'cmd', c }, o);
+  if (IOS_MODE && !_iosNoAck(c, o)) { m.qid = Date.now().toString(36) + '-' + (++_iosCmdSeq); _iosPend.set(m.qid, { m, n: 0, t: Date.now() }); }
+  _iosPost(m); return true;
+}
+function iosAckIn(m) { if (m && m.type === 'ack') { _iosPend.delete(m.qid); return true; } return false; }
+if (IOS_MODE) setInterval(() => {
+  const now = Date.now();
+  for (const [id, p] of _iosPend) {
+    if (now - p.t < 1500) continue;
+    if (p.n >= 3) {
+      _iosPend.delete(id);
+      if (now - _iosNoAckWarnT > 5000) { _iosNoAckWarnT = now; try { uiToast(`교관 명령(${p.m.c})이 교육생 기기에 닿지 않았습니다 — 연결을 확인하십시오`, 'err', 5000); } catch (e) { _swallow(e); } }
+      continue;
+    }
+    p.n++; p.t = now; _iosPost(p.m);
+  }
+}, 500);
+// ── 연결 상태 알림 — 교관 쪽: 교육생 상태가 5초 끊기면 · 다시 오면 / 교육생 쪽: 교관 ping 이 6초 끊기면 · 다시 오면 ──
+let _iosLinkPrev = 'wait', _iosPeerHad = false, _iosPeerLostT = 0;
+setInterval(() => {
+  try {
+    if (IOS_MODE) {
+      const st = iosLinkState().st;
+      if (st !== _iosLinkPrev) {
+        if (st === 'lost' && _iosLinkPrev !== 'wait') uiToast('교육생 기기와 연결이 끊겼습니다 — 다시 잇는 중(화면은 마지막 상태로 멈춤)', 'warn', 5000);
+        else if (st === 'ok' && _iosLinkPrev === 'lost') uiToast('교육생 기기와 다시 이어졌습니다');
+        _iosLinkPrev = st;
+      }
+    } else {
+      const on = Date.now() - _iosPeerT < 6000;
+      if (on) { if (_iosPeerLostT) { uiToast('교관 기기와 다시 이어졌습니다'); _iosPeerLostT = 0; } _iosPeerHad = true; }
+      else if (_iosPeerHad && !_iosPeerLostT) { _iosPeerLostT = Date.now(); uiToast('교관 기기 연결이 끊겼습니다 — 다시 이어지기를 기다립니다', 'warn', 5000); }
+    }
+  } catch (e) { _swallow(e); }
+}, 1000);
+if (_iosCh) _iosCh.onmessage = e => { if (IOS_MODE) { if (e.data && e.data.type === 'mirror') iosMirrorApply(e.data); else if (!iosAckIn(e.data)) iosRender(e.data); } else iosHandle(e.data); };
 if (!IOS_MODE) setInterval(iosSend, 500);
 function openIos() {
   const q = new URLSearchParams(location.search); q.set('ios', '1');
@@ -133,6 +180,7 @@ function iosBuild() {
     grp('바다', 'sea', [0, 1, 2, 3, 4, 5, 6].map(v => [v, String(v)])) + grp('돌풍', 'gust', [0, 5, 10, 15, 20].map(v => [v, v ? '+' + v : '없음'])) +
     grp('구름 밑면', 'ceil', [0, 500, 1000, 1500, 2500].map(v => [v, v ? v + 'ft' : '없음'])) +
     grp('지면', 'surface', [['normal', '보통'], ['sand', '모래'], ['snow', '눈']]) + grp('교통량', 'traffic', [0, 1, 3, 5].map(v => [v, v ? v + '대' : '없음'])) +
+    `<h2>IIMC</h2><div class="ios-btns"><button data-ios="iimc:1">⚠ IIMC 걸기(구름 속 · 회복 판정)</button><button data-ios="iimc:0">IIMC 멈춤</button></div>` +
     `<h2>SAR · 시나리오</h2><div class="ios-btns"><button data-ios="sar:1">요구조자 앞에 놓기</button><button data-ios="sar:0">요구조자 치우기</button></div><div class="ios-btns" data-iosv="scn"></div>
     <h2>교범</h2><div class="ios-btns"><button data-ios="manual">📘 교관 교범 열기</button></div>
     <h2>메시지</h2><div class="ios-row"><div style="flex:1;display:flex;gap:6px"><input type="text" data-iosv="msg" placeholder="교육생 화면에 띄울 말" style="flex:1"><button data-ios="msg">보내기</button></div></div>`;
@@ -150,6 +198,7 @@ function iosBuild() {
     else if (p[0] === 'msg') { const i = R.querySelector('[data-iosv="msg"]'); if (i.value.trim()) { iosCmd('msg', { text: i.value.trim() }); i.value = ''; } }
     else if (p[0] === 'scn') iosCmd('scn', { i: +p[1] });
     else if (p[0] === 'sar') iosCmd('sar', { on: p[1] === '1' });
+    else if (p[0] === 'iimc') iosCmd('iimc', { on: p[1] === '1' });
     else if (p[0] === 'gal') iosCmd('wb', { o: { gal: +p[1] } });
     else if (p[0] === 'wbset') { const o = {}; const r = R.querySelector('[data-iosv="wbrear"]').value, c = R.querySelector('[data-iosv="wbcargo"]').value; if (r !== '') o.rear = +r; if (c !== '') o.cargo = +c; iosCmd('wb', { o }); }
     else if (p[0] === 'wbp') iosCmd('wb', { o: p[1] === 'aft' ? { rear: 0, cargo: 250, copilot: 0 } : p[1] === 'heavy' ? { rear: 340, cargo: 100, copilot: 170, gal: 91 } : { rear: 0, cargo: 0, copilot: 170, pilot: 170 } });
@@ -213,7 +262,12 @@ const HELP_ITEMS = [
   ['LTE · VRS(두 기종)', 'LTE 는 흰수리에도 — 기수는 주로터 반작용 쪽으로 돈다(흰수리 왼쪽 · Bell 206 · R22 오른쪽). 위험 상대풍도 그 쪽에 맞춰 거울(흰수리 045~075° · 030~150° · 뒷바람). 회복은 반대쪽 페달 끝까지 · 사이클릭 앞으로. VRS 에 드는 강하율은 원판 하중(호버 유도속도)에 맞춰 흰수리 700 · Bell 206 약 390 · R22 약 340fpm(무게가 늘면 √ 로).'],
   ['NVG 화면', 'ENV 의 NVG 를 켜면 녹색 단색에 둥근 관 시야(40°) · 알갱이(scintillation)가 깔리고, 불빛은 2배 남짓 번져 크게 보인다. 조종석 계기는 고글 아래로 보므로 가리지 않는다.'],
   ['3D 화질 자동', '3D 의 화질 버튼 — 상 → 중 → 하 → 자동. 자동은 2초마다 초당 프레임을 재어 24 아래가 두 번 잇따르면 한 단계 낮추고, 50 넘게 20초 이어지면 한 단계 올린다.'],
-  ['지도 미리 받기(오프라인)', '🧰 도구 → 🗺 지도 미리 받기 — 지금 자리 둘레 10~40NM 의 위성 사진(8~14 단계)과 3D 지형(8~12 단계)을 받아 둔다. 바다 위 · 섬처럼 인터넷이 끊겨도 2D · 3D · MFD 지도가 뜬다. 받아 둔 지도는 앱이 새 판으로 바뀌어도 남는다.'],
+  ['지도 미리 받기(오프라인)', '🧰 도구 → 🗺 지도 미리 받기 — 지금 자리 · 비행계획 항로(양옆 10NM) · 저장한 지역(기지 · 작전 해역) 둘레의 위성 사진(8~14 단계)과 3D 지형(8~12 단계)을 받아 둔다. 바다 위 · 섬처럼 인터넷이 끊겨도 2D · 3D · MFD 지도가 뜬다. 받아 둔 지도는 앱이 새 판으로 바뀌어도 남는다.'],
+  ['IIMC 연습', '🌙 ENV → ⚠ IIMC(또는 교관 화면 IIMC 걸기) — 지금 고도를 구름 속(시정 400m)에 넣고 회복을 잰다: 날개 수평(5초) · 상승 시작(10초) · 자세 한계 · 속도 · 구름 위 안전고도. 지면 근접 · 자세 상실은 바로 불만족. 결과 창에서 환경을 되돌리고, 강평 3D 다시 보기의 ⟲ A~B 로 그 구간을 돌려 본다.'],
+  ['연료 · BINGO', '🧰 도구 → ⛽ 연료 · BINGO — 돌아갈 곳(출발 공항 · 가장 가까운 공항 · 함정 · 정한 곳)까지 바람을 넣은 귀환 연료 + 예비(분)를 BINGO 로 셈한다. 여유 150lb 아래 노랑 · 0 이하 BINGO FUEL(음성) — 강평에 남는다.'],
+  ['교신 연습', '🧰 도구 → 📻 교신 연습 — 관제 · 해경 임무 · 비상(MAYDAY · PAN-PAN) 표준 문구를 지금 자리 · 고도 · 콜사인을 넣어 읽어 준다. ● 녹음으로 내 교신을 남겨 다시 듣고, 받아쓰기(또는 직접 적기)로 비상 호출 8가지 형식을 점검한다.'],
+  ['AIS', '전탐석 — 선박 AIS(이름 · MMSI)가 CH4 항법지도 · 레이더 꼬리표 · 지정 표적 정보 · EO/IR 에 같은 표적으로 보인다. AIS 가 없는 배는 NO AIS(단속 의심) · 요구조자는 AIS-SART. 위 막대 [AIS 지도]로 2D 지도에도 겹친다.'],
+  ['관찰 기기', '📱 Instructor Sync — 교관 기기와 짝을 맺은 뒤 [👀 관찰 기기 QR]을 띄우면 다른 태블릿 · 노트북 여러 대가 찍어 보기만 한다(조작 불가). 교관 명령은 받았는지 확인(ACK)하고 닿지 않으면 다시 보낸다 · 끊기고 다시 이어지면 알린다.'],
   ['진단 기록 — 기능별', '🩺 진단 기록에 삼킨 예외를 기능(파일)별 누적으로 보인다. 10초에 100번 넘게 되풀이되면 "반복 고장 의심" 으로 화면 오류 목록에 남긴다(숨은 고장 찾기).'],
   ['외부 등화(흰수리)', '상부 콘솔과 연동 — POSITION LTS 노브(1~5) · STEADY/OFF/FLASH, ANTI COLLISION LTS UPPER/BOTH/LOWER · DIM/OFF/BRT, NAV · ANTI COLL NORM/IR. 3D 모형(외부 시점 · 3D 지도)에 왼쪽 빨강 · 오른쪽 초록 · 꼬리 흰 위치표시등과 위 · 아래 빨간 충돌방지등(번쩍)이 빛난다. 충돌방지등(BRT)은 위치표시등의 2배 밝기(DIM 은 그 반), DISPLAY 스위치로 DAY 100% · NIGHT 50% · NVG 30%. IR 은 NVG 에서만 보이고, DC 전원이 없으면 꺼진다.'],
   ['창 위 탭 줄', '왼쪽 · 가운데 · 오른쪽 · 아래 창의 탭이 모두 같은 차례다 — 화면 탭(CDU · MAP · UPPER · LOWER · SYSTEM · CONTROL, 왼쪽 창은 PFD · SYSTEM)이 먼저, 오른쪽 끝에 동작 단추(⛶ Cockpit · 분할 · ⊞ 창 배치 · ⧉ POP UP · 📌 Top · ⌂ · ⟳). 화면마다 제 색(어느 줄에서나 같다). 창이 좁으면 줄임말(UPR · LWR · SYS · CTRL)과 기호만 — 이름은 마우스를 올리면 나온다.'],

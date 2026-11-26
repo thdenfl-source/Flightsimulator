@@ -44,6 +44,21 @@ export async function run(page, t) {
   });
   if (b.skip) t.ok(true, '(EO/IR 지도 없음 — 건너뜀)');
   else t.ok(b.dropped && b.again && b.kept, `EO/IR — 문맥이 돌아오지 않으면 거두고 다음 그림에서 새로 만들고, 새 지도는 그대로 둔다 (${JSON.stringify(b)})`);
+  // 숨은 지도 — 전탐석을 열어 두어도 EO/IR 칸이 안 보이고 CH1 녹화도 없으면 EO/IR 지도는 필요 없다(5초 여유) · 진단에 살아 있는 3D 지도 목록
+  const h = await page.evaluate(() => {
+    if (typeof _eoNeed !== 'function') return { skip: true };
+    const o = {}, mo = msnOpen, wt = _eoWantT, rc = window.dvrRecCh, nt = _eoNeedT;
+    _eoWantT = -Infinity; msnOpen = false; o.closed = _eoNeed() === false;
+    msnOpen = true; window.dvrRecCh = n => n === 1; o.rec = _eoNeed() === true;
+    window.dvrRecCh = () => false; o.grace = _eoNeed() === true;              // 방금 필요했으면 5초 동안은 둔다
+    _eoNeedT = performance.now() - 6000; o.after = _eoNeed() === false || (!!_msnEl && msnScreenOn() && _cellVis(_msnEl.querySelector('.c-eo')));
+    msnOpen = mo; _eoWantT = wt; window.dvrRecCh = rc; _eoNeedT = nt;
+    const L = maps3dLive(); o.maps = L.map(x => x.name); o.main = L.some(x => x.name === '메인 3D');
+    toggleDiag(); o.diag = /3D 지도\(WebGL\)/.test(document.getElementById('diag-wrap').textContent); toggleDiag();
+    return o;
+  });
+  if (h.skip) t.ok(true, '(EO/IR 없음 — 건너뜀)');
+  else t.ok(h.closed && h.rec && h.grace && h.after && h.main && h.diag, `숨은 EO/IR 지도는 거둔다(전탐석이 열려 있어도 · CH1 녹화 중이면 둔다 · 5초 여유) · 🩺 진단에 3D 지도 목록 (${h.maps.join(', ')})`);
   const errs = (page.errors || []).filter(e => !/Failed to fetch|NetworkError|tile/i.test(e));
   t.eq(errs.length, 0, `페이지 오류 없음${errs.length ? ' — ' + errs[0] : ''}`);
   await page.evaluate(() => selectPanel('right', 'map'));

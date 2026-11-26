@@ -88,7 +88,17 @@ export async function run(page, t) {
     const cs = sw.querySelector('[data-setv="callsign"]'); cs.value = 'Shine one'; cs.dispatchEvent(new Event('change', { bubbles: true }));
     o.cs = appSet.callsign; o.csUsed = atcCs();
     const ex = settingsExport(); o.exp = typeof ex.appSet === 'string' && /Shine one/.test(ex.appSet);
-    appSet.callsign = 'Coastguard zero one'; appSetSave(); sw.style.display = 'none';
+    appSet.callsign = 'Coastguard zero one'; appSetSave();
+    // 모든 설정 — 조이스틱 배정 · 단위도 들어가고, 들여오면 되돌아온다 · 단위 단추
+    localStorage.setItem('joyBinds', JSON.stringify({ 3: 'gspd' })); localStorage.setItem('rtcPair', 'secret');
+    sw.querySelector('[data-set="unit:alt=m"]').click(); o.unitM = unitAlt === 'm' && localStorage.getItem('unitAlt') === 'm';
+    const all = settingsCollect(); o.allKeys = !!all.joyBinds && all.unitAlt === 'm' && !all.rtcPair && /조종 장치/.test(settingsSummary(all)) && /단위/.test(settingsSummary(all));
+    document.querySelector('#set-wrap [data-set="unit:alt=ft"]').click();
+    localStorage.removeItem('joyBinds');
+    o.imp = settingsImport(JSON.stringify({ joyBinds: all.joyBinds, unitAlt: 'm', rtcPair: 'x' })) === 2 && localStorage.getItem('joyBinds') === all.joyBinds && localStorage.getItem('rtcPair') === 'secret';
+    setUnit('alt', 'ft'); localStorage.removeItem('joyBinds'); localStorage.removeItem('rtcPair');
+    o.joyRow = !!document.querySelector('#set-wrap [data-set="joy:1"]') && !!document.querySelector('#set-wrap [data-set="kbd:1"]');
+    sw.style.display = 'none';
     // 도구 메뉴 — 누르면 메뉴 · 메뉴에서 설정
     toggleTools(); const tm = document.getElementById('tools-menu');
     o.tools = getComputedStyle(tm).display === 'block' && tm.querySelectorAll('[data-tool]').length === TOOLS.length && TOOLS.length >= 9;
@@ -105,6 +115,7 @@ export async function run(page, t) {
   t.ok(M.m2.env.vis === 0 && M.m2.env.ceil === 0 && M.m2.env.tod === 'DAY', 'CAVOK 낮 — 무제한 · 구름 없음 · 주간');
   t.ok(M.rb1.ok && !M.rb2.ok && M.rb2.missing.includes('right') && M.rb3.ok, `리드백 확인 — 다 맞음 ✓ · 'right' 빠짐 ✗ · 코드 4521 ✓`);
   t.ok(M.cs === 'Shine one' && /Shine one/.test(M.csUsed) && M.exp, '⚙ 설정 — 콜사인을 바꾸면 관제가 그 이름으로 부른다 · 모든 설정 내보내기');
+  t.ok(M.unitM && M.allKeys && M.imp && M.joyRow, `⚙ 설정 — 단위 단추 · 조이스틱 줄 · 모든 설정(조이스틱 배정 · 단위)을 묶음별로 내보내고 들여온다(교관 기기 짝은 뺀다) (${M.unitM} ${M.allKeys} ${M.imp} ${M.joyRow})`);
   t.ok(M.tools && M.toolSet, '🧰 도구 메뉴 — 시나리오 · 환경 · 강평 · 교관 화면 · 설정 · 도움말');
   t.ok(M.dust > 0.6 && M.dust0 < 0.1, `브라운아웃 — 모래 위 15ft 호버면 먼지가 가린다 (${M.dust.toFixed(2)})`);
 

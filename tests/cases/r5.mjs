@@ -125,6 +125,39 @@ export async function run(page, t) {
   const MQ = await page.evaluate(() => { const pk = _mq.publish('shinesong/abc/m2i', '가나다 xyz'); const st = { buf: new Uint8Array([...pk, ..._mq.publish('t2', 'b')]) }; const ps = _mq.parse(st);
     return ps.length === 2 && ps[0].topic === 'shinesong/abc/m2i' && ps[0].text === '가나다 xyz' && ps[1].text === 'b' && st.buf.length === 0 && _mq.connect('x')[0] === 0x10 && _mq.subscribe('a')[0] === 0x82; });
   t.ok(MQ, 'MQTT 중계 패킷 — CONNECT · SUBSCRIBE · PUBLISH 를 만들고 이어 붙은 패킷도 나눠 읽는다');
+  // ── 명령 확인(ACK) · 같은 명령은 한 번만 · 닿지 않으면 알림 ──
+  await page.evaluate(() => { window.__envN = 0; const f = envSet; window.__envSet0 = f; window.envSet = o => { window.__envN++; return f(o); }; });
+  await ios.evaluate(() => { iosCmd('env', { o: { tod: 'NIGHT' } }); const m = [..._iosPend.values()][0].m; window.__dup = m; });
+  await ios.waitForFunction(() => _iosPend.size === 0, null, { timeout: 6000 }).catch(() => {});
+  await ios.evaluate(() => _iosPost(window.__dup));                                          // 같은 번호로 한 번 더(중계가 늦게 온 것처럼)
+  await page.waitForTimeout(800);
+  const AK = await page.evaluate(() => { const o = { n: window.__envN, tod: env.tod }; window.envSet = window.__envSet0; envSet({ tod: 'DAY' }); return o; });
+  const AK2 = await ios.evaluate(async () => {
+    const o = { acked: _iosPend.size === 0 }, toasts = [], ut = window.uiToast; window.uiToast = m => toasts.push(m);
+    _iosPend.set('lost-1', { m: { type: 'cmd', c: 'zzz', qid: 'lost-1' }, n: 3, t: 0 }); _iosNoAckWarnT = 0;
+    await new Promise(r => setTimeout(r, 900)); o.gaveUp = !_iosPend.has('lost-1') && toasts.some(x => /닿지 않았습니다/.test(x));
+    o.noAckPing = (() => { const n0 = _iosPend.size; iosCmd('ping', { pt: 1 }); return _iosPend.size === n0; })();
+    window.uiToast = ut; return o;
+  });
+  t.ok(AK.n === 1 && AK.tod === 'NIGHT' && AK2.acked && AK2.gaveUp && AK2.noAckPing,
+    `교관 명령 확인 — 받으면 답(ACK) · 같은 번호는 한 번만 (${AK.n}번) · 3번 다시 보내도 답이 없으면 알림 · ping 은 번호 없이`);
+  // ── 관찰 기기 — 짝이 있는 메인이 띄운 SS3 QR 로 붙어 상태를 받고, 조작은 막힌다 ──
+  const [obs] = await Promise.all([page.waitForEvent('popup'), page.evaluate(u => { window.open(u, '_blank'); }, ios.url())]);
+  await obs.waitForFunction(() => !!document.getElementById('ios-root') && typeof rtcObserve === 'function', null, { timeout: 20000 });
+  await obs.evaluate(setup);
+  const q3 = await page.evaluate(() => rtcObsOpen());
+  await obs.evaluate(q => rtcObserve(q), q3);
+  await page.waitForFunction(() => rtcObsCount() >= 1, null, { timeout: 8000 }).catch(() => {});
+  await page.evaluate(() => { S.alt = 4321; iosSend(); });
+  await obs.waitForFunction(() => /4321/.test((document.querySelector('[data-iosv="state"]') || {}).textContent || ''), null, { timeout: 8000 }).catch(() => {});
+  const OB = await obs.evaluate(() => { const o = { st: /4321/.test(document.querySelector('[data-iosv="state"]').textContent), cls: document.documentElement.classList.contains('ios-obs') }; o.blocked = iosCmd('env', { o: { tod: 'DUSK' } }) === false; return o; });
+  const nObs = await page.evaluate(() => rtcObsCount());
+  await page.waitForTimeout(600);
+  const tod2 = await page.evaluate(() => env.tod);
+  t.ok(/^SS3\|/.test(q3) && nObs === 1 && OB.st && OB.cls && OB.blocked && tod2 === 'DAY', `👀 관찰 기기 — SS3 QR 로 붙어 상태를 받고(관찰 ${nObs}대) · 조작은 막힌다`);
+  await obs.evaluate(() => { try { localStorage.removeItem('rtcPair'); } catch (e) { /* 그만 */ } });
+  await obs.close();
+  await page.evaluate(() => { try { if (rtc.obsLink) rtc.obsLink.close(); } catch (e) { /* 그만 */ } rtc.obsLink = null; rtc.obsIds = {}; });
   await ios.close();
   const errs = (page.errors || []).filter(e => !/Failed to fetch|NetworkError|tile/i.test(e));
   t.ok(errs.length === 0, '오류 없음' + (errs.length ? ' — ' + errs.slice(0, 2).join(' / ') : ''));

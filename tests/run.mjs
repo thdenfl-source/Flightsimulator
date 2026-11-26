@@ -57,6 +57,7 @@ import * as alta from './cases/alta.mjs';
 import * as fcp2 from './cases/fcp2.mjs';
 import * as vendorsync from './cases/vendorsync.mjs';
 import * as glguard from './cases/glguard.mjs';
+import * as train5 from './cases/train5.mjs';
 import * as ralt from './cases/ralt.mjs';
 import * as startapt from './cases/startapt.mjs';
 import * as hdgref from './cases/hdgref.mjs';
@@ -96,7 +97,7 @@ import * as kuhsys3 from './cases/kuhsys3.mjs';
 import * as r22 from './cases/r22.mjs';
 import * as proccyc from './cases/proccyc.mjs';
 
-const SUITES0 = [smoke, actions, coords, chartcal, hold, nav, gspd, dialog, chartview, procdata, simspd, tascalc, brg, fpwpt, maprot, map3d, dmearc, dme, fporder, wptcrs, brglbl, directto, crssync, locsta, susp, layout, gslope, joystick, geosearch, simmode, ga, tdown, bbtrim, physics2, hocas, joycenter, ship3d, heli3d, ralt, startapt, hdgref, sound, view3d, runway, apptune, lock, popout, upper, system, lower, c5000, npx138, fuelsys, afcslink, gtc, edition, cockpit, pfdmsg, fcpsimple, pfdsk, cdulive, sar, eisrev, b206, b206sys, debrief, b206sim, train3, train4, r4, kuhgrip, r5, r40, cduknob, cas, kuhsys, kuhsys2, kuhsys3, r22, proccyc, extlts, fmodel3, infra2, mission, mirror, alta, fcp2, vendorsync, glguard];
+const SUITES0 = [smoke, actions, coords, chartcal, hold, nav, gspd, dialog, chartview, procdata, simspd, tascalc, brg, fpwpt, maprot, map3d, dmearc, dme, fporder, wptcrs, brglbl, directto, crssync, locsta, susp, layout, gslope, joystick, geosearch, simmode, ga, tdown, bbtrim, physics2, hocas, joycenter, ship3d, heli3d, ralt, startapt, hdgref, sound, view3d, runway, apptune, lock, popout, upper, system, lower, c5000, npx138, fuelsys, afcslink, gtc, edition, cockpit, pfdmsg, fcpsimple, pfdsk, cdulive, sar, eisrev, b206, b206sys, debrief, b206sim, train3, train4, r4, kuhgrip, r5, r40, cduknob, cas, kuhsys, kuhsys2, kuhsys3, r22, proccyc, extlts, fmodel3, infra2, mission, mirror, alta, fcp2, vendorsync, glguard, train5];
 // 여러 묶음으로 나뉜 검사(suites 를 내보내는 파일)는 펼친다
 // 절차 훈련판(EDITION=proc — Flightsimulator)에서는 SIM 모드를 쓰는 묶음을 건너뛴다(그 판은 사이클릭 피치 · 롤이 잠겨 사이클릭으로 모는 검사가 맞지 않는다 — 판 차이는 '판(edition)' 검사가 본다)
 // — SIM 을 켜는 검사(toggleSimMode(true) · SIM_SETUP · simModeOn = true)가 든 파일은 통째로
