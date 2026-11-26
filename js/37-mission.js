@@ -744,7 +744,7 @@ const HCU_TOP = [['menu', 'MENU'], ['laser', 'LASER'], ['geo', 'GEO<br>FOCUS'], 
                  ['aux', 'AUX'], ['lrf', 'LRF'], ['tx', 'TX'], ['ctrl', 'CTRL<br>AUTH'], ['pol', 'POL'], ['ircal', 'IR<br>CAL'], ['scene', 'SCENE']];
 const HCU_SW = [['zoom', 'ZOOM', ''], ['vic', 'VIC', ''], ['avtg', 'AVT<br>GATE', 'AVT<br>MODE'], ['steer', 'AUTO', 'MANUAL'], ['aid', 'AID', 'ZMULTI'],
                 ['slew', 'SLEW', 'FWD'], ['img', 'MAN/<br>AUTO', 'FILTER'], ['pip', 'IMAGE<br>INT', 'IMAGE<br>MODE']];
-// 표시기 칸 — CH1 EO/IR · CH2 레이더 · CH3 호이스트 카메라 · NAVI 지도(4분할: 왼쪽 위 지도 · 오른쪽 위 호이스트 · 왼쪽 아래 레이더 · 오른쪽 아래 EO/IR)
+// 표시기 칸 — CH1 EO/IR · CH2 레이더 · CH3 호이스트 카메라 · CH4 NAVI 지도(4분할: 왼쪽 위 지도 · 오른쪽 위 호이스트 · 왼쪽 아래 레이더 · 오른쪽 아래 EO/IR)
 const DISP_CH = { 1: 'eo', 2: 'rdr', 3: 'hoist', 4: 'map' };
 const DISP_PAIRS = [['map', 'eo'], ['rdr', 'eo'], ['hoist', 'eo'], ['map', 'rdr']];
 const disp = { lay: 'quad', ch: 1, pair: 0, bri: 100, pwr: true };
@@ -830,7 +830,7 @@ function _msnBuild() {
   <div class="msn-body">
     <div class="msn-disp">
       <div class="msn-scr">
-        <div class="msn-cell c-map"><div class="nv-map"></div><canvas class="nv-ov"></canvas><div class="nv-zb"><b data-mact="nv+">＋</b><b data-mact="nv-">−</b><b data-mact="nvc">⌖</b></div></div>
+        <div class="msn-cell c-map"><div class="nv-map"></div><canvas class="nv-ov"></canvas><span class="msn-chl">CH4 / 10fps</span><div class="nv-zb"><b data-mact="nv+">＋</b><b data-mact="nv-">−</b><b data-mact="nvc">⌖</b></div></div>
         <div class="msn-cell c-hoist"><canvas class="hc-cv"></canvas><span class="msn-chl">CH3 / 28fps</span></div>
         <div class="msn-cell msn-rdr c-rdr"><canvas></canvas><span class="msn-chl">CH2 / 28fps</span></div>
         <div class="msn-cell msn-eo c-eo"><div class="eo-vid"><canvas class="eo-spr"></canvas></div><canvas class="eo-hud"></canvas><span class="msn-chl">CH1 / 30fps</span></div>
@@ -936,13 +936,13 @@ function _msnBuild() {
 }
 // ══ 녹화기(DVR · FLM 5.19) — 호이스트 카메라 · 탐색레이더 · EO/IR · 지도 화면을 SSD 에 녹화(.MUX) · 재생 · USB 로 AVI 내보내기 ══
 //   POWER(빨강 표시등) · REC(전체 녹화 — 녹화 중 초록 깜박 · 멈춤 초록) · PLAYBACK(파랑 — 재생 0.5~256배 · 앞 · 뒤)
-//   CH1 호이스트 카메라(12V) · CH2 탐색레이더 · CH3 EO/IR · CH4 DMM 지도 — 채널 단추로 그 채널 녹화를 켜고 끈다
+//   CH1 EO/IR · CH2 탐색레이더 · CH3 호이스트 카메라(12V) · CH4 DMM 지도 — 표시기 채널(DISP_CH)과 같은 번호 · 채널 단추로 그 채널 녹화를 켜고 끈다
 //     채널 표시등: 녹화 중 초록 깜박 · 멈춤 초록 · 연결 안 됨(호이스트 전원 꺼짐 등) 꺼짐
 //   ▲▼◀▶ · ENTER — 메뉴 · 날짜/시간 검색 / 재생 중: ◀▶ 10초 앞뒤 · ▲▼ 속도 · ENTER 멈춤/재생 · ↩ 뒤로(메뉴 닫기 · 재생 끝)
 //   ◀◀/◀ · ❙❙▶ · ▶/▶▶ — 뒤로 빨리(누를 때마다 2 · 4 · … 256배) · 재생/멈춤 · 앞으로 빨리
 //   (시뮬레이터 — 채널마다 2초에 한 장(320×240 JPEG)을 메모리에 담는다. 가장 오래된 것부터 지워 1시간 분량까지 둔다. 실기 SSD 는 5시간 넘게)
-const DVR_CH = { 1: 'HOIST CAM', 2: 'RADAR', 3: 'EO/IR', 4: 'DMM MAP' };
-const DVR_CELL = { 1: 'hoist', 2: 'rdr', 3: 'eo', 4: 'map' };       // 표시기 칸
+const DVR_CH = { 1: 'EO/IR', 2: 'RADAR', 3: 'HOIST CAM', 4: 'DMM MAP' };
+const DVR_CELL = { 1: 'eo', 2: 'rdr', 3: 'hoist', 4: 'map' };       // 표시기 칸(DISP_CH 와 같은 번호)
 const DVR_W = 320, DVR_H = 240, DVR_DT = 2000, DVR_KEEP = 1800, DVR_BOOT_S = 3, DVR_SSD_H = 5.5;
 const DVR_SPEEDS = [0.5, 1, 2, 4, 8, 16, 32, 64, 128, 256];
 const DVR_MENU = ['SEARCH — 날짜 · 시간', 'PLAYBACK VIEW', 'EXPORT → USB (AVI)', 'SSD INFO', 'SSD FORMAT'];
@@ -950,11 +950,11 @@ const DVR_VIEWS = ['QUAD', 'CH1', 'CH2', 'CH3', 'CH4'];
 const dvr = { pwr: false, boot: 0, rec: false, play: false, ch: { 1: true, 2: true, 3: true, 4: true },
   fr: [], seg: [], capT: 0, pb: { t: 0, si: 1, dir: 1, pause: false }, menu: null, menuI: 0, view: 0,
   srch: { t: 0, f: 3 }, fmtArm: false, exp: null, info: '' };
-// 채널이 연결(신호가 들어오는가) — CH1 호이스트 카메라는 호이스트 전원(12V)
+// 채널이 연결(신호가 들어오는가) — CH3 호이스트 카메라는 호이스트 전원(12V)
 function dvrConn(n) {
-  if (n === 1) { try { return typeof hoistPowered !== 'function' || hoistPowered(); } catch (e) { return false; } }
+  if (n === 1) return eo.pwr;
   if (n === 2) return rdr.pwr;
-  if (n === 3) return eo.pwr;
+  if (n === 3) { try { return typeof hoistPowered !== 'function' || hoistPowered(); } catch (e) { return false; } }
   return true;
 }
 function dvrRecCh(n) { return dvr.pwr && dvr.boot <= 0 && dvr.rec && dvr.ch[n] && dvrConn(n); }
@@ -967,9 +967,9 @@ function _dvrGrab(n) {
   if (!_dvrCv) { _dvrCv = document.createElement('canvas'); _dvrCv.width = DVR_W; _dvrCv.height = DVR_H; }
   const g = _dvrCv.getContext('2d'); g.setTransform(1, 0, 0, 1, 0, 0); g.filter = 'none'; g.fillStyle = '#000'; g.fillRect(0, 0, DVR_W, DVR_H);
   try {
-    if (n === 1 && typeof sarHoistCamDrawTo === 'function') sarHoistCamDrawTo(g, 0, 0, DVR_W, DVR_H);
+    if (n === 1) eoirVideoDrawTo(g, 0, 0, DVR_W, DVR_H);
     else if (n === 2) { g.save(); _rdrPaint(g, DVR_W, DVR_H); g.restore(); }
-    else if (n === 3) eoirVideoDrawTo(g, 0, 0, DVR_W, DVR_H);
+    else if (n === 3) { if (typeof sarHoistCamDrawTo === 'function') sarHoistCamDrawTo(g, 0, 0, DVR_W, DVR_H); }
     else if (n === 4) {
       const cell = _msnEl && _msnEl.querySelector('.c-map');
       const mc = _nvMap && _cellVis(cell) ? _nvMap.getCanvas() : null, ov = cell && cell.querySelector('.nv-ov');
@@ -1350,7 +1350,7 @@ function msnHelp() {
     '  ⚠ 10ft(3.04m) 안의 물체를 비추면 100~300℃ · NVG 를 쓴 조종사 허락 없이 가시광 금지 · 조종석 컬렉티브 SRCH LT 와는 다른 등',
     '· 탐색레이더(Seaspray 5000E · VCCP): RDR > CMD 가 CKPT(조종실)이면 전탐석은 다루지 못한다 — FNC 메뉴의 RDR > CMD 를 CABIN · SHARED 로',
     '· 조종석에서도 같은 레이더: 하부 콘솔 ⑮ VCCP(같은 면판 · CKPT/SHARED 일 때) · SYSTEM 창 Video Channel RADAR 가 이 레이더 화면 그대로 · CDU 조이스틱 Push:Radar',
-    '· 녹화기(DVR): POWER(빨강) → 3초 뒤 REC(초록 깜박) · CH1 호이스트 · CH2 레이더 · CH3 EO/IR · CH4 지도 · PLAYBACK(파랑) ▶▶/◀◀ 0.5~256배 · ◀▶ 10초 · MENU — 날짜/시간 검색 · QUAD/한 채널 · USB(AVI) · SSD INFO',
+    '· 녹화기(DVR): POWER(빨강) → 3초 뒤 REC(초록 깜박) · CH1 EO/IR · CH2 레이더 · CH3 호이스트 · CH4 지도 · PLAYBACK(파랑) ▶▶/◀◀ 0.5~256배 · ◀▶ 10초 · MENU — 날짜/시간 검색 · QUAD/한 채널 · USB(AVI) · SSD INFO',
     '  손잡이 돌림 — 거리 10~200NM(메뉴가 열려 있으면 칸 옮기기) · 누름 — 메뉴 실행 · 커서 자리 표적 추적(TRK) · 4축 — 커서',
     '  FNC 메인(MODE LRS·WX·PT·SART·ISAR · TX/STBY · CMD · TILT · GAIN · SCAN · FREEZE) · MAP(WXR · TWS · R ONLY · RANGE) · ESC · CLR · WXR 강수 겹 · TWS 지형 겹 · 다시 켜면 90초 예열',
     '· EO/IR: 조이스틱(화면 HCU 가운데 · 실제 조종 장치의 사이클릭 축)으로 터릿을 돌린다. ZOOM ▲확대 ▼축소 · VIC 센서(EOW → EON → IR) · 2X 전자 줌 · POL 백상/흑상',
