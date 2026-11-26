@@ -937,7 +937,7 @@ function _msnBuild() {
 // ══ 녹화기(DVR · FLM 5.19) — 호이스트 카메라 · 탐색레이더 · EO/IR · 지도 화면을 SSD 에 녹화(.MUX) · 재생 · USB 로 AVI 내보내기 ══
 //   POWER(빨강 표시등) · REC(전체 녹화 — 녹화 중 초록 깜박 · 멈춤 초록) · PLAYBACK(파랑 — 재생 0.5~256배 · 앞 · 뒤)
 //   CH1 EO/IR · CH2 탐색레이더 · CH3 호이스트 카메라(12V) · CH4 DMM 지도 — 표시기 채널(DISP_CH)과 같은 번호 · 채널 단추로 그 채널 녹화를 켜고 끈다
-//     채널 표시등: 녹화 중 초록 깜박 · 멈춤 초록 · 연결 안 됨(호이스트 전원 꺼짐 등) 꺼짐
+//     채널 표시등: 녹화 중 초록 깜박 · 멈춤 초록 · 연결 안 됨(기체 전원 꺼짐 · 센서 꺼짐) 꺼짐
 //   ▲▼◀▶ · ENTER — 메뉴 · 날짜/시간 검색 / 재생 중: ◀▶ 10초 앞뒤 · ▲▼ 속도 · ENTER 멈춤/재생 · ↩ 뒤로(메뉴 닫기 · 재생 끝)
 //   ◀◀/◀ · ❙❙▶ · ▶/▶▶ — 뒤로 빨리(누를 때마다 2 · 4 · … 256배) · 재생/멈춤 · 앞으로 빨리
 //   (시뮬레이터 — 채널마다 2초에 한 장(320×240 JPEG)을 메모리에 담는다. 가장 오래된 것부터 지워 1시간 분량까지 둔다. 실기 SSD 는 5시간 넘게)
@@ -950,11 +950,12 @@ const DVR_VIEWS = ['QUAD', 'CH1', 'CH2', 'CH3', 'CH4'];
 const dvr = { pwr: false, boot: 0, rec: false, play: false, ch: { 1: true, 2: true, 3: true, 4: true },
   fr: [], seg: [], capT: 0, pb: { t: 0, si: 1, dir: 1, pause: false }, menu: null, menuI: 0, view: 0,
   srch: { t: 0, f: 3 }, fmtArm: false, exp: null, info: '' };
-// 채널이 연결(신호가 들어오는가) — CH3 호이스트 카메라는 호이스트 전원(12V)
+// 채널이 연결(신호가 들어오는가) — CH3 호이스트 카메라는 기체 전원(DC)이 있으면 들어온다
+//   (종전에는 상부 콘솔 HOIST ENABLE 까지 켜야 했다 — 표시기 CH3 칸에는 영상이 보이는데 녹화기만 '신호 없음'이라 헷갈렸다)
 function dvrConn(n) {
   if (n === 1) return eo.pwr;
   if (n === 2) return rdr.pwr;
-  if (n === 3) { try { return typeof hoistPowered !== 'function' || hoistPowered(); } catch (e) { return false; } }
+  if (n === 3) { try { return typeof pwrDc !== 'function' || !!pwrDc(); } catch (e) { return false; } }
   return true;
 }
 function dvrRecCh(n) { return dvr.pwr && dvr.boot <= 0 && dvr.rec && dvr.ch[n] && dvrConn(n); }

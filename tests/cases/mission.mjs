@@ -202,10 +202,12 @@ export async function run(page, t) {
     // ── 녹화기(DVR · FLM 5.19) — 녹화 · 재생 · 메뉴 · 검색 · USB(AVI) ──
     { msnShow(true); dispSet({ lay: 'quad' }); dvr.fr = []; dvr.seg = []; dvr.pwr = false; dvrPress('power'); dvr.boot = 0; dvrPress('rec');
       const t0 = Date.now() - 60000; for (let i = 0; i < 6; i++) dvrCapture(t0 + i * 2000); for (let i = 0; i < 3; i++) dvrCapture(t0 + 40000 + i * 2000);
-      o.dvRec = [dvr.fr.length, dvr.seg.length, !!dvr.fr[0].c[2], !!dvr.fr[0].c[1], !!dvr.fr[0].c[3] === dvrConn(3)].join();   // CH1 EO/IR · CH2 레이더 · CH3 호이스트(전원 따라)
-      dvrRender(); o.dvLed = [document.querySelector('[data-dvl="ch3"]').className.includes('on') ? 1 : 0, dvrConn(3) ? 1 : 0];
+      o.dvRec = [dvr.fr.length, dvr.seg.length, !!dvr.fr[0].c[2], !!dvr.fr[0].c[1], !!dvr.fr[0].c[3] === dvrConn(3)].join();   // CH1 EO/IR · CH2 레이더 · CH3 호이스트(기체 전원 따라)
+      { const sv = _sarOv; window._sarOv = (k, d) => k === 'hoistEnable' ? 'OFF' : sv(k, d); o.dvHoistOff = dvrConn(3); window._sarOv = sv; }   // HOIST ENABLE 이 꺼져도 카메라 신호는 있다
+      dvrRender();
       o.dvCh = [DVR_CH[1], DVR_CH[2], DVR_CH[3], DVR_CH[4]].join('|') + ' / ' + [1, 2, 3, 4].map(n => DISP_CH[n] === DVR_CELL[n]).join();   // 표시기 채널과 같은 번호
-      dvrPress('rec'); dvrRender(); o.dvStop = !dvr.rec && /on/.test(document.querySelector('[data-dvl="rec"]').className) && /on/.test(document.querySelector('[data-dvl="ch2"]').className);
+      dvrPress('rec'); dvrRender(); o.dvLed = [document.querySelector('[data-dvl="ch3"]').className.includes('on') ? 1 : 0, dvrConn(3) ? 1 : 0];   // 멈추면 깜박이지 않고 켜져 있다(연결된 채널)
+      o.dvStop = !dvr.rec && /on/.test(document.querySelector('[data-dvl="rec"]').className) && /on/.test(document.querySelector('[data-dvl="ch2"]').className);
       dvrPress('playback'); o.dvPlay = dvr.play && dvr.pb.t === dvr.seg[1].t0 && /blue/.test(document.querySelector('[data-dvl="play"]').className);
       dvrPress('ff'); dvrPress('ff'); o.dvFf = dvrSpeed() === 4 && dvr.pb.dir === 1; for (let i = 0; i < 12; i++) dvrPress('ff'); o.dvMax = dvrSpeed();
       dvrPress('rew'); o.dvRew = dvr.pb.dir === -1 && dvrSpeed() === 2; dvrPress('play'); o.dvPlay1 = dvrSpeed() === 1 && dvr.pb.dir === 1;
@@ -248,7 +250,8 @@ export async function run(page, t) {
   t.ok(D.hdr > 40, `레이더 화면 위 — Hdg · Trk · SRV RDR CMD · RNG · Tilt · Gain (${D.hdr}점)`);
   t.ok(D.vccp && D.vcCabin && D.vcShared && D.vcLed && D.cabCkpt && D.vcCkpt, `조종석 하부 콘솔 ⑮ VCCP — 전탐석과 같은 면판 · 같은 레이더 · CABIN 이면 듣지 않고 SHARED · CKPT 에서 다룬다 (${[D.vccp, D.vcCabin, D.vcShared, D.vcLed, D.cabCkpt, D.vcCkpt]}${D.lconErr ? ' ' + D.lconErr : ''})`);
   t.ok(D.sysRdr && D.sysGreen > 50, `조종석 SYSTEM 창 Video RADAR — 전탐석 레이더 화면(머리 글자 · 녹색 ${D.sysGreen}점)`);
-  t.ok(D.dvRec === '9,2,true,true,true' && D.dvLed[0] === D.dvLed[1] && D.dvStop, `녹화기 REC — 채널마다 한 장씩(${D.dvRec}) · 녹화 두 토막 · CH3 은 호이스트 전원 · 멈추면 초록 표시등`);
+  t.ok(D.dvRec === '9,2,true,true,true' && D.dvLed[0] === D.dvLed[1] && D.dvStop, `녹화기 REC — 채널마다 한 장씩(${D.dvRec}) · 녹화 두 토막 · CH3 호이스트 카메라는 기체 전원 · 멈추면 초록 표시등`);
+  t.ok(D.dvHoistOff === true, '녹화기 CH3(호이스트 카메라) — 상부 콘솔 HOIST ENABLE 이 꺼져 있어도 신호 있음(표시기 CH3 칸과 같다)');
   t.eq(D.dvCh, 'EO/IR|RADAR|HOIST CAM|DMM MAP / true,true,true,true', '녹화기 채널 — 표시기와 같은 번호(CH1 EO/IR · CH2 레이더 · CH3 호이스트 · CH4 지도)');
   t.ok(D.dvPlay && D.dvFf && D.dvMax === 256 && D.dvRew && D.dvPlay1 && D.dvHalf === 0.5, `PLAYBACK(파랑) — ▶▶ 2 · 4 … ${D.dvMax}배 · ◀◀ 뒤로 · ❙❙▶ 1배 · ▼ ${D.dvHalf}배`);
   t.ok(D.dvGap && D.dvStep === 2000 && D.dvDraw, `재생 — ◀▶ 10초 · 2초 지나면 2초 앞 (${D.dvStep}ms) · 칸마다 녹화 장`);
