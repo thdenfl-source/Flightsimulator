@@ -88,6 +88,17 @@ export async function run(page, t) {
     o.r1 = r1; o.r2 = r2; o.stats = await tileCacheStats();
     toggleTilePrep(); o.panel = /작전 구역 지도/.test(document.getElementById('tileprep-wrap').textContent); toggleTilePrep();
     o.tool = TOOLS.some(([, f]) => f === 'toggleTilePrep') && typeof window.toggleTilePrep === 'function';
+    // 항로 따라 · 저장한 지역
+    const R = tilesRouteList([{ lat: 35.0, lon: 129.0 }, { lat: 35.3, lon: 129.0 }], 3, { satMin: 10, satMax: 11, demMin: 10, demMax: 10 });
+    const one = tilesAreaList(35.0, 129.0, 3, { satMin: 10, satMax: 11, demMin: 10, demMax: 10 });
+    o.route = R.length > one.length && new Set(R.map(t => t.kind + t.z + '/' + t.x + '/' + t.y)).size === R.length;
+    localStorage.removeItem('tileAreas'); tileAreaAdd('제주 기지', 33.5, 126.5, 20); tileAreaAdd('부산', 35.1, 129.0, 10); tileAreaAdd('제주 기지', 33.51, 126.5, 30);
+    const A = tileAreas(); o.areas = A.length === 2 && A[0].name === '제주 기지' && A[0].nm === 30;
+    toggleTilePrep(); const tw = document.getElementById('tileprep-wrap');
+    o.areaBtn = tw.querySelectorAll('[data-tp^="src:area:"]').length === 2 && !!tw.querySelector('[data-tp="save"]');
+    tw.querySelector('[data-tp="src:area:1"]').click(); await new Promise(r => setTimeout(r, 50));
+    o.areaEst = _tpEst(20).n === tilesAreaList(35.1, 129.0, 10).length;
+    _tpSrc = 'here'; toggleTilePrep(); localStorage.removeItem('tileAreas');
     await tileCacheClear();
     window.fetch = realFetch;
     return o;
@@ -96,6 +107,7 @@ export async function run(page, t) {
   t.ok(tp.big && tp.refuse, `한 번에 받는 양을 묶는다(120NM 은 거절)`);
   t.ok(tp.r1.ok && tp.r1.done === tp.small && tp.r1.fail === 0 && tp.both, `받은 위성 사진은 3D · 2D 두 이름으로 넣는다 (${tp.r1.done}장)`);
   t.ok(tp.r2.have === tp.small && tp.stats.sat > 0 && tp.stats.dem > 0, `이미 받은 것은 다시 받지 않는다 (있음 ${tp.r2.have}/${tp.small} · 위성 ${tp.stats.sat} · 지형 ${tp.stats.dem})`);
+  t.ok(tp.route && tp.areas && tp.areaBtn && tp.areaEst, `항로 따라 받기(겹침 없이) · 자주 쓰는 지역 저장 · 고르면 그 지역 기준 (${tp.route} ${tp.areas} ${tp.areaBtn} ${tp.areaEst})`);
   t.ok(tp.panel && tp.tool, '🧰 도구 메뉴에 "지도 미리 받기" 창이 있다');
 
   // 서비스 워커는 판이 바뀌어도 타일 캐시를 지우지 않는다

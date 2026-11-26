@@ -60,6 +60,15 @@ export async function run(page, t) {
     const lat0 = S.lat; S.lat = 33; fdr.rows[5].lat = 35.5;
     _dbfSeek(5); w.querySelector('[data-dbf="r3d"]').click(); _dbfPlay(false); _dbf.cur = 5; _rpApply();
     o.rp = { on: _rp.on, lat: S.lat, mini: getComputedStyle(document.getElementById('dbf-mini')).display !== 'none', run: S.running };
+    // 사건 건너뛰기 · 10초 · A~B 구간 반복 · 사건 눈금
+    const mini = document.getElementById('dbf-mini'), cl = k => mini.querySelector(`[data-rp="${k}"]`).click();
+    fdr.ev.push({ t: fdr.rows[12].t, i: 12, txt: '시험 사건', kind: 'warn' });
+    _dbf.cur = 2; cl('evn'); o.evn = _dbf.cur; o.evTxt = mini.querySelector('[data-rp="ev"]').textContent;
+    _dbf.cur = 2; cl('f10'); o.f10 = _dbf.cur; cl('b10'); o.b10 = _dbf.cur;
+    o.marks = mini.querySelectorAll('.rp-mk').length;
+    _grade.a = 3; _grade.b = 8; _dbf.cur = 10; cl('loop'); o.loopOn = _rp.loop && _dbf.cur === 3;
+    _dbf.cur = 7; _dbf.frac = 0; _dbfStep(3); o.looped = _dbf.cur === 3;
+    cl('loop'); o.loopOff = !_rp.loop; _dbfPlay(false);
     document.querySelector('#dbf-mini [data-rp="end"]').click();
     o.back = { on: _rp.on, lat: S.lat, open: _dbf.open };
     dbfClose(); S.lat = lat0;
@@ -69,6 +78,8 @@ export async function run(page, t) {
     `채점 — 고도 ±100ft 안 ${G.alt.inPct.toFixed(0)}% · 최대 ${G.alt.maxDev.toFixed(0)}ft · 점수 ${G.score.toFixed(0)} ${G.grade}`);
   t.ok(G.rp.on && G.rp.lat === 35.5 && G.rp.mini && !G.rp.run && !G.back.on && G.back.lat === 33 && G.back.open,
     '3D 다시 보기 — 기록한 자리로 기체를 옮겨 그리고(비행 멈춤 · 아래 작은 막대) · 끝내면 원래 상태로');
+  t.ok(G.evn === 12 && /시험 사건/.test(G.evTxt) && G.f10 === 12 && G.b10 === 2 && G.marks >= 1 && G.loopOn && G.looped && G.loopOff,
+    `3D 다시 보기 — ⏭ 다음 사건(글 띄움) · ⏩⏪ 10초 · 막대 위 사건 눈금 ${G.marks} · ⟲ A~B 구간 반복 (${G.evn} ${G.f10} ${G.b10} ${G.loopOn} ${G.looped})`);
 
   // ── 시나리오 · 환경 ──
   const SC = await page.evaluate(async () => {
@@ -127,7 +138,7 @@ export async function run(page, t) {
   const SP = await page.evaluate(() => {
     const o = {};
     _dbf.play = 0; dbfOpen(); const w = document.getElementById('dbf-wrap'), b = w.querySelector('[data-dbf="spd"]');
-    o.seq = [b.textContent]; for (let i = 0; i < 5; i++) { b.click(); o.seq.push(w.querySelector('[data-dbf="spd"]').textContent); }
+    o.seq = [b.textContent]; for (let i = 0; i < 6; i++) { b.click(); o.seq.push(w.querySelector('[data-dbf="spd"]').textContent); }
     dbfClose();
     // 기록 세 줄(1초 간격) — 0.5초 나아가면 첫째와 둘째 줄 사이(반쯤)
     const keep = fdr.rows, rp = _rp.on;
@@ -141,7 +152,7 @@ export async function run(page, t) {
     _rp.on = rp; fdr.rows = keep; _dbf.cur = -1; _dbf.frac = 0; _dbf.live = true;
     return o;
   });
-  t.eq(SP.seq.join(' → '), '×1 → ×2 → ×4 → ×8 → ×10 → ×1', '재생 배속 단추 — ×1 · ×2 · ×4 · ×8 · ×10 을 돈다');
+  t.eq(SP.seq.join(' → '), '×1 → ×2 → ×4 → ×8 → ×10 → ×0.5 → ×1', '재생 배속 단추 — ×1 · ×2 · ×4 · ×8 · ×10 · ×0.5(천천히) 를 돈다');
   t.ok(SP.half.cur === 0 && Math.abs(SP.half.frac - 0.5) < 1e-6 && Math.abs(SP.half.alt - 1050) < 1e-6 && Math.abs(SP.half.ias - 85) < 1e-6,
     `기록 사이를 이어 보인다 — 0.5초면 고도 ${SP.half.alt}ft · 속도 ${SP.half.ias}kt(1000 → 1100 · 80 → 90 의 반)`);
   t.ok(SP.half.hdg === 0 || SP.half.hdg === 360, `기수는 짧은 쪽으로 돈다 (350° → 010° 의 반 = ${SP.half.hdg}°)`);

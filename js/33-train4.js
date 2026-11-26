@@ -448,8 +448,11 @@ function toggleSettings() {
       else if (k === 'voiceTest') { if (typeof speak === 'function') speak(`${appSet.callsign}, radar contact, maintain VFR.`); }
       else if (k === 'raCall' && typeof envSet === 'function') envSet({ raCall: v === '1' });
       else if (k === 'export') settingsExport();
-      else if (k === 'reset') Promise.resolve(typeof uiConfirm === 'function' ? uiConfirm('모든 설정 · 시나리오 · 저장 비행을 지우고 처음으로 돌릴까요?') : false).then(ok => { if (ok) settingsReset(); });
+      else if (k === 'reset') Promise.resolve(typeof uiConfirm === 'function' ? uiConfirm('모든 설정(조이스틱 · 단위 · 창 배치 · 환경) · 시나리오 · 저장 비행을 지우고 처음으로 돌릴까요? 비행계획 · 차트는 남깁니다.') : false).then(ok => { if (ok) settingsReset(); });
       else if (k === 'ios') toggleRemoteIos();
+      else if (k === 'unit' && typeof setUnit === 'function') { const [kind, val] = v.split('='); setUnit(kind, val); }
+      else if (k === 'joy' && typeof toggleJoy === 'function') { w.style.display = 'none'; toggleJoy(); return; }
+      else if (k === 'kbd' && typeof toggleKbdShortcuts === 'function') { w.style.display = 'none'; toggleKbdShortcuts(); return; }
       _setRender();
     });
     w.addEventListener('change', e => {
@@ -480,27 +483,88 @@ function _setRender() {
     <div class="set-row"><span>콜사인(관제)</span><div><input type="text" data-setv="callsign" value="${appSet.callsign.replace(/"/g, '&quot;')}"></div></div>
     <div class="set-row"><span>STICK 감도</span><div>${[0.5, 0.75, 1, 1.5].map(v => `<button class="sim-btn ${appSet.stickK === v ? 'on' : ''}" data-set="stickK:${v}">×${v}</button>`).join('')}</div></div>
     <div class="set-row"><span>STICK 데드존</span><div>${[0, 0.05, 0.1].map(v => `<button class="sim-btn ${appSet.stickDead === v ? 'on' : ''}" data-set="stickDead:${v}">${v ? Math.round(v * 100) + '%' : '없음'}</button>`).join('')}</div></div>
+    <div class="set-row"><span>단위</span><div>${(() => {
+      const u = (kind, val, lbl, cur) => `<button class="sim-btn ${cur === val ? 'on' : ''}" data-set="unit:${kind}=${val}">${lbl}</button>`;
+      const g = (a, b) => typeof a !== 'undefined' ? a : b;
+      return [u('alt', 'ft', 'ft', g(unitAlt, 'ft')) + u('alt', 'm', 'm', g(unitAlt, 'ft')), u('dist', 'NM', 'NM', g(unitDist, 'NM')) + u('dist', 'km', 'km', g(unitDist, 'NM')),
+        u('spd', 'kt', 'kt', g(unitSpd, 'kt')) + u('spd', 'kmh', 'km/h', g(unitSpd, 'kt')), u('temp', 'C', '°C', g(unitTemp, 'C')) + u('temp', 'F', '°F', g(unitTemp, 'C'))].join('<span class="set-gap"></span>');
+    })()}</div></div>
+    <div class="set-row"><span>조종 장치</span><div><button class="sim-btn" data-set="joy:1">🎮 조이스틱 축 · 버튼</button><button class="sim-btn" data-set="kbd:1">⌨ 키보드 단축키</button><span class="set-sum">${_setJoySum()}</span></div></div>
     <div class="set-row"><span>교관 기기 연결</span><div><button class="sim-btn" data-set="ios">📱 Instructor Sync(QR)</button></div></div>
     <div class="set-row"><span>모든 설정</span><div><button class="sim-btn" data-set="export">내보내기</button><label class="sim-btn">들여오기<input type="file" accept=".json" data-setv="file" hidden></label><button class="sim-btn" data-set="reset">초기화</button></div></div>
-    <div class="set-note">환경(시간대 · 시정 · 바다 · 돌풍 · 구름 · 지면 · 교통량)은 🌙 ENV 에서 고릅니다.</div></div>`;
+    <div class="set-note">내보내기 파일에는 조이스틱 축 · 버튼 배정 · 키보드 단축키 · 단위 · 창 배치 · 환경 · 시나리오 · 저장 비행 · 비행계획이 모두 들어갑니다(교관 기기 짝 정보는 빼고).<br>
+      환경(시간대 · 시정 · 바다 · 돌풍 · 구름 · 지면 · 교통량)은 🌙 ENV 에서 고릅니다.</div></div>`;
 }
-const SET_KEYS = ['appSet', 'envSet', 'scnList', 'fdrSaved', 'b206rad', 'shipMotion', 'simSound', 'autoMetarOn'];
-function settingsExport() {
-  const o = {}; SET_KEYS.forEach(k => { try { const v = localStorage.getItem(k); if (v !== null) o[k] = v; } catch (e) { _swallow(e); } });
+// 모든 설정 — 이 기기 localStorage 의 앱 항목을 묶음별로 내보내고 들여온다(조이스틱 · 단위 · 창 배치까지).
+//   빼는 것: 교관 기기 짝(rtcPair — 기기마다 다르다) · 한 번 본 안내 표시 · 지도 타일 같은 캐시(Cache Storage — 지도 미리 받기가 따로 맡는다)
+//   시나리오 · 저장 비행은 IndexedDB 에 있어 메모리 목록에서 꺼내 넣는다.
+const SET_KEYS = ['appSet', 'envSet', 'scnList', 'fdrSaved', 'b206rad', 'shipMotion', 'simSound', 'autoMetarOn'];   // 예전 파일과 맞춤(늘 넣는다)
+const SET_SKIP = /^(rtcPair|helpDismissed|vfrUnlocked|vfrStartApt$|_|debug)/;
+const SET_GROUPS = [
+  ['조종 장치', /^(joy|kbd|vStick|stick)/i],
+  ['단위', /^unit/],
+  ['창 배치 · 화면', /(Split|Layout|Mode2|split|pfdSk|nightMode|extCam|fpvOn|sysLayout|Ratio|kuhSeat|fixLayer|rangeRings|trkColor|raStMode|lit)/],
+  ['비행계획 · 차트', /^(fpl|savedCharts|chartCalib|navStby|vfrStartAptLast)/],
+  ['시나리오 · 저장 비행', /^(scnList|fdrSaved)$/],
+];
+function _setGroup(k) { for (const [g, re] of SET_GROUPS) if (re.test(k)) return g; return '환경 · 임무 · 기타'; }
+function _setJoySum() {
+  try {
+    const nb = typeof joyBinds === 'object' && joyBinds ? Object.keys(joyBinds).length : 0;
+    const ax = typeof joyAxes === 'object' && joyAxes ? Object.keys(joyAxes).length : 0;
+    return `축 ${ax} · 버튼 ${nb}개 배정${typeof joyOn !== 'undefined' && joyOn ? ' · 켜짐' : ''}`;
+  } catch (e) { return ''; }
+}
+function settingsCollect() {
+  const o = {};
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i); if (!k || SET_SKIP.test(k)) continue;
+      const v = localStorage.getItem(k); if (v !== null && v.length < 2e6) o[k] = v;
+    }
+  } catch (e) { _swallow(e); }
+  try { if (typeof scnList === 'function') { const a = scnList(); if (a.length) o.scnList = JSON.stringify(a); } } catch (e) { _swallow(e); }        // 시나리오는 IndexedDB
   try { if (typeof fdrSavedList === 'function' && fdrSavedList().length) o.fdrSaved = JSON.stringify(fdrSavedList()); } catch (e) { _swallow(e); }   // 저장 비행은 IndexedDB
+  return o;
+}
+function settingsSummary(o) {
+  const c = {}; Object.keys(o).forEach(k => { const g = _setGroup(k); c[g] = (c[g] || 0) + 1; });
+  return Object.keys(c).map(g => `${g} ${c[g]}`).join(' · ');
+}
+function settingsExport() {
+  const o = settingsCollect();
+  o._meta = JSON.stringify({ app: 'shinesong', ed: typeof APP_EDITION !== 'undefined' ? APP_EDITION : '', at: new Date().toISOString() });
   const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(o)], { type: 'application/json' })); a.download = 'shinesong-settings.json';
   document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  try { uiToast(`설정을 내보냈습니다 — ${settingsSummary(settingsCollect())}`, '', 4000); } catch (e) { _swallow(e); }
   return o;
 }
 function settingsImport(text) {
-  let n = 0; try { const o = JSON.parse(text); for (const k of SET_KEYS) if (typeof o[k] === 'string') { if (k === 'fdrSaved' && typeof fdrSavedReplace === 'function') fdrSavedReplace(JSON.parse(o[k])); else localStorage.setItem(k, o[k]); n++; } } catch (e) { _swallow(e); }
-  try { uiToast(n ? `설정 ${n}가지를 들여왔습니다 — 다시 열면 반영됩니다` : '설정 파일을 읽지 못했습니다', n ? '' : 'err'); } catch (e) { _swallow(e); }
+  let n = 0;
+  try {
+    const o = JSON.parse(text);
+    for (const k of Object.keys(o)) {
+      if (k === '_meta' || SET_SKIP.test(k) || typeof o[k] !== 'string') continue;
+      if (k === 'fdrSaved' && typeof fdrSavedReplace === 'function') fdrSavedReplace(JSON.parse(o[k]));
+      else if (k === 'scnList' && typeof _scnSaveList === 'function') _scnSaveList(JSON.parse(o[k]));
+      else localStorage.setItem(k, o[k]);
+      n++;
+    }
+    if (n) try { uiToast(`설정 ${n}가지를 들여왔습니다(${settingsSummary(o)}) — 다시 열면 모두 반영됩니다`, '', 5000); } catch (e) { _swallow(e); }
+  } catch (e) { _swallow(e); }
+  if (!n) try { uiToast('설정 파일을 읽지 못했습니다', 'err'); } catch (e) { _swallow(e); }
   return n;
 }
-function settingsReset() { SET_KEYS.forEach(k => { try { localStorage.removeItem(k); } catch (e) { _swallow(e); } }); try { if (typeof fdrSavedReplace === 'function') fdrSavedReplace([]); } catch (e) { _swallow(e); } try { uiToast('설정을 지웠습니다 — 다시 열면 처음 상태입니다'); } catch (e) { _swallow(e); } }
+function settingsReset() {
+  const ks = Object.keys(settingsCollect()).filter(k => _setGroup(k) !== '비행계획 · 차트').concat(SET_KEYS);   // 비행계획 · 차트(사용자 자료)는 남긴다
+  ks.forEach(k => { try { localStorage.removeItem(k); } catch (e) { _swallow(e); } });
+  try { if (typeof fdrSavedReplace === 'function') fdrSavedReplace([]); } catch (e) { _swallow(e); }
+  try { if (typeof _scnSaveList === 'function') _scnSaveList([]); } catch (e) { _swallow(e); }
+  try { uiToast('설정을 지웠습니다 — 다시 열면 처음 상태입니다'); } catch (e) { _swallow(e); }
+}
 
 // ── ⑥ 도구 메뉴(🧰) — 작은 화면(폭 900 · 높이 700 아래)에서는 낱 단추 대신 이 메뉴 하나로 ──
-const TOOLS = [['🎬 시나리오', 'toggleScenario'], ['🌙 환경', 'toggleEnvPanel'], ['📋 강평', 'toggleDebrief'], ['🧑‍✈️ Instructor View', 'openIos'], ['📱 Instructor Sync', 'toggleRemoteIos'], ['⚙ 설정', 'toggleSettings'], ['🗺 지도 미리 받기', 'toggleTilePrep'], ['🩺 진단 기록', 'toggleDiag'], ['📘 교관 교범', 'openManual'], ['❓ 도움말', 'toggleHelp']];
+const TOOLS = [['🎬 시나리오', 'toggleScenario'], ['🌙 환경', 'toggleEnvPanel'], ['📋 강평', 'toggleDebrief'], ['🧑‍✈️ Instructor View', 'openIos'], ['📱 Instructor Sync', 'toggleRemoteIos'], ['⚙ 설정', 'toggleSettings'], ['🗺 지도 미리 받기', 'toggleTilePrep'], ['⛽ 연료 · BINGO', 'toggleBingo'], ['📻 교신 연습', 'toggleRadioPractice'], ['🩺 진단 기록', 'toggleDiag'], ['📘 교관 교범', 'openManual'], ['❓ 도움말', 'toggleHelp']];
 function toggleTools(ev) {
   let m = document.getElementById('tools-menu');
   if (m && m.style.display === 'block') { m.style.display = 'none'; return; }
@@ -545,7 +609,7 @@ function _rtcWire(ch) {
 // 받은 것 — 직접 통로(WebRTC)든 인터넷 중계든 같은 곳으로
 function _rtcOnData(m) {
   if (!m) return;
-  if (typeof IOS_MODE !== 'undefined' && IOS_MODE) { if (m.type === 'mirror') { if (typeof iosMirrorApply === 'function') iosMirrorApply(m); } else if (typeof iosRender === 'function') iosRender(m); }
+  if (typeof IOS_MODE !== 'undefined' && IOS_MODE) { if (m.type === 'mirror') { if (typeof iosMirrorApply === 'function') iosMirrorApply(m); } else if (typeof iosAckIn === 'function' && iosAckIn(m)) { /* 명령 확인 */ } else if (typeof iosRender === 'function') iosRender(m); }
   else if (typeof iosHandle === 'function') iosHandle(m);
 }
 function _rtcGather(pc) { return new Promise(res => { if (pc.iceGatheringState === 'complete') return res(); const t = setTimeout(res, 3000); pc.addEventListener('icegatheringstatechange', () => { if (pc.iceGatheringState === 'complete') { clearTimeout(t); res(); } }); }); }
@@ -663,6 +727,8 @@ async function rtcJoin(qr) {
 }
 function rtcP2pOpen() { return !window._rtcForceRelay && !!rtc.ch && rtc.ch.readyState === 'open'; }
 function rtcSend(m) {
+  try { if (rtc.obsLink && m && (m.type === 'mirror' || m.type === 'state')) _rtcObsSend(m); } catch (e) { _swallow(e); }
+  if (rtc.obs && m && m.type === 'cmd' && m.c === 'ping') m.oid = rtc.oid;      // 관찰 기기 — 누구인지(몇 대인지 센다)
   try {
     if (rtcP2pOpen()) { rtc.ch.send(JSON.stringify(m)); return; }
     if (rtc.link && rtc.link.ready) {                                    // 직접 통로가 없으면 인터넷 중계로 — 미러는 0.6초에 한 번으로 줄인다
@@ -740,7 +806,7 @@ function rtcLinkOpen(rx, tx, onText) {
 function rtcLinkStart() {
   if (!rtc.room || !rtc.key) return;
   // 짝을 기억한다 — 새로고침 · 잠깐 꺼짐 뒤에도 묻지 않고 다시 이어진다(12시간 · '연결 끊기' 로 지운다)
-  try { localStorage.setItem('rtcPair', JSON.stringify({ room: rtc.room, key: rtc.key, t: Date.now() })); } catch (e) { _swallow(e); }
+  try { const o0 = JSON.parse(localStorage.getItem('rtcPair') || 'null'); localStorage.setItem('rtcPair', JSON.stringify({ room: rtc.room, key: rtc.key, t: Date.now(), obs: o0 && o0.room === rtc.room && o0.obs ? 1 : undefined })); } catch (e) { _swallow(e); }
   try { if (rtc.link) rtc.link.close(); } catch (e) { _swallow(e); }
   const ios = typeof IOS_MODE !== 'undefined' && IOS_MODE, base = 'shinesong/' + rtc.room;
   rtc.linkPeer = false;
@@ -754,13 +820,61 @@ function rtcLinkStart() {
   let n = 0; const hi = setInterval(() => { if (rtc.linkPeer || ++n > 30 || !rtc.link) { clearInterval(hi); return; } if (rtc.link.ready) rtcEnc(rtc.key, JSON.stringify({ type: 'hello' })).then(t => rtc.link && rtc.link.pub(t)).catch(_swallow); }, 1000);
 }
 
+// ── 관찰 기기(여러 대) — 교관 기기 말고도 태블릿 · 노트북 여러 대가 보기만 한다(조작 불가) ──
+//   메인(교육생) 기기가 짝을 맺은 뒤 '👀 관찰 기기 QR'(SS3|방|열쇠)을 띄우면 관찰 기기가 찍어 인터넷 중계의 따로 된 방(m2o)을 듣는다.
+//   관찰 기기는 1초마다 ping(o2m · 저마다 번호)을 보내고, 메인은 최근 15초 안에 ping 을 보낸 관찰 기기가 있을 때만 미러를 1초에 한 번 보낸다.
+function _rtcObsSend(m) {
+  const L = rtc.obsLink; if (!L || !L.ready || !rtc.key) return;
+  const now = Date.now(); Object.keys(rtc.obsIds || {}).forEach(k => { if (now - rtc.obsIds[k] > 15000) delete rtc.obsIds[k]; });
+  if (!Object.keys(rtc.obsIds || {}).length) return;
+  if (m.type === 'state') { if (now - (rtc._obsStT || 0) < 1000) return; rtc._obsStT = now; rtcEnc(rtc.key, JSON.stringify(m)).then(t => L.pub(t)).catch(_swallow); return; }
+  const P = rtc._obsPend || (rtc._obsPend = { type: 'mirror', S: {}, g: {}, ov: {} });
+  Object.assign(P.S, m.S || {}); Object.assign(P.g, m.g || {}); Object.assign(P.ov, m.ov || {}); if (m.msn) P.msn = Object.assign(P.msn || {}, m.msn); if (m.full) P.full = true;
+  if (!rtc._obsTimer) rtc._obsTimer = setTimeout(() => { const out = rtc._obsPend; rtc._obsPend = null; rtc._obsTimer = null; if (out && rtc.obsLink && rtc.obsLink.ready) rtcEnc(rtc.key, JSON.stringify(out)).then(t => rtc.obsLink.pub(t)).catch(_swallow); }, 1000);
+}
+function rtcObsCount() { const now = Date.now(); return Object.values(rtc.obsIds || {}).filter(t => now - t < 15000).length; }
+// 메인 — 관찰 기기용 방을 연다(짝이 있어야)
+function rtcObsOpen() {
+  if (!rtc.room || !rtc.key) return null;
+  if (!rtc.obsLink) {
+    const base = 'shinesong/' + rtc.room; rtc.obsIds = rtc.obsIds || {};
+    rtc.obsLink = rtcLinkOpen(base + '/o2m', base + '/m2o', async text => {
+      let m = null; try { m = JSON.parse(await rtcDec(rtc.key, text)); } catch (e) { return; }
+      if (!m || !m.oid) return;
+      const fresh = !rtc.obsIds[m.oid] || Date.now() - rtc.obsIds[m.oid] > 15000;
+      rtc.obsIds[m.oid] = Date.now();
+      if (typeof _iosPeerT !== 'undefined') _iosPeerT = Date.now();          // 미러를 보내게
+      if (fresh) { try { uiToast(`👀 관찰 기기가 붙었습니다(${rtcObsCount()}대)`); } catch (e) { _swallow(e); } try { if (typeof iosMirrorCheck === 'function') iosMirrorCheck(); } catch (e) { _swallow(e); } _rtcRender(); }
+    });
+    try { const p = JSON.parse(localStorage.getItem('rtcPair') || 'null'); if (p) { p.obs = 1; localStorage.setItem('rtcPair', JSON.stringify(p)); } } catch (e) { _swallow(e); }
+  }
+  return `SS3|${rtc.room}|${rtc.key}`;
+}
+// 관찰 기기 — 찍은 SS3 로 메인의 관찰 방을 듣는다
+function rtcObserve(code) {
+  const p = String(code).trim().split('|'); if (p[0] !== 'SS3' || p.length < 3) throw new Error('관찰 기기 QR 이 아닙니다');
+  try { if (rtc.link) rtc.link.close(); } catch (e) { _swallow(e); }
+  rtc.room = p[1]; rtc.key = p[2]; rtc.obs = true; rtc.oid = rtc.oid || Math.random().toString(36).slice(2, 10); rtc.linkPeer = false;
+  try { document.documentElement.classList.add('ios-obs'); } catch (e) { _swallow(e); }
+  try { localStorage.setItem('rtcPair', JSON.stringify({ room: rtc.room, key: rtc.key, t: Date.now(), observer: 1 })); } catch (e) { _swallow(e); }
+  const base = 'shinesong/' + rtc.room;
+  rtc.link = rtcLinkOpen(base + '/m2o', base + '/o2m', async text => {
+    let m = null; try { m = JSON.parse(await rtcDec(rtc.key, text)); } catch (e) { return; }
+    if (!rtc.linkPeer) { rtc.linkPeer = true; rtc.open = true; try { uiToast('👀 관찰 기기로 이어졌습니다 — 보기만 합니다'); } catch (e) { _swallow(e); } qrScanStop(); _rtcRender(); }
+    _rtcOnData(m);
+  });
+  return true;
+}
+
 // Instructor Sync 다시 잇기 — 기억해 둔 짝(rtcPair)이 12시간 안이면 앱을 열 때 인터넷 중계로 곧바로 다시 붙는다
 //   (중계가 끊겨도 rtcLinkOpen 이 다음 중계로 계속 다시 붙는다 · 미러는 상대가 다시 보이면 전체를 한 번 보낸다)
 const RTC_PAIR_MS = 12 * 3600 * 1000;
 function rtcPairForget() {
   try { localStorage.removeItem('rtcPair'); } catch (e) { _swallow(e); }
   try { if (rtc.link) rtc.link.close(); } catch (e) { _swallow(e); }
-  rtc.link = null; rtc.linkPeer = false; rtc.open = false; rtc.room = null; rtc.key = null;
+  try { if (rtc.obsLink) rtc.obsLink.close(); } catch (e) { _swallow(e); }
+  rtc.link = null; rtc.obsLink = null; rtc.obsIds = {}; rtc.obs = false; rtc.linkPeer = false; rtc.open = false; rtc.room = null; rtc.key = null;
+  try { document.documentElement.classList.remove('ios-obs'); } catch (e) { _swallow(e); }
   try { if (rtc.pc) rtc.pc.close(); } catch (e) { _swallow(e); } rtc.pc = null; rtc.ch = null;
   try { _rtcRender(); } catch (e) { _swallow(e); }
   try { uiToast('Instructor Sync — 연결을 끊고 짝을 지웠습니다'); } catch (e) { _swallow(e); }
@@ -769,7 +883,9 @@ function rtcResume() {
   let p = null; try { p = JSON.parse(localStorage.getItem('rtcPair') || 'null'); } catch (e) { p = null; }
   if (!p || !p.room || !p.key || !(Date.now() - (p.t || 0) < RTC_PAIR_MS)) return false;
   if (rtc.link) return true;
+  if (p.observer) { rtcObserve(`SS3|${p.room}|${p.key}`); return true; }
   rtc.room = p.room; rtc.key = p.key; rtcLinkStart();
+  if (p.obs) rtcObsOpen();
   return true;
 }
 setTimeout(() => { try { rtcResume(); } catch (e) { _swallow(e); } }, 1500);
@@ -829,7 +945,7 @@ function toggleRemoteIos() {
         ? '<div>교육생(메인) 기기에서 <b>🧰 도구 → 📱 Instructor Sync → [연결 요청]</b>을 누르면 QR 이 나옵니다.</div><div>아래 <b>[📷 교육생 QR 찍어 잇기]</b>를 누르고 그 QR 을 찍습니다.</div><div>교육생 기기에서 <b>[수락]</b>을 누르면 이어집니다.</div>'
         : '<div><b>[연결 요청]</b>을 누르면 QR 이 나옵니다.</div><div>교관 태블릿의 교관 화면에서 <b>[📷 교육생 QR 찍어 잇기]</b>로 이 QR 을 찍습니다.</div><div>이 기기에 뜨는 창에서 <b>[수락]</b>을 누르면 바로 이어집니다.</div>'}</div>
       <div class="rtc-btns">${ios ? '<button class="sim-btn on rtc-big" data-rtc="join">📷 교육생 QR 찍어 잇기</button>'
-        : '<button class="sim-btn on rtc-big" data-rtc="request">연결 요청</button>'}</div>
+        : '<button class="sim-btn on rtc-big" data-rtc="request">연결 요청</button><button class="sim-btn rtc-big" data-rtc="obs" title="교관 기기와 짝을 맺은 뒤 — 다른 태블릿 · 노트북 여러 대가 보기만 하게">👀 관찰 기기 QR</button>'}</div>
       <div class="rtc-view" data-rtcv="view"></div>
       <div class="set-note rtc-st" data-rtcv="st"></div>
       <div class="rtc-btns"><button class="sim-btn" data-rtc="forget" title="기억해 둔 짝을 지운다 — 다음에는 처음부터 연결 요청">연결 끊기</button></div>
@@ -848,14 +964,21 @@ function toggleRemoteIos() {
       try {
         if (k === 'x') { qrScanStop(); w.style.display = 'none'; return; }
         if (k === 'forget') { rtcPairForget(); return; }
-        if (k === 'request') {
+        if (k === 'obs') {
+          const q = rtcObsOpen();
+          if (!q) { uiToast('먼저 [연결 요청]으로 교관 기기와 짝을 맺으십시오', 'warn', 4000); return; }
+          await showQr(q, '관찰할 기기(교관 화면)에서 <b>[📷 교육생 QR 찍어 잇기]</b>로 이 QR 을 찍으면 보기 전용으로 붙습니다(여러 대 · 수락 없이). 이 QR 은 짝을 아는 사람에게만 보여 주십시오.');
+          out.value = q;
+        }
+        else if (k === 'request') {
           view.innerHTML = '<div class="set-note">요청 QR 을 만드는 중…</div>';
           const q = await rtcRequest(); await showQr(q, '교관 태블릿의 <b>[📷 교육생 QR 찍어 잇기]</b>로 이 QR 을 찍게 하세요. 찍으면 이 기기에 <b>수락</b> 창이 뜹니다.');
           out.value = q.split('|').slice(3).join('|');                     // 글자로 잇기 — 요청 코드(SS1)
         }
         else if (k === 'join') {
           const code = await qrScan(view);
-          if (/^SS1\|/.test(code)) { view.innerHTML = ''; await showQr(await rtcAnswer(code), '옛 방식 QR 입니다 — 이 답 QR(코드)을 교육생 기기로 보내세요.'); }
+          if (/^SS3\|/.test(code)) { rtcObserve(code); view.innerHTML = '<div class="set-note">관찰 기기로 붙는 중… (보기 전용 — 조작 단추는 듣지 않습니다)</div>'; }
+          else if (/^SS1\|/.test(code)) { view.innerHTML = ''; await showQr(await rtcAnswer(code), '옛 방식 QR 입니다 — 이 답 QR(코드)을 교육생 기기로 보내세요.'); }
           else {
             view.innerHTML = '<div class="set-note">교육생 QR 을 읽었습니다 — 연결을 청하는 중…</div>';
             const r = await rtcJoin(code);
@@ -882,7 +1005,8 @@ function _rtcRender() {
   const s = document.querySelector('#rtc-wrap [data-rtcv="st"]'); if (!s) return;
   const cs = rtc.pc ? rtc.pc.connectionState : '';
   const via = rtcP2pOpen() ? '직접 연결' : rtc.linkPeer ? '인터넷 중계' : '';
-  s.textContent = rtc.open ? `● 이어졌습니다${via ? '(' + via + ')' : ''} — 이 창을 닫아도 됩니다`
+  const nObs = typeof rtcObsCount === 'function' && rtc.obsLink ? rtcObsCount() : 0;
+  s.textContent = rtc.obs ? (rtc.open ? '👀 관찰 기기로 이어졌습니다 — 보기만 합니다' : '○ 관찰 방에 잇는 중…') : rtc.open ? `● 이어졌습니다${via ? '(' + via + ')' : ''}${nObs ? ` · 관찰 기기 ${nObs}대` : ''} — 이 창을 닫아도 됩니다`
     : cs === 'failed' && !(rtc.link && rtc.link.ready) ? '✕ 잇지 못했습니다 — 두 기기가 인터넷에 이어져 있는지 보고 처음부터 다시'
     : rtc.link && rtc.link.ready ? '○ 인터넷 중계로 잇는 중…' : rtc.pc ? '○ 기다리는 중…' : '';
   s.classList.toggle('ok', rtc.open);

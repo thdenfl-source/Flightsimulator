@@ -169,10 +169,11 @@ function toggleEnvPanel() {
       grp('공항 주기 헬기', 'parked', [['false', '없음'], ['true', '있음']]) +
       grp('착륙등(흰수리)', 'ldg', [['false', '끔'], ['true', '켬']]) +
       grp('RA 콜아웃', 'raCall', [['false', '끔'], ['true', '켬']]) +
-      `<div class="env-note" data-envv="sea"></div><div class="env-row"><span>METAR</span><div><button class="sim-btn" data-envx="metar">가까운 공항 METAR 로 맞추기</button></div></div></div>`;
+      `<div class="env-note" data-envv="sea"></div><div class="env-row"><span>IIMC 연습</span><div><button class="sim-btn" data-envx="iimc">⚠ 지금 구름 속으로(IIMC) — 회복 판정</button></div></div><div class="env-row"><span>METAR</span><div><button class="sim-btn" data-envx="metar">가까운 공항 METAR 로 맞추기</button></div></div></div>`;
     document.body.appendChild(w);
     w.addEventListener('click', e => {
       if (e.target.closest('[data-envx="metar"]')) { if (typeof envMetarNearest === 'function') envMetarNearest().then(() => envPanelRender()); return; }
+      if (e.target.closest('[data-envx="iimc"]')) { w.style.display = 'none'; if (typeof iimcStart === 'function') iimcStart(); return; }
       if (e.target === w || e.target.closest('[data-envx]')) { w.style.display = 'none'; return; }
       const b = e.target.closest('[data-env]'); if (!b) return;
       const [k, v] = b.dataset.env.split(':');
