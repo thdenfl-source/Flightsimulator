@@ -29,6 +29,25 @@ export async function run(page, t) {
   t.ok(V.off, 'MAP 탭으로 바꾸면 전탐석이 닫힌다');
   // (아래 묶음은 전탐석을 화면 가득 띄워 본다)
   await page.evaluate(() => msnShow(true));
+  // ── 전원 — 하부 콘솔 MPP DMM → 녹화기 POWER(3초 시동) → 표시기 화면 전체 ──
+  const P = await page.evaluate(async () => {
+    const w = ms => new Promise(r => setTimeout(r, ms)), o = {};
+    const dark = () => document.querySelector('#msn-root .msn-scr').classList.contains('dark');
+    const msg = () => document.querySelector('#msn-root [data-m="nopwr"]').textContent;
+    dvr.pwr = false; dvr.rec = false; ovhdSet('mpp2', 'OUT'); await w(400);
+    o.off = [dark(), /DMM/.test(msg())];
+    dvrPress('power'); o.refused = !dvr.pwr;
+    ovhdSet('mpp2', 'IN'); await w(400); o.needDvr = [dark(), /녹화기/.test(msg())];
+    dvrPress('power'); await w(400); o.boot = [dvr.pwr, dark(), /시동/.test(msg())];
+    dvr.boot = 0.01; await w(500); o.on = [dark(), msnScreenOn()];
+    ovhdSet('mpp2', 'OUT'); await w(400); o.cut = [dvr.pwr, dark()];
+    ovhdSet('mpp2', 'IN'); dvrPress('power'); dvr.boot = 0; await w(400);   // 아래 검사는 화면이 켜진 채로
+    o.ready = msnScreenOn();
+    return o;
+  });
+  t.ok(P.off.join() === 'true,true' && P.refused && P.needDvr.join() === 'true,true', `전원 — DMM 이 꺼져 있으면 화면이 까맣고 녹화기 POWER 도 들어가지 않는다 · DMM ON 이면 녹화기 POWER 를 누르라고 (${JSON.stringify(P)})`);
+  t.ok(P.boot.join() === 'true,true,true' && P.on.join() === 'false,true' && P.cut.join() === 'false,true' && P.ready,
+    '녹화기 POWER → 3초 시동 뒤 표시기 화면 전체가 들어오고, DMM 을 끄면 녹화기 · 화면이 함께 꺼진다');
   const a0 = await page.evaluate(() => ({ kuhm: !acExact('kuhm'), fam: acIs('aw189'), sys: acScrOk('sysp'), hcu: document.querySelectorAll('#msn-root [data-hcu]').length,
     top: [...document.querySelectorAll('#msn-root .hcu-key')].map(b => b.textContent).join(','), joy: !!JOY_ACT_BY_ID.hcuAvt && !!JOY_ACT_BY_ID.hcuLrf }));
   t.ok(a0.kuhm && a0.fam && a0.sys, '전탐석은 흰수리 갈래 — 흰수리 계통(SYSTEM 등)을 그대로 쓴다');
@@ -167,7 +186,7 @@ export async function run(page, t) {
     const bE = box('.msn-eohcu'), bD = box('.dvr'), bC = box('.cln'), bS = box('.slc');
     o.dvrPos = bE.bottom <= bD.top + 2 && bD.bottom <= bC.top + 2 && bS.left >= bE.right - 2;
     o.slcH = Math.round(bS.height); o.colAH = Math.round(bC.bottom - bE.top);
-    dvrPress('rec'); o.dvrOff = dvr.rec; dvrPress('power'); dvrPress('rec'); o.dvrBoot = !dvr.rec && dvr.boot > 0; dvr.boot = 0; dvrPress('rec'); dvrRender(); o.dvr = [dvr.pwr, dvr.rec, document.querySelector('[data-dvl="pwr"]').className]; dvrPress('rec'); dvrPress('power');
+    dvr.pwr = false; dvr.rec = false; dvrPress('rec'); o.dvrOff = dvr.rec; dvrPress('power'); dvrPress('rec'); o.dvrBoot = !dvr.rec && dvr.boot > 0; dvr.boot = 0; dvrPress('rec'); dvrRender(); o.dvr = [dvr.pwr, dvr.rec, document.querySelector('[data-dvl="pwr"]').className]; dvrPress('rec'); dvrPress('power');
     // ── 탐색레이더 조작기(VCCP · Seaspray 5000E) ──
     S.hdg = 0; rdr.menu = null; rdr.rng = 20;
     rdr.cmd = 'CKPT'; clnPress('rot:1', true); o.ckpt = rdr.rng === 20;                     // 조종실이 쥐고 있으면 듣지 않는다
