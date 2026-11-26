@@ -323,7 +323,8 @@ function msnContacts() {
 }
 // ══ ② 탐색레이더 — Seaspray 5000E(Osprey) · VCCP 조작기 (KUH-1CG FLM 5.20 · SDS 34-47-01) ══
 //   X 대역 9.45~10.00GHz · 최대 200NM · 표적 200개 자동 추적 · 전원 DC-ESS BUS 1(RADAR) · 다시 켜면 90초 예열
-//   안테나: 기계 스캔 ±60° + 전자 스캔(E-scan) ±120° — 부채꼴(Sector) 화면 · 스캔 폭 120 · 60 · 20 · 240°
+//   안테나: 회전하지 않는다 — 전 방향으로 동시에 전파를 내 음영 구역이 없다(스캔선 없이 화면 전체가 한꺼번에 새로 그려진다)
+//   화면: 처음 360°(전 방향) · SCN/BLK 로 120 · 60 · 20 · 240° 부채꼴만 볼 수도 있다
 //   모드: LRS(장거리 해상 · 해면 클러터 억제 · FREEZE) · WX(강수 밀도 색) · PT(소형 표적 자동 추적) · SART(수색구조 트랜스폰더) · ISAR(표적 영상)
 //   제어 권한(RDR > CMD): CKPT(조종실 · 처음) · CABIN(전탐석) · SHARED(함께) — CKPT 이면 전탐석 VCCP 는 CMD 말고는 듣지 않는다
 //   화면: 위 Hdg · Trk · SRV RDR CMD · RNG · Tilt · Gain / 아래 Alt · RAlt · GS · 위경도 · 커서 거리 · 방위 / RDR TX · STBY · FREEZE · R ONLY · NO ALT · NO HDG · NO POS
@@ -332,11 +333,11 @@ const RDR_MODES = ['PT', 'LRS', 'WX', 'TURB', 'SART', 'STM', 'MTI', 'ISAR'];   /
 const RDR_CMD_NM = { CKPT: 'CKPT', CABIN: 'CABIN', SHARED: 'INTRLV' };   // RDR > CMD — INTRLV(번갈아 · 함께 쓰기)는 안에서 SHARED
 const _rdrWx = () => rdr.mode === 'WX' || rdr.mode === 'TURB';
 const RDR_CMDS = ['CKPT', 'CABIN', 'SHARED'];
-const RDR_SECTORS = [120, 60, 20, 240];
-const RDR_SWEEP = 45;                                  // 스캔 속도(°/s)
+const RDR_SECTORS = [360, 120, 60, 20, 240];
+const RDR_REFRESH_S = 0.5;                            // 전 방향 그림이 한 번 다 새로 그려지는 시간(초) — 회전 스캔이 아니라 화면 전체를 고르게 나눠 그린다
 const RDR_WARM_S = 90;                                 // 다시 켠 뒤 예열(초)
-const RDR_RPM_S = 2 * 120 / RDR_SWEEP;                 // 한 번 오가는 시간(초) — 칠해진 표적이 살아 있는 시간에 쓴다
-const rdr = { pwr: true, warm: 0, tx: false, mode: 'LRS', cmd: 'CKPT', rng: 20, tilt: 0, gain: 15, sector: 120, frz: false, ronly: false, wxr: false, tws: true,
+const RDR_RPM_S = 1;                                   // 칠해진 표적이 살아 있는 시간(초)의 바탕 — 전 방향 동시 갱신이라 짧다
+const rdr = { pwr: true, warm: 0, tx: false, mode: 'LRS', cmd: 'CKPT', rng: 20, tilt: 0, gain: 15, sector: 360, frz: false, ronly: false, wxr: false, tws: true,
   az: 0, dir: 1, cur: { az: 0, nm: 10 }, tgt: null, trkNo: {}, nTrk: 0, menu: null, menuI: 0, paint: {}, trk: {}, pcv: null, wx: null,
   sub: null, subI: 0, menuT: 0, agc: false, sts: false, tails: false, grey: false, link: false, flt: 'ALL', lblAll: true, info: '', infoT: 0 };
 // 전탐석 VCCP 가 다룰 수 있는가 — 제어 권한
@@ -377,13 +378,9 @@ function rdrStep(dt) {
   if (rdr.menu && rdr.menuT && performance.now() - rdr.menuT > 10000) { rdr.menu = null; rdr.sub = null; }   // 10초 동안 조작이 없으면 메뉴를 닫는다(FLM 5.20 NOTE)
   if (rdr.agc) { const sea = (typeof env !== 'undefined' && env.sea) || 0; rdr.gain = _mClamp(Math.round(17 - sea * 1.5), 6, 22); }   // AUTO GAIN — 해면 상태에 맞춰
   if (!rdr.tx || !rdr.pwr) return;
-  if (rdr.frz) return;                                 // FREEZE — 화면을 붙든다(안테나는 돌지만 그림을 바꾸지 않는다)
-  // 부채꼴 스캔 — 기수 기준 ±sector/2 를 오간다
-  const half = rdr.sector / 2, a0 = rdr.az;
-  let a1 = a0 + rdr.dir * RDR_SWEEP * dt;
-  if (a1 >= half) { a1 = half; rdr.dir = -1; } else if (a1 <= -half) { a1 = -half; rdr.dir = 1; }
-  rdr.az = a1;
-  const lo = Math.min(a0, a1), hi = Math.max(a0, a1);
+  if (rdr.frz) return;                                 // FREEZE — 화면을 붙든다(그림 · 표적을 바꾸지 않는다)
+  // 전 방향 동시 — 회전하는 스캔선이 없다: 보는 범위(±sector/2) 안의 표적을 매번 모두 갱신한다
+  const half = rdr.sector / 2, lo = -half, hi = half;
   const now = performance.now();
   for (const c of msnContacts()) {
     const brg = bearing(S.lat, S.lon, c.lat, c.lon), nm = distance(S.lat, S.lon, c.lat, c.lon), rel = normAS(brg - S.hdg);
@@ -400,10 +397,12 @@ function rdrStep(dt) {
     if (((rdr.mode === 'PT' && c.rcs <= 10) || rdr.mode === 'STM') && !rdr.trkNo[c.id]) rdrTrack(c.id, true);   // STM — 잡히는 대로 추적
     if (rdr.trkNo[c.id]) { T.tail = T.tail || []; const L = T.tail[T.tail.length - 1]; if (!L || now - L.t > 4000) { T.tail.push({ lat: c.lat, lon: c.lon, t: now }); if (T.tail.length > 10) T.tail.shift(); } }   // 꼬리(CONTACT TAILS)
   }
-  _rdrPaintBeam(lo, hi - lo, dt);
+  rdr.phase = ((rdr.phase || 0) + 1) % _RDR_STRIDE;
+  _rdrPaintBeam(lo, hi - lo, dt, _RDR_STRIDE, rdr.phase);   // 화면 전체를 고르게 나눠(줄을 건너뛰며) 그린다 — 0.5초에 한 번 다 새로
 }
 // 잔상 캔버스 — 기수 기준(가운데가 안테나). 한 줄씩: 육지(TWS) · 해면 반사 · 강수 · 잡음 · 표적
-function _rdrPaintBeam(a0, sweep, dt) {
+const _RDR_STRIDE = 10;   // 한 걸음에 줄 1/10 씩(0.05초 × 10 = RDR_REFRESH_S)
+function _rdrPaintBeam(a0, sweep, dt, stride = 1, phase = 0) {
   const N = 360;
   if (!rdr.pcv) { rdr.pcv = document.createElement('canvas'); rdr.pcv.width = rdr.pcv.height = N; }
   const g = rdr.pcv.getContext('2d'), c = N / 2, R = N / 2 - 2;
@@ -411,8 +410,8 @@ function _rdrPaintBeam(a0, sweep, dt) {
   const sea = (typeof env !== 'undefined' && env.sea) || 0, gk = rdr.gain / 30;
   const clutNm = rdr.mode === 'MTI' ? 0 : (0.3 + sea * 0.45) * (rdr.mode === 'LRS' ? 0.35 : 1) * Math.max(0.2, 1 - rdr.tilt / 30);   // MTI — 해면 반사 · 육지는 걸러 낸다
   const cells = (_rdrWx() || rdr.wxr) ? _rdrWxCells() : [];
-  const steps = Math.max(1, Math.ceil(sweep / 1.2));
-  for (let s = 0; s <= steps; s++) {
+  const steps = Math.max(1, Math.ceil(sweep / 1.0));   // 1° 마다 한 줄(바깥쪽에 줄무늬가 생기지 않게)
+  for (let s = phase; s <= steps; s += stride) {
     const rel = a0 + sweep * s / steps, brg = normA(rel + S.hdg);
     const sx = Math.sin(rel * _mD), sy = -Math.cos(rel * _mD);
     const bins = 56;
@@ -425,7 +424,7 @@ function _rdrPaintBeam(a0, sweep, dt) {
       for (const w of cells) { const d = distance(la, lo, w.lat, w.lon); if (d < w.r) { const k = w.k * (1 - d / w.r); const wk = rdr.mode === 'TURB' ? (k > 0.45 ? '255,60,255' : '40,120,60') : k > 0.6 ? '255,60,60' : k > 0.35 ? '255,200,0' : '40,200,60'; if (k > v || _rdrWx()) { v = Math.max(v, 0.35 + k * 0.6); col = wk; } } }
       if (Math.random() < gk * gk * 0.02) v = Math.max(v, 0.2);                                                         // 잡음
       if (rdr.grey && col === '80,255,120') col = '205,215,205';   // GREY-GREEN — 회색 화면
-      if (v > 0) { g.fillStyle = `rgba(${col},${v.toFixed(2)})`; g.fillRect(c + sx * r - 1.5, c + sy * r - 1.5, 3.2, 3.2); }
+      if (v > 0) { g.fillStyle = `rgba(${col},${v.toFixed(2)})`; g.fillRect(c + sx * r - 1.9, c + sy * r - 1.9, 3.8, 3.8); }
     }
   }
   // 표적 — 반사 면적만큼 크게
@@ -517,6 +516,7 @@ const RDR_MAIN = [
     { n: 'FILTER', v: () => rdr.flt, set: () => { rdr.flt = { ALL: 'SURF', SURF: 'AIR', AIR: 'ALL' }[rdr.flt]; } },
   ] },
   { n: 'SCN/BLK', v: () => `${rdr.sector}°`, sub: [
+    { n: 'ALL 360°', v: () => rdr.sector === 360 ? '●' : '', set: () => { rdr.sector = 360; rdrClearPicture(); } },   // 전 방향(처음)
     { n: 'BLN 20°', v: () => rdr.sector === 20 ? '●' : '', set: () => { rdr.sector = 20; rdrClearPicture(); } },
     { n: 'BLN 60°', v: () => rdr.sector === 60 ? '●' : '', set: () => { rdr.sector = 60; rdrClearPicture(); } },
     { n: 'MAP OVERLAY', v: () => rdr.ronly ? 'OFF' : 'ON', set: () => { rdr.ronly = !rdr.ronly; } },
@@ -1459,7 +1459,8 @@ function msnHelp() {
     '· 전원: 하부 콘솔 MPP 패널 DMM ON → 녹화기(가운데) POWER → 3초 뒤 표시기 화면 전체가 들어온다(DMM 을 끄면 함께 꺼진다)',
     '· 녹화기(DVR): POWER(빨강) → 3초 뒤 REC(초록 깜박) · CH1 EO/IR · CH2 레이더 · CH3 호이스트 · CH4 지도 · PLAYBACK(파랑) ▶▶/◀◀ 0.5~256배 · ◀▶ 10초 · MENU — 날짜/시간 검색 · QUAD/한 채널 · USB(AVI) · SSD INFO',
     '  손잡이 돌림 — 거리 10~200NM(메뉴가 열려 있으면 칸 옮기기) · 누름 — 메뉴 실행 · 커서 자리 표적 추적(TRK) · 4축 — 커서',
-    '  FNC — 화면 왼쪽 세로 메뉴(FLM 5.20 표 2 · 표 4): RDR RNG ± · MODE ▷(PT · LRS · WX · TURB · SART · STM · MTI · ISAR) · CMD ▷(CKPT · CABIN · INTRLV) · R SET ▷(TILT · GAIN · AUTO GAIN · STS · CONTACT TAILS · GREY-GREEN · LINK R) · TRACK ▷(MK TRK · IN/EX AREA · DEL ALL · FILTER) · SCN/BLK ▷ · SEARCH ▷(USER 1~6 · ALL · BY DISTANCE · STEER CAM) · MAINT ▷(FAULTS · BIT · RDR NAV) · RDR TX · R ONLY · FREEZE',
+    '  레이더는 회전하지 않고 전 방향으로 동시에 전파를 낸다 — 음영 구역 · 스캔선이 없다(처음 360° 화면 · SCN/BLK 로 부채꼴만 볼 수도 있다)',
+    '  FNC — 화면 왼쪽 세로 메뉴(FLM 5.20 표 2 · 표 4): RDR RNG ± · MODE ▷(PT · LRS · WX · TURB · SART · STM · MTI · ISAR) · CMD ▷(CKPT · CABIN · INTRLV) · R SET ▷(TILT · GAIN · AUTO GAIN · STS · CONTACT TAILS · GREY-GREEN · LINK R) · TRACK ▷(MK TRK · IN/EX AREA · DEL ALL · FILTER) · SCN/BLK ▷(ALL 360° · BLN 20° · BLN 60° · MAP OVERLAY · SEARCH · SCAN 120°) · SEARCH ▷(USER 1~6 · ALL · BY DISTANCE · STEER CAM) · MAINT ▷(FAULTS · BIT · RDR NAV) · RDR TX · R ONLY · FREEZE',
     '  손잡이 돌림 고르기 · 누름 실행(▷ 는 오른쪽에 하위 메뉴) · ESC/CLR 뒤로 · 10초 조작 없으면 닫힘 · 키보드(마우스를 Vendor 위에): M 메뉴 · ↑↓ · Enter · 1~9 · Esc · MAP(WXR · TWS · R ONLY · RANGE) · 다시 켜면 90초 예열',
     '· EO/IR: 조이스틱(화면 HCU 가운데 · 실제 조종 장치의 사이클릭 축)으로 터릿을 돌린다. ZOOM ▲확대 ▼축소 · VIC 센서(EOW → EON → IR) · 2X 전자 줌 · POL 백상/흑상',
     '· AVT: 한 번 누르면 게이트(ACQ) — 표적을 게이트에 넣고 한 번 더 누르면 잠금(LOCKED) · 1.5초 누르면 해제',
@@ -1830,7 +1831,9 @@ function _eoHud(cv, W, H) {
 function _rdrGeo(W, H) {
   const top = 64, bot = 46;   // 위 — 채널 이름(CH2) 한 줄 + 머리 글 두 줄
   if (rdr.sector <= 120) { const half = rdr.sector / 2 * _mD, R = Math.max(40, Math.min(H - top - bot - 8, (W / 2 - 12) / Math.max(0.5, Math.sin(half)))); return { ox: W / 2, oy: H - bot - 4, R }; }
-  const R = Math.max(40, Math.min(W / 2 - 14, (H - top - bot) / 2 - 4)); return { ox: W / 2, oy: top + (H - top - bot) / 2 + 4, R };
+  // 전 방향(원) — 머리 글 · 아랫줄은 글자 크기(k)만큼 커지므로 그만큼 비우고, 둘레 방위 숫자 자리도 둔다
+  const k = _mClamp(Math.min(W, H) / 420, 0.6, 2), t2 = Math.max(top, 62 * k), b2 = Math.max(bot, 36 * k), m = 16 * k;
+  const R = Math.max(40, Math.min(W / 2 - m - 8, (H - t2 - b2) / 2 - m)); return { ox: W / 2, oy: t2 + (H - t2 - b2) / 2, R };
 }
 function _rdrDraw(cv) {
   const W = cv.width, H = cv.height; if (!(W > 0 && H > 0)) return;
@@ -1857,8 +1860,7 @@ function _rdrPaint(g, W, H) {
   g.strokeStyle = 'rgba(61,255,106,0.5)'; g.lineWidth = 1; g.font = `bold ${Math.round(11 * k)}px monospace`; g.fillStyle = C; g.textAlign = 'left';
   for (let i = 1; i <= 3; i++) { g.beginPath(); g.arc(ox, oy, R * i / 3, (-90 - half) * _mD, (-90 + half) * _mD); g.stroke(); const [lx, ly] = P(Math.min(half, 45) - 6, rdr.rng * i / 3); g.fillText(`${+(rdr.rng * i / 3).toFixed(1)}`, lx + 3, ly); }
   for (let a = -Math.floor(half / 30) * 30; a <= half; a += 30) { const [x, y] = P(a, rdr.rng); g.beginPath(); g.moveTo(ox, oy); g.lineTo(x, y); g.stroke(); g.textAlign = 'center'; g.fillText(fmtA(S.hdg + a), ox + Math.sin(a * _mD) * (R + 11 * k), oy - Math.cos(a * _mD) * (R + 11 * k) + 4 * k); }
-  // 스캔선
-  if (rdr.tx && !rdr.frz) { const [x, y] = P(rdr.az, rdr.rng); g.strokeStyle = 'rgba(140,255,170,0.95)'; g.lineWidth = 2.5; g.beginPath(); g.moveTo(ox, oy); g.lineTo(x, y); g.stroke(); }
+  // (스캔선 없음 — 전 방향 동시 송신)
   // EO/IR 시선 · 서치라이트
   if (eo.pwr && eo.mode !== 'STOW' && Math.abs(eo.az) <= half) { const [x, y] = P(eo.az, rdr.rng); g.strokeStyle = 'rgba(80,220,255,0.85)'; g.setLineDash([5, 4]); g.lineWidth = 1.5; g.beginPath(); g.moveTo(ox, oy); g.lineTo(x, y); g.stroke(); g.setLineDash([]); }
   if (hsl.lit && Math.abs(hsl.az) <= half) { const [x, y] = P(hsl.az, rdr.rng * 0.4); g.strokeStyle = 'rgba(255,220,80,0.8)'; g.beginPath(); g.moveTo(ox, oy); g.lineTo(x, y); g.stroke(); }

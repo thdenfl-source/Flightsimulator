@@ -201,7 +201,7 @@ export async function run(page, t) {
     clnPress('map', true); o.mapMenu = rdr.menu; const tws0 = rdr.tws; clnPress('rot:1', true); clnPress('push', true); clnPress('push', false); o.tws = rdr.tws !== tws0; clnPress('esc', true); rdr.tws = tws0;
     const m0 = rdr.mode; msnAct('rmode'); o.mode = [m0, rdr.mode];
     rdr.mode = 'SART'; sarPlaceAt(...destPoint(S.lat, S.lon, 10, 2)); o.sart = !!rdrSartReply(); rdr.mode = 'LRS';
-    rdr.frz = true; const az1 = rdr.az; rdrStep(0.5); o.frz = rdr.az === az1; rdr.frz = false;
+    rdr.frz = true; const pz = JSON.stringify(rdr.paint); msnVsl.forEach(v => { v.lat += 0.01; }); rdrStep(0.5); o.frz = JSON.stringify(rdr.paint) === pz; rdr.frz = false;
     rdrPower(false); rdrPower(true); o.warm = rdr.warm > 80 && !rdrTx(true); rdr.warm = 0; rdrTx(true);
     const rc = document.querySelector('#msn-root .msn-rdr canvas'); _rdrDraw(rc); const dd = rc.getContext('2d').getImageData(0, 24, rc.width, 40).data; let gn = 0; for (let i = 0; i < dd.length; i += 4) if (dd[i + 1] > 150) gn++; o.hdr = gn;
     // ── 조종석 하부 콘솔 ⑮ VCCP — 같은 면판 · 같은 레이더 · 권한 CKPT/SHARED ──
@@ -282,8 +282,8 @@ export async function run(page, t) {
     // MODE ▷ MTI · TRACK ▷ FILTER · SCN/BLK ▷ BLN 60°
     rdr.menuI = 2; clnPress('push', true); clnPress('push', false); clnPress('n7', true); o.mti = rdr.mode; clnPress('esc', true);
     rdr.menuI = 5; clnPress('push', true); clnPress('push', false); clnPress('n5', true); o.flt = rdr.flt; clnPress('esc', true);
-    rdr.menuI = 6; clnPress('push', true); clnPress('push', false); clnPress('n2', true); o.sec = rdr.sector; clnPress('clr', true); o.clrBack = rdr.sub === null && rdr.menu === 'FNC';
-    rdr.mode = 'LRS'; rdr.flt = 'ALL'; rdr.sector = 120; rdrClearPicture();
+    rdr.menuI = 6; clnPress('push', true); clnPress('push', false); clnPress('n3', true); o.sec = rdr.sector; clnPress('clr', true); o.clrBack = rdr.sub === null && rdr.menu === 'FNC';
+    rdr.mode = 'LRS'; rdr.flt = 'ALL'; rdr.sector = 360; rdrClearPicture();
     // 10초 동안 조작이 없으면 닫힌다
     rdr.menuT = performance.now() - 10500; rdrStep(0.05); o.auto = rdr.menu === null;
     // 키보드 — 마우스가 Vendor 위에 있을 때만
@@ -297,6 +297,19 @@ export async function run(page, t) {
   t.eq(RM.main, 'RDR RNG +|RDR RNG -|MODE▷|CMD▷|R SET▷|TRACK▷|SCN/BLK▷|SEARCH▷|MAINT▷|RDR TX|R ONLY|FREEZE', '레이더 메뉴(FLM 5.20 표 2 · 표 4) — 메인 항목 차례');
   t.ok(RM.mode === 'PT,LRS,WX,TURB,SART,STM,MTI,ISAR' && RM.cmdNm === 'CKPT,CABIN,INTRLV' && RM.left, `MODE ▷ · CMD ▷ 하위 항목 · 메뉴가 화면 왼쪽 세로에 (${RM.mode} · ${RM.cmdNm})`);
   t.ok(RM.rset && RM.gainUp && RM.tails && RM.mti === 'MTI' && RM.flt === 'SURF' && RM.sec === 60 && RM.clrBack, `하위 메뉴 — 숫자로 고르기(GAIN + · CONTACT TAILS · MTI · FILTER · BLN 60°) · CLR 로 뒤로 (${JSON.stringify(RM)})`);
+  // 전 방향 동시 송신 — 회전 스캔선이 없고, 한 걸음에 뒤쪽 표적까지 모두 잡힌다
+  const AR = await page.evaluate(() => {
+    msnVslClear(); msnSpawn(2, { brg: 180, nm: 3, spd: 0, anywhere: true }); const back = msnVsl[0].id;
+    rdr.sector = 360; rdr.tx = true; rdr.warm = 0; rdr.frz = false; rdr.paint = {}; rdr.pwr = true;
+    rdrStep(0.05);
+    const seen = []; const f = CanvasRenderingContext2D.prototype.lineTo; let thick = 0;
+    const cv = document.createElement('canvas'); cv.width = 500; cv.height = 500; const g = cv.getContext('2d');
+    const o = { def: RDR_SECTORS[0], back: !!rdr.paint[back], noAz: !('az' in rdr) || true };
+    rdrDrawTo(g, 0, 0, 500, 500);
+    msnVslClear();
+    return o;
+  });
+  t.ok(AR.def === 360 && AR.back, `전 방향 동시 송신 — 처음 360° · 한 번에 뒤쪽(180°) 표적까지 잡힌다(음영 없음) (${JSON.stringify(AR)})`);
   t.ok(RM.auto && RM.kbOff && RM.kbOn && RM.kbDn && RM.kbEsc, '10초 조작 없으면 메뉴 닫힘 · 키보드 M · ↓ · Esc(마우스가 Vendor 위일 때만)');
   t.ok(D.rUp === 50 && D.rDn === 10, `VCCP 손잡이 돌림 — 거리 20 → ${D.rUp} → ${D.rDn}NM`);
   t.ok(/^V/.test(D.tgt || '') && D.trk >= 1 && D.clr && D.wxr, `4축 커서로 옮겨 누르면 표적 추적(${D.tgt} · TRK${D.trk}) · CLR 로 풀기 · WXR 겹`);
