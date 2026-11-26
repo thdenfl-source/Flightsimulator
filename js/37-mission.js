@@ -379,7 +379,7 @@ const RDR_WARM_S = 90;                                 // 다시 켠 뒤 예열(
 const RDR_RPM_S = 1;                                   // 칠해진 표적이 살아 있는 시간(초)의 바탕 — 전 방향 동시 갱신이라 짧다
 const rdr = { pwr: true, warm: 0, tx: false, mode: 'LRS', cmd: 'CKPT', rng: 20, tilt: 0, gain: 15, sector: 180, frz: false, ronly: false, wxr: false, tws: true,
   az: 0, dir: 1, cur: { az: 0, nm: 10 }, tgt: null, trkNo: {}, nTrk: 0, menu: null, menuI: 0, paint: {}, trk: {}, pcv: null, wx: null,
-  sub: null, subI: 0, menuT: 0, agc: false, sts: false, tails: false, grey: false, link: false, flt: 'ALL', lblAll: true, info: '', infoT: 0 };
+  sub: null, subI: 0, menuT: 0, agc: false, sts: false, tails: false, grey: false, link: false, flt: 'ALL', lblAll: true, ais: true, info: '', infoT: 0 };
 // 전탐석 VCCP 가 다룰 수 있는가 — 제어 권한
 function rdrCabinOk() { return rdr.cmd !== 'CKPT'; }
 function rdrPower(on) { rdr.pwr = !!on; if (rdr.pwr) rdr.warm = RDR_WARM_S; else { rdr.tx = false; rdr.warm = 0; } }
@@ -547,6 +547,7 @@ const RDR_MAIN = [
     { n: 'GAIN -', v: () => rdr.agc ? 'AUTO' : String(rdr.gain), set: () => { rdr.agc = false; rdr.gain = _mClamp(rdr.gain - 1, 0, 30); } },
     _rdrTog('AUTO GAIN', 'agc'), _rdrTog('STS', 'sts'), _rdrTog('CONTACT TAILS', 'tails'), _rdrTog('GREY-GREEN', 'grey', rdrClearPicture),
     _rdrTog('LINK R', 'link', () => { if (rdr.link) rdrLinkMap(); }),
+    _rdrTog('AIS', 'ais'),                                                  // AIS 겹(초록 삼각형 · 이름) — 레이더 송신과 따로(AIS 수신기)
   ] },
   { n: 'TRACK', v: () => `${Object.keys(rdr.trkNo).length}`, sub: [
     { n: 'MK TRK', v: () => '', set: () => rdrCursorTrk() },
