@@ -190,7 +190,7 @@ export async function run(page, t) {
     // ── 탐색레이더 조작기(VCCP · Seaspray 5000E) ──
     S.hdg = 0; rdr.menu = null; rdr.rng = 20;
     rdr.cmd = 'CKPT'; clnPress('rot:1', true); o.ckpt = rdr.rng === 20;                     // 조종실이 쥐고 있으면 듣지 않는다
-    clnPress('fnc', true); rdr.menuI = 2; clnPress('push', true); clnPress('push', false); o.cmd = rdr.cmd; clnPress('esc', true); o.esc = rdr.menu === null;
+    clnPress('fnc', true); rdr.menuI = 3; clnPress('push', true); clnPress('push', false); o.cmdSub = rdr.sub === 3; rdr.subI = 1; clnPress('push', true); clnPress('push', false); o.cmd = rdr.cmd; clnPress('esc', true); o.escSub = rdr.sub === null && rdr.menu === 'FNC'; clnPress('esc', true); o.esc = rdr.menu === null;
     clnPress('rot:1', true); o.rUp = rdr.rng; clnPress('rot:-1', true); clnPress('rot:-1', true); o.rDn = rdr.rng;
     msnVslClear(); msnSpawn(1, { brg: 20, nm: 3, spd: 0, anywhere: true }); rdr.trkNo = {}; rdr.tgt = null; rdr.paint = {}; rdr.tx = true; rdr.frz = false; rdr.az = 0; rdr.dir = 1;
     for (let i = 0; i < 80; i++) rdrStep(0.05);
@@ -260,7 +260,44 @@ export async function run(page, t) {
   t.ok(D.stowMv === 'STOW' && D.stow[0] && D.stow[1] === 0 && D.stow[2] === -90, `INIT/STOW — STOW 25초 뒤 0° · −90° (${D.stow})`);
   t.ok(D.dvrPos && D.slcH > D.colAH * 0.6, `오른쪽 — EO/IR 조작기 밑에 녹화기, 그 밑에 레이더 조작기 · 옆에 키운 탐조등 조작기(높이 ${D.slcH} / ${D.colAH}px)`);
   t.ok(!D.dvrOff && D.dvrBoot && D.dvr[0] && D.dvr[1] && /red/.test(D.dvr[2]), '녹화기 — POWER 가 꺼져 있으면 REC 안 됨 · 켜면 빨강 POWER 표시등 · 시동 3초 뒤 REC');
-  t.ok(D.ckpt && D.cmd === 'CABIN' && D.esc, `RDR > CMD — CKPT 면 전탐석 조작을 듣지 않고 · FNC 메뉴로 ${D.cmd} 로 바꾼다 · ESC 로 닫는다`);
+  t.ok(D.ckpt && D.cmdSub && D.cmd === 'CABIN' && D.escSub && D.esc, `RDR > CMD — CKPT 면 전탐석 조작을 듣지 않고 · FNC → CMD ▷ 하위 메뉴에서 ${D.cmd} 로 · ESC 한 번에 하위 메뉴 · 두 번에 메뉴를 닫는다`);
+  // ── 레이더 메뉴(FLM 5.20 표 2 · 표 4) — 왼쪽 세로 메뉴 · 하위 메뉴 · 10초 닫힘 · 키보드 ──
+  const RM = await page.evaluate(async () => {
+    const w = ms => new Promise(r => setTimeout(r, ms)), o = {};
+    rdr.cmd = 'SHARED'; rdr.menu = null; rdr.sub = null;
+    o.main = RDR_MENU.FNC.map(m => m.n + (m.sub ? '▷' : '')).join('|');
+    o.mode = RDR_MENU.FNC[2].sub.map(m => m.n).join(',');
+    o.cmdNm = RDR_MENU.FNC[3].sub.map(m => m.n).join(',');
+    // 왼쪽 세로 메뉴 — 글자가 화면 왼쪽(x < 160)에 그려진다
+    clnPress('fnc', true); const seen = []; const f = CanvasRenderingContext2D.prototype.fillText;
+    CanvasRenderingContext2D.prototype.fillText = function (x, X, Y) { seen.push([String(x), X]); return f.apply(this, arguments); };
+    const cv = document.createElement('canvas'); cv.width = 600; cv.height = 500;
+    try { rdrDrawTo(cv.getContext('2d'), 0, 0, 600, 500); } finally { CanvasRenderingContext2D.prototype.fillText = f; }
+    const k = 600 / 640, rr = seen.find(s => s[0] === 'RDR RNG +'); o.left = !!rr && rr[1] < 40;
+    // R SET ▷ — 하위 메뉴 · 숫자로 고르기
+    rdr.menuI = 4; clnPress('push', true); clnPress('push', false); o.rset = rdr.sub === 4;
+    const g0 = rdr.gain; clnPress('n3', true); o.gainUp = rdr.gain === Math.min(30, g0 + 1);
+    clnPress('n7', true); o.tails = rdr.tails; clnPress('n7', true);
+    clnPress('esc', true);
+    // MODE ▷ MTI · TRACK ▷ FILTER · SCN/BLK ▷ BLN 60°
+    rdr.menuI = 2; clnPress('push', true); clnPress('push', false); clnPress('n7', true); o.mti = rdr.mode; clnPress('esc', true);
+    rdr.menuI = 5; clnPress('push', true); clnPress('push', false); clnPress('n5', true); o.flt = rdr.flt; clnPress('esc', true);
+    rdr.menuI = 6; clnPress('push', true); clnPress('push', false); clnPress('n2', true); o.sec = rdr.sector; clnPress('clr', true); o.clrBack = rdr.sub === null && rdr.menu === 'FNC';
+    rdr.mode = 'LRS'; rdr.flt = 'ALL'; rdr.sector = 120; rdrClearPicture();
+    // 10초 동안 조작이 없으면 닫힌다
+    rdr.menuT = performance.now() - 10500; rdrStep(0.05); o.auto = rdr.menu === null;
+    // 키보드 — 마우스가 Vendor 위에 있을 때만
+    _msnHover = false; document.dispatchEvent(new KeyboardEvent('keydown', { key: 'm', bubbles: true })); o.kbOff = rdr.menu === null;
+    _msnHover = true; document.dispatchEvent(new KeyboardEvent('keydown', { key: 'm', bubbles: true })); o.kbOn = rdr.menu === 'FNC';
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true })); o.kbDn = rdr.menuI === 1;
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); o.kbEsc = rdr.menu === null; _msnHover = false;
+    rdr.cmd = 'CKPT'; rdr.tails = false;
+    return o;
+  });
+  t.eq(RM.main, 'RDR RNG +|RDR RNG -|MODE▷|CMD▷|R SET▷|TRACK▷|SCN/BLK▷|SEARCH▷|MAINT▷|RDR TX|R ONLY|FREEZE', '레이더 메뉴(FLM 5.20 표 2 · 표 4) — 메인 항목 차례');
+  t.ok(RM.mode === 'PT,LRS,WX,TURB,SART,STM,MTI,ISAR' && RM.cmdNm === 'CKPT,CABIN,INTRLV' && RM.left, `MODE ▷ · CMD ▷ 하위 항목 · 메뉴가 화면 왼쪽 세로에 (${RM.mode} · ${RM.cmdNm})`);
+  t.ok(RM.rset && RM.gainUp && RM.tails && RM.mti === 'MTI' && RM.flt === 'SURF' && RM.sec === 60 && RM.clrBack, `하위 메뉴 — 숫자로 고르기(GAIN + · CONTACT TAILS · MTI · FILTER · BLN 60°) · CLR 로 뒤로 (${JSON.stringify(RM)})`);
+  t.ok(RM.auto && RM.kbOff && RM.kbOn && RM.kbDn && RM.kbEsc, '10초 조작 없으면 메뉴 닫힘 · 키보드 M · ↓ · Esc(마우스가 Vendor 위일 때만)');
   t.ok(D.rUp === 50 && D.rDn === 10, `VCCP 손잡이 돌림 — 거리 20 → ${D.rUp} → ${D.rDn}NM`);
   t.ok(/^V/.test(D.tgt || '') && D.trk >= 1 && D.clr && D.wxr, `4축 커서로 옮겨 누르면 표적 추적(${D.tgt} · TRK${D.trk}) · CLR 로 풀기 · WXR 겹`);
   t.ok(D.mapMenu === 'MAP' && D.tws, 'MAP 메뉴 — 손잡이로 고르고 눌러 TWS 지형 겹을 바꾼다');
