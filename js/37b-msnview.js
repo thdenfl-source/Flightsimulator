@@ -568,6 +568,22 @@ function rdrDrawTo(g, x, y, w, h) {
   g.save(); g.beginPath(); g.rect(x, y, w, h); g.clip(); g.translate(x, y);
   try { _rdrPaint(g, w, h); } finally { g.restore(); }
 }
+function _rdrAis(g, P, half, k) {
+  for (const c of aisTargets()) {
+    if (c.nm > rdr.rng) continue;
+    const rel = normAS(bearing(S.lat, S.lon, c.lat, c.lon) - S.hdg); if (Math.abs(rel) > half) continue;
+    const [x, y] = P(rel, c.nm), s2 = 7 * k;
+    g.save(); g.lineWidth = 1.5 * Math.max(1, k * 0.8);
+    if (c.ais.sart) { g.strokeStyle = '#ff4040'; g.beginPath(); g.arc(x, y, s2, 0, 2 * Math.PI); g.moveTo(x - s2 * 0.7, y - s2 * 0.7); g.lineTo(x + s2 * 0.7, y + s2 * 0.7); g.moveTo(x + s2 * 0.7, y - s2 * 0.7); g.lineTo(x - s2 * 0.7, y + s2 * 0.7); g.stroke(); }
+    else {
+      if (c.spd > 0.5) { const [la, lo] = destPoint(c.lat, c.lon, c.hdg || 0, c.spd / 60 * 3); const [x2, y2] = P(normAS(bearing(S.lat, S.lon, la, lo) - S.hdg), distance(S.lat, S.lon, la, lo)); g.strokeStyle = 'rgba(109,255,154,0.7)'; g.beginPath(); g.moveTo(x, y); g.lineTo(x2, y2); g.stroke(); }
+      g.translate(x, y); g.rotate(((c.hdg || 0) - S.hdg) * _mD); g.strokeStyle = '#6dff9a'; g.beginPath(); g.moveTo(0, -s2); g.lineTo(s2 * 0.6, s2 * 0.75); g.lineTo(-s2 * 0.6, s2 * 0.75); g.closePath(); g.stroke();
+    }
+    g.restore();
+    g.font = `${Math.round(10 * k)}px monospace`; g.textAlign = 'left'; g.fillStyle = c.ais.sart ? '#ff6060' : '#6dff9a';
+    g.fillText(c.ais.sart ? 'AIS-SART' : c.ais.name, x + s2 + 3, y + s2 + 6 * k);
+  }
+}
 // 탐색레이더 화면 한 장 — (0,0)~(W,H) 에 그린다
 function _rdrPaint(g, W, H) {
   g.fillStyle = '#000'; g.fillRect(0, 0, W, H);
@@ -590,6 +606,8 @@ function _rdrPaint(g, W, H) {
   // SART 응답 — 바깥쪽으로 점 12개(0.64NM)
   const sr = rdrSartReply();
   if (sr) { const rel = normAS(sr.brg - S.hdg); if (Math.abs(rel) <= half) { g.strokeStyle = '#5ef'; g.lineWidth = 2; for (let i = 0; i < 12; i++) { const nm = sr.nm + i * 0.64; if (nm > rdr.rng) break; const [x, y] = P(rel, nm); g.beginPath(); g.arc(x, y, 3.5 * k, 0, 2 * Math.PI); g.stroke(); } const [x, y] = P(rel, sr.nm); g.fillStyle = '#5ef'; g.textAlign = 'left'; g.fillText('SART', x + 8 * k, y - 6 * k); } }
+  // AIS 겹(R SET > AIS) — AIS 는 레이더와 따로 받는 VHF 라 STBY 에도 보인다: 침로로 돌린 초록 삼각형 · 3분 침로선 · 이름 / AIS-SART 는 빨간 원 십자
+  if (rdr.pwr && rdr.ais) _rdrAis(g, P, half, k);
   // 추적 표적(TRK) — 상자 · 번호 · 침로 막대
   const now = performance.now();
   const _cmap = {}; for (const x of msnContacts()) _cmap[x.id] = x;
@@ -778,7 +796,7 @@ function _nvRender(cell) {
     const q = P(c2.lat, c2.lon); if (!q) continue;
     g.save(); g.translate(q.x, q.y); g.lineWidth = 1.5;
     if (c2.ais.sart) { g.strokeStyle = '#ff4040'; g.beginPath(); g.arc(0, 0, 7, 0, 2 * Math.PI); g.moveTo(-5, -5); g.lineTo(5, 5); g.moveTo(5, -5); g.lineTo(-5, 5); g.stroke(); }
-    else { g.rotate(((c2.hdg || 0) - (hdgUp ? S.hdg : 0)) * _mD); g.strokeStyle = '#6dff9a'; g.beginPath(); g.moveTo(0, -8); g.lineTo(5, 6); g.lineTo(-5, 6); g.closePath(); g.stroke(); }
+    else { g.rotate(((c2.hdg || 0) - (hdgUp ? S.hdg : 0)) * _mD); g.strokeStyle = '#6dff9a'; g.beginPath(); g.moveTo(0, -9); g.lineTo(6, 7); g.lineTo(-6, 7); g.closePath(); g.stroke(); if (c2.spd > 0.5) { g.strokeStyle = 'rgba(109,255,154,0.7)'; g.beginPath(); g.moveTo(0, -9); g.lineTo(0, -9 - Math.min(40, c2.spd * 2)); g.stroke(); } }
     g.restore();
     g.font = '10px Arial'; g.textAlign = 'left'; g.fillStyle = c2.ais.sart ? '#ff6060' : '#6dff9a'; g.fillText(c2.ais.sart ? 'AIS-SART' : c2.ais.name, q.x + 9, q.y + 12);
   }
