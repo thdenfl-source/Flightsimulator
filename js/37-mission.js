@@ -323,8 +323,8 @@ function msnContacts() {
 }
 // ══ ② 탐색레이더 — Seaspray 5000E(Osprey) · VCCP 조작기 (KUH-1CG FLM 5.20 · SDS 34-47-01) ══
 //   X 대역 9.45~10.00GHz · 최대 200NM · 표적 200개 자동 추적 · 전원 DC-ESS BUS 1(RADAR) · 다시 켜면 90초 예열
-//   안테나: 회전하지 않는다 — 전 방향으로 동시에 전파를 내 음영 구역이 없다(스캔선 없이 화면 전체가 한꺼번에 새로 그려진다)
-//   화면: 처음 360°(전 방향) · SCN/BLK 로 120 · 60 · 20 · 240° 부채꼴만 볼 수도 있다
+//   안테나: 회전하지 않는다 — 전방 180°(좌우 90°씩)로 동시에 전파를 내 그 안에 음영 구역이 없다(스캔선 없이 화면 전체가 한꺼번에 새로 그려진다)
+//   화면: 처음 180°(반원) · SCN/BLK 로 120 · 60 · 20° 부채꼴만 볼 수도 있다
 //   모드: LRS(장거리 해상 · 해면 클러터 억제 · FREEZE) · WX(강수 밀도 색) · PT(소형 표적 자동 추적) · SART(수색구조 트랜스폰더) · ISAR(표적 영상)
 //   제어 권한(RDR > CMD): CKPT(조종실 · 처음) · CABIN(전탐석) · SHARED(함께) — CKPT 이면 전탐석 VCCP 는 CMD 말고는 듣지 않는다
 //   화면: 위 Hdg · Trk · SRV RDR CMD · RNG · Tilt · Gain / 아래 Alt · RAlt · GS · 위경도 · 커서 거리 · 방위 / RDR TX · STBY · FREEZE · R ONLY · NO ALT · NO HDG · NO POS
@@ -333,11 +333,11 @@ const RDR_MODES = ['PT', 'LRS', 'WX', 'TURB', 'SART', 'STM', 'MTI', 'ISAR'];   /
 const RDR_CMD_NM = { CKPT: 'CKPT', CABIN: 'CABIN', SHARED: 'INTRLV' };   // RDR > CMD — INTRLV(번갈아 · 함께 쓰기)는 안에서 SHARED
 const _rdrWx = () => rdr.mode === 'WX' || rdr.mode === 'TURB';
 const RDR_CMDS = ['CKPT', 'CABIN', 'SHARED'];
-const RDR_SECTORS = [360, 120, 60, 20, 240];
+const RDR_SECTORS = [180, 120, 60, 20];
 const RDR_REFRESH_S = 0.5;                            // 전 방향 그림이 한 번 다 새로 그려지는 시간(초) — 회전 스캔이 아니라 화면 전체를 고르게 나눠 그린다
 const RDR_WARM_S = 90;                                 // 다시 켠 뒤 예열(초)
 const RDR_RPM_S = 1;                                   // 칠해진 표적이 살아 있는 시간(초)의 바탕 — 전 방향 동시 갱신이라 짧다
-const rdr = { pwr: true, warm: 0, tx: false, mode: 'LRS', cmd: 'CKPT', rng: 20, tilt: 0, gain: 15, sector: 360, frz: false, ronly: false, wxr: false, tws: true,
+const rdr = { pwr: true, warm: 0, tx: false, mode: 'LRS', cmd: 'CKPT', rng: 20, tilt: 0, gain: 15, sector: 180, frz: false, ronly: false, wxr: false, tws: true,
   az: 0, dir: 1, cur: { az: 0, nm: 10 }, tgt: null, trkNo: {}, nTrk: 0, menu: null, menuI: 0, paint: {}, trk: {}, pcv: null, wx: null,
   sub: null, subI: 0, menuT: 0, agc: false, sts: false, tails: false, grey: false, link: false, flt: 'ALL', lblAll: true, info: '', infoT: 0 };
 // 전탐석 VCCP 가 다룰 수 있는가 — 제어 권한
@@ -516,11 +516,11 @@ const RDR_MAIN = [
     { n: 'FILTER', v: () => rdr.flt, set: () => { rdr.flt = { ALL: 'SURF', SURF: 'AIR', AIR: 'ALL' }[rdr.flt]; } },
   ] },
   { n: 'SCN/BLK', v: () => `${rdr.sector}°`, sub: [
-    { n: 'ALL 360°', v: () => rdr.sector === 360 ? '●' : '', set: () => { rdr.sector = 360; rdrClearPicture(); } },   // 전 방향(처음)
+    { n: 'WIDE 180°', v: () => rdr.sector === 180 ? '●' : '', set: () => { rdr.sector = 180; rdrClearPicture(); } },   // 전방 180°(처음)
     { n: 'BLN 20°', v: () => rdr.sector === 20 ? '●' : '', set: () => { rdr.sector = 20; rdrClearPicture(); } },
     { n: 'BLN 60°', v: () => rdr.sector === 60 ? '●' : '', set: () => { rdr.sector = 60; rdrClearPicture(); } },
     { n: 'MAP OVERLAY', v: () => rdr.ronly ? 'OFF' : 'ON', set: () => { rdr.ronly = !rdr.ronly; } },
-    { n: 'SEARCH', v: () => rdr.sector === 240 ? '●' : '', set: () => { rdr.sector = 240; rdrClearPicture(); } },
+    { n: 'SEARCH', v: () => rdr.sector === 180 ? '●' : '', set: () => { rdr.sector = 180; rdrClearPicture(); } },   // 넓게 찾기 — 전방 180°
     { n: 'SCAN 120°', v: () => rdr.sector === 120 ? '●' : '', set: () => { rdr.sector = 120; rdrClearPicture(); } },
   ] },
   { n: 'SEARCH', v: () => '', sub: [
@@ -1459,8 +1459,8 @@ function msnHelp() {
     '· 전원: 하부 콘솔 MPP 패널 DMM ON → 녹화기(가운데) POWER → 3초 뒤 표시기 화면 전체가 들어온다(DMM 을 끄면 함께 꺼진다)',
     '· 녹화기(DVR): POWER(빨강) → 3초 뒤 REC(초록 깜박) · CH1 EO/IR · CH2 레이더 · CH3 호이스트 · CH4 지도 · PLAYBACK(파랑) ▶▶/◀◀ 0.5~256배 · ◀▶ 10초 · MENU — 날짜/시간 검색 · QUAD/한 채널 · USB(AVI) · SSD INFO',
     '  손잡이 돌림 — 거리 10~200NM(메뉴가 열려 있으면 칸 옮기기) · 누름 — 메뉴 실행 · 커서 자리 표적 추적(TRK) · 4축 — 커서',
-    '  레이더는 회전하지 않고 전 방향으로 동시에 전파를 낸다 — 음영 구역 · 스캔선이 없다(처음 360° 화면 · SCN/BLK 로 부채꼴만 볼 수도 있다)',
-    '  FNC — 화면 왼쪽 세로 메뉴(FLM 5.20 표 2 · 표 4): RDR RNG ± · MODE ▷(PT · LRS · WX · TURB · SART · STM · MTI · ISAR) · CMD ▷(CKPT · CABIN · INTRLV) · R SET ▷(TILT · GAIN · AUTO GAIN · STS · CONTACT TAILS · GREY-GREEN · LINK R) · TRACK ▷(MK TRK · IN/EX AREA · DEL ALL · FILTER) · SCN/BLK ▷(ALL 360° · BLN 20° · BLN 60° · MAP OVERLAY · SEARCH · SCAN 120°) · SEARCH ▷(USER 1~6 · ALL · BY DISTANCE · STEER CAM) · MAINT ▷(FAULTS · BIT · RDR NAV) · RDR TX · R ONLY · FREEZE',
+    '  레이더는 회전하지 않고 전방 180°(좌우 90°씩)로 동시에 전파를 낸다 — 그 안에 음영 구역 · 스캔선이 없다(처음 180° 반원 화면 · SCN/BLK 로 좁게 볼 수도 있다)',
+    '  FNC — 화면 왼쪽 세로 메뉴(FLM 5.20 표 2 · 표 4): RDR RNG ± · MODE ▷(PT · LRS · WX · TURB · SART · STM · MTI · ISAR) · CMD ▷(CKPT · CABIN · INTRLV) · R SET ▷(TILT · GAIN · AUTO GAIN · STS · CONTACT TAILS · GREY-GREEN · LINK R) · TRACK ▷(MK TRK · IN/EX AREA · DEL ALL · FILTER) · SCN/BLK ▷(WIDE 180° · BLN 20° · BLN 60° · MAP OVERLAY · SEARCH · SCAN 120°) · SEARCH ▷(USER 1~6 · ALL · BY DISTANCE · STEER CAM) · MAINT ▷(FAULTS · BIT · RDR NAV) · RDR TX · R ONLY · FREEZE',
     '  손잡이 돌림 고르기 · 누름 실행(▷ 는 오른쪽에 하위 메뉴) · ESC/CLR 뒤로 · 10초 조작 없으면 닫힘 · 키보드(마우스를 Vendor 위에): M 메뉴 · ↑↓ · Enter · 1~9 · Esc · MAP(WXR · TWS · R ONLY · RANGE) · 다시 켜면 90초 예열',
     '· EO/IR: 조이스틱(화면 HCU 가운데 · 실제 조종 장치의 사이클릭 축)으로 터릿을 돌린다. ZOOM ▲확대 ▼축소 · VIC 센서(EOW → EON → IR) · 2X 전자 줌 · POL 백상/흑상',
     '· AVT: 한 번 누르면 게이트(ACQ) — 표적을 게이트에 넣고 한 번 더 누르면 잠금(LOCKED) · 1.5초 누르면 해제',
@@ -1830,7 +1830,12 @@ function _eoHud(cv, W, H) {
 // 탐색레이더 화면 — 부채꼴(Sector · B-scope) · 240°(E-scan)는 가운데가 안테나
 function _rdrGeo(W, H) {
   const top = 64, bot = 46;   // 위 — 채널 이름(CH2) 한 줄 + 머리 글 두 줄
-  if (rdr.sector <= 120) { const half = rdr.sector / 2 * _mD, R = Math.max(40, Math.min(H - top - bot - 8, (W / 2 - 12) / Math.max(0.5, Math.sin(half)))); return { ox: W / 2, oy: H - bot - 4, R }; }
+  if (rdr.sector <= 180) {   // 부채꼴 · 반원(180°) — 꼭짓점이 아래(자기 기체)
+    const k = _mClamp(Math.min(W, H) / 420, 0.6, 2), t2 = Math.max(top, 62 * k), b2 = Math.max(bot, 40 * k);
+    const half = rdr.sector / 2 * _mD, side = rdr.sector > 120 ? 34 * k : 12;   // 반원이면 좌우 끝 방위 숫자 자리
+    const R = Math.max(40, Math.min(H - t2 - b2 - 18 * k, (W / 2 - side) / Math.max(0.5, Math.sin(Math.min(half, Math.PI / 2)))));
+    return { ox: W / 2, oy: H - b2 - (rdr.sector > 120 ? 8 * k : 4), R };
+  }
   // 전 방향(원) — 머리 글 · 아랫줄은 글자 크기(k)만큼 커지므로 그만큼 비우고, 둘레 방위 숫자 자리도 둔다
   const k = _mClamp(Math.min(W, H) / 420, 0.6, 2), t2 = Math.max(top, 62 * k), b2 = Math.max(bot, 36 * k), m = 16 * k;
   const R = Math.max(40, Math.min(W / 2 - m - 8, (H - t2 - b2) / 2 - m)); return { ox: W / 2, oy: t2 + (H - t2 - b2) / 2, R };

@@ -283,7 +283,7 @@ export async function run(page, t) {
     rdr.menuI = 2; clnPress('push', true); clnPress('push', false); clnPress('n7', true); o.mti = rdr.mode; clnPress('esc', true);
     rdr.menuI = 5; clnPress('push', true); clnPress('push', false); clnPress('n5', true); o.flt = rdr.flt; clnPress('esc', true);
     rdr.menuI = 6; clnPress('push', true); clnPress('push', false); clnPress('n3', true); o.sec = rdr.sector; clnPress('clr', true); o.clrBack = rdr.sub === null && rdr.menu === 'FNC';
-    rdr.mode = 'LRS'; rdr.flt = 'ALL'; rdr.sector = 360; rdrClearPicture();
+    rdr.mode = 'LRS'; rdr.flt = 'ALL'; rdr.sector = 180; rdrClearPicture();
     // 10초 동안 조작이 없으면 닫힌다
     rdr.menuT = performance.now() - 10500; rdrStep(0.05); o.auto = rdr.menu === null;
     // 키보드 — 마우스가 Vendor 위에 있을 때만
@@ -299,17 +299,17 @@ export async function run(page, t) {
   t.ok(RM.rset && RM.gainUp && RM.tails && RM.mti === 'MTI' && RM.flt === 'SURF' && RM.sec === 60 && RM.clrBack, `하위 메뉴 — 숫자로 고르기(GAIN + · CONTACT TAILS · MTI · FILTER · BLN 60°) · CLR 로 뒤로 (${JSON.stringify(RM)})`);
   // 전 방향 동시 송신 — 회전 스캔선이 없고, 한 걸음에 뒤쪽 표적까지 모두 잡힌다
   const AR = await page.evaluate(() => {
-    msnVslClear(); msnSpawn(2, { brg: 180, nm: 3, spd: 0, anywhere: true }); const back = msnVsl[0].id;
-    rdr.sector = 360; rdr.tx = true; rdr.warm = 0; rdr.frz = false; rdr.paint = {}; rdr.pwr = true;
+    msnVslClear(); msnSpawn(1, { brg: 85, nm: 3, spd: 0, anywhere: true }); const side = msnVsl[0].id; msnSpawn(1, { brg: 180, nm: 3, spd: 0, anywhere: true }); const back = msnVsl[1].id;
+    rdr.sector = 180; rdr.tx = true; rdr.warm = 0; rdr.frz = false; rdr.paint = {}; rdr.pwr = true;
     rdrStep(0.05);
     const seen = []; const f = CanvasRenderingContext2D.prototype.lineTo; let thick = 0;
     const cv = document.createElement('canvas'); cv.width = 500; cv.height = 500; const g = cv.getContext('2d');
-    const o = { def: RDR_SECTORS[0], back: !!rdr.paint[back], noAz: !('az' in rdr) || true };
+    const o = { def: RDR_SECTORS[0], side: !!rdr.paint[side], back: !!rdr.paint[back] };
     rdrDrawTo(g, 0, 0, 500, 500);
     msnVslClear();
     return o;
   });
-  t.ok(AR.def === 360 && AR.back, `전 방향 동시 송신 — 처음 360° · 한 번에 뒤쪽(180°) 표적까지 잡힌다(음영 없음) (${JSON.stringify(AR)})`);
+  t.ok(AR.def === 180 && AR.side && !AR.back, `전방 180° 동시 송신 — 처음 180° · 한 번에 옆(85°) 표적까지 잡히고(음영 없음) 뒤(180°)는 범위 밖 (${JSON.stringify(AR)})`);
   t.ok(RM.auto && RM.kbOff && RM.kbOn && RM.kbDn && RM.kbEsc, '10초 조작 없으면 메뉴 닫힘 · 키보드 M · ↓ · Esc(마우스가 Vendor 위일 때만)');
   t.ok(D.rUp === 50 && D.rDn === 10, `VCCP 손잡이 돌림 — 거리 20 → ${D.rUp} → ${D.rDn}NM`);
   t.ok(/^V/.test(D.tgt || '') && D.trk >= 1 && D.clr && D.wxr, `4축 커서로 옮겨 누르면 표적 추적(${D.tgt} · TRK${D.trk}) · CLR 로 풀기 · WXR 겹`);
