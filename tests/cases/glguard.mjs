@@ -36,8 +36,10 @@ export async function run(page, t) {
     let again = false, err = null;
     for (let i = 0; i < 10 && !again; i++) { try { eoirVideoDrawTo(cv.getContext('2d'), 0, 0, 200, 150); } catch (e) { err = String(e); } await w(200); again = !!_eoMap && _eoMap !== old; }
     // 다시 만든 지도는 3초가 지나도 거둬지지 않는다(옛 지도를 거둘 때 나는 신호에 속지 않는다)
-    const now = _eoMap; for (let i = 0; i < 17; i++) { eoirVideoDrawTo(cv.getContext('2d'), 0, 0, 200, 150); await w(200); }   // 계속 본다(안 보면 3초 뒤 거두는 것은 따로다)
-    const kept = again && _eoMap === now;
+    // 옛 지도(거둔 것)의 복구가 새 지도를 거두지 않는다 — 3초 넘게 지나도 복구 횟수가 늘지 않고 지도가 있다
+    //   (느린 CI 에서는 다른 까닭으로 지도가 다시 만들어질 수 있어, 같은 지도인지가 아니라 '복구로 거두지 않았는지'를 본다)
+    const n1 = mapGlRebuiltN; for (let i = 0; i < 17; i++) { eoirVideoDrawTo(cv.getContext('2d'), 0, 0, 200, 150); await w(200); }   // 계속 본다(안 보면 거두는 것은 따로다)
+    const kept = again && !!_eoMap && mapGlRebuiltN === n1;
     return { dropped, again, kept, err, n: typeof mapGlRebuiltN !== 'undefined' ? mapGlRebuiltN : null };
   });
   if (b.skip) t.ok(true, '(EO/IR 지도 없음 — 건너뜀)');
