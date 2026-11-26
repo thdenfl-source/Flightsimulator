@@ -17,7 +17,7 @@
 - 앱 파일(js · index.html · sw.js · tests · data · vendor · 그림)은 **두 저장소가 같다.** 판(edition)만 다르다:
   `js/00-edition.js` 가 주소에 `flightsimulator` 가 들어 있으면 **절차 훈련판(proc)** — SIM 모드 · SIM 조작 버튼은 종합판과 같고,
   **사이클릭의 피치 · 롤만 듣지 않는다**(`CYCLIC_LOCK` — 조이스틱 · 화면 STICK 원형 사이클릭 · GYRO). 자세는 4방향 비퍼 트림과 AFCS 로,
-  컬렉티브 · 페달 · COLL TRIM 등 트림은 그대로. 시작 비밀번호가 없다(곧바로 화면 · 기종 고르기). 그 밖은 모두 같다.
+  컬렉티브 · 페달 · COLL TRIM 등 트림은 그대로. 시작 비밀번호는 판마다 다르다(절차 훈련판은 thdenfl). 그 밖은 모두 같다.
 - **고칠 일은 shinesong 에서 한다.** 끝나면 Flightsimulator 로 그대로 복사해 PR 을 하나 더 올린다
   (`.git` · `.github` · `.nojekyll` · `.gitignore` · `CLAUDE.md` · `node_modules` 만 그 저장소 것을 둔다).
 - SIM 기능은 SIM 파일(14-simmode · 15-heli3d · 16-sound) 안에 두고, 다른 파일에서 부를 때는 '있으면 부른다'로 짠다.
