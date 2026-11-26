@@ -77,30 +77,16 @@ export async function run(page, t) {
     g.urlOnly = await tb2.evaluate(() => window.gateLocked && getComputedStyle(document.getElementById('gate-mode')).display !== 'none');
     const tb3 = await browser.newPage();   // 잠금이 안 풀린 새 탭 — 주소에 ?choose=1 을 붙여 열어도
     await tb3.goto(lost); await tb3.waitForFunction(() => typeof window.gateLocked === 'boolean', null, { timeout: 20000 });
-    g.noBypass = await tb3.evaluate(() => (typeof APP_EDITION !== 'undefined' && APP_EDITION === 'proc') ? 'proc' : (window.gateLocked && getComputedStyle(document.getElementById('gate-pw')).display !== 'none'));
+    g.noBypass = await tb3.evaluate(() => window.gateLocked && getComputedStyle(document.getElementById('gate-pw')).display !== 'none');
     await tb3.close();
     await tb2.close();
     t.ok(q.btns && q.ck, '창 위 탭에 ⌂ 처음 화면 · ⟳ 새로고침 · 3D(Cockpit) 버튼 줄 맨 아래에 ⟳ 새로고침');
     t.ok(q.askHome && q.cancelHome && q.askReload && q.okReload, '처음 화면 · 새로고침은 먼저 묻는다 — 취소하면 그대로 · 확인하면 새로고침');
     t.ok(q.extraBtn && q.saved, '저장 후 새로고침 — 지금 상태를 시나리오(새로고침 전 …)로 남기고 새로 고친다');
     t.ok(g.locked && g.shown && g.choose && g.pwHidden && g.flag === '1' && g.url && g.again && open && g.flagAfter === null && !g.urlAfter, `처음 화면 — 비밀번호 없이 화면 · 기종 고르기가 뜨고, 고르면 열린다(표시도 거둔다) (${JSON.stringify(g)} · ${open})`);
-    t.ok(g.urlOnly && (g.noBypass === true || g.noBypass === 'proc'), `sessionStorage 표시가 사라져도 주소(?choose=1)로 처음 화면이 뜬다 · 잠기지 않은 탭은 주소만으로 비밀번호를 건너뛰지 못한다 (${g.urlOnly} · ${g.noBypass})`);
+    t.ok(g.urlOnly && g.noBypass === true, `sessionStorage 표시가 사라져도 주소(?choose=1)로 처음 화면이 뜬다 · 잠기지 않은 탭은 주소만으로 비밀번호를 건너뛰지 못한다 (${g.urlOnly} · ${g.noBypass})`);
   }
-  // 절차 훈련판(Flightsimulator)은 비밀번호가 없다 — 처음 열면 곧바로 화면 · 기종 고르기
-  const procEd = await page.evaluate(() => typeof APP_EDITION !== 'undefined' && APP_EDITION === 'proc');
-  if (procEd) {
-    const tb = await browser.newPage();
-    await tb.goto(url); await ready(tb);
-    const s = await tb.evaluate(() => ({ locked: window.gateLocked, shown: getComputedStyle(document.getElementById('gate-overlay')).display !== 'none',
-      choose: getComputedStyle(document.getElementById('gate-mode')).display !== 'none', pwHidden: getComputedStyle(document.getElementById('gate-pw')).display === 'none',
-      ac: document.querySelectorAll('.gate-ac-btn').length }));
-    t.ok(s.shown && s.choose && s.pwHidden && s.ac === 3, `절차 훈련판 — 비밀번호 없이 처음부터 화면 · 기종 고르기(기종 ${s.ac} — 흰수리 · Bell · R22)`);
-    await tb.click('#gate-mode-pc'); await tb.waitForTimeout(500);
-    const e = await tb.evaluate(() => ({ locked: window.gateLocked, shown: getComputedStyle(document.getElementById('gate-overlay')).display !== 'none', mode: sessionStorage.getItem('vfrStartMode') }));
-    t.ok(!e.locked && !e.shown && e.mode === 'pc', '절차 훈련판 — 화면을 고르면 바로 열린다');
-    await tb.close();
-    return;
-  }
+  // 절차 훈련판(Flightsimulator)도 아래처럼 비밀번호를 묻는다 — 비밀번호만 판마다 다르다(edition.mjs 가 본다)
   const tab = await browser.newPage();
   await tab.goto(url); await ready(tab);
   const s0 = await state(tab);
