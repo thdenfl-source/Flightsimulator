@@ -608,9 +608,11 @@ function _msnCss() {
 .msn-sp{flex:1}
 .msn-body{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) 560px;gap:10px;padding:8px;background:linear-gradient(#262c33,#1b2026)}
 /* 전탐석 표시기 — 4분할(MULTI) · 2분할(SPLIT) · 한 화면 */
-.msn-disp{display:flex;flex-direction:column;min-height:0;background:#1d2a2c;border:3px solid #0e1415;border-radius:16px;box-shadow:inset 0 1px 0 #3d4d50,0 4px 10px #000b;padding:14px 14px 8px}
+.msn-disp{position:relative;display:flex;flex-direction:column;min-height:0;background:#1d2a2c;border:3px solid #0e1415;border-radius:16px;box-shadow:inset 0 1px 0 #3d4d50,0 4px 10px #000b;padding:14px 14px 8px}
 .msn-scr{flex:1;min-height:0;position:relative;display:grid;gap:2px;background:#9aa;border:10px solid #101617;border-radius:6px;box-shadow:inset 0 0 0 1px #000}
 .msn-scr.dark{filter:brightness(0)}
+.msn-nopwr{position:absolute;left:24px;right:24px;top:24px;bottom:58px;display:none;align-items:center;justify-content:center;text-align:center;font:bold 14px "Segoe UI",Arial,sans-serif;color:#7f8f99;pointer-events:none;z-index:4;line-height:1.7}
+.msn-nopwr.on{display:flex;flex-direction:column}.msn-nopwr b{color:#ffb000}
 .msn-cell{position:relative;background:#000;overflow:hidden;min-width:0;min-height:0}
 .msn-cell canvas,.msn-cell .nv-map{position:absolute;inset:0;width:100%;height:100%}
 .msn-cell .eo-vid{position:absolute;inset:0}
@@ -748,6 +750,27 @@ const HCU_SW = [['zoom', 'ZOOM', ''], ['vic', 'VIC', ''], ['avtg', 'AVT<br>GATE'
 const DISP_CH = { 1: 'eo', 2: 'rdr', 3: 'hoist', 4: 'map' };
 const DISP_PAIRS = [['map', 'eo'], ['rdr', 'eo'], ['hoist', 'eo'], ['map', 'rdr']];
 const disp = { lay: 'quad', ch: 1, pair: 0, bri: 100, pwr: true };
+// ── 전원 — 표시기 · 녹화기는 하부 콘솔 MPP 패널의 DMM 전원(⑩ MPP · DMM ON)에 물려 있다 ──
+//   DMM ON(기체 DC 전원 있음) → 녹화기 POWER 를 누르면(3초 시동) → 표시기 화면 전체가 들어온다. DMM 을 끄면 녹화기 · 화면이 함께 꺼진다
+function msnDmmPwr() {
+  try { if (typeof ovhdGet !== 'function') return true; return ovhdGet('mpp2') === 'IN' && (typeof pwrDc !== 'function' || !!pwrDc()); } catch (e) { return true; }
+}
+function msnScreenOn() { return disp.pwr && dvr.pwr && dvr.boot <= 0 && msnDmmPwr(); }
+// 화면이 꺼져 있으면 까맣게 · 무엇을 켜야 하는지 적어 둔다(표시기 M-PWR · 녹화기 POWER · DMM 전원)
+function _msnScrPwr() {
+  if (!_msnEl) return;
+  const scr = _msnEl.querySelector('.msn-scr'), np = _msnEl.querySelector('[data-m="nopwr"]'); if (!scr) return;
+  const on = msnScreenOn();
+  scr.classList.toggle('dark', !on);
+  scr.style.filter = on && disp.bri !== 100 ? `brightness(${disp.bri / 100})` : '';
+  if (np) {
+    const L = (a, b) => `<div>${a}</div><div>${b}</div>`;
+    const t = on ? '' : !msnDmmPwr() ? L('NO POWER', '<b>하부 콘솔 MPP 패널 — DMM ON</b>')
+      : !dvr.pwr ? L('NO POWER', '<b>녹화기(가운데) POWER</b> 를 누르십시오')
+      : dvr.boot > 0 ? L('녹화기 시동 중', `${Math.ceil(dvr.boot)}초`) : L('표시기 꺼짐', '<b>M-PWR</b>');
+    np.classList.toggle('on', !on); if (np.innerHTML !== t) np.innerHTML = t;
+  }
+}
 function dispSet(o) {
   Object.assign(disp, o || {});
   if (!_msnEl) return;
@@ -759,8 +782,7 @@ function dispSet(o) {
   else { scr.style.gridTemplate = '1fr / 1fr'; show = [[DISP_CH[disp.ch] || 'eo', 1, 1]]; }
   Object.keys(cells).forEach(k => { const e = el(k); if (e) e.style.display = 'none'; });
   show.forEach(([k, r, c]) => { const e = el(k); if (e) { e.style.display = ''; e.style.gridRow = r; e.style.gridColumn = c; } });
-  scr.classList.toggle('dark', !disp.pwr);
-  scr.style.filter = disp.pwr && disp.bri !== 100 ? `brightness(${disp.bri / 100})` : '';
+  _msnScrPwr();
   try { if (_nvMap) _nvMap.resize(); if (_eoMap) { _eoHostPlace(); _eoMap.resize(); } } catch (e) { _swallow(e); }
   msnRenderPanels();
 }
@@ -828,7 +850,7 @@ function _msnBuild() {
     <button data-mact="fly">▶ 비행</button><button data-mact="spawn">선박 표적 생성</button><button data-mact="clear">표적 지우기</button>
     <button data-mact="help">❓</button><button data-mact="popout" title="전탐석을 새 창으로 — 다른 모니터에서 전탐요원이 · 조종석은 이 창에">⧉ 새 창</button><button data-mact="close">조종석 보기 ⤴</button></div>
   <div class="msn-body">
-    <div class="msn-disp">
+    <div class="msn-disp"><div class="msn-nopwr" data-m="nopwr"></div>
       <div class="msn-scr">
         <div class="msn-cell c-map"><div class="nv-map"></div><canvas class="nv-ov"></canvas><span class="msn-chl">CH4 / 10fps</span><div class="nv-zb"><b data-mact="nv+">＋</b><b data-mact="nv-">−</b><b data-mact="nvc">⌖</b></div></div>
         <div class="msn-cell c-hoist"><canvas class="hc-cv"></canvas><span class="msn-chl">CH3 / 28fps</span></div>
@@ -1022,6 +1044,7 @@ function dvrView() {
 }
 function dvrStep(dt) {
   if (!dvr.pwr) return;
+  if (!msnDmmPwr()) { dvr.pwr = false; dvr.rec = false; dvr.play = false; dvr.menu = null; dvr.boot = 0; _mNote('DMM 전원 꺼짐 — 녹화기 · 표시기 꺼짐'); try { dvrRender(); } catch (e) { _swallow(e); } return; }
   if (dvr.boot > 0) { dvr.boot -= dt; return; }
   const now = Date.now();
   if (dvr.rec && now - dvr.capT >= DVR_DT) { dvr.capT = now; try { dvrCapture(now); } catch (e) { _swallow(e); } }
@@ -1040,6 +1063,7 @@ function _dvrSpeedStep(dir) {
 }
 function dvrPress(k) {
   if (k === 'power') {
+    if (!dvr.pwr && !msnDmmPwr()) { _mToast('DMM 전원이 없습니다 — 하부 콘솔 MPP 패널 DMM ON'); return; }
     dvr.pwr = !dvr.pwr;
     if (dvr.pwr) dvr.boot = DVR_BOOT_S; else { dvr.rec = false; dvr.play = false; dvr.menu = null; dvr.boot = 0; }
     _mNote(`녹화기 POWER ${dvr.pwr ? 'ON' : 'OFF'}`); dvrRender(); return;
@@ -1351,6 +1375,7 @@ function msnHelp() {
     '  ⚠ 10ft(3.04m) 안의 물체를 비추면 100~300℃ · NVG 를 쓴 조종사 허락 없이 가시광 금지 · 조종석 컬렉티브 SRCH LT 와는 다른 등',
     '· 탐색레이더(Seaspray 5000E · VCCP): RDR > CMD 가 CKPT(조종실)이면 전탐석은 다루지 못한다 — FNC 메뉴의 RDR > CMD 를 CABIN · SHARED 로',
     '· 조종석에서도 같은 레이더: 하부 콘솔 ⑮ VCCP(같은 면판 · CKPT/SHARED 일 때) · SYSTEM 창 Video Channel RADAR 가 이 레이더 화면 그대로 · CDU 조이스틱 Push:Radar',
+    '· 전원: 하부 콘솔 MPP 패널 DMM ON → 녹화기(가운데) POWER → 3초 뒤 표시기 화면 전체가 들어온다(DMM 을 끄면 함께 꺼진다)',
     '· 녹화기(DVR): POWER(빨강) → 3초 뒤 REC(초록 깜박) · CH1 EO/IR · CH2 레이더 · CH3 호이스트 · CH4 지도 · PLAYBACK(파랑) ▶▶/◀◀ 0.5~256배 · ◀▶ 10초 · MENU — 날짜/시간 검색 · QUAD/한 채널 · USB(AVI) · SSD INFO',
     '  손잡이 돌림 — 거리 10~200NM(메뉴가 열려 있으면 칸 옮기기) · 누름 — 메뉴 실행 · 커서 자리 표적 추적(TRK) · 4축 — 커서',
     '  FNC 메인(MODE LRS·WX·PT·SART·ISAR · TX/STBY · CMD · TILT · GAIN · SCAN · FREEZE) · MAP(WXR · TWS · R ONLY · RANGE) · ESC · CLR · WXR 강수 겹 · TWS 지형 겹 · 다시 켜면 90초 예열',
@@ -1826,6 +1851,7 @@ function msnRenderHcu() {
   lamp('on', eo.pwr ? 'g' : ''); lamp('armed', eo.pwr && eo.laserArm ? 'a' : ''); lamp('active', eo.pwr && eo.laserFire ? 'r' : '');
 }
 function msnRenderPanels() {
+  try { _msnScrPwr(); } catch (e) { _swallow(e); }
   if (!_msnEl) return;
   const set = (a, on) => { const b = _msnEl.querySelector(`[data-mact="${a}"]`); if (b) b.classList.toggle('on', !!on); };
   set('fly', S.running); const fb = _msnEl.querySelector('[data-mact="fly"]'); if (fb) fb.textContent = S.running ? '❚❚ 멈춤' : '▶ 비행';
@@ -1960,7 +1986,7 @@ function msnRender() {
     }
   } catch (e) { _swallow(e); }
   if (!msnOpen || !_msnEl) return;
-  if (!disp.pwr) return;
+  if (!msnScreenOn()) { if (performance.now() - _msnTickT > 300) { _msnTickT = performance.now(); msnRenderPanels(); } return; }   // 화면이 꺼져 있으면 그리지 않는다(DMM 전원 · 녹화기 POWER · M-PWR) — 조작기 · 표시등은 그린다
   const ceo = _msnEl.querySelector('.c-eo');
   if (_cellVis(ceo)) {
     if (_eoMap && _eoHost && !ceo.contains(_eoHost)) _eoHostPlace();
