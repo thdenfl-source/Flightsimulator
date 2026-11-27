@@ -77,6 +77,7 @@ function iosHandle(m) {
     else if (c === 'scn' && typeof scnApply === 'function') scnApply(scnList()[+m.i]);
     else if (c === 'sar' && typeof sarPlaceAhead === 'function') { if (m.on) sarPlaceAhead(); else if (sar.on) sarToggleOn(); }
     else if (c === 'debrief' && typeof dbfOpen === 'function') dbfOpen();
+    else if (c === 'asset' && typeof assetDispatch === 'function') { if (m.k === 'clear') assetClear(); else assetDispatch(m.k, { rescue: !!m.rescue }); }
     else if (c === 'iimc' && typeof iimcStart === 'function') { if (m.on === false) { if (typeof iimcEnd === 'function') iimcEnd('교관이 멈춤'); } else iimcStart(); }
     else if (c === 'ping') { _iosPeerT = Date.now(); if (m.pt) _iosPingEcho = m.pt; return; }   // 교관 창이 있다 — 미러를 보낸다(받은 시각은 되돌려 보내 왕복 시간을 잰다)
     else if (c === 'ovhd' && typeof ovhdSet === 'function') ovhdSet(m.id, m.v);  // 교관 창에서 바꾼 콘솔 스위치
@@ -180,6 +181,7 @@ function iosBuild() {
     grp('바다', 'sea', [0, 1, 2, 3, 4, 5, 6].map(v => [v, String(v)])) + grp('돌풍', 'gust', [0, 5, 10, 15, 20].map(v => [v, v ? '+' + v : '없음'])) +
     grp('구름 밑면', 'ceil', [0, 500, 1000, 1500, 2500].map(v => [v, v ? v + 'ft' : '없음'])) +
     grp('지면', 'surface', [['normal', '보통'], ['sand', '모래'], ['snow', '눈']]) + grp('교통량', 'traffic', [0, 1, 3, 5].map(v => [v, v ? v + '대' : '없음'])) +
+    `<h2>협동 구조 자산</h2><div class="ios-btns"><button data-ios="asset:ship">🚢 경비함 출동</button><button data-ios="asset:rib">🚤 고속단정 출동</button><button data-ios="asset:ribr">🚤 고속단정(구조까지)</button><button data-ios="asset:clear">모두 철수</button></div>` +
     `<h2>IIMC</h2><div class="ios-btns"><button data-ios="iimc:1">⚠ IIMC 걸기(구름 속 · 회복 판정)</button><button data-ios="iimc:0">IIMC 멈춤</button></div>` +
     `<h2>SAR · 시나리오</h2><div class="ios-btns"><button data-ios="sar:1">요구조자 앞에 놓기</button><button data-ios="sar:0">요구조자 치우기</button></div><div class="ios-btns" data-iosv="scn"></div>
     <h2>교범</h2><div class="ios-btns"><button data-ios="manual">📘 교관 교범 열기</button></div>
@@ -199,6 +201,7 @@ function iosBuild() {
     else if (p[0] === 'scn') iosCmd('scn', { i: +p[1] });
     else if (p[0] === 'sar') iosCmd('sar', { on: p[1] === '1' });
     else if (p[0] === 'iimc') iosCmd('iimc', { on: p[1] === '1' });
+    else if (p[0] === 'asset') iosCmd('asset', { k: p[1] === 'ribr' ? 'rib' : p[1], rescue: p[1] === 'ribr' });
     else if (p[0] === 'gal') iosCmd('wb', { o: { gal: +p[1] } });
     else if (p[0] === 'wbset') { const o = {}; const r = R.querySelector('[data-iosv="wbrear"]').value, c = R.querySelector('[data-iosv="wbcargo"]').value; if (r !== '') o.rear = +r; if (c !== '') o.cargo = +c; iosCmd('wb', { o }); }
     else if (p[0] === 'wbp') iosCmd('wb', { o: p[1] === 'aft' ? { rear: 0, cargo: 250, copilot: 0 } : p[1] === 'heavy' ? { rear: 340, cargo: 100, copilot: 170, gal: 91 } : { rear: 0, cargo: 0, copilot: 170, pilot: 170 } });
@@ -267,6 +270,9 @@ const HELP_ITEMS = [
   ['연료 · BINGO', '🧰 도구 → ⛽ 연료 · BINGO — 돌아갈 곳(출발 공항 · 가장 가까운 공항 · 함정 · 정한 곳)까지 바람을 넣은 귀환 연료 + 예비(분)를 BINGO 로 셈한다. 여유 150lb 아래 노랑 · 0 이하 BINGO FUEL(음성) — 강평에 남는다.'],
   ['교신 연습', '🧰 도구 → 📻 교신 연습 — 관제 · 해경 임무 · 비상(MAYDAY · PAN-PAN) 표준 문구를 지금 자리 · 고도 · 콜사인을 넣어 읽어 준다. ● 녹음으로 내 교신을 남겨 다시 듣고, 받아쓰기(또는 직접 적기)로 비상 호출 8가지 형식을 점검한다.'],
   ['AIS', '전탐석 — 선박 AIS(이름 · MMSI)가 CH4 항법지도 · 레이더 꼬리표 · 지정 표적 정보 · EO/IR 에 같은 표적으로 보인다. AIS 가 없는 배는 NO AIS(단속 의심) · 요구조자는 AIS-SART. 위 막대 [AIS 지도]로 2D 지도에도 겹친다.'],
+  ['가상 부조종사', '🧰 도구 → 👨‍✈️ 부조종사(PM) — 함께 태우면 이륙 콜아웃(Positive climb · Airspeed alive · V Y)과 편차 경고(Bank angle · Sink rate · Torque · Rotor · Speed)를 부르고, 5초 안에 고치지 않으면 다시 부르며 강평에 남긴다. CDU 체크리스트를 한 항목씩 읽어 주고 ✓ 확인(또는 음성)으로 답한다.'],
+  ['협동 구조 자산', '🧰 도구 → 🚤 협동 자산(또는 교관 화면) — 경비함(18kt) · 고속단정(30kt)이 요구조자 쪽으로 오며 5 · 2 · 1NM · 현장 도착을 무전한다. 레이더 · AIS · 지도에 보인다. 단정이 구조하게 하거나, 헬기가 구조한 뒤 함정 가까이에서 인계한다.'],
+  ['두 대 협동 비행', '🧰 도구 → ✈ 협동 비행 — 방을 만들고 QR(또는 코드)을 다른 기기에서 찍으면 같은 하늘을 난다. 상대는 TCAS · 3D · 레이더에 교통으로, 2D 지도에 콜사인 · 수색 항로로 보이고 짧은 메시지를 주고받는다.'],
   ['관찰 기기', '📱 Instructor Sync — 교관 기기와 짝을 맺은 뒤 [👀 관찰 기기 QR]을 띄우면 다른 태블릿 · 노트북 여러 대가 찍어 보기만 한다(조작 불가). 교관 명령은 받았는지 확인(ACK)하고 닿지 않으면 다시 보낸다 · 끊기고 다시 이어지면 알린다.'],
   ['진단 기록 — 기능별', '🩺 진단 기록에 삼킨 예외를 기능(파일)별 누적으로 보인다. 10초에 100번 넘게 되풀이되면 "반복 고장 의심" 으로 화면 오류 목록에 남긴다(숨은 고장 찾기).'],
   ['외부 등화(흰수리)', '상부 콘솔과 연동 — POSITION LTS 노브(1~5) · STEADY/OFF/FLASH, ANTI COLLISION LTS UPPER/BOTH/LOWER · DIM/OFF/BRT, NAV · ANTI COLL NORM/IR. 3D 모형(외부 시점 · 3D 지도)에 왼쪽 빨강 · 오른쪽 초록 · 꼬리 흰 위치표시등과 위 · 아래 빨간 충돌방지등(번쩍)이 빛난다. 충돌방지등(BRT)은 위치표시등의 2배 밝기(DIM 은 그 반), DISPLAY 스위치로 DAY 100% · NIGHT 50% · NVG 30%. IR 은 NVG 에서만 보이고, DC 전원이 없으면 꺼진다.'],

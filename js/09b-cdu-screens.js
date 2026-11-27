@@ -3998,6 +3998,8 @@ switchMode('HOME');
     window.switchMode        = switchMode;         // 앱 각처 + cduFooter의 인라인 문자열
     // 지금 CDU 화면 이름 · 다시 그리기(18-system.js SYSTEM FULL/HALF 단추가 푸터를 고쳐 그릴 때)
     window.cduMode           = () => currentMode;
+    // 체크리스트 전체(정상 · 특수 · 비상) — 가상 부조종사(40-crew.js)가 읽어 준다
+    window.cduChecklistRoot  = () => _clRoot();
     window.cduRerender       = () => { try { renderContent(); } catch (e) { _swallow(e); } };
     // C-5000 VOL 노브(21-c5000.js) → CDU U/VHF 음량
     window.cduSetUvhfVol     = v => { volumes.uvhf = Math.max(0, Math.min(100, Math.round(v))); if (currentMode === 'AUDIO') { try { renderContent(); } catch (e) { _swallow(e); } } };

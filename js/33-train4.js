@@ -140,7 +140,7 @@ function trafficAdd(o = {}) {
               alt: Math.max(100, S.alt + (+o.rel || 0)), hdg: ((+o.hdg || 0) % 360 + 360) % 360, spd: +o.spd || (ac === 'kuh' ? 130 : 105), vs: 0, bnk: 0, pit: -3, st: 'OT' };
   traffic.push(t); _tfcEnvSync(); return t;
 }
-function trafficClear() { traffic.length = 0; try { if (typeof env !== 'undefined') env.traffic = 0; } catch (e) { _swallow(e); } }
+function trafficClear() { for (let i = traffic.length - 1; i >= 0; i--) if (!traffic[i].remote) traffic.splice(i, 1); try { if (typeof env !== 'undefined') env.traffic = 0; } catch (e) { _swallow(e); } }
 // 교관이 띄운 교통은 ENV 교통량에 더해진다 — 그만큼 교통량 칸을 넓혀 두어 지우지 않게
 function _tfcEnvSync() { try { if (typeof env !== 'undefined') env.traffic = Math.max(env.traffic || 0, traffic.length); } catch (e) { _swallow(e); } }
 function _tfcPatOne(nr, ac, id, wi0) {
@@ -192,12 +192,15 @@ function _tfcPatStep(t, dt) {
 }
 function trafficStep(dtSim) {
   const want = (typeof env !== 'undefined') ? (env.traffic || 0) : 0;
-  while (traffic.length > want) traffic.pop();
-  while (traffic.length < want) traffic.push(_tfcSpawn(traffic.length % 3 === 0, traffic.length));
+  // 함께 나는 다른 기기의 기체(40-crew.js 편대 · t.remote)는 교통량에 세지 않고 지우지도 않는다 — 받은 자리에서 침로 · 속도로 이어 간다
+  const own = () => traffic.reduce((n, t) => n + (t.remote ? 0 : 1), 0);
+  while (own() > want) { let i = traffic.length - 1; while (i >= 0 && traffic[i].remote) i--; if (i < 0) break; traffic.splice(i, 1); }
+  while (own() < want) traffic.push(_tfcSpawn(own() % 3 === 0, own()));
   traffic.forEach((t, i) => {
     if (t.mode === 'pat' && dtSim > 0) _tfcPatStep(t, dtSim);
     const d = t.spd * dtSim / 3600, h = t.hdg * Math.PI / 180;
     t.lat += d * Math.cos(h) / 60; t.lon += d * Math.sin(h) / 60 / Math.cos(t.lat * Math.PI / 180); t.alt += t.vs * dtSim / 60;
+    if (t.remote) return;
     const v = _tNE(S.lat, S.lon, t.lat, t.lon); if (Math.hypot(v.n, v.e) > 16) { const id = t.id; for (const k in t) delete t[k]; Object.assign(t, _tfcSpawn(Math.random() < 0.4, i), { id }); }
   });
   tcasEval();
@@ -564,7 +567,7 @@ function settingsReset() {
 }
 
 // ── ⑥ 도구 메뉴(🧰) — 작은 화면(폭 900 · 높이 700 아래)에서는 낱 단추 대신 이 메뉴 하나로 ──
-const TOOLS = [['🎬 시나리오', 'toggleScenario'], ['🌙 환경', 'toggleEnvPanel'], ['📋 강평', 'toggleDebrief'], ['🧑‍✈️ Instructor View', 'openIos'], ['📱 Instructor Sync', 'toggleRemoteIos'], ['⚙ 설정', 'toggleSettings'], ['🗺 지도 미리 받기', 'toggleTilePrep'], ['⛽ 연료 · BINGO', 'toggleBingo'], ['📻 교신 연습', 'toggleRadioPractice'], ['🩺 진단 기록', 'toggleDiag'], ['📘 교관 교범', 'openManual'], ['❓ 도움말', 'toggleHelp']];
+const TOOLS = [['🎬 시나리오', 'toggleScenario'], ['🌙 환경', 'toggleEnvPanel'], ['📋 강평', 'toggleDebrief'], ['🧑‍✈️ Instructor View', 'openIos'], ['📱 Instructor Sync', 'toggleRemoteIos'], ['⚙ 설정', 'toggleSettings'], ['🗺 지도 미리 받기', 'toggleTilePrep'], ['⛽ 연료 · BINGO', 'toggleBingo'], ['📻 교신 연습', 'toggleRadioPractice'], ['👨‍✈️ 부조종사(PM)', 'toggleCrewPm'], ['🚤 협동 자산', 'toggleAssets'], ['✈ 협동 비행', 'toggleWing'], ['🩺 진단 기록', 'toggleDiag'], ['📘 교관 교범', 'openManual'], ['❓ 도움말', 'toggleHelp']];
 function toggleTools(ev) {
   let m = document.getElementById('tools-menu');
   if (m && m.style.display === 'block') { m.style.display = 'none'; return; }

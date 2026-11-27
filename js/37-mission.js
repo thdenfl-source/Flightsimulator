@@ -358,7 +358,8 @@ function msnContacts() {
   for (const v of msnVsl) out.push({ id: v.id, kind: 'vsl', name: v.name, lat: v.lat, lon: v.lon, hM: 0, len: v.len, hdg: v.hdg, spd: v.spd, rcs: v.rcs, ais: v.ais || null });
   try { if (typeof shipVisible !== 'undefined' && shipVisible && shipLat !== null) out.push({ id: 'SHIP', kind: 'ship', name: '함정', lat: shipLat, lon: shipLon, hM: 0, len: 90, hdg: shipHdg, spd: shipSpd, rcs: 30, ais: { mmsi: '440300150', name: 'KCG 3015' } }); } catch (e) { _swallow(e); }
   try { if (typeof sar !== 'undefined' && sar.on && sar.lat !== null && sar.state !== 'aboard') out.push({ id: 'SURV', kind: 'surv', name: sar.type === 'water' ? '익수자' : '요구조자', lat: sar.lat, lon: sar.lon, hM: sar.type === 'water' ? 0 : _mGndFt(sar.lat, sar.lon) * 0.3048, len: 1.8, hdg: 0, spd: 0, rcs: 1, ais: { mmsi: '970010001', name: 'SART ACTIVE', sart: true } }); } catch (e) { _swallow(e); }
-  try { if (typeof traffic !== 'undefined') for (const t of traffic) out.push({ id: 'A' + t.id, kind: 'air', name: t.ac === 'b206' ? 'Bell 206' : '흰수리', lat: t.lat, lon: t.lon, hM: (t.alt || 0) * 0.3048, len: 15, hdg: t.hdg, spd: t.spd, rcs: 8 }); } catch (e) { _swallow(e); }
+  try { if (typeof crewAssets !== 'undefined') for (const a of crewAssets) out.push({ id: a.id, kind: 'vsl', name: a.name, lat: a.lat, lon: a.lon, hM: 0, len: a.len, hdg: a.hdg, spd: a.v, rcs: a.rcs, ais: { mmsi: a.mmsi, name: a.cs } }); } catch (e) { _swallow(e); }   // 협동 구조 자산(40-crew.js)
+  try { if (typeof traffic !== 'undefined') for (const t of traffic) out.push({ id: 'A' + t.id, kind: 'air', name: t.cs || (t.ac === 'b206' ? 'Bell 206' : '흰수리'), lat: t.lat, lon: t.lon, hM: (t.alt || 0) * 0.3048, len: 15, hdg: t.hdg, spd: t.spd, rcs: 8 }); } catch (e) { _swallow(e); }
   return out;
 }
 // ══ ② 탐색레이더 — Seaspray 5000E(Osprey) · VCCP 조작기 (KUH-1CG FLM 5.20 · SDS 34-47-01) ══

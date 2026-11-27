@@ -1140,8 +1140,8 @@ html.env-rain1 .env-rain { display: block; opacity: 0.45; } html.env-rain2 .env-
 #map-tools-btn { flex: none !important; min-width: 64px; padding-left: 8px; padding-right: 8px; white-space: nowrap; }
 #tools-menu { display: none; position: fixed; z-index: 30003; background: #121a21; border: 1px solid #3a4a58; border-radius: 8px; padding: 6px; box-shadow: 0 6px 18px rgba(0,0,0,0.5); }
 #tools-menu .sim-btn { display: block; width: 100%; margin: 3px 0; text-align: left; padding: 8px 12px; font-size: 14px; }
-#set-wrap, #rtc-wrap, #diag-wrap, #tileprep-wrap, #iimc-wrap, #bingo-wrap, #radio-wrap { display: none; position: fixed; inset: 0; z-index: 30002; background: rgba(0,0,0,0.45); align-items: center; justify-content: center; }
-#set-wrap .set-box, #rtc-wrap .set-box, #diag-wrap .set-box, #tileprep-wrap .set-box, #iimc-wrap .set-box, #bingo-wrap .set-box, #radio-wrap .set-box { width: min(520px, 96vw); max-height: 88vh; overflow-y: auto; background: #121a21; border: 1px solid #3a4a58; border-radius: 8px; color: #dfe6ec; font-size: 14px; padding-bottom: 10px; }
+#set-wrap, #rtc-wrap, #diag-wrap, #tileprep-wrap, #iimc-wrap, #bingo-wrap, #radio-wrap, #pm-wrap, #asset-wrap, #wing-wrap { display: none; position: fixed; inset: 0; z-index: 30002; background: rgba(0,0,0,0.45); align-items: center; justify-content: center; }
+#set-wrap .set-box, #rtc-wrap .set-box, #diag-wrap .set-box, #tileprep-wrap .set-box, #iimc-wrap .set-box, #bingo-wrap .set-box, #radio-wrap .set-box, #pm-wrap .set-box, #asset-wrap .set-box, #wing-wrap .set-box { width: min(520px, 96vw); max-height: 88vh; overflow-y: auto; background: #121a21; border: 1px solid #3a4a58; border-radius: 8px; color: #dfe6ec; font-size: 14px; padding-bottom: 10px; }
 .set-box .set-bar { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; background: #1b2731; margin-bottom: 4px; }
 .set-box .set-row { display: flex; align-items: center; gap: 8px; padding: 5px 12px; } .set-box .set-row > span { width: 150px; flex: none; color: #8aa0b0; }
 .set-box .set-row > div { display: flex; flex-wrap: wrap; gap: 4px; flex: 1; align-items: center; } .set-box .set-gap { width: 10px; } .set-box .set-sum { color: #8aa0b0; font-size: 12px; margin-left: 6px; } .set-box .sim-btn { width: auto; flex: none; padding: 4px 10px; margin: 0; }
@@ -1657,6 +1657,14 @@ html.ac-b206 #pfd-ov { background: transparent; border: 0; box-shadow: none; min
 #iimc-wrap .gr-우수 { color: #7dff3a; } #iimc-wrap .gr-만족 { color: #4fc3f7; } #iimc-wrap .gr-보통 { color: #ffb000; } #iimc-wrap .gr-미흡, #iimc-wrap .gr-불만족 { color: #ff5252; }
 #iimc-wrap .sim-btn.on, #bingo-wrap .sim-btn.on, #radio-wrap .sim-btn.on { background: #1d5a7a; color: #fff; }
 #radio-wrap textarea { width: 100%; background: #0d1318; color: #dfe6ec; border: 1px solid #3a4a58; border-radius: 4px; font-size: 13px; } #radio-wrap .radio-ex { flex: 1; color: #bfe3ff; font-size: 13px; }
+#pm-wrap .set-box, #wing-wrap .set-box, #asset-wrap .set-box { width: min(640px, 96vw); }
+.crew-wrap .sim-btn.on { background: #1d5a7a; color: #fff; } .crew-wrap .tp-none { color: #8aa0b0; } .crew-wrap .warn { color: #ffb000; } .crew-wrap .err { color: #ff5252; } .crew-wrap .ok { color: #7dff3a; }
+.crew-wrap input[type=text] { flex: 1; min-width: 120px; background: #0d1318; color: #dfe6ec; border: 1px solid #3a4a58; border-radius: 4px; padding: 3px 6px; }
+#pm-wrap .pm-cls { flex-direction: column; align-items: stretch !important; } #pm-wrap .pm-cl-h { color: #8fd3ff; font-weight: bold; } #pm-wrap .pm-cl-it { font-size: 16px; margin: 6px 0; }
+#pm-wrap .pm-big { font-size: 15px; padding: 6px 18px !important; } #pm-wrap .pm-cl-n { font-size: 12px; color: #8aa0b0; display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 6px; } #pm-wrap .pm-cl-n .cur { color: #fff; }
+.crew-wrap .as-list { flex-direction: column; align-items: stretch !important; } .crew-wrap .as-row { font-size: 13px; padding: 1px 0; } .crew-wrap .as-chk { font-size: 12px; color: #cfe; display: inline-flex; gap: 4px; align-items: center; }
+#wing-wrap .wg-qr svg { width: 140px; height: 140px; background: #fff; padding: 4px; } #wing-wrap .wg-code code { font-size: 11px; word-break: break-all; color: #bfe3ff; display: block; margin-bottom: 4px; }
+.asset-tip { background: rgba(10,20,28,0.85); color: #e8f4ff; border: 1px solid #456; font-size: 11px; padding: 1px 5px; box-shadow: none; }
 #radio-wrap .radio-chk { font-size: 13px; line-height: 1.6; } #radio-wrap .radio-chk span { margin-right: 6px; white-space: nowrap; }
 #tileprep-wrap .sim-btn.on { background: #1d5a7a; color: #fff; } #tileprep-wrap .tp-bar { height: 8px; background: #26323c; border-radius: 4px; overflow: hidden; margin-bottom: 4px; } #tileprep-wrap .tp-bar i { display: block; height: 100%; background: #3fb950; }
 .diag-box .diag-h { padding: 8px 12px 2px; color: #ffcc66; font-weight: bold; font-size: 13px; }
