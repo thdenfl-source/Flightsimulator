@@ -19,7 +19,7 @@ const ENV_VIS = [0, 10, 5, 3, 1.5, 0.8, 0.4];                 // km(0 = 무제�
 const ENV_SEA_ROLL = [0, 1, 2, 4, 6, 8, 10], ENV_SEA_PITCH = [0, 0.5, 1, 2, 3, 4, 5];
 const ENV_SEA_DRIFT = [0, 0.1, 0.3, 0.6, 0.9, 1.3, 1.8];      // 익수자 바람 쪽 표류(kt) — 파도 · 바람에 밀린다
 const ENV_SEA_NAME = ['0 잔잔', '1 잔물결', '2 약', '3 보통', '4 약간 높음', '5 높음', '6 매우 높음'];
-const env = { tod: 'DAY', vis: 0, rain: 0, nvg: false, sea: 0, gust: 0, ceil: 0, ldg: false, raCall: true, surface: 'normal', traffic: 0, tfcType: 'mix', tfcPat: 1, oat: 'auto', parked: true };
+const env = { tod: 'DAY', vis: 0, rain: 0, snow: 0, nvg: false, sea: 0, gust: 0, ceil: 0, ctop: 0, ldg: false, raCall: true, surface: 'normal', traffic: 0, tfcType: 'mix', tfcPat: 1, oat: 'auto', parked: true };
 try { Object.assign(env, JSON.parse(localStorage.getItem(ENV_KEY) || '{}')); } catch (e) { _swallow(e); }
 function _envSave() { try { localStorage.setItem(ENV_KEY, JSON.stringify(env)); } catch (e) { _swallow(e); } }
 // 시정(km) → 안개가 짙어지는 자리(0 = 화면 가운데 · 1 = 지평선)
@@ -64,9 +64,9 @@ function envApply() {
   } catch (e) { _swallow(e); }
 }
 function envSet(o) {
-  for (const k of ['tod', 'vis', 'rain', 'nvg', 'sea', 'gust', 'ceil', 'ldg', 'raCall', 'surface', 'traffic', 'tfcType', 'tfcPat', 'oat', 'parked']) if (o[k] !== undefined) env[k] = o[k];
+  for (const k of ['tod', 'vis', 'rain', 'snow', 'nvg', 'sea', 'gust', 'ceil', 'ctop', 'ldg', 'raCall', 'surface', 'traffic', 'tfcType', 'tfcPat', 'oat', 'parked']) if (o[k] !== undefined) env[k] = o[k];
   if (o.oat !== undefined && o.oat !== 'auto' && Number.isFinite(+o.oat)) window._oatSurfaceC = +o.oat;   // 지면 기온을 손으로(결빙 연습) — 'auto' 면 METAR 대로
-  env.sea = Math.max(0, Math.min(6, env.sea | 0)); env.rain = Math.max(0, Math.min(2, env.rain | 0));
+  env.sea = Math.max(0, Math.min(6, env.sea | 0)); env.rain = Math.max(0, Math.min(2, env.rain | 0)); env.snow = Math.max(0, Math.min(2, env.snow | 0));
   if (o.sea !== undefined) env._seaApplied = -1;
   _envSave(); envApply(); envPanelRender();
 }
@@ -79,11 +79,13 @@ function envSet(o) {
 const envIce = { cond: false, acc: 0, eng: { 1: 0, 2: 0 }, pitot: false };
 function oatNowC() { return (window._oatSurfaceC ?? 15) - 1.98 * (S.alt || 0) / 1000; }
 // 습기 정도(0~1) — 구름 속 1 · 강한 비 0.8 · 약한 비 0.5 · 짙은 안개(시정 1.6km 아래) 0.35
+// 구름층 윗면(ft) — '구름 윗면'을 밑면보다 높게 골랐으면 그 높이, 아니면(자동) 밑면 + 1,500ft · 구름이 없으면 0
+function envCloudTop() { const b = +env.ceil || 0; if (!b) return 0; const t = +env.ctop || 0; return t > b ? t : b + 1500; }
 function envMoisture() {
   const base = env.ceil || 0, alt = S.alt || 0;
-  if (base > 0 && alt >= base && alt <= base + 1500) return 1;
-  if (env.rain >= 2) return 0.8;
-  if (env.rain >= 1) return 0.5;
+  if (base > 0 && alt >= base && alt <= envCloudTop()) return 1;
+  if (env.rain >= 2 || env.snow >= 2) return 0.8;
+  if (env.rain >= 1 || env.snow >= 1) return 0.5;
   if (env.vis > 0 && env.vis < 1.6) return 0.35;
   return 0;
 }
@@ -141,6 +143,8 @@ function envPanelRender() {
     const cur = (k === 'nvg' || k === 'ldg' || k === 'raCall' || k === 'parked') ? String(!!env[k]) : String(env[k]);
     b.classList.toggle('on', cur === v);
   });
+  const cn = w.querySelector('[data-envv="cloud"]');
+  if (cn) { const b = +env.ceil || 0, t = envCloudTop(); cn.textContent = b ? `구름층 ${b.toLocaleString()} ~ ${t.toLocaleString()}ft — 그 사이는 구름 속(IMC)${env.ctop && +env.ctop <= b ? ' · 윗면이 밑면보다 낮아 자동(+1,500ft)으로' : ''}` : '구름 없음 — 밑면을 고르면 윗면까지 구름 속'; }
   const s = w.querySelector('[data-envv="sea"]');
   if (s) s.textContent = `${ENV_SEA_NAME[env.sea]} — 함정 롤 ${ENV_SEA_ROLL[env.sea]}° · 피칭 ${ENV_SEA_PITCH[env.sea]}° · 익수자 표류 ${ENV_SEA_DRIFT[env.sea]}kt(바람 쪽)`;
   const ic = w.querySelector('[data-envv="ice"]');
@@ -160,6 +164,9 @@ function toggleEnvPanel() {
       grp('바다 상태', 'sea', [0, 1, 2, 3, 4, 5, 6].map(v => [v, String(v)])) +
       grp('돌풍', 'gust', [0, 5, 10, 15, 20].map(v => [v, v ? '+' + v + 'kt' : '없음'])) +
       grp('구름 밑면', 'ceil', [0, 500, 1000, 1500, 2500, 4000].map(v => [v, v ? v + 'ft' : '없음'])) +
+      grp('구름 윗면', 'ctop', [[0, '자동(+1,500)'], ...[1500, 2500, 4000, 6000, 9000, 12000].map(v => [v, v.toLocaleString() + 'ft'])]) +
+      `<div class="env-note" data-envv="cloud"></div>` +
+      grp('눈', 'snow', [[0, '없음'], [1, '약'], [2, '강']]) +
       grp('지면', 'surface', [['normal', '보통'], ['sand', '모래(브라운아웃)'], ['snow', '눈(화이트아웃)']]) +
       grp('교통량(TCAS)', 'traffic', [0, 1, 3, 5].map(v => [v, v ? v + '대' : '없음'])) +
       grp('교통 기종', 'tfcType', [['mix', '섞어서'], ['kuh', '흰수리'], ['b206', 'Bell 206']]) +
@@ -391,10 +398,11 @@ function envBeamCone(g, r, m, p, rp, b, first) {
 function envFxFrame() {
   const fx = _envFxEls(); if (!fx) return;
   // 구름 속
-  const base = env.ceil || 0, top = base + 1500, alt = S.alt || 0;
+  const base = env.ceil || 0, top = envCloudTop(), alt = S.alt || 0;
   let co = 0; if (base > 0) co = Math.max(0, Math.min(1, (alt - base + 60) / 120)) * Math.max(0, Math.min(1, (top + 60 - alt) / 120));
   const shown = (typeof heli3dShown === 'function' && heli3dShown()) || (typeof _ckFirst === 'function' && _ckFirst());
   fx.cl.style.opacity = shown || co > 0 ? co.toFixed(2) : '0';
+  try { fx.cl.style.setProperty('--cl-deep', base > 0 ? Math.max(0, Math.min(1, Math.min(alt - base, top - alt) / 600)).toFixed(2) : '0'); } catch (e) { _swallow(e); }   // 층 가운데일수록 짙게
   const inC = co > 0.6;
   if (inC !== _envCloudIn) { _envCloudIn = inC; if (inC) { try { if (typeof fdrNote === 'function') fdrNote(`구름 진입(IMC) — ${Math.round(alt)}ft`, 'warn'); } catch (e) { _swallow(e); } } }
   // 불빛 — 밤 · 황혼 · NVG 에만
@@ -489,3 +497,77 @@ function envFxFrame() {
   g.globalAlpha = 1; g.globalCompositeOperation = 'source-over';
 }
 (function envFxLoop() { try { envFxFrame(); } catch (e) { _swallow(e); } requestAnimationFrame(envFxLoop); })();
+
+// ── 비 · 눈(3D 창 위 캔버스) — 입자마다 깊이(가까울수록 크고 빠르고 진하다) · 바람 기울기 · 앞으로 날면 화면 가운데에서 바깥으로 흐른다 ──
+//   비: 길이 · 굵기 · 투명도가 다른 빗줄기 + 강하면 바닥 물보라 · 앞유리 물방울(흘러내린다)
+//   눈: 크기가 다른 눈송이가 흔들리며 내린다(가까운 것은 흐릿하게 크게) · 앞으로 날면 바깥으로 흩어진다
+const ENV_PRECIP_N = { rain: [0, 260, 720], snow: [0, 220, 600] };
+const _envP = { cv: null, rain: [], snow: [], drops: [], last: 0, W: 0, H: 0 };
+function _envPrecipEl() {
+  const host = document.getElementById('map3d'); if (!host) return null;
+  if (!_envP.cv || !_envP.cv.isConnected) { const cv = document.createElement('canvas'); cv.className = 'env-precip'; host.appendChild(cv); _envP.cv = cv; }
+  return _envP.cv;
+}
+function _envRainP(W, H, top) { const z = 0.25 + Math.random() * 0.75; return { x: Math.random() * W, y: top ? -Math.random() * H * 0.3 : Math.random() * H, z, l: 8 + 26 * z * (0.6 + Math.random() * 0.8), v: 700 + 900 * z, a: 0.12 + 0.45 * z }; }
+function _envSnowP(W, H, top) { const z = 0.2 + Math.random() * 0.8; return { x: Math.random() * W, y: top ? -Math.random() * H * 0.2 : Math.random() * H, z, r: 0.8 + 3.2 * z * (0.6 + Math.random() * 0.7), v: 30 + 110 * z, ph: Math.random() * 6.28, sw: 10 + 30 * Math.random(), a: 0.45 + 0.5 * z }; }
+function envPrecipStep(nowMs) {
+  const cv = _envPrecipEl(); if (!cv) return;
+  const want = env.rain > 0 || env.snow > 0, host = cv.parentElement;
+  const vis = want && host && host.clientWidth > 20 && host.offsetParent !== null && !document.hidden;
+  if (!vis) { if (cv.width) { cv.width = 0; _envP.rain.length = 0; _envP.snow.length = 0; _envP.drops.length = 0; } _envP.last = 0; return; }
+  const W = host.clientWidth, H = host.clientHeight;
+  if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; }
+  const dt = _envP.last ? Math.min(0.06, (nowMs - _envP.last) / 1000) : 0.016; _envP.last = nowMs;
+  const k = (typeof simSpeed === 'number' && simSpeed > 0 && S.running) ? 1 : 1;
+  // 바람(화면에서 옆으로) · 앞으로 나는 빠르기(가운데에서 바깥으로)
+  let ws = 0, rel = 0; try { ws = typeof windSpd === 'number' ? windSpd : 0; rel = ((typeof windDir === 'number' ? windDir : 0) - (S.hdg || 0)) * Math.PI / 180; } catch (e) { _swallow(e); }
+  const side = -Math.sin(rel) * Math.min(1, ws / 40), fwd = Math.max(0, Math.min(1, (S.spd || 0) / 120));
+  const cx = W / 2, cy = H * 0.45;
+  const g = cv.getContext('2d'); g.clearRect(0, 0, W, H);
+  // 비
+  const nr = ENV_PRECIP_N.rain[env.rain] || 0, R = _envP.rain;
+  while (R.length < nr) R.push(_envRainP(W, H, false)); R.length = Math.min(R.length, nr);
+  if (nr) {
+    g.lineCap = 'round';
+    for (const p of R) {
+      const dx = p.x - cx, dy = p.y - cy, d = Math.hypot(dx, dy) || 1;
+      const vx = (side * 0.45 + fwd * 1.6 * dx / d) * p.v, vy = (1 - fwd * 0.55) * p.v + fwd * 1.6 * p.v * dy / d;
+      p.x += vx * dt * k; p.y += vy * dt * k;
+      const sp = Math.hypot(vx, vy) || 1, L = p.l * (1 + fwd * 1.5);
+      g.strokeStyle = `rgba(200,215,230,${(p.a * (env.rain === 2 ? 1 : 0.75)).toFixed(3)})`; g.lineWidth = 0.6 + 1.2 * p.z;
+      g.beginPath(); g.moveTo(p.x, p.y); g.lineTo(p.x - vx / sp * L, p.y - vy / sp * L); g.stroke();
+      if (p.y > H + 30 || p.x < -40 || p.x > W + 40 || p.y < -H) {
+        if (env.rain === 2 && fwd < 0.3 && p.y > H && Math.random() < 0.25) _envP.drops.push({ x: p.x, y: H - 4 - Math.random() * 30, r: 1 + Math.random() * 2, t: 0, splash: true });
+        Object.assign(p, _envRainP(W, H, true)); if (fwd > 0.2) { p.x = cx + (Math.random() - 0.5) * W * 0.3; p.y = cy + (Math.random() - 0.5) * H * 0.3; }
+      }
+    }
+    // 앞유리 물방울(강한 비) — 맺혔다가 흘러내린다 · 바닥 물보라
+    if (env.rain === 2 && Math.random() < 0.25 && _envP.drops.length < 60) _envP.drops.push({ x: Math.random() * W, y: Math.random() * H * 0.9, r: 1.5 + Math.random() * 3.5, t: 0 });
+    for (let i = _envP.drops.length - 1; i >= 0; i--) {
+      const q = _envP.drops[i]; q.t += dt;
+      if (q.splash) { const a = Math.max(0, 0.5 - q.t * 2); g.strokeStyle = `rgba(210,225,240,${a.toFixed(2)})`; g.lineWidth = 1; g.beginPath(); g.ellipse(q.x, q.y, q.r * (1 + q.t * 10), q.r * (0.4 + q.t * 3), 0, 0, 6.28); g.stroke(); if (a <= 0) _envP.drops.splice(i, 1); continue; }
+      if (q.t > 0.8) q.y += (40 + q.r * 20) * dt * (1 + fwd);                    // 무거워지면 흘러내린다
+      if (fwd > 0.3) q.x += (q.x - cx) * fwd * dt * 0.8;                         // 앞으로 날면 옆으로 밀린다
+      const gr = g.createRadialGradient(q.x - q.r * 0.3, q.y - q.r * 0.3, 0, q.x, q.y, q.r);
+      gr.addColorStop(0, 'rgba(255,255,255,0.55)'); gr.addColorStop(0.6, 'rgba(190,210,230,0.18)'); gr.addColorStop(1, 'rgba(120,140,160,0.35)');
+      g.fillStyle = gr; g.beginPath(); g.arc(q.x, q.y, q.r, 0, 6.28); g.fill();
+      if (q.y > H + 10 || q.t > 6) _envP.drops.splice(i, 1);
+    }
+  } else _envP.drops.length = 0;
+  // 눈
+  const ns = ENV_PRECIP_N.snow[env.snow] || 0, F = _envP.snow;
+  while (F.length < ns) F.push(_envSnowP(W, H, false)); F.length = Math.min(F.length, ns);
+  const night = env.tod === 'NIGHT';
+  for (const p of F) {
+    p.ph += dt * (0.8 + p.z);
+    const dx = p.x - cx, dy = p.y - cy, d = Math.hypot(dx, dy) || 1;
+    const vx = Math.sin(p.ph) * p.sw * (1 - fwd) + side * 90 * p.z + fwd * 420 * p.z * dx / d, vy = p.v * (1 - fwd * 0.6) + fwd * 420 * p.z * dy / d;
+    p.x += vx * dt * k; p.y += vy * dt * k;
+    const a = p.a * (night ? 0.55 : 1) * (env.snow === 2 ? 1 : 0.8);
+    if (p.z > 0.8) { const gr = g.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.r * 1.6); gr.addColorStop(0, `rgba(255,255,255,${(a * 0.8).toFixed(2)})`); gr.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = gr; g.beginPath(); g.arc(p.x, p.y, p.r * 1.6, 0, 6.28); g.fill(); }   // 가까운 송이는 흐릿하게 크게
+    else { g.fillStyle = `rgba(255,255,255,${a.toFixed(2)})`; g.beginPath(); g.arc(p.x, p.y, p.r, 0, 6.28); g.fill(); }
+    if (fwd > 0.15) { g.strokeStyle = `rgba(255,255,255,${(a * 0.35).toFixed(2)})`; g.lineWidth = p.r; g.beginPath(); g.moveTo(p.x, p.y); g.lineTo(p.x - vx * 0.02, p.y - vy * 0.02); g.stroke(); }   // 빠르면 꼬리
+    if (p.y > H + 10 || p.x < -20 || p.x > W + 20 || p.y < -H) { Object.assign(p, _envSnowP(W, H, true)); if (fwd > 0.2) { p.x = cx + (Math.random() - 0.5) * W * 0.4; p.y = cy + (Math.random() - 0.5) * H * 0.4; } }
+  }
+}
+(function envPrecipLoop(t) { try { envPrecipStep(t || performance.now()); } catch (e) { _swallow(e); } requestAnimationFrame(envPrecipLoop); })();

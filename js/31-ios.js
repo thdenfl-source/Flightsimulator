@@ -180,6 +180,7 @@ function iosBuild() {
     grp('비', 'rain', [[0, '없음'], [1, '약'], [2, '강']]) + grp('NVG', 'nvg', [['false', '끔'], ['true', '켬']]) +
     grp('바다', 'sea', [0, 1, 2, 3, 4, 5, 6].map(v => [v, String(v)])) + grp('돌풍', 'gust', [0, 5, 10, 15, 20].map(v => [v, v ? '+' + v : '없음'])) +
     grp('구름 밑면', 'ceil', [0, 500, 1000, 1500, 2500].map(v => [v, v ? v + 'ft' : '없음'])) +
+    grp('구름 윗면', 'ctop', [[0, '자동'], [2500, '2500ft'], [4000, '4000ft'], [6000, '6000ft'], [9000, '9000ft']]) + grp('눈', 'snow', [[0, '없음'], [1, '약'], [2, '강']]) +
     grp('지면', 'surface', [['normal', '보통'], ['sand', '모래'], ['snow', '눈']]) + grp('교통량', 'traffic', [0, 1, 3, 5].map(v => [v, v ? v + '대' : '없음'])) +
     `<h2>협동 구조 자산</h2><div class="ios-btns"><button data-ios="asset:ship">🚢 경비함 출동</button><button data-ios="asset:rib">🚤 고속단정 출동</button><button data-ios="asset:ribr">🚤 고속단정(구조까지)</button><button data-ios="asset:clear">모두 철수</button></div>` +
     `<h2>IIMC</h2><div class="ios-btns"><button data-ios="iimc:1">⚠ IIMC 걸기(구름 속 · 회복 판정)</button><button data-ios="iimc:0">IIMC 멈춤</button></div>` +

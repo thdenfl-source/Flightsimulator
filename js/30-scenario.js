@@ -43,7 +43,7 @@ function scnCapture(name) {
     v: 1, name: String(name || '').trim() || '시나리오', at: Date.now(), ac: (typeof AC_TYPE !== 'undefined') ? AC_TYPE : 'aw189',
     pos: { lat: S.lat, lon: S.lon, alt: S.alt, hdg: S.hdg, spd: S.spd, vs: S.vs }, gnd,
     wind: { dir: _scnNum(() => windDir, 270), spd: _scnNum(() => windSpd, 0) },
-    env: (typeof env !== 'undefined') ? { tod: env.tod, vis: env.vis, rain: env.rain, nvg: env.nvg, sea: env.sea } : null,
+    env: (typeof env !== 'undefined') ? { tod: env.tod, vis: env.vis, rain: env.rain, snow: env.snow || 0, nvg: env.nvg, sea: env.sea, ceil: env.ceil || 0, ctop: env.ctop || 0 } : null,
     fuel: b2 ? { gal: _scnNum(() => b206FuelGal()), wb: (typeof b206Wb !== 'undefined') ? Object.assign({}, b206Wb) : null }
              : { lbs: _scnNum(() => fuelLeft() + fuelRight()) },
     wps: (S.wps || []).map(w => Object.assign({}, w)), awp: S.awp,
