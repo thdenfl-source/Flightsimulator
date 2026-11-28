@@ -188,7 +188,9 @@ function fixPanelDupes() {
   // 화면 배치 — 좌측은 PFD 창(탭으로 SYSTEM 창으로도 바꿀 수 있다)이고, 가운데·우측은 CDU·MAP·3D 중에서 고른다(단독 화면 중은 빼고)
   const solo = document.body.classList.contains('solo-mode');
   if (!solo) {
-    if (leftSel !== 'sysp') leftSel = 'pfd';
+    // 좌측은 PFD · SYSTEM 과, 덧붙인 화면(CN-235 CENTER · GLARE · OVHD … · PWR)도 받는다 — 그 밖은 PFD 로
+    const leftOk = k => k === 'pfd' || k === 'sysp' || !!(window.CN_WRAPS && window.CN_WRAPS[k]) || !!(window.EXTRA_WRAPS && window.EXTRA_WRAPS[k]);
+    if (!leftOk(leftSel)) leftSel = 'pfd';
     if (midSel === 'pfd') midSel = 'cdu';
     if (rightSel === 'pfd') rightSel = 'map';
     if (botSel === 'pfd') botSel = 'cdu';

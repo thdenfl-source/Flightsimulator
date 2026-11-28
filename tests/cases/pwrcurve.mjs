@@ -28,9 +28,10 @@ export async function run(page, t) {
     o.vsOk = Math.abs(a.predVs - 1000) < 30 && Math.abs(b.predVs + 1000) < 30;
     o.rocMax = st.rocMax > 0;
     toggleSimMode(false); selectPanel('right', sel0);
+    selectPanel('left', 'pwr'); o.left = panelGet('left') === 'pwr'; selectPanel('left', 'pfd');
     return o;
   });
-  t.ok(r.tab && r.shown && r.lit > 10, `위 창 탭 PWR — 동력-속도 곡선 화면이 뜬다 (${r.lit})`);
+  t.ok(r.tab && r.shown && r.lit > 10 && r.left, `위 창 탭 PWR — 동력-속도 곡선 화면이 뜬다 (${r.lit})`);
   t.ok(r.uOk, `요구 토크 U 곡선 — 호버 ${r.u.h.toFixed(0)}% > Vy ${r.u.vyKt.toFixed(0)}kt 최소 ${r.u.vy.toFixed(0)}% < 150kt ${r.u.v150.toFixed(0)}%`);
   t.ok(r.bleed[0] === 14 && r.bleed[1] === 18 && r.bleed[2] === 4, `블리드 에어 — ENG ANTI ICE −14% · 모두 −18% · HEATER −4% (${r.bleed.join(' · ')})`);
   t.ok(r.vsOk && r.rocMax, `ΔTQ → 상승률/강하율(FLM 표 · +${r.vs.tqUp}% → ${r.vs.up}fpm · ${r.vs.tqDn}% → ${r.vs.dn}fpm)`);
