@@ -1285,7 +1285,7 @@ html.ios-mode body { background: #0b1218; overflow: auto; }
 #b206-coll-pop .bcp-fail { width: auto !important; min-width: 0; flex: none; margin: 0 4px 0 4px; padding: 2px 6px; font-size: 10px; color: #ff8a80; border-color: #7a2a2a; }
 #b206-coll-pop-body { flex: 1; min-height: 0; padding: 4px; touch-action: none; }
 /* Bell 206 — 겹친 계기는 다섯 계기 판(25-b206panel.js b206OverlayDraw) · 판이 살짝 비친다 */
-html.ac-b206 #pfd-ov { background: transparent; border: 0; box-shadow: none; min-height: 0; min-width: min(260px, calc(100% - 120px)); }
+html.ac-cn235 #pfd-ov, html.ac-b206 #pfd-ov { background: transparent; border: 0; box-shadow: none; min-height: 0; min-width: min(260px, calc(100% - 120px)); }
 #pfd-ov canvas { display: block; width: 100%; height: 100%; }
 /* 3D 가 제 창(3D 탭 · 3D 단독) — 툴바가 없으므로 위에 붙인다 */
 #map3d-wrap > #pfd-ov { top: 8px; }
@@ -2772,25 +2772,13 @@ body.simple-mode #simple-view { display: flex; position: fixed; left: 0; right: 
 #simple-host { flex: 1 1 0; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 #simple-host > .page-content, #simple-host > #pfd-wrap { flex: 1 1 0; }
 #pfdov-size { position: static; align-items: center; }
-/* CN-235 페데스탈(42-cn235.js) — 파워 · 컨디션 · 플랩 · 착륙장치 · 브레이크 */
-#cn-ped { display: none; position: fixed; z-index: 9000; left: 50%; bottom: 12px; transform: translateX(-50%); flex-direction: column; width: min(760px, calc(100vw - 24px));
-  background: #1b1d1f; border: 1px solid #4a5157; border-radius: 8px; box-shadow: 0 6px 24px rgba(0,0,0,0.6); color: #e6e9ec; font: 12px Arial, sans-serif; }
-#cn-ped .cnp-bar { display: flex; align-items: center; justify-content: space-between; padding: 4px 6px 4px 10px; background: #2a2e32; border-radius: 8px 8px 0 0; }
-#cn-ped .cnp-x { width: 32px; padding: 2px 0; }
-#cn-ped .cnp-body { display: flex; flex-wrap: wrap; gap: 10px; padding: 10px; }
-#cn-ped .cnp-col { flex: 1 1 150px; display: flex; flex-direction: column; gap: 4px; }
-#cn-ped .cnp-t { color: #9fb4c6; font-weight: bold; font-size: 11px; margin-top: 2px; }
-#cn-ped .cnp-btns { display: flex; flex-wrap: wrap; gap: 4px; }
-#cn-ped button { background: #2f3439; color: #e6e9ec; border: 1px solid #555d64; border-radius: 4px; padding: 5px 7px; font: bold 11px Arial, sans-serif; cursor: pointer; }
-#cn-ped button.on { background: #1d6b34; border-color: #3cff6a; color: #fff; }
-#cn-ped button[data-cnp="park"].on { background: #8a1c1c; border-color: #ff5a4a; }
-#cn-ped .cnp-pl { height: 170px; display: flex; justify-content: center; }
-#cn-ped .cnp-track { position: relative; width: 56px; height: 100%; background: #0d0e0f; border: 1px solid #555d64; border-radius: 4px; touch-action: none; cursor: ns-resize; }
-#cn-ped .cnp-track::after { content: ""; position: absolute; left: 0; right: 0; top: 78%; height: 2px; background: #f2c418; }
-#cn-ped .cnp-mark { position: absolute; left: 60px; white-space: nowrap; color: #9fb4c6; font-size: 10px; }
-#cn-ped .cnp-knob { position: absolute; left: -6px; right: -6px; height: 28px; background: linear-gradient(#5a5f64, #2c2f32); border: 1px solid #aaa; border-radius: 6px; pointer-events: none; }
-#cn-ped .cnp-val { color: #3cff6a; font-weight: bold; font-size: 11px; }
-#cn-ped .cnp-note { color: #8a96a0; font-size: 10px; margin-top: 4px; }
+/* CN-235 페데스탈(43-cn235panel.js · 그림 1-1-10) — 캔버스 한 장(700×1000) */
+#cn-ped { display: none; position: fixed; z-index: 9000; right: 8px; top: 48px; flex-direction: column; background: #1b1d1f; border: 1px solid #4a5157; border-radius: 8px;
+  box-shadow: 0 6px 24px rgba(0,0,0,0.6); color: #e6e9ec; font: 12px Arial, sans-serif; max-width: calc(100vw - 16px); }
+#cn-ped .cnp-bar { display: flex; align-items: center; gap: 8px; padding: 3px 4px 3px 10px; background: #2a2e32; border-radius: 8px 8px 0 0; }
+#cn-ped .cnp-k { flex: 1; color: #8a96a0; font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#cn-ped .cnp-x { width: 32px; padding: 2px 0; background: #2f3439; color: #e6e9ec; border: 1px solid #555d64; border-radius: 4px; cursor: pointer; }
+#cn-ped .cnp-cv { display: block; height: min(calc(100vh - 90px), 900px); width: auto; aspect-ratio: 700 / 1000; max-width: calc(100vw - 18px); touch-action: none; cursor: pointer; }
 #pfdov-size span { flex: 0 0 auto; min-width: 34px; text-align: center; color: #9fb4c6; font: bold 10px 'Helvetica Neue', Arial, sans-serif; }
 `;
   (document.head || document.documentElement).appendChild(st);
