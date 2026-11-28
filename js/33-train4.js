@@ -391,7 +391,7 @@ function envFromMetar(raw, fieldElevFt = 0, when = new Date(), lat = S.lat, lon 
   const o = {}, w = {};
   const wm = raw.match(/\b(VRB|\d{3})(\d{2,3})(?:G(\d{2,3}))?(KT|MPS)\b/);
   if (wm) { const k = wm[4] === 'MPS' ? 1.944 : 1; w.dir = wm[1] === 'VRB' ? null : +wm[1]; w.spd = Math.round(+wm[2] * k); o.gust = wm[3] ? Math.min(20, Math.round((+wm[3] - +wm[2]) * k / 5) * 5) : 0; }
-  if (/\bCAVOK\b/.test(raw)) { o.vis = 0; o.ceil = 0; o.rain = 0; }
+  if (/\bCAVOK\b/.test(raw)) { o.vis = 0; o.ceil = 0; o.ctop = 0; o.rain = 0; o.snow = 0; }
   else {
     const vm = raw.match(/\s(\d{4})(?:\s|NDV)/); const sm = raw.match(/\b(\d+(?:\/\d+)?)SM\b/);
     let km = vm ? (+vm[1] >= 9999 ? 99 : +vm[1] / 1000) : sm ? (sm[1].includes('/') ? eval(sm[1]) : +sm[1]) * 1.609 : 99;
@@ -401,6 +401,8 @@ function envFromMetar(raw, fieldElevFt = 0, when = new Date(), lat = S.lat, lon 
     while ((m = re.exec(raw))) { const ft = +m[2] * 100 + fieldElevFt; if (!ceil || ft < ceil) ceil = ft; }
     o.ceil = ceil ? [500, 1000, 1500, 2500, 4000].reduce((b, s) => Math.abs(s - ceil) < Math.abs(b - ceil) ? s : b, 500) : 0;
     o.rain = /\+(?:SH|TS)?RA\b/.test(raw) ? 2 : /\b-?(?:SH|TS)?(?:RA|DZ)\b/.test(raw) ? 1 : 0;
+    o.snow = /\+(?:SH|BL)?SN\b/.test(raw) ? 2 : /\b-?(?:SH|BL|DR)?(?:SN|SG)\b/.test(raw) ? 1 : 0;   // 눈(SN · SG)
+    o.ctop = 0;   // METAR 는 밑면만 준다 — 윗면은 자동(+1,500ft)
   }
   // 해의 높이(°)로 시간대 — 6° 위 주간 · −6 ~ 6° 황혼 · 그 밑 야간
   const el = sunElevation(when, lat, lon);

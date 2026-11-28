@@ -21,10 +21,10 @@ function iimcStart(opt = {}) {
   if (iimc.on) return false;
   if (typeof env === 'undefined' || typeof envSet !== 'function') return false;
   const alt = S.alt || 0;
-  iimc.snap = { vis: env.vis, ceil: env.ceil, rain: env.rain };
+  iimc.snap = { vis: env.vis, ceil: env.ceil, ctop: env.ctop || 0, rain: env.rain };
   const ceil = Math.max(100, Math.floor((alt - 300) / 100) * 100);
-  envSet({ vis: 0.4, ceil, rain: Math.max(env.rain, 1) });
-  Object.assign(iimc, { on: true, t: 0, alt0: alt, hdg0: S.hdg, safeAlt: opt.safeAlt || ceil + 1500 + 100, lvlT: null, climbT: null,
+  envSet({ vis: 0.4, ceil, ctop: 0, rain: Math.max(env.rain, 1) });
+  Object.assign(iimc, { on: true, t: 0, alt0: alt, hdg0: S.hdg, safeAlt: opt.safeAlt || (typeof envCloudTop === 'function' ? envCloudTop() : ceil + 1500) + 100, lvlT: null, climbT: null,
     maxBnk: 0, minPit: 0, maxPit: 0, minIas: 999, maxIas: 0, minRa: 99999, res: null, fail: '',
     i0: (typeof fdr !== 'undefined' && fdr.rows) ? Math.max(0, fdr.rows.length - 1) : -1 });
   try { if (typeof fdrNote === 'function') fdrNote(`IIMC 시작 — ${Math.round(alt)}ft · 안전고도 ${iimc.safeAlt}ft`, 'warn'); } catch (e) { _swallow(e); }

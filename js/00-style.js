@@ -1116,9 +1116,16 @@ html.env-nvg .maplibregl-canvas { filter: grayscale(1) brightness(1.5) contrast(
 @keyframes env-nvg-grain { 0% { background-position: 0 0; } 20% { background-position: -37px 23px; } 40% { background-position: 51px -61px; } 60% { background-position: -83px -17px; } 80% { background-position: 29px 77px; } 100% { background-position: 0 0; } }
 html.env-nvg #map3d .env-nvg { display: block; }
 html.env-nvg #map3d .env-fx { filter: grayscale(1) sepia(1) hue-rotate(55deg) saturate(3) brightness(1.35); }
-#map3d .env-cloud { position: absolute; inset: 0; pointer-events: none; z-index: 1; opacity: 0; background: radial-gradient(ellipse at 50% 40%, #e8ecef 0%, #c9d0d6 60%, #b3bcc4 100%); }
+#map3d .env-cloud { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 1; opacity: 0; background: radial-gradient(ellipse at 50% 40%, #e8ecef 0%, #c9d0d6 60%, #b3bcc4 100%); }
 html.env-night #map3d .env-cloud { background: #10141a; } html.env-dusk #map3d .env-cloud { background: #5a5560; }
-html.env-rain1 .env-rain { display: block; opacity: 0.45; } html.env-rain2 .env-rain { display: block; opacity: 0.9; animation-duration: 0.22s; }
+html.env-rain1 .env-rain, html.env-rain2 .env-rain { display: none; }   /* 비는 캔버스(.env-precip · 29-env.js envPrecipStep)가 그린다 */
+#map3d .env-precip { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 2; }
+#map3d .env-cloud::before, #map3d .env-cloud::after { content: ''; position: absolute; inset: -20%; pointer-events: none; opacity: calc(0.35 + 0.5 * var(--cl-deep, 0));
+  background: radial-gradient(ellipse 40% 25% at 30% 40%, rgba(255,255,255,0.55), transparent 70%), radial-gradient(ellipse 35% 22% at 70% 60%, rgba(220,226,232,0.6), transparent 70%), radial-gradient(ellipse 50% 30% at 50% 80%, rgba(240,244,248,0.5), transparent 70%);
+  animation: env-wisp 9s linear infinite; }
+#map3d .env-cloud::after { animation-duration: 14s; animation-direction: reverse; transform: scale(1.3); }
+html.env-night #map3d .env-cloud::before, html.env-night #map3d .env-cloud::after { opacity: 0.15; }
+@keyframes env-wisp { from { transform: translate(-6%, 2%) scale(1.1); } 50% { transform: translate(6%, -2%) scale(1.25); } to { transform: translate(-6%, 2%) scale(1.1); } }
 @keyframes env-rain { from { background-position: 0 0; } to { background-position: -50px 200px; } }
 #env-wrap { display: none; position: fixed; inset: 0; z-index: 30001; background: rgba(0,0,0,0.45); align-items: center; justify-content: center; }
 #env-wrap .env-box { width: min(560px, 96vw); background: #121a21; border: 1px solid #3a4a58; border-radius: 8px; padding-bottom: 10px; color: #dfe6ec; font-size: 14px; }
