@@ -196,6 +196,75 @@ function _sarMarker() {
   try { const d = _sarMk.getElement() && _sarMk.getElement().querySelector('.sar-mk'); if (d) d.style.boxShadow = sarBeaconOn() ? '0 0 14px 6px #fff' : '0 0 6px #ff7a00'; } catch (e) { _swallow(e); }
 }
 
+// ── 좌표 · 주소로 놓기 ──
+//   좌표: 십진(35.2058, 129.1315) · 도 분(N35 12.345 E129 07.890 — 해상 무전에서 흔한 꼴) · 도 분 초(35°12'20"N 129°07'53"E) · 한글(북위 35도 12분 동경 129도 7분)
+//   주소 · 지명: OpenStreetMap Nominatim(10-tools.js geoSearch — 누를 때만 한 번 · 같은 말은 담아 둔다)
+//   놓은 자리가 땅이면 종류를 '육상 요구조자'로, 바다면 '익수자'로 맞춘다(지형을 아직 모르면 그대로)
+function sarParseCoord(str) {
+  let s = String(str || '').trim(); if (!s) return null;
+  s = s.toUpperCase().replace(/북위/g, 'N').replace(/남위/g, 'S').replace(/동경/g, 'E').replace(/서경/g, 'W')
+    .replace(/[도°º]/g, ' ').replace(/[분'′’]/g, ' ').replace(/[초"″”]/g, ' ').replace(/[,;/]/g, ' ').replace(/\s+/g, ' ').trim();
+  const num = '(\\d+(?:\\.\\d+)?)';
+  const part = (h1, h2) => new RegExp(`([${h1}])?\\s*${num}(?:\\s+${num})?(?:\\s+${num})?\\s*([${h1}])?`);
+  const toDeg = (d, m, sc) => { d = +d; m = m === undefined ? 0 : +m; sc = sc === undefined ? 0 : +sc; if (m >= 60 || sc >= 60) return NaN; return d + m / 60 + sc / 3600; };
+  // 반구 글자(N S E W)가 있으면 그것으로 둘을 가른다
+  if (/[NSEW]/.test(s)) {
+    const re = new RegExp(`^${part('NS').source}\\s*${part('EW').source}$`), m = s.match(re);
+    if (!m) return null;
+    let lat = toDeg(m[2], m[3], m[4]), lon = toDeg(m[7], m[8], m[9]);
+    if ((m[1] || m[5]) === 'S') lat = -lat; if ((m[6] || m[10]) === 'W') lon = -lon;
+    return (Math.abs(lat) <= 90 && Math.abs(lon) <= 180) ? { lat, lon } : null;
+  }
+  // 숫자만 — 2개(십진) · 4개(도 분) · 6개(도 분 초)
+  const n = s.split(' ').map(Number); if (n.some(x => !Number.isFinite(x))) return null;
+  let lat, lon;
+  if (n.length === 2) [lat, lon] = n;
+  else if (n.length === 4) { lat = Math.sign(n[0] || 1) * toDeg(Math.abs(n[0]), n[1]); lon = Math.sign(n[2] || 1) * toDeg(Math.abs(n[2]), n[3]); }
+  else if (n.length === 6) { lat = Math.sign(n[0] || 1) * toDeg(Math.abs(n[0]), n[1], n[2]); lon = Math.sign(n[3] || 1) * toDeg(Math.abs(n[3]), n[4], n[5]); }
+  else return null;
+  return (Number.isFinite(lat) && Number.isFinite(lon) && Math.abs(lat) <= 90 && Math.abs(lon) <= 180) ? { lat, lon } : null;
+}
+// 도 분(해상 무전 꼴) — N35°12.345' E129°07.890'
+function sarFmtDdm(lat, lon) {
+  const f = (v, h, w) => { const a = Math.abs(v), d = Math.floor(a), m = (a - d) * 60; return `${h}${String(d).padStart(w, '0')}°${m.toFixed(3).padStart(6, '0')}'`; };
+  return `${f(lat, lat >= 0 ? 'N' : 'S', 2)} ${f(lon, lon >= 0 ? 'E' : 'W', 3)}`;
+}
+// 좌표 · 주소로 놓는다 — 땅 · 바다에 맞춰 종류를 고르고 지도를 그리로
+function sarPlaceExact(lat, lon, why) {
+  sarPlaceAt(lat, lon);
+  try { if (typeof _mWater === 'function') { const w = _mWater(lat, lon); if (w === false && sar.type === 'water') sarSetType('land'); else if (w === true && sar.type === 'land' && typeof _tcElev === 'function' && _tcElev(lat, lon) != null) sarSetType('water'); } } catch (e) { _swallow(e); }
+  try { if (typeof leafMap !== 'undefined') leafMap.panTo([lat, lon]); } catch (e) { _swallow(e); }
+  let far = ''; try { const nm = distance(S.lat, S.lon, lat, lon); far = ` · 기체에서 ${nm.toFixed(1)}NM ${fmtA(bearing(S.lat, S.lon, lat, lon))}°`; } catch (e) { _swallow(e); }
+  try { uiToast(`🛟 요구조자 — ${sarFmtDdm(lat, lon)}${why ? ' (' + why + ')' : ''}${far}`, 'ok', 4500); } catch (e) { _swallow(e); }
+  try { if (typeof fdrNote === 'function') fdrNote(`요구조자 놓음 — ${sarFmtDdm(lat, lon)}${why ? ' · ' + why : ''}`); } catch (e) { _swallow(e); }
+  sarPanelRender();
+}
+function sarPlaceCoordInput() {
+  const p = document.getElementById('sar-panel'), inp = p && p.querySelector('[data-sarv="coord"]'); if (!inp) return false;
+  const c = sarParseCoord(inp.value);
+  if (!c) { try { uiToast('좌표를 읽지 못했습니다 — 예: 35.2058, 129.1315 · N35 12.345 E129 07.890', 'warn', 4500); } catch (e) { _swallow(e); } return false; }
+  sarPlaceExact(c.lat, c.lon, '좌표 입력'); return true;
+}
+let _sarGeo = [];
+async function sarAddrSearch() {
+  const p = document.getElementById('sar-panel'), inp = p && p.querySelector('[data-sarv="addr"]'), box = p && p.querySelector('[data-sarv="geo"]'); if (!inp || !box) return [];
+  const q = inp.value.trim(); if (!q) return [];
+  const asC = sarParseCoord(q); if (asC) { sarPlaceExact(asC.lat, asC.lon, '좌표 입력'); return [asC]; }   // 주소 칸에 좌표를 넣어도 된다
+  box.innerHTML = '<i>찾는 중…</i>';
+  try {
+    _sarGeo = typeof geoSearch === 'function' ? (await geoSearch(q)).slice(0, 5) : [];
+    const esc = t => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+    box.innerHTML = _sarGeo.length ? _sarGeo.map((r, i) => `<button class="sar-geo-it" data-sar="geo:${i}"><b>${esc(r.name)}</b><span>${esc(r.detail)}</span></button>`).join('') + '<div class="sar-hint">OpenStreetMap 검색 — 항법용 자료가 아닙니다</div>'
+      : '<i>찾은 곳이 없습니다 — 다른 말로(시 · 군 · 동 이름을 함께)</i>';
+  } catch (e) { _swallow(e); _sarGeo = []; box.innerHTML = '<i>주소 검색에 닿지 못했습니다(인터넷 확인) — 좌표로 넣을 수 있습니다</i>'; }
+  return _sarGeo;
+}
+function sarAddrPick(i) {
+  const r = _sarGeo[i]; if (!r) return false;
+  const box = document.querySelector('#sar-panel [data-sarv="geo"]'); if (box) box.innerHTML = '';
+  sarPlaceExact(r.lat, r.lon, r.name); return true;
+}
+
 // ── SAR CONTROL 창 ──
 function _sarPanel() {
   let p = document.getElementById('sar-panel');
@@ -213,6 +282,11 @@ function _sarPanel() {
     `<button class="ship-tab ship-lvl sar-l" data-lvl="LO" data-sar="l:LO">하<small>움직임 없음</small></button></div>` +
     `<div class="sar-lbl">위치</div><div class="sar-row">` +
     `<button class="ship-tab" data-sar="ahead">기수 앞 100m</button><button class="ship-tab" data-sar="center">지도 가운데</button></div>` +
+    `<div class="sar-lbl">좌표로</div><div class="sar-row sar-in"><input type="text" data-sarv="coord" placeholder="35 12.345N 129 07.890E" autocomplete="off"><button class="ship-tab" data-sar="coord">놓기</button></div>` +
+    `<div class="sar-hint">35.2058, 129.1315 · N35°12.345' E129°07.890' · 35°12'20"N 129°07'53"E · 북위 35도 12분 동경 129도 7분</div>` +
+    `<div class="sar-lbl">주소 · 지명으로</div><div class="sar-row sar-in"><input type="text" data-sarv="addr" placeholder="예: 부산 해운대 해수욕장" autocomplete="off"><button class="ship-tab" data-sar="addr">찾기</button></div>` +
+    `<div class="sar-geo" data-sarv="geo"></div>` +
+    `<div class="sar-pos" data-sarv="pos"></div>` +
     `<div class="sar-lbl">HOIST <b class="sar-pw"></b></div><div class="sar-row">` +
     `<button class="ship-tab sar-h" data-hoist="-1">▲ UP</button><button class="ship-tab sar-h" data-hoist="1">▼ DOWN</button></div>` +
     `<div class="sar-st"></div>` +
@@ -228,6 +302,14 @@ function _sarPanel() {
     else if (a === 'ahead') sarPlaceAhead();
     else if (a === 'center') sarPlaceCenter();
     else if (a === 'reset') sarReset();
+    else if (a === 'coord') sarPlaceCoordInput();
+    else if (a === 'addr') sarAddrSearch();
+    else if (a.startsWith('geo:')) sarAddrPick(+a.slice(4));
+  });
+  // 입력 칸 — Enter 로 놓기 · 찾기 (앱 단축키에 닿지 않게)
+  p.querySelectorAll('[data-sarv="coord"], [data-sarv="addr"]').forEach(inp => {
+    inp.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') { e.preventDefault(); if (inp.dataset.sarv === 'coord') sarPlaceCoordInput(); else sarAddrSearch(); } });
+    ['keyup', 'keypress'].forEach(ev => inp.addEventListener(ev, e => e.stopPropagation()));
   });
   // ▲ UP · ▼ DOWN — 누르고 있는 동안
   p.querySelectorAll('[data-hoist]').forEach(b => {
@@ -277,6 +359,8 @@ function sarPanelRender() {
     `<div>유지 <b>${sar.hold.toFixed(0)} / ${SAR_CAP_T} s</b> · <b style="color:#ffcc66">${sar.on ? st : '요구조자 없음'}</b></div>`;
   const el = p.querySelector('.sar-st');
   if (el.innerHTML !== html) el.innerHTML = html;
+  const pe = p.querySelector('[data-sarv="pos"]');
+  if (pe) { const t = sar.on && sar.lat !== null ? `지금 자리 ${sarFmtDdm(sar.lat, sar.lon)}` : ''; if (pe.textContent !== t) pe.textContent = t; }
 }
 
 // ── 3D 모형(요구조자 · 호이스트 붐 · 케이블 · 고리) ──
