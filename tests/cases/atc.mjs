@@ -57,7 +57,7 @@ export async function run(page, t) {
   t.ok(/below glidepath/.test(A.low) && /missed approach/.test(A.low) && A.out, `너무 낮으면 복행 권고 · 범위 밖은 문구 없음 (“${A.low}”)`);
   t.ok(A.said.some(x => /turn left heading 2 7 0|turn right heading 2 7 0/.test(x)) && A.said.some(x => /and maintain 3000 feet/.test(x)) && A.said.some(x => /radar contact/.test(x)) && A.log,
     `관제 지시 — 내 기체면 읽어 준다(${A.said.length}개) · 교신 기록`);
-  t.ok(A.autoOn && A.autoOff && A.autoS === 5, `자동 PAR 유도 — 단추로 켜고 끈다 · ${A.autoS}초마다`);
+  t.ok(A.autoOn && A.autoOff && A.autoS === 15, `자동 PAR 유도 — 단추로 켜고 끈다 · ${A.autoS}초마다`);
   t.ok(A.asr && A.par && A.tabs, 'ASR · PAR 화면을 그린다 · 탭 · 🧰 도구');
 
   // ── 멀티 관제 — 관제사 창 + 조종사 창(같은 브라우저 · BroadcastChannel) ──
