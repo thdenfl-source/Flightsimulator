@@ -166,5 +166,28 @@ export async function run(page, t) {
   t.ok(SY.revInhibit && SY.lim.join() === '14400,14200,13600,14450,819,1276,139,120' && SY.fuelMax === 4190 && SY.cg > 16 && SY.cg < 30 && SY.lights >= 3,
        `AOM 한계 — MTOW 14,400 · MLW 14,200 · MZFW 13,600 · 램프 14,450 · 연료 4,190kg · CG ${SY.cg.toFixed(1)}%MAC · 역추력 120KIAS · NAV 등`);
   t.ok(SY.hits.OVHD >= 60 && SY.hits.CB >= 100 && SY.hits.CONS >= 20 && SY.hits.PERF >= 10, `오버헤드 · 회로차단기 · 콘솔 · W&B 화면(누를 자리 ${JSON.stringify(SY.hits)})`);
+  // PFD 아래 — 흰수리 FCP(소프트키 · FCP SIMPLE) 대신 CN-235 조작 띠 · 판을 눌러도(터치) 흰수리 PFD 입력창이 뜨지 않는다
+  const FC = await page.evaluate(async () => {
+    const hid = ['#pfd-sk', '#fcp-simple'].every(s => { const e = document.querySelector(s); return !e || getComputedStyle(e).display === 'none'; });
+    const bar = document.getElementById('cn-fcp');
+    const press = sel => bar.querySelector(sel).dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+    if (altHoldOn) toggleAltHold();
+    press('[data-cnf="m:ALT"]'); const alt = altHoldOn;
+    const h0 = selHdg; press('[data-cnf="k:hdg:1"]'); bar.dispatchEvent(new PointerEvent('pointerup', { bubbles: true })); const hdg = selHdg !== h0;
+    // 판 위 탭(W&B · PED) 자리를 터치 — uiPrompt 가 열리면 안 된다
+    let prompts = 0; const o0 = window.uiPrompt; window.uiPrompt = async () => { prompts++; return null; };
+    const c = document.getElementById('pfd'); drawPFD(); const r = c.getBoundingClientRect(), k = r.width / c.width;
+    for (const t of (c._cnHit.tabs || [])) {
+      const x = r.left + (t.x + t.w / 2) * k, y = r.top + (t.y + t.h / 2) * k;
+      try { const tc = new Touch({ identifier: 1, target: c, clientX: x, clientY: y }); c.dispatchEvent(new TouchEvent('touchstart', { touches: [tc], changedTouches: [tc], bubbles: true })); c.dispatchEvent(new TouchEvent('touchend', { touches: [], changedTouches: [tc], bubbles: true })); } catch (e) { /* 터치 없는 브라우저 */ }
+      c.dispatchEvent(new MouseEvent('click', { clientX: x, clientY: y, bubbles: true }));
+    }
+    for (const [fx, fy] of [[0.5, 0.05], [0.65, 0.05], [0.8, 0.1]]) c.dispatchEvent(new MouseEvent('click', { clientX: r.left + r.width * fx, clientY: r.top + r.height * fy, bubbles: true }));
+    await new Promise(res => setTimeout(res, 100));
+    window.uiPrompt = o0; cnPageSet('AUTO'); cnPedToggle(false);
+    return { hid, bar: !!bar && bar.offsetHeight > 30, alt, hdg, prompts };
+  });
+  t.ok(FC.hid && FC.bar && FC.alt && FC.hdg, 'PFD 아래 — 흰수리 FCP 대신 CN-235 조작 띠(AP 모드 · HDG · CRS · ALT · SPD · BARO 노브)가 듣는다');
+  t.ok(FC.prompts === 0, `판 위 탭(W&B · PED)을 눌러도 흰수리 PFD 입력창(IAS · ALT)이 뜨지 않는다 (${FC.prompts})`);
   t.ok(page.errors.length === 0, `오류 없음${page.errors.length ? ' — ' + page.errors.join(' / ') : ''}`);
 }

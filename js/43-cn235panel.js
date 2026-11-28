@@ -846,3 +846,86 @@ if (CN_ON) {
   }, true);
   document.addEventListener('click', e => { if (e.target && e.target.closest && e.target.closest('[data-cnk]')) { e.preventDefault(); e.stopPropagation(); } }, true);
 }
+
+// ══ PFD 아래 조작 띠(#cn-fcp) — 흰수리 FCP 대신 CN-235 방식 ══
+//   위 줄: 글레어실드 AP 모드 선택(그림 1-1-9 C) — HDG · NAV · APPR · B/C · CLIMB · ALT · ALT SEL · VS · IAS · DSC · YAW ENG · AP ENG · SR · 1/2Ø
+//   아래 줄: 페데스탈 노브(그림 1-1-10) — HDG · CRS · ALT PRESEL · SPEED · BARO(누르면 지금 값으로) · VERTICAL TRIM DN/UP · GA · AP DISC · PED
+//   Cockpit 모드(3D 단독)의 FCP ON 칸에도 이 띠가 옮겨 간다(04-map.js _fcpSplit)
+const CN_FCP_MODES = [['HDG', 'HDG'], ['NAV', 'NAV'], ['APPR', 'APPR'], ['B/C', 'BC'], ['CLM', 'CLIMB'], ['ALT', 'ALT'], ['ASEL', 'ASEL'], ['VS', 'VS'], ['IAS', 'IAS'], ['DSC', 'DSC']];
+const CN_FCP_KNOBS = [['HDG', 'hdg'], ['CRS', 'crs'], ['ALT', 'alt'], ['SPD', 'spd'], ['BARO', 'baro']];
+function _cnFcpVal(k) {
+  try {
+    if (k === 'hdg') return String(Math.round(typeof toMag === 'function' ? toMag(selHdg) : selHdg) % 360 || 360).padStart(3, '0');
+    if (k === 'crs') return String(Math.round(typeof toMag === 'function' ? toMag(activeCrs()) : activeCrs()) % 360 || 360).padStart(3, '0');
+    if (k === 'alt') return String(altHoldOn ? selAlt : altaSelGet());
+    if (k === 'spd') return String(Math.round(selSpd));
+    if (k === 'baro') { const q = Number.isFinite(window._qnhHpa) ? window._qnhHpa : 1013.25; return (q / 33.8639).toFixed(2); }
+  } catch (e) { _swallow(e); }
+  return '';
+}
+function cnFcpStep(k, d) {
+  try {
+    if (k === 'hdg') applyDelta('hdg', d);
+    else if (k === 'crs') applyDelta('crs', d);
+    else if (k === 'alt') { if (altHoldOn) selAlt = Math.max(0, selAlt + d * 100); else applyDelta('alt', d * 100); }
+    else if (k === 'spd') applyDelta('spd', d);
+    else if (k === 'baro') fcpsBaro(d);
+  } catch (e) { _swallow(e); }
+}
+// 노브 누름(PUSH) — HDG · CRS 는 지금 기수 · 지금 자리로(SYNC) · ALT 는 ALT SEL 무장 · SPEED 는 지금 속도 · BARO 는 STD
+function cnFcpPush(k) {
+  try {
+    if (k === 'hdg') { selHdg = ((Math.round(hdgInd()) + 359) % 360) + 1; }
+    else if (k === 'crs') fcpSync('crs');
+    else if (k === 'alt') altaPush();
+    else if (k === 'spd') selSpd = Math.round(S.spd);
+    else if (k === 'baro') fcpsBaroStd();
+  } catch (e) { _swallow(e); }
+}
+function cnFcpBuild() {
+  if (!CN_ON || document.getElementById('cn-fcp')) return;
+  const bar = document.querySelector('#pfd-wrap .ctrl-bar'); if (!bar) return;
+  const d = document.createElement('div'); d.id = 'cn-fcp';
+  d.innerHTML = '<div class="cnf-row">' + CN_FCP_MODES.map(([t, k]) => `<div class="cnf-b" data-cnf="m:${k}">${t}</div>`).join('') +
+    '<span class="cnf-sep"></span><div class="cnf-b ap" data-cnf="yd" title="YAW ENG">YAW</div><div class="cnf-b ap" data-cnf="ap" title="AP ENG">AP</div><div class="cnf-b" data-cnf="sr">SR</div><div class="cnf-b" data-cnf="half">1/2Ø</div></div>' +
+    '<div class="cnf-row">' + CN_FCP_KNOBS.map(([t, k]) => `<div class="cnf-k"><div class="cnf-b" data-cnf="k:${k}:-1">◀</div><i data-cnf="p:${k}"><small>${t}</small><b data-cnv="${k}"></b></i><div class="cnf-b" data-cnf="k:${k}:1">▶</div></div>`).join('') +
+    '<div class="cnf-b" data-cnf="vt:-1" title="VERTICAL TRIM DN">VT▲DN</div><div class="cnf-b" data-cnf="vt:1" title="VERTICAL TRIM UP">VT▼UP</div><div class="cnf-b red" data-cnf="ga">GA</div><div class="cnf-b red" data-cnf="apd" title="AP DISCONNECT">DISC</div><div class="cnf-b" data-cnf="ped">PED</div></div>';
+  bar.prepend(d);
+  let rep = null;
+  const stop = () => { if (rep) { clearInterval(rep.i); clearTimeout(rep.t); rep = null; } };
+  const run = a => {
+    const [k, x, y] = a.split(':');
+    if (k === 'm') cnApMode(x);
+    else if (k === 'yd') cn.yd = !cn.yd;
+    else if (k === 'ap') cnApEng();
+    else if (k === 'sr') cn.sr = !cn.sr;
+    else if (k === 'half') cn.half = !cn.half;
+    else if (k === 'k') cnFcpStep(x, +y);
+    else if (k === 'p') cnFcpPush(x);
+    else if (k === 'vt') cnPitchWheel(+x);
+    else if (k === 'ga') cnGa();
+    else if (k === 'apd') cnApDisc();
+    else if (k === 'ped') cnPedToggle();
+    cnFcpSync(); _cnRedraw();
+  };
+  d.addEventListener('pointerdown', e => {
+    const t = e.target.closest('[data-cnf]'); if (!t) return;
+    e.preventDefault(); e.stopPropagation(); stop();
+    const a = t.dataset.cnf; run(a);
+    if (/^(k|vt):/.test(a)) rep = { t: setTimeout(() => { rep.i = setInterval(() => run(a), 90); }, 380) };
+  });
+  ['pointerup', 'pointercancel', 'pointerleave'].forEach(ev => d.addEventListener(ev, stop));
+  cnFcpSync();
+  try { resizePFD(); drawPFD(); } catch (e) { _swallow(e); }
+}
+function cnFcpSync() {
+  const d = document.getElementById('cn-fcp'); if (!d) return;
+  const md = cnApModes(), set = (sel, on) => { const e = d.querySelector(sel); if (e && e.classList.contains('on') !== !!on) e.classList.toggle('on', !!on); };
+  CN_FCP_MODES.forEach(([, k]) => set(`[data-cnf="m:${k}"]`, md[k]));
+  set('[data-cnf="yd"]', cn.yd); set('[data-cnf="ap"]', cn.ap); set('[data-cnf="sr"]', cn.sr); set('[data-cnf="half"]', cn.half);
+  CN_FCP_KNOBS.forEach(([, k]) => { const e = d.querySelector(`[data-cnv="${k}"]`), v = _cnFcpVal(k); if (e && e.textContent !== v) e.textContent = v; });
+}
+if (CN_ON) {
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', cnFcpBuild); else cnFcpBuild();
+  setInterval(() => { try { cnFcpBuild(); cnFcpSync(); } catch (e) { _swallow(e); } }, 300);
+}
