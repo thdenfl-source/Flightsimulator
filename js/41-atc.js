@@ -10,19 +10,19 @@
 //      활공로는 활주로 표고 · 시단에서 3° · 접근은 화면 오른쪽에서 왼쪽으로(접지점이 왼쪽)
 //      좌우는 45° NAV 원칙 — 많이 벗어나면 45° 로 중심선에 붙이고 가까워질수록 줄인다
 //      고른 표적의 활공로 · 중심선 벗어남을 재어 표준 GCA 문구(…miles from touchdown, slightly left of course, turn right heading …, on glidepath)를 만든다
-//      '자동 유도'를 켜면 접지점까지 0.5NM 줄 때마다(…4.5 · 4 · 3.5…) 그 문구를 불러 준다 · 결심고도 · 시단 위는 한 번씩(혼자 연습 — 관제사 없이 PAR 접근)
+//      '자동 유도'를 켜면 5초마다 그 문구를 불러 준다(혼자 연습 — 관제사 없이 PAR 접근)
 //   ④ 관제 지시 — 레이더 포착 · 선회(기수) · 고도 · 속도 · PAR 접근 허가 · 착륙 허가 · 복행 · 관제탑 연락 · 직접 적기
 //      고른 표적이 내 기체면 이 기기에서 읽어 주고(음성 · 알림 · 강평), 협동 비행 기체면 그 기기로 보낸다
 //   ⑤ 멀티 관제 — 협동 비행 방(40-crew.js · SS4)에 '관제사로 참가'하면 이 기기는 제 기체를 보내지 않고
 //      관제 시설(예: RKPK APP)을 3초마다 알린다. 조종사 기기는 지시를 받으면 읽어 주고 WILCO · UNABLE · SAY AGAIN 으로 답한다
 // ══════════════════════════════════════════════════════
 const ATC_GP = 3, ATC_DH = 200, ATC_PAR_NM = 10, ATC_TD_NM = 0;   // 활공각(°) · 결심고도(ft, 활주로 표고 위) · PAR 거리 · 활공로 기준점(시단 — 활주로 표고에서 3°)
-const ATC_AUTO_NM = 0.5;   // 자동 PAR 유도 — 접지점까지 이만큼(NM) 줄 때마다 부른다
+const ATC_AUTO_S = 5;   // 자동 PAR 유도 — 몇 초마다 부르는가
 const ATC_INT_MAX = 45, ATC_INT_PER_NM = 90;   // 좌우 유도 — 45° NAV 원칙: 중심선에서 0.5NM 이상이면 45° 로 붙이고, 가까울수록 줄인다(1NM 당 90° · 5° 아래로는 내리지 않는다)
 const ATC_UNITS = { APP: 'approach', TWR: 'tower', GCA: 'precision' };
 const atc = Object.assign({ apt: 'RKPK', rwy: '', view: 'both', rng: 20, own: true, auto: false, unit: 'APP' },
   (() => { try { return JSON.parse(localStorage.getItem('atcCfg') || 'null') || {}; } catch (e) { return {}; } })(),
-  { sel: null, hist: {}, histT: 0, log: [], shown: false, el: null, autoT: 0, autoIdx: {}, sweep: 0, reply: null });
+  { sel: null, hist: {}, histT: 0, log: [], shown: false, el: null, autoT: 0, sweep: 0, reply: null });
 function _atcSave() { try { localStorage.setItem('atcCfg', JSON.stringify({ apt: atc.apt, rwy: atc.rwy, view: atc.view, rng: atc.rng, own: atc.own, auto: atc.auto, unit: atc.unit })); } catch (e) { _swallow(e); } }
 const _aEsc = t => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
 const _aNE = (la0, lo0, la, lo) => ({ n: (la - la0) * 60, e: (lo - lo0) * 60 * Math.cos(la0 * Math.PI / 180) });   // NM
@@ -184,27 +184,10 @@ setInterval(() => {
     for (const t of atcTargets()) { seen.add(t.id); const H = atc.hist[t.id] || (atc.hist[t.id] = []); H.push([t.lat, t.lon, t.alt]); if (H.length > 8) H.shift(); }
     for (const k of Object.keys(atc.hist)) if (!seen.has(k)) delete atc.hist[k];
   }
-  if (atc.auto) atcAutoStep();
+  if (atc.auto && now - atc.autoT >= ATC_AUTO_S * 1000) {
+    const t = atcTarget(); if (t) { const txt = atcTalk(t); if (txt) { atc.autoT = now; atcSend(t, txt, { quiet: true }); } }
+  }
 }, 500);
-
-// 자동 PAR 유도 — 0.5NM 눈금(…5 · 4.5 · 4…)을 안쪽으로 지날 때마다 한 번 · 결심고도 · 시단 위는 한 번씩
-//   PAR 범위에 처음 들어오면 곧바로 한 번 부르고, 범위를 벗어나거나 바깥쪽으로 물러나면 다시 들어올 때 처음처럼
-function atcAutoStep() {
-  const t = atcTarget(); if (!t) return null;
-  const P = atcPar(t), A = atc.autoIdx[t.id] || (atc.autoIdx[t.id] = { idx: null, dh: false, thr: false });
-  if (!P || !P.inCov) { A.idx = null; A.dh = false; A.thr = false; return null; }
-  const idx = Math.ceil(P.R / ATC_AUTO_NM - 1e-6);
-  let say = false;
-  if (A.idx === null || idx > A.idx + 1) { say = true; A.dh = false; A.thr = false; }   // 처음 들어옴 · 많이 물러났다 다시
-  else if (idx < A.idx) say = true;                                                       // 0.5NM 눈금을 안쪽으로 지났다
-  if (P.dh && !A.dh) { say = true; A.dh = true; }
-  if (P.R < 0.35 && !A.thr) { say = true; A.thr = true; }
-  // 처음(또는 다시) 들어오며 부른 거리(가장 가까운 눈금)는 이미 부른 것으로 — 바로 그 눈금을 지나며 또 부르지 않게 · 한 눈금 물러나는 흔들림은 무시
-  A.idx = (A.idx === null || idx > A.idx + 1) ? Math.round(P.R / ATC_AUTO_NM) : Math.min(A.idx, idx);
-  if (!say) return null;
-  const txt = atcTalk(t); if (!txt) return null;
-  atc.autoT = Date.now(); atcSend(t, txt, { quiet: true }); return txt;
-}
 
 // ── 창 ──
 function atcPanelSync(want) {
@@ -235,7 +218,7 @@ function _atcBuild() {
     if (k === 'view') atc.view = v;
     else if (k === 'rng') atc.rng = +v;
     else if (k === 'own') atc.own = !atc.own;
-    else if (k === 'auto') { atc.auto = !atc.auto; atc.autoT = 0; atc.autoIdx = {}; try { uiToast(atc.auto ? `📡 자동 PAR 유도 켬 — 접지점까지 ${ATC_AUTO_NM}NM 마다 불러 줍니다` : '📡 자동 PAR 유도 끔'); } catch (er) { _swallow(er); } try { if (typeof fdrNote === 'function') fdrNote(`ATC 자동 PAR 유도 ${atc.auto ? '켬' : '끔'}`); } catch (er) { _swallow(er); } }
+    else if (k === 'auto') { atc.auto = !atc.auto; atc.autoT = 0; try { uiToast(atc.auto ? `📡 자동 PAR 유도 켬 — ${ATC_AUTO_S}초마다 불러 줍니다` : '📡 자동 PAR 유도 끔'); } catch (er) { _swallow(er); } try { if (typeof fdrNote === 'function') fdrNote(`ATC 자동 PAR 유도 ${atc.auto ? '켬' : '끔'}`); } catch (er) { _swallow(er); } }
     else if (k === 'sel') atc.sel = v + (b.dataset.at.split(':').slice(2).length ? ':' + b.dataset.at.split(':').slice(2).join(':') : '');
     else if (k === 'say' && t) { const val = { hdg: R.querySelector('[data-atcv="ihdg"]').value, alt: R.querySelector('[data-atcv="ialt"]').value, spd: R.querySelector('[data-atcv="ispd"]').value };
       if ((v === 'hdg' && val.hdg === '') || (v === 'alt' && val.alt === '') || (v === 'spd' && val.spd === '')) { try { uiToast('값을 먼저 넣으십시오', 'warn'); } catch (er) { _swallow(er); } return; }
@@ -269,7 +252,7 @@ function _atcRenderSide() {
     return `<button class="atc-t${x.id === atc.sel ? ' on' : ''}" data-at="sel:${x.id}"><b>${_aEsc(x.cs)}</b> ${x.kind === 'own' ? '내 기체' : x.kind === 'wing' ? '방' : 'AI'} · ${Math.hypot(d.n, d.e).toFixed(1)}NM · ${Math.round(x.alt)}ft</button>`; }).join('') : '<i>표적 없음</i>';
   const par = P ? `<div class="atc-par-rd">${P.inCov ? `R ${P.R.toFixed(2)}NM · 활공로 ${P.devFt >= 0 ? '+' : ''}${Math.round(P.devFt)}ft(${P.dE >= 0 ? '+' : ''}${P.dE.toFixed(2)}°) · 중심선 ${P.devAzFt >= 0 ? 'R' : 'L'} ${Math.abs(Math.round(P.devAzFt))}ft(${P.azDeg.toFixed(2)}°)<br><b>${_aEsc(P.azTxt)} · ${_aEsc(P.elevTxt)}</b>` : 'PAR 범위 밖 — 활주로 10NM · ±20° 안 접근 쪽'}</div>` : '';
   const who = typeof wing !== 'undefined' && wing.room ? (wing.role === 'atc' ? `🎧 관제사로 방에 · 조종사 ${Object.keys(wing.peers || {}).length}명` : '✈ 조종사로 방에') : '방 없음 — 이 기기의 기체만(혼자 연습)';
-  const autoBtn = `<button class="atc-b atc-auto${atc.auto ? ' on' : ''}" data-at="auto:1" title="접지점까지 ${ATC_AUTO_NM}NM 줄 때마다 PAR 유도 문구를 불러 준다(결심고도 · 시단 위는 한 번씩)">${atc.auto ? '■ 자동 유도 끄기' : '▶ 자동 유도 켜기'}</button>`;
+  const autoBtn = `<button class="atc-b atc-auto${atc.auto ? ' on' : ''}" data-at="auto:1" title="${ATC_AUTO_S}초마다 PAR 유도 문구를 불러 준다">${atc.auto ? '■ 자동 유도 끄기' : '▶ 자동 유도 켜기'}</button>`;
   el.innerHTML = `<div class="atc-h">${_aEsc(atcFac())} · ${who}</div>
     <div class="atc-autorow">${autoBtn}<span>${atc.auto ? `자동 유도 중 — ${t ? _aEsc(t.cs) : '표적 없음'}${P && !P.inCov ? ' (PAR 범위 밖 — 들어오면 시작)' : ''}` : '자동 유도 꺼짐'}</span></div>
     <div class="atc-list">${list}</div>${par}

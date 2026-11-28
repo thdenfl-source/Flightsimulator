@@ -36,14 +36,7 @@ export async function run(page, t) {
     R.querySelector('[data-atcv="ialt"]').value = '3000'; R.querySelector('[data-at="say:alt"]').click();
     R.querySelector('[data-at="say:contact"]').click();
     o.said = said.slice(); o.log = atc.log.length >= 3;
-    // 자동 유도 — 0.5NM 눈금을 지날 때마다 한 번(6NM 에서 0.2NM 까지 0.05NM 씩 다가간다)
-    { const sp2 = window.speak, heard = []; window.speak = x => { heard.push(x); return true; };
-      atc.auto = true; atc.autoIdx = {}; atc.sel = 'OWN';
-      for (let r = 6.02; r > 0.2; r -= 0.05) { const [a, b] = destPoint(E.thr.lat, E.thr.lon, back, r); S.lat = a; S.lon = b; S.alt = E.elev + r * 6076.1 * Math.tan(3 * Math.PI / 180); atcAutoStep(); }
-      // 흔들림 — 눈금 바로 안쪽에서 조금 물러났다 다시 들어와도 또 부르지 않는다
-      atc.auto = false; window.speak = sp2;
-      const miles = heard.map(x => (x.match(/([\d.]+) miles? from touchdown/) || [])[1]).filter(Boolean);
-      o.autoMiles = miles.join(','); o.autoDh = heard.some(x => /at decision height/.test(x)); o.autoThr = heard.some(x => /over landing threshold/.test(x)); o.autoN = heard.length; }
+    o.autoS = ATC_AUTO_S;
     atc.auto = false; atcPanelSync(true); R.querySelector('.atc-auto').click(); o.autoOn = atc.auto === true && /자동 유도 끄기/.test(R.querySelector('.atc-auto').textContent);
     R.querySelector('.atc-auto').click(); o.autoOff = atc.auto === false;
     window.speak = sp;
@@ -64,8 +57,7 @@ export async function run(page, t) {
   t.ok(/below glidepath/.test(A.low) && /missed approach/.test(A.low) && A.out, `너무 낮으면 복행 권고 · 범위 밖은 문구 없음 (“${A.low}”)`);
   t.ok(A.said.some(x => /turn left heading 2 7 0|turn right heading 2 7 0/.test(x)) && A.said.some(x => /and maintain 3000 feet/.test(x)) && A.said.some(x => /radar contact/.test(x)) && A.log,
     `관제 지시 — 내 기체면 읽어 준다(${A.said.length}개) · 교신 기록`);
-  t.ok(A.autoOn && A.autoOff, '자동 PAR 유도 — 단추로 켜고 끈다');
-  t.ok(A.autoMiles === '6,5.5,5,4.5,4,3.5,3,2.5,2,1.5' && A.autoDh && A.autoThr, `자동 유도 — 0.5NM 마다 한 번(${A.autoMiles}) · 결심고도 · 시단 위 (모두 ${A.autoN}번)`);
+  t.ok(A.autoOn && A.autoOff && A.autoS === 5, `자동 PAR 유도 — 단추로 켜고 끈다 · ${A.autoS}초마다`);
   t.ok(A.asr && A.par && A.tabs, 'ASR · PAR 화면을 그린다 · 탭 · 🧰 도구');
 
   // ── 멀티 관제 — 관제사 창 + 조종사 창(같은 브라우저 · BroadcastChannel) ──
