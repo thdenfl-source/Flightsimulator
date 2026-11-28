@@ -173,7 +173,7 @@ function toggleEnvPanel() {
       grp('교통 장주비행', 'tfcPat', [[0, '없음'], [1, '셋에 하나'], [2, '반'], [3, '모두']]) +
       grp('지면 기온(결빙)', 'oat', [['auto', 'METAR'], [15, '15°C'], [5, '5°C'], [0, '0°C'], [-5, '−5°C'], [-15, '−15°C']]) +
       `<div class="env-note" data-envv="ice"></div>` +
-      grp('공항 주기 헬기', 'parked', [['false', '없음'], ['true', '있음']]) +
+      grp('공항 주기 기체', 'parked', [['false', '없음'], ['true', '있음']]) +
       grp('착륙등(흰수리)', 'ldg', [['false', '끔'], ['true', '켬']]) +
       grp('RA 콜아웃', 'raCall', [['false', '끔'], ['true', '켬']]) +
       `<div class="env-note" data-envv="sea"></div><div class="env-row"><span>IIMC 연습</span><div><button class="sim-btn" data-envx="iimc">⚠ 지금 구름 속으로(IIMC) — 회복 판정</button></div></div><div class="env-row"><span>METAR</span><div><button class="sim-btn" data-envx="metar">가까운 공항 METAR 로 맞추기</button></div></div></div>`;

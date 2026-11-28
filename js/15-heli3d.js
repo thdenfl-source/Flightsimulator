@@ -1011,10 +1011,13 @@ function _h3DrawHeli(h, parts, SP, main, pose, ph, tph, spin, aim) {
 //   높이는 내 기체와 같은 셈 — 그려진 땅(과장 배율) + 그 자리의 AGL. 15km 밖은 그리지 않는다(밤 불빛 · 점은 29-env.js).
 const TFC3D_MAX_M = 15000;
 function tfc3dActive() { return typeof traffic !== 'undefined' && traffic.length > 0; }
-// ── 공항 주기 헬기 — 가까운 공항(내 기체 12km 안)의 활주로마다 옆 주기장에 흰수리 · Bell 을 세워 둔다(로터 멈춤 · TCAS 에는 없다)
-//   활주로 가운데에서 왼쪽으로(활주로 폭 반 + 110m) · 활주로를 따라 45m 간격 셋 · 기수는 활주로 쪽
-//   ENV '공항 주기 헬기'(env.parked)로 끄고 켠다 · 내 기체가 서 있는 자리(40m 안)에는 두지 않는다
-const PARKED_KM = 12, PARKED_OFF = 110, PARKED_GAP = 45;
+// ── 공항 주기 기체 — 가까운 공항(내 기체 12km 안)의 활주로마다 옆 주기장에 고를 수 있는 기종을 차례로 세워 둔다
+//   흰수리(KUH-1CG) · Bell 206 · R22 · CN-235 (로터 · 프로펠러 멈춤 · TCAS 에는 없다)
+//   활주로 가운데에서 왼쪽으로(활주로 폭 반 + 110m) · 활주로를 따라 기체 크기만큼 띄워 넷 · 기수는 활주로 쪽
+//   ENV '공항 주기 기체'(env.parked)로 끄고 켠다 · 내 기체가 서 있는 자리(40m 안)에는 두지 않는다
+const PARKED_KM = 12, PARKED_OFF = 110;
+// [기종, 활주로를 따라 가운데에서(m)] — 흰수리(로터 지름 14m) · Bell 206(10m) · R22(7.7m) · CN-235(날개폭 25.8m · 기수가 활주로 쪽이라 날개가 활주로를 따라 놓인다)
+const PARKED_SLOTS = [['kuh', -70], ['b206', -30], ['r22', -2], ['cn235', 45]];
 let _parkedKey = '', _parkedList = [];
 function tfcParkedList() {
   if (typeof env !== 'undefined' && env.parked === false) return [];
@@ -1033,9 +1036,9 @@ function tfcParkedList() {
       const n = (r.b[0] - r.a[0]) * ky, e = (r.b[1] - r.a[1]) * kx, L = Math.hypot(n, e) || 1, u = { n: n / L, e: e / L }, lf = { n: u.e, e: -u.n };
       const off = (r.w || 45) / 2 + PARKED_OFF, la0 = (r.a[0] + r.b[0]) / 2, lo0 = (r.a[1] + r.b[1]) / 2;
       const hdgRwy = (Math.atan2(-lf.e, -lf.n) / D2R + 360) % 360;      // 활주로 쪽을 본다
-      [-1, 0, 1].forEach((k, j) => {
-        const dn = lf.n * off + u.n * k * PARKED_GAP, de = lf.e * off + u.e * k * PARKED_GAP;
-        _parkedList.push({ id: `${ap.apt}-${j}`, apt: ap.apt, ac: (ai + j) % 2 === 0 ? 'kuh' : 'b206', lat: la0 + dn / ky, lon: lo0 + de / kx, hdg: hdgRwy });
+      PARKED_SLOTS.forEach(([ac, along], j) => {
+        const dn = lf.n * off + u.n * along, de = lf.e * off + u.e * along;
+        _parkedList.push({ id: `${ap.apt}-${j}`, apt: ap.apt, ac, lat: la0 + dn / ky, lon: lo0 + de / kx, hdg: hdgRwy });
       });
     });
   }
@@ -1053,7 +1056,7 @@ const TFC3D_LAYER = {
     const main = (args && args.defaultProjectionData && args.defaultProjectionData.mainMatrix)
               || (args && args.modelViewProjectionMatrix) || args;
     if (!main || main.length !== 16) return;
-    // 주기 헬기 — 그려진 땅 위(활주로 표고로 편 자리)에 · 로터는 멈춘 채(날개 자리만 조금씩 다르게)
+    // 주기 기체 — 그려진 땅 위(활주로 표고로 편 자리)에 · 로터 · 프로펠러는 멈춘 채(날개 자리만 조금씩 다르게)
     for (const p of parked) {
       let drawn = null; try { drawn = this.map.queryTerrainElevation([p.lon, p.lat]); } catch (e) { drawn = null; }
       const ty = H3_SPECS[p.ac] ? p.ac : 'kuh', SP = H3_SPECS[ty];
