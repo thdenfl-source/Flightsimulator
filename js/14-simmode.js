@@ -1395,6 +1395,8 @@ const vStick = { coll: 0, yaw: 0, roll: 0, pitch: 0 };
 const _vsProc = () => typeof SIM_ENABLED !== 'undefined' && !SIM_ENABLED;
 function vStickAvail() { return (simModeOn || _vsProc()) && typeof fcp3dAvail === 'function' && fcp3dAvail(); }
 function vStickActive() { return vStickOn && vStickAvail(); }
+// 고정익(CN-235) — 조종간 이름을 YOKE · RUDDER · THROTTLE 로
+const _vsFw = () => typeof acFixedWing === 'function' && acFixedWing();
 function _vStickBox() {
   const d3 = document.getElementById('map3d');
   if (!d3) return null;
@@ -1402,11 +1404,11 @@ function _vStickBox() {
   if (box) return box;
   box = document.createElement('div'); box.id = 'vstick';
   box.innerHTML =
-    '<div class="vs-left"><div class="vs-track vs-ped" data-k="yaw"><div class="vs-knob"></div><span class="vs-lbl">PEDAL</span></div>' +
+    '<div class="vs-left"><div class="vs-track vs-ped" data-k="yaw"><div class="vs-knob"></div><span class="vs-lbl">' + (_vsFw() ? 'RUDDER' : 'PEDAL') + '</span></div>' +
     // 시야 조이스틱 — 사이클릭처럼 둥근 판: 끌어 간 쪽으로 고개를 돌린다(가장자리 좌우 = 어깨 너머 150° · 위아래 = 올려다보기/내려다보기).
     // 놓으면 정면으로 돌아온다 · 가운데를 톡 누르면 바로 정면
     '<div class="vs-look" data-look="1"><div class="vs-ring"></div><div class="vs-knob"></div><span class="vs-lbl">VIEW</span></div></div>' +
-    '<div class="vs-cyc" data-k="cyc"><div class="vs-ring"></div><div class="vs-knob"></div><span class="vs-lbl">CYCLIC</span></div>';
+    '<div class="vs-cyc" data-k="cyc"><div class="vs-ring"></div><div class="vs-knob"></div><span class="vs-lbl">' + (_vsFw() ? 'YOKE' : 'CYCLIC') + '</span></div>';
   d3.appendChild(box);
   // 컬렉티브는 왼손 — 화면 왼쪽 아래 끝(L CHIN 창의 왼쪽 가장자리)에 따로 둔다
   const cb = document.createElement('div'); cb.id = 'vstick-coll'; cb.className = 'vstick-pane';
