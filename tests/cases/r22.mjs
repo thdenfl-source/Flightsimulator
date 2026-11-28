@@ -43,5 +43,18 @@ export async function run(page, t) {
   t.ok(A.cap === 69 && A.max === 2550 && A.wbTitle && A.wbMax, `연료 69gal · 최대 2,550lb · W&B 창 이름 R22`);
   t.ok(A.nR22 === 1 && A.dark > 500 && A.plate && A.hitFuel, `PFD 창에 R22 계기판(검은 판 · 등록 표 · FUEL QTY 누름) (어두운 점 ${A.dark})`);
   t.ok(!A.an.engOut && !A.an.rpm && A.rpmLow && A.lowFuel, '경고등 — 정상 비행에는 꺼지고 NR 처지면 ROTOR RPM · 12gal 아래 LOW FUEL');
+  // 3D 외부 모형(15-heli3d.js) — R22 제 모형 · 실제 치수(전장 8.76m · 주로터 7.67m · 꼬리로터 1.07m 왼쪽 · 스키드 폭 1.93m)
+  const M = await page.evaluate(() => {
+    const b = _h3BuildBody(), SP = H3_SPECS[H3_OWN];
+    let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity, z1 = -Infinity;
+    for (let i = 0; i < b.length; i += 10) { x0 = Math.min(x0, b[i]); x1 = Math.max(x1, b[i]); y0 = Math.min(y0, b[i + 1]); y1 = Math.max(y1, b[i + 1]); z1 = Math.max(z1, b[i + 2]); }
+    const front = Math.max(x1, SP.rotor.x + SP.rotor.r), rear = Math.min(x0, SP.tail.x - SP.tail.r);
+    return { own: H3_OWN, len: front - rear, mid: (front + rear) / 2, rotorD: SP.rotor.r * 2, tailD: SP.tail.r * 2, tailL: SP.tail.y < 0, width: y1 - y0, top: z1,
+             livery: b.some((v, i) => i % 10 === 9 && v === 3), acLen: SIM_AC_LEN, other: _h3BuildBody('b206').length !== b.length };
+  });
+  t.ok(M.own === 'r22' && M.other && M.livery, `3D 모형 — R22 제 모형(Bell 206 과 다르다 · 붉은 동체 도색) (${M.own})`);
+  t.ok(Math.abs(M.len - 8.76) < 0.05 && Math.abs(M.mid) < 0.05 && Math.abs(M.rotorD - 7.67) < 0.02 && Math.abs(M.tailD - 1.07) < 0.02 && M.tailL,
+       `모형 치수 — 전장 ${M.len.toFixed(2)}m · 주로터 ${M.rotorD.toFixed(2)}m · 꼬리로터 ${M.tailD.toFixed(2)}m(왼쪽)`);
+  t.ok(Math.abs(M.width - 1.93) < 0.1 && M.top < 2.7 && M.acLen === 9, `스키드 폭 ${M.width.toFixed(2)}m · 착함 판정 길이 ${M.acLen}m`);
   t.ok(page.errors.length === 0, `오류 없음${page.errors.length ? ' — ' + page.errors.join(' / ') : ''}`);
 }
