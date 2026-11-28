@@ -274,7 +274,7 @@ function applyPanels() {
   requestAnimationFrame(() => { try { tabsFit(); } catch (e) { _swallow(e); } });   // ⌂ ⟳ 를 옮기거나 줄이 바뀌면 다시 잰다
 
   const wrapIds = { pfd: 'pfd-wrap', map: 'map-wrap', cdu: 'cdu-wrap', m3d: 'map3d-wrap', grip: 'grip-wrap',
-                    plan: 'fp-wrap', ovhd: 'ovhd-wrap', sysp: 'sysp-wrap', lcon: 'lcon-wrap', msn: 'msn-wrap' };   // msn — Vendor(흰수리 전탐석 · 37-mission.js)
+                    plan: 'fp-wrap', ovhd: 'ovhd-wrap', sysp: 'sysp-wrap', lcon: 'lcon-wrap', msn: 'msn-wrap', atc: 'atc-wrap' };   // atc — ATC 관제석(41-atc.js)   // msn — Vendor(흰수리 전탐석 · 37-mission.js)
   // 화면 하나만 새 창에 띄운 것(SIM Mode 창 배치판 · 00-popout.js popoutScreen)은 그 그릇이 먼저다
   const scrHost = k => (window._scrHost && window._scrHost[k]) ? document.getElementById('po-host-' + k) : null;
   // Simple mode — 고른 화면 하나가 전체 화면 그릇(#simple-host)을 차지한다
@@ -296,7 +296,7 @@ function applyPanels() {
     if (!h && k === 'cdu') { try { if (!cduOvActive()) return _ckCduSlot(); } catch (e) { _swallow(e); } }
     return h || (k === 'map' ? sysMapHost() : null) || ckC(k, 'mini');
   };
-  ['pfd', 'map', 'cdu', 'm3d', 'plan', 'ovhd', 'sysp', 'lcon', 'grip', 'msn'].forEach(k => {
+  ['pfd', 'map', 'cdu', 'm3d', 'plan', 'ovhd', 'sysp', 'lcon', 'grip', 'msn', 'atc'].forEach(k => {
     const el = document.getElementById(wrapIds[k]);
     if (!el) return;
     // 3D 단독(Cockpit Mode)에 겹친 CDU · Flight Plan(#cdu-ov — syncCduOverlay)은 그대로 둔다 — 종전에는 SYSTEM FULL/HALF 처럼
@@ -314,6 +314,7 @@ function applyPanels() {
   if (hostOf('sysp')) { try { if (typeof sysShow === 'function') requestAnimationFrame(sysShow); } catch (e) { _swallow(e); } }
   if (hostOf('grip')) { try { if (typeof gripPanelRender === 'function') gripPanelRender(true); } catch (e) { _swallow(e); } }
   try { if (typeof msnPanelSync === 'function') msnPanelSync(!!hostOf('msn')); } catch (e) { _swallow(e); }   // Vendor — 전탐석을 그 창에(37-mission.js)
+  try { if (typeof atcPanelSync === 'function') atcPanelSync(!!hostOf('atc')); } catch (e) { _swallow(e); }   // ATC — 관제석(41-atc.js)
   try { syncChinView(); } catch (e) { _swallow(e); }
   // 거울 창(38-mirror.js) — 진짜 화면이 다른 곳에 있는 자리: ① 같은 화면을 고른 다른 창(패널) ② 3D 조종석의 작은 콘솔 · CDU 칸
   try {
@@ -1166,7 +1167,7 @@ function simLayoutStart() {
 // ── Simple mode ── 시작 화면에서 'Simple Mode' 를 고르면 창 하나만 화면 가득 본다.
 // 위 막대에 쓸 수 있는 창(PFD · COCKPIT · MAP · CDU · UPPER · LOWER · SYSTEM · CONTROL)이 다 있고, 누른 창 하나만 보인다.
 // 분할 패널(#app)은 감추고, 고른 화면 묶음을 그릇(#simple-host)에 옮긴다(applyPanels 의 hostOf).
-const SIMPLE_SCREENS = [['pfd', 'PFD'], ['map', 'MAP'], ['cdu', 'CDU'], ['ovhd', 'UPPER'], ['lcon', 'LOWER'], ['sysp', 'SYSTEM'], ['grip', 'CONTROL'], ['msn', 'Vendor']]   // CONTROL — 컬렉티브 · 사이클릭(35-kuhgrip.js) · Vendor — 흰수리 전탐석(37-mission.js)
+const SIMPLE_SCREENS = [['pfd', 'PFD'], ['map', 'MAP'], ['cdu', 'CDU'], ['ovhd', 'UPPER'], ['lcon', 'LOWER'], ['sysp', 'SYSTEM'], ['grip', 'CONTROL'], ['msn', 'Vendor'], ['atc', 'ATC']]   // CONTROL — 컬렉티브 · 사이클릭(35-kuhgrip.js) · Vendor — 흰수리 전탐석(37-mission.js)
   .filter(([k]) => typeof acScrOk !== 'function' || acScrOk(k));   // Bell 206 — CDU · UPPER 없음
 // 위 막대의 두 번째 칸은 COCKPIT — Cockpit Mode(3D 조종석)로 들어가고, 끝내면(Split screen) 이 Simple 화면으로 돌아온다.
 // (3D 지도 자체는 MAP 의 '3D' 버튼으로 본다)

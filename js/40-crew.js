@@ -292,25 +292,25 @@ function _assetRender() {
 //   1초마다 내 자리 · 고도 · 침로 · 속도 · 콜사인(⚙ 설정) · 기종을, 10초마다 비행계획(수색 항로)을 보낸다.
 //   받은 기체는 교통(33-train4.js traffic · remote)으로 넣어 TCAS · PFD TCAS 창 · 3D 화면 · 레이더(전탐석)에 보이고, 2D 지도에는 콜사인 · 항로(점선)를 그린다.
 //   짧은 메시지(구역 · 발견 · 귀환 …)를 주고받는다. 같은 브라우저의 다른 창은 BroadcastChannel 로, 다른 기기는 인터넷 중계(33-train4.js rtcLinkOpen)로
-const wing = { room: null, key: null, id: Math.random().toString(36).slice(2, 10), link: null, bc: null, peers: {}, msgs: [], layer: null, sendT: 0, wpsT: 0 };
+const wing = { room: null, key: null, id: Math.random().toString(36).slice(2, 10), role: 'pilot', link: null, bc: null, peers: {}, msgs: [], layer: null, sendT: 0, wpsT: 0, ctl: {} };   // role — pilot(조종사) · atc(관제사 · 41-atc.js)
 const WING_TIMEOUT = 10000, WING_COLORS = ['#ff9f43', '#e056fd', '#7bed9f', '#70a1ff'];
 function _wingCs() { try { return (appSet && appSet.callsign) || 'Coastguard zero one'; } catch (e) { return 'Coastguard zero one'; } }
 function wingCreate() {
   const room = 'w' + Math.random().toString(36).slice(2, 12), key = (typeof _u8b64 === 'function') ? _u8b64(crypto.getRandomValues(new Uint8Array(16))) : btoa(String(Math.random()));
   wingJoin(`SS4|${room}|${key}`); return `SS4|${room}|${key}`;
 }
-function wingJoin(code) {
+function wingJoin(code, opt = {}) {
   const p = String(code || '').trim().split('|'); if (p[0] !== 'SS4' || p.length < 3) throw new Error('협동 비행 코드가 아닙니다');
   wingLeave(true);
-  wing.room = p[1]; wing.key = p[2]; wing.peers = {}; wing.msgs = [];
+  wing.room = p[1]; wing.key = p[2]; wing.peers = {}; wing.msgs = []; wing.ctl = {}; wing.role = opt.role === 'atc' ? 'atc' : 'pilot';
   const onText = async text => {
     let m = null; try { m = JSON.parse(typeof rtcDec === 'function' ? await rtcDec(wing.key, text) : text); } catch (e) { return; }
     _wingIn(m);
   };
   try { wing.bc = new BroadcastChannel('shinesong-wing-' + wing.room); wing.bc.onmessage = e => onText(e.data); } catch (e) { wing.bc = null; }
   try { if (typeof rtcLinkOpen === 'function') { const t = 'shinesong/wing/' + wing.room; wing.link = rtcLinkOpen(t, t, onText); } } catch (e) { _swallow(e); }
-  try { localStorage.setItem('wingRoom', JSON.stringify({ code: `SS4|${wing.room}|${wing.key}`, t: Date.now() })); } catch (e) { _swallow(e); }
-  _cNote('협동 비행 방에 들어감');
+  try { localStorage.setItem('wingRoom', JSON.stringify({ code: `SS4|${wing.room}|${wing.key}`, t: Date.now(), role: wing.role })); } catch (e) { _swallow(e); }
+  _cNote(wing.role === 'atc' ? '협동 비행 방에 관제사로 들어감' : '협동 비행 방에 들어감');
   wingSend(true); _wingRender(true);
   return true;
 }
@@ -332,6 +332,7 @@ async function _wingPub(m, bc = wing.bc, link = wing.link, key = wing.key) {
 }
 function wingSend(withWps) {
   if (!wing.room) return;
+  if (wing.role === 'atc') { try { if (typeof atcWingBeat === 'function') atcWingBeat(); } catch (e) { _swallow(e); } return; }   // 관제사는 제 자리를 보내지 않는다 — 관제 시설 알림(41-atc.js)
   const ac = (() => { try { return acB206() || acIs('r22') ? 'b206' : 'kuh'; } catch (e) { return 'kuh'; } })();
   const m = { type: 'pos', id: wing.id, cs: _wingCs(), ac, lat: S.lat, lon: S.lon, alt: S.alt, hdg: S.hdg, spd: S.spd || 0, vs: S.vs || 0, bnk: S.bnk || 0, pit: S.pit || 0, t: Date.now() };
   if (withWps) m.wps = (S.wps || []).filter(w => w && Number.isFinite(w.lat)).slice(0, 40).map(w => [+w.lat.toFixed(5), +w.lon.toFixed(5)]);
@@ -340,6 +341,7 @@ function wingSend(withWps) {
 function wingMsg(text) { text = String(text || '').trim().slice(0, 80); if (!text || !wing.room) return false; _wingPub({ type: 'msg', id: wing.id, cs: _wingCs(), text }); wing.msgs.unshift({ t: Date.now(), cs: '나', text }); _wingRender(); return true; }
 function _wingIn(m) {
   if (!m || m.id === wing.id) return;
+  try { if (typeof atcOnWing === 'function' && atcOnWing(m)) return; } catch (e) { _swallow(e); }   // 관제(ctl · atc · atcr — 41-atc.js)
   if (m.type === 'bye') { _wingDrop(m.id); _wingRender(true); return; }
   if (m.type === 'msg') { wing.msgs.unshift({ t: Date.now(), cs: m.cs, text: m.text }); if (wing.msgs.length > 20) wing.msgs.pop(); _cToast(`✈ ${m.cs}: ${m.text}`, '', 5000); _cNote(`협동 비행 — ${m.cs}: ${m.text}`); _wingRender(); return; }
   if (m.type !== 'pos') return;
@@ -378,7 +380,7 @@ setInterval(() => {
   _wingMap(); _wingRender();
 }, 1000);
 // 앱을 다시 열면 들어가 있던 방으로(12시간 안)
-setTimeout(() => { try { const r = JSON.parse(localStorage.getItem('wingRoom') || 'null'); if (r && r.code && Date.now() - (r.t || 0) < 12 * 3600e3 && !wing.room) wingJoin(r.code); } catch (e) { _swallow(e); } }, 2000);
+setTimeout(() => { try { const r = JSON.parse(localStorage.getItem('wingRoom') || 'null'); if (r && r.code && Date.now() - (r.t || 0) < 12 * 3600e3 && !wing.room) wingJoin(r.code, { role: r.role }); } catch (e) { _swallow(e); } }, 2000);
 const WING_QUICK = ['구역 북쪽 맡음', '구역 남쪽 맡음', '요구조자 발견', '현장으로 갑니다', '연료 BINGO — 귀환', '고도 바꿈 — 500ft 차이 유지'];
 function toggleWing() {
   let w = document.getElementById('wing-wrap');
@@ -392,8 +394,8 @@ function toggleWing() {
       try {
         if (k === 'x') { try { qrScanStop(); } catch (er) { _swallow(er); } w.style.display = 'none'; return; }
         if (k === 'new') { wingCreate(); }
-        else if (k === 'join') { const v = w.querySelector('[data-wgv="code"]').value; wingJoin(v); }
-        else if (k === 'scan') { const view = w.querySelector('[data-wgv="view"]'); const code = await qrScan(view); view.innerHTML = ''; wingJoin(code); }
+        else if (k === 'join') { const v = w.querySelector('[data-wgv="code"]').value; wingJoin(v, { role: w.querySelector('[data-wgv="asatc"]:checked') ? 'atc' : 'pilot' }); }
+        else if (k === 'scan') { const atc = !!w.querySelector('[data-wgv="asatc"]:checked'); const view = w.querySelector('[data-wgv="view"]'); const code = await qrScan(view); view.innerHTML = ''; wingJoin(code, { role: atc ? 'atc' : 'pilot' }); }
         else if (k === 'leave') wingLeave();
         else if (k === 'copy') { await navigator.clipboard.writeText(`SS4|${wing.room}|${wing.key}`); _cToast('코드를 복사했습니다'); }
         else if (k.startsWith('q:')) wingMsg(WING_QUICK[+k.slice(2)]);
@@ -414,9 +416,11 @@ function _wingRender(full) {
   w.innerHTML = `<div class="set-box diag-box"><div class="set-bar"><b>✈ 두 대 협동 비행</b><button class="sim-btn" data-wg="x">✕</button></div>
     ${wing.room ? `<div class="set-row"><span>방</span><div><span class="wg-qr" data-wgv="qr"></span><div class="wg-code"><code>${_cEsc(code)}</code><button class="sim-btn" data-wg="copy">복사</button><button class="sim-btn" data-wg="leave">나가기</button></div></div></div>`
       : `<div class="set-row"><span>시작</span><div><button class="sim-btn on" data-wg="new">방 만들기</button><button class="sim-btn" data-wg="scan">📷 QR 찍어 들어가기</button></div></div>
+         <div class="set-row"><span>관제사로</span><div><label class="as-chk"><input type="checkbox" data-wgv="asatc"> 관제사로 참가(ATC 창에서 관제 — 내 기체는 보내지 않음)</label></div></div>
          <div class="set-row"><span>코드로</span><div><input type="text" data-wgv="code" placeholder="SS4|…"><button class="sim-btn" data-wg="join">들어가기</button></div></div>`}
     <div class="set-row"><span></span><div data-wgv="view"></div></div>
-    <div class="set-row"><span>내 콜사인</span><div>${_cEsc(_wingCs())} <span class="tp-none">(⚙ 설정에서 바꿈)</span></div></div>
+    <div class="set-row"><span>내 콜사인</span><div>${_cEsc(_wingCs())}${wing.role === 'atc' ? ' — <b>관제사</b>' : ''} <span class="tp-none">(⚙ 설정에서 바꿈)</span></div></div>
+    ${Object.values(wing.ctl || {}).length ? `<div class="set-row"><span>관제</span><div>${Object.values(wing.ctl).map(c => `📡 <b>${_cEsc(c.name)}</b> ${_cEsc(c.apt)} ${_cEsc(c.rwy || '')}`).join(' · ')}</div></div>` : ''}
     <div class="set-row"><span>함께 나는 기체</span><div data-wgv="peers" class="as-list">${pl}</div></div>
     ${wing.room ? `<div class="set-row"><span>메시지</span><div>${WING_QUICK.map((q, i) => `<button class="sim-btn" data-wg="q:${i}">${q}</button>`).join('')}</div></div>
     <div class="set-row"><span></span><div><input type="text" data-wgv="msg" maxlength="80" placeholder="직접 적기"><button class="sim-btn" data-wg="send">보내기</button></div></div>
