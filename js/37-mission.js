@@ -16,7 +16,7 @@
 // 기준: KUH-1CG 비행교범(FLM 5.17) · 계통설명교범(SDS 23-71-00) — EO/IR HCU · MFD 오버레이 요약
 // 3D 전탐석 콘솔 모형은 사진을 받은 뒤 얹는다(지금은 MFD 테두리 · 콘솔 판 모양).
 // ══════════════════════════════════════════════════════
-const MSN_ON = typeof acIs === 'function' && acIs('aw189');   // 흰수리면 Vendor 창(전탐석)이 있다
+const MSN_ON = typeof acIs === 'function' && (acIs('aw189') || acIs('cn235'));   // 흰수리 · CN-235 면 Vendor 창(전탐석 · CN-235 는 전술 임무 콘솔)이 있다
 const EO_ON = typeof acIs === 'function' && acIs('aw189');   // 흰수리 갈래 — EO/IR 영상은 조종석 SYSTEM 창에도 나온다
 const MSN_RE = 6371000 * 4 / 3;                     // 대기 굴절을 넣은 지구 반지름(m) — 시선 · 레이더 수평선
 const _mD = Math.PI / 180;

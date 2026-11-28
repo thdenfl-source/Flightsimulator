@@ -79,13 +79,13 @@ export async function run(page, t) {
     try { drawPFD(); } finally { cnDraw = o0; }
     const px = (pg, w, h, x, y) => { const c = document.createElement('canvas'); c.width = w; c.height = h; cnDrawTo(c, pg); return { d: Array.from(c.getContext('2d').getImageData(x, y, 1, 1).data.slice(0, 3)), hits: c._cnHit.hits.length }; };
     const lh = px('LH', 1000, 640, 488, 200), ctr = px('CTR', 1000, 660, 146, 80), glr = px('GLR', 2000, 260, 140, 40), all = px('ALL', 2000, 920, 10, 10);
-    cnPedToggle(true); const cv = document.querySelector('#cn-ped canvas'); const shown = getComputedStyle(document.getElementById('cn-ped')).display === 'flex';
-    const H = cv._cnPedHits || [];
+    const cv = document.createElement('canvas'); cv.width = 700; cv.height = 1000; cnDrawTo(cv, 'PED'); const shown = true;
+    const H = cv._cnHit.hits || [];
     const flapHit = H.find(h => h.fn && h.y > 490 && h.y < 500 && h.x > 560); if (flapHit) flapHit.fn(0, 0);       // APPR(15)
     const pl = H.find(h => h.drag && h.x < 200 && h.w > 150); if (pl) pl.drag(250, 300);                          // 파워 MAX
     const cond = H.find(h => h.drag && h.x > 380 && h.x < 400); if (cond) cond.drag(416, 428);                     // 왼쪽 MIN RPM
     const r = { n, lh, ctr, glr, all, shown, peds: H.length, flap: cn.flapSel, pl: cn.pl, cond: cn.cond[0] };
-    cnPedToggle(false); cnFlapSet(0); cnCondSet(2, 'MAX'); cn.pl = 0.4;
+    cnFlapSet(0); cnCondSet(2, 'MAX'); cn.pl = 0.4;
     return r;
   });
   t.ok(P.n >= 1 && P.lh.d[2] > 150 && P.lh.d[0] < 120 && P.lh.hits >= 5 && P.ctr.hits >= 2 && P.glr.hits >= 14, `계기판 — PFD 창에 CN-235 판 · LH(Universal PFD 하늘 ${P.lh.d}) · 가운데 · 글레어실드(누를 자리 LH ${P.lh.hits} · CTR ${P.ctr.hits} · GLR ${P.glr.hits} · 그림 ${P.n})`);
@@ -177,14 +177,14 @@ export async function run(page, t) {
     // 판 위 탭(W&B · PED) 자리를 터치 — uiPrompt 가 열리면 안 된다
     let prompts = 0; const o0 = window.uiPrompt; window.uiPrompt = async () => { prompts++; return null; };
     const c = document.getElementById('pfd'); drawPFD(); const r = c.getBoundingClientRect(), k = r.width / c.width;
-    for (const t of (c._cnHit.tabs || [])) {
+    for (const t of [{ x: 10, y: 5, w: 60, h: 20 }, { x: 560, y: 5, w: 60, h: 20 }, { x: 680, y: 5, w: 60, h: 20 }]) {   // 종전 판 위 탭 자리
       const x = r.left + (t.x + t.w / 2) * k, y = r.top + (t.y + t.h / 2) * k;
       try { const tc = new Touch({ identifier: 1, target: c, clientX: x, clientY: y }); c.dispatchEvent(new TouchEvent('touchstart', { touches: [tc], changedTouches: [tc], bubbles: true })); c.dispatchEvent(new TouchEvent('touchend', { touches: [], changedTouches: [tc], bubbles: true })); } catch (e) { /* 터치 없는 브라우저 */ }
       c.dispatchEvent(new MouseEvent('click', { clientX: x, clientY: y, bubbles: true }));
     }
     for (const [fx, fy] of [[0.5, 0.05], [0.65, 0.05], [0.8, 0.1]]) c.dispatchEvent(new MouseEvent('click', { clientX: r.left + r.width * fx, clientY: r.top + r.height * fy, bubbles: true }));
     await new Promise(res => setTimeout(res, 100));
-    window.uiPrompt = o0; cnPageSet('AUTO'); cnPedToggle(false);
+    window.uiPrompt = o0;
     return { hid, bar: !!bar && bar.offsetHeight > 30, alt, hdg, prompts };
   });
   t.ok(FC.hid && FC.bar && FC.alt && FC.hdg, 'PFD 아래 — 흰수리 FCP 대신 CN-235 조작 띠(AP 모드 · HDG · CRS · ALT · SPD · BARO 노브)가 듣는다');
@@ -220,5 +220,34 @@ export async function run(page, t) {
   t.ok(FM.pats.every(n => n >= 4) && FM.vnav && FM.tacco && FM.cbFail, `FMS — 수색 6가지(${FM.pats.join('·')} 지점) · VNAV 강하 · TACCO 면 조종석 CDU 잠김 · 차단기 FMS`);
   t.ok(FM.knob && FM.xfr && FM.mem && FM.sto && FM.wrap && FM.guard && FM.nav && FM.test, 'RTU — 노브 1MHz/25kHz · XFR(무전기 맞춤) · MEM · STO 저장 · 범위 감김 · GUARD 121.5 · NAV 맞춤 · TEST');
   t.ok(FM.fmsHits >= 60 && FM.rtuHits >= 40, `FMS CDU · RTU 쪽 누를 자리(${FM.fmsHits} · ${FM.rtuHits})`);
+  // 위 창 탭 — CN 화면(CENTER · GLARE · OVHD · C/B · CONSOLE · W&B · FMS · RTU · PED) · Vendor · LOWER 없음 · 화면 캔버스 누름 · 끌기
+  const TB = await page.evaluate(async () => {
+    const r = {};
+    const tabs = [...document.querySelectorAll('#page-tabs .page-tab')].filter(b => getComputedStyle(b).display !== 'none').map(b => b.dataset.sel);
+    r.tabs = ['cnctr', 'cnglr', 'cnovhd', 'cncb', 'cncons', 'cnwb', 'cnfms', 'cnrtu', 'cnped'].every(k => tabs.includes(k));
+    r.noLcon = !tabs.includes('lcon'); r.msn = tabs.includes('msn');
+    const sel0 = panelGet('right');
+    selectPanel('right', 'cnped'); await new Promise(res => setTimeout(res, 450));
+    const w = document.getElementById('cnp-cnped-wrap'), c = w && w.querySelector('canvas');
+    r.shown = !!w && !w.classList.contains('page-hidden') && w.clientWidth > 50 && !!c._cnHit;
+    if (r.shown) {
+      const H = c._cnHit, R = c.getBoundingClientRect(), sx = R.width / c.width, sy = R.height / c.height;
+      const pl = H.hits.find(h => h.drag && h.x < 200 && h.w > 150);
+      const at = (x, y) => ({ clientX: R.left + (H.tx + x * H.k) * sx, clientY: R.top + (H.ty + y * H.k) * sy, bubbles: true });
+      cn.pl = 0.4; c.dispatchEvent(new PointerEvent('pointerdown', at(pl.x + 90, 420)));
+      document.dispatchEvent(new PointerEvent('pointermove', at(pl.x + 90, 300))); document.dispatchEvent(new PointerEvent('pointerup', at(pl.x + 90, 300)));
+      r.drag = cn.pl > 0.95; cn.pl = 0.4;
+    }
+    selectPanel('right', 'cnfms'); await new Promise(res => setTimeout(res, 300));
+    r.fms = !document.getElementById('cnp-cnfms-wrap').classList.contains('page-hidden');
+    selectPanel('right', sel0);
+    r.pop = ['cnctr', 'cnglr', 'cnovhd', 'cnfms', 'cnrtu', 'cnped', 'cncons', 'cncb', 'cnwb'].every(k => CKPIT_POP[k] && CKPIT_POP_AR[k] > 0)
+      && CKPIT_SCR.filter(s => CKPIT_SCR_POP[s.k] && CKPIT_SCR_POP[s.k].startsWith('cn')).length >= 9;
+    r.noLconCk = !CKPIT_CON.lcon;
+    return r;
+  });
+  t.ok(TB.tabs && TB.noLcon && TB.msn, `위 창 탭 — CN 화면 아홉 · Vendor · 흰수리 LOWER 없음 (${JSON.stringify(TB)})`);
+  t.ok(TB.shown && TB.drag && TB.fms, `탭으로 고른 PED · FMS 화면이 뜨고 레버를 끌면 듣는다 (${JSON.stringify(TB)})`);
+  t.ok(TB.pop && TB.noLconCk, 'Cockpit 모드 — 작은 칸(GLARE · CTR · OVHD · FMS · RTU · PED · CONS · C/B · W&B)을 누르면 크게(팝아웃) · 하부 콘솔 없음');
   t.ok(page.errors.length === 0, `오류 없음${page.errors.length ? ' — ' + page.errors.join(' / ') : ''}`);
 }

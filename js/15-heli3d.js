@@ -1288,6 +1288,9 @@ const CKPIT_SCR = (typeof acIs === 'function' && acIs('cn235')) ? [
   { k: 'cnL', x: 196, y: 584, w: 490, h: 314 },
   { k: 'cnC', x: 700, y: 584, w: 470, h: 310 },
   { k: 'map', x: 1186, y: 596, w: 300, h: 200 },
+  // 작은 칸 — 누르면 그 화면을 크게(팝아웃 · 43-cn235panel.js CN_SCREENS)
+  { k: 'cnF', x: 1186, y: 804, w: 40, h: 90 }, { k: 'cnR', x: 1229, y: 804, w: 40, h: 90 }, { k: 'cnP', x: 1272, y: 804, w: 40, h: 90 },
+  { k: 'cnS', x: 1315, y: 804, w: 40, h: 90 }, { k: 'cnB', x: 1358, y: 804, w: 40, h: 90 }, { k: 'cnW', x: 1401, y: 804, w: 40, h: 90 },
 ] : (typeof acIs === 'function' && acIs('b206')) ? [
   { k: 'b206', x: 550, y: 492, w: 500, h: 300 },
 ] : [
@@ -1305,7 +1308,7 @@ if (typeof acScrOk === 'function' && !acScrOk('ovhd')) delete CKPIT_CON.ovhd;   
 if (typeof acIs === 'function' && acIs('cn235')) delete CKPIT_CON.lcon;            // CN-235 — 흰수리 하부 콘솔 대신 페데스탈 창(43-cn235panel.js)
 // CDU — 하부 콘솔 오른쪽 칸(3D 단독 화면에서 07-sim.js syncCduOverlay 가 CDU 를 넣는다).
 // 다른 화면처럼 누르면 크게 띄워(팝아웃 — 오른쪽 버튼 줄 바로 옆) 조작한다.
-const CKPIT_CDU = (typeof acIs === 'function' && acIs('cn235')) ? { x: 1296, y: 806, w: 90, h: 94 } : { x: 888, y: 798, w: 90, h: 146 };
+const CKPIT_CDU = (typeof acIs === 'function' && acIs('cn235')) ? { x: 1444, y: 804, w: 42, h: 90 } : { x: 888, y: 798, w: 90, h: 146 };
 function ckpitCduSlot() {
   if (typeof acScrOk === 'function' && !acScrOk('cdu')) return null;            // Bell 206 — CDU 가 없다
   if (ckConPop === 'cdu' && _ck3dVisible()) return _ckPopEl('cdu');
@@ -1423,7 +1426,9 @@ function toggleConsolePop(k) {
   setTimeout(() => { try { leafMap.invalidateSize(); } catch (e) { _swallow(e); } }, 60);
 }
 // MFD 를 누르면 띄울 화면
-const CKPIT_SCR_POP = { pfd: 'pfd', sys: 'sysp', map: 'map', b206: 'pfd', cnG: 'pfd', cnL: 'pfd', cnC: 'pfd', cnO: 'pfd' };
+const CKPIT_SCR_POP = { pfd: 'pfd', sys: 'sysp', map: 'map', b206: 'pfd', cnG: 'cnglr', cnL: 'pfd', cnC: 'cnctr', cnO: 'cnovhd',
+  cnF: 'cnfms', cnR: 'cnrtu', cnP: 'cnped', cnS: 'cncons', cnB: 'cncb', cnW: 'cnwb' };
+const CKPIT_CN_PAGE = { cnG: 'GLR', cnL: 'LH', cnC: 'CTR', cnO: 'OVHD', cnF: 'FMS', cnR: 'RTU', cnP: 'PED', cnS: 'CONS', cnB: 'CB', cnW: 'PERF' };
 // Bell 206 조종석 틀 — 가운데 앞유리 기둥 · 좌우 문 기둥 · 계기판 덮개(검은 테) · 가운데 받침(페데스탈) · 사이클릭(오른쪽 = 기장석)
 function _ckpitSvgB206() {
   const s = CKPIT_SCR[0], x = s.x - 18, y = s.y - 18, w = s.w + 36, h = s.h + 30;
@@ -1599,12 +1604,12 @@ function ckpitDraw() {
     const cw = c.clientWidth, ch = c.clientHeight;
     if (!(cw > 4 && ch > 4)) return;
     // 칸이 작으면 큰 크기로 그려 줄여 보인다(글자가 겹치지 않게 · 07-sim.js PFD_OV_MINW 와 같은 생각)
-    const k = Math.max(dpr, (s.k === 'pfd' ? 420 : s.k === 'b206' ? 1000 : s.k === 'cnG' ? 1600 : s.k === 'cnL' || s.k === 'cnC' || s.k === 'cnO' ? 1000 : 520) / cw);
+    const k = Math.max(dpr, (s.k === 'pfd' ? 420 : s.k === 'b206' ? 1000 : s.k === 'cnG' ? 1600 : CKPIT_CN_PAGE[s.k] ? (s.w < 100 ? 400 : 1000) : 520) / cw);
     const W = Math.round(cw * k), H = Math.round(ch * k);
     if (c.width !== W || c.height !== H) { c.width = W; c.height = H; }
     try {
       if (s.k === 'b206') { if (typeof b206DrawTo === 'function') b206DrawTo(c); }
-      else if (s.k === 'cnG' || s.k === 'cnL' || s.k === 'cnC' || s.k === 'cnO') { if (typeof cnDrawTo === 'function') cnDrawTo(c, { cnG: 'GLR', cnL: 'LH', cnC: 'CTR', cnO: 'OVHD' }[s.k]); }
+      else if (CKPIT_CN_PAGE[s.k]) { if (typeof cnDrawTo === 'function') cnDrawTo(c, CKPIT_CN_PAGE[s.k]); }
       else if (s.k === 'pfd') { if (typeof drawPfdTo === 'function') drawPfdTo(c); }
       else if (s.k === 'map') { const g = c.getContext('2d'); g.setTransform(1, 0, 0, 1, 0, 0); ckMapDraw(g, 0, 0, W, H); }
       else if (s.k === 'sys') {
