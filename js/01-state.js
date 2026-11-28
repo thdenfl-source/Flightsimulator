@@ -113,6 +113,7 @@ const ROLL_RATE_MAX = 6;           // AFCS 최대 롤율(°/s)
 const ROLL_ACC_MAX  = 8;           // AFCS 롤 각가속도(°/s²)
 const HDG_ROLLOUT_DEG = 6;         // 남은 각도가 이 이하면 뱅크를 비례 감소(롤아웃)
 function stdRateBank(spd) {        // 표준선회 뱅크각(°) — 속도의 16%, 최대 30°
+  if (typeof acFixedWing === 'function' && acFixedWing()) return Math.max(2, Math.min(cn.half ? 12.5 : 25, Math.abs(spd) * 0.16));   // CN-235 AP — 최대 25° · 1/2Ø 면 12.5°(AOM)
   return Math.max(2, Math.min(30, Math.abs(spd) * 0.16));
 }
 // ── 방향 기준(MAS): MG(Slaved) / DG ──

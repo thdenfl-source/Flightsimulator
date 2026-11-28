@@ -12,7 +12,7 @@
 //   · 땅에서는 바퀴로 굴러 이륙(VR 약 95kt 에서 기수를 들어) · 플랩 0/10/15/23 · 착륙장치 올림/내림(8초)
 //
 // 제원(근사 · 연습용): 날개 면적 59.1m² · 폭 25.81m · 길이 21.4m · 최대 이륙 16,500kg
-//   엔진 GE CT7-9C 1,750shp ×2 · 프로펠러 4날개 지름 3.35m · VMO 240KIAS · 실속(깨끗) 약 100kt · (플랩 23) 약 84kt
+//   엔진 GE CT7-9C 1,750shp ×2(APR — 한 엔진 불능 때 1,870shp) · 최대 이륙 토크 424 · ITT 921~950°C(5분) · 프로펠러 4날개 지름 3.35m · VMO 240KIAS · 실속(깨끗) 약 100kt · (플랩 23) 약 84kt
 //   비행교범(AOM) 속도 한계: VMO 230KIAS(해면) · 200(20,000ft) · 180(25,000ft) · VA 160 · VFE(T/OFF 10 · APPR 15 · LNDG 23) 160 · VLE 150
 //   계기판 · 페데스탈 · 글레어실드(경고등 · 오토파일럿)는 43-cn235panel.js
 //
@@ -25,7 +25,7 @@ function acFixedWing() { return CN_ON; }
 
 const CN_P = {
   S: 59.1, span: 25.81, AR: 11.27, e: 0.80,
-  emptyKg: 9800, crewKg: 400, payloadKg: 1200, fuelKg: 3000, fuelMaxKg: 4230, mtowKg: 16500,
+  emptyKg: 9800, crewKg: 400, payloadKg: 1200, fuelKg: 2838, fuelMaxKg: 4190, mtowKg: 14400,   // AOM: MTOW 14,400 · MLW 14,200 · MZFW 13,600 · 램프 14,450 · 최소 8,700kg
   hp: 1750, eta: 0.82, tStatic: 24000,          // 엔진 한 대(축마력) · 프로펠러 효율 · 한 대의 정지 추력(N)
   CLa: 5.1,                                      // 1/rad
   CD0: 0.027, Kgear: 0.016, Kprop: 0.000,
@@ -67,7 +67,7 @@ function _cnFlapLerp(tbl, f = cn.flap) {
   return tbl[23];
 }
 function cnCL0() { return _cnFlapLerp(CN_P.dCL0); }
-function cnCLmax() { return _cnFlapLerp(CN_P.CLmax); }
+function cnCLmax() { return _cnFlapLerp(CN_P.CLmax) * (1 - 0.22 * (cn.ice || 0)); }   // 날개 착빙(WING & TAIL 제빙 꺼짐 — 44-cn235sys.js)이면 최대 양력이 준다
 function cnAlphaStall() { return (cnCLmax() - cnCL0()) / CN_P.CLa / D2R; }   // 실속각(°)
 function cnCL(aDeg) {
   const as = cnAlphaStall(), cl0 = cnCL0(), a = aDeg * D2R;
@@ -77,7 +77,7 @@ function cnCL(aDeg) {
 }
 function cnCD(CL) {
   const K = 1 / (Math.PI * CN_P.e * CN_P.AR);
-  return CN_P.CD0 + _cnFlapLerp(CN_P.dCD0) + CN_P.Kgear * cn.gearPos + K * CL * CL;
+  return CN_P.CD0 + _cnFlapLerp(CN_P.dCD0) + CN_P.Kgear * cn.gearPos + K * CL * CL + 0.012 * (cn.ice || 0) + (cn.ov && cn.ov.cargo === 'OPEN' ? 0.025 : 0);
 }
 // 실속 속도(KIAS) — 하중배수 n(선회 1/cosφ)
 function cnVs(n = 1, flap = cn.flap) {
@@ -116,20 +116,26 @@ function cnVmin() { return Math.ceil(cnVs(1) * 1.2); }
 const CN_ENG_TAU = 1.6;
 function _cnEngVals(e, tq) {
   if (!e.run) return { tq: 0, ng: Math.max(0, e.ng * 0.9), itt: Math.max(30, e.itt * 0.95), ff: 0 };
-  return { tq, ng: 70 + 0.30 * tq, itt: 480 + 3.6 * tq, ff: 95 + 2.55 * tq };   // ff: kg/h
+  return { tq, ng: 70 + 0.30 * tq, itt: 480 + 4.2 * tq, ff: 95 + 2.55 * tq };   // ff: kg/h · ITT 100% 약 900°C(한계 921~950 · 5분)
 }
 function cnEngStep(dt, tqCmd) {
   const av = cnTqAvail();
+  // CONSTANT TORQUE(페데스탈) — 걸어 두면 두 엔진 토크를 고른 값(424 = 100%)에서 더 올리지 않는다
+  if (cn.ctqOn) tqCmd = Math.min(tqCmd, cn.ctq / 4.24);
   cn.eng.forEach((e, i) => {
-    const off = cn.cond[i] === 'OFF';
-    e.run = !off;
+    // 연료 차단(컨디션 레버 FUEL OFF · 오버헤드 SHUT-OFF VALVE · FIRE 손잡이 · 그쪽 연료 바닥) — 44-cn235sys.js
+    const off = cn.cond[i] === 'OFF' || (typeof cnFuelCut === 'function' && cnFuelCut(i));
+    if (off) { e.run = false; e.starting = false; }
+    if (!e.run && typeof cnStartStep === 'function') { cnStartStep(e, i, dt); return; }
+    // APR — 한 엔진이 멎으면 남은 엔진이 1,870SHP(107%)까지(AOM 동력장치)
+    const apr = cn.apr && !cn.eng[1 - i].run ? 1870 / 1750 : 1;
     const np = !e.run ? 0 : cn.cond[i] === 'MIN' ? CN_P.npMin : CN_P.npMax;
-    const t = e.run ? Math.max(0, Math.min(av, tqCmd)) : 0;
+    const t = e.run ? Math.max(0, Math.min(av * apr, tqCmd * (apr > 1 && tqCmd > 95 ? apr : 1))) : 0;
     e.tq += (t - e.tq) * Math.min(1, dt / CN_ENG_TAU);
     e.np += (np - e.np) * Math.min(1, dt / 2.5);
     const v = _cnEngVals(e, e.tq);
     e.ng += (v.ng - e.ng) * Math.min(1, dt / 1.2); e.itt += (v.itt - e.itt) * Math.min(1, dt / 1.8); e.ff = v.ff;
-    if (e.run && dt > 0) cn.fuelKg = Math.max(0, cn.fuelKg - e.ff * dt / 3600);
+    if (e.run && dt > 0) { if (typeof cnBurn === 'function') cnBurn(i, e.ff * dt / 3600); else cn.fuelKg = Math.max(0, cn.fuelKg - e.ff * dt / 3600); }
   });
   if (cn.fuelKg <= 0) cn.eng.forEach(e => { e.run = false; });
 }
@@ -158,10 +164,12 @@ function cnPark() { return typeof simParkBrake !== 'undefined' ? !!simParkBrake 
 function cnParkToggle() { cn.park = !cnPark(); try { if (typeof simParkBrake !== 'undefined') simParkBrake = cn.park; } catch (e) { _swallow(e); } _cnRedraw(); }
 function cnCondSet(i, c) { if (['MAX', 'MIN', 'START', 'OFF'].includes(c)) { if (i === 2) cn.cond = [c, c]; else cn.cond[i] = c; _cnRedraw(); } }
 function cnMechStep(dt) {
+  // 유압(엔진 구동 펌프)이 없으면 플랩 · 착륙장치가 움직이지 않는다 — 비상 내림(중력)은 된다(44-cn235sys.js)
+  const hyd = typeof cnHydOk === 'function' ? cnHydOk() : true, cb = k => typeof cnCbOk === 'function' ? cnCbOk(k) : true;
   const d = cn.flapSel - cn.flap;
-  cn.flap += Math.sign(d) * Math.min(Math.abs(d), CN_P.flapRate * dt);
+  if (hyd && cb('FLAPS SYS')) cn.flap += Math.sign(d) * Math.min(Math.abs(d), CN_P.flapRate * dt);
   const g = cn.gearDn ? 1 : 0;
-  cn.gearPos += Math.sign(g - cn.gearPos) * Math.min(Math.abs(g - cn.gearPos), dt / CN_P.gearTime);
+  if ((hyd && cb('LDG GR')) || (cn.gearEmer && g === 1)) cn.gearPos += Math.sign(g - cn.gearPos) * Math.min(Math.abs(g - cn.gearPos), dt / CN_P.gearTime);
 }
 function _cnRedraw() { try { if (typeof drawPFD === 'function') drawPFD(); } catch (e) { _swallow(e); } try { cnPedSync(); } catch (e) { _swallow(e); } }
 
@@ -178,7 +186,7 @@ function fwSimEnter(ground) {
     const tq = cnTqLevel(v, S.vs || 0, S.bnk || 0); cn.pl = Math.max(0, Math.min(1, (tq - 8) / 92));
     cn.eng.forEach(e => { e.tq = tq; e.np = CN_P.npMax; e.ng = 70 + 0.3 * tq; e.itt = 480 + 3.6 * tq; });
   }
-  cn.trimA = cn.alpha;
+  cn.trimA = cn.alpha; cn._cabInit = false;
   try { simTrimReset(); } catch (e) { _swallow(e); }
   _cnOnGndPrev = cn.onGnd;
 }
@@ -211,12 +219,16 @@ function fwFly(dt) {
     cn.lastTd = { vs: v, spd: S.spd, grade };
     try { if (typeof simLastTouchdown !== 'undefined') simLastTouchdown = { vs: v, spd: S.spd, grade }; } catch (e) { _swallow(e); }
     try { uiToast(`접지 ${Math.round(v)}fpm · ${Math.round(S.spd)}kt — ${grade}`, cn.belly || v > 600 ? 'err' : v > 360 ? 'warn' : '', 4000); } catch (e) { _swallow(e); }
+    try { if (typeof cnSysEvent === 'function') cnSysEvent('touchdown', v); } catch (e) { _swallow(e); }
     cn.gamma = 0;
   }
+  if (!cn.onGnd && _cnOnGndPrev && S.running && typeof cnSysEvent === 'function') cnSysEvent('liftoff');
   _cnOnGndPrev = cn.onGnd;
   try { _simOnGnd = cn.onGnd; } catch (e) { _swallow(e); }
   cnLeverStep(a, dt); cnMechStep(dt);
   if (cn.gust) cn.pl = Math.min(cn.pl, 0.12);
+  if (cn.pl < 0 && S.spd > 120) { cn.pl = 0; if (!cn._revWarn) { cn._revWarn = true; try { uiToast('역추력 — 120KIAS 위에서는 쓰지 않는다(AOM)', 'warn'); } catch (e) { _swallow(e); } } } else if (S.spd < 110) cn._revWarn = false;
+  try { if (typeof cnSysStep === 'function') cnSysStep(dt); } catch (e) { _swallow(e); }
   const sig = cnSigma(), tr = tasRatio();
   let vT = Math.max(0, S.spd) * KT * tr;                     // 진대기속도(m/s)
   const vI = Math.max(0, S.spd) * KT;
@@ -236,7 +248,7 @@ function fwFly(dt) {
   cn.fd.roll = (typeof hdgSelOn !== 'undefined' && (hdgSelOn || navApOn)) ? bankTarget : 0;
   if (gDes != null && !a.pitch && cn.ap && !cn.ga) {
     const n = 1 / Math.max(0.3, Math.cos(S.bnk * D2R));
-    aCmd = cnAlphaFor(S.spd, n * Math.cos(gDes)) + Math.max(-4, Math.min(4, (gDes - cn.gamma) / D2R * 1.6));
+    aCmd = cnAlphaFor(S.spd, n * Math.cos(gDes)) + Math.max(-4, Math.min(4, (gDes - cn.gamma) / D2R * (cn.sr ? 0.8 : 1.6)));   // SR(Soft-Ride) — 이득을 반으로
     aCmd = Math.min(aCmd, as - 2);
   }
   aCmd = Math.max(-8, Math.min(as + 8, aCmd));
@@ -332,6 +344,7 @@ function fwKinStep(dt) {
   if (simModeOn) return;
   let agl = 1000; try { agl = radarAltFt(); } catch (e) { _swallow(e); }
   cn.onGnd = agl < 1;
+  try { if (typeof cnSysStep === 'function') cnSysStep(dt); } catch (e) { _swallow(e); }
   if (!cn._kinInit) { cn._kinInit = true; if (!cn.onGnd) { cn.gearDn = false; cn.gearPos = 0; } }   // 공중에서 시작하면 바퀴는 올린 채
   cnMechStep(dt);
   if (!cn.onGnd) {
@@ -358,7 +371,7 @@ function cnTqRequired() { return cnTqLevel(S.spd, 0, S.bnk || 0); }
 // ── 실속 경고음(스틱 셰이커 · 경고 혼) — 받음각이 실속각 2.5° 앞이면 ──
 let _cnHorn = null;
 function cnHornStep() {
-  const want = !!(cn.stallWarn && S.running && (typeof simModeOn !== 'undefined' && simModeOn));
+  const want = !!(cn.stallWarn && S.running && (typeof simModeOn !== 'undefined' && simModeOn)) || (cn.stallTest || 0) > performance.now();   // STALL TEST(콘솔)
   if (!want) { if (_cnHorn) { try { _cnHorn.g.gain.value = 0; } catch (e) { _swallow(e); } } return; }
   try {
     if (!_cnHorn) {

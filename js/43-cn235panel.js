@@ -12,7 +12,7 @@
 // PFD 창(03-pfd.js)이 cnDraw 를 부른다 — 창이 넓으면 셋(글레어실드 위 · LH · 가운데)을 함께, 좁으면 하나씩(위 탭으로 고른다)
 // ══════════════════════════════════════════════════════
 const CNP_BG = '#97aab1', CNP_EDGE = '#6f8288', CNP_DARK = '#222528';
-const CNP_SIZE = { LH: [1000, 640], CTR: [1000, 660], GLR: [2000, 260], ALL: [2000, 920] };
+const CNP_SIZE = { LH: [1000, 640], CTR: [1000, 660], GLR: [2000, 260], ALL: [2000, 920], OVHD: [1400, 800], CB: [1400, 560], CONS: [1400, 720], PERF: [1000, 640] };
 let cnPage = (() => { try { return localStorage.getItem('cnPage') || 'AUTO'; } catch (e) { return 'AUTO'; } })();
 function cnPageSet(p) { cnPage = p; try { localStorage.setItem('cnPage', p); } catch (e) { _swallow(e); } _cnRedraw(); }
 
@@ -45,6 +45,7 @@ function _cnDig(g, x, y, w, h, s, col = '#ffd21a') {
 function _cnLamp(g, x, y, w, h, txt, on, col, fs) {
   g.save();
   g.fillStyle = '#151617'; g.fillRect(x - 3, y - 3, w + 6, h + 6);
+  if (on && cn.ov && cn.ov.annLt === 'DIM') g.globalAlpha = 0.6;   // ANN LT DIM(RH 콘솔)
   if (on) { g.shadowColor = col; g.shadowBlur = 10; }
   g.fillStyle = on ? col : _cnDim(col); g.fillRect(x, y, w, h); g.shadowBlur = 0;
   const L = String(txt).split('\n'), f = fs || Math.min(h * 0.42 / Math.max(1, L.length * 0.8), 15);
@@ -84,30 +85,30 @@ const _CNR = '#e8231c', _CNA = '#f39a1f';
 function _cnW(fn) { return () => { try { return !!fn(); } catch (e) { return false; } }; }
 const CN_ANN_A = [
   [['#1 ENG\nFIRE DET', _CNA], ['#1AC\nGEN', _CNA, _cnW(() => !cn.eng[0].run)], ['#1\nINVERTER', _CNA], ['STBY\nINVERTER', _CNA]],
-  [['#1 ENG\nCHIP', _CNA], ['#1 INLET\nANTI ICE', _CNA], ['#1 PITOT\nHEATING', _CNA], ['AUX\nPITOT', _CNA]],
-  [['#1 ENG\nOIL FLTR', _CNA], ['#1 WSHLD\nHEATING', _CNA], ['#1 HYD\nPRESS', _CNA, _cnW(() => !cn.eng[0].run)], ['HOT\nHYD OIL', _CNA]],
-  [['#1 ENG\nFUEL FLTR', _CNA], ['#1 FUEL\nCOLD', _CNA], ['#1 FUEL\nLEVEL', _CNA, _cnW(() => cn.fuelKg < 400)], ['FLAP\nFAIL', _CNA]],
+  [['#1 ENG\nCHIP', _CNA], ['#1 INLET\nANTI ICE', _CNA], ['#1 PITOT\nHEATING', _CNA, _cnW(() => cn.ov && !cn.ov.pitotL)], ['AUX\nPITOT', _CNA, _cnW(() => cn.ov && !cn.ov.pitotAux)]],
+  [['#1 ENG\nOIL FLTR', _CNA], ['#1 WSHLD\nHEATING', _CNA], ['#1 HYD\nPRESS', _CNA, _cnW(() => !cn.eng[0].run || (cn.ov && !cn.ov.hyd1))], ['HOT\nHYD OIL', _CNA]],
+  [['#1 ENG\nFUEL FLTR', _CNA], ['#1 FUEL\nCOLD', _CNA], ['#1 FUEL\nLEVEL', _CNA, _cnW(() => cn.tank && cn.tank.mL < 200)], ['FLAP\nFAIL', _CNA, _cnW(() => typeof cnHydOk === 'function' && (!cnHydOk() || !cnCbOk('FLAPS SYS')) && Math.abs(cn.flapSel - cn.flap) > 0.5)]],
   [['—', _CNA], ['—', _CNA], ['—', _CNA], ['—', _CNA]],
 ];
 const CN_ANN_A2 = [
-  [['ELEVATOR\nFWD DISC', _CNA], ['AUTO\nFEATHER', _CNR], ['#1 DC\nGEN', _CNR, _cnW(() => !cn.eng[0].run)], ['#1 ENG\nFIRE', _CNR]],
-  [['ELEVATOR\nREAR DISC', _CNA], ['FLAP\nASYM', _CNR], ['#1 DC\nGEN HOT', _CNR], ['#1 ENG\nFUEL PRESS', _CNR, _cnW(() => cn.cond[0] === 'OFF')]],
+  [['ELEVATOR\nFWD DISC', _CNA], ['AUTO\nFEATHER', _CNR], ['#1 DC\nGEN', _CNR, _cnW(() => !cn.eng[0].run || (cn.ov && !cn.ov.gen1))], ['#1 ENG\nFIRE', _CNR]],
+  [['ELEVATOR\nREAR DISC', _CNA], ['FLAP\nASYM', _CNR], ['#1 DC\nGEN HOT', _CNR], ['#1 ENG\nFUEL PRESS', _CNR, _cnW(() => cn.cond[0] === 'OFF' || (cn.ov && (!cn.ov.fpL || !cn.ov.sovL)))]],
   [['AILERON\nFWD DISC', _CNA], ['WING\nOVERHEAT', _CNR], ['#1 BLEED\nHOT', _CNR], ['#1 ENG\nOIL PRESS', _CNR, _cnW(() => cn.eng[0].ng < 40)]],
-  [['AILERON\nREAR DISC', _CNA], ['DOOR\nUNLOCKED', _CNR], ['CABIN\nALTITUDE', _CNR], ['#1 PROP\nOIL PRESS', _CNR, _cnW(() => cn.eng[0].np < 30)]],
+  [['AILERON\nREAR DISC', _CNA], ['DOOR\nUNLOCKED', _CNR, _cnW(() => cn.ov && cn.ov.cargo === 'OPEN')], ['CABIN\nALTITUDE', _CNR, _cnW(() => (cn.cabAlt || 0) > 10000)], ['#1 PROP\nOIL PRESS', _CNR, _cnW(() => cn.eng[0].np < 30)]],
   [['#1 TRU', _CNA], ['—', _CNR], ['—', _CNR], ['LAVATORY\nFIRE', _CNR]],
 ];
 const CN_ANN_E = [
-  [['#2 ENG\nFIRE', _CNR], ['#2 DC\nGEN', _CNR, _cnW(() => !cn.eng[1].run)], ['BAT HOT', _CNR], ['FRONT\nANTISKID', _CNA, _cnW(() => !cn.antiskid)]],
-  [['#2 ENG\nFUEL PRESS', _CNR, _cnW(() => cn.cond[1] === 'OFF')], ['#2 DC\nGEN HOT', _CNR], ['BAT-GEN\nUNTIE', _CNR], ['REAR\nANTISKID', _CNA, _cnW(() => !cn.antiskid)]],
+  [['#2 ENG\nFIRE', _CNR], ['#2 DC\nGEN', _CNR, _cnW(() => !cn.eng[1].run || (cn.ov && !cn.ov.gen2))], ['BAT HOT', _CNR], ['FRONT\nANTISKID', _CNA, _cnW(() => !cn.antiskid)]],
+  [['#2 ENG\nFUEL PRESS', _CNR, _cnW(() => cn.cond[1] === 'OFF' || (cn.ov && (!cn.ov.fpR || !cn.ov.sovR)))], ['#2 DC\nGEN HOT', _CNR], ['BAT-GEN\nUNTIE', _CNR], ['REAR\nANTISKID', _CNA, _cnW(() => !cn.antiskid)]],
   [['#2 ENG\nOIL PRESS', _CNR, _cnW(() => cn.eng[1].ng < 40)], ['#2 BLEED\nHOT', _CNR], ['GEAR UP', _CNR, _cnW(() => cnPanelAnn().gear)], ['EMER LTS', _CNA]],
   [['#2 PROP\nOIL PRESS', _CNR, _cnW(() => cn.eng[1].np < 30)], ['PROP\nBRAKE', _CNR], ['AUTO\nPILOT', _CNR, _cnW(() => cn.apWarn > 0)], ['—', _CNA]],
   [['CARGO\nFIRE', _CNR], ['—', _CNR], ['—', _CNR], ['—', _CNA]],
 ];
 const CN_ANN_E2 = [
-  [['ICE\nFORM', _CNA, _cnW(() => typeof env !== 'undefined' && env.icing)], ['#2\nINVERTER', _CNA], ['#2 AC\nGEN', _CNA, _cnW(() => !cn.eng[1].run)], ['#2 ENG\nFIRE DET', _CNA]],
-  [['HIGH PRESS\nDEICING', _CNA], ['#2 PITOT\nHEATING', _CNA], ['#2 INLET\nANTI ICE', _CNA], ['#2 ENG\nCHIP', _CNA]],
-  [['WING/TAIL\nDEICING', _CNA], ['#2 HYD\nPRESS', _CNA, _cnW(() => !cn.eng[1].run)], ['#2 WSHLD\nHEATING', _CNA], ['#2 ENG\nOIL FLTR', _CNA]],
-  [['—', _CNA], ['#2 FUEL\nLEVEL', _CNA, _cnW(() => cn.fuelKg < 400)], ['#2 FUEL\nCOLD', _CNA], ['#2 ENG\nFUEL FLTR', _CNA]],
+  [['ICE\nFORM', _CNA, _cnW(() => cn.ov && cn.ov.iceDet && typeof envIce !== 'undefined' && envIce.cond)], ['#2\nINVERTER', _CNA], ['#2 AC\nGEN', _CNA, _cnW(() => !cn.eng[1].run)], ['#2 ENG\nFIRE DET', _CNA]],
+  [['HIGH PRESS\nDEICING', _CNA], ['#2 PITOT\nHEATING', _CNA, _cnW(() => cn.ov && !cn.ov.pitotR)], ['#2 INLET\nANTI ICE', _CNA], ['#2 ENG\nCHIP', _CNA]],
+  [['WING/TAIL\nDEICING', _CNA, _cnW(() => (cn.ice || 0) > 0.2 && cn.ov && !cn.ov.wingTail)], ['#2 HYD\nPRESS', _CNA, _cnW(() => !cn.eng[1].run || (cn.ov && !cn.ov.hyd2))], ['#2 WSHLD\nHEATING', _CNA], ['#2 ENG\nOIL FLTR', _CNA]],
+  [['—', _CNA], ['#2 FUEL\nLEVEL', _CNA, _cnW(() => cn.tank && cn.tank.mR < 200)], ['#2 FUEL\nCOLD', _CNA], ['#2 ENG\nFUEL FLTR', _CNA]],
   [['#2 TRU', _CNA], ['—', _CNA], ['—', _CNA], ['—', _CNA]],
 ];
 let _cnAnnTest = 0;
@@ -134,6 +135,7 @@ function cnPanelAnn() {
 
 // ══ Universal PFD(그림 1-1-8 가운데) — 속도 띠 · 자세 · 고도 띠 · 승강 · 헤딩 띠 · FMA ══
 function cnPfd(g, x, y, w, h, v) {
+  if (typeof cnEfisOk === 'function' && !cnEfisOk('PFD')) { g.save(); g.fillStyle = '#5d676c'; g.fillRect(x - 22, y - 26, w + 44, h + 74); g.fillStyle = '#000'; g.fillRect(x - 4, y - 4, w + 8, h + 8); g.restore(); return; }   // 전원 · 회로차단기
   g.save();
   g.fillStyle = '#5d676c'; g.fillRect(x - 22, y - 26, w + 44, h + 74);           // 테(UNIVERSAL)
   _cnT(g, 'UNIVERSAL', x + w / 2, y - 13, 10, '#e8e8e8', false);
@@ -239,6 +241,7 @@ function cnPfd(g, x, y, w, h, v) {
 }
 // ══ Universal MFD(그림 1-1-8 가운데 아래) — 비행계획 상태 · 지도(기수 위 원) ══
 function cnNd(g, x, y, w, h, v) {
+  if (typeof cnEfisOk === 'function' && !cnEfisOk('MFD/ND')) { g.save(); g.fillStyle = '#5d676c'; g.fillRect(x - 22, y - 20, w + 44, h + 62); g.fillStyle = '#000'; g.fillRect(x - 4, y - 4, w + 8, h + 8); g.restore(); return; }
   g.save();
   g.fillStyle = '#5d676c'; g.fillRect(x - 22, y - 20, w + 44, h + 62);
   g.fillStyle = '#000'; g.fillRect(x - 4, y - 4, w + 8, h + 8);
@@ -338,7 +341,7 @@ function cnLhDraw(g, v) {
   // 위 등
   _cnLamp(g, 398, 30, 48, 34, 'BETA\nMODE', cn.pl < 0 && cn.eng[0].run, '#f39a1f', 11);
   _cnLamp(g, 543, 30, 48, 34, 'BETA\nMODE', cn.pl < 0 && cn.eng[1].run, '#f39a1f', 11);
-  _cnLamp(g, 625, 28, 62, 34, 'STALL', an.stall, '#e8231c', 15);
+  _cnLamp(g, 625, 28, 62, 34, 'STALL', an.stall || (cn.stallTest || 0) > performance.now(), '#e8231c', 15);
   _cnLamp(g, 733, 28, 62, 34, 'WARNING', M.warn && (performance.now() / 400 | 0) % 2 === 0, '#e8231c', 13); _cnHit(733, 28, 62, 34, () => cnMasterAck('W'));
   _cnLamp(g, 840, 28, 62, 34, 'CAUTION', M.caut, '#f39a1f', 13); _cnHit(840, 28, 62, 34, () => cnMasterAck('C'));
   // AHS(◀ ▶ DG)
@@ -382,8 +385,8 @@ function cnCtrDraw(g, v) {
     b206RoundGauge(g, cx, y, R, Object.assign({ fs: R * 0.18 }, o, { val: _cl(vals[i], o.lo, o.hi * 1.04), title: title, ty: -0.12 }));
     if (dig) _cnDig(g, cx - 22, y + R * 0.42, 44, 15, dig(vals[i]));
   });
-  pair(80, ['TORQUE', 'X 100 FT/LB'], v.tq.map(q => q * 0.042), { lo: 0, hi: 5, maj: 1, min: 0.5, bands: [[0.4, 4.2, '#18c23a'], [4.2, 4.45, '#f2c418']], redline: [4.45], lab: q => q ? String(q) : null });
-  pair(196, ['ITT', 'X 100 °C'], v.itt.map(t => t / 100), { lo: 2, hi: 10, maj: 1, min: 0.5, bands: [[4, 8.2, '#18c23a'], [8.2, 8.7, '#f2c418']], redline: [8.7], lab: q => q % 2 === 0 ? String(q) : null }, t => String(Math.round(t * 100)));
+  pair(80, ['TORQUE', 'X 100 FT/LB'], v.tq.map(q => q * 0.0424), { lo: 0, hi: 5, maj: 1, min: 0.5, bands: [[0.4, 4.24, '#18c23a'], [4.24, 4.53, '#f2c418']], redline: [4.53], lab: q => q ? String(q) : null });   // 424 = 이륙 · 453 = APR(1,870SHP)
+  pair(196, ['ITT', 'X 100 °C'], v.itt.map(t => t / 100), { lo: 2, hi: 10, maj: 1, min: 0.5, bands: [[4, 9.21, '#18c23a'], [9.21, 9.5, '#f2c418']], redline: [9.5], lab: q => q % 2 === 0 ? String(q) : null }, t => String(Math.round(t * 100)));   // ITT 921~950°C(5분)
   pair(312, ['NP', '% RPM'], v.np, { lo: 15, hi: 125, maj: 20, min: 10, bands: [[84, 102, '#18c23a'], [40, 84, '#f2c418']], redline: [102], lab: q => (q === 15 || q === 45 || q === 65 || q === 85 || q === 105 || q === 125) ? String(q) : null }, n => n.toFixed(1));
   pair(428, ['NG', '% RPM'], v.ng, { lo: 0, hi: 110, maj: 20, min: 10, bands: [[60, 101, '#18c23a']], redline: [101], lab: q => q % 20 === 0 ? String(q) : null }, n => n.toFixed(1));
   pair(544, ['FF', 'PPH X 100'], v.ff.map(f => f / 100), { lo: 0, hi: 10, maj: 2, min: 1, bands: [[1, 8, '#18c23a']], lab: q => String(q) }, f => (f * 10).toFixed(1));
@@ -521,11 +524,12 @@ function cnApMode(k) {
   } catch (e) { _swallow(e); }
   _cnRedraw();
 }
-// 피치 휠 — VS 면 승강률 100fpm · ALT 면 고도 100ft · 그 밖은 VS 로
+// VERTICAL TRIM(피치 휠 · AOM) — ALT 25ft · IAS 1kt · VS 200fpm(그 밖은 VS 로)
 function cnPitchWheel(d) {
   try {
-    if (altHoldOn) { selAlt = Math.max(0, selAlt + (d < 0 ? -100 : 100)); }
-    else { if (!vsModeOn) { selVS = Math.round((S.vs || 0) / 100) * 100; vsModeOn = true; } selVS = Math.max(-3000, Math.min(3000, selVS + (d < 0 ? -100 : 100))); }
+    if (altHoldOn) { selAlt = Math.max(0, selAlt + (d < 0 ? -25 : 25)); }
+    else if (simModeOn ? simIasOn : iasNsOn) { selSpd = Math.max(80, selSpd + (d < 0 ? 1 : -1)); }
+    else { if (!vsModeOn) { selVS = Math.round((S.vs || 0) / 100) * 100; vsModeOn = true; } selVS = Math.max(-3000, Math.min(3000, selVS + (d < 0 ? -200 : 200))); }
   } catch (e) { _swallow(e); }
   _cnRedraw();
 }
@@ -546,12 +550,16 @@ function cnDrawPage(g, x, y, w, h, page, tabs) {
   if (page === 'ALL') { sub(0, 0, cnGlareDraw); sub(0, 270, cnLhDraw); sub(1000, 260, cnCtrDraw); }
   else if (page === 'GLR') sub(0, 0, cnGlareDraw);
   else if (page === 'CTR') sub(0, 0, cnCtrDraw);
+  else if (page === 'OVHD') sub(0, 0, cnOvhdDraw);
+  else if (page === 'CB') sub(0, 0, cnCbDraw);
+  else if (page === 'CONS') sub(0, 0, cnConsDraw);
+  else if (page === 'PERF') sub(0, 0, cnPerfDraw);
   else sub(0, 0, cnLhDraw);
   g.restore();
   // 고르는 탭(위 왼쪽 · 화면 픽셀)
   if (tabs) {
-    const T = [['AUTO', 'AUTO'], ['ALL', 'ALL'], ['LH', 'LH'], ['CTR', 'CTR'], ['GLR', 'GLARE'], ['PED', 'PED ▸']];
-    const bw = Math.max(34, Math.min(60, w / 11)), bh = Math.max(16, Math.min(24, h / 22));
+    const T = [['AUTO', 'AUTO'], ['ALL', 'ALL'], ['LH', 'LH'], ['CTR', 'CTR'], ['GLR', 'GLARE'], ['OVHD', 'OVHD'], ['CB', 'C/B'], ['CONS', 'CONSOLE'], ['PERF', 'W&B'], ['PED', 'PED ▸']];
+    const bw = Math.max(30, Math.min(60, (w - 40) / 10.5)), bh = Math.max(16, Math.min(24, h / 22));
     T.forEach(([kk, t], i) => {
       const bx = x + 4 + i * (bw + 3), by = y + 3, on = kk === cnPage || (kk === 'PED' && _cnPed && _cnPed.style.display === 'flex');
       g.save(); g.fillStyle = on ? '#1d6b34' : 'rgba(20,24,28,0.85)'; g.strokeStyle = on ? '#3cff6a' : '#667'; g.lineWidth = 1; g.fillRect(bx, by, bw, bh); g.strokeRect(bx, by, bw, bh); g.restore();
