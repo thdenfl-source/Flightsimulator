@@ -350,8 +350,8 @@ function _wingIn(m) {
   if (m.wps) P.wps = m.wps;
   let t = (typeof traffic !== 'undefined') ? traffic.find(x => x.remote === m.id) : null;
   if (!t && typeof traffic !== 'undefined') { t = { id: 'W' + m.id.slice(0, 4), remote: m.id, mode: 'wing', st: 'OT' }; traffic.push(t); }
-  if (t) Object.assign(t, { cs: m.cs, ac: m.ac === 'b206' || m.ac === 'r22' ? m.ac : 'kuh', lat: m.lat, lon: m.lon, alt: m.alt, hdg: m.hdg, spd: m.spd, vs: m.vs, bnk: m.bnk, pit: m.pit });
-  if (fresh) { _cToast(`✈ ${m.cs} 이(가) 함께 납니다`, 'ok'); _cNote(`협동 비행 — ${m.cs} 들어옴`); _wingRender(true); }
+  if (t) Object.assign(t, { cs: m.cs, ac: m.ac === 'b206' || m.ac === 'r22' || m.ac === 'cn235' ? m.ac : 'kuh', lat: m.lat, lon: m.lon, alt: m.alt, hdg: m.hdg, spd: m.spd, vs: m.vs, bnk: m.bnk, pit: m.pit });
+  if (fresh) { _cToast(`✈ ${m.cs} 이(가) 함께 납니다`, 'ok'); _cNote(`협동 비행 — ${m.cs} 들어옴`); _wingMap(); _wingRender(true); }   // 2D 지도에도 곧바로(1초 주기를 기다리지 않게)
 }
 function _wingDrop(id) {
   delete wing.peers[id];
