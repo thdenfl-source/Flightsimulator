@@ -1410,7 +1410,9 @@ function _vStickBox() {
   d3.appendChild(box);
   // 컬렉티브는 왼손 — 화면 왼쪽 아래 끝(L CHIN 창의 왼쪽 가장자리)에 따로 둔다
   const cb = document.createElement('div'); cb.id = 'vstick-coll'; cb.className = 'vstick-pane';
-  cb.innerHTML = '<div class="vs-track vs-coll" data-k="coll"><div class="vs-knob"></div><span class="vs-lbl">COLL</span></div>';
+  // 고정익(CN-235)은 컬렉티브 대신 스로틀(파워 레버 · 42-cn235.js 가 vStick.coll 을 cn.pl 로)
+  const _fw = typeof acFixedWing === 'function' && acFixedWing();
+  cb.innerHTML = `<div class="vs-track vs-coll" data-k="coll" title="${_fw ? 'THROTTLE(파워 레버)' : 'COLLECTIVE'}"><div class="vs-knob"></div><span class="vs-lbl">${_fw ? 'THROTTLE' : 'COLL'}</span></div>`;
   // (CHIN 창 줄은 #map3d 바깥 형제라, 그 위에 보이도록 #map3d 의 부모에 붙인다)
   (d3.parentElement || d3).appendChild(cb);
   [...box.querySelectorAll('[data-k]'), ...cb.querySelectorAll('[data-k]')].forEach(el => {
@@ -1469,7 +1471,7 @@ function vStickRender() {
   if (kc) kc.style.bottom = `calc(${(vStick.coll * 100).toFixed(1)}% - 9px)`;
   if (kp) kp.style.left = `calc(${((vStick.yaw + 1) * 50).toFixed(1)}% - 9px)`;
   if (ky) { ky.style.left = `calc(${(50 + vStick.roll * 50).toFixed(1)}% - 14px)`; ky.style.top = `calc(${(50 - vStick.pitch * 50).toFixed(1)}% - 14px)`; }
-  const l = q('.vs-coll .vs-lbl'); if (l) l.textContent = `COLL ${Math.round(vStick.coll * SIM_LEVER_TOP)}%`;
+  const l = q('.vs-coll .vs-lbl'); if (l) l.textContent = (typeof acFixedWing === 'function' && acFixedWing()) ? `THR ${Math.round(vStick.coll * 100)}%` : `COLL ${Math.round(vStick.coll * SIM_LEVER_TOP)}%`;
 }
 function syncVStick() {
   const avail = vStickAvail(), want = vStickOn && avail;

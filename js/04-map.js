@@ -1320,9 +1320,52 @@ const AC_ICON_SVG = `<svg width="40" height="40" viewBox="0 0 40 40" xmlns="http
   </g>
   <circle cx="20" cy="14.7" r="1.2" fill="#2b2e33"/>
 </svg>`;
+// 기종마다 제 평면도(00-aircraft.js AC_TYPE) — 같은 40×40 칸 · 가운데(20,20)가 기준점 · 기수가 위
+// Bell 206B-3 — 흰 동체 · 파란 띠 · 2엽 주로터(지름 10.2m) · 가는 꼬리 · 수평안정판 · 스키드
+const AC_ICON_B206 = `<svg width="40" height="40" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
+  <circle cx="20" cy="15" r="9.2" fill="none" stroke="#ffffff" stroke-width="0.5" stroke-dasharray="1.6 1.4" opacity="0.6"/>
+  <line x1="16.6" y1="11" x2="16.6" y2="20.5" stroke="#2b2e33" stroke-width="0.8" stroke-linecap="round"/>
+  <line x1="23.4" y1="11" x2="23.4" y2="20.5" stroke="#2b2e33" stroke-width="0.8" stroke-linecap="round"/>
+  <path d="M20 8.2 Q22.6 8.6 22.7 12 L22.4 19.6 Q21.6 21.6 20.6 22 L20.45 34.5 L19.55 34.5 L19.4 22 Q18.4 21.6 17.6 19.6 L17.3 12 Q17.4 8.6 20 8.2 Z" fill="#f4f5f6" stroke="#111" stroke-width="0.55" stroke-linejoin="round"/>
+  <path d="M17.8 9.8 Q20 8.6 22.2 9.8 L22.3 11.4 L17.7 11.4 Z" fill="#7fb3d6" opacity="0.9"/>
+  <rect x="17.4" y="15.5" width="5.2" height="1.4" fill="#1f4fa3"/>
+  <path d="M17 29.4 L23 29.4 L23 30.6 L17 30.6 Z" fill="#f4f5f6" stroke="#111" stroke-width="0.4"/>
+  <line x1="20.8" y1="33" x2="20.8" y2="36.8" stroke="#3b3f45" stroke-width="0.8" stroke-linecap="round"/>
+  <line x1="12.8" y1="7.8" x2="27.2" y2="22.2" stroke="#3b3f45" stroke-width="1.1" stroke-linecap="round" opacity="0.9"/>
+  <circle cx="20" cy="15" r="1" fill="#2b2e33"/>
+</svg>`;
+// R22 — 작은 거품 조종석 · 2엽 주로터(지름 7.7m) · 가는 꼬리 · 스키드
+const AC_ICON_R22 = `<svg width="40" height="40" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
+  <circle cx="20" cy="16" r="6.9" fill="none" stroke="#ffffff" stroke-width="0.5" stroke-dasharray="1.6 1.4" opacity="0.6"/>
+  <line x1="17.6" y1="12.4" x2="17.6" y2="19.8" stroke="#2b2e33" stroke-width="0.7" stroke-linecap="round"/>
+  <line x1="22.4" y1="12.4" x2="22.4" y2="19.8" stroke="#2b2e33" stroke-width="0.7" stroke-linecap="round"/>
+  <path d="M20 11 Q22.3 11.3 22.2 14.4 L21.8 18 Q21 19.4 20.35 19.6 L20.3 30 L19.7 30 L19.65 19.6 Q19 19.4 18.2 18 L17.8 14.4 Q17.7 11.3 20 11 Z" fill="#e23b2e" stroke="#111" stroke-width="0.5" stroke-linejoin="round"/>
+  <path d="M18.2 12.2 Q20 11.2 21.8 12.2 L21.9 14.3 L18.1 14.3 Z" fill="#9fd0ee" opacity="0.95"/>
+  <line x1="20.6" y1="28.6" x2="20.6" y2="31.6" stroke="#3b3f45" stroke-width="0.7" stroke-linecap="round"/>
+  <line x1="15.1" y1="11.1" x2="24.9" y2="20.9" stroke="#3b3f45" stroke-width="1" stroke-linecap="round" opacity="0.9"/>
+  <circle cx="20" cy="16" r="0.9" fill="#2b2e33"/>
+</svg>`;
+// CN-235 — 고정익(높은 날개 · 쌍발 터보프롭 · 위로 들린 꼬리 · 수평꼬리) · 해양경찰 도색(흰 바탕 · 파랑 · 주황 띠) — 날개폭 25.8m 를 칸에 맞춰 줄였다
+const AC_ICON_CN235 = `<svg width="40" height="40" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
+  <path d="M20 2.6 Q21.9 3 22.2 6.5 L22.3 26 Q22 31 20.9 35.6 L19.1 35.6 Q18 31 17.7 26 L17.8 6.5 Q18.1 3 20 2.6 Z" fill="#f4f5f6" stroke="#111" stroke-width="0.6" stroke-linejoin="round"/>
+  <path d="M1.4 15.2 L17.8 13.4 L22.2 13.4 L38.6 15.2 L38.6 17.4 L22.2 17.6 L17.8 17.6 L1.4 17.4 Z" fill="#eef0f2" stroke="#111" stroke-width="0.55" stroke-linejoin="round"/>
+  <path d="M11.2 31.6 L17.9 30.2 L22.1 30.2 L28.8 31.6 L28.8 33.3 L22 33.2 L18 33.2 L11.2 33.3 Z" fill="#eef0f2" stroke="#111" stroke-width="0.5" stroke-linejoin="round"/>
+  <rect x="10.4" y="11" width="2.4" height="8" rx="1" fill="#d8dbde" stroke="#111" stroke-width="0.45"/>
+  <rect x="27.2" y="11" width="2.4" height="8" rx="1" fill="#d8dbde" stroke="#111" stroke-width="0.45"/>
+  <line x1="7.6" y1="10.6" x2="15.6" y2="10.6" stroke="#3b3f45" stroke-width="0.9" stroke-linecap="round" opacity="0.85"/>
+  <line x1="24.4" y1="10.6" x2="32.4" y2="10.6" stroke="#3b3f45" stroke-width="0.9" stroke-linecap="round" opacity="0.85"/>
+  <path d="M18.6 4.6 Q20 3.8 21.4 4.6 L21.6 6 L18.4 6 Z" fill="#2a3846"/>
+  <rect x="17.8" y="19.5" width="4.5" height="1.3" fill="#1f4fa3"/><rect x="17.85" y="21" width="4.4" height="0.8" fill="#f08a1c"/>
+  <line x1="20" y1="28" x2="20" y2="35.4" stroke="#1f4fa3" stroke-width="0.9"/>
+  <circle cx="20" cy="20" r="0.9" fill="#2b2e33"/>
+</svg>`;
+function acIconSvg() {
+  try { if (acIs('cn235')) return AC_ICON_CN235; if (acIs('r22')) return AC_ICON_R22; if (acIs('b206')) return AC_ICON_B206; } catch (e) { _swallow(e); }
+  return AC_ICON_SVG;
+}
 function makeAircraftIcon(hdg) {
   return L.divIcon({
-    html:`<div class="ac-marker" style="transform:rotate(${hdg}deg);transform-origin:20px 20px;filter:drop-shadow(0 0 1px rgba(0,0,0,0.9));">${AC_ICON_SVG}</div>`,
+    html:`<div class="ac-marker" data-ac="${typeof AC_TYPE !== 'undefined' ? AC_TYPE : ''}" style="transform:rotate(${hdg}deg);transform-origin:20px 20px;filter:drop-shadow(0 0 1px rgba(0,0,0,0.9));">${acIconSvg()}</div>`,
     iconSize:[40,40],iconAnchor:[20,20],className:'',
   });
 }

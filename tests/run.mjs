@@ -102,20 +102,8 @@ import * as proccyc from './cases/proccyc.mjs';
 
 const SUITES0 = [smoke, actions, coords, chartcal, hold, nav, gspd, dialog, chartview, procdata, simspd, tascalc, brg, fpwpt, maprot, map3d, dmearc, dme, fporder, wptcrs, brglbl, directto, crssync, locsta, susp, layout, gslope, joystick, geosearch, simmode, ga, tdown, bbtrim, physics2, hocas, joycenter, ship3d, heli3d, ralt, startapt, hdgref, sound, view3d, runway, apptune, lock, popout, upper, system, lower, c5000, npx138, fuelsys, afcslink, gtc, edition, cockpit, pfdmsg, fcpsimple, pfdsk, cdulive, sar, eisrev, b206, b206sys, debrief, b206sim, train3, train4, r4, kuhgrip, r5, r40, cduknob, cas, kuhsys, kuhsys2, kuhsys3, r22, proccyc, extlts, fmodel3, infra2, mission, mirror, alta, fcp2, vendorsync, glguard, train5, crew, atcT, cn235];
 // 여러 묶음으로 나뉜 검사(suites 를 내보내는 파일)는 펼친다
-// 절차 훈련판(EDITION=proc — Flightsimulator)에서는 SIM 모드를 쓰는 묶음을 건너뛴다(그 판은 사이클릭 피치 · 롤이 잠겨 사이클릭으로 모는 검사가 맞지 않는다 — 판 차이는 '판(edition)' 검사가 본다)
-// — SIM 을 켜는 검사(toggleSimMode(true) · SIM_SETUP · simModeOn = true)가 든 파일은 통째로
-const _simFiles = new Set();
-if (EDITION === 'proc') {
-  const dir = new URL('./cases/', import.meta.url);
-  for (const f of fs.readdirSync(dir)) {
-    if (!f.endsWith('.mjs')) continue;
-    const src = fs.readFileSync(new URL(f, dir), 'utf8');
-    if (f === 'proccyc.mjs') continue;   // 사이클릭 잠금 비행 — 절차 훈련판의 SIM 을 보는 검사라 남긴다
-    if (/toggleSimMode\(\s*true|SIM_SETUP|simModeOn\s*=\s*true/.test(src)) _simFiles.add(await import(new URL(f, dir).href));
-  }
-}
-const SUITES = SUITES0.filter(m => !_simFiles.has(m)).flatMap(m => m.suites ? m.suites : [m]);
-if (_simFiles.size) console.log(`절차 훈련판 — SIM 을 쓰는 검사 파일 ${_simFiles.size}개는 건너뜁니다`);
+// 두 판(shinesong · Flightsimulator)은 비밀번호만 다르고 기능이 같다 — 모든 검사를 함께 돌린다
+const SUITES = SUITES0.flatMap(m => m.suites ? m.suites : [m]);
 const filter = process.argv.slice(2);
 
 function makeT() {

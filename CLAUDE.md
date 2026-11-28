@@ -8,22 +8,19 @@
 | **thdenfl-source/Flightsimulator** (이 저장소) | **절차 훈련** | AIP 절차·공항 자료, CDU·FPL, HOVER PAGE, SHIP 접근 훈련 등 |
 | **thdenfl-source/shinesong** | **모든 걸 합친 종합 시뮬레이터** | 조이스틱 직접 조종(SIM 모드), 비행 모델(토크·NR), 3D 조종석 시야·CHIN BUBBLE, 함정 착함 등 |
 
-- 이 저장소는 **shinesong 의 사본**이다 — 같은 파일을 쓰고, 판(js/00-edition.js)만 절차 훈련판으로 돌아 사이클릭 피치 · 롤이 잠긴다(SIM 은 있다).
+- 이 저장소는 **shinesong 의 사본**이다 — 같은 파일을 쓰고 기능도 모두 같다. 판(js/00-edition.js)은 시작 비밀번호만 가른다.
 - 요청한 기능이 이 저장소에 없으면 shinesong 에 있는지 확인하고 그쪽에서 작업한다
   (사용자가 저장소를 잘못 짚어 말하는 일이 있다).
 - **이 저장소의 앱 파일은 직접 고치지 않는다.** shinesong 에서 고친 뒤 이리로 복사한다(아래).
 
 ## 두 저장소는 같은 코드다 — shinesong 에서만 고친다
-- 앱 파일(js · index.html · sw.js · tests · data · vendor · 그림)은 **두 저장소가 같다.** 판(edition)만 다르다:
-  `js/00-edition.js` 가 주소에 `flightsimulator` 가 들어 있으면 **절차 훈련판(proc)** — SIM 모드 · SIM 조작 버튼은 종합판과 같고,
-  **사이클릭의 피치 · 롤만 듣지 않는다**(`CYCLIC_LOCK` — 조이스틱 · 화면 STICK 원형 사이클릭 · GYRO). 자세는 4방향 비퍼 트림과 AFCS 로,
-  컬렉티브 · 페달 · COLL TRIM 등 트림은 그대로. 시작 비밀번호는 판마다 다르다(절차 훈련판은 thdenfl). 그 밖은 모두 같다.
+- 앱 파일(js · index.html · sw.js · tests · data · vendor · 그림)은 **두 저장소가 같고 기능도 모두 같다.**
+  `js/00-edition.js` 가 주소에 `flightsimulator` 가 들어 있으면 **절차 훈련판(proc)** — 다른 것은 **시작 비밀번호뿐**(절차 훈련판은 thdenfl).
+  (예전의 사이클릭 피치 · 롤 잠금 `CYCLIC_LOCK` 은 이제 두 판 모두 꺼져 있다 — 검사 proccyc 만 잠가 본다.)
 - **고칠 일은 shinesong 에서 한다.** 끝나면 Flightsimulator 로 그대로 복사해 PR 을 하나 더 올린다
   (`.git` · `.github` · `.nojekyll` · `.gitignore` · `CLAUDE.md` · `node_modules` 만 그 저장소 것을 둔다).
 - SIM 기능은 SIM 파일(14-simmode · 15-heli3d · 16-sound) 안에 두고, 다른 파일에서 부를 때는 '있으면 부른다'로 짠다.
-  사이클릭(피치 · 롤)으로만 쓰는 새 버튼은 `js/00-style.js`(꾸밈) 의 `html.ed-proc …` 규칙(지금은 GYRO)에 넣는다.
-- 검사: Flightsimulator 경로(또는 `EDITION=proc`)에서는 SIM 을 켜는 검사 파일(toggleSimMode(true) · SIM_SETUP ·
-  simModeOn = true)을 건너뛴다. 절차 훈련판을 shinesong 에서 미리 보려면 `EDITION=proc node tests/run.mjs` · 주소 `?edition=proc`.
+- 검사: 두 판 모두 모든 검사를 돌린다. 절차 훈련판을 shinesong 에서 미리 보려면 `EDITION=proc node tests/run.mjs` · 주소 `?edition=proc`.
 
 ## 항상 따를 규칙
 
@@ -53,4 +50,4 @@
 
 ### 캐시 버전 · 검사
 - 캐시 번호(`sw.js` CACHE · `index.html` `?v=`)는 shinesong 과 같은 번호를 그대로 가져온다(복사본이므로).
-- 검사는 `node tests/run.mjs` — 이 경로에서는 절차 훈련판으로 돌고 SIM 검사 파일은 건너뛴다(사이클릭으로 모는 검사라 — 판 차이는 shinesong 의 '판(edition)' 검사가 본다).
+- 검사는 `node tests/run.mjs` — 이 경로에서는 절차 훈련판으로 돌고 모든 검사를 돌린다(기능이 같으므로).

@@ -1,8 +1,8 @@
 name: CI
 
 # 배포 전 방어선 — 이 저장소는 빌드가 없고 index.html 이 그대로 GitHub Pages 로 나간다.
-# 전체 회귀 검사를 4 조각으로 나눠 함께 돌린다(한 줄로 돌리면 15분을 넘겨 끊겼다).
-# (이 경로에서는 절차 훈련판으로 돌고 SIM 검사 파일은 건너뛴다 — tests/run.mjs)
+# 전체 회귀 검사를 8 조각으로 나눠 함께 돌린다(shinesong 과 같다 — 이제 SIM 검사도 모두 돈다).
+# (이 경로에서는 절차 훈련판으로 돈다 — 기능은 shinesong 과 같고 비밀번호만 다르다)
 on:
   push:
     branches: ['**']
@@ -33,13 +33,13 @@ jobs:
         run: node tests/check-swver.mjs "${{ github.event.pull_request.base.sha }}"
 
   test:
-    name: 회귀 테스트 ${{ matrix.shard }}/4
+    name: 회귀 테스트 ${{ matrix.shard }}/8
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4]
+        shard: [1, 2, 3, 4, 5, 6, 7, 8]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -51,6 +51,6 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: 회귀 테스트
         env:
-          SHARD: ${{ matrix.shard }}/4
+          SHARD: ${{ matrix.shard }}/8
           TIMING: '1'
         run: node tests/run.mjs
