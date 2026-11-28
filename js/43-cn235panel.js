@@ -826,12 +826,14 @@ if (CN_ON) {
 
 // ══ 조종간(요크 · 그림 1-1-14) — 창 탭 CYC·COLL 칸 · 3D 조종석 아래 ══
 //   왼쪽 뿔 위: 승강타 트림(위아래 흔들 스위치) · 도움날개 트림(옆) · AP(빨강) · GA(빨강) · PTT · 오른쪽 뿔: SYN
-function _cnYokeG(id) {
+// zoom — 조종석의 작은 요크: 몸통을 누르면 크게(cnYkPop) · 단추는 그대로 눌린다
+function _cnYokeG(id, zoom) {
+  const Z = zoom ? ' data-cnypop="1" style="pointer-events:auto;cursor:zoom-in"' : '';
   const B = (k, cx, cy, r, col, t) => `<g data-cnk="${k}" style="cursor:pointer;pointer-events:auto"><circle cx="${cx}" cy="${cy}" r="${r}" fill="${col}" stroke="#222" stroke-width="1.5"/><text x="${cx}" y="${cy + 3.5}" font-size="9" font-weight="bold" text-anchor="middle" fill="#fff">${t}</text></g>`;
   const R = (k, x, y, w, h, t) => `<g data-cnk="${k}" style="cursor:pointer;pointer-events:auto"><rect x="${x}" y="${y}" width="${w}" height="${h}" rx="3" fill="#3a3d40" stroke="#111"/><text x="${x + w / 2}" y="${y + h / 2 + 3.5}" font-size="9" font-weight="bold" text-anchor="middle" fill="#fff">${t}</text></g>`;
   return `<defs><linearGradient id="${id}" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#d3d6d9"/><stop offset="1" stop-color="#8b9095"/></linearGradient></defs>
-    <path d="M30 70 C18 26 54 8 74 30 L92 96 C110 120 190 120 208 96 L226 30 C246 8 282 26 270 70 C262 130 214 170 150 172 C86 170 38 130 30 70 Z" fill="url(#${id})" stroke="#5f6468" stroke-width="2.5"/>
-    <path d="M108 106 H192 L198 210 H102 Z" fill="url(#${id})" stroke="#5f6468" stroke-width="2.5"/>
+    <path d="M30 70 C18 26 54 8 74 30 L92 96 C110 120 190 120 208 96 L226 30 C246 8 282 26 270 70 C262 130 214 170 150 172 C86 170 38 130 30 70 Z" fill="url(#${id})" stroke="#5f6468" stroke-width="2.5"${Z}/>
+    <path d="M108 106 H192 L198 210 H102 Z" fill="url(#${id})" stroke="#5f6468" stroke-width="2.5"${Z}/>
     <rect x="118" y="112" width="64" height="34" rx="6" fill="#9ea3a7" stroke="#666"/><circle cx="138" cy="129" r="9" fill="#e4e6e8" stroke="#777"/><circle cx="162" cy="129" r="9" fill="#e4e6e8" stroke="#777"/>
     <text x="150" y="182" font-size="20" font-weight="bold" font-style="italic" text-anchor="middle" fill="#fff">CN235</text>
     ${R('etU', 46, 2, 30, 14, '▲UP')}${R('etD', 46, 17, 30, 14, '▼DN')}${R('atL', 10, 36, 20, 16, '◀')}${R('atR', 82, 36, 20, 16, '▶')}
@@ -847,7 +849,59 @@ function cnYokeHtml() {
 // 3D 조종석(15-heli3d.js _ckpitEl) — 계기판 앞 양쪽 요크(단추는 눌린다)
 function cnYokeSvgCk() {
   return `<svg class="ck-yokes" viewBox="0 0 1600 900" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg" style="position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none">
-    <g transform="translate(332 772) scale(0.78)">${_cnYokeG('cnyk-l')}</g><g transform="translate(1030 772) scale(0.78)">${_cnYokeG('cnyk-r')}</g></svg>`;
+    <g transform="translate(332 772) scale(0.78)">${_cnYokeG('cnyk-l', true)}</g><g transform="translate(1030 772) scale(0.78)">${_cnYokeG('cnyk-r', true)}</g></svg>`;
+}
+// ══ 요크 크게(팝아웃) — 조종석의 요크 몸통을 누르면 흰수리 컬렉티브 · 사이클릭 창(35-kuhgrip.js kgPop)처럼 3D 화면 위에 크게 ══
+//   큰 요크의 단추(ELEV TRIM ▲▼ · AIL TRIM ◀▶ · GA · AP DISC · PTT · SYN)와 방향타 트림 · 상태(AP · GA · 트림 값)
+let cnYkPopOn = false;
+function cnYkPop(on) { cnYkPopOn = on === undefined ? !cnYkPopOn : !!on; _cnYkPopSync(true); }
+function cnYkPopSvg() {
+  const R = (k, x, y, w, h, t, col) => `<g data-cnk="${k}" style="cursor:pointer"><rect x="${x}" y="${y}" width="${w}" height="${h}" rx="4" fill="${col || '#3a3d40'}" stroke="#111"/><text x="${x + w / 2}" y="${y + h / 2 + 4}" font-size="11" font-weight="bold" text-anchor="middle" fill="#fff">${t}</text></g>`;
+  const et = -(simTrim.pitch || 0), at = simTrim.roll || 0, rt = cn.rudTrim * 10;
+  const bar = (x, y, w, v, lo, hi, lab) => { const f = Math.max(0, Math.min(1, (v - lo) / (hi - lo))); return `<text x="${x}" y="${y - 3}" font-size="10" fill="#9fb0bf">${lab}</text><rect x="${x}" y="${y}" width="${w}" height="8" rx="3" fill="#1d2329" stroke="#4a5560"/><line x1="${x + w / 2}" y1="${y - 1}" x2="${x + w / 2}" y2="${y + 9}" stroke="#667"/><circle cx="${x + w * f}" cy="${y + 4}" r="5" fill="#3cff6a"/><text x="${x + w + 6}" y="${y + 8}" font-size="11" font-weight="bold" fill="#e6edf3">${v.toFixed(1)}</text>`; };
+  return `<svg viewBox="0 0 300 300" width="100%" height="100%" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">
+    <g>${_cnYokeG('cnyk-p')}</g>
+    <rect x="0" y="216" width="300" height="84" rx="6" fill="#14181c" stroke="#2c343c"/>
+    <text x="10" y="232" font-size="11" font-weight="bold" fill="${cn.ap ? '#3cff6a' : '#8a96a2'}">AP ${cn.ap ? 'ENG' : 'DISC'}</text>
+    <text x="70" y="232" font-size="11" font-weight="bold" fill="${cn.ga ? '#ffb000' : '#8a96a2'}">${cn.ga ? 'GA' : '—'}</text>
+    ${bar(10, 246, 70, et, -10, 10, 'ELEV TRIM')}${bar(112, 246, 70, at, -10, 10, 'AIL TRIM')}${bar(10, 278, 70, rt, -10, 10, 'RUD TRIM')}
+    ${R('rtL', 112, 270, 34, 22, '◀')}${R('rtR', 150, 270, 34, 22, '▶')}<text x="148" y="266" font-size="9" fill="#9fb0bf" text-anchor="middle">RUDDER TRIM</text>
+    ${R('ap', 214, 222, 78, 22, 'AP DISC', '#8b1a1a')}${R('ga', 214, 248, 78, 22, 'GO AROUND', '#8b1a1a')}${R('syn', 214, 274, 78, 22, 'SYN (hold)')}
+  </svg>`;
+}
+function _cnYkPopSync(force) {
+  const ck = document.getElementById('sim-ckpit');
+  const show = cnYkPopOn && CN_ON && !!ck && ck.classList.contains('show') && ck.offsetWidth > 0;
+  let p = document.getElementById('cn-yk-pop');
+  if (!show) { if (p) p.style.display = 'none'; if (!ck || !ck.classList.contains('show')) cnYkPopOn = false; return; }
+  const L = typeof _ckLayer === 'function' ? _ckLayer() : null; if (!L) return;
+  if (!p) {
+    p = document.createElement('div'); p.id = 'cn-yk-pop';
+    p.innerHTML = '<div class="kgp-bar"><span class="kgp-t">CONTROL WHEEL (LH)</span><span class="ck-pop-sz"><button type="button" class="sim-btn" data-act="ckPopScale" data-arg="[-1]" title="창 줄이기">−</button><button type="button" class="sim-btn" data-act="ckPopScale" data-arg="[1]" title="창 키우기">+</button></span><button type="button" class="sim-btn kgp-x" title="닫기">✕</button></div><div id="cn-yk-pop-body"></div>';
+    p.querySelector('.kgp-x').addEventListener('click', e => { e.stopPropagation(); cnYkPop(false); });
+  }
+  if (p.parentElement !== L) L.appendChild(p);
+  const b = document.getElementById('cn-yk-pop-body'), h0 = cnYkPopSvg();
+  if (force || b.dataset.h !== h0) { b.dataset.h = h0; b.innerHTML = h0; }
+  // 크기 — 3D 창 높이의 80% · 오른쪽 3D 버튼 줄 바로 왼쪽 · 세로 가운데(흰수리 창과 같은 자리)
+  const bar = 26, H = L.clientHeight, a = 1;
+  let h = Math.max(160, (H * 0.8 - bar) * (typeof ckPopK === 'number' ? ckPopK : 1)), w = h * a;
+  const lr = L.getBoundingClientRect(), btn = document.getElementById('ctl3d');
+  const br = btn && btn.offsetWidth > 0 ? btn.getBoundingClientRect() : null;
+  const rightEdge = br ? br.left - lr.left - 4 : L.clientWidth - 140;
+  if (w > rightEdge - 12) { w = Math.max(120, rightEdge - 12); h = w / a; }
+  const st = { display: 'flex', width: Math.round(w) + 'px', height: Math.round(h + bar) + 'px',
+               left: Math.round(Math.max(6, rightEdge - w)) + 'px', top: Math.round(Math.max(6, (H - h - bar) / 2)) + 'px' };
+  for (const kk in st) if (p.style[kk] !== st[kk]) p.style[kk] = st[kk];
+}
+if (CN_ON) {
+  setInterval(() => { try { _cnYkPopSync(); } catch (e) { _swallow(e); } }, 150);
+  document.addEventListener('pointerdown', e => {
+    const t = e.target;
+    if (t && t.closest && t.closest('[data-cnypop]')) { e.preventDefault(); e.stopPropagation(); cnYkPop(); return; }
+    const p = document.getElementById('cn-yk-pop');
+    if (cnYkPopOn && p && p.style.display !== 'none' && !p.contains(t)) cnYkPop(false);   // 바깥을 누르면 닫는다
+  }, true);
 }
 function cnYokePress(k, down) {
   const trim = { etU: 'A', etD: 'F', atL: 'L', atR: 'R' }[k];
@@ -857,6 +911,7 @@ function cnYokePress(k, down) {
     else if (k === 'ga' && down) cnGa();
     else if (k === 'ptt') radioPtt(!!down);
     else if (k === 'syn') { if (down) forceTrim(); else forceTrimRelease(); }
+    else if ((k === 'rtL' || k === 'rtR') && down) cnRudTrim(k === 'rtL' ? -0.05 : 0.05);
   } catch (e) { _swallow(e); }
   _cnRedraw();
 }
