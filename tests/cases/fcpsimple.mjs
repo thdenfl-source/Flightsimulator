@@ -44,8 +44,13 @@ export async function run(page, t) {
     const nav0 = navApOn; document.getElementById('fks-navd').click(); o.navd = navApOn !== nav0 || navArmed; if (navApOn !== nav0) toggleNavAp(); navArmed = false;   // 조건 밖이면 무장
     o.uplimOff = !document.querySelector('#fcp-simple [data-k="uplim"]').classList.contains('fks-none') && !!document.querySelector('#fcp-simple [data-k="dh"] .fks-push[data-act="altLimSrc"]');
     window._qnhHpa = 1013;
+    // CRS · HDG 숫자는 자북(PFD 칸과 같다) — 안의 값(vorObsCrs · selHdg)은 진방위
+    { const ns = navSrc, vc = vorObsCrs, sh = selHdg; navSrc = 'NAV1'; vorObsCrs = toTrue(90); selHdg = toTrue(270); fcpsSync();
+      o.crsMag = document.getElementById('fks-crs').textContent; o.hdgMag = document.getElementById('fks-hdg').textContent; o.var = Math.round(toMag(0));
+      navSrc = ns; vorObsCrs = vc; selHdg = sh; fcpsSync(); }
     return o;
   });
+  t.ok(r.crsMag === '090°' && r.hdgMag === '270°', `CRS · HDG 숫자는 자북 — CRS ${r.crsMag} · HDG ${r.hdgMag} (편차 ${r.var}°)`);
   t.ok(r.fullRows, '옛 FCP 줄 · SIMPLE/FULL 탭 · OBS/NAV · WDIR/WSPD ▲▼ · STOP WATCH 는 없다 — FCP 는 이 패널 하나');
   t.ok(r.xDiv && r.x.length === 0, `UPLIM 오른쪽 구분선 + 바람 노브 · RNP · SIM SPD · 트림 · FORCE TRIM · G/A · GSPD · 페달 (빠짐: ${r.x.join(',') || '없음'})`);
   t.ok(r.noIcpt && r.rows.up && r.rows.dn, '인터셉트 버튼은 없다 · 윗줄 RNP · SIM SPD · FORCE TRIM · G/A · GSPD / 아랫줄 COLLECTIVE TRIM · 4-WAY TRIM · 페달');
