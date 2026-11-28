@@ -12,7 +12,7 @@
 // PFD 창(03-pfd.js)이 cnDraw 를 부른다 — 창이 넓으면 셋(글레어실드 위 · LH · 가운데)을 함께, 좁으면 하나씩(위 탭으로 고른다)
 // ══════════════════════════════════════════════════════
 const CNP_BG = '#97aab1', CNP_EDGE = '#6f8288', CNP_DARK = '#222528';
-const CNP_SIZE = { LH: [1000, 640], CTR: [1000, 660], GLR: [2000, 260], ALL: [2000, 920], OVHD: [1400, 800], CB: [1400, 560], CONS: [1400, 720], PERF: [1000, 640], FMS: [700, 960], RTU: [1000, 640], PED: [700, 1000] };
+const CNP_SIZE = { LH: [1000, 640], CTR: [1000, 660], GLR: [2000, 260], ALL: [2000, 920], OVHD: [1400, 800], CB: [1400, 560], CONS: [1400, 720], PERF: [1000, 640], FMS: [700, 960], RTU: [1000, 640], PED: [700, 1000], CONSL: [700, 720], CONSR: [700, 720] };
 let cnPage = (() => { try { return localStorage.getItem('cnPage') || 'AUTO'; } catch (e) { return 'AUTO'; } })();
 function cnPageSet(p) { cnPage = p; try { localStorage.setItem('cnPage', p); } catch (e) { _swallow(e); } _cnRedraw(); }
 
@@ -540,12 +540,14 @@ function cnDraw(g, x, y, w, h) {
   if (!(w > 40 && h > 40)) return;
   cnDrawPage(g, x, y, w, h, 'LH', false);
 }
-function cnDrawPage(g, x, y, w, h, page, tabs) {
+// fill — 칸에 꽉 차게 늘여 그린다(Cockpit 모드 조종석 칸 · 누를 자리는 쓰지 않는다)
+function cnDrawPage(g, x, y, w, h, page, tabs, fill) {
   const v = cnPanelVals(), [PW, PH] = CNP_SIZE[page] || CNP_SIZE.LH;
   _cnHits = [];
   g.save(); g.fillStyle = '#20262a'; g.fillRect(x, y, w, h);
-  const k = Math.min(w / PW, h / PH), tx = x + (w - PW * k) / 2, ty = y + (h - PH * k) / 2;
-  g.translate(tx, ty); g.scale(k, k);
+  const k = Math.min(w / PW, h / PH), tx = fill ? x : x + (w - PW * k) / 2, ty = fill ? y : y + (h - PH * k) / 2;
+  g.translate(tx, ty); if (fill) g.scale(w / PW, h / PH); else g.scale(k, k);
+  g.beginPath(); g.rect(0, 0, PW, PH); g.clip();
   const sub = (ox, oy, fn) => { g.save(); g.translate(ox, oy); _cnOX = ox; _cnOY = oy; fn(g, v); g.restore(); _cnOX = 0; _cnOY = 0; };
   if (page === 'ALL') { sub(0, 0, cnGlareDraw); sub(0, 270, cnLhDraw); sub(1000, 260, cnCtrDraw); }
   else if (page === 'GLR') sub(0, 0, cnGlareDraw);
@@ -553,6 +555,8 @@ function cnDrawPage(g, x, y, w, h, page, tabs) {
   else if (page === 'OVHD') sub(0, 0, cnOvhdDraw);
   else if (page === 'CB') sub(0, 0, cnCbDraw);
   else if (page === 'CONS') sub(0, 0, cnConsDraw);
+  else if (page === 'CONSL') sub(0, 0, cnConsDraw);       // 조종석 왼쪽 콘솔 칸 — LH 반쪽
+  else if (page === 'CONSR') sub(-700, 0, cnConsDraw);    // 오른쪽 콘솔 칸 — RH 반쪽
   else if (page === 'PERF') sub(0, 0, cnPerfDraw);
   else if (page === 'FMS') sub(0, 0, cnFmsDraw);
   else if (page === 'RTU') sub(0, 0, cnRtuPage);
@@ -573,7 +577,7 @@ function cnDrawPage(g, x, y, w, h, page, tabs) {
   try { g.canvas._cnHit = { hits: _cnHits, tabs: _cnHits.tabs || [], k, tx, ty }; } catch (e) { _swallow(e); }
   _cnHits = null;
 }
-function cnDrawTo(canvas, page) { const g = canvas.getContext('2d'); g.setTransform(1, 0, 0, 1, 0, 0); if (page) cnDrawPage(g, 0, 0, canvas.width, canvas.height, page, false); else cnDraw(g, 0, 0, canvas.width, canvas.height); }
+function cnDrawTo(canvas, page, fill) { const g = canvas.getContext('2d'); g.setTransform(1, 0, 0, 1, 0, 0); if (page) cnDrawPage(g, 0, 0, canvas.width, canvas.height, page, false, fill); else cnDraw(g, 0, 0, canvas.width, canvas.height); }
 // 3D 화면에 겹친 계기(계기 ON) — PFD 하나 · 토크 둘
 function cnOverlayDraw(g, x, y, w, h) {
   if (!(w > 40 && h > 40)) return;
@@ -843,7 +847,7 @@ function cnYokeHtml() {
 // 3D 조종석(15-heli3d.js _ckpitEl) — 계기판 앞 양쪽 요크(단추는 눌린다)
 function cnYokeSvgCk() {
   return `<svg class="ck-yokes" viewBox="0 0 1600 900" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg" style="position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none">
-    <g transform="translate(332 772) scale(0.78)">${_cnYokeG('cnyk-l')}</g><g transform="translate(1036 772) scale(0.78)">${_cnYokeG('cnyk-r')}</g></svg>`;
+    <g transform="translate(332 772) scale(0.78)">${_cnYokeG('cnyk-l')}</g><g transform="translate(1030 772) scale(0.78)">${_cnYokeG('cnyk-r')}</g></svg>`;
 }
 function cnYokePress(k, down) {
   const trim = { etU: 'A', etD: 'F', atL: 'L', atR: 'R' }[k];

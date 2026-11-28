@@ -241,8 +241,8 @@ export async function run(page, t) {
     selectPanel('right', 'cnfms'); await new Promise(res => setTimeout(res, 300));
     r.fms = !document.getElementById('cnp-cnfms-wrap').classList.contains('page-hidden');
     selectPanel('right', sel0);
-    r.pop = ['cnctr', 'cnglr', 'cnovhd', 'cnfms', 'cnrtu', 'cnped', 'cncons', 'cncb', 'cnwb'].every(k => CKPIT_POP[k] && CKPIT_POP_AR[k] > 0)
-      && CKPIT_SCR.filter(s => CKPIT_SCR_POP[s.k] && CKPIT_SCR_POP[s.k].startsWith('cn')).length >= 9;
+    r.pop = CKPIT_SCR.some(s => s.k === 'cnRH') && CKPIT_SCR.some(s => s.k === 'cnSL') && ['cnctr', 'cnglr', 'cnovhd', 'cnfms', 'cnrtu', 'cnped', 'cncons', 'cncb', 'cnwb'].every(k => CKPIT_POP[k] && CKPIT_POP_AR[k] > 0)
+      && CKPIT_SCR.filter(s => CKPIT_SCR_POP[s.k] && CKPIT_SCR_POP[s.k].startsWith('cn')).length >= 10;
     r.noLconCk = !CKPIT_CON.lcon;
     return r;
   });
