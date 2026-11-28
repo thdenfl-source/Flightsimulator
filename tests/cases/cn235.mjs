@@ -73,20 +73,47 @@ export async function run(page, t) {
   t.ok(TO.lift && TO.lift.spd > 92 && TO.lift.spd < 112 && TO.lift.d < 900, `이륙 — ${TO.lift && TO.lift.spd.toFixed(0)}kt 에서 뜬다(활주 ${TO.lift && Math.round(TO.lift.d)}m · ${TO.lift && TO.lift.t.toFixed(0)}초)`);
   t.ok(TO.mid > 0.3 && TO.mid < 0.8 && TO.up < 0.01, `착륙장치 — 8초에 걸쳐 올라간다(4초 ${TO.mid.toFixed(2)} → ${TO.up.toFixed(2)})`);
 
-  // 계기판 — PFD 창에 CN-235 판(EADI · EHSI · 엔진 계기) · 페데스탈
+  // 계기판(AOM 그림 1-1-8 · 1-1-9) — PFD 창에 판 · 쪽(LH · CTR · GLARE · ALL) · 페데스탈(그림 1-1-10)
   const P = await page.evaluate(() => {
     let n = 0; const o0 = cnDraw; cnDraw = function (...a) { n++; return o0.apply(this, a); };
     try { drawPFD(); } finally { cnDraw = o0; }
-    const c = document.createElement('canvas'); c.width = 1000; c.height = 600; cnDrawTo(c);
-    const g = c.getContext('2d'), sky = g.getImageData(180, 60, 1, 1).data, ped = g.getImageData(900, 568, 1, 1).data;
-    cnPedToggle(true); const pd = document.getElementById('cn-ped'); const shown = getComputedStyle(pd).display === 'flex';
-    pd.querySelector('[data-cnp="flap"][data-v="15"]').click(); const flap = cn.flapSel;
-    pd.querySelector('[data-cnp="cond"][data-i="0"][data-v="MIN"]').click(); const cond = cn.cond[0];
-    cnPedToggle(false); cnFlapSet(0); cnCondSet(2, 'MAX');
-    return { n, sky: Array.from(sky), ped: Array.from(ped), shown, flap, cond };
+    const px = (pg, w, h, x, y) => { const c = document.createElement('canvas'); c.width = w; c.height = h; cnDrawTo(c, pg); return { d: Array.from(c.getContext('2d').getImageData(x, y, 1, 1).data.slice(0, 3)), hits: c._cnHit.hits.length }; };
+    const lh = px('LH', 1000, 640, 488, 200), ctr = px('CTR', 1000, 660, 146, 80), glr = px('GLR', 2000, 260, 140, 40), all = px('ALL', 2000, 920, 10, 10);
+    cnPedToggle(true); const cv = document.querySelector('#cn-ped canvas'); const shown = getComputedStyle(document.getElementById('cn-ped')).display === 'flex';
+    const H = cv._cnPedHits || [];
+    const flapHit = H.find(h => h.fn && h.y > 490 && h.y < 500 && h.x > 560); if (flapHit) flapHit.fn(0, 0);       // APPR(15)
+    const pl = H.find(h => h.drag && h.x < 200 && h.w > 150); if (pl) pl.drag(250, 300);                          // 파워 MAX
+    const cond = H.find(h => h.drag && h.x > 380 && h.x < 400); if (cond) cond.drag(416, 428);                     // 왼쪽 MIN RPM
+    const r = { n, lh, ctr, glr, all, shown, peds: H.length, flap: cn.flapSel, pl: cn.pl, cond: cn.cond[0] };
+    cnPedToggle(false); cnFlapSet(0); cnCondSet(2, 'MAX'); cn.pl = 0.4;
+    return r;
   });
-  t.ok(P.n >= 1 && P.sky[2] > 150 && P.sky[0] < 120, `PFD 창에 CN-235 계기판 — EADI 하늘(파랑) (${P.sky.slice(0, 3)})`);
-  t.ok(P.shown && P.flap === 15 && P.cond === 'MIN', '페데스탈 — 플랩 레버 · 컨디션 레버가 듣는다');
+  t.ok(P.n >= 1 && P.lh.d[2] > 150 && P.lh.d[0] < 120 && P.lh.hits >= 5 && P.ctr.hits >= 2 && P.glr.hits >= 14, `계기판 — PFD 창에 CN-235 판 · LH(Universal PFD 하늘 ${P.lh.d}) · 가운데 · 글레어실드(누를 자리 LH ${P.lh.hits} · CTR ${P.ctr.hits} · GLR ${P.glr.hits} · 그림 ${P.n})`);
+  t.ok(P.shown && P.peds >= 20 && P.flap === 15 && P.pl > 0.95 && P.cond === 'MIN', `페데스탈 — 플랩 레버 APPR · 파워 레버 MAX · 컨디션 레버 MIN RPM(누를 자리 ${P.peds})`);
+
+  // 오토파일럿(글레어실드 C · D) · 조종간 AP · GA · 한 엔진 — 방향타 트림 · GUST LOCK · 속도 한계(AOM)
+  const AP = await page.evaluate(() => {
+    const step = (n, f) => { for (let i = 0; i < n; i++) { if (f) f(i); fwFly(0.05); S.alt = Math.max(0, S.alt + S.vs / 60 * 0.05); } };
+    S.alt = 5000; S.spd = 180; S.vs = 0; S.bnk = 0; toggleSimMode(true, { ground: false });
+    cn.ap = true; cnApMode('ALT'); const alt = altHoldOn; step(200); const altKeep = Math.abs(S.alt - selAlt);
+    cnApMode('VS'); const vs = vsModeOn && !altHoldOn;
+    cnYokePress('ap', true); cnYokePress('ap', false); const disc = !cn.ap && cn.apWarn > 0 && !simAfcsLat();
+    cnFlapSet(23); cn.flap = 23; cnGa(); const ga = cn.ga && cn.flapSel === 15 && !cn.ap;
+    cn.ga = false; cnApEng(); const eng = cn.ap;
+    // 오른쪽 엔진 끔 — 기수가 오른쪽(죽은 엔진 쪽)으로 돈다 · 방향타 트림으로 잡는다
+    afcsReleaseAll(); cn.ap = false; cn.pl = 1; cnCondSet(1, 'OFF');
+    const h0 = S.hdg; step(100, () => { cn.pl = 1; }); const yaw = normAS(S.hdg - h0);
+    cn.rudTrim = Math.max(-1, Math.min(1, -yaw / 5 / 3)); const h1 = S.hdg; step(100, () => { cn.pl = 1; }); const yaw2 = normAS(S.hdg - h1);
+    cnCondSet(2, 'MAX'); cn.rudTrim = 0;
+    toggleSimMode(false);
+    // GUST LOCK — 땅에서 파워가 FLT IDLE 조금 위까지만
+    S.alt = 0; S.spd = 0; toggleSimMode(true, { ground: true }); cn.gust = true; cn.pl = 1; step(10, () => { cn.pl = 1; }); const gust = cn.pl <= 0.12; cn.gust = false; toggleSimMode(false);
+    return { alt, altKeep, vs, disc, ga, eng, yaw, yaw2, gust, vmo: [cnVmo(0), cnVmo(20000), cnVmo(25000)], vle: CN_P.vle, vfe: CN_P.vfe[23] };
+  });
+  t.ok(AP.alt && AP.altKeep < 60 && AP.vs, `글레어실드 AP 모드 — ALT 가 고도를 지킨다(${Math.round(AP.altKeep)}ft) · VS 로 바뀐다`);
+  t.ok(AP.disc && AP.ga && AP.eng, '조종간 — AP 단추로 끊기(AUTO PILOT 경고) · GA(플랩 LNDG → APPR · AP 끊김) · AP ENG 다시 걸기');
+  t.ok(AP.yaw > 3 && Math.abs(AP.yaw2) < AP.yaw * 0.5, `한 엔진 — 죽은 쪽으로 ${AP.yaw.toFixed(1)}° 돈다 · 방향타 트림으로 ${AP.yaw2.toFixed(1)}°`);
+  t.ok(AP.gust && AP.vmo[0] === 230 && AP.vmo[1] === 200 && AP.vmo[2] === 180 && AP.vle === 150 && AP.vfe === 160, `GUST LOCK · AOM 속도 한계 VMO ${AP.vmo.join('/')} · VLE ${AP.vle} · VFE ${AP.vfe}`);
 
   // 3D 모형 — 길이 21.4m · 날개폭 25.8m · 높이 8.18m · 프로펠러 둘
   const M = await page.evaluate(() => {

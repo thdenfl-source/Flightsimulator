@@ -17,7 +17,7 @@ const KG_SRCH = { azMax: 120, elMin: 2.5, elMax: 80, azRate: 45, elRate: 25, el0
 const KG_LDG = { on: 60, max: 87.5, rate: 40, reach: 2400, k: 1.4 };
 const kgLt = { ldgE: 0, ldgTgt: null, srch: false, az: 0, el: 30, br: 1 };   // 착륙등 펼친 각(°) · 저절로 가는 목표 · 서치라이트 켬 · 방향(기수 기준 ° · 아래로 °) · 광도(0.2~1)
 const kgLdgDown = () => 90 - kgLt.ldgE;                        // 착륙등이 비추는 아래쪽 각(°)
-function kgOn() { return !(typeof acB206 === 'function' && acB206()); }
+function kgOn() { return !(typeof acB206 === 'function' && acB206()) && !(typeof acFixedWing === 'function' && acFixedWing()); }   // CN-235 — 조종간(요크)은 43-cn235panel.js
 function _kgToast(t, k) { try { uiToast(t, k || '', 2200); } catch (e) { _swallow(e); } }
 function _kgLdg() { return typeof env !== 'undefined' && !!env.ldg; }
 function kgLdgSet(on) {
@@ -364,7 +364,8 @@ function gripPanelRender(force) {
   }
   let h = '';
   try {
-    h = kgOn() ? `<div class="grip-row"><div class="grip-cell"><div class="grip-t">COLLECTIVE</div><div>${kgCollSvg('gc')}</div></div>` +
+    h = (typeof acFixedWing === 'function' && acFixedWing() && typeof cnYokeHtml === 'function') ? cnYokeHtml() :
+        kgOn() ? `<div class="grip-row"><div class="grip-cell"><div class="grip-t">COLLECTIVE</div><div>${kgCollSvg('gc')}</div></div>` +
                  `<div class="grip-cell"><div class="grip-t">CYCLIC</div><div>${kgCyclicSvg('gy')}</div></div></div>`
                : `<div class="grip-row"><div class="grip-cell"><div class="grip-t">COLLECTIVE</div><div>${typeof _b206cSvg === 'function' ? _b206cSvg() : ''}</div></div></div>`;
   } catch (e) { _swallow(e); }

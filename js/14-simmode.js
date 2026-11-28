@@ -208,6 +208,7 @@ const SIDE_K       = 0.5;     // 옆방향 속도가 따라가는 빠르기(1/s)
 //   컬렉티브(고도): ALT(선택 고도로 가는 것 포함) · CRHT
 //   전후(기수 자세): IAS — 조종간 몫은 그 위에 얹는다(fly-through)
 function simAfcsLat() {
+  if (typeof acFixedWing === 'function' && acFixedWing() && !cnApOn()) return false;   // 고정익 — AP ENG 가 꺼져 있으면 모드는 FD(지시)만
   return simModeOn && !gspdOn && !gspdCoasting && (navApOn || (hdgSelOn && rollApOn));
 }
 // 상위모드가 하나라도 걸려 있는가 — 그때는 AFCS 가 협조 선회로 잡아 볼이 가운데다(내활·외활 없음)

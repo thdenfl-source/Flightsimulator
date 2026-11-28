@@ -13,7 +13,8 @@
 //
 // 제원(근사 · 연습용): 날개 면적 59.1m² · 폭 25.81m · 길이 21.4m · 최대 이륙 16,500kg
 //   엔진 GE CT7-9C 1,750shp ×2 · 프로펠러 4날개 지름 3.35m · VMO 240KIAS · 실속(깨끗) 약 100kt · (플랩 23) 약 84kt
-//   착륙장치 VLO/VLE 160KIAS · 플랩 10° 200 · 15° 170 · 23° 150KIAS
+//   비행교범(AOM) 속도 한계: VMO 230KIAS(해면) · 200(20,000ft) · 180(25,000ft) · VA 160 · VFE(T/OFF 10 · APPR 15 · LNDG 23) 160 · VLE 150
+//   계기판 · 페데스탈 · 글레어실드(경고등 · 오토파일럿)는 43-cn235panel.js
 //
 // SIM 이 아닐 때(절차 훈련 — 속도 · 고도를 노브로 고르는 비행)도 고정익의 한계를 지킨다:
 //   공중에서는 최소 속도(실속 × 1.2) 아래로 내려가지 않고, 자세 · 토크 계기는 위 식의 평형값을 보인다.
@@ -32,8 +33,9 @@ const CN_P = {
   dCL0: { 0: 0.25, 10: 0.55, 15: 0.68, 23: 0.88 }, // 받음각 0 의 양력계수
   CLmax: { 0: 1.55, 10: 1.92, 15: 2.05, 23: 2.25 },
   dCD0: { 0: 0, 10: 0.010, 15: 0.020, 23: 0.045 },
-  vfe: { 0: 240, 10: 200, 15: 170, 23: 150 },
-  vmo: 240, vle: 160, vr: 95, v2: 110,
+  vfe: { 0: 230, 10: 160, 15: 160, 23: 160 },
+  vmo: 230, vle: 150, va: 160, vr: 95, v2: 110,
+  flapName: { 0: 'UP', 10: 'T/OFF', 15: 'APPR', 23: 'LNDG' },
   gearTime: 8, flapRate: 2.5,                    // 착륙장치 오르내림(s) · 플랩(°/s)
   rollRate: 32, bankMax: 67, yawRate: 3, steerRate: 22,
   aTau: 0.45,                                    // 받음각이 조종간을 따라가는 시간(s)
@@ -48,7 +50,12 @@ const cn = {
   eng: [{ tq: 0, np: 0, ng: 0, itt: 30, ff: 0, run: true }, { tq: 0, np: 0, ng: 0, itt: 30, ff: 0, run: true }],
   alpha: 3, gamma: 0, trimA: 3, stall: false, stallWarn: false, onGnd: true, belly: false,
   tqKin: 0, lastTd: null,
+  ap: true, yd: true, ga: false, gust: false, antiskid: true, apr: true, ctq: 400, rudTrim: 0, mute: false, apWarn: 0, fd: { on: false, pitch: 0, roll: 0 },
 };
+// VMO — 해면 230 · 20,000ft 200 · 25,000ft 180KIAS(AOM 속도 한계표)
+function cnVmo(altFt = S.alt) { const a = Math.max(0, altFt || 0); return a <= 20000 ? 230 - 30 * a / 20000 : Math.max(170, 200 - 20 * (a - 20000) / 5000); }
+// 오토파일럿이 걸려 있는가(AP ENG) — 꺼져 있으면 모드는 비행지시기(FD)만 보인다
+function cnApOn() { return CN_ON && !!cn.ap; }
 function cnMassKg() { return CN_P.emptyKg + CN_P.crewKg + cn.payloadKg + cn.fuelKg; }
 function cnWeightN() { return cnMassKg() * G0; }
 function cnFlapKey(f = cn.flap) { let k = 0; for (const s of CN_P.flaps) if (f >= s - 0.01) k = s; return k; }
@@ -178,6 +185,7 @@ function fwSimEnter(ground) {
 // AFCS 가 기수(받음각)를 잡을 때 원하는 비행경로각(rad) — 없으면 null
 function _cnApGamma(vT) {
   const asinV = vs => Math.asin(Math.max(-0.35, Math.min(0.35, vs / FPM / Math.max(25, vT))));
+  if (cn.ga) return asinV(Math.min(1500, vT / KT * 9));                  // GO AROUND — 상승(약 7°)
   try {
     if (gsOn) {
       const g = gsDeviation();
@@ -191,6 +199,7 @@ function _cnApGamma(vT) {
 }
 function fwFly(dt) {
   const a = simModeAxes();
+  if (cn.gust) { a.pitch = 0; a.roll = 0; a.yaw = 0; }                    // GUST LOCK — 조종면이 묶여 있다(파워 레버도 FLT IDLE 조금 위까지)
   simTerrainFt();
   const gnd = simGroundFt();
   cn.onGnd = S.alt <= gnd + 0.5 && cn.gamma <= 1e-4;
@@ -207,6 +216,7 @@ function fwFly(dt) {
   _cnOnGndPrev = cn.onGnd;
   try { _simOnGnd = cn.onGnd; } catch (e) { _swallow(e); }
   cnLeverStep(a, dt); cnMechStep(dt);
+  if (cn.gust) cn.pl = Math.min(cn.pl, 0.12);
   const sig = cnSigma(), tr = tasRatio();
   let vT = Math.max(0, S.spd) * KT * tr;                     // 진대기속도(m/s)
   const vI = Math.max(0, S.spd) * KT;
@@ -220,7 +230,11 @@ function fwFly(dt) {
   const as = cnAlphaStall();
   let aCmd = cn.trimA - (simTrim.pitch || 0) * 0.5 - a.pitch * CN_P.stickA;
   const gDes = cn.onGnd ? null : _cnApGamma(vT);
-  if (gDes != null && !a.pitch) {
+  // 비행지시기(FD) — 원하는 경로각이면 그 자세 · 옆은 bankTarget(HDG · NAV) — AP 가 꺼져 있으면 조종사가 따라 몬다
+  cn.fd.on = gDes != null || (typeof hdgSelOn !== 'undefined' && (hdgSelOn || navApOn));
+  if (gDes != null) cn.fd.pitch = (gDes + cnAlphaFor(S.spd) * D2R) / D2R;
+  cn.fd.roll = (typeof hdgSelOn !== 'undefined' && (hdgSelOn || navApOn)) ? bankTarget : 0;
+  if (gDes != null && !a.pitch && cn.ap && !cn.ga) {
     const n = 1 / Math.max(0.3, Math.cos(S.bnk * D2R));
     aCmd = cnAlphaFor(S.spd, n * Math.cos(gDes)) + Math.max(-4, Math.min(4, (gDes - cn.gamma) / D2R * 1.6));
     aCmd = Math.min(aCmd, as - 2);
@@ -259,9 +273,20 @@ function fwFly(dt) {
   // 롤 — 조종간 좌우가 롤 속도 · 놓으면 그 뱅크(HDG · NAV 가 잡으면 07-sim.js 가)
   if (cn.onGnd) { S.bnk += (0 - S.bnk) * Math.min(1, dt / 0.3); bankTarget = 0; }
   else if (!(typeof simAfcsLat === 'function' && simAfcsLat())) {
-    S.bnk = Math.max(-CN_P.bankMax, Math.min(CN_P.bankMax, S.bnk + (a.roll * CN_P.rollRate + buf) * dt));
-    bankTarget = S.bnk;
+    // 조종간 좌우 + 도움날개 트림(4방향 햇 ◀ ▶ — 한 번에 0.5 · 놓아 두면 그 빠르기로 구른다)
+    S.bnk = Math.max(-CN_P.bankMax, Math.min(CN_P.bankMax, S.bnk + (a.roll * CN_P.rollRate + (simTrim.roll || 0) * 0.25 + buf) * dt));
+    if (!(typeof hdgSelOn !== 'undefined' && (hdgSelOn || navApOn))) bankTarget = S.bnk;   // 모드가 있으면 FD 옆 지시로 남겨 둔다
   }
+  // 한 엔진 — 추력이 어긋나 죽은 엔진 쪽으로 기수가 돈다 · 방향타 트림(페데스탈 RUDDER TRIM)으로 잡는다
+  if (!cn.onGnd) {
+    const tL = cnThrust1(cn.eng[0].tq, vT, cn.eng[0].np), tR = cnThrust1(cn.eng[1].tq, vT, cn.eng[1].np);
+    const yr = (tL - tR) / 40000 * 4 + cn.rudTrim * 3;
+    if (Math.abs(yr) > 0.01 && !(cn.yd && cn.ap && Math.abs(tL - tR) < 1000)) {
+      S.hdg = normA(S.hdg + yr * dt);
+      try { selHdg = (typeof hdgSelOn !== 'undefined' && hdgSelOn) ? selHdg : ((Math.round(hdgInd()) + 359) % 360) + 1; } catch (e) { _swallow(e); }
+    }
+    cn.slip = Math.max(-1, Math.min(1, yr / 4));
+  } else cn.slip = 0;
   // 페달 — 공중은 방향타(옆미끄럼 조금) · 땅은 앞바퀴 조향(빠를수록 덜)
   if (a.yaw) {
     const r = cn.onGnd ? a.yaw * CN_P.steerRate * Math.max(0.1, Math.min(1, 40 / Math.max(5, S.spd))) * Math.min(1, S.spd / 3) : a.yaw * CN_P.yawRate;
@@ -274,6 +299,34 @@ function fwFly(dt) {
   try { cnHornStep(); } catch (e) { _swallow(e); }
 }
 
+// ── 조종간 단추(AOM 그림 1-1-14) — AP(오토파일럿 끊기) · GA(복행) · SYN(맞춤) · PTT ──
+function cnApDisc() {
+  const was = cn.ap; cn.ap = false; cn.ga = false;
+  if (was) { cn.apWarn = 4; try { uiToast('AUTOPILOT DISCONNECT', 'warn', 2500); } catch (e) { _swallow(e); } try { if (typeof fdrNote === 'function') fdrNote('AP 끊김(조종간 AP)'); } catch (e) { _swallow(e); } }
+  _cnRedraw();
+}
+function cnApEng() {
+  if (cn.ap) { cnApDisc(); return; }
+  cn.ap = true; cn.ga = false;
+  // 모드가 하나도 없으면 지금 헤딩 · 승강률을 잡는다(기본 모드)
+  try {
+    if (!hdgSelOn && !navApOn) { selHdg = ((Math.round(hdgInd()) + 359) % 360) + 1; hdgSelOn = true; rollApOn = true; bankTarget = 0; }
+    if (!altHoldOn && !vsModeOn && !gsOn && !(simModeOn ? simIasOn : false)) { selVS = Math.round((S.vs || 0) / 100) * 100; vsModeOn = true; }
+  } catch (e) { _swallow(e); }
+  _cnRedraw();
+}
+function cnGa() {
+  cnApDisc(); cn.apWarn = 0;
+  try { afcsReleaseAll(); } catch (e) { _swallow(e); }
+  cn.ga = true;
+  if (cn.flapSel === 23) cnFlapSet(15);
+  const cfg = (typeof joyAxes === 'object' && joyAxes) ? joyAxes.coll : null;
+  if (!(cfg && cfg.abs)) cn.pl = 1;
+  try { uiToast('GO AROUND — FD 복행 자세 · 플랩 APPR · 최대 출력', '', 3000); } catch (e) { _swallow(e); }
+  _cnRedraw();
+}
+function cnRudTrim(d) { cn.rudTrim = Math.max(-1, Math.min(1, Math.round((cn.rudTrim + d) * 20) / 20)); _cnRedraw(); }
+
 // ══ SIM 밖 — 노브 비행에 고정익의 한계 · 평형 자세 · 토크를 입힌다(07-sim.js 가 매 구간 부른다) ══
 function fwKinStep(dt) {
   if (simModeOn) return;
@@ -284,7 +337,7 @@ function fwKinStep(dt) {
   if (!cn.onGnd) {
     const vmin = cnVmin(), vmax = Math.min(CN_P.vmo, cn.gearPos > 0.05 ? Math.max(CN_P.vle, CN_P.vfe[cnFlapKey()]) : CN_P.vfe[cnFlapKey()]);
     if (S.spd < vmin) S.spd = vmin;
-    if (S.spd > CN_P.vmo) S.spd = CN_P.vmo;
+    if (S.spd > cnVmo()) S.spd = cnVmo();
     try { if (selSpd < vmin) selSpd = vmin; } catch (e) { _swallow(e); }
     cn._vmax = vmax;
   }
@@ -317,310 +370,3 @@ function cnHornStep() {
   } catch (e) { _swallow(e); }
 }
 
-// ══ 계기판 — 해양경찰 CN-235 조종석 사진의 배치(조종사 쪽) ══
-//   왼쪽: Collins EFIS — EADI(위) · EHSI(아래) CRT
-//   가운데: 엔진 계기 두 줄(왼쪽 엔진 · 오른쪽 엔진) — TORQUE · ITT · NP · NG · FF · 오른쪽에 OIL · 플랩 지시 · 착륙장치 레버와 세 초록등
-//   오른쪽: 대기 속도계 · 고도계 · 승강계 · 위 경고등 줄(MASTER WARN · STALL · GEAR · FLAPS …)
-//   그림 좌표 1000×600(CN_W×CN_H)
-const CN_W = 1000, CN_H = 600;
-const CN_HIT = { ped: [834, 548, 150, 40], gear: [612, 438, 72, 130], flap: [604, 300, 88, 110] };
-function cnVals() {
-  const e = cn.eng;
-  return {
-    ias: Math.max(0, S.spd || 0), alt: S.alt || 0, vs: S.vs || 0, pit: S.pit || 0, bnk: S.bnk || 0,
-    hdg: (typeof toMag === 'function' ? toMag(S.hdg) : S.hdg), bug: (typeof selHdg !== 'undefined' ? selHdg : 0),
-    tq: [e[0].tq, e[1].tq], itt: [e[0].itt, e[1].itt], np: [e[0].np, e[1].np], ng: [e[0].ng, e[1].ng], ff: [e[0].ff, e[1].ff],
-    oilP: e.map(x => x.ng > 50 ? 60 + x.tq * 0.2 : x.ng), oilT: e.map(x => x.ng > 50 ? 55 + x.tq * 0.25 : 20),
-    alpha: cn.alpha, as: cnAlphaStall(), flap: cn.flap, flapSel: cn.flapSel, gear: cn.gearPos, gearDn: cn.gearDn,
-    fuel: cn.fuelKg, baro: (typeof window._qnhHpa === 'number' && Number.isFinite(window._qnhHpa) ? window._qnhHpa : 1013.25),
-  };
-}
-function cnAnnun(v) {
-  const agl = (() => { try { return radarAltFt(); } catch (e) { return 1000; } })();
-  const air = !cn.onGnd;
-  return {
-    stall: cn.stallWarn,
-    gear: air && v.gear < 0.99 && agl < 1000 && cn.pl < 0.25,
-    flapOv: v.ias > CN_P.vfe[cnFlapKey()] + 2,
-    gearOv: v.gear > 0.01 && v.ias > CN_P.vle + 2,
-    vmo: v.ias > CN_P.vmo + 1,
-    lowFuel: v.fuel < 400,
-    eng1: !cn.eng[0].run, eng2: !cn.eng[1].run,
-    park: cnPark(),
-  };
-}
-function _cnCrt(g, x, y, w, h) {
-  g.save(); g.fillStyle = '#2b2f33'; g.fillRect(x - 6, y - 6, w + 12, h + 12);
-  g.fillStyle = '#06080a'; g.fillRect(x, y, w, h); g.restore();
-}
-// EADI — 하늘(파랑) · 땅(갈색) · 피치 사다리 · 뱅크 눈금 · 노랑 비행기 표지 · 왼쪽 IAS · 오른쪽 ALT 상자 · 받음각
-function cnEadi(g, x, y, w, h, v) {
-  _cnCrt(g, x, y, w, h);
-  const cx = x + w / 2, cy = y + h / 2, ppd = h / 50;          // 1° 당 픽셀
-  g.save(); g.beginPath(); g.rect(x, y, w, h); g.clip();
-  g.translate(cx, cy); g.rotate(-v.bnk * D2R); g.translate(0, v.pit * ppd);
-  g.fillStyle = '#1e7fd6'; g.fillRect(-w * 1.5, -h * 3, w * 3, h * 3);
-  g.fillStyle = '#7a4a1e'; g.fillRect(-w * 1.5, 0, w * 3, h * 3);
-  g.strokeStyle = '#fff'; g.lineWidth = 2; g.beginPath(); g.moveTo(-w * 1.5, 0); g.lineTo(w * 1.5, 0); g.stroke();
-  g.fillStyle = '#fff'; g.font = 'bold 12px ' + B206_FONT; g.textAlign = 'right'; g.textBaseline = 'middle';
-  for (let p = -30; p <= 30; p += 5) {
-    if (!p) continue;
-    const yy = -p * ppd, half = p % 10 === 0 ? w * 0.16 : w * 0.08;
-    g.lineWidth = 1.6; g.beginPath(); g.moveTo(-half, yy); g.lineTo(half, yy); g.stroke();
-    if (p % 10 === 0) { g.fillText(String(Math.abs(p)), -half - 4, yy); g.textAlign = 'left'; g.fillText(String(Math.abs(p)), half + 4, yy); g.textAlign = 'right'; }
-  }
-  g.restore();
-  // 뱅크 눈금 · 지시
-  g.save(); g.translate(cx, cy); g.strokeStyle = '#fff'; g.lineWidth = 2;
-  const r = h * 0.40;
-  for (const b of [-60, -45, -30, -20, -10, 0, 10, 20, 30, 45, 60]) { const a = (b - 90) * D2R, l = b % 30 === 0 ? 14 : 8; g.beginPath(); g.moveTo(Math.cos(a) * r, Math.sin(a) * r); g.lineTo(Math.cos(a) * (r + l), Math.sin(a) * (r + l)); g.stroke(); }
-  g.rotate(-v.bnk * D2R); g.fillStyle = '#fff'; g.beginPath(); g.moveTo(0, -r); g.lineTo(-7, -r + 12); g.lineTo(7, -r + 12); g.closePath(); g.fill();
-  g.restore();
-  // 비행기 표지
-  g.save(); g.strokeStyle = '#000'; g.fillStyle = '#ffd21a'; g.lineWidth = 1.5;
-  g.fillRect(cx - w * 0.30, cy - 3, w * 0.16, 6); g.strokeRect(cx - w * 0.30, cy - 3, w * 0.16, 6);
-  g.fillRect(cx + w * 0.14, cy - 3, w * 0.16, 6); g.strokeRect(cx + w * 0.14, cy - 3, w * 0.16, 6);
-  g.fillRect(cx - 4, cy - 4, 8, 8); g.strokeRect(cx - 4, cy - 4, 8, 8); g.restore();
-  // IAS · ALT 상자 · 받음각 줄(오른쪽 아래)
-  const box = (bx, txt, col) => { g.save(); g.fillStyle = '#000'; g.strokeStyle = '#ddd'; g.lineWidth = 1.2; g.fillRect(bx, cy - 15, 70, 30); g.strokeRect(bx, cy - 15, 70, 30); _b206Text(g, txt, bx + 35, cy, 18, col || '#fff'); g.restore(); };
-  box(x + 6, String(Math.round(v.ias)), v.ias > CN_P.vmo ? '#ff4040' : '#fff');
-  box(x + w - 76, String(Math.round(v.alt / 10) * 10), '#fff');
-  _b206Text(g, 'IAS', x + 41, cy - 24, 11, '#9fd'); _b206Text(g, 'ALT', x + w - 41, cy - 24, 11, '#9fd');
-  _b206Text(g, `VS ${Math.round(v.vs / 10) * 10}`, x + w - 41, cy + 26, 11, '#9fd');
-  // 받음각(실속 여유) 막대
-  const k = Math.max(0, Math.min(1, v.alpha / Math.max(1, v.as)));
-  g.save(); g.fillStyle = '#222'; g.fillRect(x + 8, y + h - 22, w * 0.34, 12);
-  g.fillStyle = k > 0.85 ? '#ff3a2a' : k > 0.7 ? '#f2c418' : '#18c23a'; g.fillRect(x + 8, y + h - 22, w * 0.34 * k, 12); g.restore();
-  _b206Text(g, `AOA ${v.alpha.toFixed(1)}°`, x + 8 + w * 0.17, y + h - 34, 11, '#9fd');
-  if (cn.stallWarn) _b206Text(g, 'STALL', cx, y + 22, 22, (performance.now() / 250 | 0) % 2 ? '#ff3a2a' : '#fff');
-  // AFCS 모드(위)
-  let modes = []; try { if (hdgSelOn) modes.push('HDG'); if (navApOn) modes.push('NAV'); if (altHoldOn) modes.push('ALT'); if (vsModeOn) modes.push('VS'); if (simIasOn || (!simModeOn && iasNsOn)) modes.push('IAS'); if (gsOn) modes.push('GS'); } catch (e) { _swallow(e); }
-  _b206Text(g, modes.join('  '), cx, y + h - 14, 13, '#3cff6a');
-}
-// EHSI — 기수 위가 지금 자기 방위 · 노란 헤딩 버그 · 초록 코스 바늘(CDI)
-function cnEhsi(g, x, y, w, h, v) {
-  _cnCrt(g, x, y, w, h);
-  const cx = x + w / 2, cy = y + h / 2 + 8, R = Math.min(w, h) * 0.42;
-  g.save(); g.beginPath(); g.rect(x, y, w, h); g.clip();
-  g.translate(cx, cy);
-  g.save(); g.rotate(-v.hdg * D2R);
-  g.strokeStyle = '#fff'; g.fillStyle = '#fff'; g.font = 'bold 13px ' + B206_FONT; g.textAlign = 'center'; g.textBaseline = 'middle';
-  for (let d = 0; d < 360; d += 5) {
-    const a = (d - 90) * D2R, l = d % 10 === 0 ? 12 : 6;
-    g.lineWidth = d % 10 === 0 ? 2 : 1; g.beginPath(); g.moveTo(Math.cos(a) * R, Math.sin(a) * R); g.lineTo(Math.cos(a) * (R - l), Math.sin(a) * (R - l)); g.stroke();
-    if (d % 30 === 0) { g.save(); g.rotate(d * D2R); g.fillText(d === 0 ? 'N' : d === 90 ? 'E' : d === 180 ? 'S' : d === 270 ? 'W' : String(d / 10), 0, -R + 24); g.restore(); }
-  }
-  // 헤딩 버그
-  g.save(); g.rotate(v.bug * D2R); g.fillStyle = '#ffd21a'; g.fillRect(-9, -R - 2, 18, 8); g.restore();
-  // 코스 바늘 · CDI
-  let c = { ok: false, dev: 0, crs: 0 }; try { if (typeof b206Cdi === 'function') c = b206Cdi(); } catch (e) { _swallow(e); }
-  const crs = typeof toMag === 'function' ? toMag(c.crs) : c.crs;
-  g.save(); g.rotate(crs * D2R); g.strokeStyle = '#3cff6a'; g.fillStyle = '#3cff6a'; g.lineWidth = 3;
-  g.beginPath(); g.moveTo(0, -R + 30); g.lineTo(0, -R * 0.42); g.moveTo(0, R * 0.42); g.lineTo(0, R - 30); g.stroke();
-  g.beginPath(); g.moveTo(0, -R + 22); g.lineTo(-7, -R + 34); g.lineTo(7, -R + 34); g.closePath(); g.fill();
-  for (const d of [-2, -1, 1, 2]) { g.beginPath(); g.arc(d * R * 0.18, 0, 3, 0, 7); g.stroke(); }
-  if (c.ok) { g.beginPath(); g.moveTo(c.dev * R * 0.36, -R * 0.40); g.lineTo(c.dev * R * 0.36, R * 0.40); g.stroke(); }
-  g.restore();
-  g.restore();
-  // 기체 표지 · 위 기준선
-  g.strokeStyle = '#fff'; g.lineWidth = 2; g.beginPath(); g.moveTo(-12, 4); g.lineTo(12, 4); g.moveTo(0, -12); g.lineTo(0, 14); g.moveTo(-5, 12); g.lineTo(5, 12); g.stroke();
-  g.fillStyle = '#fff'; g.beginPath(); g.moveTo(0, -R - 4); g.lineTo(-6, -R - 14); g.lineTo(6, -R - 14); g.closePath(); g.fill();
-  g.restore();
-  _b206Text(g, String(Math.round(v.hdg) % 360).padStart(3, '0'), cx, y + 14, 15, '#fff');
-  _b206Text(g, `CRS ${String(Math.round(typeof toMag === 'function' ? toMag(c.crs) : c.crs) % 360).padStart(3, '0')}`, x + 44, y + 14, 12, '#3cff6a');
-  _b206Text(g, `HDG ${String(Math.round(v.bug) % 360).padStart(3, '0')}`, x + w - 44, y + 14, 12, '#ffd21a');
-  let gs = 0; try { gs = groundSpdKt(); } catch (e) { _swallow(e); }
-  _b206Text(g, `GS ${Math.round(gs)}`, x + 36, y + h - 14, 12, '#9fd');
-  try { if (S.awp >= 0 && S.wps[S.awp]) _b206Text(g, `${S.wps[S.awp].name || ''} ${(S.dtw || 0).toFixed(1)}NM`, x + w - 70, y + h - 14, 12, '#d86cff'); } catch (e) { _swallow(e); }
-}
-function _cnGaugePair(g, cx, cy, R, title, v, o) {
-  const opt = Object.assign({ lab: q => String(q), fs: R * 0.2 }, o);
-  ['L', 'R'].forEach((s, i) => b206RoundGauge(g, cx + (i ? R * 2.25 : 0), cy, R, Object.assign({}, opt, { val: _cl(v[i], opt.lo, opt.hi + (opt.hi - opt.lo) * 0.05), title: [title, s] })));
-}
-function cnDraw(g, x, y, w, h) {
-  if (!(w > 40 && h > 40)) return;
-  const v = cnVals(), an = cnAnnun(v);
-  g.save();
-  g.fillStyle = '#8e979e'; g.fillRect(x, y, w, h);
-  const k = Math.min(w / CN_W, h / CN_H);
-  g.translate(x + (w - CN_W * k) / 2, y + (h - CN_H * k) / 2); g.scale(k, k);
-  // 판 · 나사
-  g.save(); g.fillStyle = '#9aa3aa'; g.fillRect(0, 0, CN_W, CN_H); g.strokeStyle = '#6b747b'; g.lineWidth = 3; g.strokeRect(4, 4, CN_W - 8, CN_H - 8);
-  g.fillStyle = '#5c646b'; for (const [sx, sy] of [[14, 14], [CN_W - 14, 14], [14, CN_H - 14], [CN_W - 14, CN_H - 14], [370, 14], [700, 14]]) { g.beginPath(); g.arc(sx, sy, 4, 0, 7); g.fill(); } g.restore();
-  // EFIS — EADI · EHSI
-  cnEadi(g, 22, 30, 330, 262, v);
-  cnEhsi(g, 22, 312, 330, 262, v);
-  // 엔진 계기 — 두 줄(L · R)
-  const R = 40, X0 = 418;
-  _cnGaugePair(g, X0, 64, R, 'TORQUE', v.tq, { lo: 0, hi: 120, maj: 20, min: 10, bands: [[0, 100, B206_COL.green], [100, 106, B206_COL.yellow]], redline: [106], lab: q => q % 40 === 0 ? String(q / 10) : null });
-  _cnGaugePair(g, X0, 164, R, 'ITT', v.itt, { lo: 0, hi: 1000, maj: 200, min: 100, bands: [[400, 860, B206_COL.green], [860, 920, B206_COL.yellow]], redline: [920], lab: q => q % 200 === 0 ? String(q / 100) : null });
-  _cnGaugePair(g, X0, 264, R, 'NP %', v.np, { lo: 0, hi: 110, maj: 20, min: 10, bands: [[84, 102, B206_COL.green]], redline: [102], lab: q => q % 20 === 0 ? String(q) : null });
-  _cnGaugePair(g, X0, 364, R, 'NG %', v.ng, { lo: 0, hi: 110, maj: 20, min: 10, bands: [[60, 101, B206_COL.green]], redline: [101], lab: q => q % 20 === 0 ? String(q) : null });
-  _cnGaugePair(g, X0, 464, R, 'FF', v.ff.map(f => f * 2.2046 / 100), { lo: 0, hi: 10, maj: 2, min: 1, bands: [[1, 8, B206_COL.green]], lab: q => String(q) });
-  _b206Text(g, 'PPH ×100', X0 + R * 1.12, 512, 10, '#111');
-  // 오일 압력 · 온도(겹 계기)
-  [0, 1].forEach(i => b206DualGauge(g, 648, 64 + i * 100, R, { lo: 0, hi: 120, maj: 40, min: 20, val: v.oilP[i], bands: [[40, 100, B206_COL.green]], unit: 'PSI', lab: q => String(q) }, { lo: 0, hi: 140, maj: 40, min: 20, val: v.oilT[i], bands: [[10, 110, B206_COL.green]], unit: '°C', lab: q => String(q) }, ['ENG OIL', i ? 'R' : 'L']));
-  // 플랩 지시(0 · 10 · 15 · 23) — 누르면 다음 칸(아래로) · 길게 누르면 페데스탈
-  {
-    const cx = 648, cy = 356, RR = 46;
-    _b206Case(g, cx, cy, RR);
-    const map = f => -60 + f / 23 * 150;
-    CN_P.flaps.forEach(f => { _b206Radial(g, cx, cy, RR * 0.70, RR * 0.88, map(f), B206_COL.mark, 2); const [tx, ty] = _pt(cx, cy, RR * 0.52, map(f)); _b206Text(g, String(f), tx, ty, 11); });
-    _b206Text(g, 'FLAPS', cx, cy + RR * 0.45, 10);
-    _b206Needle(g, cx, cy, RR * 0.82, map(v.flap), 4, '#fff', 0.1); _b206Hub(g, cx, cy, 4);
-    g.save(); g.strokeStyle = '#ffd21a'; g.lineWidth = 2; const [bx, by] = _pt(cx, cy, RR * 0.95, map(v.flapSel)); g.beginPath(); g.arc(bx, by, 4, 0, 7); g.stroke(); g.restore();
-  }
-  // 착륙장치 — 레버(바퀴 손잡이) · 세 초록등(내려 잠김) · 빨강(움직이는 중)
-  {
-    g.save(); g.fillStyle = '#1a1c1e'; g.fillRect(612, 438, 72, 130); g.restore();
-    const trans = v.gear > 0.01 && v.gear < 0.99;
-    [[648, 452], [630, 474], [666, 474]].forEach(([lx, ly]) => { g.save(); g.fillStyle = v.gear > 0.99 ? '#28e04a' : trans ? '#ff3a2a' : '#2a2a2a'; g.beginPath(); g.arc(lx, ly, 7, 0, 7); g.fill(); g.restore(); });
-    const ly = v.gearDn ? 540 : 500;
-    g.save(); g.strokeStyle = '#ccc'; g.lineWidth = 5; g.beginPath(); g.moveTo(648, 500); g.lineTo(648, ly); g.stroke();
-    g.fillStyle = '#e8e8e8'; g.beginPath(); g.arc(648, ly, 11, 0, 7); g.fill(); g.restore();
-    _b206Text(g, 'UP', 676, 500, 10, '#ddd'); _b206Text(g, 'DN', 676, 540, 10, '#ddd'); _b206Text(g, 'GEAR', 648, 560, 10, '#ddd');
-  }
-  // 경고등 줄(오른쪽 위)
-  const lamps = [['STALL', an.stall, '#ff3a2a'], ['GEAR', an.gear, '#ff3a2a'], ['OVSPD', an.vmo || an.flapOv || an.gearOv, '#ff3a2a'], ['FUEL LOW', an.lowFuel, '#f2c418'],
-                 ['L ENG OUT', an.eng1, '#ff3a2a'], ['R ENG OUT', an.eng2, '#ff3a2a'], ['PARK BRK', an.park, '#f2c418'], ['REV', cn.pl < 0, '#3cf']];
-  lamps.forEach(([t, on, col], i) => _b206Lamp(g, 714 + (i % 4) * 68, 22 + (i / 4 | 0) * 30, 64, 24, t, on, col));
-  // 대기 계기 — 속도계(40~300) · 고도계 · 승강계
-  {
-    const cx = 790, cy = 168, RR = 66;
-    _b206Case(g, cx, cy, RR);
-    const map = s => s <= 40 ? -150 + s / 40 * 10 : -140 + (Math.min(300, s) - 40) / 260 * 290;
-    _b206Arc(g, cx, cy, RR * 0.86, map(84), map(150), '#f2f2f2', RR * 0.07);
-    _b206Arc(g, cx, cy, RR * 0.80, map(100), map(CN_P.vmo), B206_COL.green, RR * 0.07);
-    _b206Radial(g, cx, cy, RR * 0.66, RR * 0.93, map(CN_P.vmo), B206_COL.red, RR * 0.07);
-    for (let s = 40; s <= 300; s += 10) { const big = s % 50 === 0; _b206Radial(g, cx, cy, RR * (big ? 0.70 : 0.80), RR * 0.90, map(s), B206_COL.mark, big ? 2.2 : 1); if (big) { const [tx, ty] = _pt(cx, cy, RR * 0.54, map(s)); _b206Text(g, String(s), tx, ty, 12); } }
-    _b206Text(g, 'KNOTS', cx, cy + RR * 0.3, 10);
-    _b206Needle(g, cx, cy, RR * 0.86, map(v.ias), 4); _b206Hub(g, cx, cy, 5);
-  }
-  try { b206Altimeter(g, 920, 168, 62, v.alt, v.baro / 33.8639); } catch (e) { _swallow(e); }
-  try { b206Vsi(g, 790, 330, 62, v.vs); } catch (e) { _swallow(e); }
-  try { b206Attitude(g, 920, 330, 62, v.pit, v.bnk); } catch (e) { _swallow(e); }
-  // 연료 · 무게 · 접지
-  g.save(); g.fillStyle = '#16181a'; g.fillRect(720, 420, 264, 112); g.restore();
-  _b206Text(g, `FUEL ${Math.round(v.fuel)} kg`, 852, 438, 15, an.lowFuel ? '#f2c418' : '#3cff6a');
-  _b206Text(g, `GW ${Math.round(cnMassKg())} kg · VS1 ${Math.round(cnVs(1))} kt`, 852, 462, 13, '#cfd');
-  _b206Text(g, `PL ${Math.round(cn.pl * 100)}% · ${cn.cond[0]}/${cn.cond[1]} RPM`, 852, 486, 13, '#cfd');
-  if (cn.lastTd) _b206Text(g, `TD ${Math.round(cn.lastTd.vs)}fpm · ${cn.lastTd.grade}`, 852, 512, 12, '#ffd');
-  // 페데스탈 버튼
-  g.save(); g.fillStyle = '#2b2f33'; g.fillRect(...CN_HIT.ped); g.strokeStyle = '#ddd'; g.lineWidth = 1.5; g.strokeRect(...CN_HIT.ped); g.restore();
-  _b206Text(g, 'PEDESTAL ▸', CN_HIT.ped[0] + CN_HIT.ped[2] / 2, CN_HIT.ped[1] + 20, 15, '#fff');
-  g.restore();
-  try { g.canvas._cn = g.getTransform(); } catch (e) { _swallow(e); }
-}
-function cnDrawTo(canvas) { const g = canvas.getContext('2d'); g.setTransform(1, 0, 0, 1, 0, 0); cnDraw(g, 0, 0, canvas.width, canvas.height); }
-// 3D 화면에 겹친 계기(계기 ON) — EADI · EHSI · 토크 둘
-function cnOverlayDraw(g, x, y, w, h) {
-  if (!(w > 40 && h > 40)) return;
-  const v = cnVals();
-  g.save(); g.clearRect(x, y, w, h);
-  const W0 = 700, H0 = 280, k = Math.min(w / W0, h / H0);
-  g.translate(x + (w - W0 * k) / 2, y + (h - H0 * k) / 2); g.scale(k, k);
-  g.fillStyle = 'rgba(142,151,158,0.82)'; g.fillRect(0, 0, W0, H0);
-  cnEadi(g, 14, 14, 250, 252, v); cnEhsi(g, 280, 14, 250, 252, v);
-  _cnGaugePair(g, 590, 74, 40, 'TORQUE', v.tq, { lo: 0, hi: 120, maj: 20, min: 10, bands: [[0, 100, B206_COL.green], [100, 106, B206_COL.yellow]], redline: [106], lab: q => q % 40 === 0 ? String(q / 10) : null });
-  _cnGaugePair(g, 590, 200, 40, 'ITT', v.itt, { lo: 0, hi: 1000, maj: 200, min: 100, bands: [[400, 860, B206_COL.green]], redline: [920], lab: q => q % 200 === 0 ? String(q / 100) : null });
-  g.restore();
-}
-// 판을 누르면 — PEDESTAL(페데스탈 창) · GEAR(레버) · FLAPS(다음 칸)
-function cnPanelHit(ev) {
-  const c = ev.target; if (!CN_ON || !c || c.tagName !== 'CANVAS' || !c._cn) return null;
-  const r = c.getBoundingClientRect(); if (!(r.width > 0)) return null;
-  const px = (ev.clientX - r.left) * c.width / r.width, py = (ev.clientY - r.top) * c.height / r.height;
-  const k = c._cn.a, x = (px - c._cn.e) / k, y = (py - c._cn.f) / k;
-  for (const [n, [bx, by, bw, bh]] of Object.entries(CN_HIT)) if (x >= bx && x <= bx + bw && y >= by && y <= by + bh) return n;
-  return null;
-}
-if (CN_ON) {
-  document.addEventListener('pointerdown', ev => {
-    const h = cnPanelHit(ev); if (!h) return;
-    ev.stopPropagation(); ev.preventDefault();
-    if (h === 'ped') cnPedToggle();
-    else if (h === 'gear') cnGearToggle();
-    else if (h === 'flap') { const F = CN_P.flaps, i = F.indexOf(cn.flapSel); cnFlapSet(F[(i + 1) % F.length]); }
-  }, true);
-  document.addEventListener('click', ev => { if (cnPanelHit(ev)) { ev.stopPropagation(); ev.preventDefault(); } }, true);
-  // 키 — G 착륙장치 · F/Shift+F 플랩 내림/올림 · PgUp/PgDn 파워 레버 · P 페데스탈
-  document.addEventListener('keydown', e => {
-    if (e.ctrlKey || e.metaKey || e.altKey) return;
-    const t = e.target; if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
-    try { if (typeof kbdShortcuts !== 'undefined' && !kbdShortcuts) return; if (typeof joyKeyOwned === 'function' && joyKeyOwned(e)) return; } catch (er) { _swallow(er); }
-    const k = e.key;
-    if (k === 'g' || k === 'G') { if (!e.repeat) cnGearToggle(); }
-    else if (k === 'f') cnFlapStep(1);
-    else if (k === 'F') cnFlapStep(-1);
-    else if (k === 'PageUp') cn.pl = Math.min(1, cn.pl + 0.05);
-    else if (k === 'PageDown') cn.pl = Math.max(cn.onGnd ? -0.3 : 0, cn.pl - 0.05);
-    else if (k === 'p' || k === 'P') { if (!e.repeat) cnPedToggle(); }
-    else return;
-    e.preventDefault(); _cnRedraw();
-  });
-}
-
-// ══ 페데스탈(가운데 받침) — 사진의 배치: 파워 레버 둘 · 컨디션 레버 둘 · 플랩 레버 · 착륙장치 · 파킹 브레이크 ══
-let _cnPed = null;
-function cnPedToggle(on) {
-  if (!_cnPed) _cnPedBuild();
-  const show = on === undefined ? _cnPed.style.display !== 'flex' : !!on;
-  _cnPed.style.display = show ? 'flex' : 'none';
-  if (show) cnPedSync();
-}
-function _cnPedBuild() {
-  const d = document.createElement('div');
-  d.id = 'cn-ped';
-  const cond = i => ['MAX', 'MIN', 'START', 'OFF'].map(c => `<button data-cnp="cond" data-i="${i}" data-v="${c}">${c === 'MAX' ? 'MAX RPM' : c === 'MIN' ? 'MIN RPM' : c === 'OFF' ? 'FUEL OFF' : 'START'}</button>`).join('');
-  d.innerHTML = `<div class="cnp-bar"><b>CN-235 PEDESTAL</b><button data-cnp="close" class="cnp-x">✕</button></div>
-  <div class="cnp-body">
-    <div class="cnp-col"><div class="cnp-t">POWER</div>
-      <div class="cnp-pl"><div class="cnp-track"><div class="cnp-mark" style="top:22%">FLT IDLE</div><div class="cnp-mark" style="top:2%">MAX</div><div class="cnp-mark" style="top:88%">REV</div><div class="cnp-knob"></div></div></div>
-      <div class="cnp-val" data-cnv="pl"></div></div>
-    <div class="cnp-col"><div class="cnp-t">CONDITION L</div><div class="cnp-btns">${cond(0)}</div><div class="cnp-t">CONDITION R</div><div class="cnp-btns">${cond(1)}</div></div>
-    <div class="cnp-col"><div class="cnp-t">FLAPS</div><div class="cnp-btns">${CN_P.flaps.map(f => `<button data-cnp="flap" data-v="${f}">${f}°</button>`).join('')}</div>
-      <div class="cnp-t">GEAR</div><div class="cnp-btns"><button data-cnp="gear" data-v="up">UP</button><button data-cnp="gear" data-v="dn">DOWN</button></div><div class="cnp-val" data-cnv="gear"></div></div>
-    <div class="cnp-col"><div class="cnp-t">BRAKE</div><div class="cnp-btns"><button data-cnp="park">EMERG &amp; PARK BR.</button></div>
-      <div class="cnp-t">ELEV TRIM</div><div class="cnp-btns"><button data-cnp="trim" data-v="F">NOSE DN</button><button data-cnp="trim" data-v="A">NOSE UP</button></div><div class="cnp-val" data-cnv="trim"></div>
-      <div class="cnp-note">키: PgUp/PgDn 파워 · F/Shift+F 플랩 · G 착륙장치 · 스페이스 브레이크</div></div>
-  </div>`;
-  document.body.appendChild(d);
-  _cnPed = d;
-  d.addEventListener('click', ev => {
-    const b = ev.target.closest('[data-cnp]'); if (!b) return;
-    const k = b.dataset.cnp, v = b.dataset.v;
-    if (k === 'close') cnPedToggle(false);
-    else if (k === 'cond') cnCondSet(+b.dataset.i, v);
-    else if (k === 'flap') cnFlapSet(+v);
-    else if (k === 'gear') cnGearSet(v === 'dn');
-    else if (k === 'park') cnParkToggle();
-    else if (k === 'trim') { try { if (typeof simTrimNudge === 'function' && simModeOn) simTrimNudge(v, true); } catch (e) { _swallow(e); } }
-    cnPedSync();
-  });
-  // 파워 레버 끌기 — 위 MAX(1) · 22% FLIGHT IDLE(0) · 아래 REV(−0.3)
-  const tr = d.querySelector('.cnp-track');
-  const set = ev => {
-    const r = tr.getBoundingClientRect(), f = Math.max(0, Math.min(1, (ev.clientY - r.top) / r.height));
-    cn.pl = f <= 0.78 ? 1 - f / 0.78 : -(f - 0.78) / 0.22 * 0.3;
-    cn.pl = Math.max(cn.onGnd ? -0.3 : 0, Math.min(1, cn.pl));
-    cnPedSync();
-  };
-  tr.addEventListener('pointerdown', ev => { ev.preventDefault(); tr.setPointerCapture(ev.pointerId); set(ev); tr._drag = true; });
-  tr.addEventListener('pointermove', ev => { if (tr._drag) set(ev); });
-  ['pointerup', 'pointercancel'].forEach(t => tr.addEventListener(t, () => { tr._drag = false; }));
-}
-function cnPedSync() {
-  if (!_cnPed || _cnPed.style.display === 'none') return;
-  const kn = _cnPed.querySelector('.cnp-knob');
-  const f = cn.pl >= 0 ? (1 - cn.pl) * 0.78 : 0.78 + (-cn.pl / 0.3) * 0.22;
-  if (kn) kn.style.top = `calc(${(f * 100).toFixed(1)}% - 14px)`;
-  const set = (k, t) => { const e = _cnPed.querySelector(`[data-cnv="${k}"]`); if (e) e.textContent = t; };
-  set('pl', `PL ${Math.round(cn.pl * 100)}% · TQ ${Math.round(cnTqAvg())}%`);
-  set('gear', cn.gearPos > 0.99 ? 'DOWN & LOCKED' : cn.gearPos < 0.01 ? 'UP' : 'IN TRANSIT');
-  set('trim', `TRIM ${(-(typeof simTrim !== 'undefined' ? simTrim.pitch : 0)).toFixed(1)}`);
-  _cnPed.querySelectorAll('[data-cnp="cond"]').forEach(b => b.classList.toggle('on', cn.cond[+b.dataset.i] === b.dataset.v));
-  _cnPed.querySelectorAll('[data-cnp="flap"]').forEach(b => b.classList.toggle('on', +b.dataset.v === cn.flapSel));
-  _cnPed.querySelectorAll('[data-cnp="gear"]').forEach(b => b.classList.toggle('on', (b.dataset.v === 'dn') === cn.gearDn));
-  _cnPed.querySelectorAll('[data-cnp="park"]').forEach(b => b.classList.toggle('on', !!cnPark()));
-}
-setInterval(() => { try { if (CN_ON) cnPedSync(); } catch (e) { _swallow(e); } }, 250);

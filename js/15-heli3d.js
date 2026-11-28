@@ -1280,7 +1280,13 @@ let ckpitOn = false;
 try { ckpitOn = localStorage.getItem(CKPIT_PREF) === '1'; } catch (e) { _swallow(e); }
 // MFD 화면 자리(그림 좌표) — 테두리 안쪽
 // Bell 206(00-aircraft.js) — 화면 넷 대신 가운데 아날로그 계기판 하나(25-b206panel.js · 1000×600 비율)
-const CKPIT_SCR = (typeof acIs === 'function' && acIs('b206')) ? [
+// CN-235(43-cn235panel.js) — 글레어실드(경고 · 오토파일럿) · LH 계기판 · 가운데 계기판 · 지도(오른쪽 — 부조종사 MFD 자리)
+const CKPIT_SCR = (typeof acIs === 'function' && acIs('cn235')) ? [
+  { k: 'cnG', x: 300, y: 446, w: 1000, h: 130 },
+  { k: 'cnL', x: 196, y: 584, w: 490, h: 314 },
+  { k: 'cnC', x: 700, y: 584, w: 470, h: 310 },
+  { k: 'map', x: 1186, y: 596, w: 300, h: 200 },
+] : (typeof acIs === 'function' && acIs('b206')) ? [
   { k: 'b206', x: 550, y: 492, w: 500, h: 300 },
 ] : [
   { k: 'pfd', x: 229, y: 580, w: 242, h: 146 },    // PFD
@@ -1294,9 +1300,10 @@ const CKPIT_CON = {
   lcon: { x: 708, y: 798, w: 184, h: 258, name: 'LOWER CONSOLE' },
 };
 if (typeof acScrOk === 'function' && !acScrOk('ovhd')) delete CKPIT_CON.ovhd;   // Bell 206 — 상부 콘솔이 없다
+if (typeof acIs === 'function' && acIs('cn235')) delete CKPIT_CON.lcon;            // CN-235 — 흰수리 하부 콘솔 대신 페데스탈 창(43-cn235panel.js)
 // CDU — 하부 콘솔 오른쪽 칸(3D 단독 화면에서 07-sim.js syncCduOverlay 가 CDU 를 넣는다).
 // 다른 화면처럼 누르면 크게 띄워(팝아웃 — 오른쪽 버튼 줄 바로 옆) 조작한다.
-const CKPIT_CDU = { x: 888, y: 798, w: 90, h: 146 };
+const CKPIT_CDU = (typeof acIs === 'function' && acIs('cn235')) ? { x: 1296, y: 806, w: 90, h: 94 } : { x: 888, y: 798, w: 90, h: 146 };
 function ckpitCduSlot() {
   if (typeof acScrOk === 'function' && !acScrOk('cdu')) return null;            // Bell 206 — CDU 가 없다
   if (ckConPop === 'cdu' && _ck3dVisible()) return _ckPopEl('cdu');
@@ -1414,7 +1421,7 @@ function toggleConsolePop(k) {
   setTimeout(() => { try { leafMap.invalidateSize(); } catch (e) { _swallow(e); } }, 60);
 }
 // MFD 를 누르면 띄울 화면
-const CKPIT_SCR_POP = { pfd: 'pfd', sys: 'sysp', map: 'map', b206: 'pfd' };
+const CKPIT_SCR_POP = { pfd: 'pfd', sys: 'sysp', map: 'map', b206: 'pfd', cnG: 'pfd', cnL: 'pfd', cnC: 'pfd' };
 // Bell 206 조종석 틀 — 가운데 앞유리 기둥 · 좌우 문 기둥 · 계기판 덮개(검은 테) · 가운데 받침(페데스탈) · 사이클릭(오른쪽 = 기장석)
 function _ckpitSvgB206() {
   const s = CKPIT_SCR[0], x = s.x - 18, y = s.y - 18, w = s.w + 36, h = s.h + 30;
@@ -1441,7 +1448,32 @@ function _ckpitSvgB206() {
      <circle cx="1170" cy="800" r="5" fill="#b01818"/></g>
 </svg>`;
 }
+// CN-235 조종석 틀(AOM 그림 1-1-7) — 앞유리 일곱 장 · 기둥 · 글레어실드 · 페데스탈 · 조종간(양쪽 요크 · CN235 표)
+function _ckpitSvgCN235() {
+  const yoke = (cx, flip) => `<g transform="translate(${cx} 842) scale(${flip ? -1 : 1} 1)">
+    <path d="M-120 -40 C-130 -90 -96 -110 -78 -84 L-66 -30 C-40 -6 40 -6 66 -30 L78 -84 C96 -110 130 -90 120 -40 C112 10 60 40 0 42 C-60 40 -112 10 -120 -40 Z" fill="url(#ck-yoke)" stroke="#555b60" stroke-width="2"/>
+    <rect x="-44" y="-24" width="88" height="70" rx="12" fill="#a9aeb2" stroke="#666" stroke-width="2"/>
+    <circle cx="-14" cy="-4" r="9" fill="#ddd" stroke="#777"/><circle cx="14" cy="-4" r="9" fill="#ddd" stroke="#777"/>
+    <text x="0" y="30" font-size="16" font-weight="bold" font-style="italic" text-anchor="middle" fill="#fff" ${flip ? 'transform="scale(-1 1)"' : ''}>CN235</text>
+    <circle cx="-92" cy="-70" r="6" fill="#c81c1c"/><circle cx="-80" cy="-58" r="6" fill="#c81c1c"/><rect x="-108" y="-92" width="22" height="12" rx="3" fill="#444"/></g>`;
+  return `<svg viewBox="0 0 1600 900" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="ck-post" x1="0" x2="1" y1="0" y2="0"><stop offset="0" stop-color="#d9dcde"/><stop offset="0.5" stop-color="#f2f3f4"/><stop offset="1" stop-color="#c9ccce"/></linearGradient>
+    <linearGradient id="ck-glare" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#6c7176"/><stop offset="1" stop-color="#3e4246"/></linearGradient>
+    <linearGradient id="ck-yoke" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#c3c7ca"/><stop offset="1" stop-color="#7d8287"/></linearGradient>
+  </defs>
+  <path d="M0 0 H1600 V30 Q800 54 0 30 Z" fill="#e4e6e8"/>
+  <path d="M572 0 H598 L640 446 H604 Z" fill="url(#ck-post)"/><path d="M1028 0 H1002 L960 446 H996 Z" fill="url(#ck-post)"/>
+  <path d="M300 30 L330 30 L360 446 L322 446 Z" fill="url(#ck-post)"/><path d="M1300 30 L1270 30 L1240 446 L1278 446 Z" fill="url(#ck-post)"/>
+  <path d="M0 160 L0 250 L190 600 L234 580 L120 230 Z" fill="url(#ck-post)"/><path d="M1600 160 L1600 250 L1410 600 L1366 580 L1480 230 Z" fill="url(#ck-post)"/>
+  <path d="M250 446 Q300 424 360 420 H1240 Q1300 424 1350 446 V580 H250 Z" fill="url(#ck-glare)" stroke="#2a2d30" stroke-width="2"/>
+  <path d="M176 574 H1500 V610 H176 Z" fill="#97aab1" opacity="0.0"/>
+  <path d="M690 900 L700 894 H1170 L1180 900 Z" fill="#1c1f22"/>
+  ${yoke(470, false)}${yoke(1130, true)}
+</svg>`;
+}
 function _ckpitSvg() {
+  if (CKPIT_SCR[0].k === 'cnG') return _ckpitSvgCN235();
   if (CKPIT_SCR[0].k === 'b206') return _ckpitSvgB206();
   const bez = CKPIT_SCR.map(s => {
     const x = s.x - 14, y = s.y - 12, w = s.w + 28, h = s.h + 40;
@@ -1512,7 +1544,8 @@ function _ckpitEl() {
     Object.entries(CKPIT_CON).map(([k, c]) =>
       `<div class="ck-con" id="ck-mini-${k}" data-act="toggleConsolePop" data-arg='["${k}"]' title="${c.name} — 눌러 크게(팝아웃)" style="${pct(c.x, c.y, c.w, c.h)}"></div>`).join('') +
     ((typeof acScrOk === 'function' && !acScrOk('cdu')) ? '' :
-    `<div class="ck-con" id="ck-mini-cdu" data-act="toggleConsolePop" data-arg='["cdu"]' title="CDU — 눌러 크게(팝아웃)" style="${pct(CKPIT_CDU.x, CKPIT_CDU.y, CKPIT_CDU.w, CKPIT_CDU.h)}"></div>`);
+    `<div class="ck-con" id="ck-mini-cdu" data-act="toggleConsolePop" data-arg='["cdu"]' title="CDU — 눌러 크게(팝아웃)" style="${pct(CKPIT_CDU.x, CKPIT_CDU.y, CKPIT_CDU.w, CKPIT_CDU.h)}"></div>`) +
+    ((CKPIT_SCR[0].k === 'cnG' && typeof cnYokeSvgCk === 'function') ? cnYokeSvgCk() : '');
   d3.appendChild(el);
   return el;
 }
@@ -1564,11 +1597,12 @@ function ckpitDraw() {
     const cw = c.clientWidth, ch = c.clientHeight;
     if (!(cw > 4 && ch > 4)) return;
     // 칸이 작으면 큰 크기로 그려 줄여 보인다(글자가 겹치지 않게 · 07-sim.js PFD_OV_MINW 와 같은 생각)
-    const k = Math.max(dpr, (s.k === 'pfd' ? 420 : s.k === 'b206' ? 1000 : 520) / cw);
+    const k = Math.max(dpr, (s.k === 'pfd' ? 420 : s.k === 'b206' ? 1000 : s.k === 'cnG' ? 1600 : s.k === 'cnL' || s.k === 'cnC' ? 1000 : 520) / cw);
     const W = Math.round(cw * k), H = Math.round(ch * k);
     if (c.width !== W || c.height !== H) { c.width = W; c.height = H; }
     try {
       if (s.k === 'b206') { if (typeof b206DrawTo === 'function') b206DrawTo(c); }
+      else if (s.k === 'cnG' || s.k === 'cnL' || s.k === 'cnC') { if (typeof cnDrawTo === 'function') cnDrawTo(c, { cnG: 'GLR', cnL: 'LH', cnC: 'CTR' }[s.k]); }
       else if (s.k === 'pfd') { if (typeof drawPfdTo === 'function') drawPfdTo(c); }
       else if (s.k === 'map') { const g = c.getContext('2d'); g.setTransform(1, 0, 0, 1, 0, 0); ckMapDraw(g, 0, 0, W, H); }
       else if (s.k === 'sys') {
@@ -1775,7 +1809,7 @@ function _ckWipeSync() {
 // HEELS 등 — 문이 있는 곳을 알리는 등: 좌우 문 기둥을 따라 길게 녹색으로 켜진다(앞쪽은 없다)(18-system.js heelsLit).
 //   반투명 틀(#sim-ckpit > svg)과 따로 두어 투명도와 상관없이 또렷하다. 흰수리 조종석만(Bell 은 HEELS 스위치가 없다)
 function _ckHeelsSvg() {
-  if (CKPIT_SCR[0].k === 'b206') return '';
+  if (CKPIT_SCR[0].k === 'b206' || CKPIT_SCR[0].k === 'cnG') return '';
   return `<div id="ck-heels"><svg viewBox="0 0 1600 900" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
     <path d="M6 160 L6 246 L200 594" /><path d="M1594 160 L1594 246 L1400 594" /></svg></div>`;
 }
