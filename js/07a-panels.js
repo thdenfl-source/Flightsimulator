@@ -275,7 +275,8 @@ function applyPanels() {
 
   const wrapIds = { pfd: 'pfd-wrap', map: 'map-wrap', cdu: 'cdu-wrap', m3d: 'map3d-wrap', grip: 'grip-wrap',
                     plan: 'fp-wrap', ovhd: 'ovhd-wrap', sysp: 'sysp-wrap', lcon: 'lcon-wrap', msn: 'msn-wrap', atc: 'atc-wrap' };   // atc — ATC 관제석(41-atc.js)   // msn — Vendor(흰수리 전탐석 · 37-mission.js)
-  if (window.CN_WRAPS) Object.assign(wrapIds, window.CN_WRAPS);   // CN-235 화면들(43-cn235panel.js — CENTER · GLARE · OVHD · C/B · CONSOLE · W&B · FMS · RTU · PED)
+  if (window.CN_WRAPS) Object.assign(wrapIds, window.CN_WRAPS);
+  if (window.EXTRA_WRAPS) Object.assign(wrapIds, window.EXTRA_WRAPS);   // 그 밖의 덧붙인 화면(46-pwrcurve.js PWR)   // CN-235 화면들(43-cn235panel.js — CENTER · GLARE · OVHD · C/B · CONSOLE · W&B · FMS · RTU · PED)
   // 화면 하나만 새 창에 띄운 것(SIM Mode 창 배치판 · 00-popout.js popoutScreen)은 그 그릇이 먼저다
   const scrHost = k => (window._scrHost && window._scrHost[k]) ? document.getElementById('po-host-' + k) : null;
   // Simple mode — 고른 화면 하나가 전체 화면 그릇(#simple-host)을 차지한다
@@ -297,7 +298,7 @@ function applyPanels() {
     if (!h && k === 'cdu') { try { if (!cduOvActive()) return _ckCduSlot(); } catch (e) { _swallow(e); } }
     return h || (k === 'map' ? sysMapHost() : null) || ckC(k, 'mini');
   };
-  ['pfd', 'map', 'cdu', 'm3d', 'plan', 'ovhd', 'sysp', 'lcon', 'grip', 'msn', 'atc'].concat(Object.keys(window.CN_WRAPS || {})).forEach(k => {
+  ['pfd', 'map', 'cdu', 'm3d', 'plan', 'ovhd', 'sysp', 'lcon', 'grip', 'msn', 'atc'].concat(Object.keys(window.CN_WRAPS || {}), Object.keys(window.EXTRA_WRAPS || {})).forEach(k => {
     const el = document.getElementById(wrapIds[k]);
     if (!el) return;
     // 3D 단독(Cockpit Mode)에 겹친 CDU · Flight Plan(#cdu-ov — syncCduOverlay)은 그대로 둔다 — 종전에는 SYSTEM FULL/HALF 처럼

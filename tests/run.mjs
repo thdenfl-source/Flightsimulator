@@ -99,8 +99,9 @@ import * as kuhsys2 from './cases/kuhsys2.mjs';
 import * as kuhsys3 from './cases/kuhsys3.mjs';
 import * as r22 from './cases/r22.mjs';
 import * as proccyc from './cases/proccyc.mjs';
+import * as pwrcurve from './cases/pwrcurve.mjs';
 
-const SUITES0 = [smoke, actions, coords, chartcal, hold, nav, gspd, dialog, chartview, procdata, simspd, tascalc, brg, fpwpt, maprot, map3d, dmearc, dme, fporder, wptcrs, brglbl, directto, crssync, locsta, susp, layout, gslope, joystick, geosearch, simmode, ga, tdown, bbtrim, physics2, hocas, joycenter, ship3d, heli3d, ralt, startapt, hdgref, sound, view3d, runway, apptune, lock, popout, upper, system, lower, c5000, npx138, fuelsys, afcslink, gtc, edition, cockpit, pfdmsg, fcpsimple, pfdsk, cdulive, sar, eisrev, b206, b206sys, debrief, b206sim, train3, train4, r4, kuhgrip, r5, r40, cduknob, cas, kuhsys, kuhsys2, kuhsys3, r22, proccyc, extlts, fmodel3, infra2, mission, mirror, alta, fcp2, vendorsync, glguard, train5, crew, atcT, cn235];
+const SUITES0 = [smoke, actions, coords, chartcal, hold, nav, gspd, dialog, chartview, procdata, simspd, tascalc, brg, fpwpt, maprot, map3d, dmearc, dme, fporder, wptcrs, brglbl, directto, crssync, locsta, susp, layout, gslope, joystick, geosearch, simmode, ga, tdown, bbtrim, physics2, hocas, joycenter, ship3d, heli3d, ralt, startapt, hdgref, sound, view3d, runway, apptune, lock, popout, upper, system, lower, c5000, npx138, fuelsys, afcslink, gtc, edition, cockpit, pfdmsg, fcpsimple, pfdsk, cdulive, sar, eisrev, b206, b206sys, debrief, b206sim, train3, train4, r4, kuhgrip, r5, r40, cduknob, cas, kuhsys, kuhsys2, kuhsys3, r22, proccyc, extlts, fmodel3, infra2, mission, mirror, alta, fcp2, vendorsync, glguard, train5, crew, atcT, cn235, pwrcurve];
 // 여러 묶음으로 나뉜 검사(suites 를 내보내는 파일)는 펼친다
 // 두 판(shinesong · Flightsimulator)은 비밀번호만 다르고 기능이 같다 — 모든 검사를 함께 돌린다
 const SUITES = SUITES0.flatMap(m => m.suites ? m.suites : [m]);
