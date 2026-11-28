@@ -104,7 +104,7 @@ export async function run(page, t) {
     afcsReleaseAll(); cn.ap = false; cn.pl = 1; cnCondSet(1, 'OFF');
     const h0 = S.hdg; step(100, () => { cn.pl = 1; }); const yaw = normAS(S.hdg - h0);
     cn.rudTrim = Math.max(-1, Math.min(1, -yaw / 5 / 3)); const h1 = S.hdg; step(100, () => { cn.pl = 1; }); const yaw2 = normAS(S.hdg - h1);
-    cnCondSet(2, 'MAX'); cn.rudTrim = 0;
+    cnCondSet(2, 'MAX'); cn.rudTrim = 0; cn.eng.forEach(e => { e.run = true; e.ng = 87; e.np = 100; });   // 연료를 끊었던 엔진은 시동해야 돈다 — 검사라 바로 돌려 둔다
     toggleSimMode(false);
     // GUST LOCK — 땅에서 파워가 FLT IDLE 조금 위까지만
     S.alt = 0; S.spd = 0; toggleSimMode(true, { ground: true }); cn.gust = true; cn.pl = 1; step(10, () => { cn.pl = 1; }); const gust = cn.pl <= 0.12; cn.gust = false; toggleSimMode(false);
@@ -126,5 +126,45 @@ export async function run(page, t) {
   t.ok(M.own === 'cn235' && Math.abs(M.len - 21.4) < 0.1 && Math.abs(M.span - 25.8) < 0.3 && Math.abs(M.top - 8.18) < 0.05,
        `3D 모형 — 길이 ${M.len.toFixed(2)}m · 날개폭 ${M.span.toFixed(2)}m · 높이 ${M.top.toFixed(2)}m`);
   t.ok(M.gear && M.prop && M.props === 2 && M.liv && M.acLen === 22, '프로펠러 둘 · 착륙장치(따로) · 해양경찰 도색 · 착함 판정 길이 22m');
+  // 계통(오버헤드 · 회로차단기 · 콘솔) · AOM 성능 한계
+  const SY = await page.evaluate(() => {
+    const step = (n, f) => { for (let i = 0; i < n; i++) { if (f) f(i); fwFly(0.05); S.alt = Math.max(0, S.alt + S.vs / 60 * 0.05); } };
+    const r = {};
+    S.alt = 20000; S.spd = 170; S.vs = 0; cn.ap = false; toggleSimMode(true, { ground: false });
+    step(1600);                                                    // 80초 — 객실 고도가 자리 잡는다(분당 500ft)
+    r.cab = cn.cabAlt; cn.ov.dump = true; step(200); r.cabDump = cn.cabAlt; cn.ov.dump = false;
+    // 연료 SHUT-OFF VALVE — 닫으면 그 엔진이 멎고, 열고 START 면 다시 돈다
+    cn.ov.sovL = false; step(40); r.sovStop = !cn.eng[0].run;
+    { const a0 = S.alt; S.alt = 2000; step(200, () => { cn.pl = 1; S.alt = 2000; }); r.aprAvail = cn.eng[1].tq; S.alt = a0; cn.pl = 0.5; }   // APR — 남은 엔진이 107% 까지
+    cn.ov.sovL = true; cnStart(0); step(900); r.restart = cn.eng[0].run && cn.eng[0].ng > 60;
+    // 유압 펌프 둘을 끄면 플랩이 움직이지 않는다 · 비상 내림은 된다
+    cn.ov.hyd1 = false; cn.ov.hyd2 = false; cn.gearDn = false; cn.gearPos = 0; cn.flapSel = 15; cn.flap = 0; step(60); r.flapStuck = cn.flap < 0.1;
+    cn.gearDn = true; cn.gearEmer = true; step(200); r.emerGear = cn.gearPos > 0.99; cn.ov.hyd1 = true; cn.ov.hyd2 = true; cn.gearEmer = false; cnFlapSet(0); step(200);
+    // 회로차단기 PFD · 전원 — EFIS 가 꺼지고 AP 가 풀린다
+    cn.cb.PFD = true; r.pfdDark = !cnEfisOk('PFD'); delete cn.cb.PFD;
+    cn.ap = true; cn.ov.bat = false; cn.ov.gen1 = false; cn.ov.gen2 = false; step(2); r.elecOff = !cnElecOn() && !cn.ap && !cnEfisOk('MFD/ND');
+    cn.ov.bat = true; cn.ov.gen1 = true; cn.ov.gen2 = true;
+    // 결빙 — WING & TAIL 을 끄면 날개 착빙 · 실속 속도가 오른다
+    const vs0 = cnVs(1); envIce.cond = true; cn.ov.wingTail = false; step(1200); r.ice = cn.ice; r.vsIce = cnVs(1) - vs0;
+    cn.ov.wingTail = true; step(1200); r.iceOff = cn.ice; envIce.cond = false;
+    toggleSimMode(false);
+    // 역추력 — 120KIAS 위에서는 들지 않는다 · 땅
+    S.alt = 0; S.spd = 130; toggleSimMode(true, { ground: true }); S.spd = 130; cn.pl = -0.3; fwFly(0.05); r.revInhibit = cn.pl >= 0; toggleSimMode(false);
+    // 무게 · 무게중심 · 3D 등
+    r.lim = [CNS.mtow, CNS.mlw, CNS.mzfw, CNS.ramp, CNS.mainKg, CNS.auxKg, CNS.vTire, CNS.vRev];
+    r.cg = cnCgPct(); r.fuel = cn.fuelKg; cn.fuelKg = 9999; r.fuelMax = Math.round(cn.fuelKg); cn.fuelKg = 2838;
+    cn.ov.nav = true; r.lights = cnLightState(0.05).pts.length;
+    const hits = p => { const c = document.createElement('canvas'); c.width = 1400; c.height = 800; cnDrawTo(c, p); return c._cnHit.hits.length; };
+    r.hits = { OVHD: hits('OVHD'), CB: hits('CB'), CONS: hits('CONS'), PERF: hits('PERF') };
+    return r;
+  });
+  t.ok(SY.cab > 6000 && SY.cab < 10000 && SY.cabDump > SY.cab + 300, `여압 — 20,000ft 에서 객실 ${Math.round(SY.cab)}ft(차압 3.6psi) · PRESS DUMP 면 ${Math.round(SY.cabDump)}ft 로 오른다`);
+  t.ok(SY.sovStop && SY.aprAvail > 100 && SY.restart, `연료 SHUT-OFF VALVE 닫으면 엔진 멎음 · APR 남은 엔진 ${Math.round(SY.aprAvail)}% · 열고 START 하면 다시 돈다`);
+  t.ok(SY.flapStuck && SY.emerGear, '유압 펌프 둘 꺼짐 — 플랩이 움직이지 않고 · 착륙장치 비상 내림은 된다');
+  t.ok(SY.pfdDark && SY.elecOff, '회로차단기 PFD 뽑으면 PFD 꺼짐 · 전원(BAT · GEN) 없으면 EFIS 꺼지고 AP 풀림');
+  t.ok(SY.ice > 0.3 && SY.vsIce > 2 && SY.iceOff < SY.ice, `결빙 — WING & TAIL 꺼짐이면 날개 착빙 ${Math.round(SY.ice * 100)}% · 실속 속도 +${SY.vsIce.toFixed(1)}kt · 켜면 떨어진다`);
+  t.ok(SY.revInhibit && SY.lim.join() === '14400,14200,13600,14450,819,1276,139,120' && SY.fuelMax === 4190 && SY.cg > 16 && SY.cg < 30 && SY.lights >= 3,
+       `AOM 한계 — MTOW 14,400 · MLW 14,200 · MZFW 13,600 · 램프 14,450 · 연료 4,190kg · CG ${SY.cg.toFixed(1)}%MAC · 역추력 120KIAS · NAV 등`);
+  t.ok(SY.hits.OVHD >= 60 && SY.hits.CB >= 100 && SY.hits.CONS >= 20 && SY.hits.PERF >= 10, `오버헤드 · 회로차단기 · 콘솔 · W&B 화면(누를 자리 ${JSON.stringify(SY.hits)})`);
   t.ok(page.errors.length === 0, `오류 없음${page.errors.length ? ' — ' + page.errors.join(' / ') : ''}`);
 }
