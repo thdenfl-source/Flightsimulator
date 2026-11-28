@@ -2551,6 +2551,10 @@ html.ed-proc #gyro-btn, html.ed-proc #gyro-align-btn { display: none !important;
 html.ac-b206 .page-tab[data-sel="cdu"], html.ac-b206 .page-tab[data-sel="ovhd"], html.ac-b206 .page-tab[data-sel="sysp"], html.ac-b206 #cdu-solo-btn,
 html.ac-b206 #ctl3d #cduov-btn, html.ac-b206 #ctl3d #upperc-btn, html.ac-b206 #ctl3d #upperc-btn.show { display: none !important; }
 html:not(.ac-aw189) .page-tab.msn-tab { display: none !important; }   /* Vendor(전탐석) — 흰수리만 */
+/* CN-235 — 고정익: UPPER CONSOLE · SYSTEM(흰수리 계통) · 회전익 특성 · HOVER 단추가 없다 */
+html.ac-cn235 .page-tab[data-sel="ovhd"], html.ac-cn235 .page-tab[data-sel="sysp"], html.ac-cn235 #ctl3d #upperc-btn, html.ac-cn235 #ctl3d #upperc-btn.show,
+html.ac-cn235 [data-act="toggleRotorChar"], html.ac-cn235 [data-act="toggleRcOpt"], html.ac-cn235 [data-act="setRotorDir"],
+html.ac-cn235 [data-act="toggleHoverPage"], html.ac-cn235 [data-act="toggleHoverPosition"], html.ac-cn235 [data-act="toggleGspd"] { display: none !important; }
 /* ATC 관제석(41-atc.js) */
 #atc-wrap { position: relative; container-type: inline-size; }
 @container (max-width: 760px) { #atc-root .atc-body { flex-direction: column; } #atc-root .atc-side { width: auto; max-height: 42%; border-left: 0; border-top: 1px solid #1f3a2a; } } #atc-root { position: absolute; inset: 0; display: flex; flex-direction: column; background: #0b1210; color: #cfe8d8; font-family: "Helvetica Neue", Arial, sans-serif; }
@@ -2768,6 +2772,25 @@ body.simple-mode #simple-view { display: flex; position: fixed; left: 0; right: 
 #simple-host { flex: 1 1 0; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 #simple-host > .page-content, #simple-host > #pfd-wrap { flex: 1 1 0; }
 #pfdov-size { position: static; align-items: center; }
+/* CN-235 페데스탈(42-cn235.js) — 파워 · 컨디션 · 플랩 · 착륙장치 · 브레이크 */
+#cn-ped { display: none; position: fixed; z-index: 9000; left: 50%; bottom: 12px; transform: translateX(-50%); flex-direction: column; width: min(760px, calc(100vw - 24px));
+  background: #1b1d1f; border: 1px solid #4a5157; border-radius: 8px; box-shadow: 0 6px 24px rgba(0,0,0,0.6); color: #e6e9ec; font: 12px Arial, sans-serif; }
+#cn-ped .cnp-bar { display: flex; align-items: center; justify-content: space-between; padding: 4px 6px 4px 10px; background: #2a2e32; border-radius: 8px 8px 0 0; }
+#cn-ped .cnp-x { width: 32px; padding: 2px 0; }
+#cn-ped .cnp-body { display: flex; flex-wrap: wrap; gap: 10px; padding: 10px; }
+#cn-ped .cnp-col { flex: 1 1 150px; display: flex; flex-direction: column; gap: 4px; }
+#cn-ped .cnp-t { color: #9fb4c6; font-weight: bold; font-size: 11px; margin-top: 2px; }
+#cn-ped .cnp-btns { display: flex; flex-wrap: wrap; gap: 4px; }
+#cn-ped button { background: #2f3439; color: #e6e9ec; border: 1px solid #555d64; border-radius: 4px; padding: 5px 7px; font: bold 11px Arial, sans-serif; cursor: pointer; }
+#cn-ped button.on { background: #1d6b34; border-color: #3cff6a; color: #fff; }
+#cn-ped button[data-cnp="park"].on { background: #8a1c1c; border-color: #ff5a4a; }
+#cn-ped .cnp-pl { height: 170px; display: flex; justify-content: center; }
+#cn-ped .cnp-track { position: relative; width: 56px; height: 100%; background: #0d0e0f; border: 1px solid #555d64; border-radius: 4px; touch-action: none; cursor: ns-resize; }
+#cn-ped .cnp-track::after { content: ""; position: absolute; left: 0; right: 0; top: 78%; height: 2px; background: #f2c418; }
+#cn-ped .cnp-mark { position: absolute; left: 60px; white-space: nowrap; color: #9fb4c6; font-size: 10px; }
+#cn-ped .cnp-knob { position: absolute; left: -6px; right: -6px; height: 28px; background: linear-gradient(#5a5f64, #2c2f32); border: 1px solid #aaa; border-radius: 6px; pointer-events: none; }
+#cn-ped .cnp-val { color: #3cff6a; font-weight: bold; font-size: 11px; }
+#cn-ped .cnp-note { color: #8a96a0; font-size: 10px; margin-top: 4px; }
 #pfdov-size span { flex: 0 0 auto; min-width: 34px; text-align: center; color: #9fb4c6; font: bold 10px 'Helvetica Neue', Arial, sans-serif; }
 `;
   (document.head || document.documentElement).appendChild(st);

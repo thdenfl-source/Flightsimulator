@@ -113,6 +113,14 @@ function drawPFD() {
   const ctrlEl = document.querySelector('#pfd-wrap > .ctrl-bar') || document.querySelector('.ctrl-bar');
   // 3D 화면에 겹친 계기(drawPfdTo)는 FCP 가 없다 — 칸을 다 계기에 쓴다
   const CTRL_H = (cvs.dataset.noFcp || pfdFcpSide()) ? 0 : (ctrlEl ? ctrlEl.offsetHeight : 80);
+  // CN-235 — Collins EFIS(EADI · EHSI) · 엔진 계기 판(42-cn235.js)
+  if (typeof acCn235 === 'function' && acCn235() && typeof cnDraw === 'function') {
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    if (cvs.id === 'pfd-ov-cvs') { cnOverlayDraw(ctx, 0, 0, W, H); return; }
+    ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
+    cnDraw(ctx, 0, 0, W, b206RoomH(cvs, H, CTRL_H));
+    return;
+  }
   // Bell 206 — 유리 PFD 대신 아날로그 계기판(25-b206panel.js)을 FCP 위 칸에 그린다
   if (typeof acIs === 'function' && acIs('b206') && typeof b206Draw === 'function') {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
