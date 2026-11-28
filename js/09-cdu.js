@@ -225,6 +225,7 @@ function init(){
   // ALT header box (top of ALT tape, right column top half) → selAlt
   // CRHT header box (top of CRHT display, right column bottom half) → selCrht
   async function onPfdTap(clientX, clientY) {
+    if (typeof acFixedWing === 'function' && acFixedWing()) return;   // CN-235 — 판은 제 누를 자리(43-cn235panel.js)만 쓴다(흰수리 FMA · ALT 칸 입력창이 겹쳐 떴다)
     const rect = cvs.getBoundingClientRect();
     const scX  = cvs.width  / rect.width;
     const scY  = cvs.height / rect.height;

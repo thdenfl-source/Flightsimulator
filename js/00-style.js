@@ -2772,6 +2772,21 @@ body.simple-mode #simple-view { display: flex; position: fixed; left: 0; right: 
 #simple-host { flex: 1 1 0; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 #simple-host > .page-content, #simple-host > #pfd-wrap { flex: 1 1 0; }
 #pfdov-size { position: static; align-items: center; }
+/* CN-235 — 흰수리 FCP(소프트키 · FCP SIMPLE · 아래 줄) 대신 AP 모드 · 페데스탈 노브 띠(#cn-fcp · 43-cn235panel.js) */
+html.ac-cn235 #pfd-sk, html.ac-cn235 #fcp-simple, html.ac-cn235 .ctrl-bar > .ctrl-sub-row { display: none !important; }
+#cn-fcp { display: flex; flex-direction: column; gap: 3px; padding: 3px 4px; background: #16181b; border-top: 1px solid #2a2f35; font: bold 10px Arial, sans-serif; color: #e6e9ec; user-select: none; }
+#cn-fcp .cnf-row { display: flex; flex-wrap: nowrap; gap: 2px; align-items: stretch; }
+#cn-fcp .cnf-b { flex: 1 1 auto; min-width: 0; overflow: hidden; padding: 6px 1px; background: #2a2d30; color: #e6e9ec; border: 1px solid #4d545a; border-radius: 3px; text-align: center; cursor: pointer; white-space: nowrap; }
+#cn-fcp .cnf-b.on { background: #1d5b2c; border-color: #3cff6a; color: #fff; }
+#cn-fcp .cnf-b.ap.on { background: #1d5b2c; } #cn-fcp .cnf-b.red { background: #5a1a1a; border-color: #c33; }
+#cn-fcp .cnf-sep { width: 4px; flex: none; }
+#cn-fcp .cnf-row:last-child > .cnf-b { flex: 0.8 1 0; }
+#cn-fcp .cnf-k { flex: 2.3 1 0; min-width: 0; display: flex; align-items: center; gap: 2px; background: #0f1113; border: 1px solid #3a4046; border-radius: 3px; padding: 2px; }
+#cn-fcp .cnf-k > i { flex: 1; font-style: normal; text-align: center; line-height: 1.1; }
+#cn-fcp .cnf-k > i { overflow: hidden; white-space: nowrap; }
+#cn-fcp .cnf-k > i small { display: block; color: #8fa2ad; font-size: 8px; }
+#cn-fcp .cnf-k > i b { color: #3cf; font-size: 12px; }
+#cn-fcp .cnf-k .cnf-b { flex: 0 0 16px; min-width: 16px; padding: 6px 0; }
 /* CN-235 페데스탈(43-cn235panel.js · 그림 1-1-10) — 캔버스 한 장(700×1000) */
 #cn-ped { display: none; position: fixed; z-index: 9000; right: 8px; top: 48px; flex-direction: column; background: #1b1d1f; border: 1px solid #4a5157; border-radius: 8px;
   box-shadow: 0 6px 24px rgba(0,0,0,0.6); color: #e6e9ec; font: 12px Arial, sans-serif; max-width: calc(100vw - 16px); }

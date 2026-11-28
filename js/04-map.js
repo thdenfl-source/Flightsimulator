@@ -867,6 +867,8 @@ function _fcpSplit() {
   if (!bar) return [];
   _fcpParts = [];
   // 3D 단독 화면에서도 비행 조작에 쓰는 PFD 소프트키를 FCP 패널 바로 위에 — 첫 줄 소프트키, 둘째 줄 FCP 패널(07-sim.js)
+  const cnf = bar.querySelector(':scope > #cn-fcp');                 // CN-235 — 흰수리 FCP 대신 AP · 노브 띠(43-cn235panel.js)
+  if (cnf) { _fcpParts.push({ el: cnf, side: 'L', row: 0, ph: null }); return _fcpParts; }
   const sk = bar.querySelector(':scope > #pfd-sk');
   const simple = bar.querySelector(':scope > #fcp-simple');
   let off = 0;
