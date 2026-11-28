@@ -10,14 +10,14 @@
 //      활공로는 활주로 표고 · 시단에서 3° · 접근은 화면 오른쪽에서 왼쪽으로(접지점이 왼쪽)
 //      좌우는 45° NAV 원칙 — 많이 벗어나면 45° 로 중심선에 붙이고 가까워질수록 줄인다
 //      고른 표적의 활공로 · 중심선 벗어남을 재어 표준 GCA 문구(…miles from touchdown, slightly left of course, turn right heading …, on glidepath)를 만든다
-//      '자동 유도'를 켜면 10초마다 그 문구를 불러 준다(혼자 연습 — 관제사 없이 PAR 접근)
+//      '자동 유도'를 켜면 15초마다 그 문구를 불러 준다(혼자 연습 — 관제사 없이 PAR 접근)
 //   ④ 관제 지시 — 레이더 포착 · 선회(기수) · 고도 · 속도 · PAR 접근 허가 · 착륙 허가 · 복행 · 관제탑 연락 · 직접 적기
 //      고른 표적이 내 기체면 이 기기에서 읽어 주고(음성 · 알림 · 강평), 협동 비행 기체면 그 기기로 보낸다
 //   ⑤ 멀티 관제 — 협동 비행 방(40-crew.js · SS4)에 '관제사로 참가'하면 이 기기는 제 기체를 보내지 않고
 //      관제 시설(예: RKPK APP)을 3초마다 알린다. 조종사 기기는 지시를 받으면 읽어 주고 WILCO · UNABLE · SAY AGAIN 으로 답한다
 // ══════════════════════════════════════════════════════
 const ATC_GP = 3, ATC_DH = 200, ATC_PAR_NM = 10, ATC_TD_NM = 0;   // 활공각(°) · 결심고도(ft, 활주로 표고 위) · PAR 거리 · 활공로 기준점(시단 — 활주로 표고에서 3°)
-const ATC_AUTO_S = 10;   // 자동 PAR 유도 — 몇 초마다 부르는가
+const ATC_AUTO_S = 15;   // 자동 PAR 유도 — 몇 초마다 부르는가
 const ATC_INT_MAX = 45, ATC_INT_PER_NM = 90;   // 좌우 유도 — 45° NAV 원칙: 중심선에서 0.5NM 이상이면 45° 로 붙이고, 가까울수록 줄인다(1NM 당 90° · 5° 아래로는 내리지 않는다)
 const ATC_UNITS = { APP: 'approach', TWR: 'tower', GCA: 'precision' };
 const atc = Object.assign({ apt: 'RKPK', rwy: '', view: 'both', rng: 20, own: true, auto: false, unit: 'APP' },
