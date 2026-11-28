@@ -85,7 +85,7 @@ export async function run(page, t) {
     try { if (simModeOn) toggleSimMode(false); } catch (e) { /* 절차 훈련판 */ }
     return o;
   });
-  t.ok(sc.names === 'PFD,COCKPIT,MAP,CDU,UPPER,LOWER,SYSTEM,CONTROL,Vendor,ATC' && sc.ck && !sc.simpleIn, `Simple 위 막대 — 3D 자리에 COCKPIT · 누르면 Cockpit Mode (${sc.names})`);
+  t.ok(sc.names === 'PFD,COCKPIT,MAP,CDU,UPPER,LOWER,SYSTEM,CONTROL,Vendor,ATC,PWR' && sc.ck && !sc.simpleIn, `Simple 위 막대 — 3D 자리에 COCKPIT · 누르면 Cockpit Mode (${sc.names})`);
   t.ok(sc.back.simple && sc.back.scr === 'map' && !sc.back.ck, 'Cockpit Mode 를 끝내면 들어오기 전 Simple 화면(MAP)으로 돌아온다');
 
   // ── 오른쪽 창 탭이 LOWER(또는 UPPER)였어도 조종석 안 작은 콘솔에 들어온다 — 접힌 창에 남아 검게 비던 일 ──

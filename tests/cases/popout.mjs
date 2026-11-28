@@ -13,7 +13,7 @@ export async function run(page, t) {
              L: txt('left-tabs'), M: txt('mid-tabs'), R: txt('page-tabs') };
   });
   t.ok(tabs.tri && tabs.sel === 'pfd·cdu·map', `처음에는 3분할 PFD · CDU · MAP (${tabs.sel})`);
-  t.ok(/^PFD\|SYSTEM\|▦ 4분할\|⊞ 창 배치\|⧉ POP UP$/.test(tabs.L), `PFD 창 탭: PFD · SYSTEM · 분할(→4분할) · 창 배치 · POP UP (+ 📌 Top) (${tabs.L})`);
+  t.ok(/^PFD\|SYSTEM\|PWR\|▦ 4분할\|⊞ 창 배치\|⧉ POP UP$/.test(tabs.L), `PFD 창 탭: PFD · SYSTEM · PWR · 분할(→4분할) · 창 배치 · POP UP (+ 📌 Top) (${tabs.L})`);
   // 제일 왼쪽 창의 SYSTEM 탭 — PFD 자리에 SYSTEM 창, PFD 탭으로 돌아온다(다른 창도 SYSTEM 이면 그쪽은 거울 창 — 38-mirror.js)
   const lsys = await page.evaluate(() => {
     const where = () => [leftSel, document.getElementById('sysp-wrap').parentElement.id, document.getElementById('pfd-wrap').classList.contains('page-hidden')];
@@ -25,8 +25,8 @@ export async function run(page, t) {
   });
   t.ok(lsys.a.join() === 'sysp,left-panel,true' && lsys.r === 'sysp' && lsys.mir && lsys.b[0] === 'pfd' && lsys.b[2] === false,
     `왼쪽 창 SYSTEM 탭 — PFD 자리에 SYSTEM(우측도 SYSTEM 이면 맞바꾸지 않고 거울 창) · PFD 탭으로 돌아온다 (${lsys.a.join(' ')} · 우측 ${lsys.r} 거울 ${lsys.mir} · ${lsys.b.join(' ')})`);
-  t.ok(tabs.M === 'CDU|MAP|UPPER|LOWER|SYSTEM|CONTROL|Vendor|ATC|⛶ Cockpit|⧉ POP UP|⌂|⟳', `CDU 창 탭: CDU · MAP · UPPER · LOWER · SYSTEM · CONTROL · Vendor · ATC · Cockpit Mode · POP UP · 처음 화면 · 새로고침 (+ 📌 Top) — 모든 줄이 같은 차례 (${tabs.M})`);
-  t.ok(tabs.R === 'CDU|MAP|UPPER|LOWER|SYSTEM|CONTROL|Vendor|ATC|⛶ Cockpit|⧉ POP UP', `MAP 창 탭: CDU · MAP · UPPER · LOWER · SYSTEM · CONTROL · Vendor · ATC · Cockpit Mode · POP UP (+ 📌 Top) (${tabs.R})`);
+  t.ok(tabs.M === 'CDU|MAP|UPPER|LOWER|SYSTEM|CONTROL|Vendor|ATC|PWR|⛶ Cockpit|⧉ POP UP|⌂|⟳', `CDU 창 탭: CDU · MAP · UPPER · LOWER · SYSTEM · CONTROL · Vendor · ATC · PWR · Cockpit Mode · POP UP · 처음 화면 · 새로고침 (+ 📌 Top) — 모든 줄이 같은 차례 (${tabs.M})`);
+  t.ok(tabs.R === 'CDU|MAP|UPPER|LOWER|SYSTEM|CONTROL|Vendor|ATC|PWR|⛶ Cockpit|⧉ POP UP', `MAP 창 탭: CDU · MAP · UPPER · LOWER · SYSTEM · CONTROL · Vendor · ATC · PWR · Cockpit Mode · POP UP (+ 📌 Top) (${tabs.R})`);
   // 모든 줄이 같은 화면 탭 차례 · 같은 색 · 이름이 잘리지 않는다(좁으면 줄임말 UPR · LWR · SYS · CTRL)
   const fit = await page.evaluate(async () => {
     const w = ms => new Promise(r => setTimeout(r, ms)), o = {};
@@ -42,7 +42,7 @@ export async function run(page, t) {
     document.documentElement.style.width = keepW; window.dispatchEvent(new Event('resize')); await w(300); tabsFit();
     return o;
   });
-  t.ok(new Set(fit.order).size === 1 && fit.order[0] === 'cdu,map,ovhd,lcon,sysp,grip,msn,atc' && new Set(fit.colors).size === 1,
+  t.ok(new Set(fit.order).size === 1 && fit.order[0] === 'cdu,map,ovhd,lcon,sysp,grip,msn,atc,pwr' && new Set(fit.colors).size === 1,
     `가운데 · 오른쪽 · 아래 탭 줄이 같은 차례 · 같은 색 (${fit.order[0]} · UPPER ${fit.colors[0]})`);
   t.ok(fit.narrow.mode !== 'full' && fit.narrow.clip.length === 0 && /UPR/.test(fit.narrow.upr),
     `좁은 줄은 줄임말로 — 이름이 잘리지 않는다 (${fit.wide.mode} → ${fit.narrow.mode} · UPPER → ${fit.narrow.upr} · 잘린 것 ${fit.narrow.clip.length})`);

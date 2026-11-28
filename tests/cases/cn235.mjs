@@ -225,7 +225,7 @@ export async function run(page, t) {
     const r = {};
     const tabs = [...document.querySelectorAll('#page-tabs .page-tab')].filter(b => getComputedStyle(b).display !== 'none').map(b => b.dataset.sel);
     r.tabs = ['cnctr', 'cnglr', 'cnovhd', 'cncb', 'cncons', 'cnwb', 'cnfms', 'cnrtu', 'cnped'].every(k => tabs.includes(k));
-    r.noLcon = !tabs.includes('lcon'); r.msn = tabs.includes('msn');
+    r.noLcon = !tabs.includes('lcon') && !tabs.includes('pwr'); r.msn = tabs.includes('msn');
     const sel0 = panelGet('right');
     selectPanel('right', 'cnped'); await new Promise(res => setTimeout(res, 450));
     const w = document.getElementById('cnp-cnped-wrap'), c = w && w.querySelector('canvas');

@@ -37,7 +37,8 @@ function acIs(k) { return AC_TYPE === k || AC_TYPES[AC_TYPE].family === k; }
 function acExact(k) { return AC_TYPE === k; }
 function acR22() { return AC_TYPE === 'r22'; }
 // 이 기종에 있는 화면인가 — Bell 206 은 CDU(· 비행계획 창) · UPPER CONSOLE · SYSTEM 이 없다(무전 · 항법은 LOWER CONSOLE 의 항공전자 스택)
-function acScrOk(k) { if (k === 'msn') return acIs('aw189') || acIs('cn235'); if (acIs('cn235') && (k === 'ovhd' || k === 'sysp' || k === 'lcon')) return false; if (/^cn/.test(k)) return acIs('cn235'); return !(acIs('b206') && (k === 'cdu' || k === 'plan' || k === 'ovhd' || k === 'sysp')); }   // Vendor(전탐석) — 흰수리만   // SYSTEM(MFD 계통 화면)도 없다
+function acScrOk(k) { if (k === 'pwr') return !acIs('cn235');   // PWR(동력-속도 곡선 · 46-pwrcurve.js) — 회전익
+  if (k === 'msn') return acIs('aw189') || acIs('cn235'); if (acIs('cn235') && (k === 'ovhd' || k === 'sysp' || k === 'lcon')) return false; if (/^cn/.test(k)) return acIs('cn235'); return !(acIs('b206') && (k === 'cdu' || k === 'plan' || k === 'ovhd' || k === 'sysp')); }   // Vendor(전탐석) — 흰수리만   // SYSTEM(MFD 계통 화면)도 없다
 function acInfo() { return AC_TYPES[AC_TYPE]; }
 // 기종을 바꾼다 — 적어 두고 다시 불러온다(주소의 ?ac= 는 걷어 낸다 · 그것이 저장값을 이기므로)
 function setAircraftType(k, reload = true) {
