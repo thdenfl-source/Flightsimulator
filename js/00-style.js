@@ -678,10 +678,12 @@ html, body {
                  border-left: 4px solid #e8eaec; border-right: 4px solid #e8eaec; display: flex; align-items: center; }
 .start-pos-rwy .sp-cl { flex: 1; height: 0; border-top: 2px dashed #e8eaec; margin: 0 6px; }
 .start-pos-rwy .sp-id { color: #e8eaec; font: bold 13px Arial, sans-serif; padding: 0 4px; }
-.start-pos-btn { position: absolute; transform: translate(-50%, -50%); min-width: 62px; padding: 6px 6px; font: bold 11px Arial, sans-serif;
+.start-pos-btn { position: absolute; transform: translate(-50%, -50%); min-width: 62px; padding: 3px 8px; font: bold 11px Arial, sans-serif; display: flex; flex-direction: column; align-items: center; line-height: 1.1;
                  color: #fff; background: rgba(150, 20, 20, 0.85); border: 2px solid #ff4a3d; border-radius: 4px; cursor: pointer; z-index: 1; }
 .start-pos-btn.air { background: rgba(20, 40, 70, 0.9); border-color: #4aa3ff; }
 .start-pos-btn:hover { filter: brightness(1.3); }
+.start-pos-btn .sp-n { font-size: 20px; letter-spacing: 1px; }
+.start-pos-btn .sp-s { font-size: 11px; }
 /* 출발 공항 고르기(09-cdu.js openStartAirportPicker) */
 .ui-dlg.start-apt { width: min(560px, 94vw); max-width: min(560px, 94vw); }
 .start-apt-sub { font-size: 12px; color: #9aa4ae; }

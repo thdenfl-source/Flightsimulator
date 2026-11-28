@@ -329,83 +329,21 @@ export async function run(page, t) {
   t.ok(hbad.asked && hbad.after === hbad.before,
     `홀딩도 범위 밖(999°)은 알리고 값을 지킨다 (${hbad.after}°M 유지)`);
 
-  // ── ORIGIN 을 넣으면 항공기가 그 자리로 ──
-  // 시작 위치는 앱을 켤 때 한 번 잡히고 그만이라, 다른 공항에서 출발해 보려면
-  // 지도를 끌어다 항공기를 손으로 옮겨야 했다. 출발지는 비행계획 첫 줄에
-  // 이미 적는 것이니 그걸 적으면 거기 서 있게 한다.
+  // ── ORIGIN 을 넣어도 항공기는 옮기지 않는다(시작 자리는 출발 공항 · ✈ 시작 위치 창 — 09a-start.js) ──
   const org = await page.evaluate(async () => {
     const wait = ms => new Promise(r => setTimeout(r, ms));
     const r = {};
     S.running = false; gpsMode = false;
     S.lat = 37.3895; S.lon = 126.6550; S.wps = []; S.awp = -1;
-    S.trail = [[S.lat, S.lon], [37.4, 126.7]];
-    S.alt = 3000; S.spd = 90; S.vs = 500;      // 날던 고도·속도는 버리고 지면에 세운다
-    fpAddPreset('RKPK');                       // 공항 명칭으로 출발지 지정
-    await wait(100);
-    const apt = AIRPORTS.find(x => x.ident === 'RKPK');
-    r.toApt = distance(S.lat, S.lon, apt.lat, apt.lon);
-    // 지형 표고가 늦게 오면(인터넷이 되는 CI) 처음엔 아는 높이에 세웠다가 0.3초마다 다시 맞춘다(simSetOnGround) — 맞을 때까지(최대 4초)
-    for (let i = 0; i < 40 && Math.abs(S.alt - simGroundFt()) >= 1; i++) await wait(100);
-    r.gnd = { alt: S.alt, g: simGroundFt(), spd: S.spd, vs: S.vs };
-    r.trail = S.trail.length;
-    // 두 번째부터는 옮기지 않는다 — 출발지만 자리를 정한다
     const at = [S.lat, S.lon];
-    fpAddPreset('RKSI');
-    await wait(100);
-    r.secondMoved = distance(at[0], at[1], S.lat, S.lon) > 0.05;
-    // 좌표로 넣어도, 나중에 고쳐도 따라간다
-    S.wps = []; S.awp = -1; S.lat = 37.0; S.lon = 127.0;
-    pushWP({ ident: 'ORG', lat: 35.0, lon: 128.0 });
-    await wait(100);
-    r.byCoord = distance(S.lat, S.lon, 35.0, 128.0);
-    fpWptOpen(0); fpWptCoord();
-    fpInputBuf = '36.5'; fpConfirmCoord('LAT');
-    fpInputBuf = '127.5'; fpConfirmCoord('LON');
-    await wait(120);
-    r.afterEdit = distance(S.lat, S.lon, 36.5, 127.5);
-    // GPS 모드(실제 비행)에서는 손대지 않는다 — 위치는 수신기가 정한다
-    S.wps = []; S.awp = -1; S.lat = 37.0; S.lon = 127.0; gpsMode = true;
-    pushWP({ ident: 'X', lat: 34.0, lon: 129.0 });
-    await wait(100);
-    r.gpsHeld = distance(S.lat, S.lon, 37.0, 127.0) < 0.05;
-    gpsMode = false;
+    fpAddPreset('RKPK'); await wait(100);
+    r.stay = distance(at[0], at[1], S.lat, S.lon) < 0.01;
+    r.origin = S.wps.length > 0 && S.wps[0].ident === 'RKPK';
+    S.running = true; S.wps = []; S.awp = -1;
+    pushWP({ ident: 'A', lat: 35.0, lon: 128.0 }); await wait(120);
+    r.noAsk = !document.querySelector('.ui-dlg') && distance(at[0], at[1], S.lat, S.lon) < 0.01;
+    S.running = false; S.wps = []; S.awp = -1;
     return r;
   });
-  t.ok(org.toApt < 0.05, `공항 명칭으로 출발지를 넣으면 그 공항에 선다 (RKPK 에서 ${org.toApt.toFixed(2)}NM)`);
-  t.ok(Math.abs(org.gnd.alt - org.gnd.g) < 1 && org.gnd.alt < 3000,
-    `출발지에서는 지면 고도에 선다 (${org.gnd.alt.toFixed(0)}ft · 지면 ${org.gnd.g.toFixed(0)}ft)`);
-  t.ok(org.gnd.spd === 0 && org.gnd.vs === 0, `멈춰 선다 (${org.gnd.spd}kt · ${org.gnd.vs}fpm)`);
-  t.eq(org.trail, 0, '옮기면서 옛 항적을 지운다 — 남기면 순간이동 선이 하나 그어진다');
-  t.eq(org.secondMoved, false, '두 번째 웨이포인트부터는 항공기를 옮기지 않는다');
-  t.ok(org.byCoord < 0.05 && org.afterEdit < 0.05,
-    `좌표로 넣어도, 나중에 고쳐도 따라간다 (${org.byCoord.toFixed(2)}NM · ${org.afterEdit.toFixed(2)}NM)`);
-  t.eq(org.gpsHeld, true, 'GPS 모드에서는 옮기지 않는다(위치는 수신기가 정한다)');
-
-  // 비행 중이면 되묻는다 — 날고 있는 기체를 말없이 순간이동시키지 않는다
-  const fly = await page.evaluate(async () => {
-    const wait = ms => new Promise(r => setTimeout(r, ms));
-    const btn = lbl => [...document.querySelectorAll('.ui-dlg-btns button, .ui-dlg-btns .ui-dlg-ok')]
-      .find(b => b.textContent.trim() === lbl);
-    const r = {};
-    S.lat = 37.0; S.lon = 127.0; S.running = true; gpsMode = false;
-    S.wps = []; S.awp = -1;
-    pushWP({ ident: 'A', lat: 35.0, lon: 128.0 });
-    await wait(120);
-    r.asked = !!document.querySelector('.ui-dlg');
-    r.msg = document.querySelector('.ui-dlg-msg')?.textContent || '';
-    btn('그대로')?.click(); await wait(120);
-    r.stayed = distance(S.lat, S.lon, 37.0, 127.0) < 0.05;
-    S.wps = []; S.awp = -1;
-    pushWP({ ident: 'B', lat: 35.0, lon: 128.0 });
-    await wait(120);
-    btn('옮기기')?.click(); await wait(150);
-    r.moved = distance(S.lat, S.lon, 35.0, 128.0) < 0.05;
-    S.running = false;
-    return r;
-  });
-  t.eq(fly.asked, true, '비행 중에 출발지를 넣으면 옮길지 되묻는다');
-  t.ok(/비행 중/.test(fly.msg) && /NM/.test(fly.msg),
-    '얼마나 떨어진 자리인지 알려 준다');
-  t.eq(fly.stayed, true, '「그대로」 를 고르면 항공기는 제자리다');
-  t.eq(fly.moved, true, '「옮기기」 를 고르면 그 자리로 간다');
+  t.ok(org.stay && org.origin && org.noAsk, `출발지(ORIGIN)를 넣어도 항공기는 제자리 · 묻지 않는다 (${JSON.stringify(org)})`);
 }

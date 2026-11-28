@@ -2146,7 +2146,7 @@ appRegister({
   fpRefBksp,
   fpRefOpen,
   fpType,
-  hardReload, goStartScreen,
+  hardReload, goStartScreen, startPosOpen,
   lockScreen,
   openAimPackage,
   openShipPanel,
