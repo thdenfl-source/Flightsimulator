@@ -567,7 +567,7 @@ function settingsReset() {
 }
 
 // ── ⑥ 도구 메뉴(🧰) — 작은 화면(폭 900 · 높이 700 아래)에서는 낱 단추 대신 이 메뉴 하나로 ──
-const TOOLS = [['🎬 시나리오', 'toggleScenario'], ['🌙 환경', 'toggleEnvPanel'], ['📋 강평', 'toggleDebrief'], ['🧑‍✈️ Instructor View', 'openIos'], ['📱 Instructor Sync', 'toggleRemoteIos'], ['⚙ 설정', 'toggleSettings'], ['🗺 지도 미리 받기', 'toggleTilePrep'], ['⛽ 연료 · BINGO', 'toggleBingo'], ['📻 교신 연습', 'toggleRadioPractice'], ['👨‍✈️ 부조종사(PM)', 'toggleCrewPm'], ['🚤 협동 자산', 'toggleAssets'], ['✈ 협동 비행', 'toggleWing'], ['🩺 진단 기록', 'toggleDiag'], ['📘 교관 교범', 'openManual'], ['❓ 도움말', 'toggleHelp']];
+const TOOLS = [['🎬 시나리오', 'toggleScenario'], ['🌙 환경', 'toggleEnvPanel'], ['📋 강평', 'toggleDebrief'], ['🧑‍✈️ Instructor View', 'openIos'], ['📱 Instructor Sync', 'toggleRemoteIos'], ['⚙ 설정', 'toggleSettings'], ['🗺 지도 미리 받기', 'toggleTilePrep'], ['⛽ 연료 · BINGO', 'toggleBingo'], ['📻 교신 연습', 'toggleRadioPractice'], ['👨‍✈️ 부조종사(PM)', 'toggleCrewPm'], ['🚤 협동 자산', 'toggleAssets'], ['✈ 협동 비행', 'toggleWing'], ['📡 ATC 관제석', 'openAtc'], ['🩺 진단 기록', 'toggleDiag'], ['📘 교관 교범', 'openManual'], ['❓ 도움말', 'toggleHelp']];
 function toggleTools(ev) {
   let m = document.getElementById('tools-menu');
   if (m && m.style.display === 'block') { m.style.display = 'none'; return; }

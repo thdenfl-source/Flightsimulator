@@ -57,7 +57,7 @@ const DIAG_FILE_LABEL = {
   '23-afcs': 'AFCS', '24-sar': 'SAR', '25-b206panel': 'Bell 계기판', '26-b206radio': 'Bell 무전', '27-b206coll': 'Bell 컬렉티브', '28-debrief': '강평 · FDR',
   '29-env': '환경 · 불빛', '30-scenario': '시나리오', '31-ios': '교관 화면', '32-callout': '음성 호출', '33-train4': '교통 · 훈련', '34-infra': '진단 · 저장',
   '35-kuhgrip': '컬렉티브 · 사이클릭 그림', '36-kuhsys': 'KUH 계통', '37-mission': '전탐석 · 레이더', '37a-dvr': '전탐석 녹화기', '37b-msnview': '전탐석 화면 · Vendor',
-  '38-mirror': '교관 미러', '39-train5': 'IIMC · BINGO · 교신', '40-crew': '부조종사 · 협동 자산 · 협동 비행',
+  '38-mirror': '교관 미러', '39-train5': 'IIMC · BINGO · 교신', '40-crew': '부조종사 · 협동 자산 · 협동 비행', '41-atc': 'ATC 관제석',
 };
 function diagFileLabel(f) { const k = String(f).replace(/^js\//, '').replace(/\.js$/, ''); return DIAG_FILE_LABEL[k] || k; }
 // 반복 고장 의심 — 10초 동안 한 파일에서 100번 넘게 삼키면(매 프레임 터지는 숨은 고장) 화면 오류 목록에 한 번 남긴다(5분에 한 번)

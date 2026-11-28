@@ -2544,6 +2544,22 @@ html.ed-proc #gyro-btn, html.ed-proc #gyro-align-btn { display: none !important;
 html.ac-b206 .page-tab[data-sel="cdu"], html.ac-b206 .page-tab[data-sel="ovhd"], html.ac-b206 .page-tab[data-sel="sysp"], html.ac-b206 #cdu-solo-btn,
 html.ac-b206 #ctl3d #cduov-btn, html.ac-b206 #ctl3d #upperc-btn, html.ac-b206 #ctl3d #upperc-btn.show { display: none !important; }
 html:not(.ac-aw189) .page-tab.msn-tab { display: none !important; }   /* Vendor(전탐석) — 흰수리만 */
+/* ATC 관제석(41-atc.js) */
+#atc-wrap { position: relative; } #atc-root { position: absolute; inset: 0; display: flex; flex-direction: column; background: #0b1210; color: #cfe8d8; font-family: "Helvetica Neue", Arial, sans-serif; }
+#atc-root .atc-top { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; padding: 4px 8px; background: #050906; border-bottom: 1px solid #1f3a2a; font-size: 12px; }
+#atc-root .atc-top b { color: #7dffa8; margin-right: 4px; } #atc-root select, #atc-root input { background: #0d1a13; color: #dff; border: 1px solid #2c4a38; border-radius: 3px; font-size: 12px; padding: 2px 4px; }
+#atc-root .atc-sp { flex: 1; } #atc-root .atc-b { background: #12251a; border: 1px solid #2c4a38; color: #cfe; border-radius: 4px; padding: 3px 7px; font-size: 11px; cursor: pointer; } #atc-root .atc-b.on { background: #1f6f3f; color: #fff; border-color: #3fd07a; }
+#atc-root .atc-body { flex: 1; min-height: 0; display: flex; } #atc-root .atc-scopes { flex: 1; min-width: 0; display: flex; gap: 2px; } #atc-root .atc-scopes canvas { flex: 1; min-width: 0; width: 100%; height: 100%; display: block; }
+#atc-root .atc-side { width: 300px; flex: none; overflow-y: auto; border-left: 1px solid #1f3a2a; padding: 6px; font-size: 12px; }
+#atc-root .atc-h { color: #7dffa8; font-weight: bold; margin: 6px 0 3px; } #atc-root .atc-list { display: flex; flex-direction: column; gap: 2px; }
+#atc-root .atc-t { text-align: left; background: #0d1a13; border: 1px solid #1f3a2a; color: #cfe; border-radius: 3px; padding: 3px 6px; font-size: 11px; cursor: pointer; } #atc-root .atc-t.on { border-color: #ffd23a; color: #ffd23a; }
+#atc-root .atc-par-rd { margin-top: 4px; padding: 4px; background: #08140d; border: 1px solid #1f3a2a; border-radius: 3px; font-size: 11px; } #atc-root .atc-cmd { display: flex; flex-wrap: wrap; gap: 3px; }
+#atc-root .atc-in { display: flex; gap: 3px; width: 100%; } #atc-root .atc-in input { flex: 1; min-width: 0; } #atc-root .atc-log { font-size: 11px; font-family: monospace; } #atc-root .atc-log .in { color: #ffd23a; }
+@media (max-width: 760px) { #atc-root .atc-body { flex-direction: column; } #atc-root .atc-side { width: auto; max-height: 45%; border-left: 0; border-top: 1px solid #1f3a2a; } }
+#atc-root .atc-scopes.v-both { flex-direction: row; } @container (max-width: 700px) { #atc-root .atc-scopes.v-both { flex-direction: column; } }
+#atc-reply { display: none; position: fixed; left: 50%; top: 64px; transform: translateX(-50%); z-index: 30010; flex-direction: column; gap: 4px; max-width: min(560px, 94vw); padding: 8px 12px; background: rgba(8,20,13,0.95); border: 1px solid #3fd07a; border-radius: 8px; color: #e8fff0; font-size: 13px; }
+#atc-reply b { color: #7dffa8; } #atc-reply div { display: flex; gap: 4px; } #atc-reply .sim-btn { width: auto; flex: none; padding: 3px 10px; margin: 0; }
+
 #msn-wrap { position: relative; overflow: hidden; background: #1b2026; }
 html.ac-b206 #lcon-wrap .ov-reset-btn, html.ac-b206 #lcon-wrap .ov-zones-btn { display: none; }   /* 스위치 판이 없다 */
 #b206rad { display: flex; flex-direction: column; gap: 6px; background: #121314; font-family: Arial, sans-serif; color: #c9cdd1; }
