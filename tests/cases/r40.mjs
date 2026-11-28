@@ -188,7 +188,7 @@ export async function run(page, t) {
   t.ok(I2.asi && /PITOT ICING/.test(I2.cas) && I2.asiBack, '피토 히트 OFF 로 착빙 — 속도계가 굳고, PITOT HEAT 을 켜면 풀린다');
   t.ok(I2.e1Melt && I2.melt, '방빙을 켜면 엔진 착빙이 녹고, 5°C 넘는 곳으로 나오면 착빙이 걷힌다');
 
-  // ── 공항 주기 헬기 — 가까운 공항 활주로 옆에 셋씩(흰수리 · Bell) · ENV 로 끈다 ──
+  // ── 공항 주기 기체 — 가까운 공항 활주로 옆에 넷(흰수리 · Bell 206 · R22 · CN-235 차례) · ENV 로 끈다 ──
   const P = await page.evaluate(() => {
     const k = { la: S.lat, lo: S.lon, pk: env.parked };
     const ap = RUNWAYS.find(a => a.apt === 'RKSI') || RUNWAYS.find(a => a.rwys && a.rwys.length), r = ap.rwys[0];
@@ -196,13 +196,13 @@ export async function run(page, t) {
     const L = tfcParkedList().filter(p => p.apt === ap.apt);
     const midLa = S.lat, midLo = S.lon;
     const d = L.map(p => Math.hypot((p.lat - midLa) * 110540, (p.lon - midLo) * 111320 * Math.cos(midLa * Math.PI / 180)));
-    const o = { n: L.length, kinds: new Set(L.map(p => p.ac)).size, dmin: Math.min(...d), layer: !!(typeof _ml3d !== 'undefined' && _ml3d && _ml3d.getLayer && _ml3d.getLayer('traffic-3d')) || typeof TFC3D_LAYER === 'object' };
+    const o = { n: L.length, kinds: new Set(L.map(p => p.ac)).size, order: L.map(p => p.ac).join(','), dmin: Math.min(...d), layer: !!(typeof _ml3d !== 'undefined' && _ml3d && _ml3d.getLayer && _ml3d.getLayer('traffic-3d')) || typeof TFC3D_LAYER === 'object' };
     envSet({ parked: false }); o.off = tfcParkedList().length === 0;
     envSet({ parked: k.pk }); S.lat = k.la; S.lon = k.lo; _parkedKey = '';
     return o;
   });
-  t.ok(P.n === 3 && P.kinds === 2 && P.dmin > 100 && P.layer, `공항 주기 헬기 — 활주로 옆 주기장에 셋(흰수리 · Bell · 활주로 가운데에서 ${Math.round(P.dmin)}m 밖)`);
-  t.ok(P.off, 'ENV 공항 주기 헬기 없음이면 그리지 않는다');
+  t.ok(P.n === 4 && P.order === 'kuh,b206,r22,cn235' && P.dmin > 100 && P.layer, `공항 주기 기체 — 활주로 옆 주기장에 넷(${P.order} · 활주로 가운데에서 ${Math.round(P.dmin)}m 밖)`);
+  t.ok(P.off, 'ENV 공항 주기 기체 없음이면 그리지 않는다');
 
   // ── CDU TCAS(KUH-1CG FLM) — 홈의 Checklist 자리에 TCAS · Checklist 는 Aircraft Systems 안 ──
   const TC = await page.evaluate(async () => {
