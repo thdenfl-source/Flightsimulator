@@ -56,5 +56,7 @@ export async function run(page, t) {
   t.ok(Math.abs(M.len - 8.76) < 0.05 && Math.abs(M.mid) < 0.05 && Math.abs(M.rotorD - 7.67) < 0.02 && Math.abs(M.tailD - 1.07) < 0.02 && M.tailL,
        `모형 치수 — 전장 ${M.len.toFixed(2)}m · 주로터 ${M.rotorD.toFixed(2)}m · 꼬리로터 ${M.tailD.toFixed(2)}m(왼쪽)`);
   t.ok(Math.abs(M.width - 1.93) < 0.1 && M.top < 2.7 && M.acLen === 9, `스키드 폭 ${M.width.toFixed(2)}m · 착함 판정 길이 ${M.acLen}m`);
+  const MK = await page.evaluate(() => ({ ac: acMarker.getElement().querySelector('.ac-marker').dataset.ac, r22: acIconSvg() === AC_ICON_R22 }));
+  t.ok(MK.ac === 'r22' && MK.r22, `지도 심볼 — R22 평면도 (${JSON.stringify(MK)})`);
   t.ok(page.errors.length === 0, `오류 없음${page.errors.length ? ' — ' + page.errors.join(' / ') : ''}`);
 }

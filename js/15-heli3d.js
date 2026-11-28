@@ -1742,9 +1742,16 @@ function ckMapDraw(g, x, y, w, h) {
       if (id) g.fillText(String(id).slice(0, 7), px + 7, py - 6);
     });
   }
-  // 내 헬기(가운데 · 기수 위)
+  // 내 기체(가운데 · 기수 위) — 고정익(CN-235)은 비행기 모양 · 헬기는 화살촉 + 로터 원
   g.fillStyle = '#fff'; g.strokeStyle = '#000'; g.lineWidth = 1;
-  g.beginPath(); g.moveTo(cx, cy - 11); g.lineTo(cx + 7, cy + 8); g.lineTo(cx, cy + 4); g.lineTo(cx - 7, cy + 8); g.closePath(); g.fill(); g.stroke();
+  if (typeof acFixedWing === 'function' && acFixedWing()) {
+    g.beginPath(); g.moveTo(cx, cy - 11); g.lineTo(cx + 1.6, cy - 4); g.lineTo(cx + 11, cy - 1); g.lineTo(cx + 11, cy + 1.5); g.lineTo(cx + 1.6, cy + 1);
+    g.lineTo(cx + 1.2, cy + 7); g.lineTo(cx + 5, cy + 9); g.lineTo(cx + 5, cy + 11); g.lineTo(cx, cy + 10); g.lineTo(cx - 5, cy + 11); g.lineTo(cx - 5, cy + 9);
+    g.lineTo(cx - 1.2, cy + 7); g.lineTo(cx - 1.6, cy + 1); g.lineTo(cx - 11, cy + 1.5); g.lineTo(cx - 11, cy - 1); g.lineTo(cx - 1.6, cy - 4); g.closePath(); g.fill(); g.stroke();
+  } else {
+    g.beginPath(); g.moveTo(cx, cy - 11); g.lineTo(cx + 7, cy + 8); g.lineTo(cx, cy + 4); g.lineTo(cx - 7, cy + 8); g.closePath(); g.fill(); g.stroke();
+    g.save(); g.setLineDash([2, 2]); g.strokeStyle = 'rgba(255,255,255,0.7)'; g.beginPath(); g.arc(cx, cy - 1, 10, 0, Math.PI * 2); g.stroke(); g.restore();
+  }
   // 위 가운데 방위 상자
   const ht = `${String(Math.round(((Number(S.hdg) || 0) % 360 + 360) % 360) || 360).padStart(3, '0')}°`;
   g.font = `bold ${fs * 1.1}px Arial`; g.textAlign = 'center';

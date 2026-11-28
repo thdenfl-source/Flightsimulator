@@ -1,4 +1,4 @@
-// 판(js/00-edition.js) — 같은 파일로 shinesong(full · SIM 있음)과 Flightsimulator(proc · SIM 있음 · 사이클릭 피치 · 롤 잠금)를 낸다
+// 판(js/00-edition.js) — 같은 파일로 shinesong(full)과 Flightsimulator(proc)를 낸다 · 다른 것은 시작 비밀번호뿐(기능은 모두 같다)
 export const name = '판(edition)';
 
 export async function run(page, t) {
@@ -34,12 +34,12 @@ export async function run(page, t) {
     return o;
   });
   const errs = (page.errors || []).filter(e => !/Failed to fetch|NetworkError|tile/i.test(e));
-  t.ok(cur.ed === 'full' && cur.sim, `shinesong 판은 full — SIM 있음 (${cur.ed})`);
-  t.ok(P.ed === 'proc' && P.sim && P.lock && P.cls, `?edition=proc(또는 주소에 flightsimulator) — 절차 훈련판 · SIM 있음 · 사이클릭 잠금 (${P.ed})`);
-  t.ok(P.pw && !cur.pwProc, '시작 비밀번호 — 절차 훈련판은 thdenfl, shinesong 판은 그대로(thdenfl 로는 안 열림)');
+  t.ok(cur.sim, `지금 판(${cur.ed}) — SIM 있음`);
+  t.ok(P.ed === 'proc' && P.sim && !P.lock && !P.cls, `?edition=proc(또는 주소에 flightsimulator) — 절차 훈련판 · SIM 있음 · 사이클릭 잠금 없음 (${P.ed})`);
+  t.ok(P.pw && (cur.ed === 'proc' || !cur.pwProc), '시작 비밀번호 — 절차 훈련판은 thdenfl, shinesong 판은 그대로(thdenfl 로는 안 열림)');
   t.ok(P.on1, '절차 훈련판에서도 SIM 모드가 켜진다');
-  t.ok(P.shown.length === 0 && P.gyro && P.sk, `SIM 조작 버튼 · PFD 소프트키 SIM 은 종합판과 같고(GYRO 만 없음)${P.shown.length ? ' (안 보임: ' + P.shown.join(', ') + ')' : ''}`);
-  t.ok(P.ax.roll === 0 && P.ax.pitch === 0 && P.ax.coll > 0.5 && P.ax.yaw > 0.5, `사이클릭 피치 · 롤은 듣지 않고 컬렉티브 · 페달은 듣는다 (${JSON.stringify(P.ax)})`);
+  t.ok(P.shown.length === 0 && !P.gyro && P.sk, `SIM 조작 버튼(GYRO 포함) · PFD 소프트키 SIM 은 종합판과 같다${P.shown.length ? ' (안 보임: ' + P.shown.join(', ') + ')' : ''}`);
+  t.ok(Math.abs(P.ax.roll) > 0.5 && Math.abs(P.ax.pitch) > 0.5 && P.ax.coll > 0.5 && P.ax.yaw > 0.5, `사이클릭 피치 · 롤 · 컬렉티브 · 페달이 모두 듣는다 (${JSON.stringify(P.ax)})`);
   t.ok(P.trim, '비퍼 트림(4방향)은 종합판처럼 피치 · 롤 트림 자세를 옮긴다');
   t.ok(P.snd, '절차 훈련판에도 SOUND 버튼은 있다(로터 소리)');
   t.ok(P.pfd && P.panels === true && errs.length === 0, `PFD · 하부 콘솔 · SYSTEM 창은 그대로 돈다${errs.length ? ' (오류: ' + errs.slice(0, 2).join(' | ') + ')' : ''}`);
