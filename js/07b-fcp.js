@@ -103,7 +103,7 @@ function fcpsSync() {
   // Bell 206 은 AFCS 가 없는 기체 — IAS 가 걸려 있지 않으면 지금 속도(속도계와 같은 값)를 보인다
   const _b206 = typeof acIs === 'function' && acIs('b206');
   set('ias', String(Math.round(_b206 ? (simIasOn ? selSpd : S.spd) : (iasModeOn() || g(() => fcpPre.ias, false) ? selSpd : S.spd))));   // 걸렸거나 고르는 중이면 기준 · 아니면 지금 속도
-  set('hdg', String(((Math.round(selHdg) + 359) % 360) + 1).padStart(3, '0') + '°');
+  set('hdg', String(((Math.round(g(() => toMag(selHdg), selHdg)) + 359) % 360) + 1).padStart(3, '0') + '°');   // 자북(PFD HDG 칸과 같게)
   { const v = Math.round(selVS); set('vs', (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v)); }   // 고른 승강률(부호)
   set('alta', String(Math.round(g(() => altaSelGet(), selAlt))));                                   // 고른 목표 고도
   set('crht', String(Math.round(selCrht)));
@@ -112,7 +112,7 @@ function fcpsSync() {
     if (L) { set('uplim', f(L.up)); set('dh', f(L.dh)); on('uplim', L.up.v > 0); on('dh', L.dh.v > 0); } }
   { const q = g(() => (Number.isFinite(window._qnhHpa) ? window._qnhHpa : QNH_STD), QNH_STD);
     set('baro', (typeof pfdBaroUnit !== 'undefined' && pfdBaroUnit === 'IN') ? (q / HPA_PER_IN).toFixed(2) : String(Math.round(q))); }
-  set('crs', fmtA(g(() => (navSrc !== 'FMS' ? vorObsCrs : S.crs), S.crs)) + '°');
+  set('crs', fmtA(g(() => toMag(activeCrs()), S.crs)) + '°');   // 자북(PFD CRS 칸과 같게) — 안의 코스(vorObsCrs · S.crs)는 진방위
   on('ias', g(() => iasModeOn(), false));
   on('hdg', g(() => hdgSelOn, false));
   on('crht', g(() => crhtOn, false));
