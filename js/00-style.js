@@ -796,8 +796,8 @@ html, body {
 #ck-pop-mapslot > #map-wrap > #map { position: absolute; inset: 0; width: 100%; height: 100%; }
 /* MFD 화면도 누르면 크게 띄운다 */
 #sim-ckpit canvas.ck-scr { pointer-events: auto; cursor: zoom-in; }
-#ck-pop .ck-pop-sz, #kg-pop .ck-pop-sz { margin-left: auto; margin-right: 6px; display: flex; gap: 3px; }   /* 팝아웃 크기 − · + (15-heli3d.js ckPopScale) */
-#ck-pop .ck-pop-sz .sim-btn, #kg-pop .ck-pop-sz .sim-btn { padding: 1px 9px; min-width: 0; }
+#ck-pop .ck-pop-sz, #kg-pop .ck-pop-sz, #cn-yk-pop .ck-pop-sz { margin-left: auto; margin-right: 6px; display: flex; gap: 3px; }   /* 팝아웃 크기 − · + (15-heli3d.js ckPopScale) */
+#ck-pop .ck-pop-sz .sim-btn, #kg-pop .ck-pop-sz .sim-btn, #cn-yk-pop .ck-pop-sz .sim-btn { padding: 1px 9px; min-width: 0; }
 #ck-pop .ck-pop-bar { flex: none; display: flex; align-items: center; justify-content: space-between;
                       padding: 3px 6px 3px 10px; color: #cfd6dc; font: bold 12px Arial, sans-serif; letter-spacing: 1px; }
 #ck-pop .ck-pop-bar .sim-btn { position: static; flex: none; width: auto !important; min-width: 0; padding: 2px 12px; }
@@ -1195,7 +1195,7 @@ html.ios-win:not(.ios-mode) #ios-root { display: none !important; }
 .ios-grip svg { flex: 1; min-height: 0; }
 @media (orientation: portrait) { .ios-grip .ios-gcell { height: calc(50vh - 56px); } }   /* 태블릿 세로 — 컬렉티브 · 사이클릭을 위아래로 한 화면에 */
 /* 태블릿 세로 — 조종석의 컬렉티브 · 사이클릭 큰 창도 화면 폭 안에 */
-@media (orientation: portrait) { #kg-pop, #b206-coll-pop { max-width: calc(100vw - 130px); } }
+@media (orientation: portrait) { #kg-pop, #cn-yk-pop, #b206-coll-pop { max-width: calc(100vw - 130px); } }
 html.ios-mode body { background: #0b1218; overflow: auto; }
 #ios-root { color: #dfe6ec; font: 14px -apple-system, 'Segoe UI', Arial, sans-serif; padding: 12px; max-width: 640px; margin: 0 auto; }
 #ios-root h1 { font-size: 18px; margin: 4px 0 8px; } #ios-root h2 { font-size: 14px; color: #8aa0b0; margin: 14px 0 6px; border-bottom: 1px solid #22313d; }
@@ -1269,12 +1269,12 @@ html.ios-mode body { background: #0b1218; overflow: auto; }
 @media (max-width: 700px) { #dbf-wrap .dbf-main { flex-direction: column; } #dbf-wrap .dbf-bot { flex-direction: column; height: 200px; } }
 /* 흰수리 컬렉티브 · 사이클릭(35-kuhgrip.js) — 조종석의 작은 그림 · 누르면 큰 창(#ck-layer 위) */
 #sim-ckpit .kg-mini > svg { pointer-events: none; }
-#kg-pop { display: none; position: absolute; z-index: 2; flex-direction: column; pointer-events: auto; background: #101214;
+#kg-pop, #cn-yk-pop { display: none; position: absolute; z-index: 2; flex-direction: column; pointer-events: auto; background: #101214;
   border: 1px solid #3a3e43; border-radius: 6px; box-shadow: 0 4px 24px rgba(0,0,0,0.7); }
-#kg-pop .kgp-bar { height: 26px; flex: none; display: flex; align-items: center; justify-content: space-between; padding: 0 4px 0 10px;
+#kg-pop .kgp-bar, #cn-yk-pop .kgp-bar { height: 26px; flex: none; display: flex; align-items: center; justify-content: space-between; padding: 0 4px 0 10px;
   color: #cfd6dc; font: bold 12px Arial, sans-serif; letter-spacing: 1px; border-bottom: 1px solid #2a2e33; }
-#kg-pop .kgp-x { width: 34px !important; min-width: 0; flex: none; padding: 2px 0; margin: 0; }
-#kg-pop-body { flex: 1; min-height: 0; padding: 4px; touch-action: none; user-select: none; -webkit-user-select: none; }
+#kg-pop .kgp-x, #cn-yk-pop .kgp-x { width: 34px !important; min-width: 0; flex: none; padding: 2px 0; margin: 0; }
+#kg-pop-body, #cn-yk-pop-body { flex: 1; min-height: 0; padding: 4px; touch-action: none; user-select: none; -webkit-user-select: none; }
 /* Bell 206 컬렉티브 큰 창(27-b206coll.js) — 다른 팝아웃처럼 #ck-layer 위 */
 #b206-coll-pop { display: none; position: absolute; z-index: 2; flex-direction: column; pointer-events: auto; background: #101214;
   border: 1px solid #3a3e43; border-radius: 6px; box-shadow: 0 4px 24px rgba(0,0,0,0.7); }

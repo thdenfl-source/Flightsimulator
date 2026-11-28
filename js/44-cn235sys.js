@@ -153,8 +153,11 @@ const CN_LT_POS = { L: [0.9, -12.88, 4.49], R: [0.9, 12.88, 4.49], T: [-10.75, 0
 function cnLightState(t) {
   const o = cn.ov, pwr = cnElecOn(), lit = pwr && o.nav, ac = pwr && o.acol && (t % 1.1) < 0.15;
   const pts = [];
-  if (lit) pts.push({ id: 'posL', p: CN_LT_POS.L, col: [1, 0.12, 0.10], k: 0.5 }, { id: 'posR', p: CN_LT_POS.R, col: [0.15, 1, 0.35], k: 0.5 }, { id: 'posT', p: CN_LT_POS.T, col: [1, 1, 0.95], k: 0.5 });
-  if (ac) pts.push({ id: 'acolU', p: CN_LT_POS.U, col: [1, 0.12, 0.10], k: 1 }, { id: 'acolD', p: CN_LT_POS.D, col: [1, 0.12, 0.10], k: 1 });
+  // 좌적 · 우녹 · 꼬리 백 — 색은 15-heli3d.js 의 LT_COL 그 배열을 그대로 넘긴다(그쪽이 같은 배열인지로 빛 무리 색을 고른다 ·
+  //   새 배열을 넘기면 모두 빨강으로 그려졌다)
+  const C = (typeof LT_COL !== 'undefined') ? LT_COL : { red: [1, 0.12, 0.10], green: [0.15, 1, 0.35], white: [1, 1, 0.95] };
+  if (lit) pts.push({ id: 'posL', p: CN_LT_POS.L, col: C.red, k: 0.5 }, { id: 'posR', p: CN_LT_POS.R, col: C.green, k: 0.5 }, { id: 'posT', p: CN_LT_POS.T, col: C.white, k: 0.5 });
+  if (ac) pts.push({ id: 'acolU', p: CN_LT_POS.U, col: C.red, k: 1 }, { id: 'acolD', p: CN_LT_POS.D, col: C.red, k: 1 });
   return { disp: 'DAY', dispK: 1, pwr, nvg: false, pos: { on: lit, lit, k: lit ? 0.5 : 0 }, acol: { on: pwr && o.acol, lit: ac, k: 1 }, blink: o.acol, pts };
 }
 

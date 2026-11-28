@@ -638,7 +638,8 @@ function _h3DrawLights(h, main, pose, mpp, st) {
   const R = heli3dRot(pose.hdg, pose.pit, pose.bnk);
   const base = _m4Mul(main, _m4From(_m3Mul([[s, 0, 0], [0, -s, 0], [0, 0, s]], R), [mc.x, mc.y, mc.z]));
   const rot3 = new Float32Array([1, 0, 0, 0, 1, 0, 0, 0, 1]);
-  const keyOf = c => c === LT_COL.green ? 'green' : c === LT_COL.white ? 'white' : 'red';
+  // 색 이름 — 같은 배열이 아니어도 값으로 가린다(초록이 가장 큰 것 · 셋 다 밝으면 흰색 · 그 밖은 빨강)
+  const keyOf = c => c === LT_COL.green || (c[1] > 0.8 && c[0] < 0.5) ? 'green' : c === LT_COL.white || (c[0] > 0.8 && c[1] > 0.8 && c[2] > 0.8) ? 'white' : 'red';
   mpp = Number.isFinite(mpp) && mpp > 0 ? mpp : 0.05;
   // 어두울 때(황혼 · 밤 · NVG)는 3D 지도 그림 전체를 CSS 로 어둡게 깎는다(index.html html.env-night .maplibregl-canvas —
   // brightness 0.22). 같은 그림에 그린 불빛도 함께 22% 로 꺼져 보이지 않았다 — 그래서 어두울 때는 빛 무리를 지도 위 겹
