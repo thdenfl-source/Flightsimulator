@@ -86,10 +86,25 @@ function startAirportSet(icao, opt = {}) {
   S.trail = []; try { updateTrail(); } catch (e) { _swallow(e); }
   try { startStateApply(); } catch (e) { _swallow(e); }
   try { if (typeof acPlaceOnGround === 'function') acPlaceOnGround(); } catch (e) { _swallow(e); }
+  _startGroundSettle();
   try { leafMap.setView([S.lat, S.lon], 13, { animate: false }); } catch (e) { _swallow(e); }
   try { updateAcOnMap(); updateNav(); updateCenterCoord(); } catch (e) { _swallow(e); }
   if (!opt.quiet) try { uiToast(`${a.ident} ${a.name} ${rw ? 'RWY ' + rw.id + ' 가운데' : ''}에서 시작합니다 — 시동 · 전자장비 ON · AUTO TRIM OFF`); } catch (e) { _swallow(e); }
   return true;
+}
+// 옮긴 자리의 지형 고도는 조금 뒤에 들어온다(14-simmode.js simGroundFt) — 그 사이 0ft 에 놓였으면 땅속(김포 59ft)에 묻힌다.
+// 4초 동안 그 자리에 멈춰 있으면 지면 고도가 바뀔 때마다 다시 지면에 올려 둔다.
+let _startSettleT = null;
+function _startGroundSettle() {
+  if (_startSettleT) clearTimeout(_startSettleT);
+  const lat0 = S.lat, lon0 = S.lon, t0 = Date.now();
+  const tick = () => {
+    _startSettleT = null;
+    if (Date.now() - t0 > 4000 || S.lat !== lat0 || S.lon !== lon0 || S.spd !== 0) return;
+    try { if (typeof simGroundFt === 'function' && Math.abs(S.alt - simGroundFt()) > 0.5 && typeof acPlaceOnGround === 'function') acPlaceOnGround(); } catch (e) { _swallow(e); }
+    _startSettleT = setTimeout(tick, 50);
+  };
+  _startSettleT = setTimeout(tick, 50);
 }
 // 출발 공항 고르기 창 — ICAO · 이름으로 걸러 찾을 수 있다. 닫으면(건너뛰기) 이미 세워 둔 기본 공항(지난번에 고른 곳 · 처음은 김포) 활주로 그대로
 // (되살린 상태가 있으면 그 자리에서 이어서, 아니면 송도).

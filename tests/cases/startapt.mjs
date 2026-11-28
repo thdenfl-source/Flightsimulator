@@ -45,6 +45,8 @@ export async function run(page, t) {
     [...document.querySelectorAll('.start-apt-btn')].filter(b => b.style.display !== 'none').map(b => b.dataset.icao));
   await tab.keyboard.press('Enter');
   await tab.waitForTimeout(300);
+  // 지형 고도가 늦게 들어와도 곧 지면에 올라선다(09a-start.js _startGroundSettle)
+  await tab.waitForFunction(() => typeof simGroundFt === 'function' && Math.abs(S.alt - simGroundFt()) < 1, null, { timeout: 4000 }).catch(() => {});
   const picked = await tab.evaluate(() => {
     const a = startRunwayOf('RKSS');
     const on = id => ovhdGet(id);

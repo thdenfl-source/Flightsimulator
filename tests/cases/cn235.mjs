@@ -251,8 +251,8 @@ export async function run(page, t) {
   t.ok(TB.pop && TB.noLconCk, 'Cockpit 모드 — 작은 칸(GLARE · CTR · OVHD · FMS · RTU · PED · CONS · C/B · W&B)을 누르면 크게(팝아웃) · 하부 콘솔 없음');
   // 지도 심볼 — 기종마다 제 평면도(04-map.js acIconSvg) · CN-235 는 고정익
   const MK = await page.evaluate(() => { const e = acMarker.getElement(); const m = e && e.querySelector('.ac-marker'); return { ac: m && m.dataset.ac, plane: acIconSvg() === AC_ICON_CN235, kuh: AC_ICON_SVG !== AC_ICON_CN235 }; });
-  const VS = await page.evaluate(() => { toggleSimMode(true); _vStickBox(); vStick.coll = 0.6; vStickRender(); const l = document.querySelector('#vstick-coll .vs-lbl'); const r = l && l.textContent; toggleSimMode(false); return r; });
-  t.ok(/^THR 60%$/.test(VS || ''), `Cockpit 모드 STICK — 고정익은 COLL 대신 THROTTLE (${VS})`);
+  const VS = await page.evaluate(() => { toggleSimMode(true); _vStickBox(); vStick.coll = 0.6; vStickRender(); const l = document.querySelector('#vstick-coll .vs-lbl'); const lb = s => (document.querySelector('#vstick ' + s + ' .vs-lbl') || {}).textContent; const r = [l && l.textContent, lb('.vs-cyc'), lb('.vs-ped')].join('|'); toggleSimMode(false); return r; });
+  t.ok(/^THR 60%\|YOKE\|RUDDER$/.test(VS || ''), `Cockpit 모드 STICK — 고정익은 THROTTLE · YOKE · RUDDER (${VS})`);
   t.ok(MK.ac === 'cn235' && MK.plane && MK.kuh, `지도 심볼 — CN-235 는 비행기 평면도 (${JSON.stringify(MK)})`);
   t.ok(page.errors.length === 0, `오류 없음${page.errors.length ? ' — ' + page.errors.join(' / ') : ''}`);
 }
