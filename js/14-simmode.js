@@ -1644,7 +1644,7 @@ function simGroundFt() { return _simGndFresh ? _simGndFt : 0; }
 // 갑판에 앉아 있으면 함정과 함께 간다(07-sim.js 의 함정 이동 · 09-cdu.js 의 침로 변경).
 // 기체는 앞뒤 20m(로터 포함)로 본다. 그 길이 아래 어디라도 함정이 있으면 가장 높은
 // 윗면이 바닥이다 — 기수가 함교 위로 들어가 있으면 내려앉지 못하고 함교에 걸린다.
-const SIM_AC_LEN = (typeof acIs === "function" && acIs("b206")) ? 12 : 20;               // m
+const SIM_AC_LEN = (typeof acR22 === "function" && acR22()) ? 9 : (typeof acIs === "function" && acIs("b206")) ? 12 : 20;               // m
 function simShipTopM(lat, lon, hdg) {
   if (typeof shipDeckTopM !== 'function') return null;
   const h = hdg * D2R, cl = Math.cos(lat * D2R);

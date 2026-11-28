@@ -24,8 +24,11 @@ const H3_B206 = typeof acIs === 'function' && acIs('b206');
 const H3_SPECS = {
   kuh:  { len: 20,   rotor: { x: 2.95, z: 5.45, r: 7.05, blades: 4 }, tail: { x: -8.55, y: 0.42, z: 4.35, r: 1.45, blades: 4 }, rps: 4.4 },   // 꼬리로터 오른쪽 · 265rpm
   b206: { len: 11.8, rotor: { x: 0.6, z: 2.86, r: 5.08, blades: 2 },  tail: { x: -5.22, y: -0.30, z: 1.78, r: 0.83, blades: 2 }, rps: 6.5 },  // 꼬리로터 왼쪽 · 394rpm
+  // R22 — 전장 8.76m(28ft 9in) · 주로터 지름 7.67m(25ft 2in · 2날개 · 시위 18cm) · 꼬리로터 1.07m(3ft 6in · 왼쪽) · 높이 2.7m · 스키드 폭 1.93m · 530rpm
+  r22:  { len: 8.76, rotor: { x: 0.54, z: 2.66, r: 3.84, blades: 2, hub: 0.22, chord: 0.09 }, tail: { x: -3.85, y: -0.24, z: 1.52, r: 0.53, blades: 2, hub: 0.09, chord: 0.05 }, rps: 8.8 },
 };
-const H3_OWN = H3_B206 ? 'b206' : 'kuh';
+const H3_R22 = typeof acR22 === 'function' && acR22();
+const H3_OWN = H3_R22 ? 'r22' : H3_B206 ? 'b206' : 'kuh';
 const HELI3D_LEN = H3_SPECS[H3_OWN].len;      // 전장(m)
 const HELI3D_ROTOR = H3_SPECS[H3_OWN].rotor;  // 주로터
 const HELI3D_TAIL  = H3_SPECS[H3_OWN].tail;   // 꼬리로터(흰수리 오른쪽 · Bell 왼쪽)
@@ -276,8 +279,82 @@ function _h3BuildBodyB206(SP = H3_SPECS.b206) {
   _h3Lathe(m, [-1.30, 0, 2.18], H3Z, [[0.07, 0], [0.07, 0.07], [0, 0.10]], H3C.red, 10);
   return m;
 }
+// ── R22 — 붉은 동체 · 짙은 거품 유리 · 드러난 엔진 · 가는 꼬리 붐 · 위아래 꼬리날개 · 스키드 ──
+//   원점 = 전장(8.76m)의 가운데 · 스키드 바닥. 기수 +2.24m · 마스트 +0.54m · 꼬리로터 −3.85m(왼쪽)
+//   그림(측면 · 평면 · 정면 · 아래 입면도)의 비율 — 기수가 마스트 앞 1.7m · 객실 폭 1.12m · 꼬리로터 가운데 높이 1.5m
+const H3R_CABIN = [
+  //  X      반폭   아래    위    지수
+  [ 2.24, 0.02, 0.93, 1.03, 2.0],      // 기수 끝
+  [ 2.18, 0.28, 0.70, 1.34, 2.0],
+  [ 2.02, 0.44, 0.56, 1.60, 2.0],
+  [ 1.75, 0.53, 0.49, 1.79, 2.2],
+  [ 1.38, 0.57, 0.46, 1.90, 2.4],
+  [ 0.95, 0.57, 0.46, 1.94, 2.6],      // 객실
+  [ 0.62, 0.55, 0.48, 1.92, 2.6],
+  [ 0.50, 0.46, 0.54, 1.86, 2.4],      // 뒷벽(좌석 뒤)
+  [ 0.44, 0.02, 1.10, 1.20, 2.0],
+];
+// 엔진 · 변속기 덮개(지붕 뒤 · 연료탱크 둘) → 꼬리 원뿔
+const H3R_COWL = [
+  [ 0.80, 0.20, 1.82, 1.98, 2.2],
+  [ 0.55, 0.42, 1.52, 2.12, 2.6],
+  [ 0.10, 0.48, 1.46, 2.18, 2.8],
+  [-0.40, 0.46, 1.42, 2.12, 2.8],
+  [-0.85, 0.34, 1.34, 1.92, 2.6],
+  [-1.20, 0.18, 1.28, 1.62, 2.4],
+  [-1.40, 0.12, 1.30, 1.54, 2.2],
+];
+const H3R_BOOM = [
+  [-1.38, 0.115, 1.31, 1.53, 2.0],
+  [-2.40, 0.090, 1.38, 1.56, 2.0],
+  [-3.40, 0.065, 1.45, 1.58, 2.0],
+  [-3.70, 0.055, 1.47, 1.58, 2.0],
+  [-3.78, 0.010, 1.51, 1.55, 2.0],
+];
+function _h3BuildBodyR22(SP = H3_SPECS.r22) {
+  const m = _h3New(), R = SP.rotor, T = SP.tail;
+  _h3Loft(m, H3R_CABIN, H3C.red, 3, false);
+  _h3Loft(m, H3R_COWL, H3C.red, 0, false);
+  _h3Loft(m, H3R_BOOM, H3C.red, 0, false);
+  // 드러난 엔진(덮개 아래 · 은색) · 냉각 팬 통 · 배기관 · 아래 틀(관)
+  _h3Lathe(m, [0.30, 0, 1.08], H3X, [[0, -0.02], [0.24, 0], [0.26, 0.10], [0.26, 0.38], [0.20, 0.42], [0, 0.42]].map(([r, t]) => [r, -t]), H3C.gray, 16);
+  _h3Lathe(m, [-0.18, 0, 1.12], H3X, [[0, 0], [0.30, 0], [0.30, -0.22], [0, -0.22]], H3C.dark, 16);
+  _h3Rod(m, [-0.20, 0.18, 0.92], [-0.95, 0.10, 1.12], 0.045, H3C.dark);
+  [-1, 1].forEach(sd => {
+    _h3Rod(m, [0.45, sd * 0.36, 0.62], [-0.70, sd * 0.24, 1.30], 0.025, H3C.gray);
+    _h3Rod(m, [0.45, sd * 0.36, 1.60], [-0.70, sd * 0.24, 1.30], 0.025, H3C.gray);
+    _h3Rod(m, [0.45, sd * 0.36, 0.62], [-0.40, sd * 0.30, 0.80], 0.025, H3C.gray);
+  });
+  // 마스트(덮개 위 · 꼭지 둥근 덮개) · 꼬리로터 기어
+  _h3Lathe(m, [R.x, 0, 2.10], H3Z, [[0.16, 0], [0.09, 0.14], [0.065, 0.20], [0.065, R.z - 2.10 - 0.04]], H3C.dark, 12);
+  _h3Pod(m, T.x - 0.12, T.x + 0.14, Math.sign(T.y) * 0.05, T.z, 0.07, 0.09, H3C.gray, 3, 2);
+  // 꼬리날개 — 위(붉은) · 아래(붉은) · 수평 안정판 · 아래 날개 끝 꼬리 보호대(관)
+  _h3Plate(m, [[-3.42, 1.56], [-3.78, 2.08], [-3.98, 2.10], [-3.84, 1.56]], [0, 0, 0], H3X, H3Z, H3Y, 0.05, H3C.red);
+  _h3Plate(m, [[-3.40, 1.48], [-3.70, 0.98], [-3.90, 0.98], [-3.82, 1.48]], [0, 0, 0], H3X, H3Z, H3Y, 0.05, H3C.red);
+  _h3Plate(m, [[-3.22, -0.37], [-3.22, 0.37], [-3.46, 0.37], [-3.46, -0.37]], [0, 0, 1.50], H3X, H3Y, H3Z, 0.035, H3C.red);
+  _h3Rod(m, [-3.30, 0, 1.40], [-3.62, 0, 0.88], 0.02, H3C.gray);
+  _h3Rod(m, [-3.62, 0, 0.88], [-3.84, 0, 0.92], 0.02, H3C.gray);
+  // 스키드 — 좌우 관(앞 들림) · 가로관 둘(위로 휘어 동체에 붙는다) · 앞 지지 다리
+  [-1, 1].forEach(sd => {
+    const y = sd * 0.965;
+    _h3Rod(m, [-1.15, y, 0.05], [1.40, y, 0.05], 0.032, H3C.gray);
+    _h3Rod(m, [1.40, y, 0.05], [1.66, y, 0.22], 0.032, H3C.gray);
+    _h3Rod(m, [-1.15, y, 0.05], [-1.22, y, 0.09], 0.03, H3C.gray);
+    [1.02, -0.62].forEach(x => {
+      _h3Rod(m, [x, y, 0.05], [x, sd * 0.88, 0.40], 0.03, H3C.gray);
+      _h3Rod(m, [x, sd * 0.88, 0.40], [x, sd * 0.46, 0.52], 0.03, H3C.gray);
+    });
+  });
+  [1.02, -0.62].forEach(x => _h3Rod(m, [x, -0.46, 0.52], [x, 0.46, 0.52], 0.03, H3C.gray));
+  // 기수 아래 착륙등 · 꼬리 흰 등 · 지붕 빨간 충돌방지등(꼬리 원뿔 위)
+  _h3Lathe(m, [2.10, 0, 0.66], H3X, [[0, 0], [0.06, 0], [0.06, 0.06], [0, 0.07]], [0.98, 0.96, 0.80], 12);
+  _h3Lathe(m, [-3.78, 0, 1.54], H3X, [[0, 0], [0.03, 0], [0.03, -0.04], [0, -0.04]], [1, 1, 1], 8);
+  _h3Lathe(m, [-1.05, 0, 1.80], H3Z, [[0.05, 0], [0.05, 0.05], [0, 0.07]], H3C.red, 10);
+  return m;
+}
 function _h3BuildBody(ty = H3_OWN) {
   if (ty === 'b206') return _h3BuildBodyB206();
+  if (ty === 'r22') return _h3BuildBodyR22();
   const SP = H3_SPECS.kuh, HELI3D_ROTOR = SP.rotor, HELI3D_TAIL = SP.tail;
   const m = _h3New();
   _h3Loft(m, H3_FUSE, H3C.white, 1, false);
@@ -364,24 +441,26 @@ function h3HslAim() {
 // 주로터(허브 가운데가 원점, Z 축으로 돈다)
 function _h3BuildRotor(SP = H3_SPECS[H3_OWN]) {
   const HELI3D_ROTOR = SP.rotor, m = _h3New(), R = HELI3D_ROTOR.r;
-  _h3Lathe(m, [0, 0, -0.10], H3Z, [[0, 0], [0.55, 0], [0.55, 0.14], [0, 0.14]], H3C.dark, 18);        // 허브 판
-  _h3Lathe(m, [0, 0, 0.10], H3Z, [[0.56, 0], [0.50, 0.12], [0.34, 0.24], [0, 0.30]], H3C.dark, 18);   // 덮개
+  const hk = (HELI3D_ROTOR.hub || 0.55) / 0.55, ck = (HELI3D_ROTOR.chord || 0.27) / 0.27;   // 허브 크기 · 날개 시위(작은 기체는 작게)
+  _h3Lathe(m, [0, 0, -0.10 * hk], H3Z, [[0, 0], [0.55 * hk, 0], [0.55 * hk, 0.14 * hk], [0, 0.14 * hk]], H3C.dark, 18);        // 허브 판
+  _h3Lathe(m, [0, 0, 0.10 * hk], H3Z, [[0.56 * hk, 0], [0.50 * hk, 0.12 * hk], [0.34 * hk, 0.24 * hk], [0, 0.30 * hk]], H3C.dark, 18);   // 덮개
   for (let k = 0; k < HELI3D_ROTOR.blades; k++) {
     const a = k / HELI3D_ROTOR.blades * 2 * Math.PI;
     const U = [Math.cos(a), Math.sin(a), 0], V = [-Math.sin(a), Math.cos(a), 0];
-    _h3Plate(m, [[0.45, -0.20], [1.10, -0.27], [R - 0.15, -0.24], [R, -0.12], [R, 0.18], [1.10, 0.27], [0.45, 0.20]],
-             [0, 0, 0], U, V, H3Z, 0.08, H3C.blade);
+    _h3Plate(m, [[0.45 * hk, -0.20 * ck], [1.10 * hk, -0.27 * ck], [R - 0.15, -0.24 * ck], [R, -0.12 * ck], [R, 0.18 * ck], [1.10 * hk, 0.27 * ck], [0.45 * hk, 0.20 * ck]],
+             [0, 0, 0], U, V, H3Z, 0.08 * Math.min(1, ck * 1.5), H3C.blade);
   }
   return m;
 }
 // 꼬리로터(허브 가운데가 원점, Y 축으로 돈다). 꼬리날개 바깥쪽(s: 오른쪽 +1)에 붙는다.
 function _h3BuildTail(SP = H3_SPECS[H3_OWN]) {
   const HELI3D_TAIL = SP.tail, m = _h3New(), R = HELI3D_TAIL.r, s = Math.sign(HELI3D_TAIL.y) || 1;
-  _h3Lathe(m, [0, -0.12 * s, 0], [0, s, 0], [[0, 0], [0.20, 0], [0.20, 0.16], [0, 0.20]], H3C.dark, 14);
+  const hb = HELI3D_TAIL.hub || 0.20, ch = HELI3D_TAIL.chord || 0.13;
+  _h3Lathe(m, [0, -0.12 * s, 0], [0, s, 0], [[0, 0], [hb, 0], [hb, 0.16], [0, 0.20]], H3C.dark, 14);
   for (let k = 0; k < HELI3D_TAIL.blades; k++) {
     const a = k / HELI3D_TAIL.blades * 2 * Math.PI;
     const U = [Math.cos(a), 0, Math.sin(a)], V = [-Math.sin(a), 0, Math.cos(a)];
-    _h3Plate(m, [[0.15, -0.13], [R, -0.11], [R, 0.11], [0.15, 0.13]], [0, 0.06 * s, 0], U, V, H3Y, 0.05, H3C.blade);
+    _h3Plate(m, [[hb * 0.75, -ch], [R, -ch * 0.85], [R, ch * 0.85], [hb * 0.75, ch]], [0, 0.06 * s, 0], U, V, H3Y, 0.05, H3C.blade);
   }
   return m;
 }
@@ -547,9 +626,20 @@ vec3 bell(vec3 p, vec3 n) {
   if (p.z > 0.84 && p.z < 1.00 && p.x > -5.3) return BLUE;                           // 파란 띠
   return WHITE;
 }
+// R22 — 붉은 동체 · 짙은 거품 유리(앞 · 지붕 앞 · 문 창) · 문 기둥 · 옆 흰 줄
+vec3 r22(vec3 p, vec3 n) {
+  const vec3 TINT = vec3(0.34, 0.43, 0.52);                                                 // 옅은 청회색 유리
+  bool side = abs(n.y) > 0.45;
+  if (n.x > 0.25 && abs(p.y) < 0.022 && p.z > 0.88 && p.x > 1.30) return RED;              // 앞유리 가운데 기둥
+  if (side && p.x > 1.02 && p.x < 1.09 && p.z > 0.80) return RED;                           // 문 앞 기둥
+  if (p.x > 1.05 && p.z > 0.88) return TINT;                                                // 앞 거품 유리 · 지붕 앞
+  if (side && p.x > 0.60 && p.x < 1.02 && p.z > 0.80 && p.z < 1.80) return TINT;            // 문 창(바닥 가까이까지)
+  if (side && p.z > 0.68 && p.z < 0.73 && p.x > 0.50) return WHITE;                         // 옆 흰 줄
+  return RED;
+}
 void main() {
   if (v_mat < -0.5) { gl_FragColor = vec4(v_col * u_alpha, u_alpha); return; }   // 스스로 빛나는 등(함정 수평 지시등)
-  vec3 c = v_mat > 1.5 ? bell(v_pos, normalize(v_nm)) : v_mat > 0.5 ? livery(v_pos, normalize(v_nm)) : v_col;
+  vec3 c = v_mat > 2.5 ? r22(v_pos, normalize(v_nm)) : v_mat > 1.5 ? bell(v_pos, normalize(v_nm)) : v_mat > 0.5 ? livery(v_pos, normalize(v_nm)) : v_col;
   vec3 nw = normalize(v_nw);
   float d = max(dot(nw, u_light), 0.0);
   float sky = 0.5 + 0.5 * nw.z;
@@ -605,7 +695,7 @@ function _h3Set(h, ty) {
     body: _h3Upload(gl, _h3BuildBody(ty)), rotor: _h3Upload(gl, _h3BuildRotor(SP)), tail: _h3Upload(gl, _h3BuildTail(SP)),
     disc: _h3Upload(gl, _h3BuildDisc(SP.rotor.r, 'z')), tdisc: _h3Upload(gl, _h3BuildDisc(SP.tail.r, 'y')),
   };
-  if (ty !== 'b206') { parts.hsl = _h3Upload(gl, _h3BuildHsl()); parts.hslOff = _h3Upload(gl, _h3BuildHslLens(false)); parts.hslOn = _h3Upload(gl, _h3BuildHslLens(true)); }
+  if (ty === 'kuh') { parts.hsl = _h3Upload(gl, _h3BuildHsl()); parts.hslOff = _h3Upload(gl, _h3BuildHslLens(false)); parts.hslOn = _h3Upload(gl, _h3BuildHslLens(true)); }
   Object.values(parts).forEach(p => {
     if (vao) { p.vao = vao.create(); vao.bind(p.vao); }
     gl.bindBuffer(gl.ARRAY_BUFFER, p.buf);
@@ -853,7 +943,7 @@ const TFC3D_LAYER = {
     // 주기 헬기 — 그려진 땅 위(활주로 표고로 편 자리)에 · 로터는 멈춘 채(날개 자리만 조금씩 다르게)
     for (const p of parked) {
       let drawn = null; try { drawn = this.map.queryTerrainElevation([p.lon, p.lat]); } catch (e) { drawn = null; }
-      const ty = p.ac === 'b206' ? 'b206' : 'kuh', SP = H3_SPECS[ty];
+      const ty = H3_SPECS[p.ac] ? p.ac : 'kuh', SP = H3_SPECS[ty];
       try { _h3DrawHeli(h, _h3Set(h, ty), SP, main, { lon: p.lon, lat: p.lat, alt: Number.isFinite(drawn) ? Math.max(0, drawn) : 0, hdg: p.hdg, pit: 0, bnk: 0 }, (p.id.length * 0.7) % 1.5, 0, false); } catch (e) { _swallow(e); }
     }
     if (!tfc3dActive()) return;
@@ -870,7 +960,7 @@ const TFC3D_LAYER = {
       if (!Number.isFinite(drawn)) drawn = 0;
       const phys = Math.max(0, drawn / ex), altM = (t.alt + (t.vs || 0) * ahead / 60) * 0.3048;
       const alt = Math.max(drawn, drawn + (altM - phys));
-      const ty = t.ac === 'b206' ? 'b206' : 'kuh', SP = H3_SPECS[ty];
+      const ty = H3_SPECS[t.ac] ? t.ac : 'kuh', SP = H3_SPECS[ty];
       const ph = (sec * SP.rps * 2 * Math.PI + t.id) % (2 * Math.PI), tph = (sec * HELI3D_TAIL_RPS * 2 * Math.PI) % (2 * Math.PI);
       try { _h3DrawHeli(h, _h3Set(h, ty), SP, main, { lon, lat, alt, hdg: t.hdg, pit: t.pit || 0, bnk: t.bnk || 0 }, ph, tph, true); } catch (e) { _swallow(e); }
     }

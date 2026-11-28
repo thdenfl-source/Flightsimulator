@@ -439,7 +439,7 @@ function envFxFrame() {
     // 꼬리표 — 기종 · 상대고도(백 ft) · 거리(NM) · TCAS 색(멀어 모형이 작아도 알아보게)
     if (typeof tcasShow === 'function' && !tcasShow(tr)) continue;   // 꼬리표는 TCAS 가 그리는 교통만(CDU TCAS 모드 · 고도 범위)
     const col = tr.st === 'RA' ? '#ff3030' : tr.st === 'TA' ? '#ffb000' : dark ? '#e8f4ff' : '#0b2a44';
-    const lbl = `${tr.ac === 'b206' ? 'B206' : 'KUH'} ${typeof tcasAltTag === 'function' ? tcasAltTag(tr) : ''} ${(f.d / 1852).toFixed(1)}`;
+    const lbl = `${tr.ac === 'b206' ? 'B206' : tr.ac === 'r22' ? 'R22' : 'KUH'} ${typeof tcasAltTag === 'function' ? tcasAltTag(tr) : ''} ${(f.d / 1852).toFixed(1)}`;
     g.globalAlpha = 0.9; g.font = 'bold 11px Arial'; g.textAlign = 'center'; g.lineWidth = 3;
     g.strokeStyle = dark ? 'rgba(0,0,0,0.8)' : 'rgba(255,255,255,0.85)'; g.strokeText(lbl, p.x, y - 10);
     g.fillStyle = col; g.fillText(lbl, p.x, y - 10);

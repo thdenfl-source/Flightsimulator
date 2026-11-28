@@ -333,7 +333,7 @@ async function _wingPub(m, bc = wing.bc, link = wing.link, key = wing.key) {
 function wingSend(withWps) {
   if (!wing.room) return;
   if (wing.role === 'atc') { try { if (typeof atcWingBeat === 'function') atcWingBeat(); } catch (e) { _swallow(e); } return; }   // 관제사는 제 자리를 보내지 않는다 — 관제 시설 알림(41-atc.js)
-  const ac = (() => { try { return acB206() || acIs('r22') ? 'b206' : 'kuh'; } catch (e) { return 'kuh'; } })();
+  const ac = (() => { try { return acIs('r22') ? 'r22' : acB206() ? 'b206' : 'kuh'; } catch (e) { return 'kuh'; } })();
   const m = { type: 'pos', id: wing.id, cs: _wingCs(), ac, lat: S.lat, lon: S.lon, alt: S.alt, hdg: S.hdg, spd: S.spd || 0, vs: S.vs || 0, bnk: S.bnk || 0, pit: S.pit || 0, t: Date.now() };
   if (withWps) m.wps = (S.wps || []).filter(w => w && Number.isFinite(w.lat)).slice(0, 40).map(w => [+w.lat.toFixed(5), +w.lon.toFixed(5)]);
   _wingPub(m);
@@ -350,7 +350,7 @@ function _wingIn(m) {
   if (m.wps) P.wps = m.wps;
   let t = (typeof traffic !== 'undefined') ? traffic.find(x => x.remote === m.id) : null;
   if (!t && typeof traffic !== 'undefined') { t = { id: 'W' + m.id.slice(0, 4), remote: m.id, mode: 'wing', st: 'OT' }; traffic.push(t); }
-  if (t) Object.assign(t, { cs: m.cs, ac: m.ac === 'b206' ? 'b206' : 'kuh', lat: m.lat, lon: m.lon, alt: m.alt, hdg: m.hdg, spd: m.spd, vs: m.vs, bnk: m.bnk, pit: m.pit });
+  if (t) Object.assign(t, { cs: m.cs, ac: m.ac === 'b206' || m.ac === 'r22' ? m.ac : 'kuh', lat: m.lat, lon: m.lon, alt: m.alt, hdg: m.hdg, spd: m.spd, vs: m.vs, bnk: m.bnk, pit: m.pit });
   if (fresh) { _cToast(`✈ ${m.cs} 이(가) 함께 납니다`, 'ok'); _cNote(`협동 비행 — ${m.cs} 들어옴`); _wingRender(true); }
 }
 function _wingDrop(id) {
