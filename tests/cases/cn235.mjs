@@ -189,5 +189,36 @@ export async function run(page, t) {
   });
   t.ok(FC.hid && FC.bar && FC.alt && FC.hdg, 'PFD 아래 — 흰수리 FCP 대신 CN-235 조작 띠(AP 모드 · HDG · CRS · ALT · SPD · BARO 노브)가 듣는다');
   t.ok(FC.prompts === 0, `판 위 탭(W&B · PED)을 눌러도 흰수리 PFD 입력창(IAS · ALT)이 뜨지 않는다 (${FC.prompts})`);
+  // FMS(Universal) · RTU · ACU — AFM · AOM 의 절차
+  const FM = await page.evaluate(() => {
+    const r = {}, type = s => s.split('').forEach(k => fmsKey(k));
+    S.alt = 3000; S.spd = 170; cn.ov.fmsSel = 'CKPT'; cn.fms.on = true; cn.fms.init = 0; cn.fms.turn = 'AUTO';
+    try { clearFP(); } catch (e) { /* */ }
+    type('RKSS'); fmsKey('DTO'); fmsLsk('R', 4); r.dto = S.wps[S.awp] && S.wps[S.awp].ident === 'RKSS' && navApOn;
+    cn.fms.turn = 'LEFT'; type('RKPC'); fmsKey('DTO'); fmsLsk('R', 4); r.dtoL = hdgSelOn && hdgTurnDir === -1 && cn.fms.pendDir === 1 && S.wps[S.awp].ident === 'RKPC'; cn.fms.turn = 'AUTO'; cn.fms.pendDir = 0;
+    cn.fms.page = 'HDG'; type('90'); fmsLsk('L', 0); r.cmdHdg = hdgSelOn && Math.round(toMag(selHdg)) === 90;
+    type('R45'); const h0 = hdgInd(); fmsLsk('L', 1); r.turnR = hdgTurnDir === 1;
+    r.pats = CN_PATS.map((t, i) => { cn.fms.pat.type = i; return fmsPattern(); });
+    S.wps[S.awp].alt = 1500; cn.fms.page = 'VNAV'; fmsLsk('R', 0); cnFmsStep(0.25); r.vnav = cn.fms.vnav && vsModeOn && selVS < 0; cn.fms.vnav = false; vsModeOn = false;
+    cn.ov.fmsSel = 'TACCO'; const sp0 = cn.fms.sp; fmsKey('A'); r.tacco = cn.fms.sp === 'TACCO HAS CONTROL'; cn.ov.fmsSel = 'CKPT'; cn.fms.sp = '';
+    cn.cb.FMS = true; r.cbFail = !cnFmsOk(); delete cn.cb.FMS;
+    // RTU — 노브(바깥 1MHz · 안 25kHz) · XFR(무전기에 맞춤) · MEM · STO · TEST · GUARD · 범위 감김
+    const c = cn.rtu.com1; c.pre = 124.6; rtuKnob('com1', true, 1); rtuKnob('com1', false, 1); r.knob = c.pre === 125.625;
+    rtuXfr('com1'); r.xfr = cduRadio('com1').act === '125.625';
+    rtuMem('com1'); r.mem = c.memLamp && c.pre === c.mem[0];
+    c.pre = 130.1; rtuSto('com1'); rtuKnob('com1', false, 1); rtuSto('com1'); r.sto = c.mem[1] === 130.1;
+    c.pre = 151.975; rtuKnob('com1', false, 1); r.wrap = c.pre === 118;
+    rtuGuard('com1'); r.guard = c.act === 121.5;
+    const n = cn.rtu.nav1; n.pre = 113.6; rtuXfr('nav1'); r.nav = Math.abs(parseFloat(navRadios.NAV1.freq) - 113.6) < 0.001;
+    rtuTest('com2'); r.test = cn.rtu.com2.test > performance.now();
+    const cv = document.createElement('canvas'); cv.width = 700; cv.height = 960; cnDrawTo(cv, 'FMS'); r.fmsHits = cv._cnHit.hits.length;
+    const cv2 = document.createElement('canvas'); cv2.width = 1000; cv2.height = 640; cnDrawTo(cv2, 'RTU'); r.rtuHits = cv2._cnHit.hits.length;
+    try { clearFP(); afcsReleaseAll(); } catch (e) { /* */ }
+    return r;
+  });
+  t.ok(FM.dto && FM.dtoL && FM.cmdHdg && FM.turnR, 'FMS — DTO(식별부호 · NAV 롤 스티어링) · 선회 방향 LEFT · CMD HDG · TURN R45');
+  t.ok(FM.pats.every(n => n >= 4) && FM.vnav && FM.tacco && FM.cbFail, `FMS — 수색 6가지(${FM.pats.join('·')} 지점) · VNAV 강하 · TACCO 면 조종석 CDU 잠김 · 차단기 FMS`);
+  t.ok(FM.knob && FM.xfr && FM.mem && FM.sto && FM.wrap && FM.guard && FM.nav && FM.test, 'RTU — 노브 1MHz/25kHz · XFR(무전기 맞춤) · MEM · STO 저장 · 범위 감김 · GUARD 121.5 · NAV 맞춤 · TEST');
+  t.ok(FM.fmsHits >= 60 && FM.rtuHits >= 40, `FMS CDU · RTU 쪽 누를 자리(${FM.fmsHits} · ${FM.rtuHits})`);
   t.ok(page.errors.length === 0, `오류 없음${page.errors.length ? ' — ' + page.errors.join(' / ') : ''}`);
 }
