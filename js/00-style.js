@@ -2379,6 +2379,11 @@ body.gate-open #gate-overlay { display: none; }
   box-shadow: 0 8px 24px rgba(0,0,0,0.85); }
 #sar-panel .sar-hd { color: #ff9a3c; font-size: 10px; font-weight: bold; text-align: center; letter-spacing: 1px;
   border-bottom: 1px solid #222; padding-bottom: 6px; margin-bottom: 8px; position: relative; cursor: grab; user-select: none; touch-action: none; }
+#sar-panel .sar-in { display: flex; gap: 3px; } #sar-panel .sar-in input { flex: 1; min-width: 0; background: #0b0b0b; color: #eee; border: 1px solid #3a3a3a; border-radius: 3px; font-size: 11px; padding: 3px 4px; } #sar-panel .sar-in .ship-tab { flex: none; width: auto; padding: 3px 7px; }
+#sar-panel .sar-hint { color: #777; font-size: 9px; line-height: 1.3; margin: 2px 0 4px; } #sar-panel .sar-pos { color: #ffcc66; font-size: 10px; font-family: monospace; margin: 3px 0; }
+#sar-panel .sar-geo { display: flex; flex-direction: column; gap: 2px; font-size: 10px; color: #aaa; } #sar-panel .sar-geo-it { text-align: left; background: #1a1a1a; border: 1px solid #333; color: #ddd; border-radius: 3px; padding: 3px 5px; cursor: pointer; font-size: 10px; }
+#sar-panel .sar-geo-it b { display: block; color: #fff; } #sar-panel .sar-geo-it span { display: block; color: #889; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#sar-panel { width: 250px; }
 #sar-panel .sar-x { position: absolute; right: -2px; top: -4px; background: none; border: 0; color: #888; font-size: 13px; cursor: pointer; }
 #sar-panel .sar-on { width: 100%; background: #1a1a1a; border: 1px solid #3a3a3a; color: #ccc; border-radius: 4px; padding: 6px 0; font-size: 11px; font-weight: bold; cursor: pointer; }
 #sar-panel .sar-on span { color: #888; } #sar-panel .sar-on.on { border-color: #33cc55; } #sar-panel .sar-on.on span { color: #4ade80; }

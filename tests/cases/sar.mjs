@@ -149,4 +149,46 @@ export async function run(page, t) {
   });
   t.ok(K.on && K.mode === 'off' && K.white > 0, `Cockpit Mode SYSTEM MFD 에도 HOIST CAM — 화면 밖 지도를 옮겨 그린다 (${K.mode} · 십자 ${K.white}px)`);
   t.ok(!K.after, 'Cockpit Mode 를 나가거나 채널을 바꾸면 거둔다');
+  await runCoord(page, t);
+}
+
+// ── 좌표 · 주소로 요구조자 놓기 ──
+export async function runCoord(page, t) {
+  const C = await page.evaluate(async () => {
+    const o = {}, near = (c, la, lo) => !!c && Math.abs(c.lat - la) < 1e-4 && Math.abs(c.lon - lo) < 1e-4;
+    o.dec = near(sarParseCoord('35.2058, 129.1315'), 35.2058, 129.1315);
+    o.ddm = near(sarParseCoord('N35 12.348 E129 07.890'), 35 + 12.348 / 60, 129 + 7.89 / 60);
+    o.ddm2 = near(sarParseCoord("35°12.348'N 129°07.890'E"), 35 + 12.348 / 60, 129 + 7.89 / 60);
+    o.dms = near(sarParseCoord('35°12\'20"N 129°07\'53"E'), 35 + 12 / 60 + 20 / 3600, 129 + 7 / 60 + 53 / 3600);
+    o.ko = near(sarParseCoord('북위 35도 12분 동경 129도 7분'), 35.2, 129 + 7 / 60);
+    o.sw = near(sarParseCoord('S33 52.000 W151 12.000'), -(33 + 52 / 60), -(151 + 12 / 60));
+    o.num4 = near(sarParseCoord('35 12.348 129 7.89'), 35 + 12.348 / 60, 129 + 7.89 / 60);
+    o.bad = sarParseCoord('abc') === null && sarParseCoord('95, 200') === null && sarParseCoord('35 75 129 10') === null;
+    o.fmt = sarFmtDdm(35 + 12.345 / 60, 129 + 7.89 / 60);
+    // 창 — 좌표 칸에 넣고 놓기
+    sarPanelOpen(); const p = document.getElementById('sar-panel');
+    const ci = p.querySelector('[data-sarv="coord"]'); ci.value = 'N35 10.000 E129 20.000'; p.querySelector('[data-sar="coord"]').click();
+    o.placed = near({ lat: sar.lat, lon: sar.lon }, 35 + 10 / 60, 129 + 20 / 60) && sar.on && sar.state === 'wait';
+    o.wpt = sarWptIndex() >= 0;
+    o.pos = /N35°10\.000' E129°20\.000'/.test(p.querySelector('[data-sarv="pos"]').textContent);
+    // 주소 — 검색(가짜 결과)에서 골라 놓기
+    const gs = window.geoSearch; window.geoSearch = async q => [{ name: '해운대해수욕장', detail: '부산광역시 해운대구', lat: 35.1587, lon: 129.1604 }];
+    p.querySelector('[data-sarv="addr"]').value = '해운대 해수욕장'; const L = await sarAddrSearch();
+    o.list = L.length === 1 && /해운대해수욕장/.test(p.querySelector('[data-sarv="geo"]').textContent);
+    p.querySelector('[data-sar="geo:0"]').click();
+    o.addr = near({ lat: sar.lat, lon: sar.lon }, 35.1587, 129.1604);
+    window.geoSearch = async () => { throw new Error('net'); }; await sarAddrSearch(); o.netMsg = /닿지 못했습니다/.test(p.querySelector('[data-sarv="geo"]').textContent);
+    window.geoSearch = gs;
+    // 주소 칸에 좌표를 넣어도 된다
+    p.querySelector('[data-sarv="addr"]').value = '35.3, 129.4'; await sarAddrSearch(); o.addrCoord = near({ lat: sar.lat, lon: sar.lon }, 35.3, 129.4);
+    // 입력 중 키는 앱 단축키에 닿지 않는다
+    let leaked = 0; const f = () => leaked++; document.addEventListener('keydown', f);
+    ci.dispatchEvent(new KeyboardEvent('keydown', { key: 'w', bubbles: true })); document.removeEventListener('keydown', f); o.noLeak = leaked === 0;
+    sarPanelClose(); if (sar.on) sarToggleOn();
+    return o;
+  });
+  t.ok(C.dec && C.ddm && C.ddm2 && C.dms && C.ko && C.sw && C.num4 && C.bad, `좌표 읽기 — 십진 · 도 분 · 도 분 초 · 한글 · 남서반구 · 숫자 넷 · 틀린 것은 거절 (${JSON.stringify(C)})`);
+  t.ok(C.fmt === "N35°12.345' E129°07.890'", `도 분 표기 ${C.fmt}`);
+  t.ok(C.placed && C.wpt && C.pos, 'SAR CONTROL 좌표 칸 — 놓으면 그 자리에 요구조자 · 비행계획 SAR01 · 지금 자리 표시');
+  t.ok(C.list && C.addr && C.netMsg && C.addrCoord && C.noLeak, '주소 · 지명 — 찾아 골라 놓기 · 검색이 안 되면 알림 · 주소 칸에 좌표도 · 입력 키는 앱에 닿지 않음');
 }
