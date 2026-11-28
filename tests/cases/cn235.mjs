@@ -256,6 +256,13 @@ export async function run(page, t) {
     return { zoom: (ck.match(/data-cnypop/g) || []).length, keys: ['etU', 'etD', 'atL', 'atR', 'ga', 'ap', 'ptt', 'syn', 'rtL', 'rtR'].every(k => big.includes(`data-cnk="${k}"`)), rt: +rt.toFixed(2) };
   });
   t.ok(YK.zoom === 4 && YK.keys && YK.rt === 0.05, `요크 크게 — 조종석 요크 몸통을 누르면 큰 요크(트림 · GA · AP DISC · PTT · SYN · 방향타 트림) (${JSON.stringify(YK)})`);
+  // 위치표시등 — 좌적 · 우녹 · 꼬리 백(빛 무리 색도 그 색으로)
+  const LT = await page.evaluate(() => {
+    const nav0 = cn.ov.nav; cn.ov.nav = true; const st = extLightState(0); cn.ov.nav = nav0;
+    const c = id => { const p = st.pts.find(q => q.id === id); return p ? (p.col === LT_COL.red ? 'red' : p.col === LT_COL.green ? 'green' : p.col === LT_COL.white ? 'white' : 'other') : null; };
+    return { pwr: st.pwr, L: c('posL'), R: c('posR'), T: c('posT') };
+  });
+  t.ok(!LT.pwr || (LT.L === 'red' && LT.R === 'green' && LT.T === 'white'), `위치표시등 — 왼쪽 빨강 · 오른쪽 초록 · 꼬리 흰색 (${JSON.stringify(LT)})`);
   // 지도 심볼 — 기종마다 제 평면도(04-map.js acIconSvg) · CN-235 는 고정익
   const MK = await page.evaluate(() => { const e = acMarker.getElement(); const m = e && e.querySelector('.ac-marker'); return { ac: m && m.dataset.ac, plane: acIconSvg() === AC_ICON_CN235, kuh: AC_ICON_SVG !== AC_ICON_CN235 }; });
   const VS = await page.evaluate(() => { toggleSimMode(true); _vStickBox(); vStick.coll = 0.6; vStickRender(); const l = document.querySelector('#vstick-coll .vs-lbl'); const lb = s => (document.querySelector('#vstick ' + s + ' .vs-lbl') || {}).textContent; const r = [l && l.textContent, lb('.vs-cyc'), lb('.vs-ped')].join('|'); toggleSimMode(false); return r; });
