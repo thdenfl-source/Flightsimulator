@@ -32,7 +32,7 @@ export async function run(page, t) {
       const dlg = () => document.querySelector('.ui-dlg'), gone = () => !document.querySelector('.ui-dlg');
       const hb = document.getElementById('home-btn'), rb = document.getElementById('reload-btn');
       o.btns = !!hb && !!rb && hb.nextElementSibling === rb && getComputedStyle(hb).display !== 'none';
-      const r3 = document.getElementById('reload3d-btn'); o.ck = !!r3 && r3.parentElement.id === 'ctl3d-body' && r3 === r3.parentElement.lastElementChild;
+      const r3 = document.getElementById('reload3d-btn'); const sp = document.getElementById('startpos3d-btn'); o.ck = !!r3 && r3.parentElement.id === 'ctl3d-body' && r3.nextElementSibling === sp && sp === r3.parentElement.lastElementChild;   // 맨 아래 ⟳ 새로고침 · 그 아래 ✈ 시작 위치
       window._reloaded = 0; const keep = hardReloadNow; window.hardReloadNow = () => { window._reloaded++; };
       hb.click(); o.askHome = await until(dlg);
       const cancel = [...document.querySelectorAll('.ui-dlg button')].find(b => /취소/.test(b.textContent)); if (cancel) cancel.click(); await until(gone); await w(100);
@@ -80,7 +80,7 @@ export async function run(page, t) {
     g.noBypass = await tb3.evaluate(() => window.gateLocked && getComputedStyle(document.getElementById('gate-pw')).display !== 'none');
     await tb3.close();
     await tb2.close();
-    t.ok(q.btns && q.ck, '창 위 탭에 ⌂ 처음 화면 · ⟳ 새로고침 · 3D(Cockpit) 버튼 줄 맨 아래에 ⟳ 새로고침');
+    t.ok(q.btns && q.ck, '창 위 탭에 ⌂ 처음 화면 · ⟳ 새로고침 · 3D(Cockpit) 버튼 줄 아래에 ⟳ 새로고침 · ✈ 시작 위치');
     t.ok(q.askHome && q.cancelHome && q.askReload && q.okReload, '처음 화면 · 새로고침은 먼저 묻는다 — 취소하면 그대로 · 확인하면 새로고침');
     t.ok(q.extraBtn && q.saved, '저장 후 새로고침 — 지금 상태를 시나리오(새로고침 전 …)로 남기고 새로 고친다');
     t.ok(g.locked && g.shown && g.choose && g.pwHidden && g.flag === '1' && g.url && g.again && open && g.flagAfter === null && !g.urlAfter, `처음 화면 — 비밀번호 없이 화면 · 기종 고르기가 뜨고, 고르면 열린다(표시도 거둔다) (${JSON.stringify(g)} · ${open})`);
