@@ -241,13 +241,17 @@ export async function run(page, t) {
     selectPanel('right', 'cnfms'); await new Promise(res => setTimeout(res, 300));
     r.fms = !document.getElementById('cnp-cnfms-wrap').classList.contains('page-hidden');
     selectPanel('right', sel0);
+    // 왼쪽 창(PFD 자리)에서도 고른다 — 종전에는 fixPanelDupes 가 PFD 로 되돌렸다
+    selectPanel('left', 'cnctr'); await new Promise(res => setTimeout(res, 250));
+    r.left = panelGet('left') === 'cnctr' && !document.getElementById('cnp-cnctr-wrap').classList.contains('page-hidden');
+    selectPanel('left', 'pfd'); r.leftBack = panelGet('left') === 'pfd';
     r.pop = CKPIT_SCR.some(s => s.k === 'cnRH') && CKPIT_SCR.some(s => s.k === 'cnSL') && ['cnctr', 'cnglr', 'cnovhd', 'cnfms', 'cnrtu', 'cnped', 'cncons', 'cncb', 'cnwb'].every(k => CKPIT_POP[k] && CKPIT_POP_AR[k] > 0)
       && CKPIT_SCR.filter(s => CKPIT_SCR_POP[s.k] && CKPIT_SCR_POP[s.k].startsWith('cn')).length >= 10;
     r.noLconCk = !CKPIT_CON.lcon;
     return r;
   });
   t.ok(TB.tabs && TB.noLcon && TB.msn, `위 창 탭 — CN 화면 아홉 · Vendor · 흰수리 LOWER 없음 (${JSON.stringify(TB)})`);
-  t.ok(TB.shown && TB.drag && TB.fms, `탭으로 고른 PED · FMS 화면이 뜨고 레버를 끌면 듣는다 (${JSON.stringify(TB)})`);
+  t.ok(TB.shown && TB.drag && TB.fms && TB.left && TB.leftBack, `탭으로 고른 PED · FMS 화면이 뜨고(왼쪽 창에서도) 레버를 끌면 듣는다 (${JSON.stringify(TB)})`);
   t.ok(TB.pop && TB.noLconCk, 'Cockpit 모드 — 작은 칸(GLARE · CTR · OVHD · FMS · RTU · PED · CONS · C/B · W&B)을 누르면 크게(팝아웃) · 하부 콘솔 없음');
   // 조종석 요크 — 몸통을 누르면 크게(팝아웃) · 큰 요크 단추 · 방향타 트림
   const YK = await page.evaluate(() => {
