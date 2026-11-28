@@ -391,7 +391,8 @@ function cnConsDraw(g) {
   _cnMini(g, 820, 530, 40, 'PSI', 1800, 0, 2000); _cnTog(g, 930, 540, '', o.oxy !== false, () => { o.oxy = o.oxy === false; });
   P(1160, 470, 220, 120, 'WIPER');
   _cnRot(g, 1270, 540, '', o.wiper, ['PARK', 'OFF', 'LOW', 'HIGH'], v => { o.wiper = v; try { _ckWipeSync(); } catch (e) { _swallow(e); } });
-  P(750, 600, 630, 100, 'HAND-MIKE · PHONE');
+  P(750, 600, 630, 100, 'HAND-MIKE · PHONE · FMS CDU SEL');
+  _cnTog(g, 1250, 660, 'FMS CDU', o.fmsSel === 'CKPT', () => { o.fmsSel = o.fmsSel === 'CKPT' ? 'TACCO' : 'CKPT'; }, 'CKPT', 'TACCO');
 }
 
 // ══ 무게 · 무게중심 · 성능(1000×640) — AOM 한계 · 탑재 고르기 ══

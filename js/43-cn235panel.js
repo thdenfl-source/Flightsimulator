@@ -12,7 +12,7 @@
 // PFD 창(03-pfd.js)이 cnDraw 를 부른다 — 창이 넓으면 셋(글레어실드 위 · LH · 가운데)을 함께, 좁으면 하나씩(위 탭으로 고른다)
 // ══════════════════════════════════════════════════════
 const CNP_BG = '#97aab1', CNP_EDGE = '#6f8288', CNP_DARK = '#222528';
-const CNP_SIZE = { LH: [1000, 640], CTR: [1000, 660], GLR: [2000, 260], ALL: [2000, 920], OVHD: [1400, 800], CB: [1400, 560], CONS: [1400, 720], PERF: [1000, 640] };
+const CNP_SIZE = { LH: [1000, 640], CTR: [1000, 660], GLR: [2000, 260], ALL: [2000, 920], OVHD: [1400, 800], CB: [1400, 560], CONS: [1400, 720], PERF: [1000, 640], FMS: [700, 960], RTU: [1000, 640] };
 let cnPage = (() => { try { return localStorage.getItem('cnPage') || 'AUTO'; } catch (e) { return 'AUTO'; } })();
 function cnPageSet(p) { cnPage = p; try { localStorage.setItem('cnPage', p); } catch (e) { _swallow(e); } _cnRedraw(); }
 
@@ -554,12 +554,14 @@ function cnDrawPage(g, x, y, w, h, page, tabs) {
   else if (page === 'CB') sub(0, 0, cnCbDraw);
   else if (page === 'CONS') sub(0, 0, cnConsDraw);
   else if (page === 'PERF') sub(0, 0, cnPerfDraw);
+  else if (page === 'FMS') sub(0, 0, cnFmsDraw);
+  else if (page === 'RTU') sub(0, 0, cnRtuPage);
   else sub(0, 0, cnLhDraw);
   g.restore();
   // 고르는 탭(위 왼쪽 · 화면 픽셀)
   if (tabs) {
-    const T = [['AUTO', 'AUTO'], ['ALL', 'ALL'], ['LH', 'LH'], ['CTR', 'CTR'], ['GLR', 'GLARE'], ['OVHD', 'OVHD'], ['CB', 'C/B'], ['CONS', 'CONSOLE'], ['PERF', 'W&B'], ['PED', 'PED ▸']];
-    const bw = Math.max(30, Math.min(60, (w - 40) / 10.5)), bh = Math.max(16, Math.min(24, h / 22));
+    const T = [['AUTO', 'AUTO'], ['ALL', 'ALL'], ['LH', 'LH'], ['CTR', 'CTR'], ['GLR', 'GLARE'], ['OVHD', 'OVHD'], ['CB', 'C/B'], ['CONS', 'CONSOLE'], ['PERF', 'W&B'], ['FMS', 'FMS'], ['RTU', 'RTU'], ['PED', 'PED ▸']];
+    const bw = Math.max(28, Math.min(60, (w - 40) / 12.5)), bh = Math.max(16, Math.min(24, h / 22));
     T.forEach(([kk, t], i) => {
       const bx = x + 4 + i * (bw + 3), by = y + 3, on = kk === cnPage || (kk === 'PED' && _cnPed && _cnPed.style.display === 'flex');
       g.save(); g.fillStyle = on ? '#1d6b34' : 'rgba(20,24,28,0.85)'; g.strokeStyle = on ? '#3cff6a' : '#667'; g.lineWidth = 1; g.fillRect(bx, by, bw, bh); g.strokeRect(bx, by, bw, bh); g.restore();
@@ -665,17 +667,18 @@ function cnPedDraw(g) {
   let xp = '7000'; try { if (typeof xpdrCode !== 'undefined') xp = String(xpdrCode); } catch (e) { _swallow(e); }
   _cnT(g, 'ATC/TCAS', 104, 152, 7, '#fff'); _cnT(g, xp, 104, 170, 14, '#9cf');
   // NAV · COM 넷
-  const freq = k => { try { const r = navRadios && navRadios[k]; if (r && r.freq) return String(r.freq); } catch (e) { _swallow(e); } return ''; };
+  const freq = k => { try { const r = cn.rtu && cn.rtu[k.toLowerCase()]; if (r) return rtuFmt(r, r.act); } catch (e) { _swallow(e); } return ''; };
   [['NAV', 'NAV1'], ['NAV', 'NAV2'], ['COM', 'COM1'], ['COM', 'COM2']].forEach(([t, k], i) => {
     const bx = 252 + (i % 2) * 96, by = 30 + (i / 2 | 0) * 108; _cnBlackPanel(g, bx, by, 90, 100);
     _cnDig(g, bx + 8, by + 10, 74, 26, freq(k).slice(0, 7), '#ff7a3a'); _cnT(g, t, bx + 70, by + 46, 9, '#fff');
     g.save(); g.fillStyle = '#9aa'; [bx + 24, bx + 66].forEach(cx => { g.beginPath(); g.arc(cx, by + 72, 12, 0, 7); g.fill(); }); g.restore();
+    _cnHit(bx, by, 90, 100, () => cnPageSet('RTU'));   // RTU 쪽에서 노브 · XFR · MEM · STO · TEST
   });
   // UNIVERSAL CDU(누르면 CDU 를 연다)
   _cnBlackPanel(g, 446, 90, 200, 190); _cnT(g, 'UNIVERSAL', 546, 106, 11, '#fff');
-  g.save(); g.fillStyle = '#05070a'; g.fillRect(486, 118, 120, 76); g.restore(); _cnT(g, 'FMS', 546, 156, 14, '#3cff6a');
+  g.save(); g.fillStyle = '#05070a'; g.fillRect(486, 118, 120, 76); g.restore(); _cnT(g, (cn.fms && cn.fms.on) ? (cn.fms.page || 'FMS') : 'OFF', 546, 156, 14, '#3cff6a');
   for (let r = 0; r < 4; r++) for (let c = 0; c < 10; c++) { g.save(); g.fillStyle = '#3d4246'; g.fillRect(466 + c * 16.5, 204 + r * 17, 13, 13); g.restore(); }
-  _cnHit(446, 90, 200, 190, () => { try { if (typeof toggleCduOverlay === 'function') toggleCduOverlay(); } catch (e) { _swallow(e); } });
+  _cnHit(446, 90, 200, 190, () => cnPageSet('FMS'));   // UNIVERSAL CDU — FMS 쪽(45-cn235fms.js)
   // EMER & PARK BR(왼쪽 빨간 손잡이)
   g.save(); g.fillStyle = '#121314'; g.fillRect(52, 280, 88, 288); g.fillStyle = '#000'; g.fillRect(90, 320, 12, 210); g.restore();
   const park = cnPark(), py = park ? 330 : 420;
