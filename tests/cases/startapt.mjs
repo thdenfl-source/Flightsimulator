@@ -45,6 +45,11 @@ export async function run(page, t) {
     [...document.querySelectorAll('.start-apt-btn')].filter(b => b.style.display !== 'none').map(b => b.dataset.icao));
   await tab.keyboard.press('Enter');
   await tab.waitForTimeout(300);
+  // 이어서 시작 자리 고르기 창 — 아홉 칸(땅 셋 · 5NM 공중 여섯) · Enter 면 활주로 가운데
+  const pos = await tab.evaluate(() => ({ dlg: !!document.querySelector('.start-pos'), n: document.querySelectorAll('.start-pos-btn').length, air: document.querySelectorAll('.start-pos-btn.air').length }));
+  t.ok(pos.dlg && pos.n === 9 && pos.air === 6, `공항을 고르면 시작 자리 고르기 — 활주로 위 셋 · 5NM 공중 여섯 (${pos.n} · ${pos.air})`);
+  await tab.keyboard.press('Enter');
+  await tab.waitForTimeout(200);
   // 지형 고도가 늦게 들어와도 곧 지면에 올라선다(09a-start.js _startGroundSettle)
   await tab.waitForFunction(() => typeof simGroundFt === 'function' && Math.abs(S.alt - simGroundFt()) < 1, null, { timeout: 4000 }).catch(() => {});
   const picked = await tab.evaluate(() => {
@@ -64,6 +69,21 @@ export async function run(page, t) {
   t.ok(picked.eng && picked.elec && picked.avn, '시동 · 전기 · 전자장비(AP · AVCS · RADAR/EGPWS/DMM · C-5000)가 모두 켜져 있다');
   t.ok(picked.at && !picked.deg, 'AFCAU 의 AUTO TRIM 만 꺼져 있다 — AFCS DEGRADED 는 뜨지 않는다');
   t.ok(Math.abs(picked.agl) < 1 && picked.spd === 0, `지면에 멈춰 선다 (AGL ${picked.agl.toFixed(1)}ft · ${picked.spd}kt)`);
+  // 공중 자리 — 시단에서 5NM · 1500ft · 80kt · 그 시단을 향해(정대 · 좌우 30°) / 땅 자리 — 시단에서 출력 0
+  const AIR = await tab.evaluate(() => {
+    const R = startRunwayEnds('RKSS'), o = {};
+    openStartPosPicker('RKSS'); document.querySelector('.start-pos-btn[data-pos="aS"]').click();
+    o.aS = { d: distance(S.lat, S.lon, R.a.lat, R.a.lon), alt: S.alt, spd: S.spd, err: Math.abs(((S.hdg - R.hdg + 540) % 360) - 180), dlg: !!document.querySelector('.start-pos') };
+    startPosSet('RKSS', 'bR'); const brgB = _startBrg(R.b, S), off = ((brgB - R.hdg + 540) % 360) - 180;
+    o.bR = { d: distance(S.lat, S.lon, R.b.lat, R.b.lon), off, toB: Math.abs(((S.hdg - _startBrg(S, R.b) + 540) % 360) - 180) };
+    startPosSet('RKSS', 'thrB'); o.thrB = { d: distance(S.lat, S.lon, R.b.lat, R.b.lon) * 1852, spd: S.spd, hdgErr: Math.abs(((S.hdg - (R.hdg + 180) + 540) % 360) - 180), park: ovhdGet('parkBrake') };
+    startAirportSet('RKSS', { quiet: true });
+    return o;
+  });
+  t.ok(!AIR.aS.dlg && Math.abs(AIR.aS.d - 5) < 0.1 && AIR.aS.alt === 1500 && AIR.aS.spd === 80 && AIR.aS.err < 1,
+    `공중 정대 — 시단에서 ${AIR.aS.d.toFixed(2)}NM · ${AIR.aS.alt}ft · ${AIR.aS.spd}kt · 활주로 방향`);
+  t.ok(Math.abs(AIR.bR.d - 5) < 0.1 && Math.abs(Math.abs(AIR.bR.off) - 30) < 1 && AIR.bR.toB < 1, `공중 30° — 활주로 연장선에서 ${Math.abs(AIR.bR.off).toFixed(1)}° · 그 시단을 향해`);
+  t.ok(AIR.thrB.d < 100 && AIR.thrB.spd === 0 && AIR.thrB.hdgErr < 1 && AIR.thrB.park === 'SET', `땅 — 반대쪽 시단(${Math.round(AIR.thrB.d)}m 안)에 활주로 방향 · 출력 0 · 파킹 브레이크`);
   t.eq(picked.gps, false, '고른 뒤에도 GPS 는 꺼진 채다');
 
   // 같은 탭(세션)에서는 다시 묻지 않는다 — 고르면 sessionStorage 에 적어 두고, 새로고침(자동
