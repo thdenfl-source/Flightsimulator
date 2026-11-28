@@ -7,6 +7,8 @@
 //   ② ASR — 북쪽 위 · 거리 고리 · 활주로 · 연장선(1NM 눈금) · 표적(내 기체 · 협동 비행 기체 · 교통)과 자료 꼬리표
 //      (콜사인 / 고도 百ft · 승강 화살표 / 지상속도 · 기수) · 지난 자리 점 · 누르면 고른다
 //   ③ PAR — 위: 고도(활공각 3° · 결심고도 200ft) · 아래: 방위(활주로 중심선 · 커버리지 ±20°) · 10NM 까지
+//      활공로는 활주로 표고 · 시단에서 3° · 접근은 화면 오른쪽에서 왼쪽으로(접지점이 왼쪽)
+//      좌우는 45° NAV 원칙 — 많이 벗어나면 45° 로 중심선에 붙이고 가까워질수록 줄인다
 //      고른 표적의 활공로 · 중심선 벗어남을 재어 표준 GCA 문구(…miles from touchdown, slightly left of course, turn right heading …, on glidepath)를 만든다
 //      '자동 유도'를 켜면 5초마다 그 문구를 불러 준다(혼자 연습 — 관제사 없이 PAR 접근)
 //   ④ 관제 지시 — 레이더 포착 · 선회(기수) · 고도 · 속도 · PAR 접근 허가 · 착륙 허가 · 복행 · 관제탑 연락 · 직접 적기
@@ -14,7 +16,8 @@
 //   ⑤ 멀티 관제 — 협동 비행 방(40-crew.js · SS4)에 '관제사로 참가'하면 이 기기는 제 기체를 보내지 않고
 //      관제 시설(예: RKPK APP)을 3초마다 알린다. 조종사 기기는 지시를 받으면 읽어 주고 WILCO · UNABLE · SAY AGAIN 으로 답한다
 // ══════════════════════════════════════════════════════
-const ATC_GP = 3, ATC_DH = 200, ATC_PAR_NM = 10, ATC_TD_NM = 0.165;   // 활공각(°) · 결심고도(ft, 접지점 위) · PAR 거리 · 접지점(시단에서 약 1,000ft)
+const ATC_GP = 3, ATC_DH = 200, ATC_PAR_NM = 10, ATC_TD_NM = 0;   // 활공각(°) · 결심고도(ft, 활주로 표고 위) · PAR 거리 · 활공로 기준점(시단 — 활주로 표고에서 3°)
+const ATC_INT_MAX = 45, ATC_INT_PER_NM = 90;   // 좌우 유도 — 45° NAV 원칙: 중심선에서 0.5NM 이상이면 45° 로 붙이고, 가까울수록 줄인다(1NM 당 90° · 5° 아래로는 내리지 않는다)
 const ATC_UNITS = { APP: 'approach', TWR: 'tower', GCA: 'precision' };
 const atc = Object.assign({ apt: 'RKPK', rwy: '', view: 'both', rng: 20, own: true, auto: false, unit: 'APP' },
   (() => { try { return JSON.parse(localStorage.getItem('atcCfg') || 'null') || {}; } catch (e) { return {}; } })(),
@@ -78,7 +81,7 @@ function atcPar(t, E = atcRwy()) {
   const inCov = R > 0 && R <= ATC_PAR_NM && aA <= 20 && elevDeg > -1 && elevDeg < 8;
   const elevTxt = aE < 0.15 ? 'on glidepath' : `${aE < 0.35 ? 'slightly ' : aE < 0.7 ? '' : 'well '}${dE > 0 ? 'above' : 'below'} glidepath`;
   const azTxt = aA < 0.25 ? 'on course' : `${aA < 0.6 ? 'slightly ' : aA < 1.5 ? '' : 'well '}${cross > 0 ? 'right' : 'left'} of course`;
-  const corr = aA < 0.25 ? 0 : -Math.sign(cross) * Math.min(15, Math.max(2, Math.round(aA * 3)));   // 왼쪽이면 오른쪽으로 · 많이 벗어날수록 크게
+  const corr = aA < 0.25 ? 0 : -Math.sign(cross) * Math.min(ATC_INT_MAX, Math.max(5, Math.round(Math.abs(cross) * ATC_INT_PER_NM / 5) * 5));   // 왼쪽이면 오른쪽으로 — 45° NAV(0.5NM 넘으면 45° · 5° 단위)
   const want = (E.hdg + corr + 360) % 360;
   return { R, cross, h, gpFt, elevDeg, azDeg, dE, devFt: h - gpFt, devAzFt: cross * 6076, inCov, elevTxt, azTxt, corr, want, dh: h <= ATC_DH + 20 };
 }
@@ -214,7 +217,7 @@ function _atcBuild() {
     if (k === 'view') atc.view = v;
     else if (k === 'rng') atc.rng = +v;
     else if (k === 'own') atc.own = !atc.own;
-    else if (k === 'auto') { atc.auto = !atc.auto; atc.autoT = 0; }
+    else if (k === 'auto') { atc.auto = !atc.auto; atc.autoT = 0; try { uiToast(atc.auto ? '📡 자동 PAR 유도 켬 — 5초마다 불러 줍니다' : '📡 자동 PAR 유도 끔'); } catch (er) { _swallow(er); } try { if (typeof fdrNote === 'function') fdrNote(`ATC 자동 PAR 유도 ${atc.auto ? '켬' : '끔'}`); } catch (er) { _swallow(er); } }
     else if (k === 'sel') atc.sel = v + (b.dataset.at.split(':').slice(2).length ? ':' + b.dataset.at.split(':').slice(2).join(':') : '');
     else if (k === 'say' && t) { const val = { hdg: R.querySelector('[data-atcv="ihdg"]').value, alt: R.querySelector('[data-atcv="ialt"]').value, spd: R.querySelector('[data-atcv="ispd"]').value };
       if ((v === 'hdg' && val.hdg === '') || (v === 'alt' && val.alt === '') || (v === 'spd' && val.spd === '')) { try { uiToast('값을 먼저 넣으십시오', 'warn'); } catch (er) { _swallow(er); } return; }
@@ -236,7 +239,7 @@ function _atcRenderTop() {
     <select data-atcv="unit">${Object.keys(ATC_UNITS).map(u => `<option value="${u}" ${u === atc.unit ? 'selected' : ''}>${u}</option>`).join('')}</select>
     ${btn('view', 'asr', 'ASR', atc.view === 'asr')}${btn('view', 'par', 'PAR', atc.view === 'par')}${btn('view', 'both', 'ASR+PAR', atc.view === 'both')}
     <span class="atc-sp"></span>${[5, 10, 20, 40, 60].map(r => btn('rng', r, r + 'NM', atc.rng === r)).join('')}
-    ${btn('own', 1, '내 기체', atc.own)}${btn('auto', 1, '자동 PAR 유도', atc.auto)}
+    ${btn('own', 1, '내 기체', atc.own)}${btn('auto', 1, atc.auto ? '자동 유도 ON' : '자동 유도 OFF', atc.auto)}
     <button class="atc-b" data-at="wing:1" title="협동 비행 방 — 관제사로 참가하면 다른 기기의 기체를 관제합니다">${typeof wing !== 'undefined' && wing.room ? (wing.role === 'atc' ? '🎧 관제 중(방)' : '✈ 방') : '✈ 방 · 관제사 참가'}</button>`;
 }
 function _atcRenderSide() {
@@ -248,7 +251,9 @@ function _atcRenderSide() {
     return `<button class="atc-t${x.id === atc.sel ? ' on' : ''}" data-at="sel:${x.id}"><b>${_aEsc(x.cs)}</b> ${x.kind === 'own' ? '내 기체' : x.kind === 'wing' ? '방' : 'AI'} · ${Math.hypot(d.n, d.e).toFixed(1)}NM · ${Math.round(x.alt)}ft</button>`; }).join('') : '<i>표적 없음</i>';
   const par = P ? `<div class="atc-par-rd">${P.inCov ? `R ${P.R.toFixed(2)}NM · 활공로 ${P.devFt >= 0 ? '+' : ''}${Math.round(P.devFt)}ft(${P.dE >= 0 ? '+' : ''}${P.dE.toFixed(2)}°) · 중심선 ${P.devAzFt >= 0 ? 'R' : 'L'} ${Math.abs(Math.round(P.devAzFt))}ft(${P.azDeg.toFixed(2)}°)<br><b>${_aEsc(P.azTxt)} · ${_aEsc(P.elevTxt)}</b>` : 'PAR 범위 밖 — 활주로 10NM · ±20° 안 접근 쪽'}</div>` : '';
   const who = typeof wing !== 'undefined' && wing.room ? (wing.role === 'atc' ? `🎧 관제사로 방에 · 조종사 ${Object.keys(wing.peers || {}).length}명` : '✈ 조종사로 방에') : '방 없음 — 이 기기의 기체만(혼자 연습)';
+  const autoBtn = `<button class="atc-b atc-auto${atc.auto ? ' on' : ''}" data-at="auto:1" title="5초마다 PAR 유도 문구를 불러 준다">${atc.auto ? '■ 자동 유도 끄기' : '▶ 자동 유도 켜기'}</button>`;
   el.innerHTML = `<div class="atc-h">${_aEsc(atcFac())} · ${who}</div>
+    <div class="atc-autorow">${autoBtn}<span>${atc.auto ? `자동 유도 중 — ${t ? _aEsc(t.cs) : '표적 없음'}${P && !P.inCov ? ' (PAR 범위 밖 — 들어오면 시작)' : ''}` : '자동 유도 꺼짐'}</span></div>
     <div class="atc-list">${list}</div>${par}
     <div class="atc-h">지시 — ${t ? _aEsc(t.cs) : '표적을 고르십시오'}</div>
     <div class="atc-cmd">
@@ -329,7 +334,7 @@ function atcDrawPar(cv) {
   const { W, H, k } = _atcFit(cv); if (!(W > 0)) return;
   const g = cv.getContext('2d'); g.setTransform(1, 0, 0, 1, 0, 0); g.fillStyle = '#020a06'; g.fillRect(0, 0, W, H);
   const E = atcRwy(), G = '#2fdc6a'; if (!E) { g.fillStyle = '#888'; g.font = `${13 * k}px sans-serif`; g.fillText('이 공항에는 활주로 자료가 없습니다', 12 * k, 24 * k); return; }
-  const L = 50 * k, Rm = W - 12 * k, X = R => Rm - (Rm - L) * R / ATC_PAR_NM;
+  const L = 50 * k, Rm = W - 12 * k, X = R => L + (Rm - L) * R / ATC_PAR_NM;   // 접지점이 왼쪽 — 기체는 오른쪽에서 왼쪽으로 다가온다
   const hTop = 18 * k, hBot = H / 2 - 12 * k, aTop = H / 2 + 14 * k, aBot = H - 16 * k;
   const maxFt = ATC_PAR_NM * 6076 * Math.tan(7 * Math.PI / 180), Yh = ft => hBot - (hBot - hTop) * Math.max(0, Math.min(1, ft / maxFt));
   const maxLat = ATC_PAR_NM * Math.tan(10 * Math.PI / 180), aMid = (aTop + aBot) / 2, Ya = nm => aMid - (aBot - aTop) / 2 * Math.max(-1, Math.min(1, nm / maxLat));
@@ -345,7 +350,7 @@ function atcDrawPar(cv) {
   g.strokeStyle = 'rgba(47,220,106,0.5)'; g.lineWidth = 1 * k; g.beginPath(); g.moveTo(X(0), aMid); g.lineTo(X(ATC_PAR_NM), Ya(maxLat)); g.moveTo(X(0), aMid); g.lineTo(X(ATC_PAR_NM), Ya(-maxLat)); g.stroke();
   g.textAlign = 'left'; g.fillStyle = G; g.font = `bold ${11 * k}px monospace`;
   g.fillText(`PAR RWY ${E.id}  GP ${ATC_GP.toFixed(1)}°  DH ${ATC_DH}`, 8 * k, 12 * k); g.fillText('ELEVATION', 4 * k, (hTop + hBot) / 2); g.fillText('AZIMUTH', 4 * k, aMid);
-  g.fillText('L', 6 * k, aTop + 8 * k); g.fillText('R', 6 * k, aBot - 2 * k);
+  g.fillText('R', 6 * k, aTop + 8 * k); g.fillText('L', 6 * k, aBot - 2 * k);   // 왼쪽으로 가는 기체의 오른쪽이 위
   // 표적(커버리지 안) — 고른 것은 노랑 · 지난 자리
   for (const t of atcTargets()) {
     const p = atcPar(t, E); if (!p || !p.inCov) continue;
