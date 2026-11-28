@@ -430,6 +430,7 @@ function simStep(ts, noLoop){   // noLoop — 새 창이 대신 한 프레임을
       if (hdgRef === 'DG') dgErr = normAS(dgErr - DG_DRIFT / 3600 * dt);
       // SIM 모드: 조종간 입력을 먼저 자세·속도에 반영한다(아래 운동식은 그대로 쓴다)
       try { simFly(dt); } catch(e) { _swallow(e); }
+      try { if (!simModeOn && typeof acFixedWing === 'function' && acFixedWing()) fwKinStep(dt); } catch(e) { _swallow(e); }   // 고정익 — 최소 속도 · 평형 자세 · 토크(42-cn235.js)
       // smooth bank toward target — GSPD 중에는 ADI 자세 변화 없음(수평 유지)
       const bt = gspdOn ? 0 : bankTarget;
       const bankDiff=bt-S.bnk;

@@ -26,9 +26,14 @@ const H3_SPECS = {
   b206: { len: 11.8, rotor: { x: 0.6, z: 2.86, r: 5.08, blades: 2 },  tail: { x: -5.22, y: -0.30, z: 1.78, r: 0.83, blades: 2 }, rps: 6.5 },  // 꼬리로터 왼쪽 · 394rpm
   // R22 — 전장 8.76m(28ft 9in) · 주로터 지름 7.67m(25ft 2in · 2날개 · 시위 18cm) · 꼬리로터 1.07m(3ft 6in · 왼쪽) · 높이 2.7m · 스키드 폭 1.93m · 530rpm
   r22:  { len: 8.76, rotor: { x: 0.54, z: 2.66, r: 3.84, blades: 2, hub: 0.22, chord: 0.09 }, tail: { x: -3.85, y: -0.24, z: 1.52, r: 0.53, blades: 2, hub: 0.09, chord: 0.05 }, rps: 8.8 },
+  // CN-235-220(고정익 · 쌍발 터보프롭) — 길이 21.4m · 날개폭 25.81m · 높이 8.18m · 프로펠러 4날개 지름 3.35m(1,020rpm)
+  //   rotor · tail 은 쓰지 않는다(프로펠러 props 로 그린다) — 치수를 읽는 곳이 있어 자리만 둔다
+  cn235: { len: 21.4, fixed: true, rotor: { x: 4.75, z: 3.5, r: 1.675, blades: 4 }, tail: { x: -10.7, y: 0, z: 3.7, r: 0.01, blades: 2 }, rps: 17,
+           props: [{ x: 4.75, y: -3.9, z: 3.5 }, { x: 4.75, y: 3.9, z: 3.5 }], pr: 1.675, pblades: 4 },
 };
 const H3_R22 = typeof acR22 === 'function' && acR22();
-const H3_OWN = H3_R22 ? 'r22' : H3_B206 ? 'b206' : 'kuh';
+const H3_CN = typeof acIs === 'function' && acIs('cn235');
+const H3_OWN = H3_CN ? 'cn235' : H3_R22 ? 'r22' : H3_B206 ? 'b206' : 'kuh';
 const HELI3D_LEN = H3_SPECS[H3_OWN].len;      // 전장(m)
 const HELI3D_ROTOR = H3_SPECS[H3_OWN].rotor;  // 주로터
 const HELI3D_TAIL  = H3_SPECS[H3_OWN].tail;   // 꼬리로터(흰수리 오른쪽 · Bell 왼쪽)
@@ -352,9 +357,92 @@ function _h3BuildBodyR22(SP = H3_SPECS.r22) {
   _h3Lathe(m, [-1.05, 0, 1.80], H3Z, [[0.05, 0], [0.05, 0.05], [0, 0.07]], H3C.red, 10);
   return m;
 }
+// ── CN-235-220(해양경찰) — 흰 동체 · 붉은 나셀 · 뒤 동체 빨강 · 노랑 · 파랑 띠 · 파란 수직꼬리(뒷전 빨강) · 붉은 수평꼬리 ──
+//   원점 = 길이(21.4m)의 가운데 · 바퀴 바닥. 기수 +10.7m · 꼬리 끝 −10.7m · 높은 날개(윗면 약 4.1m) · 날개폭 25.81m
+//   그림(해양경찰 CN235-220 정사영 — 측면 · 위 · 정면 · 아래)의 비율
+const H3C_FUSE = [
+  //  X       반폭   아래    위    지수
+  [ 10.70, 0.02, 2.02, 2.12, 2.0],      // 기수 끝(레이돔)
+  [ 10.55, 0.42, 1.62, 2.55, 2.0],
+  [ 10.20, 0.78, 1.32, 2.92, 2.0],
+  [  9.60, 1.07, 1.08, 3.22, 2.1],      // 조종석 창
+  [  8.80, 1.31, 0.94, 3.52, 2.2],
+  [  7.80, 1.43, 0.90, 3.72, 2.3],
+  [  6.00, 1.45, 0.88, 3.78, 2.4],      // 화물실
+  [ -3.00, 1.45, 0.88, 3.78, 2.4],
+  [ -4.50, 1.38, 1.30, 3.80, 2.3],      // 뒤 램프(위로 휜다)
+  [ -6.00, 1.20, 1.90, 3.82, 2.2],
+  [ -7.50, 0.95, 2.50, 3.85, 2.1],
+  [ -9.00, 0.65, 3.00, 3.88, 2.0],
+  [-10.20, 0.35, 3.40, 3.88, 2.0],
+  [-10.70, 0.04, 3.62, 3.80, 2.0],      // 꼬리 끝
+];
+function _h3BuildBodyCN235(SP = H3_SPECS.cn235) {
+  const m = _h3New();
+  _h3Loft(m, H3C_FUSE, H3C.white, 4, false);
+  // 날개 뿌리 덮개(동체 위 혹)
+  _h3Loft(m, [[3.0, 0.30, 3.70, 3.84, 2.2], [2.4, 0.95, 3.70, 4.12, 2.4], [0.6, 1.00, 3.70, 4.18, 2.6], [-1.2, 0.85, 3.70, 4.04, 2.4], [-2.4, 0.30, 3.70, 3.84, 2.2]], H3C.white, 0, false);
+  // 날개 — 안쪽(나셀까지 평평) · 바깥(쳐든각 3°) · 앞전 회색 띠
+  const dih = 3 * D2R;
+  [-1, 1].forEach(sd => {
+    const Vin = [0, sd, 0], Wn = [0, 0, 1];
+    _h3Plate(m, [[2.45, 0.6], [2.30, 3.9], [-0.55, 3.9], [-0.65, 0.6]], [0, 0, 4.02], H3X, Vin, Wn, 0.40, H3C.white);
+    const Vo = [0, sd * Math.cos(dih), Math.sin(dih)], Wo = [0, -sd * Math.sin(dih), Math.cos(dih)];
+    _h3Plate(m, [[2.30, 0], [1.55, 9.0], [0.25, 9.0], [-0.55, 0]], [0, sd * 3.9, 4.02], H3X, Vo, Wo, 0.30, H3C.white);
+    _h3Plate(m, [[2.36, 0], [1.62, 9.0], [1.50, 9.0], [2.22, 0]], [0, sd * 3.9, 4.04], H3X, Vo, Wo, 0.31, H3C.gray);       // 앞전(제빙 부츠)
+    // 날개 끝 등(왼쪽 빨강 · 오른쪽 초록)
+    _h3Lathe(m, [0.9, sd * (3.9 + 9.0 * Math.cos(dih)), 4.02 + 9.0 * Math.sin(dih)], [0, sd, 0], [[0, 0], [0.08, 0], [0.08, 0.10], [0, 0.12]], sd < 0 ? [0.95, 0.15, 0.15] : [0.15, 0.9, 0.25], 8);
+  });
+  // 엔진 나셀(붉은색 · 날개 아래로 늘어진다) · 흡입구 · 배기
+  SP.props.forEach(P => {
+    _h3Pod(m, -2.7, P.x - 0.15, P.y, P.z, 0.60, 0.72, H3C.red, 3, 2.3);
+    _h3Lathe(m, [P.x - 0.6, P.y, P.z - 0.55], H3X, [[0.20, 0], [0.24, 0.08], [0, 0.10]], H3C.black, 12);                  // 아래 흡입구
+    _h3Lathe(m, [-1.2, P.y + Math.sign(P.y) * 0.55, P.z + 0.05], [0, Math.sign(P.y), 0], [[0.18, 0], [0.18, 0.12], [0, 0.12]], H3C.dark, 10);   // 옆 배기
+  });
+  // 주 착륙장치 덮개(스폰슨) — 바퀴는 따로(_h3BuildGearCN235 · 올리면 감춘다)
+  [-1, 1].forEach(sd => _h3Pod(m, -1.4, 2.8, sd * 1.42, 1.18, 0.42, 0.42, H3C.white, 3, 2.4));
+  // 수직 꼬리(파랑 · 뒷전 빨강) · 등 지느러미 · 수평 꼬리(빨강)
+  const fin = [[-5.6, 3.80], [-9.0, 8.18], [-10.3, 8.18], [-10.65, 3.80]];
+  _h3Plate(m, fin, [0, 0, 0], H3X, H3Z, H3Y, 0.26, H3C.blue);
+  _h3Plate(m, [[-9.55, 6.10], [-9.95, 8.16], [-10.30, 8.16], [-10.62, 4.10], [-10.10, 4.10]], [0, 0, 0], H3X, H3Z, H3Y, 0.28, H3C.red);
+  _h3Plate(m, [[-3.6, 3.80], [-5.7, 4.75], [-5.7, 3.80]], [0, 0, 0], H3X, H3Z, H3Y, 0.30, H3C.blue);
+  [-1, 1].forEach(sd => _h3Plate(m, [[-8.0, 0.2], [-9.45, 5.1], [-10.55, 5.1], [-10.55, 0.2]], [0, 0, 3.98], H3X, [0, sd, 0], H3Z, 0.16, H3C.red));
+  // 등 · 배 충돌방지등 · 꼬리 흰 등 · 안테나
+  _h3Lathe(m, [1.2, 0, 4.18], H3Z, [[0.08, 0], [0.08, 0.06], [0, 0.10]], H3C.red, 10);
+  _h3Lathe(m, [2.0, 0, 0.88], H3Z, [[0.08, 0], [0.08, -0.06], [0, -0.10]], H3C.red, 10);
+  _h3Lathe(m, [-10.7, 0, 3.71], H3X, [[0, 0], [0.05, 0], [0.05, -0.06], [0, -0.06]], [1, 1, 1], 8);
+  _h3Plate(m, [[4.6, 0], [4.2, 0], [4.0, 0.5], [4.25, 0.5]], [0, 0, 3.76], H3X, H3Z, H3Y, 0.03, H3C.dark);
+  return m;
+}
+// 착륙장치(바퀴 · 다리) — 주바퀴 앞뒤 둘씩(스폰슨 아래) · 앞바퀴 둘
+function _h3BuildGearCN235() {
+  const m = _h3New();
+  [-1, 1].forEach(sd => {
+    [0.1, 1.25].forEach(x => {
+      _h3Lathe(m, [x, sd * 1.62, 0.42], H3Y, [[0, -0.13], [0.30, -0.13], [0.42, -0.10], [0.42, 0.10], [0.30, 0.13], [0, 0.13]], H3C.black, 16);
+      _h3Rod(m, [x, sd * 1.50, 0.42], [x, sd * 1.35, 0.95], 0.06, H3C.gray);
+    });
+  });
+  [-1, 1].forEach(sd => _h3Lathe(m, [8.55, sd * 0.17, 0.33], H3Y, [[0, -0.08], [0.24, -0.08], [0.33, -0.05], [0.33, 0.05], [0.24, 0.08], [0, 0.08]], H3C.black, 14));
+  _h3Rod(m, [8.55, 0, 1.0], [8.55, 0, 0.33], 0.07, H3C.gray);
+  _h3Rod(m, [8.55, -0.2, 0.33], [8.55, 0.2, 0.33], 0.05, H3C.gray);
+  return m;
+}
+// 프로펠러(허브 가운데가 원점 · X 축으로 돈다) — 붉은 스피너 · 검은 4날개(끝 노랑)
+function _h3BuildProp(SP) {
+  const m = _h3New(), R = SP.pr, n = SP.pblades || 4;
+  _h3Lathe(m, [-0.35, 0, 0], H3X, [[0.40, 0], [0.38, 0.25], [0.28, 0.50], [0.12, 0.66], [0, 0.72]], H3C.red, 16);
+  for (let k = 0; k < n; k++) {
+    const a = k / n * 2 * Math.PI, U = [0, Math.cos(a), Math.sin(a)], V = [0, -Math.sin(a), Math.cos(a)];
+    _h3Plate(m, [[0.30, -0.14], [0.9, -0.17], [R - 0.12, -0.10], [R - 0.12, 0.12], [0.9, 0.17], [0.30, 0.12]], [0, 0, 0], U, V, H3X, 0.06, H3C.black);
+    _h3Plate(m, [[R - 0.12, -0.10], [R, -0.07], [R, 0.08], [R - 0.12, 0.12]], [0, 0, 0], U, V, H3X, 0.06, H3C.yellow);
+  }
+  return m;
+}
 function _h3BuildBody(ty = H3_OWN) {
   if (ty === 'b206') return _h3BuildBodyB206();
   if (ty === 'r22') return _h3BuildBodyR22();
+  if (ty === 'cn235') return _h3BuildBodyCN235();
   const SP = H3_SPECS.kuh, HELI3D_ROTOR = SP.rotor, HELI3D_TAIL = SP.tail;
   const m = _h3New();
   _h3Loft(m, H3_FUSE, H3C.white, 1, false);
@@ -469,8 +557,8 @@ function _h3BuildDisc(r, axis) {
   const m = _h3New(), N = 48;
   for (let j = 0; j < N; j++) {
     const a0 = j / N * 2 * Math.PI, a1 = (j + 1) / N * 2 * Math.PI;
-    const pt = a => axis === 'z' ? [r * Math.cos(a), r * Math.sin(a), 0] : [r * Math.cos(a), 0, r * Math.sin(a)];
-    const n = axis === 'z' ? H3Z : H3Y;
+    const pt = a => axis === 'z' ? [r * Math.cos(a), r * Math.sin(a), 0] : axis === 'x' ? [0, r * Math.cos(a), r * Math.sin(a)] : [r * Math.cos(a), 0, r * Math.sin(a)];
+    const n = axis === 'z' ? H3Z : axis === 'x' ? H3X : H3Y;
     _h3Put(m, [0, 0, 0], n, H3C.blade, 0); _h3Put(m, pt(a0), n, H3C.blade, 0); _h3Put(m, pt(a1), n, H3C.blade, 0);
   }
   return m;
@@ -637,9 +725,20 @@ vec3 r22(vec3 p, vec3 n) {
   if (side && p.z > 0.68 && p.z < 0.73 && p.x > 0.50) return WHITE;                         // 옆 흰 줄
   return RED;
 }
+// CN-235(해양경찰) — 흰 동체 · 조종석 창 · 객실 창 줄 · 뒤 동체 빨강 · 노랑 · 파랑 띠(비스듬히) · 검은 레이돔 끝
+vec3 cnLiv(vec3 p, vec3 n) {
+  if (p.x > 10.45) return vec3(0.12, 0.13, 0.15);
+  if (p.x > 8.65 && p.x < 9.95 && p.z > 2.88 && p.z < 3.38) return GLASS;                              // 조종석 창
+  if (abs(n.y) > 0.6 && p.z > 2.30 && p.z < 2.72 && p.x > -2.6 && p.x < 5.6 && fract((p.x + 10.0) / 0.85) < 0.48) return GLASS;   // 객실 창
+  float d = p.x - (p.z - 0.9) * 0.35;
+  if (d < -5.35) return BLUE;
+  if (d < -4.85) return YELLOW;
+  if (d < -4.35) return RED;
+  return WHITE;
+}
 void main() {
   if (v_mat < -0.5) { gl_FragColor = vec4(v_col * u_alpha, u_alpha); return; }   // 스스로 빛나는 등(함정 수평 지시등)
-  vec3 c = v_mat > 2.5 ? r22(v_pos, normalize(v_nm)) : v_mat > 1.5 ? bell(v_pos, normalize(v_nm)) : v_mat > 0.5 ? livery(v_pos, normalize(v_nm)) : v_col;
+  vec3 c = v_mat > 3.5 ? cnLiv(v_pos, normalize(v_nm)) : v_mat > 2.5 ? r22(v_pos, normalize(v_nm)) : v_mat > 1.5 ? bell(v_pos, normalize(v_nm)) : v_mat > 0.5 ? livery(v_pos, normalize(v_nm)) : v_col;
   vec3 nw = normalize(v_nw);
   float d = max(dot(nw, u_light), 0.0);
   float sky = 0.5 + 0.5 * nw.z;
@@ -691,7 +790,9 @@ function _h3Init(gl) {
 function _h3Set(h, ty) {
   if (h.sets[ty]) return h.sets[ty];
   const gl = h.gl, loc = h.loc, vao = h.vao, SP = H3_SPECS[ty];
-  const parts = {
+  const parts = SP.props ? {   // 고정익 — 몸통 · 프로펠러 · 도는 원판(X 축)
+    body: _h3Upload(gl, _h3BuildBody(ty)), gear: _h3Upload(gl, _h3BuildGearCN235()), prop: _h3Upload(gl, _h3BuildProp(SP)), pdisc: _h3Upload(gl, _h3BuildDisc(SP.pr, 'x')),
+  } : {
     body: _h3Upload(gl, _h3BuildBody(ty)), rotor: _h3Upload(gl, _h3BuildRotor(SP)), tail: _h3Upload(gl, _h3BuildTail(SP)),
     disc: _h3Upload(gl, _h3BuildDisc(SP.rotor.r, 'z')), tdisc: _h3Upload(gl, _h3BuildDisc(SP.tail.r, 'y')),
   };
@@ -833,7 +934,8 @@ const HELI3D_LAYER = {
     _h3TPhase = (_h3TPhase + dt * k * HELI3D_TAIL_RPS * 2 * Math.PI) % (2 * Math.PI);
 
     const pc = _h3PoseNow;
-    const pose = (pc && simExtView && now - pc.t < 60) ? pc.pose : heli3dPose(this.map);
+    const pose = Object.assign({}, (pc && simExtView && now - pc.t < 60) ? pc.pose : heli3dPose(this.map));
+    if (H3_CN) { try { pose.gear = cn.gearPos > 0.5; } catch (e) { _swallow(e); } }   // CN-235 — 착륙장치를 올렸으면 바퀴를 감춘다
     _h3DrawHeli(h, h.parts, H3_SPECS[H3_OWN], main, pose, _h3Phase, _h3TPhase, k > 0, h3HslAim());
     // 외부 등화(상부 콘솔 POSITION · ANTI COLLISION LTS)
     try {
@@ -866,6 +968,15 @@ function _h3DrawHeli(h, parts, SP, main, pose, ph, tph, spin, aim) {
   gl.uniform3fv(h.loc.light, H3_LIGHT);
   const f32 = a => new Float32Array(a);
   _h3Draw(h, parts.body, f32(base), rot3, 1);
+  if (SP.props && parts.gear && pose.gear !== false) _h3Draw(h, parts.gear, f32(base), rot3, 1);   // 착륙장치(올리면 감춘다)
+  if (SP.props) {   // 고정익 — 프로펠러 둘(앞에서 볼 때 시계 방향) · 돌면 흐린 원판
+    const cp = Math.cos(ph * 2), sp = Math.sin(ph * 2), Rp = [[1, 0, 0], [0, cp, -sp], [0, sp, cp]];
+    SP.props.forEach(P => {
+      _h3Draw(h, parts.prop, f32(_m4Mul(base, _m4From(Rp, [P.x, P.y, P.z]))), rotR(Rp), 1);
+      if (spin) { gl.depthMask(false); _h3Draw(h, parts.pdisc, f32(_m4Mul(base, _m4From([[1, 0, 0], [0, 1, 0], [0, 0, 1]], [P.x + 0.02, P.y, P.z]))), rot3, 0.12); gl.depthMask(true); }
+    });
+    return;
+  }
   _h3Draw(h, parts.rotor, f32(rotorM), rotR([[ca, -sa, 0], [sa, ca, 0], [0, 0, 1]]), 1);
   _h3Draw(h, parts.tail, f32(tailM), rotR([[cb, 0, sb], [0, 1, 0], [-sb, 0, cb]]), 1);
   // 외장형 탐조등 머리 — 방위(Z 축 · +오른쪽) 다음 고각(Y 축 · −아래)

@@ -18,7 +18,9 @@ const SND_FILES_AW = { gnd: 'sounds/heli-ground.wav', air: 'sounds/heli-flight.w
 // Bell 206 — 단발(Allison 250 한 대) · 두 날개 주로터의 낮은 'whop'(13Hz) · 꼬리로터 버즈를 합성한 소리
 // (같은 6초 되풀이 · 끝과 처음이 끊김 없이 이어진다)
 const SND_FILES_B206 = { gnd: 'sounds/b206-ground.wav', air: 'sounds/b206-flight.wav' };
-function sndFiles() { return (typeof acIs === 'function' && acIs('b206')) ? SND_FILES_B206 : SND_FILES_AW; }
+// CN-235 — 4날개 프로펠러 둘(68Hz 날개 지나감 · 맥놀이) · CT7 터빈을 합성한 소리(sounds/cn235-synth.py)
+const SND_FILES_CN = { gnd: 'sounds/cn235-ground.wav', air: 'sounds/cn235-flight.wav' };
+function sndFiles() { return (typeof acIs === 'function' && acIs('cn235')) ? SND_FILES_CN : (typeof acIs === 'function' && acIs('b206')) ? SND_FILES_B206 : SND_FILES_AW; }
 const SND_XFADE = 2.5;    // 땅 ↔ 공중 소리가 겹쳐 바뀌는 시간(s)
 const SND_LIGHT = 0.3;    // LIGHT ON WHEELS — 바퀴가 떨어지기 직전 미리 섞는 이륙 후 소리의 몫
 const SND_VOL   = 0.8;    // 전체 크기(100% — 두 소리가 겹쳐도 넘치지 않게 조금 낮춰 둔다)
@@ -266,7 +268,7 @@ function sysSndLevels(st, mem, dt) {
   return out;
 }
 function sysSndTick(dt) {
-  if (typeof acIs === 'function' && acIs('b206')) return;          // Bell 은 제 소리(27-b206coll.js)
+  if (typeof acIs === 'function' && (acIs('b206') || acIs('cn235'))) return;          // Bell 은 제 소리(27-b206coll.js) · CN-235 는 계통 소리가 없다
   if (!_snd || !sndOn) { if (_ss) { try { _ss.bus.gain.setTargetAtTime(0, _snd.ctx.currentTime, 0.1); } catch (e) { _swallow(e); } } return; }
   const ss = _ssEnsure(); if (!ss) return;
   const ctx = _snd.ctx, t = ctx.currentTime, st = sysSndState();

@@ -472,7 +472,7 @@ function simAfcsLatRelease() {
 // 지금 속도에서 뱅크가 '선회' 로 쓰이는 몫(0=전부 옆미끄럼, 1=전부 선회)
 // HDG·NAV 가 뱅크를 잡고 있으면 평소처럼 선회만 한다(옆으로 미끄러지면 기수를 못 돌린다).
 function simTurnFrac() {
-  if (!simModeOn || simAfcsLat()) return 1;
+  if (!simModeOn || simAfcsLat() || (typeof acFixedWing === 'function' && acFixedWing())) return 1;   // 고정익은 뱅크가 늘 선회
   return Math.max(0, Math.min(1, Math.abs(S.spd) / SIDE_FADE_KT));
 }
 const SIM_SPD_MAX   = 160;     // 최대 대기속도(kt)
@@ -1165,7 +1165,7 @@ function simTrimEff(k, stick) {
 // 끄면 그 자세를 트림으로 잡아 두어 자세가 튀지 않는다.
 const SIM_IAS_RATE = 5;        // 조종간을 놓았을 때 IAS 자세로 돌아오는 빠르기(°/s)
 // Bell 206 은 VNE 130 KIAS(25-b206panel.js B206_LIM.vne) 를 넘겨 고르지 못한다
-function simIasMax() { return (typeof acIs === 'function' && acIs('b206')) ? B206P.vne : SIM_SPD_MAX; }   // R22 100
+function simIasMax() { return (typeof acIs === 'function' && acIs('cn235')) ? 240 : (typeof acIs === 'function' && acIs('b206')) ? B206P.vne : SIM_SPD_MAX; }   // R22 100
 function simIasClamp(v) { return Math.max(0, Math.min(simIasMax(), Math.round(v))); }
 function simIasEngage() {
   if (!simModeOn) return;
@@ -1644,7 +1644,7 @@ function simGroundFt() { return _simGndFresh ? _simGndFt : 0; }
 // 갑판에 앉아 있으면 함정과 함께 간다(07-sim.js 의 함정 이동 · 09-cdu.js 의 침로 변경).
 // 기체는 앞뒤 20m(로터 포함)로 본다. 그 길이 아래 어디라도 함정이 있으면 가장 높은
 // 윗면이 바닥이다 — 기수가 함교 위로 들어가 있으면 내려앉지 못하고 함교에 걸린다.
-const SIM_AC_LEN = (typeof acR22 === "function" && acR22()) ? 9 : (typeof acIs === "function" && acIs("b206")) ? 12 : 20;               // m
+const SIM_AC_LEN = (typeof acIs === "function" && acIs("cn235")) ? 22 : (typeof acR22 === "function" && acR22()) ? 9 : (typeof acIs === "function" && acIs("b206")) ? 12 : 20;               // m
 function simShipTopM(lat, lon, hdg) {
   if (typeof shipDeckTopM !== 'function') return null;
   const h = hdg * D2R, cl = Math.cos(lat * D2R);
@@ -1788,6 +1788,7 @@ function toggleSimMode(on, opt) {
     // 땅에서 시작할지는 따로 주지 않으면 지금 자리로 정한다(지면 가까이면 땅에서)
     const ground = (opt && typeof opt.ground === 'boolean') ? opt.ground : simNearGround();
     if (ground) simStartGround();
+    try { if (typeof acFixedWing === 'function' && acFixedWing()) fwSimEnter(ground); } catch (e) { _swallow(e); }   // 고정익 — 날던 대로(받음각 · 경로각 · 파워 레버)
     simEnterView();
   } else {
     simExitView();
@@ -1898,6 +1899,7 @@ function simFly(dt) {
   try { gaStep(dt); } catch (e) { _swallow(e); }
   try { tdStep(dt); } catch (e) { _swallow(e); }
   if (!simModeOn || !(dt > 0)) return;
+  if (typeof acFixedWing === 'function' && acFixedWing()) { fwFly(dt); return; }   // 고정익(CN-235 · 42-cn235.js)
   const a = simModeAxes();
 
   // 땅에 붙어 있는가 — 지면 위에서는 자세를 줘도 미끄러지지 않는다
