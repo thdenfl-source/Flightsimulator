@@ -12,7 +12,7 @@
 // PFD 창(03-pfd.js)이 cnDraw 를 부른다 — 창이 넓으면 셋(글레어실드 위 · LH · 가운데)을 함께, 좁으면 하나씩(위 탭으로 고른다)
 // ══════════════════════════════════════════════════════
 const CNP_BG = '#97aab1', CNP_EDGE = '#6f8288', CNP_DARK = '#222528';
-const CNP_SIZE = { LH: [1000, 640], CTR: [1000, 660], GLR: [2000, 260], ALL: [2000, 920], OVHD: [1400, 800], CB: [1400, 560], CONS: [1400, 720], PERF: [1000, 640], FMS: [700, 960], RTU: [1000, 640] };
+const CNP_SIZE = { LH: [1000, 640], CTR: [1000, 660], GLR: [2000, 260], ALL: [2000, 920], OVHD: [1400, 800], CB: [1400, 560], CONS: [1400, 720], PERF: [1000, 640], FMS: [700, 960], RTU: [1000, 640], PED: [700, 1000] };
 let cnPage = (() => { try { return localStorage.getItem('cnPage') || 'AUTO'; } catch (e) { return 'AUTO'; } })();
 function cnPageSet(p) { cnPage = p; try { localStorage.setItem('cnPage', p); } catch (e) { _swallow(e); } _cnRedraw(); }
 
@@ -535,10 +535,10 @@ function cnPitchWheel(d) {
 }
 
 // ══ 판 한 장(PFD 창 · Cockpit 모드) — 넓으면 셋을 함께, 좁으면 위 탭으로 고른 하나 ══
+// PFD 창 = LH 계기판 — 다른 판(CENTER · GLARE · OVHD · C/B · CONSOLE · W&B · FMS · RTU · PED)은 위 창 탭의 제 화면(아래 CN_SCREENS)
 function cnDraw(g, x, y, w, h) {
   if (!(w > 40 && h > 40)) return;
-  const page = cnPage === 'AUTO' ? (w / h > 1.75 ? 'ALL' : 'LH') : cnPage;
-  cnDrawPage(g, x, y, w, h, page, true);
+  cnDrawPage(g, x, y, w, h, 'LH', false);
 }
 function cnDrawPage(g, x, y, w, h, page, tabs) {
   const v = cnPanelVals(), [PW, PH] = CNP_SIZE[page] || CNP_SIZE.LH;
@@ -556,6 +556,7 @@ function cnDrawPage(g, x, y, w, h, page, tabs) {
   else if (page === 'PERF') sub(0, 0, cnPerfDraw);
   else if (page === 'FMS') sub(0, 0, cnFmsDraw);
   else if (page === 'RTU') sub(0, 0, cnRtuPage);
+  else if (page === 'PED') sub(0, 0, cnPedDraw);
   else sub(0, 0, cnLhDraw);
   g.restore();
   // 고르는 탭(위 왼쪽 · 화면 픽셀)
@@ -586,6 +587,7 @@ function cnOverlayDraw(g, x, y, w, h) {
   [0, 1].forEach(i => { _cnOct(g, 450 + i * 100, 230, 40); b206RoundGauge(g, 450 + i * 100, 230, 40, { lo: 2, hi: 10, maj: 1, min: 0.5, bands: [[4, 8.2, '#18c23a']], redline: [8.7], lab: q => q % 2 === 0 ? String(q) : null, val: v.itt[i] / 100, title: ['ITT'], ty: -0.1, fs: 8 }); });
   g.restore();
 }
+let _cnDrag = null;
 // 판을 누르면 — 판 그림 좌표로 되짚어 그 자리 일을 한다(누름은 여기서 끝낸다)
 function _cnCanvasHit(ev, c) {
   const H = c && c._cnHit; if (!H) return null;
@@ -598,18 +600,34 @@ function _cnCanvasHit(ev, c) {
 }
 if (CN_ON) {
   document.addEventListener('pointerdown', ev => {
-    const c = ev.target; if (!c || c.tagName !== 'CANVAS' || !c._cnHit) return;
+    const c = ev.target; if (!c || c.tagName !== 'CANVAS' || !c._cnHit || c.classList.contains('ck-scr')) return;   // 조종석 작은 칸은 누르면 크게(15-heli3d.js)
     const h = _cnCanvasHit(ev, c); if (!h) return;
     ev.stopPropagation(); ev.preventDefault();
-    try { h.fn(ev, h.lx, h.ly); } catch (e) { _swallow(e); }
-    _cnRedraw();
+    try { if (h.drag) { h.drag(h.lx, h.ly); _cnDrag = { c, h }; } else if (h.fn) h.fn(ev, h.lx, h.ly); } catch (e) { _swallow(e); }
+    _cnRedraw(); cnScreensDraw(true);
   }, true);
-  document.addEventListener('click', ev => { const c = ev.target; if (c && c.tagName === 'CANVAS' && c._cnHit && _cnCanvasHit(ev, c)) { ev.stopPropagation(); ev.preventDefault(); } }, true);
+  // 끌기(페데스탈 파워 · 컨디션 레버) — 누른 칸 안에서 손가락을 따라
+  document.addEventListener('pointermove', ev => {
+    if (!_cnDrag) return;
+    const H = _cnDrag.c._cnHit, r = _cnDrag.c.getBoundingClientRect(); if (!H || !(r.width > 0)) return;
+    const px = (ev.clientX - r.left) * _cnDrag.c.width / r.width, py = (ev.clientY - r.top) * _cnDrag.c.height / r.height;
+    try { _cnDrag.h.drag((px - H.tx) / H.k - _cnDrag.h.ox, (py - H.ty) / H.k - _cnDrag.h.oy); } catch (e) { _swallow(e); }
+    cnScreensDraw(true);
+  }, true);
+  ['pointerup', 'pointercancel'].forEach(t => document.addEventListener(t, () => { _cnDrag = null; }, true));
+  document.addEventListener('click', ev => { const c = ev.target; if (c && c.tagName === 'CANVAS' && c._cnHit && !c.classList.contains('ck-scr') && _cnCanvasHit(ev, c)) { ev.stopPropagation(); ev.preventDefault(); } }, true);
 }
 
 // ══ 페데스탈(그림 1-1-10 · 700×1000) — 끌어서 레버 · 눌러서 스위치 ══
 let _cnPed = null, _cnPedDrag = null;
+// 페데스탈 — 이제는 위 창 탭의 PED 화면(cnped)으로 연다 · 종전 떠 있는 창(_cnPedBuild)은 legacy 로 남겨 둔다
 function cnPedToggle(on) {
+  if (typeof cnShow === 'function') {
+    const shown = (typeof ckConPop !== 'undefined' && ckConPop === 'cnped') || (typeof panelSides === 'function' && panelSides().some(sd => panelGet(sd) === 'cnped'));
+    if (on === false || (on === undefined && shown)) { if (typeof ckConPop !== 'undefined' && ckConPop === 'cnped') toggleConsolePop(null); return; }
+    if (!shown) cnShow('cnped');
+    return;
+  }
   if (!_cnPed) _cnPedBuild();
   const show = on === undefined ? _cnPed.style.display !== 'flex' : !!on;
   _cnPed.style.display = show ? 'flex' : 'none';
@@ -672,13 +690,13 @@ function cnPedDraw(g) {
     const bx = 252 + (i % 2) * 96, by = 30 + (i / 2 | 0) * 108; _cnBlackPanel(g, bx, by, 90, 100);
     _cnDig(g, bx + 8, by + 10, 74, 26, freq(k).slice(0, 7), '#ff7a3a'); _cnT(g, t, bx + 70, by + 46, 9, '#fff');
     g.save(); g.fillStyle = '#9aa'; [bx + 24, bx + 66].forEach(cx => { g.beginPath(); g.arc(cx, by + 72, 12, 0, 7); g.fill(); }); g.restore();
-    _cnHit(bx, by, 90, 100, () => cnPageSet('RTU'));   // RTU 쪽에서 노브 · XFR · MEM · STO · TEST
+    _cnHit(bx, by, 90, 100, () => cnShow('cnrtu'));   // RTU 쪽에서 노브 · XFR · MEM · STO · TEST
   });
   // UNIVERSAL CDU(누르면 CDU 를 연다)
   _cnBlackPanel(g, 446, 90, 200, 190); _cnT(g, 'UNIVERSAL', 546, 106, 11, '#fff');
   g.save(); g.fillStyle = '#05070a'; g.fillRect(486, 118, 120, 76); g.restore(); _cnT(g, (cn.fms && cn.fms.on) ? (cn.fms.page || 'FMS') : 'OFF', 546, 156, 14, '#3cff6a');
   for (let r = 0; r < 4; r++) for (let c = 0; c < 10; c++) { g.save(); g.fillStyle = '#3d4246'; g.fillRect(466 + c * 16.5, 204 + r * 17, 13, 13); g.restore(); }
-  _cnHit(446, 90, 200, 190, () => cnPageSet('FMS'));   // UNIVERSAL CDU — FMS 쪽(45-cn235fms.js)
+  _cnHit(446, 90, 200, 190, () => cnShow('cnfms'));   // UNIVERSAL CDU — FMS 쪽(45-cn235fms.js)
   // EMER & PARK BR(왼쪽 빨간 손잡이)
   g.save(); g.fillStyle = '#121314'; g.fillRect(52, 280, 88, 288); g.fillStyle = '#000'; g.fillRect(90, 320, 12, 210); g.restore();
   const park = cnPark(), py = park ? 330 : 420;
@@ -931,4 +949,56 @@ function cnFcpSync() {
 if (CN_ON) {
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', cnFcpBuild); else cnFcpBuild();
   setInterval(() => { try { cnFcpBuild(); cnFcpSync(); } catch (e) { _swallow(e); } }, 300);
+}
+
+// ══ CN-235 화면 — 위 창 탭(왼쪽 · 가운데 · 오른쪽 · 아래)에서 고른다 · Cockpit 모드에서는 작은 칸을 누르면 크게(팝아웃) ══
+//   PFD 탭은 LH 계기판 · 나머지는 아래 화면마다 제 그릇(#cnp-<k>-wrap)과 캔버스(07a-panels.js applyPanels 가 옮긴다)
+const CN_SCREENS = [['cnctr', 'CENTER', 'CTR', 'CTR'], ['cnglr', 'GLARE', 'GLR', 'GLR'], ['cnovhd', 'OVHD', 'OVHD', 'OVHD'], ['cncb', 'C/B', 'C/B', 'CB'],
+  ['cncons', 'CONSOLE', 'CONS', 'CONS'], ['cnwb', 'W&B', 'W&B', 'PERF'], ['cnfms', 'FMS', 'FMS', 'FMS'], ['cnrtu', 'RTU', 'RTU', 'RTU'], ['cnped', 'PEDESTAL', 'PED', 'PED']];
+const CN_PAGE_OF = Object.fromEntries(CN_SCREENS.map(([k, , , pg]) => [k, pg]));
+if (CN_ON) {
+  window.CN_WRAPS = Object.fromEntries(CN_SCREENS.map(([k]) => [k, `cnp-${k}-wrap`]));
+  const R = document.getElementById('right-panel');
+  CN_SCREENS.forEach(([k]) => {
+    if (document.getElementById(`cnp-${k}-wrap`)) return;
+    const d = document.createElement('div'); d.id = `cnp-${k}-wrap`; d.className = 'page-content page-hidden cnp-wrap';
+    d.innerHTML = `<canvas class="cnp-cv" data-cnp-page="${CN_PAGE_OF[k]}"></canvas>`; if (R) R.appendChild(d);
+  });
+  // 탭 — 줄마다 Cockpit 단추 앞에
+  [['left-tabs', 'left'], ['mid-tabs', 'mid'], ['page-tabs', 'right'], ['bot-tabs', 'bot']].forEach(([id, side]) => {
+    const row = document.getElementById(id); if (!row || row.querySelector('.cn-tab')) return;
+    const before = row.querySelector('.tab-act') || null;
+    CN_SCREENS.forEach(([k, name, short]) => {
+      const b = document.createElement('button'); b.className = 'page-tab cn-tab'; b.dataset.sel = k; b.dataset.short = short;
+      b.dataset.act = 'selectPanel'; b.dataset.arg = JSON.stringify([side, k]); b.textContent = name; b.title = `CN-235 ${name}`;
+      row.insertBefore(b, before);
+    });
+  });
+  try { if (typeof SIMPLE_SCREENS !== 'undefined') CN_SCREENS.forEach(([k, name]) => { if (!SIMPLE_SCREENS.some(x => x[0] === k)) SIMPLE_SCREENS.push([k, name]); }); } catch (e) { _swallow(e); }
+  try {   // Cockpit 모드 팝아웃(15-heli3d.js) — 이름 · 가로세로 비율
+    if (typeof CKPIT_POP !== 'undefined') CN_SCREENS.forEach(([k, name]) => { CKPIT_POP[k] = name; const sz = CNP_SIZE[CN_PAGE_OF[k]]; if (sz && typeof CKPIT_POP_AR !== 'undefined') CKPIT_POP_AR[k] = sz[0] / sz[1]; });
+    if (typeof CKPIT_POP_AR !== 'undefined') CKPIT_POP_AR.pfd = 1000 / 700;
+  } catch (e) { _swallow(e); }
+  try { if (typeof applyPanels === 'function') applyPanels(); } catch (e) { _swallow(e); }
+}
+// 보이는 CN 화면을 그 크기로 다시 그린다(1초에 다섯 번 · 누르면 곧바로)
+function cnScreensDraw(now) {
+  if (!CN_ON) return;
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  document.querySelectorAll('.cnp-wrap:not(.page-hidden) > canvas.cnp-cv').forEach(c => {
+    const w = c.clientWidth, h = c.clientHeight; if (!(w > 20 && h > 20)) return;
+    const W = Math.round(w * dpr), H = Math.round(h * dpr);
+    if (c.width !== W || c.height !== H) { c.width = W; c.height = H; }
+    try { cnDrawTo(c, c.dataset.cnpPage); } catch (e) { _swallow(e); }
+  });
+}
+if (CN_ON) setInterval(() => { try { cnScreensDraw(); } catch (e) { _swallow(e); } }, 200);
+// 그 화면을 보이게 — Cockpit 모드면 크게(팝아웃) · 아니면 PFD 가 아닌 창에
+function cnShow(k) {
+  try {
+    if (typeof ckpitWanted === 'function' && ckpitWanted() && typeof toggleConsolePop === 'function') { if (ckConPop !== k) toggleConsolePop(k); return; }
+    const sides = panelSides(); if (sides.some(sd => panelGet(sd) === k)) return;
+    const side = sides.find(sd => sd !== 'left' && panelGet(sd) !== 'pfd') || sides.find(sd => panelGet(sd) !== 'pfd') || 'right';
+    selectPanel(side, k);
+  } catch (e) { _swallow(e); }
 }

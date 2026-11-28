@@ -2550,9 +2550,9 @@ html.ed-proc #gyro-btn, html.ed-proc #gyro-align-btn { display: none !important;
 /* Bell 206 — CDU · UPPER CONSOLE 이 없다(00-aircraft.js acScrOk) — 탭 · 단독 · 조종석 버튼을 감춘다 */
 html.ac-b206 .page-tab[data-sel="cdu"], html.ac-b206 .page-tab[data-sel="ovhd"], html.ac-b206 .page-tab[data-sel="sysp"], html.ac-b206 #cdu-solo-btn,
 html.ac-b206 #ctl3d #cduov-btn, html.ac-b206 #ctl3d #upperc-btn, html.ac-b206 #ctl3d #upperc-btn.show { display: none !important; }
-html:not(.ac-aw189) .page-tab.msn-tab { display: none !important; }   /* Vendor(전탐석) — 흰수리만 */
+html:not(.ac-aw189):not(.ac-cn235) .page-tab.msn-tab { display: none !important; }   /* Vendor(전탐석) — 흰수리 · CN-235 */
 /* CN-235 — 고정익: UPPER CONSOLE · SYSTEM(흰수리 계통) · 회전익 특성 · HOVER 단추가 없다 */
-html.ac-cn235 .page-tab[data-sel="ovhd"], html.ac-cn235 .page-tab[data-sel="sysp"], html.ac-cn235 #ctl3d #upperc-btn, html.ac-cn235 #ctl3d #upperc-btn.show,
+html.ac-cn235 .page-tab[data-sel="ovhd"], html.ac-cn235 .page-tab[data-sel="sysp"], html.ac-cn235 .page-tab[data-sel="lcon"], html.ac-cn235 #ctl3d #lconc-btn, html.ac-cn235 #ctl3d #lconc-btn.show, html.ac-cn235 #ctl3d #upperc-btn, html.ac-cn235 #ctl3d #upperc-btn.show,
 html.ac-cn235 [data-act="toggleRotorChar"], html.ac-cn235 [data-act="toggleRcOpt"], html.ac-cn235 [data-act="setRotorDir"],
 html.ac-cn235 [data-act="toggleHoverPage"], html.ac-cn235 [data-act="toggleHoverPosition"], html.ac-cn235 [data-act="toggleGspd"] { display: none !important; }
 /* ATC 관제석(41-atc.js) */
@@ -2787,6 +2787,9 @@ html.ac-cn235 #pfd-sk, html.ac-cn235 #fcp-simple, html.ac-cn235 .ctrl-bar > .ctr
 #cn-fcp .cnf-k > i small { display: block; color: #8fa2ad; font-size: 8px; }
 #cn-fcp .cnf-k > i b { color: #3cf; font-size: 12px; }
 #cn-fcp .cnf-k .cnf-b { flex: 0 0 16px; min-width: 16px; padding: 6px 0; }
+/* CN-235 화면(위 창 탭 — CENTER · GLARE · OVHD · C/B · CONSOLE · W&B · FMS · RTU · PED · 43-cn235panel.js) */
+.cnp-wrap { position: relative; background: #1b1d1f; overflow: hidden; }
+.cnp-wrap > canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
 /* CN-235 페데스탈(43-cn235panel.js · 그림 1-1-10) — 캔버스 한 장(700×1000) */
 #cn-ped { display: none; position: fixed; z-index: 9000; right: 8px; top: 48px; flex-direction: column; background: #1b1d1f; border: 1px solid #4a5157; border-radius: 8px;
   box-shadow: 0 6px 24px rgba(0,0,0,0.6); color: #e6e9ec; font: 12px Arial, sans-serif; max-width: calc(100vw - 16px); }
