@@ -2545,7 +2545,8 @@ html.ac-b206 .page-tab[data-sel="cdu"], html.ac-b206 .page-tab[data-sel="ovhd"],
 html.ac-b206 #ctl3d #cduov-btn, html.ac-b206 #ctl3d #upperc-btn, html.ac-b206 #ctl3d #upperc-btn.show { display: none !important; }
 html:not(.ac-aw189) .page-tab.msn-tab { display: none !important; }   /* Vendor(전탐석) — 흰수리만 */
 /* ATC 관제석(41-atc.js) */
-#atc-wrap { position: relative; } #atc-root { position: absolute; inset: 0; display: flex; flex-direction: column; background: #0b1210; color: #cfe8d8; font-family: "Helvetica Neue", Arial, sans-serif; }
+#atc-wrap { position: relative; container-type: inline-size; }
+@container (max-width: 760px) { #atc-root .atc-body { flex-direction: column; } #atc-root .atc-side { width: auto; max-height: 42%; border-left: 0; border-top: 1px solid #1f3a2a; } } #atc-root { position: absolute; inset: 0; display: flex; flex-direction: column; background: #0b1210; color: #cfe8d8; font-family: "Helvetica Neue", Arial, sans-serif; }
 #atc-root .atc-top { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; padding: 4px 8px; background: #050906; border-bottom: 1px solid #1f3a2a; font-size: 12px; }
 #atc-root .atc-top b { color: #7dffa8; margin-right: 4px; } #atc-root select, #atc-root input { background: #0d1a13; color: #dff; border: 1px solid #2c4a38; border-radius: 3px; font-size: 12px; padding: 2px 4px; }
 #atc-root .atc-sp { flex: 1; } #atc-root .atc-b { background: #12251a; border: 1px solid #2c4a38; color: #cfe; border-radius: 4px; padding: 3px 7px; font-size: 11px; cursor: pointer; } #atc-root .atc-b.on { background: #1f6f3f; color: #fff; border-color: #3fd07a; }
@@ -2553,6 +2554,7 @@ html:not(.ac-aw189) .page-tab.msn-tab { display: none !important; }   /* Vendor(
 #atc-root .atc-side { width: 300px; flex: none; overflow-y: auto; border-left: 1px solid #1f3a2a; padding: 6px; font-size: 12px; }
 #atc-root .atc-h { color: #7dffa8; font-weight: bold; margin: 6px 0 3px; } #atc-root .atc-list { display: flex; flex-direction: column; gap: 2px; }
 #atc-root .atc-t { text-align: left; background: #0d1a13; border: 1px solid #1f3a2a; color: #cfe; border-radius: 3px; padding: 3px 6px; font-size: 11px; cursor: pointer; } #atc-root .atc-t.on { border-color: #ffd23a; color: #ffd23a; }
+#atc-root .atc-autorow { display: flex; gap: 6px; align-items: center; margin: 4px 0; font-size: 11px; color: #9fc; } #atc-root .atc-auto { font-size: 12px; padding: 4px 10px; font-weight: bold; } #atc-root .atc-auto.on { background: #8a1f1f; border-color: #ff6b6b; }
 #atc-root .atc-par-rd { margin-top: 4px; padding: 4px; background: #08140d; border: 1px solid #1f3a2a; border-radius: 3px; font-size: 11px; } #atc-root .atc-cmd { display: flex; flex-wrap: wrap; gap: 3px; }
 #atc-root .atc-in { display: flex; gap: 3px; width: 100%; } #atc-root .atc-in input { flex: 1; min-width: 0; } #atc-root .atc-log { font-size: 11px; font-family: monospace; } #atc-root .atc-log .in { color: #ffd23a; }
 @media (max-width: 760px) { #atc-root .atc-body { flex-direction: column; } #atc-root .atc-side { width: auto; max-height: 45%; border-left: 0; border-top: 1px solid #1f3a2a; } }

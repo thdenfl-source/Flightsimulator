@@ -21,6 +21,11 @@ export async function run(page, t) {
     // 너무 낮게 · 가까이
     const [l3, o3] = destPoint(E.td.lat, E.td.lon, back, 1.5); S.lat = l3; S.lon = o3; S.alt = E.elev + 100;
     o.low = atcTalk(atcTarget('OWN'));
+    // 시단 기준 3° — 시단에서 4NM · 표고 + 4NM × tan3° 면 활공로 위 / 45° NAV — 0.6NM 벗어나면 45° · 0.1NM 이면 10°
+    o.thrRef = Math.abs(E.td.lat - E.thr.lat) < 1e-9 && Math.abs(E.td.lon - E.thr.lon) < 1e-9;
+    { const [a, b] = destPoint(E.thr.lat, E.thr.lon, back, 4); S.lat = a; S.lon = b; S.alt = E.elev + 4 * 6076.1 * Math.tan(3 * Math.PI / 180); o.thr4 = atcPar(atcTarget('OWN')).elevTxt; }
+    { const [a, b] = destPoint(E.thr.lat, E.thr.lon, back, 6); const [c, d] = destPoint(a, b, (E.hdg + 270) % 360, 0.6); S.lat = c; S.lon = d; S.alt = E.elev + 6 * 6076.1 * Math.tan(3 * Math.PI / 180); const q = atcPar(atcTarget('OWN')); o.int45 = q.corr; }
+    { const [a, b] = destPoint(E.thr.lat, E.thr.lon, back, 6); const [c, d] = destPoint(a, b, (E.hdg + 90) % 360, 0.1); S.lat = c; S.lon = d; const q = atcPar(atcTarget('OWN')); o.int10 = q.corr; }
     // 범위 밖(활주로 반대쪽)
     const [l4, o4] = destPoint(E.td.lat, E.td.lon, E.hdg, 4); S.lat = l4; S.lon = o4; S.alt = 2000; o.out = atcPar(atcTarget('OWN')).inCov === false && atcTalk(atcTarget('OWN')) === null;
     // 지시 — 내 기체면 이 기기에서 읽는다
@@ -31,6 +36,8 @@ export async function run(page, t) {
     R.querySelector('[data-atcv="ialt"]').value = '3000'; R.querySelector('[data-at="say:alt"]').click();
     R.querySelector('[data-at="say:contact"]').click();
     o.said = said.slice(); o.log = atc.log.length >= 3;
+    atc.auto = false; atcPanelSync(true); R.querySelector('.atc-auto').click(); o.autoOn = atc.auto === true && /자동 유도 끄기/.test(R.querySelector('.atc-auto').textContent);
+    R.querySelector('.atc-auto').click(); o.autoOff = atc.auto === false;
     window.speak = sp;
     // 그리기 — ASR · PAR 둘 다
     atc.view = 'both'; _atcDraw(); const cv = R.querySelector('.atc-asr'), cp = R.querySelector('.atc-par');
@@ -45,9 +52,11 @@ export async function run(page, t) {
   t.ok(Math.abs(A.on.R - 5) < 0.05 && A.on.inCov && A.on.el === 'on glidepath' && A.on.az === 'on course' && A.on.corr === 0 && /5 miles from touchdown, on course, on glidepath/.test(A.talkOn),
     `PAR — 5NM 활공로 · 중심선 위: “${A.talkOn}”`);
   t.ok(/left of course/.test(A.off.az) && /above glidepath/.test(A.off.el) && A.off.corr > 0 && /turn right heading/.test(A.talkOff), `벗어나면 — “${A.talkOff}”`);
+  t.ok(A.thrRef && A.thr4 === 'on glidepath' && A.int45 === 45 && A.int10 === -10, `활공로는 활주로 표고 · 시단에서 3° (4NM ${A.thr4}) · 45° NAV — 왼쪽 0.6NM 이면 오른쪽 ${A.int45}° · 오른쪽 0.1NM 이면 ${A.int10}°`);
   t.ok(/below glidepath/.test(A.low) && /missed approach/.test(A.low) && A.out, `너무 낮으면 복행 권고 · 범위 밖은 문구 없음 (“${A.low}”)`);
   t.ok(A.said.some(x => /turn left heading 2 7 0|turn right heading 2 7 0/.test(x)) && A.said.some(x => /and maintain 3000 feet/.test(x)) && A.said.some(x => /radar contact/.test(x)) && A.log,
     `관제 지시 — 내 기체면 읽어 준다(${A.said.length}개) · 교신 기록`);
+  t.ok(A.autoOn && A.autoOff, '자동 PAR 유도 — 단추로 켜고 끈다');
   t.ok(A.asr && A.par && A.tabs, 'ASR · PAR 화면을 그린다 · 탭 · 🧰 도구');
 
   // ── 멀티 관제 — 관제사 창 + 조종사 창(같은 브라우저 · BroadcastChannel) ──
