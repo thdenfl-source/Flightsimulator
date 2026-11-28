@@ -108,7 +108,9 @@ function _startGroundSettle() {
 }
 // 출발 공항 고르기 창 — ICAO · 이름으로 걸러 찾을 수 있다. 닫으면(건너뛰기) 이미 세워 둔 기본 공항(지난번에 고른 곳 · 처음은 김포) 활주로 그대로
 // (되살린 상태가 있으면 그 자리에서 이어서, 아니면 송도).
-function openStartAirportPicker(resume) {
+// 3D 버튼 줄 '✈ 시작 위치'(Cockpit Mode 에서도) — 처음 시작할 때처럼 공항 → 시작 자리를 고른다
+function startPosOpen() { try { openStartAirportPicker(false, { again: true }); } catch (e) { _swallow(e); } }
+function openStartAirportPicker(resume, opt = {}) {
   if (document.querySelector('.start-apt')) return;
   const back = document.createElement('div');
   back.className = 'ui-dlg-back';
@@ -117,11 +119,11 @@ function openStartAirportPicker(resume) {
   dlg.setAttribute('role', 'dialog');
   dlg.setAttribute('aria-modal', 'true');
   dlg.innerHTML = `
-    <div class="ui-dlg-msg"><b>출발 공항을 고르세요</b><br><span class="start-apt-sub">고른 공항 활주로 가운데에 활주로 방향으로 섭니다 · 시동 · 전자장비 ON · AUTO TRIM OFF · GPS 는 꺼진 채</span></div>
+    <div class="ui-dlg-msg"><b>출발 공항을 고르세요</b><br><span class="start-apt-sub">공항을 고르면 시작 자리(활주로 위 · 5NM 공중)를 고릅니다 · 시동 · 전자장비 ON · AUTO TRIM OFF · GPS 는 꺼진 채</span></div>
     <input class="ui-dlg-in start-apt-q" type="text" placeholder="ICAO 또는 이름 (예: RKSI · 김포)" autocomplete="off">
     <div class="start-apt-list">${AIRPORTS.map(a =>
       `<button type="button" class="start-apt-btn" data-icao="${a.ident}"><b>${a.ident}</b> ${a.name}</button>`).join('')}</div>
-    <div class="ui-dlg-btns"><button type="button" class="start-apt-skip">건너뛰기(${START_APT_DEF} 활주로)</button></div>`;
+    <div class="ui-dlg-btns"><button type="button" class="start-apt-skip">${opt.again ? '닫기(지금 자리 그대로)' : `건너뛰기(${START_APT_DEF} 활주로)`}</button></div>`;
   const close = () => {
     try { sessionStorage.setItem('vfrStartApt', '1'); } catch (e) { _swallow(e); }
     document.removeEventListener('keydown', onKey, true);
@@ -157,11 +159,11 @@ function openStartAirportPicker(resume) {
 }
 
 // ══ 시작 자리 — 공항을 고른 뒤 활주로 그림에서 고른다 ══
-//   땅(출력 0): 첫 번호 쪽 시단 · 활주로 가운데 · 반대쪽 시단 — 활주로 방향으로
-//   공중: 양쪽 시단에서 5NM · 1500ft · 진입로(활주로 연장선) 정대 · 좌우 30° — 그 시단을 향해 · 속도 80kt(고정익 120kt)
+//   땅(출력 0): 첫 번호 쪽 활주로 끝 · 활주로 가운데 · 반대쪽 활주로 끝 — 활주로 방향으로
+//   공중: 양쪽 활주로 끝에서 5NM · 1500ft · 진입로(활주로 연장선) 정대 · 좌우 30° — 그 활주로 끝을 향해 · 속도 80kt(고정익 120kt)
 //   Enter · 건너뛰기 = 활주로 가운데(이미 세워 둔 자리)
 const START_AIR_NM = 5, START_AIR_FT = 1500, START_AIR_DEG = 30, START_THR_IN_M = 60;
-// 가장 긴 활주로의 두 끝 · 방향 · 번호 — a(첫 번호 쪽 시단) → b
+// 가장 긴 활주로의 두 끝 · 방향 · 번호 — a(첫 번호 쪽 활주로 끝) → b
 function startRunwayEnds(icao) {
   const ap = (typeof RUNWAYS === 'undefined' ? [] : RUNWAYS).find(r => r.apt === icao);
   if (!ap || !ap.rwys || !ap.rwys.length) return null;
@@ -192,17 +194,17 @@ function startPositions(icao) {
   const thrA = _startMove(R.a, H, START_THR_IN_M), thrB = _startMove(R.b, back, START_THR_IN_M);
   const mid = { lat: (R.a.lat + R.b.lat) / 2, lon: (R.a.lon + R.b.lon) / 2 };
   const out = [
-    { k: 'thrA', air: false, ...thrA, hdg: H, label: `RWY ${R.idA} 시단` },
+    { k: 'thrA', air: false, ...thrA, hdg: H, label: `RWY ${R.idA}` },
     { k: 'mid', air: false, ...mid, hdg: H, label: '활주로 가운데' },
-    { k: 'thrB', air: false, ...thrB, hdg: back, label: `RWY ${R.idB} 시단` },
+    { k: 'thrB', air: false, ...thrB, hdg: back, label: `RWY ${R.idB}` },
   ];
-  // 공중 — RWY a 로 내리는 쪽은 a 시단 바깥(back 방향) · 조종사가 보는 왼쪽 = 꼬리 방향에서 시계 방향(+30°)
+  // 공중 — RWY a 로 내리는 쪽은 a 활주로 끝 바깥(back 방향) · 조종사가 보는 왼쪽 = 꼬리 방향에서 시계 방향(+30°)
   const air = (k, end, base, off, rid, side) => { const p = _startMove(end, (base + off + 360) % 360, nm); out.push({ k, air: true, ...p, hdg: _startBrg(p, end), label: `RWY ${rid} ${side}` }); };
   air('aL', R.a, back, d, R.idA, `${d}°L`); air('aS', R.a, back, 0, R.idA, '정대'); air('aR', R.a, back, -d, R.idA, `${d}°R`);
   air('bL', R.b, H, d, R.idB, `${d}°L`); air('bS', R.b, H, 0, R.idB, '정대'); air('bR', R.b, H, -d, R.idB, `${d}°R`);
   return out;
 }
-// 그 자리에서 시작 — 땅이면 출력 0 으로 세우고, 공중이면 1500ft · 80kt(고정익 120kt)로 그 시단을 향해 난다
+// 그 자리에서 시작 — 땅이면 출력 0 으로 세우고, 공중이면 1500ft · 80kt(고정익 120kt)로 그 활주로 끝을 향해 난다
 function startPosSet(icao, k) {
   const P = startPositions(icao).find(p => p.k === k); if (!P) return false;
   if (k === 'mid') { startAirportSet(icao, { quiet: true }); return true; }
@@ -238,13 +240,15 @@ function openStartPosPicker(icao) {
   const R = startRunwayEnds(icao), fixed = typeof acFixedWing === 'function' && acFixedWing();
   const back = document.createElement('div'); back.className = 'ui-dlg-back';
   const dlg = document.createElement('div'); dlg.className = 'ui-dlg start-pos'; dlg.setAttribute('role', 'dialog'); dlg.setAttribute('aria-modal', 'true');
-  // 칸 자리(%) — 위 = 왼쪽 시단으로 내리는 조종사의 왼쪽(L)
+  // 칸 자리(%) — 위 = 왼쪽 활주로 끝으로 내리는 조종사의 왼쪽(L)
   const AT = { aL: [8, 14], aS: [8, 50], aR: [8, 86], thrA: [27, 50], mid: [50, 50], thrB: [73, 50], bR: [92, 14], bS: [92, 50], bL: [92, 86] };
-  const btn = p => { const [x, y] = AT[p.k]; return `<button type="button" class="start-pos-btn${p.air ? ' air' : ''}" data-pos="${p.k}" style="left:${x}%;top:${y}%" title="${p.label}${p.air ? ` · ${START_AIR_NM}NM · ${START_AIR_FT}ft · ${fixed ? 120 : 80}kt` : ' · 땅 · 출력 0'}">${p.label.replace(/^RWY /, '')}</button>`; };
+  // 칸 글 — 활주로 번호는 크게(땅: 번호 · 가운데 / 공중: 번호 + 정대 · 30°L/R)
+  const txt = p => { const m = /^RWY (\S+)(?: (.+))?$/.exec(p.label); return m ? `<span class="sp-n">${m[1]}</span>${m[2] ? `<span class="sp-s">${m[2]}</span>` : ''}` : `<span class="sp-s">${p.label}</span>`; };
+  const btn = p => { const [x, y] = AT[p.k]; return `<button type="button" class="start-pos-btn${p.air ? ' air' : ''}" data-pos="${p.k}" style="left:${x}%;top:${y}%" title="${p.label}${p.air ? ` · ${START_AIR_NM}NM · ${START_AIR_FT}ft · ${fixed ? 120 : 80}kt` : ' · 땅 · 출력 0'}">${txt(p)}</button>`; };
   dlg.innerHTML = `
-    <div class="ui-dlg-msg"><b>${icao} — 시작 자리를 고르세요</b><br><span class="start-apt-sub">활주로 위(땅 · 출력 0) 셋 · 양쪽 시단 바깥 ${START_AIR_NM}NM · ${START_AIR_FT}ft · ${fixed ? 120 : 80}kt(정대 · 좌우 ${START_AIR_DEG}°) 여섯 — 공중은 그 시단을 향해</span></div>
+    <div class="ui-dlg-msg"><b>${icao} — 시작 자리를 고르세요</b><br><span class="start-apt-sub">활주로 위(땅 · 출력 0) 셋 · 활주로 끝에서 ${START_AIR_NM}NM · ${START_AIR_FT}ft · ${fixed ? 120 : 80}kt(정대 · 좌우 ${START_AIR_DEG}°) 여섯 — 공중은 그 활주로 끝을 향해</span></div>
     <div class="start-pos-map">
-      <div class="start-pos-rwy"><span class="sp-id l">${R.idA}</span><span class="sp-cl"></span><span class="sp-id r">${R.idB}</span></div>
+      <div class="start-pos-rwy"><span class="sp-id l"></span><span class="sp-cl"></span><span class="sp-id r"></span></div>
       ${P.map(btn).join('')}
     </div>
     <div class="ui-dlg-btns"><button type="button" class="start-pos-skip">활주로 가운데(Enter)</button></div>`;

@@ -69,6 +69,18 @@ export async function run(page, t) {
   t.ok(picked.eng && picked.elec && picked.avn, '시동 · 전기 · 전자장비(AP · AVCS · RADAR/EGPWS/DMM · C-5000)가 모두 켜져 있다');
   t.ok(picked.at && !picked.deg, 'AFCAU 의 AUTO TRIM 만 꺼져 있다 — AFCS DEGRADED 는 뜨지 않는다');
   t.ok(Math.abs(picked.agl) < 1 && picked.spd === 0, `지면에 멈춰 선다 (AGL ${picked.agl.toFixed(1)}ft · ${picked.spd}kt)`);
+  // ✈ 시작 위치(3D 버튼 줄 · Cockpit Mode 에서도) — 처음처럼 공항 → 시작 자리 · '시단' 이란 말 없이 활주로 번호를 크게
+  const BTN = await tab.evaluate(async () => {
+    const b = document.getElementById('startpos3d-btn'); b.click(); await new Promise(r => setTimeout(r, 150));
+    const o = { btn: !!b, apt: !!document.querySelector('.start-apt'), skip: (document.querySelector('.start-apt-skip') || {}).textContent || '' };
+    document.querySelector('.start-apt-btn[data-icao="RKSS"]').click(); await new Promise(r => setTimeout(r, 150));
+    o.pos = !!document.querySelector('.start-pos'); o.txt = (document.querySelector('.start-pos') || {}).textContent || '';
+    o.num = getComputedStyle(document.querySelector('.start-pos-btn .sp-n')).fontSize;
+    document.querySelector('.start-pos-skip').click();
+    return o;
+  });
+  t.ok(BTN.btn && BTN.apt && /닫기/.test(BTN.skip) && BTN.pos && !/시단/.test(BTN.txt) && parseFloat(BTN.num) >= 18,
+    `✈ 시작 위치 버튼 — 공항 → 시작 자리 · '시단' 없음 · 활주로 번호 ${BTN.num} (${BTN.skip})`);
   // 공중 자리 — 시단에서 5NM · 1500ft · 80kt · 그 시단을 향해(정대 · 좌우 30°) / 땅 자리 — 시단에서 출력 0
   const AIR = await tab.evaluate(() => {
     const R = startRunwayEnds('RKSS'), o = {};
